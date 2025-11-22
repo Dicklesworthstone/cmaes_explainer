@@ -1,6 +1,7 @@
 "use client";
 
 import { MathJax } from "better-react-mathjax";
+import { CovarianceMinimap } from "./CovarianceMinimap";
 
 export function TechnicalAddendum() {
   return (
@@ -27,6 +28,10 @@ export function TechnicalAddendum() {
         why the algorithm stays stable under odd objective scalings and why the update lines up with a
         sampled natural gradient step on the manifold of Gaussians.
       </p>
+
+      <div className="mt-4">
+        <CovarianceMinimap />
+      </div>
 
       <p>
         Information-geometry lens: maximize expected fitness under a Gaussian while staying invariant
