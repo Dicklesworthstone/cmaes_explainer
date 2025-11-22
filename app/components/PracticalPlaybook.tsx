@@ -3,6 +3,7 @@
 import { ShieldCheck, Waves } from "lucide-react";
 import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 import { NoiseExplorer } from "./NoiseExplorer";
+import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
 
 export function PracticalPlaybook() {
   return (
@@ -37,6 +38,9 @@ export function PracticalPlaybook() {
       </div>
       <div className="pt-2">
         <NoiseExplorer />
+      </div>
+      <div className="pt-2">
+        <ConstraintRepairDemo />
       </div>
     </div>
   );
