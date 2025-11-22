@@ -95,6 +95,7 @@ export function TransformerViz() {
   const [depth, setDepth] = useState(0.55); // normalized 0-1
   const [width, setWidth] = useState(0.5);
   const [heads, setHeads] = useState(0.45);
+  const manifold = useMemo(() => makeManifoldPoints(), []);
 
   return (
     <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm">
@@ -141,8 +142,124 @@ export function TransformerViz() {
             and brighten attention pulses. It mirrors the hyperparam card—mixed discrete/continuous
             knobs where gradients don’t help, but CMA-ES can still learn which directions matter.
           </p>
+          <ManifoldHeatmap
+            depth={depth}
+            width={width}
+            heads={heads}
+            points={manifold}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+type ManifoldPoint = { x: number; y: number; fitness: number };
+
+function makeManifoldPoints(): ManifoldPoint[] {
+  const pts: ManifoldPoint[] = [];
+  const rand = rng(2025);
+  for (let i = 0; i < 220; i++) {
+    const d = rand();
+    const w = rand();
+    const h = rand();
+    const fitness = toyFit(d, w, h) + (rand() - 0.5) * 0.1;
+    // fake 2D projection that preserves some ordering
+    const px = d * 0.55 + w * 0.35 + (rand() - 0.5) * 0.08;
+    const py = h * 0.6 + w * 0.25 + (rand() - 0.5) * 0.08;
+    pts.push({ x: px, y: py, fitness });
+  }
+  return pts;
+}
+
+function toyFit(d: number, w: number, h: number) {
+  // lower is better; prefer mid depth, moderate width, heads aligned with width
+  const depthTerm = Math.pow(d - 0.55, 2) * 1.5;
+  const widthTerm = Math.pow(w - 0.5, 2) * 1.2;
+  const headTerm = Math.pow(h - 0.4 - 0.2 * w, 2) * 1.6;
+  return depthTerm + widthTerm + headTerm;
+}
+
+function ManifoldHeatmap({ depth, width, heads, points }: { depth: number; width: number; heads: number; points: ManifoldPoint[] }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const current = useMemo(() => {
+    const px = depth * 0.55 + width * 0.35;
+    const py = heads * 0.6 + width * 0.25;
+    const fit = toyFit(depth, width, heads);
+    const covScale = 0.04 + 0.12 * Math.pow(1 - fit, 1.2);
+    return { px, py, cov: [covScale, 0, 0, covScale * 1.4] as [number, number, number, number] };
+  }, [depth, width, heads]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const Wc = 320;
+    const Hc = 220;
+    ctx.clearRect(0, 0, Wc, Hc);
+
+    // heatmap points
+    points.forEach((p) => {
+      const x = p.x * (Wc - 20) + 10;
+      const y = Hc - (p.y * (Hc - 20) + 10);
+      const hue = 200 + (1 - Math.tanh(p.fitness * 2)) * 80; // better = cooler
+      ctx.fillStyle = `hsla(${hue},75%,65%,0.55)`;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // ellipse for current cov
+    const [a, b, c, d] = current.cov;
+    const tr = a + d;
+    const det = a * d - b * c;
+    const disc = Math.sqrt(Math.max(tr * tr - 4 * det, 0));
+    const l1 = (tr + disc) / 2;
+    const l2 = (tr - disc) / 2;
+    const v1 = [b, l1 - a];
+    const len1 = Math.hypot(v1[0], v1[1]) || 1;
+    const e1 = [v1[0] / len1, v1[1] / len1];
+    const angle = Math.atan2(e1[1], e1[0]);
+    const cx = current.px * (Wc - 20) + 10;
+    const cy = Hc - (current.py * (Hc - 20) + 10);
+    const rx = Math.sqrt(Math.max(l1, 0)) * 120;
+    const ry = Math.sqrt(Math.max(l2, 0)) * 120;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-angle);
+    ctx.strokeStyle = "rgba(34,211,238,0.9)";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // current point
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#cbd5e1";
+    ctx.font = "10px Inter";
+    ctx.fillText("UMAP-ish hyperparam manifold (color = fitness)", 10, 14);
+  }, [points, current]);
+
+  return (
+    <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-2">
+      <div className="text-[0.82rem] text-slate-200 font-semibold">Hyperparam manifold (projected)</div>
+      <canvas ref={canvasRef} width={320} height={220} className="w-full rounded-lg border border-slate-800/60 bg-slate-950" />
+      <div className="text-[0.78rem] text-slate-400">Dots = sampled configs; cooler = better. Mint ellipse = current covariance projected.</div>
+    </div>
+  );
+}
+
+function rng(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (1664525 * s + 1013904223) >>> 0;
+    return s / 0xffffffff;
+  };
 }
