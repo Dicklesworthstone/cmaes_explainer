@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CMA-ES wasm demo (sequential)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; line-height: 1.5; }
+    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+  <h1>CMA-ES WASM (sequential bundle)</h1>
+  <p>Optimizes a simple sphere function starting from x = [3, -2].</p>
+  <button id="run">Run optimizer</button>
+  <pre id="out">Click "Run optimizer"</pre>
+
+  <script type="module">
+    import init, { fmin } from "../pkg/cmaes_wasm.js";
+
+    const $out = document.querySelector('#out');
+    document.querySelector('#run').addEventListener('click', async () => {
+      $out.textContent = 'Loading wasm...';
+      await init();
+
+      const x0 = new Float64Array([3.0, -2.0]);
+      const sigma = 0.8;
+      const objective = (x) => x[0] * x[0] + x[1] * x[1];
+
+      $out.textContent = 'Running CMA-ES...';
+      const res = fmin(x0, sigma, objective);
+
+      $out.textContent = JSON.stringify({
+        best_f: res.best_f,
+        best_x: Array.from(res.best_x()),
+        evals: res.evals,
+        iterations: res.iterations,
+      }, null, 2);
+    });
+  </script>
+</body>
+</html>

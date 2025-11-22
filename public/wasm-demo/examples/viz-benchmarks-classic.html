@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+  <meta name="theme-color" content="#0c162a">
+  <meta name="description" content="Interactive CMA-ES optimization playground with WebAssembly">
+  <title>CMA-ES Benchmark Gallery</title>
+  <link rel="icon" href="/wasm_cmaes/favicon.ico" />
+  <link rel="manifest" href="/wasm_cmaes/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./tailwind.css" />
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --color-primary: #38bdf8;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      color: #e2e8f0;
+      background: radial-gradient(circle at 20% 20%, #122341, #0c162a 40%, #070d1a 70%, #050912);
+      position: relative;
+      overflow-x: hidden;
+      font-size: clamp(0.875rem, 2vw, 1rem);
+    }
+
+    code, pre, .font-mono {
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+      border-radius: 0.25rem;
+    }
+
+    button {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    button:hover:not(:disabled) {
+      transform: scale(1.02);
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+    @keyframes holoPulse {
+      0% { opacity: 0.8; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1.02); }
+      100% { opacity: 0.8; transform: scale(0.98); }
+    }
+    /* animated grid backdrop */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+                  linear-gradient(0deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.4), transparent 65%);
+      z-index: 0;
+      animation: drift 30s linear infinite;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 70% 20%, rgba(56,189,248,0.18), transparent 45%),
+                  radial-gradient(circle at 25% 70%, rgba(99,102,241,0.14), transparent 50%);
+      z-index: 0;
+      pointer-events: none;
+    }
+    @keyframes drift {
+      from { transform: translate3d(0,0,0); }
+      to   { transform: translate3d(80px,80px,0); }
+    }
+    .panel {
+      position: relative;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 20px 70px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset;
+      z-index: 1;
+    }
+    .glow {
+      box-shadow: 0 18px 40px rgba(56,189,248,0.35), 0 0 0 1px rgba(14,165,233,0.35);
+    }
+    .chart text { fill: #cbd5e1; }
+    .chart .axis line, .chart .axis path { stroke: #64748b; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Three.js background -->
+  <canvas id="bg-canvas" class="fixed inset-0 w-full h-full"></canvas>
+
+  <div class="max-w-6xl mx-auto py-10 px-6 space-y-6 relative z-10">
+    <header class="flex flex-col gap-3">
+      <div class="inline-flex items-center gap-3 bg-sky-500/10 text-sky-200 px-3 py-1 rounded-full w-fit border border-sky-500/20">
+        <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+        <span class="text-xs tracking-[0.25em] uppercase">CMA-ES · WebAssembly</span>
+      </div>
+      <div class="flex flex-col gap-2">
+        <h1 class="text-4xl font-semibold text-sky-50">Benchmark Playground</h1>
+        <p class="text-slate-200 max-w-3xl">Pick a classic test function and watch CMA-ES explore in 2D. Smooth log-loss, animated scatter, live best tracker. Tunable λ, σ, seeds.</p>
+      </div>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="panel rounded-xl p-4 flex flex-col gap-1">
+          <div class="flex items-center gap-2 text-sky-200 text-xs"><span class="lucide" data-icon="cpu"></span>Bundle</div>
+          <p class="text-lg font-semibold text-sky-100">Sequential (pkg)</p>
+          <p class="text-xs text-slate-400">Swap to parallel by importing pkg-par in the script tag.</p>
+        </div>
+        <div class="panel rounded-xl p-4 flex flex-col gap-1">
+          <div class="flex items-center gap-2 text-amber-200 text-xs"><span class="lucide" data-icon="activity"></span>Rendering</div>
+          <p class="text-lg font-semibold text-amber-100">D3 + Tailwind + GSAP</p>
+          <p class="text-xs text-slate-400">Log curve, animated scatter, parallax glow.</p>
+        </div>
+        <div class="panel rounded-xl p-4 flex flex-col gap-1">
+          <div class="flex items-center gap-2 text-emerald-200 text-xs"><span class="lucide" data-icon="bar-chart-2"></span>Status</div>
+          <p id="status" class="text-lg font-semibold text-emerald-200">Idle</p>
+          <p class="text-xs text-slate-400">Tracks iterations/evals in real time.</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="grid lg:grid-cols-3 gap-4">
+      <div class="panel rounded-xl p-5 space-y-4 col-span-1">
+        <div class="space-y-2">
+          <label for="bench" class="block text-sm text-slate-400">Benchmark</label>
+          <select id="bench" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Select benchmark function to optimize">
+            <option value="sphere">Sphere (smooth)</option>
+            <option value="rastrigin">Rastrigin (multimodal)</option>
+            <option value="ackley">Ackley (flat valley)</option>
+            <option value="griewank">Griewank (oscillatory)</option>
+            <option value="schwefel">Schwefel (deceptive)</option>
+            <option value="levy">Levy (broad ridges)</option>
+            <option value="zakharov">Zakharov (ill-conditioned)</option>
+            <option value="alpine">Alpine N1 (spiky)</option>
+            <option value="bukin6">Bukin N.6 (steep valley)</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="lambda" class="block text-sm text-slate-400">Lambda (pop)</label>
+            <input id="lambda" type="number" value="32" min="4" max="128" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Population size (lambda)" />
+          </div>
+          <div>
+            <label for="sigma" class="block text-sm text-slate-400">Sigma</label>
+            <input id="sigma" type="number" value="1.2" step="0.1" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Initial step size (sigma)" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="iters" class="block text-sm text-slate-400">Max iters</label>
+            <input id="iters" type="number" value="250" min="10" max="2000" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Maximum number of iterations" />
+          </div>
+          <div>
+            <label for="seed" class="block text-sm text-slate-400">Seed</label>
+            <input id="seed" type="number" value="42" min="0" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Random seed for reproducibility" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-sm text-slate-400">Dimension (fixed)</label>
+            <input id="dim" type="range" value="2" min="2" max="2" class="w-full" disabled />
+          </div>
+          <div class="text-sm text-slate-300" id="dim-label">2D surface view</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="projection" class="block text-sm text-slate-400">Projection</label>
+            <select id="projection" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Dimension projection for visualization" disabled>
+              <option value="first2">First 2 dims</option>
+            </select>
+          </div>
+          <div>
+            <label for="run-race" class="block text-sm text-slate-400">Race mode</label>
+            <button id="run-race" class="w-full bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-900 font-semibold px-3 py-2 rounded-lg transition" aria-label="Run comparison race between WASM and JavaScript implementations">Run WASM vs JS</button>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="block text-sm text-slate-400 flex items-center gap-2">
+            <input id="bounds-toggle" type="checkbox" class="accent-sky-400" aria-label="Enable search space bounds" /> Enable bounds
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <input id="bound-lo" type="number" value="-5" step="0.5" class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Lower bound for search space" />
+            <input id="bound-hi" type="number" value="5" step="0.5" class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" aria-label="Upper bound for search space" />
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="block text-sm text-slate-400">Noise model</label>
+          <div class="grid grid-cols-3 gap-2 text-sm text-slate-200">
+            <div class="space-y-1">
+              <label for="noise-samples" class="text-xs text-slate-400">Samples/pt</label>
+              <input id="noise-samples" type="number" value="1" min="1" max="16" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1" aria-label="Number of samples per point for noise handling" />
+            </div>
+            <div class="space-y-1">
+              <label for="noise-max" class="text-xs text-slate-400">Max samples</label>
+              <input id="noise-max" type="number" value="8" min="1" max="32" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1" aria-label="Maximum number of samples for adaptive noise handling" />
+            </div>
+            <div class="space-y-1">
+              <label class="flex items-center gap-2 text-xs text-slate-400">
+                <input id="noise-adaptive" type="checkbox" class="accent-sky-400" aria-label="Enable adaptive noise sampling" /> Adaptive
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="run" class="relative overflow-hidden font-semibold px-6 py-3 rounded-xl text-slate-900" aria-label="Run CMA-ES optimization with WebAssembly">
+            <span class="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300" style="animation: holoPulse 3s ease-in-out infinite;"></span>
+            <span class="absolute inset-[2px] rounded-xl bg-slate-900" style="box-shadow: 0 0 20px rgba(56,189,248,0.35);"></span>
+            <span class="relative z-10 flex items-center gap-2 text-cyan-100">🚀 Run the Live Demo</span>
+          </button>
+          <button id="run-js" class="bg-amber-400/90 hover:bg-amber-300 text-slate-900 font-semibold px-4 py-2 rounded-lg transition" aria-label="Run baseline JavaScript optimizer">Run baseline (JS)</button>
+          <div class="flex gap-2">
+            <button id="export-csv" class="bg-slate-700/80 hover:bg-slate-600 text-slate-100 font-medium px-3 py-2 rounded-lg transition text-sm" aria-label="Export optimization results to CSV" title="Export CSV (Ctrl+E)">📊 Export CSV</button>
+            <button id="export-json" class="bg-slate-700/80 hover:bg-slate-600 text-slate-100 font-medium px-3 py-2 rounded-lg transition text-sm" aria-label="Export optimization results to JSON" title="Export JSON (Ctrl+Shift+E)">📁 Export JSON</button>
+            <button id="share-config" class="bg-slate-700/80 hover:bg-slate-600 text-slate-100 font-medium px-3 py-2 rounded-lg transition text-sm" aria-label="Share configuration via URL" title="Share Config (Ctrl+S)">🔗 Share</button>
+            <button id="help-btn" class="bg-sky-600/80 hover:bg-sky-500 text-slate-100 font-medium px-3 py-2 rounded-lg transition text-sm" aria-label="Show keyboard shortcuts and help" title="Help (H or ?)">❓ Help</button>
+          </div>
+          <div class="text-sm text-slate-300">Real-time render for WASM; JS baseline runs headless and reports timing.</div>
+        </div>
+        <div class="text-xs text-slate-400 space-y-1">
+          <div><span class="text-emerald-200">WASM</span> uses the Rust CMA-ES with SIMD (if enabled); chart drives the visible step loop on a 2D surface.</div>
+          <div><span class="text-amber-200">Baseline JS</span> is a simple (μ+λ) strategy in vanilla JS for speed comparison.</div>
+          <div class="text-slate-400">Bounds/noise settings apply to the optimizer; visualization shows the 2D slice.</div>
+          <div id="timing" class="text-slate-200 font-semibold"></div>
+        </div>
+      </div>
+
+      <div class="panel rounded-xl p-5 col-span-2 space-y-4 overflow-hidden">
+        <div class="flex justify-between items-center text-slate-300 text-sm">
+          <span>Best f(t)</span>
+          <span id="best-display">–</span>
+        </div>
+        <svg id="line" class="chart w-full" viewBox="0 0 800 320"></svg>
+        <div class="flex justify-between items-center text-slate-300 text-sm">
+          <span>3D surface + candidates</span>
+          <span id="iter-display">Iter 0</span>
+        </div>
+        <div class="relative">
+          <canvas id="three-canvas" class="w-full h-[380px] rounded-lg" role="img" aria-label="3D visualization of optimization landscape and candidate solutions"></canvas>
+          <div class="absolute bottom-2 left-2 right-2 flex items-center gap-2 text-xs text-slate-200">
+            <input id="scrub" type="range" min="0" max="0" value="0" class="w-full" aria-label="Timeline scrubber to replay optimization history" />
+            <button id="scrub-play" class="px-2 py-1 rounded bg-slate-800" aria-label="Play optimization history animation">▶</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid lg:grid-cols-2 gap-4">
+      <div class="panel rounded-xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Custom objective</p>
+            <h3 class="text-lg text-sky-100 font-semibold">Write your own f(x)</h3>
+          </div>
+          <button id="apply-custom" class="bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 font-semibold px-3 py-2 rounded-lg transition" aria-label="Apply custom objective function to optimizer">Use in WASM</button>
+        </div>
+        <div class="text-xs text-slate-400">Function signature: <code>f(x: number[]): number</code>. Keep it deterministic for fair races.</div>
+        <div id="editor" class="w-full h-56 rounded-lg overflow-hidden border border-slate-700 bg-slate-900" role="textbox" aria-label="Monaco code editor for custom objective function"></div>
+      </div>
+
+      <div class="panel rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Story mode</p>
+            <h3 class="text-lg text-amber-100 font-semibold">Guided CMA-ES</h3>
+          </div>
+          <div class="flex gap-2">
+            <button id="story-prev" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-200" aria-label="Previous story step">Prev</button>
+            <button id="story-next" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-200" aria-label="Next story step">Next</button>
+            <button id="story-open" class="px-3 py-2 rounded-lg bg-amber-400/80 text-slate-900" aria-label="Open full story overlay">Open</button>
+          </div>
+        </div>
+        <div id="story-text" class="text-slate-200 text-sm leading-relaxed" role="region" aria-live="polite">1) Sampling: CMA-ES draws λ candidates from a multivariate normal around the mean.</div>
+      </div>
+    </section>
+  </div>
+
+  <div id="hud" class="fixed top-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[220px]">
+    <div class="flex justify-between"><span>FPS</span><span id="hud-fps">–</span></div>
+    <div class="flex justify-between"><span>WASM last run</span><span id="hud-wasm">–</span></div>
+    <div class="flex justify-between"><span>JS baseline</span><span id="hud-js">–</span></div>
+    <div class="flex justify-between"><span>Iter/sec (viz)</span><span id="hud-iter">–</span></div>
+  </div>
+
+  <div id="race-results" class="fixed bottom-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[260px]"></div>
+
+  <div id="story-overlay" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-20 items-center justify-center">
+    <div class="panel rounded-xl p-6 max-w-xl space-y-3 text-slate-100">
+      <h3 class="text-xl font-semibold">CMA-ES story</h3>
+      <p id="story-overlay-text" class="text-sm"></p>
+      <div class="flex justify-end gap-2">
+        <button id="story-close" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-200">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help overlay with keyboard shortcuts -->
+  <div id="help-overlay" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-30 flex items-center justify-center p-4" role="dialog" aria-labelledby="help-title" aria-modal="true">
+    <div class="panel rounded-xl p-6 max-w-2xl w-full space-y-4 text-slate-100 max-h-[80vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h2 id="help-title" class="text-2xl font-bold text-sky-100">Keyboard Shortcuts & Help</h2>
+        <button id="help-close-x" class="text-slate-400 hover:text-slate-200 text-2xl leading-none" aria-label="Close help">&times;</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <h3 class="text-lg font-semibold text-emerald-300 mb-2">Keyboard Shortcuts</h3>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Run optimization</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">Space</kbd>
+            </div>
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Reset to defaults</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">R</kbd>
+            </div>
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Show help</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">H</kbd> or <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">?</kbd>
+            </div>
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Share config</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">Ctrl+S</kbd>
+            </div>
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Export CSV</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">Ctrl+E</kbd>
+            </div>
+            <div class="flex justify-between bg-slate-800/50 rounded px-3 py-2">
+              <span class="text-slate-300">Export JSON</span>
+              <kbd class="bg-slate-700 px-2 py-1 rounded text-xs font-mono">Ctrl+Shift+E</kbd>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-amber-300 mb-2">What is CMA-ES?</h3>
+          <p class="text-sm text-slate-300 leading-relaxed">
+            CMA-ES (Covariance Matrix Adaptation Evolution Strategy) is a state-of-the-art derivative-free optimization algorithm.
+            It's particularly effective for non-convex, noisy, and multi-modal optimization problems. This playground lets you
+            visualize how CMA-ES explores the search space in real-time.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-sky-300 mb-2">Benchmark Functions</h3>
+          <div class="text-sm text-slate-300 space-y-2">
+            <div><strong class="text-emerald-200">Sphere:</strong> Simple convex quadratic function, easy to optimize</div>
+            <div><strong class="text-emerald-200">Rastrigin:</strong> Highly multi-modal with many local minima</div>
+            <div><strong class="text-emerald-200">Ackley:</strong> Nearly flat outer region with central hole at the optimum</div>
+            <div><strong class="text-emerald-200">Rosenbrock:</strong> Narrow valley making optimization challenging</div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-lg font-semibold text-fuchsia-300 mb-2">Tips for Best Results</h3>
+          <ul class="text-sm text-slate-300 space-y-1 list-disc list-inside">
+            <li>Start with Sphere to understand the basic behavior</li>
+            <li>Increase λ (population size) for more difficult functions</li>
+            <li>Adjust σ (step size) based on the search space scale</li>
+            <li>Use the 3D visualization to understand the landscape</li>
+            <li>Try the race mode to compare WASM vs JavaScript performance</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
+        <button id="help-close-btn" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification container -->
+  <div id="toast-container" class="fixed bottom-4 left-4 z-50 space-y-2 max-w-sm pointer-events-none" role="status" aria-live="polite" aria-atomic="true"></div>
+  </div>
+
+  <script type="module">
+    import init, { WasmCmaes } from "../pkg/cmaes_wasm.js";
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js";
+
+    // Load lucide icon paths (fallback-safe)
+    let lucideIcons = {};
+    try {
+      const res = await fetch("https://unpkg.com/lucide-static@0.321.0/icons.json");
+      if (res.ok) lucideIcons = await res.json();
+    } catch (_) {
+      lucideIcons = {};
+    }
+
+    // Monaco editor setup
+    const defaultCustomCode = `// Return a scalar fitness; lower is better
+function f(x) {
+  // Example: shifted bowl
+  const cx = 1.5, cy = -2.0;
+  const dx = x[0] - cx;
+  const dy = x[1] - cy;
+  return dx*dx + dy*dy + 0.1*Math.sin(3*dx) + 0.1*Math.cos(3*dy);
+}`;
+    let editor;
+    const monacoReady = new Promise((resolve) => {
+      window.require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+      window.require(["vs/editor/editor.main"], () => {
+        editor = monaco.editor.create(document.getElementById("editor"), {
+          value: defaultCustomCode,
+          language: "javascript",
+          theme: "vs-dark",
+          fontSize: 13,
+          minimap: { enabled: false },
+          automaticLayout: true,
+        });
+        resolve(editor);
+      });
+    });
+
+    let customFn = (x) => x.reduce((s, v) => s + v * v, 0);
+
+    function safeCustom(x) {
+      try {
+        const v = customFn(x);
+        return Number.isFinite(v) ? v : 1e9;
+      } catch (e) {
+        console.warn('Custom fn error', e);
+        return 1e9;
+      }
+    }
+
+    function validateCustomCode(code) {
+      const banned = /(window|document|globalThis|Function|eval|import|fetch|Worker|XMLHttpRequest)/i;
+      if (banned.test(code)) throw new Error('Disallowed identifier detected');
+      if (code.length > 4000) throw new Error('Code too long');
+    }
+
+    const benchFns = {
+      sphere: {
+        title: "Sphere",
+        f: (x) => x[0] * x[0] + x[1] * x[1],
+        x0: [3, -2],
+      },
+      rastrigin: {
+        title: "Rastrigin",
+        f: (x) => {
+          const A = 10;
+          return 2 * A + x.reduce((s, xi) => s + (xi * xi - A * Math.cos(2 * Math.PI * xi)), 0);
+        },
+        x0: [3, -3],
+      },
+      ackley: {
+        title: "Ackley",
+        f: (x) => {
+          const a = 20, b = 0.2, c = 2 * Math.PI;
+          const sumSq = x.reduce((s, xi) => s + xi * xi, 0);
+          const sumCos = x.reduce((s, xi) => s + Math.cos(c * xi), 0);
+          return -a * Math.exp(-b * Math.sqrt(sumSq / x.length)) - Math.exp(sumCos / x.length) + a + Math.E;
+        },
+        x0: [2.5, -2.5],
+      },
+      griewank: {
+        title: "Griewank",
+        f: (x) => {
+          const sum = x.reduce((s, xi) => s + (xi * xi) / 4000, 0);
+          const prod = x.reduce((p, xi, i) => p * Math.cos(xi / Math.sqrt(i + 1)), 1);
+          return sum - prod + 1;
+        },
+        x0: [4, -3],
+      },
+      schwefel: {
+        title: "Schwefel",
+        f: (x) => {
+          const bias = 418.9829 * x.length;
+          const s = x.reduce((acc, xi) => acc + xi * Math.sin(Math.sqrt(Math.abs(xi))), 0);
+          return bias - s;
+        },
+        x0: [200, -150],
+      },
+      levy: {
+        title: "Levy",
+        f: (x) => {
+          const w = x.map((xi) => 1 + (xi - 1) / 4);
+          const term1 = Math.pow(Math.sin(Math.PI * w[0]), 2);
+          let sum = 0;
+          for (let i = 0; i < w.length - 1; i++) {
+            sum += Math.pow(w[i] - 1, 2) * (1 + 10 * Math.pow(Math.sin(Math.PI * w[i] + 1), 2));
+          }
+          const term3 = Math.pow(w[w.length - 1] - 1, 2) * (1 + Math.pow(Math.sin(2 * Math.PI * w[w.length - 1]), 2));
+          return term1 + sum + term3;
+        },
+        x0: [1.5, -1.5],
+      },
+      zakharov: {
+        title: "Zakharov",
+        f: (x) => {
+          const sum1 = x.reduce((s, xi) => s + xi * xi, 0);
+          const sum2 = x.reduce((s, xi, i) => s + 0.5 * (i + 1) * xi, 0);
+          return sum1 + Math.pow(sum2, 2) + Math.pow(sum2, 4);
+        },
+        x0: [2.0, -2.0],
+      },
+      alpine: {
+        title: "Alpine N1",
+        f: (x) => x.reduce((s, xi) => s + Math.abs(xi * Math.sin(xi) + 0.1 * xi), 0),
+        x0: [4.5, -4.0],
+      },
+      bukin6: {
+        title: "Bukin N.6",
+        f: (x) => {
+          const [x1, x2] = x;
+          return 100 * Math.sqrt(Math.abs(x2 - 0.01 * x1 * x1)) + 0.01 * Math.abs(x1 + 10);
+        },
+        x0: [-12, 2.5],
+      },
+      custom: {
+        title: "Custom",
+        f: (x) => safeCustom(x),
+        x0: [0, 0],
+      },
+    };
+
+    // Inject lucide icons
+    document.querySelectorAll('.lucide').forEach((el) => {
+      const name = el.dataset.icon;
+      const path = lucideIcons[name];
+      if (!path) return;
+      el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path.join('')}</svg>`;
+    });
+
+    const mustGet = (id) => {
+      const el = document.getElementById(id);
+      if (!el) throw new Error(`Missing DOM id: ${id}`);
+      return el;
+    };
+
+    const benchSelect = mustGet('bench');
+    const dimInput = mustGet('dim');
+    const dimLabel = mustGet('dim-label');
+    const projectionSelect = mustGet('projection');
+    const boundsToggle = mustGet('bounds-toggle');
+    const boundLo = mustGet('bound-lo');
+    const boundHi = mustGet('bound-hi');
+    const noiseSamples = mustGet('noise-samples');
+    const noiseMax = mustGet('noise-max');
+    const noiseAdaptive = mustGet('noise-adaptive');
+    const timingEl = mustGet('timing');
+    const raceResults = mustGet('race-results');
+
+    const lineSvg = d3.select('#line');
+    const scrub = mustGet('scrub');
+    const scrubPlay = mustGet('scrub-play');
+    const playbackState = { frames: [], playing: false, idx: 0 };
+
+    // Module-level history and metadata for export functions
+    let optimizationHistory = [];
+    let currentRunMetadata = null;
+
+    const lineMargin = { top: 10, right: 10, bottom: 30, left: 50 };
+    const width = 800, height = 320;
+
+    const lineG = lineSvg.append('g').attr('transform', `translate(${lineMargin.left},${lineMargin.top})`);
+
+    const lineX = d3.scaleLinear().range([0, width - lineMargin.left - lineMargin.right]);
+    const lineY = d3.scaleLog().clamp(true).range([height - lineMargin.top - lineMargin.bottom, 0]);
+
+    lineG.append('g').attr('class', 'axis axis-x').attr('transform', `translate(0,${height - lineMargin.top - lineMargin.bottom})`);
+    lineG.append('g').attr('class', 'axis axis-y');
+
+    const linePath = lineG.append('path').attr('fill', 'none').attr('stroke', '#38bdf8').attr('stroke-width', 2.5);
+
+    const statusEl = document.getElementById('status');
+    const bestEl = document.getElementById('best-display');
+    const iterEl = document.getElementById('iter-display');
+    const hudFps = document.getElementById('hud-fps');
+    const hudWasm = document.getElementById('hud-wasm');
+    const hudJs = document.getElementById('hud-js');
+    const hudIter = document.getElementById('hud-iter');
+
+    let wasmInitialized = false;
+
+    function currentDim(benchKey) {
+      dimInput.value = 2;
+      dimLabel.textContent = '2D surface view';
+      return 2;
+    }
+
+    function buildOptions(lambda, maxIter, seed, dim) {
+      const opts = { popsize: lambda, seed, maxEvals: lambda * maxIter };
+      if (boundsToggle.checked) {
+        const lo = Number(boundLo.value) || -5;
+        const hi = Number(boundHi.value) || 5;
+        opts.bounds = {
+          lower: new Float64Array(Array(dim).fill(lo)),
+          upper: new Float64Array(Array(dim).fill(hi)),
+        };
+      }
+      const samples = Number(noiseSamples.value) || 1;
+      const maxS = Number(noiseMax.value) || 8;
+      opts.noise = {
+        samplesPerPoint: samples,
+        maxSamplesPerPoint: maxS,
+        adaptive: noiseAdaptive.checked,
+      };
+      return opts;
+    }
+
+    function projectCandidates(cands, bestVec, dim) {
+      const mode = projectionSelect.value === 'auto' ? (dim > 2 ? 'pca' : 'first2') : projectionSelect.value;
+      if (dim <= 2 || mode === 'first2') {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+      const mean = Array(dim).fill(0);
+      cands.forEach((v) => v.forEach((val, i) => { mean[i] += val; }));
+      mean.forEach((_, i) => { mean[i] /= cands.length; });
+      const cov = Array.from({ length: dim }, () => Array(dim).fill(0));
+      cands.forEach((v) => {
+        for (let i = 0; i < dim; i++) {
+          const a = v[i] - mean[i];
+          for (let j = 0; j < dim; j++) cov[i][j] += a * (v[j] - mean[j]);
+        }
+      });
+      const denom = Math.max(1, cands.length - 1);
+      for (let i = 0; i < dim; i++) for (let j = 0; j < dim; j++) cov[i][j] /= denom;
+
+      const powerVec = (M) => {
+        let v = Array.from({ length: dim }, () => Math.random());
+        const norm = (arr) => Math.sqrt(arr.reduce((s, x) => s + x * x, 0));
+        for (let it = 0; it < 25; it++) {
+          const nv = Array(dim).fill(0);
+          for (let i = 0; i < dim; i++) {
+            for (let j = 0; j < dim; j++) nv[i] += M[i][j] * v[j];
+          }
+          const n = norm(nv) || 1;
+          v = nv.map((x) => x / n);
+        }
+        let lambda = 0;
+        for (let i = 0; i < dim; i++) for (let j = 0; j < dim; j++) lambda += v[i] * M[i][j] * v[j];
+        return { v, lambda };
+      };
+
+      const { v: v1, lambda: l1 } = powerVec(cov);
+      if (!isFinite(l1) || Math.abs(l1) < 1e-12) {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+      const cov2 = cov.map((row, i) => row.map((val, j) => val - l1 * v1[i] * v1[j]));
+      const { v: v2, lambda: l2 } = powerVec(cov2);
+      if (!isFinite(l2) || Math.abs(l2) < 1e-12) {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+
+      const project = (vec) => {
+        const centered = vec.map((x, i) => x - mean[i]);
+        const px = centered.reduce((s, x, i) => s + x * v1[i], 0);
+        const py = centered.reduce((s, x, i) => s + x * v2[i], 0);
+        return { x: px, y: py };
+      };
+
+      return { pts: cands.map(project), b: project(bestVec) };
+    }
+
+    // Three.js scene
+    const threeCanvas = mustGet('three-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, antialias: true, alpha: true });
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 16/9, 0.1, 500);
+    camera.position.set(0, 40, 70);
+    const controls = new OrbitControls(camera, threeCanvas);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+    scene.add(new THREE.AmbientLight(0x666666));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(30, 50, 30);
+    scene.add(dir);
+
+    let surfaceMesh = null;
+    const surfaceGroup = new THREE.Group();
+    scene.add(surfaceGroup);
+    let pointsMesh = null;
+    let bestSphere = null;
+    let ellipseLine = null;
+
+    function viridis(t) {
+      // Simple viridis approximation
+      const a = [68, 1, 84], b = [59, 82, 139], c = [33, 145, 140], d = [94, 201, 98], e = [253, 231, 37];
+      const lerp = (p, q, s) => p + (q - p) * s;
+      const x = t;
+      let r, g, b2;
+      if (x < 0.25) { const s = x / 0.25; r = lerp(a[0], b[0], s); g = lerp(a[1], b[1], s); b2 = lerp(a[2], b[2], s); }
+      else if (x < 0.5) { const s = (x-0.25)/0.25; r = lerp(b[0], c[0], s); g = lerp(b[1], c[1], s); b2 = lerp(b[2], c[2], s); }
+      else if (x < 0.75) { const s = (x-0.5)/0.25; r = lerp(c[0], d[0], s); g = lerp(c[1], d[1], s); b2 = lerp(c[2], d[2], s); }
+      else { const s = (x-0.75)/0.25; r = lerp(d[0], e[0], s); g = lerp(d[1], e[1], s); b2 = lerp(d[2], e[2], s); }
+      return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b2);
+    }
+
+    function buildSurfaceGeometry(fn) {
+      const size = 40;
+      const segments = 80;
+      const geom = new THREE.PlaneGeometry(size, size, segments, segments);
+      const pos = geom.attributes.position;
+      let min = Infinity, max = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = fn([x / 2, y / 2]);
+        pos.setZ(i, z);
+        if (z < min) min = z;
+        if (z > max) max = z;
+      }
+      const colors = [];
+      for (let i = 0; i < pos.count; i++) {
+        const z = pos.getZ(i);
+        const t = (z - min) / (max - min + 1e-9);
+        const rgb = viridis(t);
+        colors.push(((rgb >> 16) & 255) / 255, ((rgb >> 8) & 255) / 255, (rgb & 255) / 255);
+      }
+      geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geom.rotateX(-Math.PI / 2);
+      return geom;
+    }
+
+    function updateSurface(fn) {
+      if (surfaceMesh) surfaceGroup.remove(surfaceMesh);
+      const geom = buildSurfaceGeometry(fn);
+      const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.9, roughness: 0.6, metalness: 0.0 });
+      surfaceMesh = new THREE.Mesh(geom, mat);
+      surfaceGroup.add(surfaceMesh);
+    }
+
+    function updatePoints(batch, mean) {
+      if (pointsMesh) surfaceGroup.remove(pointsMesh);
+      const geom = new THREE.BufferGeometry();
+      const arr = new Float32Array(batch.length * 3);
+      for (let i = 0; i < batch.length; i++) {
+        arr[i*3] = batch[i].x;
+        arr[i*3+1] = 0.05;
+        arr[i*3+2] = batch[i].y;
+      }
+      geom.setAttribute('position', new THREE.BufferAttribute(arr,3));
+      const mat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.6 });
+      pointsMesh = new THREE.Points(geom, mat);
+      surfaceGroup.add(pointsMesh);
+
+      if (bestSphere) surfaceGroup.remove(bestSphere);
+      const sphereGeo = new THREE.SphereGeometry(0.6, 24, 24);
+      const sphereMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.6 });
+      bestSphere = new THREE.Mesh(sphereGeo, sphereMat);
+      bestSphere.position.set(mean.x, 0.1, mean.y);
+      surfaceGroup.add(bestSphere);
+    }
+
+    function updateEllipse(mean, cov2x2) {
+      if (ellipseLine) surfaceGroup.remove(ellipseLine);
+      // Eigen decomposition of 2x2 covariance
+      const a = cov2x2[0], b = cov2x2[1], c = cov2x2[3];
+      const trace = a + c;
+      const det = a * c - b * b;
+      const disc = Math.max(trace*trace/4 - det, 0);
+      const l1 = trace/2 + Math.sqrt(disc);
+      const l2 = trace/2 - Math.sqrt(disc);
+      const rx = Math.sqrt(Math.max(l1, 1e-6));
+      const ry = Math.sqrt(Math.max(l2, 1e-6));
+      const angle = Math.atan2(b, l1 - a); // eigenvector for l1
+      const pts = [];
+      for (let i = 0; i <= 64; i++) {
+        const t = (i / 64) * Math.PI * 2;
+        const x = rx * Math.cos(t);
+        const y = ry * Math.sin(t);
+        const xr = x * Math.cos(angle) - y * Math.sin(angle);
+        const yr = x * Math.sin(angle) + y * Math.cos(angle);
+        pts.push(new THREE.Vector3(mean.x + xr, 0.05, mean.y + yr));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.8 });
+      ellipseLine = new THREE.LineLoop(geo, mat);
+      ellipseLine.computeLineDistances();
+      surfaceGroup.add(ellipseLine);
+    }
+
+    function resizeRenderer() {
+      const w = threeCanvas.clientWidth || 800;
+      const h = 380;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resizeRenderer();
+    window.addEventListener('resize', resizeRenderer);
+
+    function renderThree() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(renderThree);
+    }
+    renderThree();
+
+    function covFromPoints(batch, mean) {
+      if (!batch.length) return [1,0,0,1];
+      const n = batch.length;
+      let sxx=0, sxy=0, syy=0;
+      for (const p of batch) {
+        const dx = p.x - mean.x;
+        const dy = p.y - mean.y;
+        sxx += dx*dx;
+        sxy += dx*dy;
+        syy += dy*dy;
+      }
+      const denom = Math.max(1, n-1);
+      return [sxx/denom, sxy/denom, sxy/denom, syy/denom];
+    }
+
+    async function run() {
+      statusEl.textContent = 'Initializing wasm...';
+      if (!wasmInitialized) {
+        await init();
+        wasmInitialized = true;
+      }
+
+      const benchKey = benchSelect.value;
+      const bench = benchFns[benchKey];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = currentDim(benchKey);
+      dimLabel.textContent = '2D surface view';
+
+      const opts = buildOptions(lambda, maxIter, seed, dim);
+
+      const x0 = new Float64Array(dim);
+      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+      const es = new WasmCmaes(x0, sigma, opts);
+
+      buildSurface(bench.f);
+
+      // Reset module-level history for new run and capture metadata
+      optimizationHistory = [];
+      currentRunMetadata = {
+        benchmark: benchKey,
+        lambda: lambda,
+        sigma: sigma,
+        maxIterations: maxIter,
+        seed: seed,
+        dimensions: dim
+      };
+      const history = optimizationHistory;  // Local alias for compatibility
+      let iter = 0;
+      let bestF = Infinity;
+      let lastTs = performance.now();
+      let iterCounter = 0;
+      playbackState.frames = [];
+      playbackState.idx = 0;
+      scrub.max = 0;
+
+      const stepOnce = () => {
+        const lambda = es.lambda;
+        const candFlat = es.ask_flat();
+        const fits = new Float64Array(lambda);
+        const candidates = [];
+        for (let k = 0; k < lambda; k++) {
+          const offset = k * dim;
+          const v = candFlat.slice(offset, offset + dim);
+          candidates.push(Array.from(v));
+          fits[k] = bench.f(v);
+        }
+        es.tell_flat(fits);
+        const res = es.result();
+        const covArr = Array.from(es.cov_matrix());
+        const cov2x2 = [covArr[0], covArr[1], covArr[2], covArr[3]];
+        bestF = Math.min(bestF, res.best_f);
+        history.push({ iter, best: bestF });
+        iterCounter++;
+
+        const bestVec = Array.from(res.best_x());
+        const proj = projectCandidates(candidates, bestVec, dim);
+        render(history, proj.pts, res, proj.b, cov2x2);
+        // Store frame for scrub
+        const meanPt = { x: res.xmean()[0], y: res.xmean()[1] };
+        if (playbackState.frames.length > 1000) playbackState.frames.shift();
+        playbackState.frames.push({
+          pts: proj.pts,
+          mean: meanPt,
+          cov: cov2x2,
+          best: proj.b,
+          bestF: res.best_f,
+          iter,
+        });
+        scrub.max = playbackState.frames.length - 1;
+
+        const delta = history.length > 1 ? history[history.length - 2].best - res.best_f : 0;
+        const boost = Math.max(1.0, Math.min(1.25, 1.0 + Math.abs(delta) * 2));
+        gsap.fromTo(bestEl, { scale: 1 }, { scale: boost, duration: 0.35, ease: 'sine.out' });
+
+        iter++;
+        const now = performance.now();
+        if (now - lastTs > 1000) {
+          document.getElementById('hud-iter').textContent = `${iterCounter} iter/s`;
+          iterCounter = 0;
+          lastTs = now;
+        }
+
+        if (!es.stop_status().stopped && iter < maxIter) {
+          requestAnimationFrame(stepOnce);
+        } else {
+          statusEl.textContent = `Done in ${iter} iterations / ${res.evals} evals`;
+          document.getElementById('hud-wasm').textContent = `${res.evals} evals`;
+        }
+      };
+
+      statusEl.textContent = `Running ${bench.title}...`;
+      requestAnimationFrame(stepOnce);
+    }
+
+    function runJsBaseline(dimOverride) {
+      const bench = benchFns[benchSelect.value];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma0 = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = dimOverride || 2;
+
+      const rng = (() => {
+        let state = BigInt(seed || 1);
+        return () => {
+          state = (6364136223846793005n * state + 1n) & ((1n << 64n) - 1n);
+          return Number(state >> 11n) / 9007199254740992;
+        };
+      })();
+
+      let mean = Array.from({ length: dim }, (_, i) => bench.x0[i % bench.x0.length] || 0);
+      let sigma = sigma0;
+      const sample = () => {
+        const z = [];
+        for (let i=0;i<dim;i++) {
+          const u1 = Math.max(1e-12, 1 - rng());
+          const u2 = 1 - rng();
+          const r = Math.sqrt(-2*Math.log(u1));
+          const th = 2*Math.PI*u2;
+          z.push(r*Math.cos(th));
+        }
+        return z.map((zi, i) => mean[i] + sigma * zi);
+      };
+
+      let bestF = Infinity;
+      let bestX = mean.slice();
+      const t0 = performance.now();
+      for (let iter=0; iter<maxIter; iter++) {
+        const cand = [];
+        for (let k=0;k<lambda;k++) {
+          const x = sample();
+          let f = bench.f(x);
+          if (boundsToggle.checked) {
+            const lo = Number(boundLo.value) || -5;
+            const hi = Number(boundHi.value) || 5;
+            let penalty = 0;
+            for (let i=0;i<dim;i++) {
+              let xi = x[i];
+              if (xi < lo) { penalty += (lo - xi) ** 2; xi = lo; }
+              else if (xi > hi) { penalty += (xi - hi) ** 2; xi = hi; }
+              x[i] = xi;
+            }
+            f += 1e3 * penalty;
+          }
+        cand.push({x,f});
+        if (f < bestF) { bestF = f; bestX = x; }
+      }
+        cand.sort((a,b)=>a.f-b.f);
+        const mu = Math.max(1, Math.floor(lambda/4));
+        mean = Array(dim).fill(0);
+        for (let i=0;i<mu;i++) {
+          for (let d=0; d<dim; d++) mean[d] += cand[i].x[d];
+        }
+        for (let d=0; d<dim; d++) mean[d] /= mu;
+        sigma *= 0.99;
+      }
+      const t1 = performance.now();
+      const msg = `Baseline JS: best f=${bestF.toExponential(3)} in ${(t1-t0).toFixed(1)} ms`;
+      timingEl.textContent = msg;
+      hudJs.textContent = msg;
+      return { bestF, ms: (t1-t0), bestX };
+    }
+
+    function render(hist, batch, res, projBest, cov) {
+      if (!hist.length) return;
+      const xDomain = [0, d3.max(hist, (d) => d.iter) + 1];
+      const yMin = Math.max(1e-9, Math.min(...hist.map((d) => d.best)));
+      const yMaxRaw = d3.max(hist, (d) => d.best) || 1;
+      const yMax = yMaxRaw <= yMin ? yMin * 1.05 + 1e-9 : yMaxRaw;
+      lineX.domain(xDomain);
+      lineY.domain([yMin, yMax]);
+
+      lineG.select('.axis-x').call(d3.axisBottom(lineX).ticks(8).tickSizeOuter(0));
+      lineG.select('.axis-y').call(d3.axisLeft(lineY).ticks(6, "~g"));
+
+      const lineGen = d3.line()
+        .x((d) => lineX(d.iter))
+        .y((d) => lineY(d.best))
+        .curve(d3.curveCatmullRom.alpha(0.6));
+      linePath.attr('d', lineGen(hist));
+
+      const meanPt = projBest || { x: res.best_x()[0], y: res.best_x()[1] };
+      updatePoints(batch, meanPt);
+      if (cov) updateEllipse(meanPt, cov);
+
+      bestEl.textContent = `best f = ${res.best_f.toExponential(3)}`;
+      iterEl.textContent = `Iter ${hist[hist.length - 1].iter}`;
+    }
+
+    document.getElementById('run').addEventListener('click', run);
+    document.getElementById('run-js').addEventListener('click', () => runJsBaseline());
+    const runMobileBtn = document.getElementById('run-mobile');
+    if (runMobileBtn) runMobileBtn.addEventListener('click', run);
+    document.getElementById('run-race').addEventListener('click', async () => {
+      statusEl.textContent = 'Race: running WASM...';
+      const benchKey = benchSelect.value;
+      const bench = benchFns[benchKey];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = currentDim(benchKey);
+      const opts = buildOptions(lambda, maxIter, seed, dim);
+      if (!wasmInitialized) { await init(); wasmInitialized = true; }
+      const x0 = new Float64Array(dim);
+      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+      const es = new WasmCmaes(x0, sigma, opts);
+      const t0 = performance.now();
+      while (!es.stop_status().stopped) {
+        const candFlat = es.ask_flat();
+        const fits = new Float64Array(es.lambda);
+        for (let k = 0; k < es.lambda; k++) {
+          const offset = k * dim;
+          fits[k] = bench.f(candFlat.slice(offset, offset + dim));
+        }
+        es.tell_flat(fits);
+        if (es.evals >= opts.maxEvals) break;
+      }
+      const wasmMs = performance.now() - t0;
+      const wasmRes = es.result();
+      hudWasm.textContent = `${wasmRes.evals} evals, ${wasmMs.toFixed(1)} ms`;
+
+      statusEl.textContent = 'Race: running JS baseline...';
+      const jsRes = runJsBaseline(dim);
+      raceResults.innerHTML = `<div class="font-semibold">Race results</div>
+        <div>WASM: f=${wasmRes.best_f.toExponential(3)}, ${wasmMs.toFixed(1)} ms</div>
+        <div>JS: f=${jsRes.bestF.toExponential(3)}, ${jsRes.ms.toFixed(1)} ms</div>`;
+      statusEl.textContent = 'Race complete';
+    });
+
+    dimInput.addEventListener('input', () => {
+      dimInput.value = 2;
+      dimLabel.textContent = '2D surface view';
+    });
+
+    const playLoop = () => {
+      if (!playbackState.playing || playbackState.frames.length === 0) return;
+      playbackState.idx = (playbackState.idx + 1) % playbackState.frames.length;
+      scrub.value = playbackState.idx;
+      const frame = playbackState.frames[playbackState.idx];
+      updatePoints(frame.pts, frame.mean);
+      updateEllipse(frame.mean, frame.cov);
+      iterEl.textContent = `Iter ${frame.iter}`;
+      bestEl.textContent = `best f = ${frame.bestF?.toExponential?.(3) ?? '–'}`;
+      requestAnimationFrame(playLoop);
+    };
+
+    scrub.addEventListener('input', () => {
+      const idx = Number(scrub.value) || 0;
+      playbackState.idx = idx;
+      const frame = playbackState.frames[idx];
+      if (frame) {
+        updatePoints(frame.pts, frame.mean);
+        updateEllipse(frame.mean, frame.cov);
+        iterEl.textContent = `Iter ${frame.iter}`;
+        bestEl.textContent = `best f = ${frame.bestF?.toExponential?.(3) ?? '–'}`;
+      }
+    });
+
+    scrubPlay.addEventListener('click', () => {
+      playbackState.playing = !playbackState.playing;
+      scrubPlay.textContent = playbackState.playing ? '⏸' : '▶';
+      if (playbackState.playing) requestAnimationFrame(playLoop);
+    });
+
+    document.getElementById('apply-custom').addEventListener('click', async () => {
+      await monacoReady;
+      try {
+        const code = editor.getValue();
+        validateCustomCode(code);
+        const fn = new Function(`${code}; return f;`)();
+        if (typeof fn !== 'function') throw new Error('f is not a function');
+        customFn = fn;
+        benchSelect.value = 'custom';
+        statusEl.textContent = 'Custom objective applied';
+      } catch (e) {
+        alert('Invalid function: ' + e.message);
+      }
+    });
+
+    // Story mode
+    const storySteps = [
+      'Sampling: CMA-ES draws λ candidates from a multivariate normal around the mean.',
+      'Selection: rank candidates, take top μ with log weights.',
+      'Adaptation: update mean, covariance (full/sep/lm), and step size σ.',
+      'Stop: ftarget, max evals, TolFun/TolX, or ill-conditioned covariance.',
+      'Restarts: optional IPOP/BIPOP strategies to escape local minima.'
+    ];
+    let storyIdx = 0;
+    const storyText = document.getElementById('story-text');
+    const storyOverlay = document.getElementById('story-overlay');
+    const storyOverlayText = document.getElementById('story-overlay-text');
+    const updateStory = () => { storyText.textContent = storySteps[storyIdx]; };
+    updateStory();
+    const storyPrev = mustGet('story-prev');
+    const storyNext = mustGet('story-next');
+    const storyClose = mustGet('story-close');
+    storyPrev.addEventListener('click', () => { storyIdx = (storyIdx - 1 + storySteps.length) % storySteps.length; updateStory(); });
+    storyNext.addEventListener('click', () => { storyIdx = (storyIdx + 1) % storySteps.length; updateStory(); });
+    storyClose.addEventListener('click', () => storyOverlay.classList.add('hidden'));
+    storyText.addEventListener('click', () => { storyOverlayText.textContent = storySteps[storyIdx]; storyOverlay.classList.remove('hidden'); });
+    document.getElementById('story-open').addEventListener('click', () => { storyOverlayText.textContent = storySteps[storyIdx]; storyOverlay.classList.remove('hidden'); });
+    const startTutorialBtn = document.getElementById('start-tutorial');
+    if (startTutorialBtn) startTutorialBtn.addEventListener('click', () => {
+      storyOverlayText.textContent = storySteps[storyIdx];
+      storyOverlay.classList.remove('hidden');
+    });
+
+    // FPS HUD
+    let lastFrame = performance.now();
+    let frames = 0;
+    const tick = () => {
+      frames++;
+      const now = performance.now();
+      if (now - lastFrame > 1000) {
+        hudFps.textContent = `${frames} fps`;
+        frames = 0;
+        lastFrame = now;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+
+    // Background Three.js particles
+    const canvas = document.getElementById('bg-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+    camera.position.z = 200;
+    const geometry = new THREE.BufferGeometry();
+    const COUNT = 800;
+    const positions = new Float32Array(COUNT * 3);
+    for (let i = 0; i < COUNT * 3; i++) positions[i] = (Math.random() - 0.5) * 400;
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({ color: 0x38bdf8, size: 1.6, transparent: true, opacity: 0.6 });
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    const animateBg = () => {
+      points.rotation.y += 0.0008;
+      points.rotation.x += 0.0004;
+      renderer.render(scene, camera);
+      requestAnimationFrame(animateBg);
+    };
+
+    // Optional 3D surface of the current benchmark (preview only, not exact scale)
+    let surface;
+    function buildSurface(fn) {
+      if (surface) scene.remove(surface);
+      const planeSize = 60;
+      const res = 40;
+      const geo = new THREE.PlaneGeometry(planeSize, planeSize, res, res);
+      const positions = geo.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i) / 5; // shrink input
+        const y = positions.getY(i) / 5;
+        const z = -fn([x, y]);
+        positions.setZ(i, z);
+      }
+      positions.needsUpdate = true;
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        flatShading: true,
+      });
+      surface = new THREE.Mesh(geo, mat);
+      surface.rotation.x = -Math.PI / 2;
+      scene.add(surface);
+    }
+
+    // Lights for the surface
+    const light1 = new THREE.PointLight(0x38bdf8, 1, 400);
+    light1.position.set(80, 120, 120);
+    scene.add(light1);
+    const light2 = new THREE.PointLight(0x6366f1, 0.7, 400);
+    light2.position.set(-60, 120, -80);
+    scene.add(light2);
+
+    const onResize = () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
+    animateBg();
+
+    // Subtle GSAP float on panels
+    gsap.utils.toArray('.panel').forEach((el, i) => {
+      gsap.to(el, { y: '+=6', duration: 3 + i * 0.2, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: i * 0.1 });
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/wasm_cmaes/sw.js').catch((err) => {
+        console.warn('Service worker registration failed', err);
+      });
+    }
+
+    // ============================================================================
+    // ENHANCEMENTS: Toast notifications, keyboard shortcuts, export, help
+    // ============================================================================
+
+    // Toast notification system
+    function showToast(message, type = 'info', duration = 3000) {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type} px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium transform transition-all duration-300 translate-x-full`;
+
+      const colors = {
+        info: 'bg-blue-500',
+        success: 'bg-green-500',
+        warning: 'bg-yellow-500',
+        error: 'bg-red-500'
+      };
+      toast.classList.add(colors[type] || colors.info);
+
+      const icons = {
+        info: 'ℹ️',
+        success: '✓',
+        warning: '⚠️',
+        error: '✗'
+      };
+      toast.innerHTML = `<span class="mr-2">${icons[type] || icons.info}</span>${message}`;
+
+      container.appendChild(toast);
+
+      // Animate in
+      setTimeout(() => toast.classList.remove('translate-x-full'), 50);
+
+      // Auto-remove
+      setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => container.removeChild(toast), 300);
+      }, duration);
+    }
+
+    // Export to CSV
+    function exportCSV() {
+      if (!optimizationHistory || optimizationHistory.length === 0) {
+        showToast('No optimization data to export', 'warning');
+        return;
+      }
+
+      const headers = 'iteration,best_value,lambda\n';
+      const rows = optimizationHistory.map((h, i) => {
+        return `${i + 1},${h.best},${document.getElementById('lambda').value}`;
+      }).join('\n');
+
+      const csv = headers + rows;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `cmaes-${currentRunMetadata?.benchmark || benchSelect.value}-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('CSV exported successfully', 'success');
+    }
+
+    // Export to JSON
+    function exportJSON() {
+      if (!optimizationHistory || optimizationHistory.length === 0) {
+        showToast('No optimization data to export', 'warning');
+        return;
+      }
+
+      const data = {
+        benchmark: currentRunMetadata?.benchmark || benchSelect.value,
+        parameters: currentRunMetadata || {
+          lambda: Number(document.getElementById('lambda').value),
+          sigma: Number(document.getElementById('sigma').value),
+          maxIterations: Number(document.getElementById('iters').value),
+          seed: Number(document.getElementById('seed').value),
+          dimensions: currentDim(benchSelect.value)
+        },
+        history: optimizationHistory,
+        timestamp: new Date().toISOString(),
+        finalBest: optimizationHistory[optimizationHistory.length - 1]?.best
+      };
+
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `cmaes-${currentRunMetadata?.benchmark || benchSelect.value}-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('JSON exported successfully', 'success');
+    }
+
+    // Share configuration via URL
+    function shareConfig() {
+      const params = new URLSearchParams({
+        bench: benchSelect.value,
+        lambda: document.getElementById('lambda').value,
+        sigma: document.getElementById('sigma').value,
+        iters: document.getElementById('iters').value,
+        seed: document.getElementById('seed').value
+      });
+
+      const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast('Configuration URL copied to clipboard!', 'success');
+        }).catch(() => {
+          showToast('Failed to copy URL', 'error');
+        });
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          showToast('Configuration URL copied to clipboard!', 'success');
+        } catch (err) {
+          showToast('Failed to copy URL', 'error');
+        }
+        document.body.removeChild(textArea);
+      }
+    }
+
+    // Load configuration from URL on page load
+    function loadConfigFromURL() {
+      const params = new URLSearchParams(window.location.search);
+
+      if (params.has('bench')) benchSelect.value = params.get('bench');
+      if (params.has('lambda')) document.getElementById('lambda').value = params.get('lambda');
+      if (params.has('sigma')) document.getElementById('sigma').value = params.get('sigma');
+      if (params.has('iters')) document.getElementById('iters').value = params.get('iters');
+      if (params.has('seed')) document.getElementById('seed').value = params.get('seed');
+
+      if (params.size > 0) {
+        showToast('Configuration loaded from URL', 'info');
+      }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger shortcuts when typing in inputs or Monaco editor
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      // Don't trigger shortcuts when typing in Monaco editor
+      const editorContainer = document.getElementById('editor');
+      if (editorContainer && editorContainer.contains(e.target)) return;
+
+      // Space: Run optimization
+      if (e.key === ' ') {
+        e.preventDefault();
+        run();
+      }
+
+      // R: Reset to defaults
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        benchSelect.value = 'sphere';
+        document.getElementById('lambda').value = '32';
+        document.getElementById('sigma').value = '1.2';
+        document.getElementById('iters').value = '250';
+        document.getElementById('seed').value = '42';
+        showToast('Reset to default values', 'info');
+      }
+
+      // H or ?: Show help
+      if (e.key === 'h' || e.key === 'H' || e.key === '?') {
+        e.preventDefault();
+        toggleHelp();
+      }
+
+      // Ctrl/Cmd + S: Share configuration
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        shareConfig();
+      }
+
+      // Ctrl/Cmd + E: Export CSV
+      if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        exportCSV();
+      }
+
+      // Ctrl/Cmd + Shift + E: Export JSON
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'E') {
+        e.preventDefault();
+        exportJSON();
+      }
+
+      // Escape: Close help overlay
+      if (e.key === 'Escape') {
+        const helpOverlay = document.getElementById('help-overlay');
+        if (helpOverlay && !helpOverlay.classList.contains('hidden')) {
+          toggleHelp();
+        }
+      }
+    });
+
+    // Help overlay toggle with focus management and focus trapping
+    let helpTriggerElement = null;
+
+    function toggleHelp() {
+      const overlay = document.getElementById('help-overlay');
+      if (!overlay) return;
+
+      const isHidden = overlay.classList.contains('hidden');
+
+      if (isHidden) {
+        // Opening - store current focus and move to overlay
+        helpTriggerElement = document.activeElement;
+        overlay.classList.remove('hidden');
+
+        // Focus the close button for keyboard accessibility
+        setTimeout(() => {
+          const closeBtn = document.getElementById('help-close-btn');
+          if (closeBtn) closeBtn.focus();
+        }, 50);
+
+        // Add focus trap
+        overlay.addEventListener('keydown', trapFocus);
+      } else {
+        // Closing - return focus to trigger
+        overlay.classList.add('hidden');
+        overlay.removeEventListener('keydown', trapFocus);
+
+        if (helpTriggerElement && typeof helpTriggerElement.focus === 'function') {
+          helpTriggerElement.focus();
+          helpTriggerElement = null;
+        }
+      }
+    }
+
+    // Trap focus inside help overlay (accessibility requirement for modals)
+    function trapFocus(e) {
+      if (e.key !== 'Tab') return;
+
+      const overlay = document.getElementById('help-overlay');
+      const focusableElements = overlay.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        // Shift+Tab - if on first element, go to last
+        if (document.activeElement === firstElement) {
+          lastElement.focus();
+          e.preventDefault();
+        }
+      } else {
+        // Tab - if on last element, go to first
+        if (document.activeElement === lastElement) {
+          firstElement.focus();
+          e.preventDefault();
+        }
+      }
+    }
+
+    // Initialize: Load config from URL if present
+    loadConfigFromURL();
+
+    // Add event listeners to export buttons if they exist
+    const exportCsvBtn = document.getElementById('export-csv');
+    const exportJsonBtn = document.getElementById('export-json');
+    const shareBtn = document.getElementById('share-config');
+    const helpBtn = document.getElementById('help-btn');
+    const helpCloseX = document.getElementById('help-close-x');
+    const helpCloseBtn = document.getElementById('help-close-btn');
+
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportCSV);
+    if (exportJsonBtn) exportJsonBtn.addEventListener('click', exportJSON);
+    if (shareBtn) shareBtn.addEventListener('click', shareConfig);
+    if (helpBtn) helpBtn.addEventListener('click', toggleHelp);
+    if (helpCloseX) helpCloseX.addEventListener('click', toggleHelp);
+    if (helpCloseBtn) helpCloseBtn.addEventListener('click', toggleHelp);
+
+  </script>
+</body>
+</html>

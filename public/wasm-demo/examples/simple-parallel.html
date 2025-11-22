@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CMA-ES wasm demo (parallel bundle)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; line-height: 1.5; }
+    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+  <h1>CMA-ES WASM (parallel + SIMD bundle)</h1>
+  <p>Uses the <code>pkg-par/</code> build. Rayon will still run single-threaded unless you rebuild with atomics + init a thread pool (see README).</p>
+  <button id="run">Run optimizer</button>
+  <pre id="out">Click "Run optimizer"</pre>
+
+  <script type="module">
+    import init, { fmin } from "../pkg-par/cmaes_wasm.js";
+
+    const $out = document.querySelector('#out');
+    document.querySelector('#run').addEventListener('click', async () => {
+      $out.textContent = 'Loading wasm (parallel bundle)...';
+      await init();
+
+      const x0 = new Float64Array([4.0, -1.5, 0.5]);
+      const sigma = 1.0;
+      const objective = (x) => {
+        let s = 0;
+        for (let i = 0; i < x.length - 1; i++) {
+          const t1 = x[i + 1] - x[i] * x[i];
+          const t2 = x[i] - 1;
+          s += 100 * t1 * t1 + t2 * t2; // Rosenbrock
+        }
+        return s;
+      };
+
+      $out.textContent = 'Running CMA-ES (parallel build)...';
+      const res = fmin(x0, sigma, objective);
+
+      $out.textContent = JSON.stringify({
+        best_f: res.best_f,
+        best_x: Array.from(res.best_x()),
+        evals: res.evals,
+        iterations: res.iterations,
+      }, null, 2);
+    });
+  </script>
+</body>
+</html>
