@@ -5,6 +5,7 @@ import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 import { NoiseExplorer } from "./NoiseExplorer";
 import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
 import { ActiveCovarianceDemo } from "./ActiveCovarianceDemo";
+import { RestartStrategyViewer } from "./RestartStrategyViewer";
 
 export function PracticalPlaybook() {
   return (
@@ -45,6 +46,9 @@ export function PracticalPlaybook() {
       </div>
       <div className="pt-2">
         <ActiveCovarianceDemo />
+      </div>
+      <div className="pt-2">
+        <RestartStrategyViewer />
       </div>
     </div>
   );
