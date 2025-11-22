@@ -136,7 +136,9 @@ export function CAGalleryTrace() {
         {snapshots.map((_, i) => (
           <div key={i} className="relative">
             <canvas
-              ref={(el) => (canvasRefs.current[i] = el)}
+              ref={(el) => {
+                canvasRefs.current[i] = el;
+              }}
               width={SIZE}
               height={SIZE}
               className="w-full rounded-lg border border-slate-800/70 bg-slate-950"
