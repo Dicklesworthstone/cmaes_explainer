@@ -362,18 +362,38 @@ export function TransformerViz() {
   const [depth, setDepth] = useState(0.55);
   const [width, setWidth] = useState(0.5);
   const [heads, setHeads] = useState(0.45);
+  const [interacting, setInteracting] = useState(false); // Mobile interaction state
   
   const manifoldPoints = useMemo(() => makeManifoldPoints(), []);
 
   return (
-    <div className="glass-card p-6 space-y-6">
+    <div className="glass-card p-4 md:p-6 space-y-6">
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         
         {/* 3D Visualization */}
-        <div className="lg:w-[60%] w-full relative group aspect-[4/3] lg:aspect-auto lg:h-[480px]">
+        <div className="w-full lg:w-[60%] relative group aspect-[16/10] lg:aspect-auto lg:h-[480px]">
           <div className="absolute -inset-1 bg-gradient-to-br from-violet-600/20 to-teal-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
           <div className="relative h-full w-full rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-[#030014]">
-            <Canvas dpr={[1, 2]}>
+            
+            {/* Mobile Interactivity Overlay */}
+            {!interacting && (
+              <div 
+                className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 backdrop-blur-[2px] cursor-pointer lg:pointer-events-none lg:hidden"
+                onClick={() => setInteracting(true)}
+                onTouchStart={() => setInteracting(true)}
+              >
+                <div className="px-4 py-2 rounded-full bg-slate-900/80 border border-white/10 text-xs font-semibold text-white shadow-lg animate-pulse">
+                  Tap to Interact
+                </div>
+              </div>
+            )}
+
+            <Canvas 
+              dpr={[1, 2]}
+              className={`${interacting ? "touch-none" : "touch-pan-y"}`}
+              onPointerDown={() => setInteracting(true)}
+              onPointerLeave={() => setInteracting(false)}
+            >
               <PerspectiveCamera makeDefault position={[5, 2, 5]} fov={40} />
               <color attach="background" args={["#030014"]} />
               <fog attach="fog" args={["#030014", 6, 18]} />
@@ -389,9 +409,10 @@ export function TransformerViz() {
               </Float>
 
               <OrbitControls 
+                enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
                 enablePan={false} 
                 enableZoom={false} 
-                autoRotate 
+                autoRotate={!interacting} 
                 autoRotateSpeed={0.8} 
                 maxPolarAngle={Math.PI / 2} 
                 minPolarAngle={Math.PI / 4}
@@ -401,7 +422,7 @@ export function TransformerViz() {
               <gridHelper position={[0, -2, 0]} args={[20, 20, "#1e1b4b", "#0f172a"]} />
             </Canvas>
             
-            <div className="absolute top-4 left-4 px-3 py-1 rounded bg-slate-950/60 backdrop-blur-md border border-white/5 text-xs text-violet-300 font-mono">
+            <div className="absolute top-4 left-4 px-3 py-1 rounded bg-slate-950/60 backdrop-blur-md border border-white/5 text-xs text-violet-300 font-mono pointer-events-none">
               Arch: Transformer
             </div>
           </div>
@@ -467,6 +488,13 @@ function ControlSlider({ label, value, setValue, min, max, displayValue, color }
     fuchsia: "accent-fuchsia-400 text-fuchsia-400 border-fuchsia-500/20 bg-fuchsia-500/10",
   }[color as string] || "accent-sky-500";
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(parseFloat(e.target.value));
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+       navigator.vibrate(5); 
+    }
+  };
+
   return (
     <div className="relative pl-2">
       <label className="block space-y-2">
@@ -482,7 +510,7 @@ function ControlSlider({ label, value, setValue, min, max, displayValue, color }
           max={max}
           step={0.01}
           value={value}
-          onChange={(e) => setValue(parseFloat(e.target.value))}
+          onChange={handleChange}
           className={`w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer ${colorClass.split(" ")[0]}`}
         />
       </label>
