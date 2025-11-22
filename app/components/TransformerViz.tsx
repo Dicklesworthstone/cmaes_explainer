@@ -364,6 +364,18 @@ export function TransformerViz() {
   const [heads, setHeads] = useState(0.45);
   const [interacting, setInteracting] = useState(false); // Mobile interaction state
   
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      setIsLargeScreen(mq.matches);
+      const handler = (e: MediaQueryListEvent) => setIsLargeScreen(e.matches);
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, []);
+
   const manifoldPoints = useMemo(() => makeManifoldPoints(), []);
 
   return (
@@ -412,7 +424,8 @@ export function TransformerViz() {
                 </Float>
 
                 <OrbitControls 
-                  enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
+                  makeDefault
+                  enabled={interacting || isLargeScreen}
                   enablePan={false} 
                   enableZoom={false} 
                   autoRotate={!interacting} 

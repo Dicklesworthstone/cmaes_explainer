@@ -6,7 +6,7 @@
   "scripts": {
     "preinstall": "bun -e \"if(!(process.env.npm_config_user_agent||'').includes('bun')){console.error('Use bun: bun install');process.exit(1);}\"",
     "dev": "next dev",
-    "build": "next build",
+    "build": "rm -rf .next && next build",
     "start": "next start",
     "lint": "eslint ."
   },

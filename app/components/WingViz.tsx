@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Environment, Float, Text } from "@react-three/drei";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 
 // --- Math / Physics Helpers ---
@@ -214,6 +214,18 @@ export function WingViz() {
   const [thickness, setThickness] = useState(0.5);
   const [interacting, setInteracting] = useState(false); // Track interaction for overlay
 
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      setIsLargeScreen(mq.matches);
+      const handler = (e: MediaQueryListEvent) => setIsLargeScreen(e.matches);
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, []);
+
   // Toy physics model for "fitness" (Lift/Drag ratio)
   // Higher aspect = better L/D usually
   // Higher thickness = more drag, but maybe more structural integrity (not modeled here)
@@ -282,7 +294,8 @@ export function WingViz() {
                 </group>
 
                 <OrbitControls 
-                  enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
+                  makeDefault
+                  enabled={interacting || isLargeScreen}
                   enablePan={false} 
                   enableZoom={false} 
                   minPolarAngle={Math.PI / 4} 
