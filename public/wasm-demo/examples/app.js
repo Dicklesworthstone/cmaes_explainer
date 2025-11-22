@@ -2054,3 +2054,142 @@ function f(x) {
         console.warn('Service worker registration failed', err);
       });
     }
+
+// ============================================================================
+// UI ENHANCEMENTS (Merged from app-ui.js)
+// ============================================================================
+
+// Theme Management
+const toggleTheme = () => {
+  const isDark = document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark', !isDark);
+  document.documentElement.classList.toggle('light', isDark);
+  
+  const moonIcon = document.getElementById('moon-icon');
+  const sunIcon = document.getElementById('sun-icon');
+  if (moonIcon && sunIcon) {
+    moonIcon.classList.toggle('hidden', isDark);
+    sunIcon.classList.toggle('hidden', !isDark);
+  }
+  localStorage.setItem('theme', !isDark ? 'dark' : 'light');
+  showToast(`Switched to ${!isDark ? 'dark' : 'light'} mode`, 'info', 2000);
+};
+
+const themeToggleBtn = document.getElementById('theme-toggle');
+if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+
+// Mobile Bottom Sheet Logic
+const initMobileSheet = () => {
+  const sheet = document.getElementById('mobile-sheet');
+  const handleBar = sheet?.querySelector('.handle-bar');
+  const closeBtn = document.getElementById('close-sheet');
+
+  if (!sheet || !handleBar) return;
+
+  let startY = 0;
+  let isDragging = false;
+
+  const open = () => sheet.classList.add('open');
+  const close = () => sheet.classList.remove('open');
+  const toggle = () => sheet.classList.contains('open') ? close() : open();
+
+  handleBar.addEventListener('click', toggle);
+  if (closeBtn) closeBtn.addEventListener('click', close);
+
+  handleBar.addEventListener('touchstart', (e) => {
+    startY = e.touches[0].clientY;
+    isDragging = true;
+  });
+
+  handleBar.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const deltaY = e.touches[0].clientY - startY;
+    if (sheet.classList.contains('open') && deltaY > 50) { close(); isDragging = false; }
+    else if (!sheet.classList.contains('open') && deltaY < -50) { open(); isDragging = false; }
+  });
+  
+  handleBar.addEventListener('touchend', () => isDragging = false);
+};
+initMobileSheet();
+
+// Command Palette
+const commands = [
+  { id: 'run', title: 'Run Optimization', icon: '🚀', handler: () => document.getElementById('run')?.click() },
+  { id: 'reset', title: 'Reset Defaults', icon: '↺', handler: () => {
+      if(document.getElementById('bench')) document.getElementById('bench').value = 'sphere';
+      if(document.getElementById('lambda')) document.getElementById('lambda').value = 32;
+      if(document.getElementById('sigma')) document.getElementById('sigma').value = 1.2;
+      if(document.getElementById('iters')) document.getElementById('iters').value = 250;
+      if(document.getElementById('seed')) document.getElementById('seed').value = 42;
+      document.getElementById('bench')?.dispatchEvent(new Event('change'));
+      showToast('Reset to defaults', 'info');
+  }},
+  { id: 'theme', title: 'Toggle Theme', icon: '🌓', handler: toggleTheme },
+  { id: 'capture', title: 'Capture 3D', icon: '📷', handler: () => {
+      const canvas = document.getElementById('three-canvas');
+      if(canvas) {
+          const link = document.createElement('a');
+          link.download = 'cmaes-3d.png';
+          link.href = canvas.toDataURL();
+          link.click();
+      }
+  }}
+];
+
+const toggleCommandPalette = () => {
+  const palette = document.getElementById('command-palette');
+  const backdrop = document.getElementById('command-palette-backdrop');
+  const input = document.getElementById('command-search');
+  
+  if (!palette || !backdrop) return;
+  
+  const isActive = palette.classList.contains('active');
+  
+  if (isActive) {
+    palette.classList.remove('active');
+    backdrop.classList.add('hidden');
+  } else {
+    palette.classList.add('active');
+    backdrop.classList.remove('hidden');
+    input?.focus();
+    renderCommands();
+  }
+};
+
+const renderCommands = (filter = '') => {
+  const list = document.getElementById('command-list');
+  if (!list) return;
+  
+  list.innerHTML = '';
+  commands.filter(c => c.title.toLowerCase().includes(filter.toLowerCase())).forEach(cmd => {
+    const item = document.createElement('div');
+    item.className = 'command-item p-3 hover:bg-white/10 cursor-pointer flex items-center gap-3 border-b border-white/5';
+    item.innerHTML = `<span class="text-lg">${cmd.icon}</span><span class="text-sm text-slate-200">${cmd.title}</span>`;
+    item.addEventListener('click', () => {
+      cmd.handler();
+      toggleCommandPalette();
+    });
+    list.appendChild(item);
+  });
+};
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    toggleCommandPalette();
+  }
+  if (e.key === 'Escape') {
+    const palette = document.getElementById('command-palette');
+    if (palette?.classList.contains('active')) toggleCommandPalette();
+  }
+});
+
+const cmdSearch = document.getElementById('command-search');
+if(cmdSearch) cmdSearch.addEventListener('input', (e) => renderCommands(e.target.value));
+document.getElementById('command-palette-backdrop')?.addEventListener('click', toggleCommandPalette);
+
+// Initial UI Polish
+document.getElementById('help-btn')?.addEventListener('click', () => {
+    // Simple help for now
+    showToast('Shortcuts: Space (Run), Ctrl+K (Cmds), R (Reset)', 'info', 5000);
+});
