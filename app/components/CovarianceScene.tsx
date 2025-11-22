@@ -1,8 +1,9 @@
 "use client";
 
+import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import type { Mesh } from "three";
 
 function Ellipsoid() {
@@ -13,6 +14,8 @@ function Ellipsoid() {
     ref.current.rotation.y += delta * 0.25;
     ref.current.rotation.x += delta * 0.1;
   });
+
+  const edgeGeo = useMemo(() => new THREE.SphereGeometry(1, 24, 24), []);
 
   return (
     <mesh ref={ref} scale={[1.4, 0.7, 1.0]}>
@@ -29,7 +32,7 @@ function Ellipsoid() {
         clearcoat={1}
       />
       <lineSegments>
-        <edgesGeometry args={[new THREE.SphereGeometry(1, 24, 24)]} />
+        <edgesGeometry args={[edgeGeo]} />
         <lineBasicMaterial color="#7dd3fc" transparent opacity={0.3} />
       </lineSegments>
     </mesh>
@@ -37,7 +40,7 @@ function Ellipsoid() {
 }
 
 function SampleCloud() {
-  const makePoints = () => {
+  const points = useMemo(() => {
     const n = 800;
     const data = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -54,17 +57,15 @@ function SampleCloud() {
       data[i * 3 + 2] = z;
     }
     return data;
-  };
-
-  const points = useRef<Float32Array>(makePoints());
+  }, []);
 
   return (
     <points>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
-          args={[points.current, 3]}
-          array={points.current}
+          args={[points, 3]}
+          array={points}
           itemSize={3}
         />
       </bufferGeometry>
@@ -81,11 +82,7 @@ function SampleCloud() {
   );
 }
 
-import * as THREE from "three";
-
 export function CovarianceScene() {
-  if (typeof window === "undefined") return null;
-
   return (
     <Canvas
       camera={{ position: [2.8, 1.6, 3.2], fov: 35 }}
@@ -102,6 +99,7 @@ export function CovarianceScene() {
       <Ellipsoid />
       
       <OrbitControls
+        makeDefault
         enablePan={false}
         enableZoom={false}
         autoRotate
