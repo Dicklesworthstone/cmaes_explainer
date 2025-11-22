@@ -189,7 +189,7 @@ function fix([x, y]: [number, number], strat: Strat): [number, number] {
 }
 
 function toPix([x, y]: [number, number]) {
-  const px = (x) => 40 + clamp01(x) * (SIZE - 80);
-  const py = (y) => 40 + (1 - clamp01(y)) * (SIZE - 80);
+  const px = (val: number) => 40 + clamp01(val) * (SIZE - 80);
+  const py = (val: number) => 40 + (1 - clamp01(val)) * (SIZE - 80);
   return [px(x), py(y)] as [number, number];
 }
