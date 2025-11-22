@@ -1,62 +1,166 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
-:root {
-  color-scheme: dark;
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap');
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-[#020617] text-slate-300 font-sans antialiased selection:bg-sky-500/30 selection:text-sky-200;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* Noise Overlay for Texture */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    opacity: 0.6;
+    mix-blend-mode: overlay;
+  }
+
+  /* Subtle grid background */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+    pointer-events: none;
+    z-index: -1;
+  }
 }
 
-html,
-body {
-  height: 100%;
-}
-
-body {
-  @apply bg-slate-950 text-slate-100 antialiased;
-  background: radial-gradient(120% 120% at 10% 0%, rgba(56,189,248,0.12), transparent),
-    radial-gradient(90% 90% at 90% 10%, rgba(16,185,129,0.12), transparent),
-    radial-gradient(110% 110% at 50% 95%, rgba(251,191,36,0.08), transparent),
-    #020617;
-  position: relative;
-  overflow-x: hidden;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 160px 160px, 160px 160px;
-  mask-image: radial-gradient(circle at 50% 40%, rgba(0,0,0,0.45), transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-main {
-  min-height: 100vh;
+@layer utilities {
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Hide scrollbar for clean horizontal scroll areas */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 .scroll-section {
-  scroll-margin-top: 5rem;
+  scroll-margin-top: 6rem;
 }
 
+/* Typography Polish */
 .prose-cmaes {
-  @apply prose prose-invert prose-lg max-w-3xl;
+  @apply prose prose-invert prose-lg max-w-3xl mx-auto;
+}
+
+.prose-cmaes p {
+  @apply text-slate-400 font-light leading-7 tracking-wide;
+}
+
+.prose-cmaes a {
+  @apply text-sky-400 font-medium no-underline border-b border-sky-500/30 hover:border-sky-400 hover:text-sky-300 transition-all duration-200;
+}
+
+.prose-cmaes strong {
+  @apply text-slate-100 font-semibold;
+}
+
+.prose-cmaes h2 {
+  @apply font-display text-3xl font-bold tracking-tight text-white mt-12 mb-6;
+}
+
+.prose-cmaes h3 {
+  @apply font-display text-xl font-semibold text-slate-200 mt-8 mb-4;
 }
 
 .prose-cmaes code {
-  @apply font-mono text-sm px-1.5 py-0.5 rounded bg-slate-900/70 text-emerald-300;
+  @apply font-mono text-[0.85em] px-1.5 py-0.5 rounded-md bg-slate-800/50 border border-white/10 text-sky-300 shadow-sm align-middle;
 }
 
 .prose-cmaes pre {
-  @apply bg-slate-900/70 border border-slate-800 rounded-xl p-4 text-sm font-mono overflow-x-auto;
+  @apply bg-[#0B1121] border border-white/10 rounded-2xl p-5 text-sm font-mono overflow-x-auto shadow-inner my-8;
 }
 
-.gradient-shell {
-  background:
-    radial-gradient(circle at top left, rgba(96,165,250,0.25), transparent 55%),
-    radial-gradient(circle at top right, rgba(45,212,191,0.25), transparent 55%),
-    radial-gradient(circle at bottom, rgba(251,191,36,0.2), transparent 55%),
-    linear-gradient(to bottom, #020617, #020617);
+/* Glass Card - The "Stripe" Feel */
+.glass-card {
+  @apply bg-slate-900/40 backdrop-blur-xl border border-white/5 rounded-3xl shadow-glass transition-all duration-500 relative overflow-hidden;
+}
+.glass-card::before {
+  content: "";
+  @apply absolute inset-0 bg-gradient-surface opacity-0 transition-opacity duration-500;
+}
+.glass-card:hover {
+  @apply border-white/10 shadow-glow-sm transform -translate-y-[1px];
+}
+.glass-card:hover::before {
+  @apply opacity-100;
+}
+
+/* Range Inputs - Slick & Tactile */
+input[type="range"] {
+  @apply appearance-none bg-transparent cursor-pointer w-full h-8 touch-none; /* Larger touch target height */
+}
+input[type="range"]:focus {
+  @apply outline-none;
+}
+
+/* Track */
+input[type="range"]::-webkit-slider-runnable-track {
+  @apply h-1.5 w-full rounded-full bg-slate-800 shadow-inner border border-white/5 transition-colors duration-300;
+}
+input[type="range"]:hover::-webkit-slider-runnable-track {
+  @apply bg-slate-700;
+}
+input[type="range"]::-moz-range-track {
+  @apply h-1.5 w-full rounded-full bg-slate-800 shadow-inner border border-white/5 transition-colors duration-300;
+}
+
+/* Thumb - Larger & animated */
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none h-5 w-5 rounded-full bg-white shadow-lg border border-slate-300 -mt-[7px] transition-transform duration-200;
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  @apply scale-125 border-sky-400 bg-sky-50 shadow-glow-sm;
+}
+input[type="range"]::-moz-range-thumb {
+  @apply appearance-none h-5 w-5 rounded-full bg-white shadow-lg border border-slate-300 border-none transition-transform duration-200;
+}
+input[type="range"]:active::-moz-range-thumb {
+  @apply scale-125 border-sky-400 bg-sky-50 shadow-glow-sm;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 5px;
+  border: 2px solid #020617; /* Padding effect */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
