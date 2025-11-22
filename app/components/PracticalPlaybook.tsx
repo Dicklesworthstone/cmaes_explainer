@@ -4,6 +4,7 @@ import { ShieldCheck, Waves } from "lucide-react";
 import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 import { NoiseExplorer } from "./NoiseExplorer";
 import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
+import { ActiveCovarianceDemo } from "./ActiveCovarianceDemo";
 
 export function PracticalPlaybook() {
   return (
@@ -41,6 +42,9 @@ export function PracticalPlaybook() {
       </div>
       <div className="pt-2">
         <ConstraintRepairDemo />
+      </div>
+      <div className="pt-2">
+        <ActiveCovarianceDemo />
       </div>
     </div>
   );
