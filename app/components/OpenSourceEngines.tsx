@@ -20,34 +20,29 @@ export function OpenSourceEngines() {
           </span>
         </div>
         <p className="text-xs leading-relaxed text-slate-200">
-          <code>wasm_cmaes</code> is a Rust implementation of CMA-ES compiled to WebAssembly with
-          <span className="font-mono text-emerald-300"> wasm-bindgen</span>. It comes with:
+          Rust CMA-ES compiled to WebAssembly, wrapped in a clean JS/TS API and paired with a D3 +
+          Tailwind playground. Drop a serious optimizer into any browser tool and watch the
+          covariance ellipsoid adapt live.
         </p>
         <ul className="mt-2 list-disc space-y-1 text-[0.7rem] text-slate-300 pl-5">
-          <li>A clean JS/TS API (<code>fmin</code>, batch runner, ask/tell loop).</li>
-          <li>
-            Two builds: sequential (<code>pkg/</code>) and SIMD/Rayon-enabled (<code>pkg-par/</code>)
-            for real parallelism where browsers allow it.
-          </li>
-          <li>
-            A D3 + Tailwind playground (<code>examples/viz-benchmarks.html</code>) that lets you watch
-            CMA-ES chew through classic test functions in real time.
-          </li>
+          <li>Two bundles: `pkg/` sequential and `pkg-par/` with SIMD + Rayon for threaded browsers.</li>
+          <li>Ask/tell loop, batch API, deterministic seeded RNG, JSON state save/restore.</li>
+          <li>Benchmark dashboard to compare against a naive μ+λ ES and see the “metric learning” effect.</li>
         </ul>
-        <p className="mt-2 text-[0.7rem] text-slate-300">
-          You can load it directly in a browser app:
-        </p>
+        <p className="mt-2 text-[0.7rem] text-slate-300">Minimal JS usage:</p>
         <pre className="mt-2 text-[0.7rem]">
 {`import init, { fmin } from "./pkg/cmaes_wasm.js";
 
-await init(); // initializes the WASM module
+await init();
 
-const start = new Float64Array([3.0, -2.0]);
-const sigma0 = 0.8;
-
-const res = fmin(start, sigma0, (x) => x[0] * x[0] + x[1] * x[1]);
+const res = fmin(new Float64Array([3, -2]), 0.8, x => x[0]*x[0] + x[1]*x[1]);
 console.log(res.best_f, res.best_x());`}
         </pre>
+        <p className="mt-2 text-[0.7rem] text-slate-300">
+          To rebuild or teach with the full viz: <code>scripts/build-all.sh</code>, then open
+          <code>examples/viz-benchmarks.html</code>; parallelism requires wasm threads + atomics
+          enabled.
+        </p>
         <div className="mt-3 flex flex-wrap gap-2 text-[0.7rem]">
           <a
             href="https://github.com/Dicklesworthstone/wasm_cmaes"
@@ -86,45 +81,36 @@ console.log(res.best_f, res.best_x());`}
           </span>
         </div>
         <p className="text-xs leading-relaxed text-slate-200">
-          <code>fast_cmaes</code> pushes hard on performance while still feeling like a very normal
-          Python library:
+          A hyper-optimized Rust core with a friendly Python surface. Feels like
+          <code>scipy.optimize</code>, runs like a modern ES: SIMD, Rayon, deterministic seeds,
+          restarts, constraints, vectorized objectives, and a Rich TUI.
         </p>
         <ul className="mt-2 list-disc space-y-1 text-[0.7rem] text-slate-300 pl-5">
-          <li>
-            Published to PyPI as <code>fast-cmaes</code> (module name <code>fastcma</code>).
-          </li>
-          <li>
-            Multiple entry points: <code>fmin</code>, <code>fmin_vec</code>, <code>fmin_constrained</code>,
-            and a configurable <code>CMAES</code> class.
-          </li>
-          <li>
-            SIMD-accelerated dot products, optional Rayon-based parallel objective evaluation,
-            full/diagonal covariance modes, restart helpers, deterministic seeds.
-          </li>
-          <li>
-            A Rich-powered TUI demo so you can literally watch <code>σ</code> and best-f evolve in your
-            terminal.
-          </li>
+          <li>PyPI: <code>fast-cmaes</code> (module <code>fastcma</code>); wheels for Linux/macOS/Windows.</li>
+          <li>APIs: <code>fmin</code>, <code>fmin_vec</code>, <code>fmin_constrained</code>, and a configurable <code>CMAES</code> class.</li>
+          <li>Full or diagonal covariance, restart helpers, seeded runs, optional LAPACK eigensolver and NumPy fast paths.</li>
+          <li>Rich-powered terminal UI to watch σ, best-f, and eval counts live.</li>
         </ul>
-        <p className="mt-2 text-[0.7rem] text-slate-300">Installation and minimal usage:</p>
+        <p className="mt-2 text-[0.7rem] text-slate-300">Minimal Python usage:</p>
         <pre className="mt-2 text-[0.7rem]">
 {`python -m pip install fast-cmaes
 
 from fastcma import fmin
 
 def sphere(x):
-    return sum(v * v for v in x)
+    return sum(v*v for v in x)
 
-xmin, es = fmin(sphere, [0.5, -0.2, 0.8],
-                sigma=0.3,
-                maxfevals=4000,
-                ftarget=1e-12)
+xmin, es = fmin(sphere, [0.5, -0.2, 0.8], sigma=0.3, maxfevals=4000, ftarget=1e-12)
 print("xmin", xmin)`}
         </pre>
         <p className="mt-2 text-[0.7rem] text-slate-300">
-          Under the hood the Python API is just driving the same Rust core that powers the benchmarks
-          and TUI. The whole point is to get “serious” CMA-ES performance without giving up the
-          convenience of simple Python callables as objectives.
+          Build/dev loop: <code>maturin develop --release</code> (optionally <code>--features numpy_support,eigen_lapack</code>), or run
+          <code>./scripts/setup_and_demo.sh</code> to spin up a <code>uv</code> env and launch the Rich TUI.
+        </p>
+        <p className="mt-2 text-[0.7rem] text-slate-300">
+          Practical limit note: full CMA-ES is O(n²) inside; switch to the diagonal mode for cheap,
+          very high-dimensional problems, or keep full covariance when each evaluation is costly and
+          geometry learning matters most.
         </p>
         <div className="mt-3">
           <a
