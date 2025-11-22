@@ -104,7 +104,7 @@ export function CAGalleryTrace() {
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const imageData = new ImageData(img, SIZE, SIZE);
+      const imageData = new ImageData(new Uint8ClampedArray(img), SIZE, SIZE);
       ctx.putImageData(imageData, 0, 0);
     });
   }, [snapshots]);
