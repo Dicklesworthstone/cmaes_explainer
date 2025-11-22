@@ -184,7 +184,13 @@ export function CovarianceMinimap() {
         <div className="uppercase tracking-wide text-sky-200">Covariance evolution minimap</div>
         <div className="flex items-center gap-2 text-[0.75rem] text-slate-400">
           <label className="flex items-center gap-1">
-            <input type="checkbox" checked={showNG} onChange={(e) => setShowNG(e.target.checked)} className="accent-emerald-400" />
+            <input
+              type="checkbox"
+              checked={showNG}
+              onChange={(e) => setShowNG(e.target.checked)}
+              className="accent-emerald-400"
+              aria-label="Toggle natural gradient arrow"
+            />
             <span>Show natural-grad</span>
           </label>
         </div>
@@ -205,13 +211,14 @@ export function CovarianceMinimap() {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <span className="text-slate-400 text-[0.78rem]">Generation</span>
           <input
+            aria-label="Generation progress"
             type="range"
             min={0}
             max={1}
             step={0.01}
             value={progress}
             onChange={(e) => setProgress(parseFloat(e.target.value))}
-            className="w-32 accent-sky-400"
+            className="w-36 accent-sky-400"
           />
           <span className="text-slate-200 text-[0.78rem]">{Math.round(progress * 100)}%</span>
         </div>

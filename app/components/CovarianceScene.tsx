@@ -71,6 +71,8 @@ function SampleCloud() {
 }
 
 export function CovarianceScene() {
+  if (typeof window === "undefined") return null;
+
   return (
     <Canvas
       camera={{ position: [2.5, 1.4, 2.8], fov: 40 }}

@@ -189,6 +189,7 @@ export function ActiveCovarianceDemo() {
           <Switch
             checked={showActive}
             onChange={setShowActive}
+            aria-label="Toggle active covariance"
             className={`${showActive ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
           >
             <span className={`${showActive ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
@@ -207,7 +208,16 @@ export function ActiveCovarianceDemo() {
               <span>Generation</span>
               <span className="text-sky-200 font-semibold">{frame}</span>
             </div>
-            <input type="range" min={0} max={27} step={1} value={frame} onChange={(e) => setFrame(parseInt(e.target.value))} className="w-full accent-sky-400" />
+            <input
+              aria-label="Generation frame"
+              type="range"
+              min={0}
+              max={27}
+              step={1}
+              value={frame}
+              onChange={(e) => setFrame(parseInt(e.target.value))}
+              className="w-full accent-sky-400"
+            />
           </div>
           <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 text-[0.82rem] text-slate-300">
             <div className="flex items-center gap-2 text-slate-200 font-semibold text-[0.9rem]">

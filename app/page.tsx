@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import dynamicImport from "next/dynamic";
 
 const MathProvider = dynamicImport(
@@ -18,11 +16,12 @@ import { WasmDemo } from "./components/WasmDemo";
 import { Footer } from "./components/Footer";
 import { Section } from "./components/Section";
 import { TechnicalAddendum } from "./components/TechnicalAddendum";
+import { BackToTop } from "./components/BackToTop";
 
 export default function Page() {
   return (
     <MathProvider>
-      <main className="relative min-h-screen">
+      <main id="main-content" className="relative min-h-screen">
         <Navbar />
         <div className="pt-20 pb-24">
           <Hero />
@@ -48,6 +47,7 @@ export default function Page() {
             <TechnicalAddendum />
           </Section>
           <Footer />
+          <BackToTop />
         </div>
       </main>
     </MathProvider>

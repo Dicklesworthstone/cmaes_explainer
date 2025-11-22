@@ -6,14 +6,16 @@ import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { CovarianceScene } from "./CovarianceScene";
+import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
 
 gsap.registerPlugin(ScrollTrigger);
 
 export function Hero() {
   const gradientRef = useRef<HTMLDivElement | null>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
-    if (!gradientRef.current) return;
+    if (!gradientRef.current || prefersReducedMotion) return;
 
     // Skip heavy parallax on small screens to keep scrolling smooth on mobile.
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
@@ -41,7 +43,7 @@ export function Hero() {
     return () => {
       ScrollTrigger.getAll().forEach((t) => t.kill());
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <section className="relative overflow-hidden">
@@ -56,8 +58,8 @@ export function Hero() {
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pt-8 pb-14 sm:gap-10 sm:pt-10 sm:pb-20 lg:flex-row lg:items-center lg:pt-16">
         <div className="relative z-10 max-w-xl space-y-6">
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
             className="inline-flex items-center gap-2 rounded-full border border-sky-400/50 bg-sky-500/15 px-3 py-1 text-[0.72rem] text-sky-100 shadow-glow-sm backdrop-blur"
           >
@@ -66,8 +68,8 @@ export function Hero() {
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.1 }}
             className="font-display text-4xl leading-tight tracking-tight text-slate-50 sm:text-5xl lg:text-6xl drop-shadow-[0_6px_24px_rgba(8,47,73,0.35)]"
           >
@@ -78,10 +80,10 @@ export function Hero() {
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.75, delay: 0.2 }}
-            className="text-sm leading-relaxed text-slate-300 sm:text-base"
+            className="text-base leading-relaxed text-slate-200"
           >
             If you have gradients, use them. In the many places where gradients don’t exist (aircraft
             wings, bridges, neural architecture search), CMA-ES quietly shines. This is a straight
@@ -90,10 +92,10 @@ export function Hero() {
             derivative.
           </motion.p>
           <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.75, delay: 0.25 }}
-            className="text-[0.92rem] leading-relaxed text-slate-400"
+            className="text-[0.98rem] leading-relaxed text-slate-300"
           >
             Roots: CMA-ES grew out of evolution strategies (Rechenberg/Schwefel) and split from
             classic genetic algorithms by optimizing the search <em>distribution</em> instead of
@@ -102,8 +104,8 @@ export function Hero() {
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.3 }}
             className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
           >
@@ -124,10 +126,10 @@ export function Hero() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="mt-6 grid grid-cols-1 gap-3 text-[0.85rem] text-slate-300/90 sm:grid-cols-2 sm:text-[0.7rem]"
+            className="mt-6 grid grid-cols-1 gap-3 text-[0.95rem] text-slate-200/90 sm:grid-cols-2 sm:text-[0.9rem]"
           >
             <div className="rounded-xl border border-slate-800/70 bg-slate-950/60 p-3">
               <div className="text-slate-400">Designed for</div>
@@ -145,8 +147,8 @@ export function Hero() {
         </div>
 
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, x: 20 }}
+          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
           transition={{ duration: 0.9, delay: 0.25 }}
           className="relative z-0 mt-10 flex-1 lg:mt-0"
         >

@@ -56,14 +56,14 @@ export function WingWalkthrough() {
         metric without ever seeing a gradient.
       </p>
 
-      <p>
-        Practical tricks:
-        <ul>
+      <div className="space-y-2">
+        <p className="font-semibold text-slate-100">Practical tricks</p>
+        <ul className="list-disc space-y-1 pl-4 text-slate-200">
           <li>Reflect or squash out-of-bounds samples rather than rejecting them to keep data flowing.</li>
           <li>Quantize categorical dimensions as late as possible so the search stays continuous.</li>
           <li>Keep seeds and ask/tell logs so you can replay a run; determinism makes debugging sane.</li>
         </ul>
-      </p>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-start">
         <div className="grid gap-4 lg:grid-cols-2">

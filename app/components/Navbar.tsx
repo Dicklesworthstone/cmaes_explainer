@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Github, Brain, Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useScrollSpy } from "../hooks/useScrollSpy";
 
 const sections = [
   { id: "what-is-cmaes", label: "What is CMA-ES?" },
@@ -15,6 +16,7 @@ const sections = [
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const activeId = useScrollSpy(sections.map((s) => s.id));
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 16);
@@ -46,12 +48,13 @@ export function Navbar() {
           </div>
         </Link>
 
-        <div className="hidden items-center gap-6 text-xs md:flex">
+        <div className="hidden items-center gap-6 text-xs md:flex" aria-label="Page sections">
           {sections.map((s) => (
             <a
               key={s.id}
               href={`#${s.id}`}
-              className="text-slate-300/80 hover:text-sky-300 transition-colors"
+              className={`transition-colors ${activeId === s.id ? "text-sky-100 font-semibold" : "text-slate-300/80 hover:text-sky-200"}`}
+              aria-current={activeId === s.id ? "true" : undefined}
             >
               {s.label}
             </a>
@@ -81,7 +84,8 @@ export function Navbar() {
             <a
               key={s.id}
               href={`#${s.id}`}
-              className="whitespace-nowrap rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-[0.78rem] text-slate-100 hover:border-sky-400/70 hover:text-sky-100"
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-[0.85rem] transition-colors ${activeId === s.id ? "border-sky-400/80 bg-sky-500/10 text-sky-50" : "border-slate-800 bg-slate-900/80 text-slate-100 hover:border-sky-400/70 hover:text-sky-100"}`}
+              aria-current={activeId === s.id ? "true" : undefined}
             >
               {s.label}
             </a>

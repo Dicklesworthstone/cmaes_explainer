@@ -1,8 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useState } from "react";
 
 export function WasmDemo() {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
   return (
     <div className="space-y-4">
       <p className="prose-cmaes">
@@ -34,11 +37,25 @@ export function WasmDemo() {
           </span>
         </div>
         <div className="aspect-[16/9] w-full">
+          {!loaded && !errored && (
+            <div className="flex h-full items-center justify-center text-sm text-slate-300">
+              Loading WASM explorer…
+            </div>
+          )}
+          {errored && (
+            <div className="flex h-full items-center justify-center text-sm text-amber-200 bg-slate-900/80 px-4 text-center">
+              Couldn’t load the WASM demo assets. Run <code>./scripts/pull_wasm_demo.sh</code> or check
+              your network.
+            </div>
+          )}
           <iframe
             src="/wasm-demo/examples/viz-benchmarks.html"
             className="h-full w-full border-0 bg-slate-950"
             loading="lazy"
             title="CMA-ES WASM visualization"
+            onLoad={() => setLoaded(true)}
+            onError={() => setErrored(true)}
+            aria-label="CMA-ES WASM visualization"
           />
         </div>
       </motion.div>

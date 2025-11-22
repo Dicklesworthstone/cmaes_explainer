@@ -15,6 +15,8 @@ function rng(seed: number) {
   };
 }
 
+// Simulate a simple CA and return a single RGBA snapshot for the given params
+// keeping the output length exactly width*height*4 to avoid ImageData errors.
 function simulateCA(params: [number, number, number], seed = 1) {
   const n = SIZE;
   const rand = rng(seed);
@@ -34,7 +36,7 @@ function simulateCA(params: [number, number, number], seed = 1) {
     0.05 * k1
   ];
 
-  const snapshots: Uint8ClampedArray[] = [];
+  let snapshot: Uint8ClampedArray | null = null;
   for (let step = 0; step < 40; step++) {
     const next = new Float32Array(n * n);
     for (let y = 0; y < n; y++) {
@@ -54,7 +56,7 @@ function simulateCA(params: [number, number, number], seed = 1) {
       }
     }
     state = next;
-    if (step % 4 === 3) {
+    if (step === 36) {
       const img = new Uint8ClampedArray(n * n * 4);
       for (let i = 0; i < n * n; i++) {
         const v = state[i];
@@ -64,10 +66,10 @@ function simulateCA(params: [number, number, number], seed = 1) {
         img[i * 4 + 2] = 255 - c;
         img[i * 4 + 3] = 255;
       }
-      snapshots.push(img);
+      snapshot = img;
     }
   }
-  return snapshots.slice(0, STEPS);
+  return snapshot ?? new Uint8ClampedArray(n * n * 4);
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -119,7 +121,16 @@ export function CAGalleryTrace() {
         </div>
         <div className="flex items-center gap-2 text-[0.8rem] text-slate-300">
           <span>Path tightness</span>
-          <input type="range" min={0} max={1} step={0.01} value={pathT} onChange={(e) => setPathT(parseFloat(e.target.value))} className="w-28 accent-sky-400" />
+          <input
+            aria-label="Path tightness"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={pathT}
+            onChange={(e) => setPathT(parseFloat(e.target.value))}
+            className="w-32 accent-sky-400"
+          />
           <button
             onClick={() => setSeed((s) => s + 7)}
             className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-[0.78rem] text-slate-200 hover:border-sky-400/70"
