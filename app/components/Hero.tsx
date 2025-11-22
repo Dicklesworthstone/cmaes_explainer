@@ -50,13 +50,16 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 bg-radial-soft mix-blend-screen"
       />
 
+      <div className="pointer-events-none absolute -right-20 top-10 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute -left-12 top-40 h-48 w-48 rounded-full bg-emerald-400/10 blur-3xl" />
+
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 pt-8 pb-14 sm:gap-10 sm:pt-10 sm:pb-20 lg:flex-row lg:items-center lg:pt-16">
         <div className="relative z-10 max-w-xl space-y-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="inline-flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-500/10 px-3 py-1 text-[0.7rem] text-sky-100 shadow-glow-sm"
+            className="inline-flex items-center gap-2 rounded-full border border-sky-400/50 bg-sky-500/15 px-3 py-1 text-[0.72rem] text-sky-100 shadow-glow-sm backdrop-blur"
           >
             <Cpu className="h-3.5 w-3.5" />
             <span>Derivative-free • Geometry-aware • Surprisingly elegant</span>
@@ -66,7 +69,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.1 }}
-            className="font-display text-4xl leading-tight tracking-tight text-slate-50 sm:text-5xl lg:text-6xl"
+            className="font-display text-4xl leading-tight tracking-tight text-slate-50 sm:text-5xl lg:text-6xl drop-shadow-[0_6px_24px_rgba(8,47,73,0.35)]"
           >
             CMA-ES:
             <span className="block bg-gradient-to-r from-sky-300 via-cyan-200 to-amber-200 bg-clip-text text-transparent">
@@ -112,7 +115,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="mt-6 grid grid-cols-1 gap-3 text-[0.8rem] text-slate-300/90 sm:grid-cols-2 sm:text-[0.7rem]"
+            className="mt-6 grid grid-cols-1 gap-3 text-[0.85rem] text-slate-300/90 sm:grid-cols-2 sm:text-[0.7rem]"
           >
             <div className="rounded-xl border border-slate-800/70 bg-slate-950/60 p-3">
               <div className="text-slate-400">Designed for</div>
