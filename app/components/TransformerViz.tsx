@@ -388,39 +388,43 @@ export function TransformerViz() {
               </div>
             )}
 
-            <Canvas 
-              dpr={[1, 2]}
-              className={`${interacting ? "touch-none" : "touch-pan-y"}`}
+            <div
+              className={`w-full h-full ${interacting ? "touch-none" : "touch-pan-y"}`}
               onPointerDown={() => setInteracting(true)}
               onPointerLeave={() => setInteracting(false)}
             >
-              <PerspectiveCamera makeDefault position={[5, 2, 5]} fov={40} />
-              <color attach="background" args={["#030014"]} />
-              <fog attach="fog" args={["#030014", 6, 18]} />
-              
-              <ambientLight intensity={0.2} />
-              <pointLight position={[5, 5, 5]} intensity={1} color="#2dd4bf" />
-              <pointLight position={[-5, -5, -5]} intensity={0.5} color="#a78bfa" />
-              
-              <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.2}>
-                <group position={[0, 0, 0]} rotation={[0, Math.PI / 4, 0]}>
-                  <NetworkTopology depth={depth} width={width} heads={heads} />
-                </group>
-              </Float>
+              <Canvas 
+                dpr={[1, 2]}
+                className="w-full h-full"
+              >
+                <PerspectiveCamera makeDefault position={[5, 2, 5]} fov={40} />
+                <color attach="background" args={["#030014"]} />
+                <fog attach="fog" args={["#030014", 6, 18]} />
+                
+                <ambientLight intensity={0.2} />
+                <pointLight position={[5, 5, 5]} intensity={1} color="#2dd4bf" />
+                <pointLight position={[-5, -5, -5]} intensity={0.5} color="#a78bfa" />
+                
+                <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.2}>
+                  <group position={[0, 0, 0]} rotation={[0, Math.PI / 4, 0]}>
+                    <NetworkTopology depth={depth} width={width} heads={heads} />
+                  </group>
+                </Float>
 
-              <OrbitControls 
-                enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
-                enablePan={false} 
-                enableZoom={false} 
-                autoRotate={!interacting} 
-                autoRotateSpeed={0.8} 
-                maxPolarAngle={Math.PI / 2} 
-                minPolarAngle={Math.PI / 4}
-              />
-              
-              {/* Floor Reflection Plane (Cheap trick: just a grid) */}
-              <gridHelper position={[0, -2, 0]} args={[20, 20, "#1e1b4b", "#0f172a"]} />
-            </Canvas>
+                <OrbitControls 
+                  enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
+                  enablePan={false} 
+                  enableZoom={false} 
+                  autoRotate={!interacting} 
+                  autoRotateSpeed={0.8} 
+                  maxPolarAngle={Math.PI / 2} 
+                  minPolarAngle={Math.PI / 4}
+                />
+                
+                {/* Floor Reflection Plane (Cheap trick: just a grid) */}
+                <gridHelper position={[0, -2, 0]} args={[20, 20, "#1e1b4b", "#0f172a"]} />
+              </Canvas>
+            </div>
             
             <div className="absolute top-4 left-4 px-3 py-1 rounded bg-slate-950/60 backdrop-blur-md border border-white/5 text-xs text-violet-300 font-mono pointer-events-none">
               Arch: Transformer

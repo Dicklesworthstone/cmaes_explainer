@@ -250,44 +250,48 @@ export function WingViz() {
               </div>
             )}
 
-            <Canvas 
-              shadows 
-              dpr={[1, 2]} 
-              className={`${interacting ? "touch-none" : "touch-pan-y"}`}
+            <div
+              className={`w-full h-full ${interacting ? "touch-none" : "touch-pan-y"}`}
               onPointerDown={() => setInteracting(true)}
               onPointerLeave={() => setInteracting(false)}
             >
-              <PerspectiveCamera makeDefault position={[4, 2, 4]} fov={40} />
-              <color attach="background" args={["#020617"]} />
-              <fog attach="fog" args={["#020617", 5, 20]} />
-              
-              {/* Lighting */}
-              <ambientLight intensity={0.2} />
-              <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
-              <pointLight position={[-10, -10, -10]} intensity={0.5} color="#38bdf8" />
-              
-              <Environment preset="city" />
-
-              {/* Scene */}
-              <group position={[0, -0.5, 0]}>
-                <Airfoil aspect={aspect} sweep={sweep} thickness={thickness} />
-                <Streamlines speed={1.5} liftStrength={lift} />
-                <LiftVector liftVal={lift * 0.5} />
+              <Canvas 
+                shadows 
+                dpr={[1, 2]}
+                className="w-full h-full"
+              >
+                <PerspectiveCamera makeDefault position={[4, 2, 4]} fov={40} />
+                <color attach="background" args={["#020617"]} />
+                <fog attach="fog" args={["#020617", 5, 20]} />
                 
-                {/* Grid Floor */}
-                <gridHelper args={[20, 20, "#1e293b", "#0f172a"]} position={[0, -2, 0]} />
-              </group>
+                {/* Lighting */}
+                <ambientLight intensity={0.2} />
+                <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+                <pointLight position={[-10, -10, -10]} intensity={0.5} color="#38bdf8" />
+                
+                <Environment preset="city" />
 
-              <OrbitControls 
-                enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
-                enablePan={false} 
-                enableZoom={false} 
-                minPolarAngle={Math.PI / 4} 
-                maxPolarAngle={Math.PI / 2}
-                autoRotate={!interacting}
-                autoRotateSpeed={0.5}
-              />
-            </Canvas>
+                {/* Scene */}
+                <group position={[0, -0.5, 0]}>
+                  <Airfoil aspect={aspect} sweep={sweep} thickness={thickness} />
+                  <Streamlines speed={1.5} liftStrength={lift} />
+                  <LiftVector liftVal={lift * 0.5} />
+                  
+                  {/* Grid Floor */}
+                  <gridHelper args={[20, 20, "#1e293b", "#0f172a"]} position={[0, -2, 0]} />
+                </group>
+
+                <OrbitControls 
+                  enabled={interacting || (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches)}
+                  enablePan={false} 
+                  enableZoom={false} 
+                  minPolarAngle={Math.PI / 4} 
+                  maxPolarAngle={Math.PI / 2}
+                  autoRotate={!interacting}
+                  autoRotateSpeed={0.5}
+                />
+              </Canvas>
+            </div>
             
             <div className="absolute bottom-4 left-4 flex flex-col gap-1 pointer-events-none">
               <div className="px-2 py-1 rounded bg-slate-950/80 text-[0.65rem] text-cyan-400 border border-cyan-900/50 backdrop-blur-md shadow-lg">
