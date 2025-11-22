@@ -143,50 +143,78 @@ export function NoiseExplorer() {
   }, [data]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
+    <div className="glass-card p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-          <Shuffle className="h-4 w-4" /> Noise vs λ explorer
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+             <Shuffle className="h-4 w-4 text-purple-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Noise vs Population Explorer</h3>
+            <p className="text-xs text-slate-400">Stabilizing ranks in noisy landscapes</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[0.8rem] text-slate-300">
-          <span>Re-evaluate elites</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-slate-400">Re-evaluate Elites</span>
           <Switch
             checked={reeval}
             onChange={setReeval}
-            className={`${reeval ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
+            className={`${reeval ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
           >
-            <span className={`${reeval ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
+            <span className={`${reeval ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
           </Switch>
         </div>
       </div>
-      <p className="text-sm text-slate-300">
-        Noisy evaluations scramble ranks. Increasing λ or re-evaluating elites stabilizes selection and
-        keeps covariance learning honest.
+      
+      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+        Noisy evaluations scramble ranks. Increasing λ (population) or re-evaluating elites stabilizes selection and keeps covariance learning honest.
       </p>
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] items-center">
-        <div className="space-y-2">
-          <canvas ref={canvasRef} width={520} height={240} className="w-full rounded-xl border border-slate-800/70 bg-slate-950" />
-          <div className="text-[0.8rem] text-slate-400">Shaded band shows noisy vs true best. Purple = noisy, mint = true.</div>
-        </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr] items-start">
         <div className="space-y-3">
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-2 text-[0.86rem] text-slate-200">
-            <div className="flex items-center justify-between">
-              <span>Population λ</span>
-              <span className="text-sky-200 font-semibold">{lambda}</span>
-            </div>
-            <input type="range" min={4} max={64} step={1} value={lambda} onChange={(e) => setLambda(parseInt(e.target.value))} className="w-full accent-sky-400" />
-            <div className="flex items-center justify-between text-slate-300 text-[0.82rem]">
-              <span>Noise σ</span>
-              <span className="text-amber-200 font-semibold">{noise.toFixed(2)}</span>
-            </div>
-            <input type="range" min={0} max={3} step={0.05} value={noise} onChange={(e) => setNoise(parseFloat(e.target.value))} className="w-full accent-amber-400" />
+          <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-inner bg-[#0B1121]">
+             <canvas ref={canvasRef} width={520} height={240} className="w-full block" />
           </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3">
-            <div className="flex items-center gap-2 text-[0.85rem] text-slate-200 mb-2">
-              <Activity className="h-4 w-4 text-emerald-300" /> Rank stability (overlap of true vs noisy top-μ)
+          <div className="text-xs text-slate-400 flex items-center gap-4 justify-center bg-slate-950/30 py-2 rounded-lg border border-white/5">
+            <div className="flex items-center gap-1.5">
+               <span className="w-2 h-2 rounded-full bg-[#a855f7]" /> Noisy Best
             </div>
-            <canvas ref={stripRef} width={520} height={80} className="w-full rounded-lg border border-slate-800/70 bg-slate-950" />
-            <div className="text-[0.78rem] text-slate-400 mt-1">Higher bars = elites are consistent with ground truth.</div>
+            <div className="flex items-center gap-1.5">
+               <span className="w-2 h-2 rounded-full bg-[#22d3ee]" /> True Best
+            </div>
+            <div className="flex items-center gap-1.5">
+               <span className="w-2 h-2 rounded bg-purple-500/20 border border-purple-500/30" /> Range
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="glass-card p-5 space-y-4 bg-slate-900/40">
+             <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-slate-300">Population λ</span>
+                  <span className="text-sky-300 font-mono bg-sky-500/10 px-1.5 rounded border border-sky-500/20">{lambda}</span>
+                </div>
+                <input type="range" min={4} max={64} step={1} value={lambda} onChange={(e) => setLambda(parseInt(e.target.value))} className="w-full accent-sky-500" />
+             </div>
+             
+             <div className="space-y-3 pt-2 border-t border-white/5">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-slate-300">Noise σ</span>
+                  <span className="text-amber-300 font-mono bg-amber-500/10 px-1.5 rounded border border-amber-500/20">{noise.toFixed(2)}</span>
+                </div>
+                <input type="range" min={0} max={3} step={0.05} value={noise} onChange={(e) => setNoise(parseFloat(e.target.value))} className="w-full accent-amber-500" />
+             </div>
+          </div>
+
+          <div className="glass-card p-4 bg-slate-900/40">
+            <div className="flex items-center gap-2 text-xs font-bold text-emerald-200 uppercase tracking-wide mb-3">
+              <Activity className="h-3.5 w-3.5" /> Rank Stability
+            </div>
+            <canvas ref={stripRef} width={520} height={60} className="w-full rounded-lg border border-white/10 bg-[#0B1121]" />
+            <div className="text-[0.65rem] text-slate-500 mt-2 text-center">
+              Height = overlap between true vs noisy top-μ elites
+            </div>
           </div>
         </div>
       </div>

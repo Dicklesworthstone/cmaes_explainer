@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Switch } from "@headlessui/react";
-import { Scissors, Sparkles } from "lucide-react";
+import { Scissors, Sparkles, Activity } from "lucide-react";
 
 const W = 360;
 const H = 260;
@@ -132,15 +132,16 @@ export function ActiveCovarianceDemo() {
         const v = toy(x, y);
         const norm = Math.tanh(v / 150);
         const idx = (iy * W + ix) * 4;
-        img.data[idx] = 24;
-        img.data[idx + 1] = Math.floor(180 * (1 - norm));
-        img.data[idx + 2] = 255;
+        // Deep elegant blue theme
+        img.data[idx] = 15;
+        img.data[idx + 1] = 23 + Math.floor(100 * (1 - norm));
+        img.data[idx + 2] = 40 + Math.floor(120 * (1 - norm));
         img.data[idx + 3] = 255;
       }
     }
     ctx.putImageData(img, 0, 0);
 
-    const drawRun = (traj: { mean: [number, number]; cov: [number, number, number, number] }[], color: string, alpha: number) => {
+    const drawRun = (traj: { mean: [number, number]; cov: [number, number, number, number] }[], color: string, strokeColor: string, alpha: number) => {
       const clampedFrame = Math.min(frame, traj.length - 1);
       const { mean, cov } = traj[clampedFrame];
       const [a, b, c, d] = cov;
@@ -158,55 +159,74 @@ export function ActiveCovarianceDemo() {
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(-angle);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2.5;
       ctx.globalAlpha = alpha;
       const rx = Math.sqrt(Math.max(l1, 0)) * (W / (2 * DOMAIN)) * 0.7;
       const ry = Math.sqrt(Math.max(l2, 0)) * (H / (2 * DOMAIN)) * 0.7;
       ctx.beginPath();
       ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha * 0.15;
+      ctx.fill();
       ctx.restore();
       ctx.globalAlpha = 1;
-      ctx.fillStyle = color;
+      ctx.fillStyle = strokeColor;
       ctx.beginPath();
-      ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
       ctx.fill();
     };
 
-    drawRun(passive, "rgba(168,85,247,0.9)", 0.8);
-    if (showActive) drawRun(active, "rgba(34,211,238,0.95)", 0.9);
+    drawRun(passive, "rgb(168,85,247)", "rgba(192,132,252,0.9)", 0.75);
+    if (showActive) drawRun(active, "rgb(34,211,238)", "rgba(56,189,248,0.95)", 0.95);
   }, [passive, active, frame, showActive]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-          <Scissors className="h-4 w-4" /> Active covariance vs passive
+    <div className="glass-card p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
+            <Scissors className="h-4 w-4 text-sky-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Active vs Passive Covariance</h3>
+            <p className="text-xs text-slate-400">Shrinking variance along bad directions</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[0.8rem] text-slate-300">
-          <span>Show active</span>
+        <div className="flex items-center gap-3 bg-slate-950/30 p-1.5 pl-3 pr-2 rounded-full border border-white/5">
+          <span className="text-xs font-medium text-slate-300">Enable active</span>
           <Switch
             checked={showActive}
             onChange={setShowActive}
-            aria-label="Toggle active covariance"
-            className={`${showActive ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
+            className={`${showActive ? "bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900`}
           >
-            <span className={`${showActive ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
+            <span className={`${showActive ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
           </Switch>
         </div>
       </div>
-      <p className="text-sm text-slate-300">
-        Active CMA shrinks variance along bad directions by using negative weights on the worst samples.
-        Watch how the mint ellipsoid tightens faster than the purple passive one on the same landscape.
+      
+      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+        Active CMA uses negative weights for the worst samples to aggressively shrink the covariance along bad directions.
+        Notice how the <span className="text-sky-300 font-medium">blue ellipsoid (active)</span> tightens much faster than the <span className="text-purple-300 font-medium">purple one (passive)</span>.
       </p>
-      <div className="grid gap-3 sm:grid-cols-[1.1fr_auto] items-center">
-        <canvas ref={canvasRef} width={W} height={H} className="w-full rounded-xl border border-slate-800/70 bg-slate-950" />
-        <div className="space-y-3 text-[0.85rem] text-slate-200">
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-2">
-            <div className="flex items-center justify-between text-slate-300 text-[0.8rem]">
-              <span>Generation</span>
-              <span className="text-sky-200 font-semibold">{frame}</span>
+      
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-br from-sky-500/20 to-purple-500/20 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-500" />
+          <canvas 
+            ref={canvasRef} 
+            width={W} 
+            height={H} 
+            className="relative w-full rounded-xl border border-white/10 bg-[#0B1121] shadow-inner" 
+          />
+        </div>
+        
+        <div className="flex flex-col gap-4">
+          <div className="bg-slate-950/40 rounded-xl p-4 border border-white/5 space-y-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-400 font-medium">Generation</span>
+              <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">{frame}</span>
             </div>
             <input
               aria-label="Generation frame"
@@ -216,17 +236,28 @@ export function ActiveCovarianceDemo() {
               step={1}
               value={frame}
               onChange={(e) => setFrame(parseInt(e.target.value))}
-              className="w-full accent-sky-400"
+              className="w-full accent-sky-500"
             />
-          </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 text-[0.82rem] text-slate-300">
-            <div className="flex items-center gap-2 text-slate-200 font-semibold text-[0.9rem]">
-              <Sparkles className="h-4 w-4 text-emerald-300" /> What you’re seeing
+            <div className="flex justify-between text-xs text-slate-500 font-mono">
+              <span>Start</span>
+              <span>Converged</span>
             </div>
-            <ul className="list-disc pl-4 space-y-1 mt-2">
-              <li>Purple = passive rank-μ update only.</li>
-              <li>Mint = active update adds negative weights on bad samples → sharper short axis.</li>
-              <li>Both start from same mean/cov; active collapses orthogonal junk directions sooner.</li>
+          </div>
+
+          <div className="bg-slate-950/40 rounded-xl p-4 border border-white/5 flex-1">
+            <div className="flex items-center gap-2 text-slate-200 font-medium text-sm mb-3">
+              <Sparkles className="h-3.5 w-3.5 text-amber-300" /> 
+              <span>Key Insight</span>
+            </div>
+            <ul className="space-y-2.5 text-xs text-slate-300 leading-5">
+              <li className="flex gap-2 items-start">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(192,132,252,0.5)]" />
+                <span><strong>Passive update:</strong> Only uses the best samples to stretch the covariance.</span>
+              </li>
+              <li className="flex gap-2 items-start">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-1.5 shrink-0 shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
+                <span><strong>Active update:</strong> Explicitly penalizes the worst directions, preventing the ellipsoid from drifting sideways in neutral subspaces.</span>
+              </li>
             </ul>
           </div>
         </div>

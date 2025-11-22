@@ -179,54 +179,72 @@ export function CovarianceMinimap() {
   }, [fn, currentCov, currentMean, showNG]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
-      <div className="flex items-center justify-between text-xs text-slate-300">
-        <div className="uppercase tracking-wide text-sky-200">Covariance evolution minimap</div>
-        <div className="flex items-center gap-2 text-[0.75rem] text-slate-400">
-          <label className="flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={showNG}
-              onChange={(e) => setShowNG(e.target.checked)}
-              className="accent-emerald-400"
-              aria-label="Toggle natural gradient arrow"
-            />
-            <span>Show natural-grad</span>
-          </label>
+    <div className="glass-card p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20">
+            <div className="w-4 h-4 rounded-full border-2 border-sky-400/60" />
+          </div>
+          <div>
+             <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Covariance Evolution</h3>
+             <p className="text-xs text-slate-400">Metric adaptation in action</p>
+          </div>
         </div>
+        <label className="flex items-center gap-2 cursor-pointer group">
+          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${showNG ? "bg-emerald-500 border-emerald-500" : "border-slate-600 bg-slate-800"}`}>
+             {showNG && <div className="w-2 h-2 bg-white rounded-sm" />}
+          </div>
+          <input
+            type="checkbox"
+            checked={showNG}
+            onChange={(e) => setShowNG(e.target.checked)}
+            className="hidden"
+          />
+          <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200 transition-colors">Show Natural Grad</span>
+        </label>
       </div>
-      <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full rounded-xl border border-slate-800/80 bg-slate-950" />
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto] items-center text-[0.82rem] text-slate-200">
-        <div className="flex flex-wrap gap-2">
+
+      <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-inner bg-[#0B1121]">
+         <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full block" />
+         <div className="absolute top-3 right-3 flex gap-1.5">
           {(Object.keys(objectives) as ObjKey[]).map((k) => (
             <button
               key={k}
               onClick={() => setObj(k)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold border ${obj === k ? "border-sky-400/70 bg-sky-500/10 text-sky-100" : "border-slate-700 bg-slate-900/60 text-slate-300"}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 backdrop-blur-sm ${
+                obj === k
+                  ? "bg-sky-500/90 text-white shadow-lg shadow-sky-500/20"
+                  : "bg-slate-900/60 text-slate-400 hover:bg-slate-800 hover:text-white border border-white/5"
+              }`}
             >
               {objectives[k].label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-slate-400 text-[0.78rem]">Generation</span>
-          <input
-            aria-label="Generation progress"
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={progress}
-            onChange={(e) => setProgress(parseFloat(e.target.value))}
-            className="w-36 accent-sky-400"
-          />
-          <span className="text-slate-200 text-[0.78rem]">{Math.round(progress * 100)}%</span>
-        </div>
       </div>
-      <p className="text-[0.82rem] text-slate-300">
-        Watch the ellipsoid tilt and shrink: Euclidean step (red) vs. natural-gradient-aligned step (mint).
-        Switching objectives shows why covariance adaptation learns the right metric instead of just shrinking σ.
-      </p>
+
+      <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5 flex flex-col sm:flex-row sm:items-center gap-4">
+         <div className="flex-1">
+            <div className="flex justify-between text-xs font-medium mb-2">
+              <span className="text-slate-400">Optimization Progress</span>
+              <span className="text-sky-300 font-mono">{Math.round(progress * 100)}%</span>
+            </div>
+            <input
+              aria-label="Generation progress"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={progress}
+              onChange={(e) => setProgress(parseFloat(e.target.value))}
+              className="w-full accent-sky-500"
+            />
+         </div>
+         <div className="text-xs text-slate-400 max-w-xs leading-relaxed border-l border-white/10 pl-4 hidden sm:block">
+            <strong>Red:</strong> Euclidean descent.<br/>
+            <strong>Mint:</strong> Natural gradient (covariance-aware).
+         </div>
+      </div>
     </div>
   );
 }

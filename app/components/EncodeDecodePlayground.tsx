@@ -49,42 +49,44 @@ export function EncodeDecodePlayground() {
   }, [continuous, categorical, reflectMode, logScale, unbounded]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-4">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-        <Layers className="h-4 w-4" /> Encode/Decode Playground
+    <div className="glass-card p-6 space-y-6">
+      <div className="flex items-center gap-2.5">
+        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
+          <Layers className="h-4 w-4 text-sky-400" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Encode/Decode Playground</h3>
+          <p className="text-xs text-slate-400">Map messy world to clean [0,1] vectors</p>
+        </div>
       </div>
-      <p className="text-sm text-slate-300">
-        Map messy real-world knobs into a clean [0,1] vector, then decode back. Late quantization keeps
-        search continuous; reflection avoids wasting samples beyond bounds.
+      
+      <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
+        Map messy real-world knobs into a clean <code className="text-xs bg-white/10 px-1 py-0.5 rounded border border-white/10 font-mono">[0,1]</code> vector, then decode back. Late quantization keeps search continuous; reflection avoids wasting samples beyond bounds.
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-5">
           <ControlBlock
-            title="Continuous (learning rate proxy)"
+            title="Continuous (Learning Rate)"
             value={continuous}
             onChange={setContinuous}
-            subtitle={logScale ? "log-scale 1e-3 → 1e1" : "linear 1e-3 → 1e1"}
+            subtitle={logScale ? "Log-scale: 1e-3 → 1e1" : "Linear: 1e-3 → 1e1"}
             readout={decoded.c.toExponential(3)}
           />
 
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-2 text-[0.85rem] text-slate-200">
-            <div className="flex items-center justify-between text-[0.8rem] text-slate-300">
-              <span>Log scale</span>
-              <Switch
+          <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5 flex items-center justify-between">
+             <span className="text-xs text-slate-300 font-medium">Log Scale Interpolation</span>
+             <Switch
                 checked={logScale}
                 onChange={setLogScale}
-                className={`${logScale ? "bg-sky-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
+                className={`${logScale ? "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
               >
-                <span
-                  className={`${logScale ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`}
-                />
+                <span className={`${logScale ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
               </Switch>
-            </div>
           </div>
 
           <ControlBlock
-            title="Categorical (activation)"
+            title="Categorical (Activation)"
             value={categorical}
             onChange={setCategorical}
             subtitle="Intervals map to GELU / SwiGLU / ReLU / Mish"
@@ -92,42 +94,51 @@ export function EncodeDecodePlayground() {
           />
 
           <ControlBlock
-            title="Unbounded (tanh squash)"
+            title="Unbounded (Tanh Squash)"
             value={unbounded}
             onChange={setUnbounded}
-            subtitle="Raw in (-∞,∞) → tanh → [0,1], then reflect/clip"
+            subtitle="Raw (-∞,∞) → tanh → [0,1]"
             readout={decoded.finalU.toFixed(3)}
           >
-            <div className="flex items-center justify-between text-[0.8rem] text-slate-300">
-              <span>Reflect out-of-bounds</span>
-              <Switch
-                checked={reflectMode}
-                onChange={setReflectMode}
-                className={`${reflectMode ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
-              >
-                <span
-                  className={`${reflectMode ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`}
-                />
-              </Switch>
+            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+               <span className="text-xs text-slate-300 font-medium">Reflect Out-of-Bounds</span>
+               <Switch
+                  checked={reflectMode}
+                  onChange={setReflectMode}
+                  className={`${reflectMode ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
+                >
+                  <span className={`${reflectMode ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
+                </Switch>
             </div>
           </ControlBlock>
         </div>
 
-        <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 space-y-3">
-          <div className="text-[0.85rem] font-semibold text-emerald-200 flex items-center gap-2">
-            <Target className="h-4 w-4" /> Decoded summary
+        <div className="bg-gradient-to-br from-slate-900/50 to-slate-900/30 rounded-2xl p-5 border border-white/5 shadow-inner space-y-4 h-fit">
+          <div className="flex items-center gap-2 pb-2 border-b border-white/5 text-sm font-semibold text-emerald-200">
+            <Target className="h-4 w-4" /> Decoded Summary
           </div>
-          <div className="grid gap-2 text-[0.86rem] text-slate-200">
-            <SummaryRow label="Continuous (decoded)">{decoded.c.toExponential(3)} (log {logScale ? "on" : "off"})</SummaryRow>
-            <SummaryRow label="Categorical bin">{categories[decoded.catIdx]}</SummaryRow>
-            <SummaryRow label="Unbounded squashed">{decoded.mapped.toFixed(3)} (pre-reflect/clip)</SummaryRow>
-            <SummaryRow label="Final unbounded in [0,1]">{decoded.finalU.toFixed(3)}</SummaryRow>
+          <div className="space-y-2.5">
+            <SummaryRow label="Continuous (Decoded)">
+              <span className="font-mono text-sky-300">{decoded.c.toExponential(3)}</span>
+              <span className="text-slate-500 text-[0.7rem] ml-2">({logScale ? "Log" : "Lin"})</span>
+            </SummaryRow>
+            <SummaryRow label="Categorical Bin">
+              <span className="font-mono text-amber-300">{categories[decoded.catIdx]}</span>
+            </SummaryRow>
+            <SummaryRow label="Unbounded Squashed">
+               <span className="font-mono text-slate-300 opacity-60">{decoded.mapped.toFixed(3)}</span>
+            </SummaryRow>
+            <SummaryRow label="Final [0,1] Value">
+               <span className="font-mono text-emerald-300 font-bold">{decoded.finalU.toFixed(3)}</span>
+            </SummaryRow>
           </div>
-          <div className="text-[0.82rem] text-slate-300 flex items-center gap-2">
-            <Zap className="h-3.5 w-3.5 text-amber-300" /> Late quantization + reflection keeps CMA-ES in continuous mode as long as possible, so covariance learning isn’t broken by hard edges.
-          </div>
-          <div className="text-[0.78rem] text-slate-400">
-            Pair this with the Practical Playbook: logit/tanh for bounds, reflect instead of reject, quantize categories late, seed everything.
+          
+          <div className="mt-4 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl text-xs text-slate-300 leading-relaxed">
+             <div className="flex gap-2 mb-1">
+                <Zap className="h-3.5 w-3.5 text-amber-300 shrink-0" />
+                <strong className="text-emerald-200">Pro Tip</strong>
+             </div>
+             Late quantization + reflection keeps CMA-ES in continuous mode as long as possible. This prevents covariance learning from breaking on hard edges.
           </div>
         </div>
       </div>
@@ -151,13 +162,13 @@ function ControlBlock({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-2">
-      <div className="flex items-center justify-between text-[0.82rem] text-slate-300">
+    <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5 transition-all hover:bg-slate-950/40 hover:border-white/10">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="font-semibold text-slate-100 text-[0.9rem]">{title}</div>
-          <div className="text-[0.78rem] text-slate-400">{subtitle}</div>
+          <div className="font-semibold text-slate-200 text-xs uppercase tracking-wide">{title}</div>
+          <div className="text-[0.65rem] text-slate-500 font-medium mt-0.5">{subtitle}</div>
         </div>
-        <div className="text-[0.82rem] text-sky-200 font-semibold">{readout}</div>
+        <div className="font-mono text-xs text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 shadow-sm">{readout}</div>
       </div>
       <input
         type="range"
@@ -166,7 +177,7 @@ function ControlBlock({
         step={0.01}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-sky-400"
+        className="w-full accent-sky-500"
       />
       {children}
     </div>
@@ -175,9 +186,9 @@ function ControlBlock({
 
 function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex justify-between rounded-lg border border-slate-800/60 bg-slate-950/60 px-3 py-2 text-[0.84rem]">
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-100 font-semibold">{children}</span>
+    <div className="flex justify-between items-center rounded-lg bg-black/20 px-3 py-2.5 text-xs border border-white/5">
+      <span className="text-slate-400 font-medium">{label}</span>
+      <span>{children}</span>
     </div>
   );
 }

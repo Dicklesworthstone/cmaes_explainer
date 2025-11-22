@@ -145,71 +145,86 @@ export function ConstraintRepairDemo() {
   }, [samples, showMean, showArrows]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
+    <div className="glass-card p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-          <Square className="h-4 w-4" /> Constraint repair demo
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+             <Square className="h-4 w-4 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Constraint Repair</h3>
+             <p className="text-xs text-slate-400">Handling bounds in black-box optimization</p>
+          </div>
         </div>
         <button
           onClick={() => setSeed((s) => s + 1)}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/70 px-2.5 py-1 text-[0.78rem] text-slate-200 hover:border-sky-400/70"
+          className="flex items-center gap-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-white/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 transition-colors shadow-sm"
         >
-          <Shuffle className="h-3.5 w-3.5" /> Resample
+          <Shuffle className="h-3.5 w-3.5 opacity-70" /> Resample
         </button>
       </div>
-      <p className="text-sm text-slate-300">
-        Overshoot the box, then repair. Compare clip, reflect, and logit-transform strategies. Mean shift
-        (yellow→green) shows how repair affects the search distribution.
+
+      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+        What happens when the optimizer suggests points outside the box? Compare strategies to bring them back.
       </p>
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-center">
-        <canvas ref={canvasRef} width={SIZE} height={SIZE} className="w-full rounded-xl border border-slate-800/70 bg-slate-950 shadow-glow-sm" />
-        <div className="space-y-3 text-[0.88rem] text-slate-200">
+
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] items-start">
+        <div className="relative group">
+           <div className="absolute -inset-0.5 bg-gradient-to-br from-emerald-500/20 to-sky-500/20 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-500" />
+           <canvas ref={canvasRef} width={SIZE} height={SIZE} className="relative w-full rounded-xl border border-white/10 bg-[#0B1121] shadow-inner" />
+        </div>
+
+        <div className="space-y-6">
           <div className="grid grid-cols-3 gap-2">
             {strategies.map((s) => (
               <button
                 key={s.key}
                 onClick={() => setStrategy(s.key)}
-                className={`rounded-xl border px-3 py-2 text-center text-[0.8rem] font-semibold transition ${
+                className={`rounded-xl border px-3 py-3 text-center text-xs font-semibold transition-all duration-300 ${
                   strategy === s.key
-                    ? "border-emerald-400/70 bg-emerald-500/10 text-emerald-100"
-                    : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-sky-400/60"
+                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                    : "border-white/5 bg-slate-900/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >
-                <div>{s.label}</div>
-                <div className="text-[0.72rem] text-slate-400">{s.desc}</div>
+                <div className="mb-1">{s.label}</div>
+                <div className="text-[0.65rem] opacity-70 font-normal">{s.desc}</div>
               </button>
             ))}
           </div>
-          <div className="flex items-center justify-between text-[0.82rem] text-slate-300">
-            <span className="flex items-center gap-1"><Wand2 className="h-4 w-4 text-amber-300" /> Show mean shift</span>
-            <Switch
-              checked={showMean}
-              onChange={setShowMean}
-              className={`${showMean ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
-            >
-              <span className={`${showMean ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
-            </Switch>
-          </div>
-          <div className="flex items-center justify-between text-[0.82rem] text-slate-300">
-            <span className="flex items-center gap-1"><Paintbrush className="h-4 w-4 text-sky-300" /> Show arrows</span>
-            <Switch
-              checked={showArrows}
-              onChange={setShowArrows}
-              className={`${showArrows ? "bg-sky-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
-            >
-              <span className={`${showArrows ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
-            </Switch>
-          </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 text-[0.82rem] text-slate-300 space-y-1">
-            <div className="font-semibold text-slate-100 text-[0.88rem]">When to use which</div>
-            <ul className="space-y-1 list-disc pl-4">
-              <li>Clip: simplest, but piles samples on the boundary—can mislead covariance.</li>
-              <li>Reflect: preserves density near edges; usually best default.</li>
-              <li>Logit: keep sampling unbounded internally; decode via logit to respect bounds.</li>
-            </ul>
-            <div className="text-[0.78rem] text-slate-400 flex items-center gap-1">
-              <MoveRight className="h-3.5 w-3.5" /> Pair with encode/decode and noise explorer to see end-to-end effects.
+
+          <div className="space-y-4 bg-slate-950/30 rounded-xl p-4 border border-white/5">
+            <div className="flex items-center justify-between text-sm text-slate-300">
+              <span className="flex items-center gap-2"><Wand2 className="h-4 w-4 text-amber-400" /> Show Mean Shift</span>
+              <Switch
+                checked={showMean}
+                onChange={setShowMean}
+                className={`${showMean ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
+              >
+                 <span className={`${showMean ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
+              </Switch>
             </div>
+            <div className="flex items-center justify-between text-sm text-slate-300">
+              <span className="flex items-center gap-2"><Paintbrush className="h-4 w-4 text-sky-400" /> Show Repair Vectors</span>
+              <Switch
+                checked={showArrows}
+                onChange={setShowArrows}
+                className={`${showArrows ? "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
+              >
+                <span className={`${showArrows ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
+              </Switch>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-900/40 p-4 border border-white/5 text-xs text-slate-400 space-y-2">
+            <div className="font-semibold text-slate-200 flex items-center gap-2">
+               <MoveRight className="h-3.5 w-3.5 text-slate-500" />
+               Analysis
+            </div>
+            <ul className="space-y-1.5 list-disc pl-4 marker:text-slate-600">
+              <li><strong>Clip:</strong> Simplest, but piles samples on the boundary.</li>
+              <li><strong>Reflect:</strong> Preserves density near edges; good default.</li>
+              <li><strong>Logit:</strong> Search in unconstrained space; mathematically cleanest.</li>
+            </ul>
           </div>
         </div>
       </div>

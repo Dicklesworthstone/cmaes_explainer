@@ -1,8 +1,10 @@
 "use client";
 
+import { CheckCircle2 } from "lucide-react";
+
 export function WhyILove() {
   const bullets = [
-    "Keeps an explicit search distribution; updates are principled (natural-gradient flavored) not ad hoc.",
+    "Keeps an explicit search distribution; updates are principled (natural-gradient flavored).",
     "Rank-based and coordinate-invariant: units, scalings, and monotone hacks don’t derail it.",
     "Turns scarce, expensive evaluations into geometry learning (covariance as inverse-Hessian proxy).",
     "Works on mixed discrete/continuous spaces with minimal tweaks (encode/decode, late quantization).",
@@ -10,11 +12,14 @@ export function WhyILove() {
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-2">
-      <div className="text-xs uppercase tracking-wide text-sky-200">Why I love CMA-ES</div>
-      <ul className="list-disc space-y-1 pl-5 text-[0.9rem] text-slate-200">
+    <div className="glass-card p-5 border-l-4 border-l-sky-500">
+      <div className="text-xs font-bold uppercase tracking-wider text-sky-200 mb-3">Why I love CMA-ES</div>
+      <ul className="space-y-2.5">
         {bullets.map((b) => (
-          <li key={b}>{b}</li>
+          <li key={b} className="flex gap-3 items-start text-sm text-slate-300 leading-relaxed">
+             <CheckCircle2 className="w-4 h-4 text-sky-500 shrink-0 mt-0.5" />
+             <span>{b}</span>
+          </li>
         ))}
       </ul>
     </div>

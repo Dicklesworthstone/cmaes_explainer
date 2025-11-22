@@ -56,36 +56,46 @@ export function WingWalkthrough() {
         metric without ever seeing a gradient.
       </p>
 
-      <div className="space-y-2">
-        <p className="font-semibold text-slate-100">Practical tricks</p>
-        <ul className="list-disc space-y-1 pl-4 text-slate-200">
-          <li>Reflect or squash out-of-bounds samples rather than rejecting them to keep data flowing.</li>
-          <li>Quantize categorical dimensions as late as possible so the search stays continuous.</li>
-          <li>Keep seeds and ask/tell logs so you can replay a run; determinism makes debugging sane.</li>
-        </ul>
+      <div className="space-y-6">
+        <div className="bg-slate-900/30 border border-white/5 rounded-xl p-5">
+          <h3 className="font-semibold text-slate-100 mb-3 text-sm flex items-center gap-2">
+             <span className="w-1 h-4 bg-emerald-500 rounded-full" />
+             Practical Tricks
+          </h3>
+          <ul className="space-y-2 text-slate-300 text-sm list-disc pl-4 marker:text-emerald-500">
+            <li>Reflect or squash out-of-bounds samples rather than rejecting them to keep data flowing.</li>
+            <li>Quantize categorical dimensions as late as possible so the search stays continuous.</li>
+            <li>Keep seeds and ask/tell logs so you can replay a run; determinism makes debugging sane.</li>
+          </ul>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-start">
-        <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] items-start mt-12">
+        <div className="space-y-4">
           {steps.map((s, i) => (
             <motion.div
               key={s.title}
-              initial={{ opacity: 0, y: 18 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.55, delay: i * 0.03 }}
-              className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4 text-xs text-slate-200"
+              transition={{ duration: 0.5, delay: i * 0.05 }}
+              className="glass-card p-5 hover:border-sky-500/30 transition-colors group"
             >
-              <div className="mb-2 text-[0.7rem] font-semibold text-sky-200">
+              <div className="mb-2 text-xs font-bold text-sky-200 uppercase tracking-wider flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-[0.6rem] text-sky-400 font-mono">
+                   {i + 1}
+                </span>
                 {s.title}
               </div>
-              <p className="leading-relaxed">
+              <p className="text-xs text-slate-300 leading-relaxed group-hover:text-slate-200 transition-colors">
                 <MathJax dynamic>{s.text}</MathJax>
               </p>
             </motion.div>
           ))}
         </div>
-        <WingViz />
+        <div className="lg:sticky lg:top-24">
+           <WingViz />
+        </div>
       </div>
 
       <p className="mt-6">

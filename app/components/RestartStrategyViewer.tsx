@@ -110,46 +110,61 @@ export function RestartStrategyViewer() {
   }, [data]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
+    <div className="glass-card p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-          <RefreshCw className="h-4 w-4" /> Restart strategy viewer
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
+            <RefreshCw className="h-4 w-4 text-sky-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Restart Strategy Viewer</h3>
+            <p className="text-xs text-slate-400">IPOP vs BIPOP dynamics</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[0.8rem] text-slate-300">
-          <span>{mode.toUpperCase()}</span>
+        
+        <div className="flex items-center gap-3 bg-slate-950/30 px-3 py-1.5 rounded-full border border-white/5">
+          <span className={`text-xs font-bold transition-colors ${mode === "ipop" ? "text-sky-400" : "text-slate-500"}`}>IPOP</span>
           <Switch
             checked={mode === "bipop"}
             onChange={(v) => setMode(v ? "bipop" : "ipop")}
-            className={`${mode === "bipop" ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-12 items-center rounded-full`}
+            className="group relative inline-flex h-6 w-12 items-center rounded-full bg-slate-700 transition-colors data-[checked]:bg-emerald-500"
           >
-            <span className={`${mode === "bipop" ? "translate-x-6" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
+            <span className="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition-transform group-data-[checked]:translate-x-7 shadow-sm" />
           </Switch>
+          <span className={`text-xs font-bold transition-colors ${mode === "bipop" ? "text-emerald-400" : "text-slate-500"}`}>BIPOP</span>
         </div>
       </div>
-      <p className="text-sm text-slate-300">
-        IPOP grows the population on each restart; BIPOP alternates small and large. Bigger λ explores
-        broadly but costs more per generation. Scrub through the timeline to see how fitness and λ move.
+
+      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+        <strong>IPOP</strong> doubles the population on each restart. <strong>BIPOP</strong> alternates small and large. Bigger λ explores broadly but costs more per generation.
       </p>
-      <div className="space-y-3">
-        <canvas ref={canvasRef} width={W} height={H} className="w-full rounded-xl border border-slate-800/70 bg-slate-950" />
-        <canvas ref={lambdaRef} width={W} height={60} className="w-full rounded-xl border border-slate-800/70 bg-slate-950" />
+
+      <div className="space-y-4">
+        <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-inner bg-[#0B1121]">
+          <canvas ref={canvasRef} width={W} height={H} className="w-full block" />
+        </div>
+        <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-inner bg-[#0B1121]">
+           <canvas ref={lambdaRef} width={W} height={60} className="w-full block" />
+        </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 text-[0.84rem] text-slate-200">
-        <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-1">
-          <div className="flex items-center gap-2 text-slate-100 font-semibold text-[0.9rem]">
-            <Timer className="h-4 w-4 text-amber-300" /> When to prefer IPOP
+
+      <div className="grid gap-4 sm:grid-cols-2 text-sm">
+        <div className="bg-slate-900/40 rounded-xl p-4 border border-white/5 hover:border-sky-500/30 transition-colors">
+          <div className="flex items-center gap-2 text-sky-200 font-semibold text-xs uppercase tracking-wide mb-2">
+            <Timer className="h-4 w-4" /> Prefer IPOP
           </div>
-          <ul className="list-disc pl-4 space-y-1 text-slate-300">
-            <li>Globally structured multimodal problems (Rastrigin/Griewank).</li>
-            <li>You want systematic population growth to sweep wider basins.</li>
+          <ul className="list-disc pl-4 space-y-1.5 text-slate-400 text-xs leading-relaxed">
+            <li>Globally structured multimodal problems (Rastrigin).</li>
+            <li>Systematic population growth sweeps wider basins.</li>
           </ul>
         </div>
-        <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 space-y-1">
-          <div className="flex items-center gap-2 text-slate-100 font-semibold text-[0.9rem]">
-            <Activity className="h-4 w-4 text-emerald-300" /> When to prefer BIPOP
+
+        <div className="bg-slate-900/40 rounded-xl p-4 border border-white/5 hover:border-emerald-500/30 transition-colors">
+          <div className="flex items-center gap-2 text-emerald-200 font-semibold text-xs uppercase tracking-wide mb-2">
+            <Activity className="h-4 w-4" /> Prefer BIPOP
           </div>
-          <ul className="list-disc pl-4 space-y-1 text-slate-300">
-            <li>Weak global structure; need rapid local exploitation between light global sweeps.</li>
+          <ul className="list-disc pl-4 space-y-1.5 text-slate-400 text-xs leading-relaxed">
+            <li>Weak global structure; rapid local exploitation needed.</li>
             <li>Compute budgets that favor alternating small/large bursts.</li>
           </ul>
         </div>

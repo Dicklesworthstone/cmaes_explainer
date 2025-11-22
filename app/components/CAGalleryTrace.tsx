@@ -114,59 +114,76 @@ export function CAGalleryTrace() {
   }, [snapshots]);
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-sky-200">
-          <Sparkles className="h-4 w-4" /> CA pattern gallery (CMA-ES trace)
+    <div className="glass-card p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
+            <Sparkles className="h-4 w-4 text-sky-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">CA Pattern Gallery</h3>
+            <p className="text-xs text-slate-400">Tracing the CMA-ES path</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-[0.8rem] text-slate-300">
-          <span>Path tightness</span>
-          <input
-            aria-label="Path tightness"
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={pathT}
-            onChange={(e) => setPathT(parseFloat(e.target.value))}
-            className="w-32 accent-sky-400"
-          />
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-950/30 px-3 py-1.5 rounded-full border border-white/5">
+            <span className="font-medium">Tightness</span>
+            <input
+              aria-label="Path tightness"
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={pathT}
+              onChange={(e) => setPathT(parseFloat(e.target.value))}
+              className="w-24 accent-sky-500"
+            />
+          </div>
           <button
             onClick={() => setSeed((s) => s + 7)}
-            className="rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-[0.78rem] text-slate-200 hover:border-sky-400/70"
+            className="flex items-center gap-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-white/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 transition-colors shadow-sm"
           >
+            <RouteIcon className="w-3 h-3 opacity-70" />
             Resample
           </button>
         </div>
       </div>
-      <p className="text-sm text-slate-300">
-        Each thumbnail is a CA snapshot along a CMA-ES-like path from broad exploration (top-left) to
-        a clustered region (bottom-right). Dot colors show how structure sharpens as parameters converge.
+
+      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+        Each thumbnail is a Cellular Automata snapshot along a CMA-ES-like path. The optimizer drags parameters from broad random exploration (top-left) toward a clustered region of coherent structures (bottom-right).
       </p>
-      <div className="grid grid-cols-5 gap-2">
+
+      <div className="grid grid-cols-5 gap-3">
         {snapshots.map((_, i) => (
-          <div key={i} className="relative">
+          <div key={i} className="relative group aspect-square">
             <canvas
               ref={(el) => {
                 canvasRefs.current[i] = el;
               }}
               width={SIZE}
               height={SIZE}
-              className="w-full rounded-lg border border-slate-800/70 bg-slate-950"
+              className="w-full h-full rounded-lg border border-white/5 bg-[#0B1121] shadow-inner transition-transform duration-300 group-hover:scale-[1.02] group-hover:border-sky-500/30"
             />
             {i === snapshots.length - 1 && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="rounded-full bg-emerald-400/80 px-2 py-0.5 text-[0.7rem] text-slate-900 shadow-lg">
-                  best
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                <div className="rounded-full bg-emerald-500/90 backdrop-blur-sm px-2.5 py-1 text-[0.65rem] font-bold text-white shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                  BEST
                 </div>
               </div>
             )}
+             <div className="absolute top-1 left-1 text-[0.55rem] font-mono text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                #{i + 1}
+             </div>
           </div>
         ))}
       </div>
-      <div className="text-[0.82rem] text-slate-400">
-        This mirrors the creative-systems vignette: CMA-ES drags CA parameters from “random noise” toward
-        coherent structure. Adjust path tightness to see faster vs slower convergence to the sweet spot.
+      
+      <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/30 p-3 rounded-lg border border-white/5">
+        <div className="w-1.5 h-1.5 rounded-full bg-sky-400 shadow-[0_0_5px_#38bdf8] shrink-0" />
+         <p>
+          Adjust <strong>path tightness</strong> to see how quickly the search converges to the &quot;sweet spot&quot; of complex behavior.
+        </p>
       </div>
     </div>
   );

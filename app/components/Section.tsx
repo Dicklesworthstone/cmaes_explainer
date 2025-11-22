@@ -11,20 +11,21 @@ export function Section(props: {
   return (
     <section
       id={props.id}
-      className="scroll-section mx-auto mt-12 max-w-6xl px-4 scroll-mt-28 sm:mt-20 sm:scroll-mt-32 lg:mt-24"
+      className="scroll-section mx-auto mt-24 max-w-6xl px-6 sm:mt-32 lg:mt-40"
     >
       <motion.div
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ amount: 0.3, once: true }}
-        transition={{ duration: 0.6 }}
+        viewport={{ amount: 0.2, once: true }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
       >
-        <h2 className="font-display text-xl tracking-tight text-slate-50 sm:text-2xl">
+        <h2 className="text-balance font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl drop-shadow-md">
           {props.title}
         </h2>
-        <div className="mt-4 border-t border-slate-800/70" />
-        <div className="mt-6">
-          {props.children}
+        <div className="mt-8 mb-12 h-px w-full max-w-xs bg-gradient-to-r from-sky-500/50 to-transparent" />
+        
+        <div className="relative">
+            {props.children}
         </div>
       </motion.div>
     </section>
