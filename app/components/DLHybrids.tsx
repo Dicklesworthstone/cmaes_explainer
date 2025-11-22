@@ -22,6 +22,7 @@ export function DLHybrids() {
           <ul className="space-y-1 text-slate-300 text-[0.86rem]">
             <li>Continuous cellular automata scored on “visual interest” or entropy.</li>
             <li>Latent-space prompts / tool knobs for LLM systems when gradients are meaningless.</li>
+            <li>Define a single scalar fitness (entropy, coherent structures, aesthetic score) and let CMA-ES roam the CA parameter box.</li>
           </ul>
         </div>
       </div>

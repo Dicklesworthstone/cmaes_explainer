@@ -28,9 +28,11 @@ export function CommunitySplit() {
         </div>
       </div>
       <div className="mt-3 text-[0.82rem] text-slate-300">
-        These worlds keep re-inventing each other (see NES vs CMA-ES; JEPA vibes with “optimize a
-        distribution”). Bridging them is low-hanging fruit: if it’s a black box, reach for CMA-ES
-        before rolling custom sweeps.
+        These worlds keep re-inventing each other (NES vs CMA-ES; JEPA vibes with “optimize a
+        distribution”). LeCun’s JEPA intuition about learning a latent distribution rhymes with the
+        CMA-ES view of nudging a Gaussian in latent space—two ships passing until they notice each
+        other. Bridging is low-hanging fruit: if it’s a black box, reach for CMA-ES before custom
+        sweeps.
       </div>
       <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[0.75rem] text-emerald-100">
         <Sparkles className="h-3.5 w-3.5" />
