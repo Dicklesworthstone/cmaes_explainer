@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Switch } from "@headlessui/react";
-import { Square, Wand2, MoveRight } from "lucide-react";
+import { Square, Wand2, MoveRight, Shuffle } from "lucide-react";
 
 const SIZE = 320;
 
