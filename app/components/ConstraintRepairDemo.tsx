@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Switch } from "@headlessui/react";
-import { Square, Wand2, MoveRight, Shuffle } from "lucide-react";
+import { Square, Wand2, MoveRight, Shuffle, Paintbrush } from "lucide-react";
 
 const SIZE = 320;
 
@@ -45,6 +45,7 @@ export function ConstraintRepairDemo() {
   const [strategy, setStrategy] = useState<Strat>("reflect");
   const [seed, setSeed] = useState(7);
   const [showMean, setShowMean] = useState(true);
+   const [showArrows, setShowArrows] = useState(true);
 
   const samples = useMemo(() => {
     const rand = rng(seed);
@@ -64,16 +65,40 @@ export function ConstraintRepairDemo() {
     if (!ctx) return;
 
     ctx.clearRect(0, 0, SIZE, SIZE);
-    ctx.fillStyle = "#0b1224";
+
+    // gradient backdrop
+    const grad = ctx.createLinearGradient(0, 0, SIZE, SIZE);
+    grad.addColorStop(0, "#0b1224");
+    grad.addColorStop(1, "#0f172a");
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, SIZE, SIZE);
 
+    // box glow
+    ctx.strokeStyle = "rgba(14,165,233,0.35)";
+    ctx.lineWidth = 8;
+    ctx.strokeRect(36, 36, SIZE - 72, SIZE - 72);
+
     // box
-    ctx.strokeStyle = "rgba(148,163,184,0.6)";
+    ctx.strokeStyle = "rgba(148,163,184,0.7)";
     ctx.lineWidth = 2;
     ctx.strokeRect(40, 40, SIZE - 80, SIZE - 80);
 
+    // draw arrows raw -> fixed for first N
+    if (showArrows) {
+      ctx.strokeStyle = "rgba(248,113,113,0.35)";
+      ctx.lineWidth = 1.5;
+      samples.slice(0, 25).forEach((s) => {
+        const [rx, ry] = toPix(s.raw);
+        const [fx, fy] = toPix(s.fixed);
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+      });
+    }
+
     // raw samples
-    ctx.fillStyle = "rgba(248,113,113,0.5)";
+    ctx.fillStyle = "rgba(248,113,113,0.6)";
     samples.forEach((s) => {
       const [x, y] = toPix(s.raw);
       ctx.beginPath();
@@ -82,11 +107,11 @@ export function ConstraintRepairDemo() {
     });
 
     // repaired samples
-    ctx.fillStyle = "rgba(34,211,238,0.85)";
+    ctx.fillStyle = "rgba(34,211,238,0.9)";
     samples.forEach((s) => {
       const [x, y] = toPix(s.fixed);
       ctx.beginPath();
-      ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+      ctx.arc(x, y, 4.6, 0, Math.PI * 2);
       ctx.fill();
     });
 
@@ -103,6 +128,7 @@ export function ConstraintRepairDemo() {
       const [rx, ry] = toPix(meanRaw);
       const [fx, fy] = toPix(meanFix);
       ctx.strokeStyle = "rgba(244,244,245,0.8)";
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(rx, ry);
       ctx.lineTo(fx, fy);
@@ -116,7 +142,7 @@ export function ConstraintRepairDemo() {
       ctx.arc(fx, fy, 6, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [samples, showMean]);
+  }, [samples, showMean, showArrows]);
 
   return (
     <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 p-4 shadow-glow-sm space-y-3">
@@ -136,7 +162,7 @@ export function ConstraintRepairDemo() {
         (yellow→green) shows how repair affects the search distribution.
       </p>
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-center">
-        <canvas ref={canvasRef} width={SIZE} height={SIZE} className="w-full rounded-xl border border-slate-800/70 bg-slate-950" />
+        <canvas ref={canvasRef} width={SIZE} height={SIZE} className="w-full rounded-xl border border-slate-800/70 bg-slate-950 shadow-glow-sm" />
         <div className="space-y-3 text-[0.88rem] text-slate-200">
           <div className="grid grid-cols-3 gap-2">
             {strategies.map((s) => (
@@ -162,6 +188,16 @@ export function ConstraintRepairDemo() {
               className={`${showMean ? "bg-emerald-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
             >
               <span className={`${showMean ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
+            </Switch>
+          </div>
+          <div className="flex items-center justify-between text-[0.82rem] text-slate-300">
+            <span className="flex items-center gap-1"><Paintbrush className="h-4 w-4 text-sky-300" /> Show arrows</span>
+            <Switch
+              checked={showArrows}
+              onChange={setShowArrows}
+              className={`${showArrows ? "bg-sky-500/70" : "bg-slate-700"} relative inline-flex h-5 w-10 items-center rounded-full`}
+            >
+              <span className={`${showArrows ? "translate-x-5" : "translate-x-1"} inline-block h-3 w-3 transform rounded-full bg-white`} />
             </Switch>
           </div>
           <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3 text-[0.82rem] text-slate-300 space-y-1">
