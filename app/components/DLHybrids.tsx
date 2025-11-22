@@ -1,6 +1,7 @@
 "use client";
 
 import { Cpu, Palette, Workflow } from "lucide-react";
+import { CAGalleryTrace } from "./CAGalleryTrace";
 
 export function DLHybrids() {
   return (
@@ -36,6 +37,9 @@ export function DLHybrids() {
       </div>
       <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[0.75rem] text-emerald-100">
         <Cpu className="h-3.5 w-3.5" /> CMA-ES = “geometry-aware random search” when backprop ghosts you.
+      </div>
+      <div className="pt-2">
+        <CAGalleryTrace />
       </div>
     </div>
   );
