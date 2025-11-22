@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MathJax } from "better-react-mathjax";
+import { WingViz } from "./WingViz";
 
 export function WingWalkthrough() {
   const steps = [
@@ -36,40 +37,64 @@ export function WingWalkthrough() {
   ];
 
   return (
-    <div className="prose-cmaes">
+    <div className="prose-cmaes space-y-6">
       <p>
         Let’s simplify the wing to just three normalized parameters
         <MathJax inline>{"$x_1, x_2, x_3 \\in [0,1]$"}</MathJax>: aspect ratio, sweep, and an airfoil
         family index. Physical ranges map linearly into the unit cube; the categorical airfoil index
         is carved into five sub-intervals and later quantized. Normalizing like this keeps the
-        initial Gaussian honest; every direction starts equally plausible.
+        initial Gaussian honest; every direction starts equally plausible. The real pipeline would
+        be hours of meshing + CFD per point, so every generation has to count — that’s the regime
+        where CMA-ES earns its keep.
       </p>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {steps.map((s, i) => (
-          <motion.div
-            key={s.title}
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.55, delay: i * 0.03 }}
-            className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4 text-xs text-slate-200"
-          >
-            <div className="mb-2 text-[0.7rem] font-semibold text-sky-200">
-              {s.title}
-            </div>
-            <p className="leading-relaxed">
-              <MathJax dynamic>{s.text}</MathJax>
-            </p>
-          </motion.div>
-        ))}
+      <p>
+        The rhythm looks like this: sample a batch, run the expensive simulator, rank, and update.
+        The evolving ellipsoid is an online PCA of “what worked,” steadily aligning to benign
+        directions (e.g., sweep + aspect ratio together) and squeezing dangerous ones (high aspect
+        ratio with low sweep). By the mid-game generations you’ve converted ignorance into a tailored
+        metric without ever seeing a gradient.
+      </p>
+
+      <p>
+        Practical tricks:
+        <ul>
+          <li>Reflect or squash out-of-bounds samples rather than rejecting them to keep data flowing.</li>
+          <li>Quantize categorical dimensions as late as possible so the search stays continuous.</li>
+          <li>Keep seeds and ask/tell logs so you can replay a run; determinism makes debugging sane.</li>
+        </ul>
+      </p>
+
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] items-start">
+        <div className="grid gap-4 lg:grid-cols-2">
+          {steps.map((s, i) => (
+            <motion.div
+              key={s.title}
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.55, delay: i * 0.03 }}
+              className="rounded-2xl border border-slate-800/70 bg-slate-950/60 p-4 text-xs text-slate-200"
+            >
+              <div className="mb-2 text-[0.7rem] font-semibold text-sky-200">
+                {s.title}
+              </div>
+              <p className="leading-relaxed">
+                <MathJax dynamic>{s.text}</MathJax>
+              </p>
+            </motion.div>
+          ))}
+        </div>
+        <WingViz />
       </div>
 
       <p className="mt-6">
         The important part is what we <em>don’t</em> assume. We never assume the objective is convex
         or even smooth. We just assume that sampling around the current mean and steering the
         covariance toward where good things have happened in the past is a reasonable meta-strategy.
-        CMA-ES is the formalization of that idea with a lot of very careful math underneath.
+        CMA-ES is the formalization of that idea with careful math underneath: invariance from
+        rank-based selection, natural-gradient flavored updates in distribution space, and restart
+        policies (IPOP/BIPOP) when you need to sweep multiple basins.
       </p>
     </div>
   );
