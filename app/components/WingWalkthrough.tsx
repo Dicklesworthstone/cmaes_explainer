@@ -31,7 +31,7 @@ export function WingWalkthrough() {
     },
     {
       title: "Restarts when you need global search",
-      text: `If progress stalls or you suspect multiple basins, restart CMA‑ES with a larger population (IPOP) or alternate big and small populations (BIPOP). You keep the same encode/decode trick—everything stays in [0,1]³ with categories carved into intervals—and let the restart policy trade exploration for exploitation automatically.`
+      text: `If progress stalls or you suspect multiple basins, restart CMA‑ES with a larger population (IPOP) or alternate big and small populations (BIPOP). You keep the same encode/decode trick; everything stays in [0,1]³ with categories carved into intervals; the restart policy trades exploration for exploitation automatically.`
     }
   ];
 
@@ -42,7 +42,7 @@ export function WingWalkthrough() {
         <MathJax inline>{"$x_1, x_2, x_3 \\in [0,1]$"}</MathJax>: aspect ratio, sweep, and an airfoil
         family index. Physical ranges map linearly into the unit cube; the categorical airfoil index
         is carved into five sub-intervals and later quantized. Normalizing like this keeps the
-        initial Gaussian honest—every direction starts equally plausible.
+        initial Gaussian honest; every direction starts equally plausible.
       </p>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">

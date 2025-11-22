@@ -83,10 +83,10 @@ export function Hero() {
             transition={{ duration: 0.75, delay: 0.2 }}
             className="text-sm leading-relaxed text-slate-300 sm:text-base"
           >
-            If you have gradients, you should absolutely use them. But in the many places where
-            gradients simply don’t exist—aircraft wings, bridges, neural architecture search—CMA-ES
-            quietly shines. This is a guided tour of why I love it, with live visualizations and two
-            high-performance Rust implementations you can actually use.
+            If you have gradients, use them. In the many places where gradients don’t exist (aircraft
+            wings, bridges, neural architecture search), CMA-ES quietly shines. This is a straight
+            walkthrough of why it works, with live visualizations and two Rust implementations you
+            can actually use.
           </motion.p>
 
           <motion.div

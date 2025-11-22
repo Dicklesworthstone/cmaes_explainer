@@ -7,23 +7,22 @@ export function CmaesIntro() {
     <div className="prose-cmaes">
       <p>
         If you live anywhere near modern machine learning, “optimization” almost automatically
-        means <em>gradients</em>. Adam, Adafactor, Lion, SGD with warm restarts—pick your favorite
-        flavor, they are all dancing to the same tune: move parameters downhill along a gradient you
-        can compute cheaply.
+        means <em>gradients</em>. Adam, Adafactor, Lion, SGD with warm restarts; pick your favorite
+        flavor; they all chase the same idea: move parameters downhill along a gradient you can
+        compute cheaply.
       </p>
       <p>
         But there is a big category of problems where the gradient either does not exist, is
         meaningless, or is so expensive to approximate that you might as well not bother. In that
-        world—what people call <em>black-box optimization</em>—my favorite tool by a wide margin is
+        world; people call it <em>black-box optimization</em>; my favorite tool by a wide margin is
         <strong> CMA-ES</strong>, the Covariance Matrix Adaptation Evolution Strategy.
       </p>
       <p>
         Roughly speaking, CMA-ES does for nasty, opaque objective functions what gradient descent
-        does for nice smooth ones: it gives you a principled way to turn “I can only evaluate this
-        thing” into “I can reliably walk toward a good solution.” It keeps a
-        <em> Gaussian search distribution</em> over your parameter space and iteratively morphs that
-        Gaussian—its mean and its covariance—to concentrate probability mass where the objective
-        looks good.
+        does for smooth ones: it turns “I can only evaluate this” into “I can walk toward a good
+        solution.” It keeps a <em>Gaussian search distribution</em> over your parameter space and
+        iteratively morphs that Gaussian; its mean and its covariance tighten around promising
+        regions.
       </p>
       <p>
         Concretely, suppose you have some unknown function
