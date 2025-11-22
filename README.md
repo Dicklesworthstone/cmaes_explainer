@@ -2,13 +2,15 @@
 
 Next.js 15 + Tailwind + Framer Motion + Three.js + MathJax + your Rust CMA-ES engines.
 
+**Runtime:** Bun 1.3+ only (we do not use npm/yarn/pnpm).
+
 ## Getting started
 
 ```bash
 git clone https://github.com/Dicklesworthstone/cmaes_explainer
 cd cmaes_explainer
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Open http://localhost:3000.
