@@ -1,6 +1,7 @@
 "use client";
 
 import { ShieldCheck, Waves } from "lucide-react";
+import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 
 export function PracticalPlaybook() {
   return (
@@ -29,6 +30,9 @@ export function PracticalPlaybook() {
       </div>
       <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[0.75rem] text-emerald-100">
         <Waves className="h-3.5 w-3.5" /> If each eval costs hours, invest in full covariance; drop to diagonal/LM when n is huge and f is cheap.
+      </div>
+      <div className="pt-2">
+        <EncodeDecodePlayground />
       </div>
     </div>
   );
