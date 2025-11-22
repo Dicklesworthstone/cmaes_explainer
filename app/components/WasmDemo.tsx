@@ -1,17 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState } from "react";
 
 export function WasmDemo() {
-  const [loaded, setLoaded] = useState(false);
-  const [errored, setErrored] = useState(false);
   return (
     <div className="space-y-6">
       <p className="prose-cmaes">
         The nice thing about having a Rust core that targets WebAssembly is that we can ship a full
-        CMA-ES playground directly into the browser. The panel below is just your
-        <code>wasm_cmaes</code> viz, wired in as a static asset under <code>public/wasm-demo/</code>.
+        CMA-ES playground directly into the browser. The live embed is temporarily disabled while we
+        sort out a crash, but the assets remain under <code>public/wasm-demo/</code>.
       </p>
       <p className="prose-cmaes text-sm text-slate-300">
         Rebuild it yourself with <code>scripts/build-all.sh</code>; parallelism needs wasm threads
@@ -39,27 +36,16 @@ export function WasmDemo() {
             powered by wasm_cmaes
           </span>
         </div>
-        <div className="aspect-[16/9] w-full bg-[#0B1121]">
-          {!loaded && !errored && (
-            <div className="flex h-full items-center justify-center text-sm text-slate-400 animate-pulse">
-              Loading WASM explorer...
-            </div>
-          )}
-          {errored && (
-            <div className="flex h-full items-center justify-center text-sm text-amber-200 bg-slate-900/80 px-4 text-center">
-              Couldn’t load the WASM demo assets. Run <code>./scripts/pull_wasm_demo.sh</code> or check
-              your network.
-            </div>
-          )}
-          <iframe
-            src="/wasm-demo/examples/viz-benchmarks.html"
-            className="h-full w-full border-0 mix-blend-luminosity opacity-90 hover:opacity-100 hover:mix-blend-normal transition-all duration-500"
-            loading="lazy"
-            title="CMA-ES WASM visualization"
-            onLoad={() => setLoaded(true)}
-            onError={() => setErrored(true)}
-            aria-label="CMA-ES WASM visualization"
-          />
+        <div className="aspect-[16/9] w-full bg-[#0B1121] flex items-center justify-center px-6 text-center text-slate-200">
+          <div className="space-y-3">
+            <div className="text-lg font-semibold text-emerald-200">Live demo temporarily disabled</div>
+            <p className="text-sm text-slate-400 max-w-xl mx-auto">
+              The embedded iframe version of the WebAssembly explorer was causing page crashes, so
+              we’ve paused it for now. You can still run the demo locally by building the
+              <code> wasm_cmaes </code> assets with <code>scripts/build-all.sh</code> and opening
+              <code> public/wasm-demo/examples/viz-benchmarks.html</code> directly.
+            </p>
+          </div>
         </div>
       </motion.div>
       <p className="text-[0.75rem] text-slate-500 leading-relaxed border-l-2 border-white/10 pl-4">
