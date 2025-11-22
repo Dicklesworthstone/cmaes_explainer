@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, Environment, Text, useTexture, Line } from "@react-three/drei";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 
 // --- Math / Color Helpers ---
@@ -231,6 +231,12 @@ export function BridgeViz() {
 
   // Physics state for load position animation
   const physicsState = useMemo(() => ({ loadPos: 0 }), []);
+
+  // SSR guard: Track client-side mount to avoid hydration mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
 
   return (
     <div className="glass-card p-6 space-y-6">

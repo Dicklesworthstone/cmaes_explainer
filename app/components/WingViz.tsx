@@ -240,6 +240,12 @@ export function WingViz() {
 
   const ratio = lift / drag;
 
+  // SSR guard: Track client-side mount to avoid hydration mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
+
   return (
     <div className="glass-card p-4 md:p-6 space-y-6">
       <div className="flex flex-col lg:flex-row gap-8 items-start">

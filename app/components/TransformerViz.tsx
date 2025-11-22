@@ -363,7 +363,7 @@ export function TransformerViz() {
   const [width, setWidth] = useState(0.5);
   const [heads, setHeads] = useState(0.45);
   const [interacting, setInteracting] = useState(false); // Mobile interaction state
-  
+
   const [isLargeScreen, setIsLargeScreen] = useState(false);
 
   useEffect(() => {
@@ -377,6 +377,12 @@ export function TransformerViz() {
   }, []);
 
   const manifoldPoints = useMemo(() => makeManifoldPoints(), []);
+
+  // SSR guard: Track client-side mount to avoid hydration mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!mounted) return null;
 
   return (
     <div className="glass-card p-4 md:p-6 space-y-6">
