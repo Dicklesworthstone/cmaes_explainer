@@ -85,8 +85,20 @@ export function Hero() {
           >
             If you have gradients, use them. In the many places where gradients don’t exist (aircraft
             wings, bridges, neural architecture search), CMA-ES quietly shines. This is a straight
-            walkthrough of why it works, with live visualizations and two Rust implementations you
-            can actually use.
+            walkthrough of why it works, how it morphs a Gaussian into an inverse-Hessian stand‑in,
+            and how to run it yourself in the browser or in Python without touching a single
+            derivative.
+          </motion.p>
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.75, delay: 0.25 }}
+            className="text-[0.92rem] leading-relaxed text-slate-400"
+          >
+            Roots: CMA-ES grew out of evolution strategies (Rechenberg/Schwefel) and split from
+            classic genetic algorithms by optimizing the search <em>distribution</em> instead of
+            chromosomes. It shares DNA with kriging’s “neutral prior, bend with evidence” mindset and
+            the estimation-of-distribution / cross-entropy family.
           </motion.p>
 
           <motion.div

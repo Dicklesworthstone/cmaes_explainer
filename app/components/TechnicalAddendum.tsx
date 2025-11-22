@@ -22,6 +22,19 @@ export function TechnicalAddendum() {
         for a given variance, rotationally invariant when isotropic, and analytically convenient.
       </p>
 
+      <p>
+        Another way to say it: you optimize the <em>distribution</em>, not individual points. That is
+        why the algorithm stays stable under odd objective scalings and why the update lines up with a
+        sampled natural gradient step on the manifold of Gaussians.
+      </p>
+
+      <p>
+        Information-geometry lens: maximize expected fitness under a Gaussian while staying invariant
+        to coordinate choices. The natural gradient with the Fisher metric gives exactly the CMA-ES
+        mean/covariance updates (Akimoto et al.), making the algorithm more than a heuristic—it is the
+        canonical move given “I search with a Gaussian.”
+      </p>
+
       <h3>Invariance as a design principle</h3>
       <p>
         CMA-ES is rank-based: only the ordering of
@@ -30,6 +43,17 @@ export function TechnicalAddendum() {
         invariant to rigid linear transforms of the search space (rotations, reflections,
         translations). Those invariances make a single benchmark represent a whole equivalence class
         of problems.
+      </p>
+
+      <p>
+        Practically this means you can change units, rotate the basis, or cobble together composite
+        scores without breaking the optimizer’s intuition—it will relearn the metric on the fly.
+      </p>
+
+      <p>
+        Kriging parallel: kriging builds the best linear unbiased predictor with a Gaussian process;
+        CMA-ES builds the best-behaving Gaussian proposal it can from samples. Both start with
+        maximum-entropy ignorance and let covariance carry the learning burden.
       </p>
 
       <h3>Step-size control (CSA)</h3>
@@ -58,6 +82,12 @@ export function TechnicalAddendum() {
         from zero‑order data.
       </p>
 
+      <p>
+        Active CMA layers in negative weights for clearly bad samples to shrink variance along harmful
+        directions faster, sharpening the short axes while keeping <MathJax inline>{"$C$"}</MathJax>
+        positive definite.
+      </p>
+
       <h3>Active covariance and rank‑µ</h3>
       <p>
         Using only the best steps is the standard rank‑
@@ -73,12 +103,23 @@ export function TechnicalAddendum() {
         both global and local regimes without manual tuning.
       </p>
 
+      <p>
+        The effect is that you get global sweeps and local refinement without retuning a dozen knobs;
+        it is a big part of why CMA-ES feels close to parameter-free in practice.
+      </p>
+
       <h3>Complexity and variants</h3>
       <p>
         Full CMA-ES costs <MathJax inline>{"$O(n^2)$"}</MathJax> per evaluation internally. That is
         negligible when each evaluation is a massive CFD/FEA run but expensive for cheap objectives
         in high dimensions. Diagonal (sep‑CMA‑ES) and limited‑memory (LM‑CMA) variants trade fidelity
         for <MathJax inline>{"$O(n)$"}</MathJax> or low‑rank scaling.
+      </p>
+
+      <p>
+        Rule of thumb: keep full covariance when each sample is precious and geometry learning pays
+        for itself; drop to diagonal/LM when you are in thousands of dimensions with inexpensive
+        evaluations.
       </p>
 
       <h3>Big-picture summary</h3>
@@ -93,13 +134,24 @@ export function TechnicalAddendum() {
         magnitude fewer evaluations once you add covariance adaptation and good step-size control.
       </p>
 
+      <h3>Why this matters beyond toy functions</h3>
+      <p>
+        The same machinery carries over to neural architecture search, physics sims, robotics
+        controllers, and continuous cellular automata scored on “visual interestingness.” When the
+        gradient is missing or misleading, CMA-ES turns scarce evaluations into a learned metric and a
+        reliable walk toward good regions.
+      </p>
+
       <h3>Where this came from</h3>
       <p>
-        CMA-ES is a descendant of early evolution strategies and genetic algorithms. The key leap was
-        to treat the search distribution itself as the object of optimization and to let symmetry and
-        invariance guide the design; start isotropic, then learn anisotropy from the data. That makes
-        it a best-unbiased starting point when you know nothing about the landscape. The attitude is
-        close to geostatistics and kriging: begin with a neutral prior, then let evidence bend it.
+        CMA-ES descends from the German evolution-strategies line (Rechenberg/Schwefel) and sits
+        next to genetic algorithms: small populations, Gaussian mutations, self-adapting strategy
+        parameters instead of crossover on bitstrings. The key leap was to treat the <em>search
+        distribution</em> as the optimization object and let symmetry/invariance drive the design:
+        start isotropic, learn anisotropy from data. That’s close in spirit to kriging/geostatistics:
+        begin with a maximum-entropy prior, then bend it with evidence. It’s also kin to
+        estimation-of-distribution and cross-entropy methods, all phrased as “fit a distribution to
+        elites.”
       </p>
 
       <h3>Two communities that mostly ignore each other</h3>
