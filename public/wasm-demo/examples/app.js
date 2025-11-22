@@ -11,7 +11,7 @@
       lucideIcons = {};
     }
 
-    // Monaco editor setup
+    // Monaco editor setup - Deferred to avoid mustGet call before DOM ready
     const defaultCustomCode = `// Return a scalar fitness; lower is better
 function f(x) {
   // Example: shifted bowl
@@ -21,20 +21,35 @@ function f(x) {
   return dx*dx + dy*dy + 0.1*Math.sin(3*dx) + 0.1*Math.cos(3*dy);
 }`;
     let editor;
-    const editorContainer = mustGet('editor');
+    let editorContainer; // Deferred initialization
     const monacoReady = new Promise((resolve) => {
-      window.require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
-      window.require(["vs/editor/editor.main"], () => {
-        editor = monaco.editor.create(editorContainer, {
-          value: defaultCustomCode,
-          language: "javascript",
-          theme: "vs-dark",
-          fontSize: 13,
-          minimap: { enabled: false },
-          automaticLayout: true,
+      // Wait for DOM and mustGet definition
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMonaco);
+      } else {
+        initMonaco();
+      }
+
+      function initMonaco() {
+        editorContainer = document.getElementById('editor');
+        if (!editorContainer) {
+          console.warn('Editor container not found');
+          resolve(null);
+          return;
+        }
+        window.require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+        window.require(["vs/editor/editor.main"], () => {
+          editor = monaco.editor.create(editorContainer, {
+            value: defaultCustomCode,
+            language: "javascript",
+            theme: "vs-dark",
+            fontSize: 13,
+            minimap: { enabled: false },
+            automaticLayout: true,
+          });
+          resolve(editor);
         });
-        resolve(editor);
-      });
+      }
     });
 
     let customFn = (x) => x.reduce((s, v) => s + v * v, 0);
