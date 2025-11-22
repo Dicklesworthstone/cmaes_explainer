@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+main {
+  min-height: 100vh;
+}
+
+.scroll-section {
+  scroll-margin-top: 5rem;
+}
+
+.prose-cmaes {
+  @apply prose prose-invert prose-lg max-w-3xl;
+}
+
+.prose-cmaes code {
+  @apply font-mono text-sm px-1.5 py-0.5 rounded bg-slate-900/70 text-emerald-300;
+}
+
+.prose-cmaes pre {
+  @apply bg-slate-900/70 border border-slate-800 rounded-xl p-4 text-sm font-mono overflow-x-auto;
+}
+
+.gradient-shell {
+  background:
+    radial-gradient(circle at top left, rgba(96,165,250,0.25), transparent 55%),
+    radial-gradient(circle at top right, rgba(45,212,191,0.25), transparent 55%),
+    radial-gradient(circle at bottom, rgba(251,191,36,0.2), transparent 55%),
+    linear-gradient(to bottom, #020617, #020617);
+}
