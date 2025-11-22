@@ -90,7 +90,13 @@ function matVecSqrt([a, b, c, d]: number[], [z0, z1]: [number, number]): [number
   const l1 = (tr + disc) / 2;
   const l2 = (tr - disc) / 2;
   const v1 = [b, l1 - a];
-  const len1 = Math.hypot(v1[0], v1[1]) || 1;
+  let len1 = Math.hypot(v1[0], v1[1]);
+  if (len1 < 1e-9) {
+     // Fallback for diagonal case where l1 ~= a
+     v1[0] = 1; 
+     v1[1] = 0;
+     len1 = 1;
+  }
   const e1 = [v1[0] / len1, v1[1] / len1];
   const e2 = [-e1[1], e1[0]];
   return [

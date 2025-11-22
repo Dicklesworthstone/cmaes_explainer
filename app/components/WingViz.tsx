@@ -378,7 +378,7 @@ function ControlSlider({ label, value, setValue, min, max, displayValue, color }
     <div className="relative lg:pl-8 group">
       {/* Dot Decoration (Desktop only) */}
       <div className={`hidden lg:flex absolute left-0 top-1.5 w-6 h-6 rounded-full border-2 bg-[#020617] z-10 items-center justify-center transition-colors duration-300 ${colorClass.replace("accent-", "border-").split(" ")[2]}`}>
-        <div className={`w-2 h-2 rounded-full ${colorClass.replace("accent-", "bg-").split(" ")[1]}`} />
+        <div className={`w-2 h-2 rounded-full ${colorClass.replace("accent-", "bg-").split(" ")[0]}`} />
       </div>
       
       <label className="block space-y-3">

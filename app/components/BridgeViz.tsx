@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Environment, Text, useTexture } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, Environment, Text, useTexture, Line } from "@react-three/drei";
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
@@ -461,5 +461,49 @@ function DeckAnimator({ physicsState, span, stiffness, loadMass }: any) {
          </mesh>
       </mesh>
     </group>
+  );
+}
+
+function ControlSlider({ label, value, setValue, min, max, displayValue, color }: any) {
+  const colorClass = {
+    amber: "accent-amber-400 text-amber-400 border-amber-500/20 bg-amber-500/10",
+    orange: "accent-orange-400 text-orange-400 border-orange-500/20 bg-orange-500/10",
+    red: "accent-red-400 text-red-400 border-red-500/20 bg-red-500/10",
+    emerald: "accent-emerald-400 text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
+  }[color as string] || "accent-slate-500";
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(parseFloat(e.target.value));
+    // Haptics
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+       navigator.vibrate(5); // Gentle tick
+    }
+  };
+
+  return (
+    <div className="relative lg:pl-8 group">
+      {/* Dot Decoration (Desktop only) */}
+      <div className={`hidden lg:flex absolute left-0 top-1.5 w-6 h-6 rounded-full border-2 bg-[#0f172a] z-10 items-center justify-center transition-colors duration-300 ${colorClass.replace("accent-", "border-").split(" ")[2]}`}>
+        <div className={`w-2 h-2 rounded-full ${colorClass.replace("accent-", "bg-").split(" ")[0]}`} />
+      </div>
+      
+      <label className="block space-y-3">
+        <div className="flex justify-between text-xs font-medium uppercase tracking-wider">
+          <span className="text-slate-300 group-hover:text-white transition-colors">{label}</span>
+          <span className={`font-mono px-2 py-0.5 rounded border ${colorClass.split(" ").slice(1).join(" ")}`}>
+            {displayValue}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={0.01}
+          value={value}
+          onChange={handleChange}
+          className={`w-full bg-slate-800 rounded-lg appearance-none cursor-pointer ${colorClass.split(" ")[0]}`}
+        />
+      </label>
+    </div>
   );
 }
