@@ -18,25 +18,25 @@ const cards: Card[] = [
     id: "wing",
     Icon: PlaneTakeoff,
     title: "Airplane wing in CFD",
-    subtitle: "10–20 geometry knobs, hours per eval, no gradients",
-    metrics: ["CFD + meshing every run", "Stall / noise / drag blended score", "Discrete airfoil choices"],
-    CTA: "Why CMA-ES works here"
+    subtitle: "10–20 geometry knobs; hours per eval; no gradients",
+    metrics: ["CFD + meshing each time", "Stall / noise / drag blended score", "Discrete airfoil choices"],
+    CTA: "Why CMA-ES works"
   },
   {
     id: "bridge",
     Icon: Building2,
     title: "Suspension bridge via FEA",
-    subtitle: "Nonlinear modes flip → gradients lie",
-    metrics: ["Span, cable sag, deck stiffness", "Multi-load-case penalties", "Sharp regime changes"],
-    CTA: "See the rank-based trick"
+    subtitle: "Nonlinear modes flip; gradients lie",
+    metrics: ["Span, cable sag, deck stiffness", "Multi-load-case penalties", "Sharp regime shifts"],
+    CTA: "Rank-based trick"
   },
   {
     id: "llm",
     Icon: BrainCircuit,
     title: "Transformer hyperparams",
-    subtitle: "Mixed discrete/continuous, noisy evals",
-    metrics: ["LR schedule, wd, dropout, norm eps", "Layers / d_model / heads choices", "Only ~200 evals budget"],
-    CTA: "How CMA-ES stays sample-smart"
+    subtitle: "Mixed discrete + continuous; noisy evals",
+    metrics: ["LR schedule, wd, dropout, norm eps", "Layers / d_model / heads choices", "Budget ~200 evals"],
+    CTA: "Sample-smart search"
   }
 ];
 

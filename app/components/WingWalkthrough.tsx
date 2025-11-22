@@ -7,27 +7,27 @@ export function WingWalkthrough() {
   const steps = [
     {
       title: "State of CMA-ES",
-      text: `The algorithm carries a mean m ∈ ℝ³, scalar step-size σ, covariance C ∈ ℝ^{3×3}, and two evolution paths p_σ, p_c. We also pick a population size λ and an elite size μ with weights w₁…w_μ. A reasonable start for the toy wing is m⁰ = (0.5,0.5,0.5), σ⁰ = 0.3, C⁰ = I, p_σ = p_c = 0.`
+      text: `Keep a mean m ∈ ℝ³, step size σ, covariance C ∈ ℝ^{3×3}, and two evolution paths p_σ, p_c. Pick a population λ and elite size μ with weights w₁…w_μ. For the toy wing start at m⁰ = (0.5,0.5,0.5), σ⁰ = 0.3, C⁰ = I, p_σ = p_c = 0.`
     },
     {
       title: "Generation 1: blind exploration",
-      text: `Sample λ points x_i ~ 𝒩(m⁰, (σ⁰)² C⁰). Map back to physical wing parameters, quantize the airfoil index, launch CFD, and obtain scalar scores f(x_i). Rank the samples, form the new mean m¹ as a weighted average of the best μ, and record the mean shift Δm = m¹ − m⁰.`
+      text: `Sample λ points x_i ~ 𝒩(m⁰, (σ⁰)² C⁰). Map back to physical wing parameters, quantize the airfoil index, run CFD, get scores f(x_i). Rank, take a weighted average of the best μ to get m¹, record the shift Δm = m¹ − m⁰.`
     },
     {
       title: "Evolution paths",
-      text: `Feed the normalized step into p_σ (in the whitened coordinates of C) and into p_c (in the original coordinates). If the mean keeps moving in a correlated direction, these paths grow; if it jitters, they shrink. They are the memory that makes step-size and covariance updates data‑efficient.`
+      text: `Feed the normalized step into p_σ (in C-whitened coords) and into p_c (in original coords). If the mean keeps moving in one direction, paths grow; if it jitters, they shrink. These paths are the memory that lets the updates stay data-efficient.`
     },
     {
       title: "Covariance adaptation",
-      text: `Update C with a rank‑1 term from p_c p_cᵀ and a rank‑μ term from the deviations of the top μ samples. Directions that consistently lead to better lift/drag are stretched; directions that hurt are damped. This is online PCA of the good steps, slowly turning the sampling ellipsoid into a rotated cigar aligned with benign directions.`
+      text: `Update C with a rank‑1 term from p_c p_cᵀ and a rank‑μ term from deviations of the top μ. Good directions stretch; bad ones shrink. This is online PCA of successful steps, turning the ellipsoid into a rotated cigar along safe directions.`
     },
     {
       title: "Step-size control",
-      text: `Compare the length of p_σ to the expected length of a random walk under 𝒩(0,I). If it is longer, increase σ (we are making steady progress); if shorter, decrease σ (we are meandering). That is cumulative step-size adaptation (CSA).`
+      text: `Compare |p_σ| to the expected length of a random walk under 𝒩(0,I). If it is longer, increase σ; if shorter, decrease σ. That is cumulative step-size adaptation (CSA).`
     },
     {
       title: "Generations 5–15: learning the geometry",
-      text: `After a few batches of CFD, the mean has moved into a promising region, σ has shrunk, and C has elongated along “safe” directions (e.g., changing aspect ratio and sweep together) while squeezing dangerous ones (high aspect ratio + low sweep). By generation ~15 you are doing local refinement with a skinny, well‑oriented ellipsoid.`
+      text: `After a few batches of CFD, the mean moves into a promising region, σ shrinks, and C elongates along “safe” directions (e.g., aspect ratio and sweep together) while squeezing dangerous ones. By generation ~15 you are in local refinement with a skinny, well oriented ellipsoid.`
     },
     {
       title: "Restarts when you need global search",

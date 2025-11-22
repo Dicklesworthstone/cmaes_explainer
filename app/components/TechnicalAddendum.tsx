@@ -92,6 +92,32 @@ export function TechnicalAddendum() {
         Problems that were “impossible” for plain evolution strategies become solvable with orders of
         magnitude fewer evaluations once you add covariance adaptation and good step-size control.
       </p>
+
+      <h3>Where this came from</h3>
+      <p>
+        CMA-ES is a descendant of early evolution strategies and genetic algorithms. The key leap was
+        to treat the search distribution itself as the object of optimization and to let symmetry and
+        invariance guide the design; start isotropic, then learn anisotropy from the data. That makes
+        it a best-unbiased starting point when you know nothing about the landscape. The attitude is
+        close to geostatistics and kriging: begin with a neutral prior, then let evidence bend it.
+      </p>
+
+      <h3>Two communities that mostly ignore each other</h3>
+      <p>
+        There is a long-running black-box optimization community (GECCO and friends) with its own
+        language, benchmarks, and heroes. The deep learning world (NeurIPS, ICML) often rediscovers the
+        same ideas with new names. Projects like Le Jepa overlap with CMA-ES thinking, but the two ships
+        still pass in the night. Bridging them is low-hanging fruit.
+      </p>
+
+      <h3>Why it still matters with modern AI</h3>
+      <p>
+        You can bolt CMA-ES onto things that have no clean gradients or where the gradients tell you the
+        wrong story. Example: evolving continuous cellular automata for “visual interestingness” and
+        spatial complexity; define a scalar score, wire up the parameters that drive your CA, and let the
+        optimizer roam. The same pattern applies to neural architecture search, physics sims, robotics
+        controllers, and any case where each evaluation is expensive but you still need to search.
+      </p>
     </div>
   );
 }
