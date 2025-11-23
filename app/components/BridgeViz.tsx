@@ -236,7 +236,9 @@ export function BridgeViz() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return <div className="glass-card p-6 space-y-6"><div className="h-[450px] w-full bg-slate-900/30 animate-pulse" /></div>;
+  }
 
   return (
     <div className="glass-card p-6 space-y-6">

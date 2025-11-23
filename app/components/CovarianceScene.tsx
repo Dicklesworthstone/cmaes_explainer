@@ -87,7 +87,9 @@ export function CovarianceScene() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return <div className="h-full w-full" />;
+  }
 
   return (
     <Canvas
@@ -105,7 +107,6 @@ export function CovarianceScene() {
       <Ellipsoid />
       
       <OrbitControls
-        makeDefault
         enablePan={false}
         enableZoom={false}
         autoRotate
