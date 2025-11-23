@@ -5,8 +5,16 @@ import { Wand2, Cpu } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { CovarianceScene } from "./CovarianceScene";
+import dynamic from "next/dynamic";
 import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
+
+const CovarianceScene = dynamic(
+  () => import("./CovarianceScene").then((mod) => mod.CovarianceScene),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full bg-slate-900/30 animate-pulse" />
+  }
+);
 
 gsap.registerPlugin(ScrollTrigger);
 

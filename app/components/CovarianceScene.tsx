@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { useRef, useMemo, useState, useEffect } from "react";
+import { useRef, useMemo } from "react";
 import type { Mesh } from "three";
 
 function Ellipsoid() {
@@ -83,14 +83,6 @@ function SampleCloud() {
 }
 
 export function CovarianceScene() {
-  // SSR guard: Track client-side mount to avoid hydration mismatch
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
-
-  if (!mounted) {
-    return <div className="h-full w-full" />;
-  }
-
   return (
     <Canvas
       camera={{ position: [2.8, 1.6, 3.2], fov: 35 }}
