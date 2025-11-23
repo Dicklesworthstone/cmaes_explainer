@@ -312,6 +312,10 @@ function f(x) {
       });
     }
 
+    // ============================================================================
+    // Main initialization - wait for DOM to be ready
+    // ============================================================================
+    function initApp() {
     // Inject lucide icons
     const parser = new DOMParser();
     document.querySelectorAll('.lucide').forEach((el) => {
@@ -2068,4 +2072,15 @@ function f(x) {
       navigator.serviceWorker.register('/wasm_cmaes/sw.js').catch((err) => {
         console.warn('Service worker registration failed', err);
       });
+    }
+
+    } // End of initApp()
+
+    // ============================================================================
+    // Execute when DOM is ready
+    // ============================================================================
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
     }
