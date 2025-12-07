@@ -1,0 +1,14 @@
+node_modules
+.next
+.vercel
+dist
+build
+out
+public
+vendor/wasm_cmaes/target
+vendor/wasm_cmaes/pkg
+vendor/wasm_cmaes/pkg-par
+**/*.min.js
+**/*.map
+bun.lock
+package-lock.json

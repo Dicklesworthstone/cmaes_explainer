@@ -18,7 +18,7 @@ function rng(seed: number) {
 
 function simulate(active: boolean) {
   const rand = rng(active ? 777 : 555);
-  let cov = [1, 0, 0, 0.2]; // cigar-ish starting cov (aligned)
+  let cov: [number, number, number, number] = [1, 0, 0, 0.2]; // cigar-ish starting cov (aligned)
   let mean = [1.6, 1.0];
   const traj: { mean: [number, number]; cov: [number, number, number, number] }[] = [];
 
@@ -66,7 +66,7 @@ function simulate(active: boolean) {
 
     cov = addMat(cov, covUpd, 0.7); // smoothing
     cov = stabilize(cov);
-    traj.push({ mean: [mean[0], mean[1]], cov: [...cov] as any });
+    traj.push({ mean: [mean[0], mean[1]], cov: [...cov] as [number, number, number, number] });
   }
   return traj;
 }
@@ -117,10 +117,16 @@ function stabilize([a, b, c, d]: number[]): [number, number, number, number] {
 
 export function ActiveCovarianceDemo() {
   const [showActive, setShowActive] = useState(true);
-  const passive = useMemo(() => simulate(false), []);
-  const active = useMemo(() => simulate(true), []);
+  const [passive, setPassive] = useState<{ mean: [number, number]; cov: [number, number, number, number] }[]>([]);
+  const [active, setActive] = useState<{ mean: [number, number]; cov: [number, number, number, number] }[]>([]);
   const [frame, setFrame] = useState(18);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    // Hydration safe: run simulation only on client
+    setPassive(simulate(false));
+    setActive(simulate(true));
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -148,8 +154,11 @@ export function ActiveCovarianceDemo() {
     ctx.putImageData(img, 0, 0);
 
     const drawRun = (traj: { mean: [number, number]; cov: [number, number, number, number] }[], color: string, strokeColor: string, alpha: number) => {
+      if (!traj || traj.length === 0) return;
       const clampedFrame = Math.min(frame, traj.length - 1);
-      const { mean, cov } = traj[clampedFrame];
+      const step = traj[clampedFrame];
+      if (!step) return;
+      const { mean, cov } = step;
       const [a, b, c, d] = cov;
       const tr = a + d;
       const det = a * d - b * c;
@@ -241,7 +250,7 @@ export function ActiveCovarianceDemo() {
               max={27}
               step={1}
               value={frame}
-              onChange={(e) => setFrame(parseInt(e.target.value))}
+              onChange={(e) => setFrame(parseInt(e.target.value, 10))}
               className="w-full accent-sky-500"
             />
             <div className="flex justify-between text-xs text-slate-500 font-mono">

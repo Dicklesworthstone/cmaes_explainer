@@ -1,9 +1,11 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Environment, Float, Text } from "@react-three/drei";
+import { safePointerEvents } from "./safeR3FEvents";
+import { PerspectiveCamera, Environment, Float, Text } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 // --- Math / Physics Helpers ---
 
@@ -214,17 +216,7 @@ export function WingViz() {
   const [thickness, setThickness] = useState(0.5);
   const [interacting, setInteracting] = useState(false); // Track interaction for overlay
 
-  const [isLargeScreen, setIsLargeScreen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const mq = window.matchMedia('(min-width: 1024px)');
-      setIsLargeScreen(mq.matches);
-      const handler = (e: MediaQueryListEvent) => setIsLargeScreen(e.matches);
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    }
-  }, []);
+  const isLargeScreen = useMediaQuery('(min-width: 1024px)', false);
 
   // Toy physics model for "fitness" (Lift/Drag ratio)
   // Higher aspect = better L/D usually
@@ -242,6 +234,7 @@ export function WingViz() {
 
   // SSR guard: Track client-side mount to avoid hydration mismatch
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return null;
@@ -274,6 +267,7 @@ export function WingViz() {
               onPointerLeave={() => setInteracting(false)}
             >
               <Canvas 
+                events={safePointerEvents}
                 shadows 
                 dpr={[1, 2]}
                 className="w-full h-full"
@@ -299,16 +293,6 @@ export function WingViz() {
                   <gridHelper args={[20, 20, "#1e293b", "#0f172a"]} position={[0, -2, 0]} />
                 </group>
 
-                <OrbitControls 
-                  makeDefault
-                  enabled={interacting || isLargeScreen}
-                  enablePan={false} 
-                  enableZoom={false} 
-                  minPolarAngle={Math.PI / 4} 
-                  maxPolarAngle={Math.PI / 2}
-                  autoRotate={!interacting}
-                  autoRotateSpeed={0.5}
-                />
               </Canvas>
             </div>
             
@@ -374,7 +358,7 @@ export function WingViz() {
           </div>
 
           <div className="bg-slate-900/50 rounded-lg p-4 border border-white/5 text-xs text-slate-500">
-            <strong className="text-slate-300">Why it matters:</strong> Small changes in curvature (Camber) drastically alter the pressure distribution. A gradient-free optimizer like CMA-ES is robust against the "noise" often found in real fluid dynamics simulations.
+            <strong className="text-slate-300">Why it matters:</strong> Small changes in curvature (Camber) drastically alter the pressure distribution. A gradient-free optimizer like CMA-ES is robust against the &quot;noise&quot; often found in real fluid dynamics simulations.
           </div>
         </div>
       </div>
@@ -382,7 +366,17 @@ export function WingViz() {
   );
 }
 
-function ControlSlider({ label, value, setValue, min, max, displayValue, color }: any) {
+interface ControlSliderProps {
+  label: string;
+  value: number;
+  setValue: (val: number) => void;
+  min: number;
+  max: number;
+  displayValue: number | string;
+  color: string;
+}
+
+function ControlSlider({ label, value, setValue, min, max, displayValue, color }: ControlSliderProps) {
   const colorClass = {
     cyan: "accent-cyan-400 text-cyan-400 border-cyan-500/20 bg-cyan-500/10",
     blue: "accent-blue-400 text-blue-400 border-blue-500/20 bg-blue-500/10",

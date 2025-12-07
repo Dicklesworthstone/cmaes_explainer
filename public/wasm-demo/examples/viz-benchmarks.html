@@ -1,103 +1,52 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
-  <meta name="theme-color" content="#0c162a">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="Interactive CMA-ES optimization playground with WebAssembly. Visualize benchmark functions in real-time with 3D surfaces and convergence plots.">
-
-  <title>CMA-ES Benchmark Gallery - Interactive WebAssembly Optimizer</title>
+  <title>CMA-ES Benchmark Gallery</title>
   <link rel="icon" href="/wasm_cmaes/favicon.ico" />
-  <link rel="manifest" href="/wasm_cmaes/manifest.json" />
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <!-- Core Libraries -->
-  <link rel="stylesheet" href="./tailwind.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/examples/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/"
+      }
+    }
+  </script>
   <style>
     :root {
       color-scheme: dark;
-      /* Semantic Color Tokens */
-      --color-primary: #38bdf8;
-      --color-secondary: #a78bfa;
-      --color-success: #10b981;
-      --color-warning: #f59e0b;
-      --color-danger: #ef4444;
-      --color-accent: #ec4899;
-
-      /* Gradients */
-      --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      --gradient-surface: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
-      --gradient-glow: radial-gradient(circle, rgba(56,189,248,0.15), transparent);
-
-      /* Spacing */
-      --touch-target: 48px;
+      --bg-1: #050912;
+      --bg-2: #0b1222;
+      --card: rgba(255,255,255,0.04);
+      --card-border: rgba(255,255,255,0.09);
+      --text: #e9edf5;
+      --muted: #94a3b8;
+      --accent: #7dd3fc;
+      --accent-2: #c084fc;
+      --shadow: 0 18px 60px rgba(0,0,0,0.55);
     }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
       min-height: 100vh;
-      color: #e2e8f0;
-      background: radial-gradient(circle at 20% 20%, #122341, #0c162a 40%, #070d1a 70%, #050912);
+      color: var(--text);
+      background: radial-gradient(circle at 20% 18%, #0f1a31, #070d1a 45%, #04070f 78%), radial-gradient(circle at 78% 10%, rgba(59,130,246,0.25), transparent 42%), linear-gradient(135deg, rgba(124,58,237,0.22), rgba(14,165,233,0.08));
       position: relative;
       overflow-x: hidden;
-      font-size: clamp(0.875rem, 2vw, 1rem);
+      font-family: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      letter-spacing: -0.01em;
     }
-
-    h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 600; }
-    h2 { font-size: clamp(1.25rem, 3vw, 1.75rem); font-weight: 600; }
-    h3 { font-size: clamp(1.125rem, 2.5vw, 1.5rem); font-weight: 600; }
-
-    code, pre, .font-mono {
-      font-family: 'JetBrains Mono', 'Courier New', monospace;
+    @keyframes holoPulse {
+      0% { opacity: 0.8; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1.02); }
+      100% { opacity: 0.8; transform: scale(0.98); }
     }
-
-    /* Screen reader only */
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border-width: 0;
-    }
-
-    .sr-only:focus {
-      position: static;
-      width: auto;
-      height: auto;
-      padding: inherit;
-      margin: inherit;
-      overflow: visible;
-      clip: auto;
-      white-space: normal;
-    }
-
-    /* Focus visible styles */
-    *:focus-visible {
-      outline: 2px solid var(--color-primary);
-      outline-offset: 2px;
-      border-radius: 0.25rem;
-    }
-
-    /* Animated background */
+    /* animated grid backdrop */
     body::before {
       content: "";
       position: fixed;
@@ -109,7 +58,6 @@
       z-index: 0;
       animation: drift 30s linear infinite;
     }
-
     body::after {
       content: "";
       position: fixed;
@@ -119,1143 +67,1148 @@
       z-index: 0;
       pointer-events: none;
     }
-
     @keyframes drift {
       from { transform: translate3d(0,0,0); }
       to   { transform: translate3d(80px,80px,0); }
     }
-
-    /* Enhanced glassmorphism */
+    h1, h2, h3 { letter-spacing: -0.02em; }
+    p { color: var(--muted); }
     .panel {
       position: relative;
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-      border: 1px solid rgba(255,255,255,0.12);
-      box-shadow:
-        0 8px 32px 0 rgba(0, 0, 0, 0.37),
-        inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+      border: 1px solid var(--card-border);
+      box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.03) inset;
       z-index: 1;
     }
-
-    .panel-glass {
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-      border: 1px solid rgba(255,255,255,0.12);
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 22px;
+      border-radius: 14px;
+      font-weight: 600;
+      color: #0b1222;
+      background: linear-gradient(120deg, #7dd3fc, #c084fc, #fcd34d);
+      box-shadow: 0 12px 35px rgba(124,58,237,0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
+      transition: transform 160ms ease, filter 160ms ease;
     }
-
-    /* Button micro-interactions */
-    button, .btn {
-      min-height: var(--touch-target);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.03); }
+    .metric { color: #e2e8f0; font-weight: 600; }
+    .muted { color: var(--muted); }
+    @media (max-width: 1024px) {
+      body { font-size: 15px; }
+      .hero-grid { grid-template-columns: 1fr; }
+      #three-canvas { height: 320px !important; }
+      #line { height: 260px; }
     }
-
-    button:hover, .btn:hover {
-      transform: scale(1.02);
+    .glow {
+      box-shadow: 0 18px 40px rgba(56,189,248,0.35), 0 0 0 1px rgba(14,165,233,0.35);
     }
-
-    button:active, .btn:active {
-      transform: scale(0.98);
-    }
-
-    /* Toast notification */
-    .toast {
-      position: fixed;
-      bottom: 1rem;
-      right: 1rem;
-      z-index: 9999;
-      animation: slideInRight 0.3s ease-out;
-      max-width: 90vw;
-    }
-
-    @keyframes slideInRight {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes slideOutRight {
-      from {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      to {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-    }
-
-    /* Progress bar */
-    .progress-bar {
-      height: 4px;
-      background: rgba(56, 189, 248, 0.2);
-      overflow: hidden;
-      border-radius: 9999px;
-    }
-
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
-      transition: width 0.3s ease;
-      border-radius: 9999px;
-    }
-
-    /* Tooltip */
-    .tooltip {
-      position: absolute;
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.375rem;
-      font-size: 0.875rem;
-      white-space: nowrap;
-      z-index: 9998;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-
-    .tooltip.show {
-      opacity: 1;
-    }
-
-    /* Chart enhancements */
-    .chart text { fill: #cbd5e1; font-size: 12px; }
+    .chart text { fill: #cbd5e1; }
     .chart .axis line, .chart .axis path { stroke: #64748b; }
-    .chart .grid line { stroke: rgba(255,255,255,0.05); }
-
-    /* Loading skeleton */
-    .skeleton {
-      background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
-      background-size: 200% 100%;
-      animation: loading 1.5s ease-in-out infinite;
-    }
-
-    @keyframes loading {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    /* Mobile bottom sheet */
-    .bottom-sheet {
-      position: fixed;
-      inset: 0;
-      top: auto;
-      transform: translateY(calc(100% - 60px));
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      touch-action: pan-y;
-      z-index: 50;
-    }
-
-    .bottom-sheet.open {
-      transform: translateY(0);
-    }
-
-    .handle-bar {
-      width: 3rem;
-      height: 4px;
-      background: #64748b;
-      border-radius: 9999px;
-      margin: 0.75rem auto;
-      cursor: grab;
-    }
-
-    .handle-bar:active {
-      cursor: grabbing;
-    }
-
-    /* Command palette */
-    .command-palette {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.95);
-      width: 90%;
-      max-width: 600px;
-      max-height: 70vh;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 9997;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .command-palette.active {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-      pointer-events: auto;
-    }
-
-    .command-item {
-      padding: 0.75rem 1rem;
-      cursor: pointer;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      transition: background 0.15s;
-    }
-
-    .command-item:hover, .command-item.selected {
-      background: rgba(56, 189, 248, 0.1);
-    }
-
-    /* Benchmark card */
-    .benchmark-card {
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .benchmark-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(56, 189, 248, 0.2);
-    }
-
-    .benchmark-card .expanded-content {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease;
-    }
-
-    .benchmark-card.expanded .expanded-content {
-      max-height: 500px;
-    }
-
-    /* Reduced motion support */
-    @media (prefers-reduced-motion: reduce) {
-      *,
-      *::before,
-      *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-
-      .panel {
-        animation: none !important;
-      }
-    }
-
-    /* High contrast mode */
-    @media (prefers-contrast: high) {
-      .panel {
-        border: 2px solid white;
-        background: #000;
-      }
-
-      button {
-        border: 2px solid currentColor;
-      }
-    }
-
-    /* Mobile-specific */
-    @media (max-width: 768px) {
-      .mobile-hide {
-        display: none !important;
-      }
-
-      h1 {
-        font-size: 1.75rem;
-      }
-
-      .panel {
-        padding: 1rem !important;
-      }
-    }
-
-    /* Light mode (toggle) */
-    html.light body {
-      background: radial-gradient(circle at 20% 20%, #e0f2fe, #f8fafc 40%, #ffffff 70%, #f1f5f9);
-      color: #0f172a;
-    }
-
-    html.light .panel {
-      background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7));
-      border: 1px solid rgba(0,0,0,0.08);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
-    }
-
-    html.light .chart text { fill: #334155; }
-    html.light .chart .axis line, html.light .chart .axis path { stroke: #94a3b8; }
-
-    /* Particle trail */
-    .particle-trail {
-      position: absolute;
-      width: 4px;
-      height: 4px;
-      background: var(--color-warning);
-      border-radius: 50%;
-      pointer-events: none;
-      animation: fadeTrail 1s ease-out forwards;
-    }
-
-    @keyframes fadeTrail {
-      to {
-        opacity: 0;
-        transform: scale(2);
-      }
-    }
-</style>
+  </style>
 </head>
-<body class="min-h-screen" role="document">
-  <!-- Skip link for accessibility -->
-  <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-white text-black px-4 py-2 rounded-lg z-[10000]">
-    Skip to main content
-  </a>
+<body class="min-h-screen">
+  <!-- Three.js background -->
+  <canvas id="bg-canvas" class="fixed inset-0 w-full h-full"></canvas>
 
-  <!-- Screen reader announcements -->
-  <div role="status" aria-live="polite" aria-atomic="true" class="sr-only" id="sr-announcements"></div>
-
-  <!-- Three.js background canvas -->
-  <canvas id="bg-canvas" class="fixed inset-0 w-full h-full" aria-hidden="true"></canvas>
-
-  <!-- Theme toggle -->
-  <button id="theme-toggle"
-          aria-label="Toggle dark/light mode"
-          class="fixed top-4 left-4 panel rounded-lg p-2 z-40 hover:scale-105 transition-transform">
-    <svg id="moon-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-    </svg>
-    <svg id="sun-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  </button>
-
-  <!-- Main content -->
-  <div id="main-content" class="max-w-7xl mx-auto py-6 md:py-10 px-4 md:px-6 space-y-6 relative z-10">
-
-    <!-- Header -->
-    <header class="flex flex-col gap-3" role="banner">
-      <div class="inline-flex items-center gap-3 bg-sky-500/10 text-sky-200 px-3 py-1.5 rounded-full w-fit border border-sky-500/20">
-        <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" aria-hidden="true"></span>
+  <div class="max-w-6xl mx-auto py-10 px-6 space-y-6 relative z-10">
+    <header class="flex flex-col gap-3">
+      <div class="inline-flex items-center gap-3 bg-sky-500/10 text-sky-200 px-3 py-1 rounded-full w-fit border border-sky-500/20 shadow-lg shadow-cyan-500/10">
+        <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
         <span class="text-xs tracking-[0.25em] uppercase">CMA-ES · WebAssembly</span>
       </div>
-
-      <div class="flex flex-col gap-2">
-        <h1 class="text-sky-50">Benchmark Playground</h1>
-        <p class="text-slate-300 max-w-3xl text-sm md:text-base">
-          Pick a classic test function and watch CMA-ES explore in 2D. Smooth log-loss, animated scatter, live best tracker. Tunable λ, σ, seeds.
-        </p>
-        <div class="flex flex-wrap gap-2">
-          <button id="learn-mode-toggle"
-                  class="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-100 border border-amber-400/40 text-sm hover:bg-amber-400/25">
-            ✨ Learn mode
-          </button>
-        </div>
+      <div class="flex flex-col gap-3">
+        <h1 class="text-4xl lg:text-5xl font-semibold text-sky-50 leading-tight">Benchmark Playground</h1>
+        <p class="text-slate-200 max-w-3xl text-lg">Pick a benchmark, set λ/σ, and watch CMA‑ES morph its Gaussian each generation. Log-loss, live scatter, covariance ellipse, scrubable timeline.</p>
       </div>
-
-      <!-- Info cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div class="grid sm:grid-cols-3 gap-3 hero-grid">
         <div class="panel rounded-xl p-4 flex flex-col gap-1">
-          <div class="flex items-center gap-2 text-sky-200 text-xs">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-            </svg>
-            <span>Bundle</span>
-          </div>
-          <p class="text-base md:text-lg font-semibold text-sky-100">Sequential (pkg)</p>
-          <p class="text-xs text-slate-400">Rust + WASM with optional SIMD acceleration</p>
+          <div class="flex items-center gap-2 text-sky-200 text-xs"><span class="lucide" data-icon="cpu"></span>Bundle</div>
+          <p id="bundle-label" class="text-lg font-semibold text-sky-100">Sequential (pkg)</p>
+          <button id="bundle-toggle" class="w-fit mt-1 text-xs px-3 py-1 rounded bg-slate-800 border border-slate-600 hover:border-sky-400 text-slate-200">Switch to parallel (reload)</button>
         </div>
-
         <div class="panel rounded-xl p-4 flex flex-col gap-1">
-          <div class="flex items-center gap-2 text-amber-200 text-xs">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span>Rendering</span>
-          </div>
-          <p class="text-base md:text-lg font-semibold text-amber-100">D3 + Three.js + GSAP</p>
-          <p class="text-xs text-slate-400">Real-time 2D/3D visualization with animations</p>
+          <div class="flex items-center gap-2 text-amber-200 text-xs"><span class="lucide" data-icon="activity"></span>Algorithm</div>
+          <p class="text-lg font-semibold text-amber-100">CMA‑ES full covariance</p>
+          <p class="text-xs text-slate-400">Per-generation Gaussian, mean, covariance, σ adaptation.</p>
         </div>
-
-        <div class="panel rounded-xl p-4 flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
-          <div class="flex items-center gap-2 text-emerald-200 text-xs">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span>Status</span>
-          </div>
-          <p id="status" class="text-base md:text-lg font-semibold text-emerald-200" aria-live="polite">Idle</p>
-          <p class="text-xs text-slate-400">Real-time iteration tracking</p>
-        </div>
-      </div>
-
-      <!-- Progress bar (hidden by default) -->
-      <div id="progress-container" class="hidden">
-        <div class="progress-bar">
-          <div id="progress-fill" class="progress-bar-fill" style="width: 0%"></div>
-        </div>
-        <div class="flex justify-between text-xs text-slate-400 mt-1">
-          <span id="progress-text">Initializing...</span>
-          <span id="progress-percent">0%</span>
+        <div class="panel rounded-xl p-4 flex flex-col gap-1">
+          <div class="flex items-center gap-2 text-emerald-200 text-xs"><span class="lucide" data-icon="bar-chart-2"></span>Status</div>
+          <p id="status" class="text-lg font-semibold text-emerald-200">Idle</p>
         </div>
       </div>
     </header>
 
-    <!-- Main visualization section -->
-    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4" role="main">
-
-      <!-- Controls panel (desktop) - hidden on mobile, replaced by bottom sheet -->
-      <div id="controls-panel" class="panel rounded-xl p-4 md:p-5 space-y-4 col-span-1 mobile-hide">
-        <h2 class="text-lg font-semibold text-slate-100 mb-2">Controls</h2>
-
-        <!-- Benchmark selector -->
+    <section class="grid lg:grid-cols-3 gap-4">
+      <div class="panel rounded-xl p-5 space-y-4 col-span-1">
         <div class="space-y-2">
-          <label for="bench" class="block text-sm font-medium text-slate-300">
-            Benchmark Function
-            <button class="ml-1 text-slate-400 hover:text-slate-200"
-                    data-tooltip="Select an optimization test function"
-                    aria-label="Help for benchmark selection">
-              <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-          </label>
-          <select id="bench"
-                  class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2.5 text-slate-100 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                  aria-describedby="bench-help">
-            <option value="sphere">Sphere (smooth, unimodal)</option>
-            <option value="rastrigin">Rastrigin (highly multimodal)</option>
-            <option value="ackley">Ackley (nearly flat valleys)</option>
+          <label class="block text-sm text-slate-400">Benchmark</label>
+          <select id="bench" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100">
+            <option value="sphere">Sphere (smooth)</option>
+            <option value="rastrigin">Rastrigin (multimodal)</option>
+            <option value="ackley">Ackley (flat valley)</option>
             <option value="griewank">Griewank (oscillatory)</option>
             <option value="schwefel">Schwefel (deceptive)</option>
             <option value="levy">Levy (broad ridges)</option>
             <option value="zakharov">Zakharov (ill-conditioned)</option>
-            <option value="alpine">Alpine N1 (many spikes)</option>
+            <option value="alpine">Alpine N1 (spiky)</option>
             <option value="bukin6">Bukin N.6 (steep valley)</option>
           </select>
-          <p id="bench-help" class="text-xs text-slate-400 sr-only">
-            Choose a mathematical test function for the optimizer to minimize
-          </p>
-
-          <!-- Curated presets -->
-          <div class="space-y-2 mt-3">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium text-slate-200">Curated presets</span>
-              <span class="text-xs text-slate-400">One-click apply</span>
-            </div>
-            <div id="preset-gallery" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
-          </div>
-
-          <!-- Recently used -->
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium text-slate-200">Recently used</span>
-              <span class="text-xs text-slate-400">Last few presets</span>
-            </div>
-            <div id="recent-presets" class="flex flex-wrap gap-2"></div>
-          </div>
-
-          <!-- Run comparisons -->
-          <div class="space-y-2 mt-4">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium text-slate-200">Run comparisons</span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="pin-run" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm border border-slate-700 hover:border-sky-500">
-                Pin this run
-              </button>
-              <button id="compare-last" class="px-3 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm border border-slate-700 hover:border-emerald-400">
-                Compare to last run
-              </button>
-              <button id="clear-overlays" class="px-3 py-2 rounded-lg bg-slate-900 text-slate-200 text-sm border border-slate-700 hover:border-red-400">
-                Clear overlays
-              </button>
-            </div>
-            <div id="comparison-legend" class="flex flex-wrap gap-2 text-xs text-slate-200"></div>
-            <div id="comparison-stats" class="text-xs text-slate-200 space-y-1"></div>
-          </div>
-
-          <!-- High-D visualizations (shown when dim > 2) -->
-          <div class="space-y-2 mt-4">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium text-slate-200">High-D views</span>
-              <span class="text-xs text-slate-400">Dim > 2</span>
-            </div>
-            <div id="pca-container" class="panel rounded-lg p-2 border border-slate-700 bg-slate-900">
-              <div class="text-xs text-slate-400 mb-1">PCA scatter (candidates)</div>
-              <svg id="pca-scatter" width="100%" height="180"></svg>
-            </div>
-            <div id="parcoords-container" class="panel rounded-lg p-2 border border-slate-700 bg-slate-900">
-              <div class="text-xs text-slate-400 mb-1">Parallel coordinates (run stats)</div>
-              <svg id="param-parcoords" width="100%" height="180"></svg>
-            </div>
-          </div>
         </div>
-
-        <!-- Parameter recommendations banner -->
-        <div id="param-recommendation" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs">
-          <div class="flex items-start gap-2">
-            <svg class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            <div>
-              <strong class="text-amber-300">Recommendation:</strong>
-              <span id="param-recommendation-text" class="text-slate-300"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Lambda and Sigma -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="lambda" class="block text-sm font-medium text-slate-300">
-              Lambda (λ)
-              <button class="ml-1 text-slate-400 hover:text-slate-200"
-                      data-tooltip="Population size: number of candidates per iteration"
-                      aria-label="Help for lambda parameter">
-                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-            </label>
-            <input id="lambda" type="number" value="32" min="4" max="128"
-                   class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                   aria-label="Lambda population size parameter" />
+            <label class="block text-sm text-slate-400">Lambda (pop)</label>
+            <input id="lambda" type="number" value="32" min="4" max="128" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
           </div>
           <div>
-            <label for="sigma" class="block text-sm font-medium text-slate-300">
-              Sigma (σ)
-              <button class="ml-1 text-slate-400 hover:text-slate-200"
-                      data-tooltip="Step size: controls exploration radius"
-                      aria-label="Help for sigma parameter">
-                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-            </label>
-            <input id="sigma" type="number" value="1.2" step="0.1"
-                   class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                   aria-label="Sigma step size parameter" />
+            <label class="block text-sm text-slate-400">Sigma</label>
+            <input id="sigma" type="number" value="1.2" step="0.1" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
           </div>
         </div>
-
-        <!-- Iterations and Seed -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="iters" class="block text-sm font-medium text-slate-300">Max Iterations</label>
-            <input id="iters" type="number" value="250" min="10" max="2000"
-                   class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                   aria-label="Maximum number of iterations" />
+            <label class="block text-sm text-slate-400">Max iters</label>
+            <input id="iters" type="number" value="250" min="10" max="2000" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
           </div>
           <div>
-            <label for="seed" class="block text-sm font-medium text-slate-300">Random Seed</label>
-            <input id="seed" type="number" value="42" min="0"
-                   class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                   aria-label="Random seed for reproducibility" />
+            <label class="block text-sm text-slate-400">Seed</label>
+            <input id="seed" type="number" value="42" min="0" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
           </div>
         </div>
-
-        <!-- Dimension (fixed at 2) -->
+        <div class="grid grid-cols-2 gap-3 items-center">
+          <div>
+            <label class="block text-sm text-slate-400">Dimension (fixed)</label>
+            <input id="dim" type="range" value="2" min="2" max="2" class="w-full" disabled />
+          </div>
+          <div class="text-sm text-slate-300" id="dim-label">2D surface view</div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-slate-400">Projection</label>
+            <select id="projection" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" disabled>
+              <option value="first2">First 2 dims</option>
+            </select>
+          </div>
+        </div>
         <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-300">Dimension</label>
-          <input id="dim" type="range" value="2" min="2" max="2" class="w-full" disabled aria-label="Problem dimension (fixed at 2D)" />
-          <div class="text-sm text-slate-300" id="dim-label">2D for surface visualization</div>
-        </div>
-
-        <!-- Projection mode -->
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label for="projection" class="block text-sm font-medium text-slate-300">Projection</label>
-              <select id="projection" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" disabled>
-                <option value="first2">First 2 dimensions</option>
-              </select>
-            </div>
-            <div>
-              <label for="covar-model" class="block text-sm font-medium text-slate-300">Covariance model</label>
-              <select id="covar-model" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100">
-                <option value="auto" selected>Auto</option>
-                <option value="full">Full</option>
-                <option value="lm">Limited-memory</option>
-                <option value="sep">Separable</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-slate-300">Race Mode</label>
-              <button id="run-race"
-                      class="w-full bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-900 font-semibold px-3 py-2 rounded-lg transition"
-                      aria-label="Run speed comparison between WASM and JavaScript">
-                ⚡ WASM vs JS
-            </button>
-          </div>
-        </div>
-
-        <!-- Bounds -->
-        <div class="space-y-2">
-          <label class="flex items-center gap-2 text-sm font-medium text-slate-300">
-            <input id="bounds-toggle" type="checkbox" class="accent-sky-400 w-4 h-4" aria-describedby="bounds-help" />
-            Enable Bounds
+          <label class="block text-sm text-slate-400 flex items-center gap-2">
+            <input id="bounds-toggle" type="checkbox" class="accent-sky-400" /> Enable bounds
           </label>
-          <p id="bounds-help" class="text-xs text-slate-400 sr-only">
-            Constrain the search space to specified lower and upper bounds
-          </p>
           <div class="grid grid-cols-2 gap-3">
-            <input id="bound-lo" type="number" value="-5" step="0.5"
-                   class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100"
-                   aria-label="Lower bound" placeholder="Lower" />
-            <input id="bound-hi" type="number" value="5" step="0.5"
-                   class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100"
-                   aria-label="Upper bound" placeholder="Upper" />
+            <input id="bound-lo" type="number" value="-5" step="0.5" class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
+            <input id="bound-hi" type="number" value="5" step="0.5" class="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
           </div>
         </div>
-
-        <!-- Constraint handling -->
         <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-300">Constraint Handling</label>
-          <div class="grid grid-cols-2 gap-2 text-sm text-slate-200">
-            <div>
-              <span class="text-xs text-slate-400">Strategy</span>
-              <select id="constraint-strategy" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100">
-                <option value="penalty">Penalty</option>
-                <option value="project">Project</option>
-                <option value="resample">Resample</option>
-              </select>
-            </div>
-            <div>
-              <span class="text-xs text-slate-400">Resample cap</span>
-              <input id="resample-cap" type="number" value="5" min="1" max="50"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
-            </div>
-            <div>
-              <span class="text-xs text-slate-400">Penalty weight</span>
-              <input id="penalty-weight" type="number" value="1000" step="10" min="0"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-2 text-slate-100" />
-            </div>
-          </div>
-          <p class="text-xs text-slate-400">Penalty uses augmented Lagrangian (linear + quadratic) on bound violations.</p>
-        </div>
-
-        <!-- Noise model -->
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-300">Noise Model</label>
+          <label class="block text-sm text-slate-400">Noise model</label>
           <div class="grid grid-cols-3 gap-2 text-sm text-slate-200">
             <div class="space-y-1">
               <span class="text-xs text-slate-400">Samples/pt</span>
-              <input id="noise-samples" type="number" value="1" min="1" max="16"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100" />
+              <input id="noise-samples" type="number" value="1" min="1" max="16" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1" />
             </div>
             <div class="space-y-1">
               <span class="text-xs text-slate-400">Max samples</span>
-              <input id="noise-max" type="number" value="8" min="1" max="32"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100" />
+              <input id="noise-max" type="number" value="8" min="1" max="32" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-2 py-1" />
             </div>
-            <div class="space-y-1 flex items-end">
+            <div class="space-y-1">
               <label class="flex items-center gap-2 text-xs text-slate-400">
-                <input id="noise-adaptive" type="checkbox" class="accent-sky-400 w-3.5 h-3.5" />
-                Adaptive
+                <input id="noise-adaptive" type="checkbox" class="accent-sky-400" /> Adaptive
               </label>
             </div>
           </div>
-          <label class="flex items-center gap-2 text-sm font-medium text-amber-200 mt-2">
-            <input id="noisy-toggle" type="checkbox" class="accent-amber-400 w-4 h-4" />
-            Noisy objective (robust sampling)
-          </label>
-          <p class="text-xs text-slate-400">Turns on adaptive multi-sampling (3–9 samples) for noisy benchmarks.</p>
         </div>
-
-        <!-- Action buttons -->
-        <div class="flex flex-col gap-3 pt-2">
-          <button id="run"
-                  class="relative overflow-hidden font-semibold px-6 py-3.5 rounded-xl text-slate-900 w-full"
-                  aria-label="Run CMA-ES optimization">
-            <span class="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 animate-pulse"></span>
-            <span class="absolute inset-[2px] rounded-xl bg-slate-900"></span>
-            <span class="relative z-10 flex items-center justify-center gap-2 text-cyan-100">
-              🚀 Run Optimization
-            </span>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="run" class="relative overflow-hidden font-semibold px-6 py-3 rounded-xl text-slate-900">
+            <span class="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-300" style="animation: holoPulse 3s ease-in-out infinite;"></span>
+            <span class="absolute inset-[2px] rounded-xl bg-slate-900" style="box-shadow: 0 0 20px rgba(56,189,248,0.35);"></span>
+            <span class="relative z-10 flex items-center gap-2 text-cyan-100 run-label">🚀 Run the Live Demo (WASM)</span>
           </button>
-
-          <div class="grid grid-cols-2 gap-2">
-            <button id="run-js"
-                    class="bg-amber-400/90 hover:bg-amber-300 text-slate-900 font-semibold px-4 py-2.5 rounded-lg transition"
-                    aria-label="Run JavaScript baseline comparison">
-              JS Baseline
-            </button>
-            <button id="start-tutorial"
-                    class="bg-purple-500/90 hover:bg-purple-400 text-white font-semibold px-4 py-2.5 rounded-lg transition"
-                    aria-label="Start interactive tutorial">
-              📚 Tutorial
-            </button>
-          </div>
+          <div class="text-sm text-slate-300">Runs CMA‑ES (WASM) and renders the full per-generation timeline. Use the scrub bar to navigate.</div>
         </div>
-
-        <!-- Info text -->
-        <div class="text-xs text-slate-400 space-y-1 pt-2 border-t border-slate-700">
-          <div><span class="text-emerald-300 font-medium">WASM:</span> Rust CMA-ES compiled to WebAssembly with SIMD</div>
-          <div><span class="text-amber-300 font-medium">JS Baseline:</span> Vanilla JavaScript (μ+λ) strategy for comparison</div>
-          <div id="timing" class="text-slate-200 font-semibold mt-2"></div>
+          <div class="text-xs text-slate-400 space-y-1">
+          <div><span class="text-emerald-200">WASM</span> uses the Rust CMA-ES with SIMD (if enabled); chart drives the visible step loop on a 2D surface.</div>
+          <div class="text-slate-400">Bounds/noise settings apply to the optimizer; visualization shows the 2D slice.</div>
+          <div id="timing" class="text-slate-200 font-semibold"></div>
         </div>
       </div>
 
-      <!-- Visualization panels -->
-      <div class="col-span-1 lg:col-span-2 space-y-4">
-
-        <!-- Chart panel -->
-        <div class="panel rounded-xl p-4 md:p-5 space-y-4 overflow-hidden">
-          <div class="flex justify-between items-center flex-wrap gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-slate-300">Convergence Plot</span>
-
-              <!-- Chart type toggle -->
-              <div class="hidden md:flex items-center gap-1 bg-slate-800/50 rounded-lg p-1">
-                <button id="chart-log"
-                        class="px-2 py-1 text-xs rounded bg-sky-500 text-white font-medium"
-                        aria-label="Logarithmic scale"
-                        aria-pressed="true">
-                  Log
-                </button>
-                <button id="chart-linear"
-                        class="px-2 py-1 text-xs rounded text-slate-400 hover:text-slate-200"
-                        aria-label="Linear scale"
-                        aria-pressed="false">
-                  Linear
-                </button>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <span id="best-display" class="text-sm font-mono text-slate-300" aria-live="polite">–</span>
-
-              <!-- Export chart button -->
-              <button id="export-chart"
-                      class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
-                      aria-label="Export chart as PNG">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="relative">
-            <svg id="line" class="chart w-full" viewBox="0 0 800 320" preserveAspectRatio="xMidYMid meet"></svg>
-
-            <!-- Crosshair tooltip -->
-            <div id="chart-tooltip" class="tooltip">
-              <div class="text-xs"></div>
-            </div>
-          </div>
+      <div class="panel rounded-xl p-5 col-span-2 space-y-4 overflow-hidden">
+        <div class="flex justify-between items-center text-slate-300 text-sm">
+          <span>Best f(t)</span>
+          <span id="best-display">–</span>
         </div>
-
-        <!-- 3D surface panel -->
-        <div class="panel rounded-xl p-4 md:p-5 space-y-4 overflow-hidden">
-          <div class="flex justify-between items-center flex-wrap gap-2">
-            <span class="text-sm font-medium text-slate-300">3D Surface + Candidates</span>
-
-            <div class="flex items-center gap-2">
-              <span id="iter-display" class="text-sm text-slate-300" aria-live="polite">Iter 0</span>
-
-              <!-- 3D view controls -->
-              <div class="hidden md:flex items-center gap-1">
-                <button id="view-top"
-                        class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
-                        aria-label="Top view"
-                        title="Top view">
-                  ⬆️
-                </button>
-                <button id="view-iso"
-                        class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
-                        aria-label="Isometric view"
-                        title="Isometric view">
-                  📐
-                </button>
-                <button id="capture-3d"
-                        class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
-                        aria-label="Capture screenshot">
-                  📷
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="relative">
-            <canvas id="three-canvas"
-                    class="w-full rounded-lg"
-                    style="height: clamp(250px, 50vw, 380px);"
-                    role="img"
-                    aria-label="3D visualization of optimization surface with candidate points"></canvas>
-
-            <!-- Timeline scrubber -->
-            <div class="absolute bottom-2 left-2 right-2 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-lg p-2">
-              <input id="scrub"
-                     type="range"
-                     min="0"
-                     max="0"
-                     value="0"
-                     class="w-full h-2 rounded-lg appearance-none bg-slate-600 cursor-pointer accent-sky-500"
-                     aria-label="Timeline scrubber" />
-              <button id="scrub-play"
-                      class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 min-w-[2rem] text-center"
-                      aria-label="Play/pause timeline">
-                ▶
-              </button>
-            </div>
+        <svg id="line" class="chart w-full" viewBox="0 0 800 320"></svg>
+        <div class="flex justify-between items-center text-slate-300 text-sm">
+          <span>3D surface + candidates</span>
+          <span id="iter-display">Iter 0</span>
+        </div>
+        <div class="relative">
+          <canvas id="three-canvas" class="w-full h-[380px] rounded-lg"></canvas>
+          <div class="absolute bottom-2 left-2 right-2 flex items-center gap-2 text-xs text-slate-200">
+            <input id="scrub" type="range" min="0" max="0" value="0" class="w-full" />
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Mobile bottom sheet (controls) -->
-    <div id="mobile-sheet" class="bottom-sheet panel md:hidden" role="region" aria-label="Control panel">
-      <div class="handle-bar" role="button" tabindex="0" aria-label="Drag to open controls"></div>
-
-      <div class="px-4 pb-4 max-h-[70vh] overflow-y-auto">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-semibold text-slate-100">Controls</h2>
-          <button id="close-sheet" class="text-slate-400 hover:text-slate-200" aria-label="Close control panel">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Mobile controls content (duplicate of desktop controls) -->
-        <div class="space-y-4">
-          <!-- Quick run button -->
-          <button id="run-mobile"
-                  class="relative overflow-hidden font-semibold px-6 py-3.5 rounded-xl text-slate-900 w-full"
-                  aria-label="Run CMA-ES optimization">
-            <span class="absolute inset-0 rounded-xl bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300"></span>
-            <span class="absolute inset-[2px] rounded-xl bg-slate-900"></span>
-            <span class="relative z-10 flex items-center justify-center gap-2 text-cyan-100">
-              🚀 Run Optimization
-            </span>
-          </button>
-
-          <!-- Benchmark selector -->
-          <div class="space-y-2">
-            <label for="bench-mobile" class="block text-sm font-medium text-slate-300">Benchmark</label>
-            <select id="bench-mobile" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2.5 text-slate-100">
-              <option value="sphere">Sphere</option>
-              <option value="rastrigin">Rastrigin</option>
-              <option value="ackley">Ackley</option>
-              <option value="griewank">Griewank</option>
-              <option value="schwefel">Schwefel</option>
-              <option value="levy">Levy</option>
-              <option value="zakharov">Zakharov</option>
-              <option value="alpine">Alpine N1</option>
-              <option value="bukin6">Bukin N.6</option>
-            </select>
-
-            <div class="space-y-2 mt-2">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-sm font-medium text-slate-200">Presets</span>
-                <span class="text-xs text-slate-400">Tap to apply</span>
-              </div>
-              <div id="preset-gallery-mobile" class="grid grid-cols-1 gap-2"></div>
-            </div>
-
-            <div class="space-y-2">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-sm font-medium text-slate-200">Recent</span>
-                <span class="text-xs text-slate-400">Last few</span>
-              </div>
-              <div id="recent-presets-mobile" class="flex flex-wrap gap-2"></div>
-            </div>
-          </div>
-
-          <!-- Lambda and Sigma -->
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label for="lambda-mobile" class="block text-sm font-medium text-slate-300">Lambda</label>
-              <input id="lambda-mobile" type="number" value="32" min="4" max="128"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
-            </div>
-            <div>
-              <label for="sigma-mobile" class="block text-sm font-medium text-slate-300">Sigma</label>
-              <input id="sigma-mobile" type="number" value="1.2" step="0.1"
-                     class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label class="flex items-center gap-2 text-sm font-medium text-amber-200">
-              <input id="noisy-toggle-mobile" type="checkbox" class="accent-amber-400 w-4 h-4" />
-              Noisy objective (robust sampling)
-            </label>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label for="covar-model-mobile" class="block text-sm font-medium text-slate-300">Covariance model</label>
-              <select id="covar-model-mobile" class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100">
-                <option value="auto" selected>Auto</option>
-                <option value="full">Full</option>
-                <option value="lm">Limited-memory</option>
-                <option value="sep">Separable</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- More controls toggle -->
-          <button id="toggle-advanced" class="w-full text-sm text-sky-400 hover:text-sky-300 flex items-center justify-center gap-1">
-            <span>Advanced Options</span>
-            <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          <div id="advanced-options" class="hidden space-y-4 pt-2 border-t border-slate-700">
-            <!-- Iterations and Seed -->
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="iters-mobile" class="block text-sm font-medium text-slate-300">Max Iters</label>
-                <input id="iters-mobile" type="number" value="250" min="10" max="2000"
-                       class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
-              </div>
-              <div>
-                <label for="seed-mobile" class="block text-sm font-medium text-slate-300">Seed</label>
-                <input id="seed-mobile" type="number" value="42" min="0"
-                       class="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-100" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quickstart carousel -->
-    <section class="panel rounded-xl p-4 md:p-5 space-y-3">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-xs text-slate-400">Onboarding</p>
-          <h3 class="text-base md:text-lg text-sky-100 font-semibold">Quickstart</h3>
-        </div>
-        <div class="flex items-center gap-2 text-xs">
-          <button id="quickstart-prev" class="px-2 py-1 rounded bg-slate-800 text-slate-200">◀</button>
-          <button id="quickstart-next" class="px-2 py-1 rounded bg-slate-800 text-slate-200">▶</button>
-        </div>
-      </div>
-      <div id="quickstart-content" class="text-sm text-slate-200 leading-relaxed"></div>
-      <div id="quickstart-dots" class="flex gap-1"></div>
-    </section>
-
-    <!-- Educational sections -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-      <!-- Custom objective editor -->
-      <div class="panel rounded-xl p-4 md:p-5 space-y-3">
-        <div class="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <p class="text-xs text-slate-400">Custom Objective</p>
-            <h3 class="text-base md:text-lg text-sky-100 font-semibold">Write Your Own f(x)</h3>
-          </div>
-          <button id="apply-custom"
-                  class="bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 font-semibold px-3 py-2 rounded-lg transition"
-                  aria-label="Apply custom objective function">
-            Apply
-          </button>
-        </div>
-
-        <div class="text-xs text-slate-400">
-          Function signature: <code class="bg-slate-800 px-1 py-0.5 rounded">f(x: number[]): number</code>
-        </div>
-
-        <!-- Editor container - will use Monaco on desktop, textarea on mobile -->
-        <div id="editor-container" class="w-full h-56 rounded-lg overflow-hidden border border-slate-700 bg-slate-900">
-          <div id="editor" class="w-full h-full"></div>
-        </div>
-      </div>
-
-      <!-- Benchmark documentation -->
-      <div class="panel rounded-xl p-4 md:p-5 space-y-3">
+    <section class="grid lg:grid-cols-2 gap-4">
+      <div class="panel rounded-xl p-5 space-y-3 lg:col-span-2">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs text-slate-400">Documentation</p>
-            <h3 class="text-base md:text-lg text-amber-100 font-semibold">Function Details</h3>
+            <p class="text-xs text-slate-400">Custom objective</p>
+            <h3 class="text-lg text-sky-100 font-semibold">Write your own f(x)</h3>
           </div>
+          <button id="apply-custom" class="bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 font-semibold px-3 py-2 rounded-lg transition">Use in WASM</button>
         </div>
-
-        <div id="benchmark-info" class="space-y-3 text-sm text-slate-300">
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span class="text-slate-400">Type:</span>
-              <span id="info-type" class="ml-1 font-medium">–</span>
-            </div>
-            <div>
-              <span class="text-slate-400">Difficulty:</span>
-              <span id="info-difficulty" class="ml-1" aria-label="Difficulty rating">–</span>
-            </div>
-            <div>
-              <span class="text-slate-400">Global minimum:</span>
-              <span id="info-minimum" class="ml-1 font-mono text-xs">–</span>
-            </div>
-            <div>
-              <span class="text-slate-400">Domain:</span>
-              <span id="info-domain" class="ml-1 font-mono text-xs">–</span>
-            </div>
-          </div>
-
-          <div>
-            <span class="text-slate-400 text-xs">Description:</span>
-            <p id="info-description" class="mt-1 leading-relaxed">
-              Select a benchmark function to view detailed information about its characteristics and optimization challenges.
-            </p>
-          </div>
-
-          <a id="info-link" href="#" target="_blank" rel="noopener noreferrer"
-             class="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 hover:underline">
-            <span>Learn more</span>
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-        </div>
-      </div>
-
-      <!-- Glossary -->
-      <div class="panel rounded-xl p-4 md:p-5 space-y-3">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs text-slate-400">Glossary</p>
-            <h3 class="text-base md:text-lg text-sky-100 font-semibold">Key Terms</h3>
-          </div>
-        </div>
-        <ul id="glossary-list" class="space-y-2 text-sm text-slate-200"></ul>
-      </div>
-    </section>
-
-    <!-- Preset gallery -->
-    <section class="panel rounded-xl p-4 md:p-5 space-y-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-xs text-slate-400">Quick Start</p>
-          <h3 class="text-base md:text-lg text-purple-100 font-semibold">Preset Configurations</h3>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <!-- Presets will be dynamically populated -->
-        <button class="preset-card panel rounded-lg p-3 hover:scale-105 transition-transform text-left" data-preset="quick-sphere">
-          <div class="text-sm font-semibold text-sky-200 mb-1">⚡ Quick Sphere</div>
-          <div class="text-xs text-slate-400">Fast convergence demo</div>
-        </button>
-
-        <button class="preset-card panel rounded-lg p-3 hover:scale-105 transition-transform text-left" data-preset="multimodal">
-          <div class="text-sm font-semibold text-amber-200 mb-1">🎯 Multimodal</div>
-          <div class="text-xs text-slate-400">Rastrigin challenge</div>
-        </button>
-
-        <button class="preset-card panel rounded-lg p-3 hover:scale-105 transition-transform text-left" data-preset="high-dim">
-          <div class="text-sm font-semibold text-purple-200 mb-1">📊 High Lambda</div>
-          <div class="text-xs text-slate-400">Large population test</div>
-        </button>
-
-        <button class="preset-card panel rounded-lg p-3 hover:scale-105 transition-transform text-left" data-preset="bounded">
-          <div class="text-sm font-semibold text-emerald-200 mb-1">🔒 Bounded</div>
-          <div class="text-xs text-slate-400">Constrained search</div>
-        </button>
-      </div>
-    </section>
-
-    <!-- Share and export section -->
-    <section class="panel rounded-xl p-4 md:p-5">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <p class="text-xs text-slate-400">Share & Export</p>
-          <h3 class="text-base md:text-lg text-slate-100 font-semibold">Save Your Results</h3>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          <button id="share-config"
-                  class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-200 flex items-center gap-2 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-            Share Config
-          </button>
-
-          <button id="export-csv"
-                  class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-200 flex items-center gap-2 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export CSV
-          </button>
-
-          <button id="export-json"
-                  class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium text-slate-200 flex items-center gap-2 transition">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-            </svg>
-            Export JSON
-          </button>
-        </div>
+        <div class="text-xs text-slate-400">Function signature: <code>f(x: number[]): number</code>. Keep it deterministic for fair races.</div>
+        <div id="editor" class="w-full h-56 rounded-lg overflow-hidden border border-slate-700 bg-slate-900"></div>
       </div>
     </section>
   </div>
 
-  <!-- HUD (stats overlay) -->
-  <div id="hud" class="fixed top-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[180px] md:min-w-[220px] hidden md:block" role="complementary" aria-label="Statistics">
-    <div class="flex justify-between"><span>FPS</span><span id="hud-fps" aria-live="polite">–</span></div>
-    <div class="flex justify-between"><span>WASM (last)</span><span id="hud-wasm" aria-live="polite">–</span></div>
-    <div class="flex justify-between"><span>JS baseline</span><span id="hud-js" aria-live="polite">–</span></div>
-    <div class="flex justify-between"><span>Iter/sec</span><span id="hud-iter" aria-live="polite">–</span></div>
-    <div class="flex justify-between"><span>Model</span><span id="hud-model" aria-live="polite">auto</span></div>
+  <div id="hud" class="fixed top-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[220px]">
+    <div class="flex justify-between"><span>FPS</span><span id="hud-fps">–</span></div>
+    <div class="flex justify-between"><span>WASM last run</span><span id="hud-wasm">–</span></div>
+    <div class="flex justify-between"><span>JS baseline</span><span id="hud-js">–</span></div>
+    <div class="flex justify-between"><span>Iter/sec (viz)</span><span id="hud-iter">–</span></div>
   </div>
 
-  <!-- Race results (bottom-right overlay) -->
-  <div id="race-results" class="fixed bottom-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[200px] md:min-w-[260px] hidden" role="alert" aria-live="polite"></div>
+  <div id="race-results" class="fixed bottom-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[260px]"></div>
 
-  <!-- Tutorial overlay -->
-  <div id="tutorial-overlay" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 items-center justify-center p-4">
-    <div class="panel rounded-xl p-6 max-w-2xl w-full space-y-4 text-slate-100">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="text-xl font-semibold mb-1">Interactive Tutorial</h3>
-          <p class="text-sm text-slate-400" id="tutorial-step-count">Step 1 of 6</p>
-        </div>
-        <button id="tutorial-close" class="text-slate-400 hover:text-slate-200" aria-label="Close tutorial">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div id="tutorial-content" class="text-sm leading-relaxed">
-        <p>Welcome to the CMA-ES Benchmark Playground! This tutorial will guide you through the key features.</p>
-      </div>
-
-      <div class="flex justify-between items-center pt-2 border-t border-slate-700">
-        <button id="tutorial-skip" class="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">
-          Skip Tutorial
-        </button>
-        <div class="flex gap-2">
-          <button id="tutorial-prev" class="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">
-            Previous
-          </button>
-          <button id="tutorial-next" class="px-4 py-2 rounded-lg bg-sky-500 text-white hover:bg-sky-600">
-            Next
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 
-  <!-- Command palette (Cmd+K) -->
-  <div id="command-palette-backdrop" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[9996]"></div>
-  <div id="command-palette" class="command-palette panel rounded-xl overflow-hidden" role="dialog" aria-label="Command palette">
-    <div class="p-4 border-b border-slate-700">
-      <input id="command-search"
-             type="text"
-             placeholder="Type a command or search..."
-             class="w-full bg-transparent text-slate-100 placeholder-slate-400 outline-none text-sm"
-             aria-label="Search commands" />
-    </div>
+  <script type="module">
+    const bundle = (localStorage.getItem('cmaes-bundle') === 'pkg-par') ? 'pkg-par' : 'pkg';
+    const { default: init, WasmCmaes } = await import(`../${bundle}/cmaes_wasm.js`);
+    import * as THREE from "three";
+    import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-    <div id="command-list" class="max-h-96 overflow-y-auto">
-      <!-- Commands populated dynamically -->
-    </div>
-  </div>
+    // Minimal lucide icon paths (inline to avoid CORS failures in demos)
+    const lucideIcons = {
+      activity: ["<path d='M22 12h-4l-3 9L9 3l-3 9H2'></path>"],
+      cpu: [
+        "<rect x='4' y='4' width='16' height='16' rx='2' ry='2'></rect>",
+        "<rect x='9' y='9' width='6' height='6'></rect>",
+        "<path d='M15 2v2'></path>",
+        "<path d='M9 2v2'></path>",
+        "<path d='M15 20v2'></path>",
+        "<path d='M9 20v2'></path>",
+        "<path d='M2 15h2'></path>",
+        "<path d='M2 9h2'></path>",
+        "<path d='M20 15h2'></path>",
+        "<path d='M20 9h2'></path>",
+      ],
+      'bar-chart-2': [
+        "<line x1='18' y1='20' x2='18' y2='10'></line>",
+        "<line x1='12' y1='20' x2='12' y2='4'></line>",
+        "<line x1='6' y1='20' x2='6' y2='14'></line>",
+      ],
+    };
 
-  <!-- Toast container -->
-  <div id="toast-container" class="fixed bottom-4 left-4 md:left-auto md:right-4 z-[9999] space-y-2 max-w-sm" role="region" aria-live="polite"></div>
+    // Monaco editor setup
+    const defaultCustomCode = `// Return a scalar fitness; lower is better
+function f(x) {
+  // Example: shifted bowl
+  const cx = 1.5, cy = -2.0;
+  const dx = x[0] - cx;
+  const dy = x[1] - cy;
+  return dx*dx + dy*dy + 0.1*Math.sin(3*dx) + 0.1*Math.cos(3*dy);
+}`;
+    let editor;
+    const monacoReady = new Promise((resolve) => {
+      window.require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+      window.require(["vs/editor/editor.main"], () => {
+        editor = monaco.editor.create(document.getElementById("editor"), {
+          value: defaultCustomCode,
+          language: "javascript",
+          theme: "vs-dark",
+          fontSize: 13,
+          minimap: { enabled: false },
+          automaticLayout: true,
+        });
+        resolve(editor);
+      });
+    });
 
-  <script type="module" src="./app.js"></script>
+    let customFn = (x) => x.reduce((s, v) => s + v * v, 0);
+
+    function safeCustom(x) {
+      try {
+        const v = customFn(x);
+        return Number.isFinite(v) ? v : 1e9;
+      } catch (e) {
+        console.warn('Custom fn error', e);
+        return 1e9;
+      }
+    }
+
+    function validateCustomCode(code) {
+      const banned = /(window|document|globalThis|Function|eval|import|fetch|Worker|XMLHttpRequest)/i;
+      if (banned.test(code)) throw new Error('Disallowed identifier detected');
+      if (code.length > 4000) throw new Error('Code too long');
+    }
+
+    const benchFns = {
+      sphere: {
+        title: "Sphere",
+        f: (x) => x[0] * x[0] + x[1] * x[1],
+        x0: [3, -2],
+      },
+      rastrigin: {
+        title: "Rastrigin",
+        f: (x) => {
+          const A = 10;
+          return 2 * A + x.reduce((s, xi) => s + (xi * xi - A * Math.cos(2 * Math.PI * xi)), 0);
+        },
+        x0: [3, -3],
+      },
+      ackley: {
+        title: "Ackley",
+        f: (x) => {
+          const a = 20, b = 0.2, c = 2 * Math.PI;
+          const sumSq = x.reduce((s, xi) => s + xi * xi, 0);
+          const sumCos = x.reduce((s, xi) => s + Math.cos(c * xi), 0);
+          return -a * Math.exp(-b * Math.sqrt(sumSq / x.length)) - Math.exp(sumCos / x.length) + a + Math.E;
+        },
+        x0: [2.5, -2.5],
+      },
+      griewank: {
+        title: "Griewank",
+        f: (x) => {
+          const sum = x.reduce((s, xi) => s + (xi * xi) / 4000, 0);
+          const prod = x.reduce((p, xi, i) => p * Math.cos(xi / Math.sqrt(i + 1)), 1);
+          return sum - prod + 1;
+        },
+        x0: [4, -3],
+      },
+      schwefel: {
+        title: "Schwefel",
+        f: (x) => {
+          const bias = 418.9829 * x.length;
+          const s = x.reduce((acc, xi) => acc + xi * Math.sin(Math.sqrt(Math.abs(xi))), 0);
+          return bias - s;
+        },
+        x0: [200, -150],
+      },
+      levy: {
+        title: "Levy",
+        f: (x) => {
+          const w = x.map((xi) => 1 + (xi - 1) / 4);
+          const term1 = Math.pow(Math.sin(Math.PI * w[0]), 2);
+          let sum = 0;
+          for (let i = 0; i < w.length - 1; i++) {
+            sum += Math.pow(w[i] - 1, 2) * (1 + 10 * Math.pow(Math.sin(Math.PI * w[i] + 1), 2));
+          }
+          const term3 = Math.pow(w[w.length - 1] - 1, 2) * (1 + Math.pow(Math.sin(2 * Math.PI * w[w.length - 1]), 2));
+          return term1 + sum + term3;
+        },
+        x0: [1.5, -1.5],
+      },
+      zakharov: {
+        title: "Zakharov",
+        f: (x) => {
+          const sum1 = x.reduce((s, xi) => s + xi * xi, 0);
+          const sum2 = x.reduce((s, xi, i) => s + 0.5 * (i + 1) * xi, 0);
+          return sum1 + Math.pow(sum2, 2) + Math.pow(sum2, 4);
+        },
+        x0: [2.0, -2.0],
+      },
+      alpine: {
+        title: "Alpine N1",
+        f: (x) => x.reduce((s, xi) => s + Math.abs(xi * Math.sin(xi) + 0.1 * xi), 0),
+        x0: [4.5, -4.0],
+      },
+      bukin6: {
+        title: "Bukin N.6",
+        f: (x) => {
+          const [x1, x2] = x;
+          return 100 * Math.sqrt(Math.abs(x2 - 0.01 * x1 * x1)) + 0.01 * Math.abs(x1 + 10);
+        },
+        x0: [-12, 2.5],
+      },
+      custom: {
+        title: "Custom",
+        f: (x) => safeCustom(x),
+        x0: [0, 0],
+      },
+    };
+
+    // Inject lucide icons
+    document.querySelectorAll('.lucide').forEach((el) => {
+      const name = el.dataset.icon;
+      const path = lucideIcons[name];
+      if (!path) return;
+      el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path.join('')}</svg>`;
+    });
+
+    const mustGet = (id) => {
+      const el = document.getElementById(id);
+      if (!el) throw new Error(`Missing DOM id: ${id}`);
+      return el;
+    };
+
+    const benchSelect = mustGet('bench');
+    const dimInput = mustGet('dim');
+    const dimLabel = mustGet('dim-label');
+    const projectionSelect = mustGet('projection');
+    const boundsToggle = mustGet('bounds-toggle');
+    const boundLo = mustGet('bound-lo');
+    const boundHi = mustGet('bound-hi');
+    const noiseSamples = mustGet('noise-samples');
+    const noiseMax = mustGet('noise-max');
+    const noiseAdaptive = mustGet('noise-adaptive');
+    const timingEl = mustGet('timing');
+    const raceResults = mustGet('race-results');
+
+    // Safer event binding helper to avoid null derefs when markup changes
+    const bind = (id, event, handler) => {
+      const el = document.getElementById(id);
+      if (!el) {
+        console.warn(`Skipping listener: #${id} not found`);
+        return null;
+      }
+      el.addEventListener(event, handler);
+      return el;
+    };
+
+    const lineSvg = d3.select('#line');
+    const scrub = mustGet('scrub');
+    const playbackState = { frames: [], playing: false, idx: 0 };
+    let currentHist = [];
+    let currentMaxIter = null;
+    const lineMargin = { top: 10, right: 10, bottom: 30, left: 50 };
+    const width = 800, height = 320;
+
+    const lineG = lineSvg.append('g').attr('transform', `translate(${lineMargin.left},${lineMargin.top})`);
+
+    const lineX = d3.scaleLinear().range([0, width - lineMargin.left - lineMargin.right]);
+    const lineY = d3.scaleLog().clamp(true).range([height - lineMargin.top - lineMargin.bottom, 0]);
+
+    lineG.append('g').attr('class', 'axis axis-x').attr('transform', `translate(0,${height - lineMargin.top - lineMargin.bottom})`);
+    lineG.append('g').attr('class', 'axis axis-y');
+
+    const linePath = lineG.append('path').attr('fill', 'none').attr('stroke', '#38bdf8').attr('stroke-width', 2.5);
+    const lineCursor = lineG.append('line').attr('stroke', '#f59e0b').attr('stroke-width', 1.5).attr('y1', 0).attr('y2', height - lineMargin.top - lineMargin.bottom).attr('opacity', 0.75).style('display', 'none');
+    const lineDot = lineG.append('circle').attr('r', 4).attr('fill', '#f59e0b').attr('stroke', '#0f172a').attr('stroke-width', 1).style('display', 'none');
+
+    const statusEl = document.getElementById('status');
+    const bundleLabelEl = document.getElementById('bundle-label');
+    const bundleToggle = document.getElementById('bundle-toggle');
+    const runButton = document.getElementById('run');
+    const runLabel = runButton?.querySelector('.run-label');
+    const bestEl = document.getElementById('best-display');
+    const iterEl = document.getElementById('iter-display');
+    const hudFps = document.getElementById('hud-fps');
+    const hudWasm = document.getElementById('hud-wasm');
+    const hudJs = document.getElementById('hud-js');
+    const hudIter = document.getElementById('hud-iter');
+
+    let wasmInitialized = false;
+    let runActive = false;
+    let lastRunFinished = false;
+
+    if (bundleLabelEl) {
+      const bundleName = bundle === 'pkg-par' ? 'Parallel (pkg-par)' : 'Sequential (pkg)';
+      bundleLabelEl.textContent = bundleName;
+    }
+    if (bundleToggle) {
+      bundleToggle.textContent = bundle === 'pkg-par' ? 'Switch to sequential (reload)' : 'Switch to parallel (reload)';
+      bundleToggle.addEventListener('click', () => {
+        const next = bundle === 'pkg-par' ? 'pkg' : 'pkg-par';
+        localStorage.setItem('cmaes-bundle', next);
+        location.reload();
+      });
+    }
+
+    function currentDim(benchKey) {
+      dimInput.value = 2;
+      dimLabel.textContent = '2D surface view';
+      return 2;
+    }
+
+    function buildOptions(lambda, maxIter, seed, dim) {
+      const opts = { popsize: lambda, seed, maxEvals: lambda * maxIter };
+      if (boundsToggle.checked) {
+        const lo = Number(boundLo.value) || -5;
+        const hi = Number(boundHi.value) || 5;
+        opts.bounds = {
+          lower: new Float64Array(Array(dim).fill(lo)),
+          upper: new Float64Array(Array(dim).fill(hi)),
+        };
+      }
+      const samples = Number(noiseSamples.value) || 1;
+      const maxS = Number(noiseMax.value) || 8;
+      opts.noise = {
+        samplesPerPoint: samples,
+        maxSamplesPerPoint: maxS,
+        adaptive: noiseAdaptive.checked,
+      };
+      return opts;
+    }
+
+    function projectCandidates(cands, bestVec, dim) {
+      const mode = projectionSelect.value === 'auto' ? (dim > 2 ? 'pca' : 'first2') : projectionSelect.value;
+      if (dim <= 2 || mode === 'first2') {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+      const mean = Array(dim).fill(0);
+      cands.forEach((v) => v.forEach((val, i) => { mean[i] += val; }));
+      mean.forEach((_, i) => { mean[i] /= cands.length; });
+      const cov = Array.from({ length: dim }, () => Array(dim).fill(0));
+      cands.forEach((v) => {
+        for (let i = 0; i < dim; i++) {
+          const a = v[i] - mean[i];
+          for (let j = 0; j < dim; j++) cov[i][j] += a * (v[j] - mean[j]);
+        }
+      });
+      const denom = Math.max(1, cands.length - 1);
+      for (let i = 0; i < dim; i++) for (let j = 0; j < dim; j++) cov[i][j] /= denom;
+
+      const powerVec = (M) => {
+        let v = Array.from({ length: dim }, () => Math.random());
+        const norm = (arr) => Math.sqrt(arr.reduce((s, x) => s + x * x, 0));
+        for (let it = 0; it < 25; it++) {
+          const nv = Array(dim).fill(0);
+          for (let i = 0; i < dim; i++) {
+            for (let j = 0; j < dim; j++) nv[i] += M[i][j] * v[j];
+          }
+          const n = norm(nv) || 1;
+          v = nv.map((x) => x / n);
+        }
+        let lambda = 0;
+        for (let i = 0; i < dim; i++) for (let j = 0; j < dim; j++) lambda += v[i] * M[i][j] * v[j];
+        return { v, lambda };
+      };
+
+      const { v: v1, lambda: l1 } = powerVec(cov);
+      if (!isFinite(l1) || Math.abs(l1) < 1e-12) {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+      const cov2 = cov.map((row, i) => row.map((val, j) => val - l1 * v1[i] * v1[j]));
+      const { v: v2, lambda: l2 } = powerVec(cov2);
+      if (!isFinite(l2) || Math.abs(l2) < 1e-12) {
+        const pts = cands.map((v) => ({ x: v[0], y: v[1] }));
+        const b = { x: bestVec[0], y: bestVec[1] };
+        return { pts, b };
+      }
+
+      const project = (vec) => {
+        const centered = vec.map((x, i) => x - mean[i]);
+        const px = centered.reduce((s, x, i) => s + x * v1[i], 0);
+        const py = centered.reduce((s, x, i) => s + x * v2[i], 0);
+        return { x: px, y: py };
+      };
+
+      return { pts: cands.map(project), b: project(bestVec) };
+    }
+
+    // Three.js scene
+    const threeCanvas = mustGet('three-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, antialias: true, alpha: true });
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, 16/9, 0.1, 500);
+    camera.position.set(0, 40, 70);
+    const controls = new OrbitControls(camera, threeCanvas);
+    controls.enableDamping = true;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+    scene.add(new THREE.AmbientLight(0x666666));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(30, 50, 30);
+    scene.add(dir);
+
+    let surfaceMesh = null;
+    const surfaceGroup = new THREE.Group();
+    scene.add(surfaceGroup);
+    let pointsMesh = null;
+    let bestSphere = null;
+    let ellipseLine = null;
+
+    function viridis(t) {
+      // Simple viridis approximation
+      const a = [68, 1, 84], b = [59, 82, 139], c = [33, 145, 140], d = [94, 201, 98], e = [253, 231, 37];
+      const lerp = (p, q, s) => p + (q - p) * s;
+      const x = t;
+      let r, g, b2;
+      if (x < 0.25) { const s = x / 0.25; r = lerp(a[0], b[0], s); g = lerp(a[1], b[1], s); b2 = lerp(a[2], b[2], s); }
+      else if (x < 0.5) { const s = (x-0.25)/0.25; r = lerp(b[0], c[0], s); g = lerp(b[1], c[1], s); b2 = lerp(b[2], c[2], s); }
+      else if (x < 0.75) { const s = (x-0.5)/0.25; r = lerp(c[0], d[0], s); g = lerp(c[1], d[1], s); b2 = lerp(c[2], d[2], s); }
+      else { const s = (x-0.75)/0.25; r = lerp(d[0], e[0], s); g = lerp(d[1], e[1], s); b2 = lerp(d[2], e[2], s); }
+      return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b2);
+    }
+
+    function buildSurfaceGeometry(fn) {
+      const size = 40;
+      const segments = 80;
+      const geom = new THREE.PlaneGeometry(size, size, segments, segments);
+      const pos = geom.attributes.position;
+      let min = Infinity, max = -Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = fn([x / 2, y / 2]);
+        pos.setZ(i, z);
+        if (z < min) min = z;
+        if (z > max) max = z;
+      }
+      const colors = [];
+      for (let i = 0; i < pos.count; i++) {
+        const z = pos.getZ(i);
+        const t = (z - min) / (max - min + 1e-9);
+        const rgb = viridis(t);
+        colors.push(((rgb >> 16) & 255) / 255, ((rgb >> 8) & 255) / 255, (rgb & 255) / 255);
+      }
+      geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geom.rotateX(-Math.PI / 2);
+      return geom;
+    }
+
+    function updateSurface(fn) {
+      if (surfaceMesh) surfaceGroup.remove(surfaceMesh);
+      const geom = buildSurfaceGeometry(fn);
+      const mat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.9, roughness: 0.6, metalness: 0.0 });
+      surfaceMesh = new THREE.Mesh(geom, mat);
+      surfaceGroup.add(surfaceMesh);
+    }
+
+    function updatePoints(batch, mean, best) {
+      if (pointsMesh) {
+        surfaceGroup.remove(pointsMesh);
+        if (pointsMesh.geometry) pointsMesh.geometry.dispose();
+        if (pointsMesh.material) pointsMesh.material.dispose();
+      }
+      const geom = new THREE.BufferGeometry();
+      const arr = new Float32Array(batch.length * 3);
+      for (let i = 0; i < batch.length; i++) {
+        arr[i*3] = batch[i].x;
+        arr[i*3+1] = 0.05;
+        arr[i*3+2] = batch[i].y;
+      }
+      geom.setAttribute('position', new THREE.BufferAttribute(arr,3));
+      const mat = new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.6 });
+      pointsMesh = new THREE.Points(geom, mat);
+      surfaceGroup.add(pointsMesh);
+
+      if (bestSphere) {
+        surfaceGroup.remove(bestSphere);
+        if (bestSphere.geometry) bestSphere.geometry.dispose();
+        if (bestSphere.material) bestSphere.material.dispose();
+      }
+      const sphereGeo = new THREE.SphereGeometry(0.6, 24, 24);
+      const sphereMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 0.6 });
+      bestSphere = new THREE.Mesh(sphereGeo, sphereMat);
+      const bx = best?.x ?? mean.x;
+      const by = best?.y ?? mean.y;
+      bestSphere.position.set(bx, 0.1, by);
+      surfaceGroup.add(bestSphere);
+    }
+
+    function updateEllipse(mean, cov2x2) {
+      if (ellipseLine) {
+        surfaceGroup.remove(ellipseLine);
+        if (ellipseLine.geometry) ellipseLine.geometry.dispose();
+        if (ellipseLine.material) ellipseLine.material.dispose();
+      }
+      // Eigen decomposition of 2x2 covariance
+      const a = cov2x2[0], b = cov2x2[1], c = cov2x2[3];
+      const trace = a + c;
+      const det = a * c - b * b;
+      const disc = Math.max(trace*trace/4 - det, 0);
+      const l1 = trace/2 + Math.sqrt(disc);
+      const l2 = trace/2 - Math.sqrt(disc);
+      const rx = Math.sqrt(Math.max(l1, 1e-6));
+      const ry = Math.sqrt(Math.max(l2, 1e-6));
+      const angle = Math.atan2(b, l1 - a); // eigenvector for l1
+      const pts = [];
+      for (let i = 0; i <= 64; i++) {
+        const t = (i / 64) * Math.PI * 2;
+        const x = rx * Math.cos(t);
+        const y = ry * Math.sin(t);
+        const xr = x * Math.cos(angle) - y * Math.sin(angle);
+        const yr = x * Math.sin(angle) + y * Math.cos(angle);
+        pts.push(new THREE.Vector3(mean.x + xr, 0.05, mean.y + yr));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineDashedMaterial({ color: 0x38bdf8, dashSize: 0.5, gapSize: 0.3, transparent: true, opacity: 0.8 });
+      ellipseLine = new THREE.LineLoop(geo, mat);
+      ellipseLine.computeLineDistances();
+      surfaceGroup.add(ellipseLine);
+    }
+
+    const cov2x2FromFlat = (flat, dim) => {
+      if (!flat || flat.length < 4) return [1,0,0,1];
+      if (dim < 2) return [flat[0] ?? 1, 0, 0, flat[0] ?? 1];
+      return [flat[0], flat[1], flat[dim], flat[dim + 1]];
+    };
+
+    function resizeRenderer() {
+      const w = threeCanvas.clientWidth || 800;
+      const h = 380;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resizeRenderer();
+    window.addEventListener('resize', resizeRenderer);
+
+    function renderThree() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(renderThree);
+    }
+    renderThree();
+
+    function covFromPoints(batch, mean) {
+      if (!batch.length) return [1,0,0,1];
+      const n = batch.length;
+      let sxx=0, sxy=0, syy=0;
+      for (const p of batch) {
+        const dx = p.x - mean.x;
+        const dy = p.y - mean.y;
+        sxx += dx*dx;
+        sxy += dx*dy;
+        syy += dy*dy;
+      }
+      const denom = Math.max(1, n-1);
+      return [sxx/denom, sxy/denom, sxy/denom, syy/denom];
+    }
+
+    async function run() {
+      statusEl.textContent = 'Initializing wasm...';
+      runActive = true;
+      lastRunFinished = false;
+      playbackState.playing = false;
+      updateRunButton();
+      if (!wasmInitialized) {
+        await init();
+        wasmInitialized = true;
+      }
+
+      const benchKey = benchSelect.value;
+      const bench = benchFns[benchKey];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = currentDim(benchKey);
+      currentMaxIter = maxIter;
+      dimLabel.textContent = '2D surface view';
+
+      const opts = buildOptions(lambda, maxIter, seed, dim);
+
+      const x0 = new Float64Array(dim);
+      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+      const es = new WasmCmaes(x0, sigma, opts);
+
+      buildSurface(bench.f);
+
+      const history = [];
+      let iter = 0;
+      let bestF = Infinity;
+      let lastTs = performance.now();
+      let iterCounter = 0;
+      playbackState.frames = [];
+      playbackState.idx = 0;
+      scrub.max = 0;
+      currentHist = history;
+
+      const stepOnce = () => {
+        const lambda = es.lambda;
+        const meanBefore = Array.from(es.xmean());
+        const covBeforeFlat = Array.from(es.cov_matrix());
+        const candFlat = es.ask_flat();
+        const fits = new Float64Array(lambda);
+        const candidates = [];
+        let genBestF = Infinity;
+        let genBestVec = null;
+        for (let k = 0; k < lambda; k++) {
+          const offset = k * dim;
+          const v = candFlat.slice(offset, offset + dim);
+          candidates.push(Array.from(v));
+          fits[k] = bench.f(v);
+          if (fits[k] < genBestF) { genBestF = fits[k]; genBestVec = candidates[candidates.length - 1]; }
+        }
+        es.tell_flat(fits);
+        const res = es.result();
+        const cov = cov2x2FromFlat(covBeforeFlat, dim);
+        bestF = Math.min(bestF, res.best_f);
+        history.push({ iter, best: bestF });
+        iterCounter++;
+
+        const bestVec = genBestVec || Array.from(res.best_x());
+        const meanVec = meanBefore;
+        const proj = projectCandidates(candidates, bestVec, dim);
+        const meanPt = { x: meanVec[0], y: meanVec[1] };
+        const bestPt = { x: proj.b.x, y: proj.b.y };
+        render(history, proj.pts, res, meanPt, cov, bestPt);
+        // Store frame for scrub
+        if (playbackState.frames.length > 1000) playbackState.frames.shift();
+        playbackState.frames.push({
+          pts: proj.pts,
+          mean: meanPt,
+          best: bestPt,
+          cov,
+          bestF: bestF,
+          iter,
+        });
+        scrub.max = playbackState.frames.length - 1;
+
+        const delta = history.length > 1 ? history[history.length - 2].best - res.best_f : 0;
+        const boost = Math.max(1.0, Math.min(1.25, 1.0 + Math.abs(delta) * 2));
+        gsap.fromTo(bestEl, { scale: 1 }, { scale: boost, duration: 0.35, ease: 'sine.out' });
+
+        iter++;
+        const now = performance.now();
+        if (now - lastTs > 1000) {
+          document.getElementById('hud-iter').textContent = `${iterCounter} iter/s`;
+          iterCounter = 0;
+          lastTs = now;
+        }
+
+        if (!es.stop_status().stopped && iter < maxIter) {
+          requestAnimationFrame(stepOnce);
+        } else {
+          statusEl.textContent = `Done in ${iter} iterations / ${res.evals} evals`;
+          document.getElementById('hud-wasm').textContent = `${res.evals} evals`;
+          runActive = false;
+          lastRunFinished = true;
+          playbackState.playing = false;
+          updateRunButton();
+        }
+      };
+
+      statusEl.textContent = `Running ${bench.title}...`;
+      requestAnimationFrame(stepOnce);
+    }
+
+    function runJsBaseline(dimOverride) {
+      const bench = benchFns[benchSelect.value];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma0 = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = dimOverride || 2;
+
+      const rng = (() => {
+        let state = BigInt(seed || 1);
+        return () => {
+          state = (6364136223846793005n * state + 1n) & ((1n << 64n) - 1n);
+          return Number(state >> 11n) / 9007199254740992;
+        };
+      })();
+
+      let mean = Array.from({ length: dim }, (_, i) => bench.x0[i % bench.x0.length] || 0);
+      let sigma = sigma0;
+      const sample = () => {
+        const z = [];
+        for (let i=0;i<dim;i++) {
+          const u1 = Math.max(1e-12, 1 - rng());
+          const u2 = 1 - rng();
+          const r = Math.sqrt(-2*Math.log(u1));
+          const th = 2*Math.PI*u2;
+          z.push(r*Math.cos(th));
+        }
+        return z.map((zi, i) => mean[i] + sigma * zi);
+      };
+
+      let bestF = Infinity;
+      let bestX = mean.slice();
+      const t0 = performance.now();
+      for (let iter=0; iter<maxIter; iter++) {
+        const cand = [];
+        for (let k=0;k<lambda;k++) {
+          const x = sample();
+          let f = bench.f(x);
+          if (boundsToggle.checked) {
+            const lo = Number(boundLo.value) || -5;
+            const hi = Number(boundHi.value) || 5;
+            let penalty = 0;
+            for (let i=0;i<dim;i++) {
+              let xi = x[i];
+              if (xi < lo) { penalty += (lo - xi) ** 2; xi = lo; }
+              else if (xi > hi) { penalty += (xi - hi) ** 2; xi = hi; }
+              x[i] = xi;
+            }
+            f += 1e3 * penalty;
+          }
+        cand.push({x,f});
+        if (f < bestF) { bestF = f; bestX = x; }
+      }
+        cand.sort((a,b)=>a.f-b.f);
+        const mu = Math.max(1, Math.floor(lambda/4));
+        mean = Array(dim).fill(0);
+        for (let i=0;i<mu;i++) {
+          for (let d=0; d<dim; d++) mean[d] += cand[i].x[d];
+        }
+        for (let d=0; d<dim; d++) mean[d] /= mu;
+        sigma *= 0.99;
+      }
+      const t1 = performance.now();
+      const msg = `Baseline JS: best f=${bestF.toExponential(3)} in ${(t1-t0).toFixed(1)} ms`;
+      timingEl.textContent = msg;
+      hudJs.textContent = msg;
+      return { bestF, ms: (t1-t0), bestX };
+    }
+
+    function renderLine(idxOverride = null) {
+      if (!currentHist.length) return;
+      const lastIdx = idxOverride === null ? currentHist.length - 1 : idxOverride;
+      const subHist = currentHist.slice(0, Math.max(1, lastIdx + 1));
+      const xMax = currentMaxIter ?? (currentHist[currentHist.length - 1]?.iter ?? lastIdx);
+      const xDomain = [0, Math.max(xMax, subHist[subHist.length - 1].iter + 1)];
+      const yMin = Math.max(1e-9, Math.min(...subHist.map((d) => d.best)));
+      const yMax = d3.max(subHist, (d) => d.best) || 1;
+      lineX.domain(xDomain);
+      lineY.domain([yMin, yMax]);
+
+      lineG.select('.axis-x').call(d3.axisBottom(lineX).ticks(8).tickSizeOuter(0));
+      lineG.select('.axis-y').call(d3.axisLeft(lineY).ticks(6, "~g"));
+
+      const lineGen = d3.line()
+        .x((d) => lineX(d.iter))
+        .y((d) => lineY(d.best))
+        .curve(d3.curveCatmullRom.alpha(0.6));
+      linePath.attr('d', lineGen(subHist));
+
+      const latest = subHist[subHist.length - 1];
+      lineCursor.style('display', 'block')
+        .attr('x1', lineX(latest.iter))
+        .attr('x2', lineX(latest.iter));
+      lineDot.style('display', 'block')
+        .attr('cx', lineX(latest.iter))
+        .attr('cy', lineY(latest.best));
+    }
+
+    function render(hist, batch, res, meanPt, cov, bestPt) {
+      if (!hist.length) return;
+      currentHist = hist;
+      renderLine();
+
+      updatePoints(batch, meanPt, bestPt);
+      if (cov) updateEllipse(meanPt, cov);
+
+      bestEl.textContent = `best f = ${res.best_f.toExponential(3)}`;
+      iterEl.textContent = `Iter ${hist[hist.length - 1].iter}`;
+    }
+
+    const updateRunButton = () => {
+      if (!runButton) return;
+      if (runActive) {
+        runButton.disabled = true;
+        if (runLabel) runLabel.textContent = 'Running…';
+        return;
+      }
+      runButton.disabled = false;
+      if (!lastRunFinished || playbackState.frames.length === 0) {
+        if (runLabel) runLabel.textContent = '🚀 Run the Live Demo (WASM)';
+      } else if (playbackState.playing) {
+        if (runLabel) runLabel.textContent = '⏸ Pause replay';
+      } else {
+        if (runLabel) runLabel.textContent = '▶ Replay';
+      }
+    };
+
+    const onRunClick = () => {
+      if (runActive) return;
+      // If we have frames from a completed run, toggle replay
+      if (lastRunFinished && playbackState.frames.length > 0) {
+        playbackState.playing = !playbackState.playing;
+        if (playbackState.playing) requestAnimationFrame(playLoop);
+        updateRunButton();
+        return;
+      }
+      // Otherwise start a fresh run
+      run();
+    };
+
+    if (runButton) runButton.addEventListener('click', onRunClick);
+    bind('run-race', 'click', async () => {
+      statusEl.textContent = 'Race: running WASM...';
+      const benchKey = benchSelect.value;
+      const bench = benchFns[benchKey];
+      const lambda = Number(document.getElementById('lambda').value) || 32;
+      const sigma = Number(document.getElementById('sigma').value) || 1.2;
+      const maxIter = Number(document.getElementById('iters').value) || 250;
+      const seed = Number(document.getElementById('seed').value) || 42;
+      const dim = currentDim(benchKey);
+      const opts = buildOptions(lambda, maxIter, seed, dim);
+      if (!wasmInitialized) { await init(); wasmInitialized = true; }
+      const x0 = new Float64Array(dim);
+      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+      const es = new WasmCmaes(x0, sigma, opts);
+      const t0 = performance.now();
+      while (!es.stop_status().stopped) {
+        const candFlat = es.ask_flat();
+        const fits = new Float64Array(es.lambda);
+        for (let k = 0; k < es.lambda; k++) {
+          const offset = k * dim;
+          fits[k] = bench.f(candFlat.slice(offset, offset + dim));
+        }
+        es.tell_flat(fits);
+        if (es.evals >= opts.maxEvals) break;
+      }
+      const wasmMs = performance.now() - t0;
+      const wasmRes = es.result();
+      hudWasm.textContent = `${wasmRes.evals} evals, ${wasmMs.toFixed(1)} ms`;
+
+      statusEl.textContent = 'Race: running JS baseline...';
+      const jsRes = runJsBaseline(dim);
+      raceResults.innerHTML = `<div class="font-semibold">Race results</div>
+        <div>WASM: f=${wasmRes.best_f.toExponential(3)}, ${wasmMs.toFixed(1)} ms</div>
+        <div>JS: f=${jsRes.bestF.toExponential(3)}, ${jsRes.ms.toFixed(1)} ms</div>`;
+      statusEl.textContent = 'Race complete';
+    });
+
+    dimInput.addEventListener('input', () => {
+      dimInput.value = 2;
+      dimLabel.textContent = '2D surface view';
+    });
+
+    const showFrame = (frame) => {
+      if (!frame) return;
+      updatePoints(frame.pts, frame.mean, frame.best);
+      updateEllipse(frame.mean, frame.cov);
+      iterEl.textContent = `Iter ${frame.iter}`;
+      bestEl.textContent = `best f = ${frame.bestF?.toExponential?.(3) ?? '–'}`;
+      renderLine(frame.iter);
+      lineCursor.style('display', 'block')
+        .attr('x1', lineX(frame.iter))
+        .attr('x2', lineX(frame.iter));
+      lineDot.style('display', 'block')
+        .attr('cx', lineX(frame.iter))
+        .attr('cy', lineY(frame.bestF || 1e-9));
+    };
+
+    const playLoop = () => {
+      if (!playbackState.playing || playbackState.frames.length === 0) return;
+      playbackState.idx = (playbackState.idx + 1) % playbackState.frames.length;
+      scrub.value = playbackState.idx;
+      showFrame(playbackState.frames[playbackState.idx]);
+      requestAnimationFrame(playLoop);
+    };
+
+    scrub.addEventListener('input', () => {
+      const idx = Number(scrub.value) || 0;
+      playbackState.idx = idx;
+      playbackState.playing = false;
+      showFrame(playbackState.frames[idx]);
+      updateRunButton();
+    });
+
+    bind('apply-custom', 'click', async () => {
+      await monacoReady;
+      try {
+        const code = editor.getValue();
+        validateCustomCode(code);
+        const fn = new Function(`${code}; return f;`)();
+        if (typeof fn !== 'function') throw new Error('f is not a function');
+        customFn = fn;
+        benchSelect.value = 'custom';
+        statusEl.textContent = 'Custom objective applied';
+      } catch (e) {
+        alert('Invalid function: ' + e.message);
+      }
+    });
+
+    // FPS HUD
+    let lastFrame = performance.now();
+    let frames = 0;
+    const tick = () => {
+      frames++;
+      const now = performance.now();
+      if (now - lastFrame > 1000) {
+        hudFps.textContent = `${frames} fps`;
+        frames = 0;
+        lastFrame = now;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+
+    // Background Three.js particles
+    const bgCanvas = document.getElementById('bg-canvas');
+    const bgRenderer = new THREE.WebGLRenderer({ canvas: bgCanvas, antialias: true, alpha: true });
+    const bgScene = new THREE.Scene();
+    const bgCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+    bgCamera.position.z = 200;
+    const bgGeometry = new THREE.BufferGeometry();
+    const COUNT = 800;
+    const bgPositions = new Float32Array(COUNT * 3);
+    for (let i = 0; i < COUNT * 3; i++) bgPositions[i] = (Math.random() - 0.5) * 400;
+    bgGeometry.setAttribute('position', new THREE.BufferAttribute(bgPositions, 3));
+    const bgMaterial = new THREE.PointsMaterial({ color: 0x38bdf8, size: 1.6, transparent: true, opacity: 0.6 });
+    const bgPoints = new THREE.Points(bgGeometry, bgMaterial);
+    bgScene.add(bgPoints);
+
+    const animateBg = () => {
+      bgPoints.rotation.y += 0.0008;
+      bgPoints.rotation.x += 0.0004;
+      bgRenderer.render(bgScene, bgCamera);
+      requestAnimationFrame(animateBg);
+    };
+
+    // Optional 3D surface of the current benchmark (preview only, not exact scale)
+    let surface;
+    function buildSurface(fn) {
+      if (surface) {
+        scene.remove(surface);
+        if (surface.geometry) surface.geometry.dispose();
+        if (surface.material) surface.material.dispose();
+      }
+      const planeSize = 60;
+      const res = 40;
+      const geo = new THREE.PlaneGeometry(planeSize, planeSize, res, res);
+      const positions = geo.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i) / 5; // shrink input
+        const y = positions.getY(i) / 5;
+        const z = -fn([x, y]);
+        positions.setZ(i, z);
+      }
+      positions.needsUpdate = true;
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        flatShading: true,
+      });
+      surface = new THREE.Mesh(geo, mat);
+      surface.rotation.x = -Math.PI / 2;
+      scene.add(surface);
+    }
+
+    // Lights for the surface
+    const light1 = new THREE.PointLight(0x38bdf8, 1, 400);
+    light1.position.set(80, 120, 120);
+    scene.add(light1);
+    const light2 = new THREE.PointLight(0x6366f1, 0.7, 400);
+    light2.position.set(-60, 120, -80);
+    scene.add(light2);
+
+    const onResize = () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      bgRenderer.setSize(w, h);
+      bgCamera.aspect = w / h;
+      bgCamera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
+    animateBg();
+
+    // Subtle GSAP float on panels
+    gsap.utils.toArray('.panel').forEach((el, i) => {
+      gsap.to(el, { y: '+=6', duration: 3 + i * 0.2, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: i * 0.1 });
+    });
+  </script>
 </body>
 </html>

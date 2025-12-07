@@ -1,7 +1,8 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Environment, Text, useTexture, Line } from "@react-three/drei";
+import { safePointerEvents } from "./safeR3FEvents";
+import { PerspectiveCamera, Environment, Text, useTexture, Line } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 
@@ -234,6 +235,7 @@ export function BridgeViz() {
 
   // SSR guard: Track client-side mount to avoid hydration mismatch
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) {
@@ -248,7 +250,7 @@ export function BridgeViz() {
         <div className="lg:w-[65%] w-full relative group aspect-[4/3] lg:aspect-auto lg:h-[450px]">
           <div className="absolute -inset-1 bg-gradient-to-br from-amber-500/10 to-red-500/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
           <div className="relative h-full w-full rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-[#0f172a]">
-            <Canvas shadows dpr={[1, 2]}>
+            <Canvas shadows dpr={[1, 2]} events={safePointerEvents}>
               <PerspectiveCamera makeDefault position={[4, 3, 5]} fov={45} />
               <color attach="background" args={["#0f172a"]} />
               <fog attach="fog" args={["#0f172a", 8, 25]} />
@@ -272,13 +274,6 @@ export function BridgeViz() {
                 />
               </group>
 
-              <OrbitControls 
-                enablePan={false} 
-                enableZoom={false} 
-                autoRotate={false}
-                minPolarAngle={Math.PI / 6} 
-                maxPolarAngle={Math.PI / 2.2}
-              />
             </Canvas>
             
             {/* Legend Overlay */}
@@ -370,6 +365,7 @@ function PhysicsDriver({ state, span, speed }: { state: { loadPos: number }; spa
   useFrame((clock) => {
     if (speed > 0) {
       const t = clock.clock.elapsedTime * speed;
+      // eslint-disable-next-line react-hooks/immutability
       state.loadPos = Math.sin(t) * (span - 0.2);
     }
   });
@@ -396,8 +392,15 @@ function SegmentedDeckWrapper({
   );
 }
 
+interface DeckAnimatorProps {
+  physicsState: { loadPos: number };
+  span: number;
+  stiffness: number;
+  loadMass: number;
+}
+
 // The actual mesh that updates every frame based on physicsState
-function DeckAnimator({ physicsState, span, stiffness, loadMass }: any) {
+function DeckAnimator({ physicsState, span, stiffness, loadMass }: DeckAnimatorProps) {
   const segments = 50;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const lightRef = useRef<THREE.PointLight>(null);
@@ -441,6 +444,7 @@ function DeckAnimator({ physicsState, span, stiffness, loadMass }: any) {
       getTurboColor(totalStress, tempColor);
 
       dummy.position.set(x, y, 0);
+      // eslint-disable-next-line react-hooks/immutability
       dummy.rotation.z = 0; 
       dummy.scale.set((2 * span) / segments * 1.02, 0.15, 1.2); 
       
@@ -472,7 +476,17 @@ function DeckAnimator({ physicsState, span, stiffness, loadMass }: any) {
   );
 }
 
-function ControlSlider({ label, value, setValue, min, max, displayValue, color }: any) {
+interface ControlSliderProps {
+  label: string;
+  value: number;
+  setValue: (val: number) => void;
+  min: number;
+  max: number;
+  displayValue: number | string;
+  color: string;
+}
+
+function ControlSlider({ label, value, setValue, min, max, displayValue, color }: ControlSliderProps) {
   const colorClass = {
     amber: "accent-amber-400 text-amber-400 border-amber-500/20 bg-amber-500/10",
     orange: "accent-orange-400 text-orange-400 border-orange-500/20 bg-orange-500/10",

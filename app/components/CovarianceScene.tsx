@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo } from "react";
 import type { Mesh } from "three";
 
@@ -85,6 +85,7 @@ function SampleCloud() {
 export function CovarianceScene() {
   return (
     <Canvas
+      events={safePointerEvents}
       camera={{ position: [2.8, 1.6, 3.2], fov: 35 }}
       className="h-full w-full"
       dpr={[1, 2]}
@@ -98,14 +99,6 @@ export function CovarianceScene() {
       <SampleCloud />
       <Ellipsoid />
       
-      <OrbitControls
-        enablePan={false}
-        enableZoom={false}
-        autoRotate
-        autoRotateSpeed={0.5}
-        enableDamping
-        dampingFactor={0.05}
-      />
     </Canvas>
   );
 }

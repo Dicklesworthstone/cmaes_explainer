@@ -1,0 +1,6 @@
+# Vercel Ignore File
+vendor/wasm_cmaes/target
+node_modules
+.next
+.vercel
+.git

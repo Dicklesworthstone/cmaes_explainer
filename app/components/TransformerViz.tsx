@@ -1,9 +1,11 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Environment, Float, Text } from "@react-three/drei";
+import { safePointerEvents } from "./safeR3FEvents";
+import { PerspectiveCamera, Environment, Float } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 // --- 3D Network Visuals ---
 
@@ -154,7 +156,7 @@ function NetworkTopology({ depth, width, heads }: { depth: number; width: number
       ls.push(nodes);
     }
     return ls;
-  }, [depth, width, layerCount]);
+  }, [width, layerCount]);
 
   return (
     <group>
@@ -364,22 +366,13 @@ export function TransformerViz() {
   const [heads, setHeads] = useState(0.45);
   const [interacting, setInteracting] = useState(false); // Mobile interaction state
 
-  const [isLargeScreen, setIsLargeScreen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const mq = window.matchMedia('(min-width: 1024px)');
-      setIsLargeScreen(mq.matches);
-      const handler = (e: MediaQueryListEvent) => setIsLargeScreen(e.matches);
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    }
-  }, []);
+  const isLargeScreen = useMediaQuery('(min-width: 1024px)', false);
 
   const manifoldPoints = useMemo(() => makeManifoldPoints(), []);
 
   // SSR guard: Track client-side mount to avoid hydration mismatch
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return null;
@@ -414,6 +407,7 @@ export function TransformerViz() {
               <Canvas 
                 dpr={[1, 2]}
                 className="w-full h-full"
+                events={safePointerEvents}
               >
                 <PerspectiveCamera makeDefault position={[5, 2, 5]} fov={40} />
                 <color attach="background" args={["#030014"]} />
@@ -429,17 +423,6 @@ export function TransformerViz() {
                   </group>
                 </Float>
 
-                <OrbitControls 
-                  makeDefault
-                  enabled={interacting || isLargeScreen}
-                  enablePan={false} 
-                  enableZoom={false} 
-                  autoRotate={!interacting} 
-                  autoRotateSpeed={0.8} 
-                  maxPolarAngle={Math.PI / 2} 
-                  minPolarAngle={Math.PI / 4}
-                />
-                
                 {/* Floor Reflection Plane (Cheap trick: just a grid) */}
                 <gridHelper position={[0, -2, 0]} args={[20, 20, "#1e1b4b", "#0f172a"]} />
               </Canvas>
@@ -504,7 +487,17 @@ export function TransformerViz() {
   );
 }
 
-function ControlSlider({ label, value, setValue, min, max, displayValue, color }: any) {
+interface ControlSliderProps {
+  label: string;
+  value: number;
+  setValue: (val: number) => void;
+  min: number;
+  max: number;
+  displayValue: number | string;
+  color: string;
+}
+
+function ControlSlider({ label, value, setValue, min, max, displayValue, color }: ControlSliderProps) {
   const colorClass = {
     violet: "accent-violet-400 text-violet-400 border-violet-500/20 bg-violet-500/10",
     teal: "accent-teal-400 text-teal-400 border-teal-500/20 bg-teal-500/10",

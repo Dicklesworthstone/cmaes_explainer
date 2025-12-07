@@ -3,7 +3,7 @@ import globals from "globals";
 
 const config = [
   {
-    ignores: ["node_modules", "dist", "public/wasm-demo", "vendor"]
+    ignores: ["node_modules", "dist", "public/wasm-demo", "vendor", ".vercel", ".next"]
   },
   ...nextConfigs,
   {

@@ -149,7 +149,7 @@ export function CovarianceMinimap() {
     // gradient arrows
     const grad = [2 * currentMean[0], 2 * currentMean[1]] as [number, number];
     const euclid = [-grad[0], -grad[1]];
-    const nat = multMatVec(cov.flat() as any, euclid);
+    const nat = multMatVec(cov.flat() as [number, number, number, number], euclid);
     const drawArrow = (vec: [number, number], color: string, scale: number) => {
       const [vx, vy] = vec;
       const sx = cx;

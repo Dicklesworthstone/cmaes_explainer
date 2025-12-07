@@ -195,7 +195,7 @@ export function NoiseExplorer() {
                   <span className="text-slate-300">Population λ</span>
                   <span className="text-sky-300 font-mono bg-sky-500/10 px-1.5 rounded border border-sky-500/20">{lambda}</span>
                 </div>
-                <input type="range" min={4} max={64} step={1} value={lambda} onChange={(e) => setLambda(parseInt(e.target.value))} className="w-full accent-sky-500" />
+                <input type="range" min={4} max={64} step={1} value={lambda} onChange={(e) => setLambda(parseInt(e.target.value, 10))} className="w-full accent-sky-500" />
              </div>
              
              <div className="space-y-3 pt-2 border-t border-white/5">
