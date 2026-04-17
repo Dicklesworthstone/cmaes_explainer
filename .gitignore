@@ -6,3 +6,6 @@ node_modules
 dist
 coverage
 vendor/wasm_cmaes/target
+
+# Local read-only vendored clone (standalone git checkout, not a submodule — see commit msg)
+vendor/wasm_cmaes/
