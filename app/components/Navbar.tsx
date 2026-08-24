@@ -111,7 +111,8 @@ export function Navbar() {
           </div>
           <span className="text-sm font-bold text-white font-display">CMA-ES</span>
         </div>
-        <button 
+        <button
+          aria-label="Open navigation menu"
           onClick={() => setMobileMenuOpen(true)}
           className="p-2 text-slate-300 hover:text-white"
         >
@@ -136,7 +137,8 @@ export function Navbar() {
               </a>
            ))}
            <div className="w-[1px] h-4 bg-white/10 mx-1" />
-           <button 
+           <button
+             aria-label="Open navigation menu"
              onClick={() => setMobileMenuOpen(true)}
              className="p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10"
            >
@@ -157,7 +159,8 @@ export function Navbar() {
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
                <span className="text-lg font-bold font-display text-white">Menu</span>
-               <button 
+               <button
+                 aria-label="Close navigation menu"
                  onClick={() => setMobileMenuOpen(false)}
                  className="p-2 rounded-full bg-white/5 text-slate-300"
                >
