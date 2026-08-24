@@ -30,10 +30,13 @@ export function Navbar() {
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
+    // Lock body scroll only while the mobile menu is open. When closing,
+    // remove the inline override entirely so the stylesheet's overflow-x
+    // rule keeps applying (an inline "unset" would clobber it forever).
     if (mobileMenuOpen) {
       document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset";
+      document.body.style.removeProperty("overflow");
     }
   }, [mobileMenuOpen]);
 

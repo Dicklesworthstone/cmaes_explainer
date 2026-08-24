@@ -12,6 +12,9 @@ export function useScrollSpy(
 ) {
   const [activeId, setActiveId] = useState("");
   const { rootMargin = "-45% 0px -45% 0px", threshold } = options;
+  // sectionIds is typically an inline array (new identity on every render);
+  // key it so the observer is not torn down and rebuilt on every render.
+  const sectionKey = sectionIds.join("|");
 
   useEffect(() => {
     if (typeof window === "undefined" || !("IntersectionObserver" in window)) return;
@@ -23,13 +26,13 @@ export function useScrollSpy(
       });
     }, { rootMargin, threshold });
 
-    sectionIds.forEach((id) => {
+    sectionKey.split("|").forEach((id) => {
       const el = document.getElementById(id);
       if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, [sectionIds, rootMargin, threshold]);
+  }, [sectionKey, rootMargin, threshold]);
 
   return activeId;
 }

@@ -1,36 +1,15 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
-import Lenis from "@studio-freight/lenis";
+import type { ReactNode } from "react";
 
+// Smooth wheel-scroll hijacking (via @studio-freight/lenis) was removed on
+// purpose. The deprecated Lenis 1.0.x raced React 19 hydration: wheel events
+// arriving mid-hydration triggered intermittent hydration mismatches
+// (React #418), which discard the server tree, reset scroll position, and
+// leave the page effectively unscrollable (reproduced 7/8 loads; 0/8 without
+// Lenis). Native scrolling plus `scroll-behavior: smooth` (globals.css) for
+// anchor jumps is the correct, dependency-free behavior for an essay site.
+// Do not reintroduce a scroll-hijacking library without solving that race.
 export function SmoothScroll({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    let lenis: Lenis | undefined;
-    try {
-      lenis = new Lenis({
-        duration: 1.2,
-        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-        orientation: "vertical",
-        gestureOrientation: "vertical",
-        smoothWheel: true,
-        touchMultiplier: 2,
-      });
-    } catch (e) {
-      console.warn("Lenis init failed:", e);
-      return;
-    }
-
-    const raf = (time: number) => {
-      lenis?.raf(time);
-      requestAnimationFrame(raf);
-    };
-
-    requestAnimationFrame(raf);
-
-    return () => {
-      lenis?.destroy();
-    };
-  }, []);
-
   return <>{children}</>;
 }
