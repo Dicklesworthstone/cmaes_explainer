@@ -1,6 +1,6 @@
 # CMA-ES Explainer Site
 
-Next.js 15 + Tailwind + Framer Motion + Three.js + MathJax + your Rust CMA-ES engines.
+Next.js 16 + Tailwind + Framer Motion + Three.js + MathJax + your Rust CMA-ES engines.
 
 **Runtime:** Bun 1.3+ only (we do not use npm/yarn/pnpm).
 

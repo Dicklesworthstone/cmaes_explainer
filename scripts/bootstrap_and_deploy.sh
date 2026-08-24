@@ -6,10 +6,10 @@ GITHUB_REPO="Dicklesworthstone/${PROJECT_SLUG}"
 VERCEL_PROJECT_NAME="cmaes-explainer"
 
 if [ ! -d "node_modules" ]; then
-  npm install
+  bun install
 fi
 
-npm run build
+bun run build
 
 if [ ! -d ".git" ]; then
   git init

@@ -14,8 +14,8 @@ export function WasmDemo() {
         <code>wasm_cmaes</code> viz, wired in as a static asset under <code>public/wasm-demo/</code>.
       </p>
       <p className="prose-cmaes text-sm text-slate-300">
-        Rebuild it yourself with <code>scripts/build-all.sh</code>; parallelism needs wasm threads
-        and atomics enabled. The dashboard lets you toggle benchmark functions, seeds, and
+        Rebuild it yourself with <code>scripts/pull_wasm_demo.sh</code>; parallelism needs wasm
+        threads and atomics enabled. The dashboard lets you toggle benchmark functions, seeds, and
         population sizes to see how the covariance ellipsoid learns the metric in real time.
       </p>
       <motion.div
