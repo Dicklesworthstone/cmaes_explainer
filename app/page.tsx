@@ -1,12 +1,3 @@
-"use client";
-import "./three-patch";
-
-import dynamicImport from "next/dynamic";
-
-const MathProvider = dynamicImport(
-  () => import("./components/MathProvider").then((m) => m.MathProvider),
-  { ssr: false }
-);
 import { Navbar } from "./components/Navbar";
 import { Hero } from "./components/Hero";
 import { CmaesIntro } from "./components/CmaesIntro";
@@ -19,7 +10,12 @@ import { Section } from "./components/Section";
 import { TechnicalAddendum } from "./components/TechnicalAddendum";
 import { BackToTop } from "./components/BackToTop";
 import { ThreePatch } from "./components/ThreePatch";
+import { MathProvider } from "./components/MathProvider";
 
+// Server component: everything below SSRs (client components still render on
+// the server in the App Router). The only former SSR suppressor was the
+// next/dynamic ssr:false wrapper around MathProvider, which blanked the whole
+// page for crawlers; MathProvider now SSRs directly.
 export default function Page() {
   return (
     <ThreePatch>
