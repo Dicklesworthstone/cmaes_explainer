@@ -4,8 +4,23 @@ import "./globals.css";
 import { SmoothScroll } from "./components/SmoothScroll";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://cmaesexplainer.vercel.app"),
   title: "CMA-ES: A Love Letter to My Favorite Black-Box Optimizer",
-  description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python."
+  description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
+  openGraph: {
+    title: "CMA-ES: A Love Letter to My Favorite Black-Box Optimizer",
+    description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
+    url: "https://cmaesexplainer.vercel.app",
+    siteName: "CMA-ES Explainer",
+    images: [{ url: "/og-image.png", width: 1280, height: 640, alt: "CMA-ES Explainer" }],
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CMA-ES: A Love Letter to My Favorite Black-Box Optimizer",
+    description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
+    images: ["/og-image.png"]
+  }
 };
 
 export default function RootLayout(props: { children: ReactNode }) {

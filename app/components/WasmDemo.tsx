@@ -53,7 +53,7 @@ export function WasmDemo() {
           )}
           <iframe
             src="/wasm-demo/examples/viz-benchmarks.html"
-            className="h-full w-full border-0 mix-blend-luminosity opacity-90 hover:opacity-100 hover:mix-blend-normal transition-all duration-500"
+            className="h-full w-full border-0"
             loading="lazy"
             title="CMA-ES WASM visualization"
             onLoad={() => setLoaded(true)}
