@@ -26,6 +26,19 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // The vendored wasm-demo pages pull scripts from CDNs (tailwind, jsDelivr, Google
+        // Fonts) that don't send CORP headers, which `require-corp` blocks. Serve them with
+        // `credentialless` instead: CDN loads succeed and Chrome still grants
+        // crossOriginIsolated (SharedArrayBuffer) for the pkg-par threaded build.
+        source: "/wasm-demo/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "credentialless",
+          },
+        ],
+      },
     ];
   },
   turbopack: {

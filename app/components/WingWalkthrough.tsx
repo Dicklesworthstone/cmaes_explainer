@@ -39,7 +39,7 @@ export function WingWalkthrough() {
   return (
     <div className="prose-cmaes space-y-6">
       <p>
-        Let’s simplify the wing to just three normalized parameters
+        Let’s simplify the wing to just three normalized parameters{" "}
         <MathJax inline>{"$x_1, x_2, x_3 \\in [0,1]$"}</MathJax>: aspect ratio, sweep, and an airfoil
         family index. Physical ranges map linearly into the unit cube; the categorical airfoil index
         is carved into five sub-intervals and later quantized. Normalizing like this keeps the

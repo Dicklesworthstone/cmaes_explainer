@@ -123,9 +123,13 @@ export function ActiveCovarianceDemo() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    // Hydration safe: run simulation only on client
-    setPassive(simulate(false));
-    setActive(simulate(true));
+    // Hydration safe: run simulation only on client, one frame after mount so we
+    // never call setState synchronously inside the effect body (react-hooks/set-state-in-effect).
+    const raf = requestAnimationFrame(() => {
+      setPassive(simulate(false));
+      setActive(simulate(true));
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   useEffect(() => {

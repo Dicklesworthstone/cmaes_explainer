@@ -15,9 +15,9 @@ export function TechnicalAddendum() {
 
       <h3>The search distribution</h3>
       <p>
-        CMA-ES maintains
-        <MathJax inline>{"$x \\sim \\mathcal{N}(m, \\sigma^2 C)$"}</MathJax> with parameters mean
-        <MathJax inline>{"$m$"}</MathJax>, scalar step size <MathJax inline>{"$\\sigma$"}</MathJax>,
+        CMA-ES maintains{" "}
+        <MathJax inline>{"$x \\sim \\mathcal{N}(m, \\sigma^2 C)$"}</MathJax> with parameters mean{" "}
+        <MathJax inline>{"$m$"}</MathJax>, scalar step size <MathJax inline>{"$\\sigma$"}</MathJax>,{" "}
         and covariance <MathJax inline>{"$C$"}</MathJax>. All adaptation happens in this distribution
         space, not directly in parameter space. The Gaussian is chosen because it is maximum entropy
         for a given variance, rotationally invariant when isotropic, and analytically convenient.
@@ -42,7 +42,7 @@ export function TechnicalAddendum() {
 
       <h3>Invariance as a design principle</h3>
       <p>
-        CMA-ES is rank-based: only the ordering of
+        CMA-ES is rank-based: only the ordering of{" "}
         <MathJax inline>{"$f(x_i)$"}</MathJax> matters, so any strictly increasing transform of the
         objective leaves the trajectory unchanged. With full covariance adaptation it is also
         invariant to rigid linear transforms of the search space (rotations, reflections,
@@ -77,19 +77,19 @@ export function TechnicalAddendum() {
       </p>
         <MathJax dynamic>{"$$C^{(g+1)} = (1 - c_1 - c_\\mu) C^{(g)} + c_1\\, p_c p_c^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i\\, y_{i:\\lambda} y_{i:\\lambda}^\\top$$"}</MathJax>
       <p>
-        where <MathJax inline>{"$y_{i:\\lambda} = (x_{i:\\lambda} - m^{(g)})/\\sigma^{(g)}$"}</MathJax> are
-        normalized steps of the top <MathJax inline>{"$\\mu$"}</MathJax> samples and
-        <MathJax inline>{"$p_c$"}</MathJax> is a cumulated path of mean shifts. The rank‑1 term is an
+        where <MathJax inline>{"$y_{i:\\lambda} = (x_{i:\\lambda} - m^{(g)})/\\sigma^{(g)}$"}</MathJax> are{" "}
+        normalized steps of the top <MathJax inline>{"$\\mu$"}</MathJax> samples and{" "}
+        <MathJax inline>{"$p_c$"}</MathJax> is a cumulated path of mean shifts. The rank‑1 term is an{" "}
         online PCA of where the mean has been moving; the rank‑
         <MathJax inline>{"$\\mu$"}</MathJax> term is a weighted covariance of successful steps. On a
-        quadratic <MathJax inline>{"$f(x)=x^\\top H x$"}</MathJax> this drives
+        quadratic <MathJax inline>{"$f(x)=x^\\top H x$"}</MathJax> this drives{" "}
         <MathJax inline>{"$C \\propto H^{-1}$"}</MathJax>, i.e., it learns an inverse Hessian metric
         from zero‑order data.
       </p>
 
       <p>
         Active CMA layers in negative weights for clearly bad samples to shrink variance along harmful
-        directions faster, sharpening the short axes while keeping <MathJax inline>{"$C$"}</MathJax>
+        directions faster, sharpening the short axes while keeping <MathJax inline>{"$C$"}</MathJax>{" "}
         positive definite.
       </p>
 

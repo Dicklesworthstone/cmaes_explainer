@@ -28,12 +28,12 @@ export function CmaesIntro() {
       <p>
         Concretely, suppose you have some unknown function
       </p>
-      <MathJax dynamic>{"$$f: \\mathbb{R}^n \to \\mathbb{R}$$"}</MathJax>
+      <MathJax dynamic>{"$$f: \\mathbb{R}^n \\to \\mathbb{R}$$"}</MathJax>
       <p>
         that you want to minimize. CMA-ES keeps a mean vector <MathJax inline>{"$m$"}</MathJax>, a
-        scalar step size <MathJax inline>{"$\\sigma$"}</MathJax>, and a covariance matrix
-        <MathJax inline>{"$C$"}</MathJax>. Each round it samples a small population
-        <MathJax inline>{"$x_i \\sim \\mathcal{N}(m, \\sigma^2 C)$"}</MathJax>, evaluates
+        scalar step size <MathJax inline>{"$\\sigma$"}</MathJax>, and a covariance matrix{" "}
+        <MathJax inline>{"$C$"}</MathJax>. Each round it samples a small population{" "}
+        <MathJax inline>{"$x_i \\sim \\mathcal{N}(m, \\sigma^2 C)$"}</MathJax>, evaluates{" "}
         <MathJax inline>{"$f(x_i)$"}</MathJax>, ranks them, and nudges <MathJax inline>{"$m, \\sigma,$"}</MathJax>
         and <MathJax inline>{"$C$"}</MathJax> so the next Gaussian leans toward what worked.
       </p>

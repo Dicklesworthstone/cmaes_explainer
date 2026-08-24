@@ -16,7 +16,7 @@ export function Section(props: {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ amount: 0.2, once: true }}
+        viewport={{ once: true }}
         transition={{ duration: 0.8, ease: "easeOut" }}
       >
         <h2 className="text-balance font-display text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl drop-shadow-md">
