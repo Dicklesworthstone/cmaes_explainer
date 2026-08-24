@@ -58,6 +58,17 @@ GitHub page at `https://github.com/Dicklesworthstone/cmaes_explainer/commit/<has
 - `bootstrap_and_deploy.sh` now uses `bun install` / `bun run build` instead
   of npm ([57899a3](https://github.com/Dicklesworthstone/cmaes_explainer/commit/57899a3))
 
+### Accessibility
+
+- The three icon-only mobile menu buttons (open ×2, close) now carry
+  aria-labels; the mobile dock shows three section links so the menu button
+  stays on-screen at 375px
+  ([526176e](https://github.com/Dicklesworthstone/cmaes_explainer/commit/526176e))
+- All framer-motion animations respect the OS `prefers-reduced-motion`
+  setting via `MotionConfig reducedMotion="user"` (transform animations are
+  skipped for motion-sensitive users; opacity fades remain)
+  ([c929a77](https://github.com/Dicklesworthstone/cmaes_explainer/commit/c929a77))
+
 ---
 
 ## 2026-08-23 -- Sections Visible Again, WASM Engine Ships, Math Fixed
