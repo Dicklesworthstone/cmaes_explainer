@@ -123,7 +123,9 @@ export function Navbar() {
       {/* --- Mobile Floating Dock (Bottom) --- */}
       <div className="fixed bottom-6 inset-x-0 z-40 flex lg:hidden justify-center pointer-events-none">
         <div className="pointer-events-auto flex items-center gap-1 rounded-full bg-[#0f172a]/80 backdrop-blur-xl border border-white/10 p-1.5 shadow-2xl shadow-black/50 max-w-[90%] overflow-x-auto no-scrollbar">
-           {sections.slice(0, 4).map((s) => (
+           {/* Only three links fit a 375px dock alongside the menu button;
+               the rest are reachable via the full-screen menu. */}
+           {sections.slice(0, 3).map((s) => (
               <a
                 key={s.id}
                 href={`#${s.id}`}

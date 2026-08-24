@@ -178,3 +178,15 @@ input[type="range"]:active::-moz-range-thumb {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Long display equations must scroll horizontally instead of blowing out the
+   page width: on phones a wide MJX formula inflated the mobile layout
+   viewport to ~491px, zooming the entire page out and unanchoring
+   fixed-position elements. */
+mjx-container[display="true"] {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
