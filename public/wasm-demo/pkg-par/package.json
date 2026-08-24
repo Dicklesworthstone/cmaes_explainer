@@ -1,0 +1,16 @@
+{
+  "name": "cmaes_wasm-par",
+  "type": "module",
+  "version": "0.2.0",
+  "license": "MIT OR Apache-2.0",
+  "files": [
+    "cmaes_wasm_bg.wasm",
+    "cmaes_wasm.js",
+    "cmaes_wasm.d.ts"
+  ],
+  "main": "cmaes_wasm.js",
+  "types": "cmaes_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
