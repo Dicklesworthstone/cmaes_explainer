@@ -10,8 +10,9 @@ export function WasmDemo() {
     <div className="space-y-6">
       <p className="prose-cmaes">
         The nice thing about having a Rust core that targets WebAssembly is that we can ship a full
-        CMA-ES playground directly into the browser. The panel below is just your
-        <code>wasm_cmaes</code> viz, wired in as a static asset under <code>public/wasm-demo/</code>.
+        CMA-ES playground directly into the browser. The panel below is just your{" "}
+        <code>wasm_cmaes</code> viz, wired in as a static asset under{" "}
+        <code>public/wasm-demo/</code>.
       </p>
       <p className="prose-cmaes text-sm text-slate-300">
         Rebuild it yourself with <code>scripts/pull_wasm_demo.sh</code>; parallelism needs wasm
@@ -64,8 +65,8 @@ export function WasmDemo() {
       </motion.div>
       <p className="text-[0.75rem] text-slate-500 leading-relaxed border-l-2 border-white/10 pl-4">
         Implementation detail: the Next.js app doesn’t try to be clever about bundling the wasm
-        module. We just build <code>wasm_cmaes</code> with its own scripts and copy
-        <code>examples/</code>, <code>pkg/</code>, and <code>pkg-par/</code> into
+        module. We just build <code>wasm_cmaes</code> with its own scripts and copy{" "}
+        <code>examples/</code>, <code>pkg/</code>, and <code>pkg-par/</code> into{" "}
         <code>public/wasm-demo/</code>. The browser does the rest.
       </p>
     </div>
