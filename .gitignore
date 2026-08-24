@@ -9,3 +9,9 @@ vendor/wasm_cmaes/target
 
 # Local read-only vendored clone (standalone git checkout, not a submodule — see commit msg)
 vendor/wasm_cmaes/
+
+# Build/dependency artifacts that must never be tracked (see AGENTS.md bun-only rule)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+tsconfig.tsbuildinfo
