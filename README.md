@@ -15,11 +15,11 @@ bun run dev
 
 Open http://localhost:3000.
 
-## Integrating the wasm CMA-ES demo
+## WASM demo payload
 
-This repo expects a copy of your `wasm_cmaes` visualization under `public/wasm-demo/`.
-
-From the project root:
+The prebuilt engine bundles (`pkg/` and `pkg-par/`) are committed under
+`public/wasm-demo/`, so the live demo works out of the box (Vercel builds do
+not run the pull script). To rebuild them after upstream `wasm_cmaes` changes:
 
 ```bash
 ./scripts/pull_wasm_demo.sh
@@ -29,9 +29,10 @@ That script:
 
 * Clones `wasm_cmaes` into `vendor/wasm_cmaes` (or pulls latest)
 * Runs its build script
-* Copies `examples/viz-benchmarks.html`, `pkg/`, and `pkg-par/` into `public/wasm-demo/`
+* Refreshes `public/wasm-demo/` (`examples/`, `pkg/`, `pkg-par/`) — commit the
+  refreshed payload so deployments pick it up
 
-The “Live CMA-ES demo” section at `/` embeds `/wasm-demo/examples/viz-benchmarks.html` via iframe.
+The "Live CMA-ES demo" section at `/` embeds `/wasm-demo/examples/viz-benchmarks.html` via iframe.
 
 ## Deploying to GitHub + Vercel
 

@@ -8,6 +8,98 @@ GitHub page at `https://github.com/Dicklesworthstone/cmaes_explainer/commit/<has
 
 ---
 
+## 2026-08-24 -- Scrolling Restored, True SSR, Social Cards
+
+### Scrolling and Hydration
+
+- Fixed the page-freezing hydration race: better-react-mathjax's MathJaxContext
+  injects the MathJax script during the client render pass, and tex-svg.js
+  auto-typesets the entire document on load; when that landed mid-hydration
+  (near-certain whenever the user scrolled during page load), React threw #418,
+  regenerated the whole tree, and lost scroll position. MathProvider now
+  disables the document-wide auto-sweep (`startup.typeset: false`) and runs one
+  explicit typeset from a post-hydration effect
+  ([09f3862](https://github.com/Dicklesworthstone/cmaes_explainer/commit/09f3862))
+- Removed the deprecated `@studio-freight/lenis` scroll hijacker: its wheel
+  preventDefault plus per-frame scrollTo model competed with native scrolling,
+  and its self-rescheduling rAF loop was never cancelled on cleanup. Native
+  scrolling with CSS smooth anchor jumps replaces it
+  ([09f3862](https://github.com/Dicklesworthstone/cmaes_explainer/commit/09f3862))
+- `useScrollSpy` now keys its IntersectionObserver on a stable section key
+  instead of a fresh array identity, ending observer churn on every Navbar
+  render ([09f3862](https://github.com/Dicklesworthstone/cmaes_explainer/commit/09f3862))
+- Navbar no longer leaves a permanent inline `overflow: unset` on `<body>`
+  after the mobile menu closes
+  ([09f3862](https://github.com/Dicklesworthstone/cmaes_explainer/commit/09f3862))
+
+### Server-Side Rendering
+
+- The full essay now renders on the server (prerendered HTML grew from ~7 KB
+  to ~121 KB): MathProvider was wrapped in `next/dynamic` with `ssr:false`,
+  which suppressed server rendering of the entire page; MathJaxContext SSRs
+  safely, so the wrapper is gone and crawlers see the real content
+  ([97ee083](https://github.com/Dicklesworthstone/cmaes_explainer/commit/97ee083))
+
+### SEO and Social Preview
+
+- Added `metadataBase`, OpenGraph, and Twitter card metadata with a 1280x640
+  `/og-image.png`, so shared links render a proper preview
+  ([d183eac](https://github.com/Dicklesworthstone/cmaes_explainer/commit/d183eac),
+  [8235357](https://github.com/Dicklesworthstone/cmaes_explainer/commit/8235357))
+- Removed the `mix-blend-luminosity` filter from the WASM demo iframe that
+  desaturated the Benchmark Playground
+  ([d183eac](https://github.com/Dicklesworthstone/cmaes_explainer/commit/d183eac))
+
+### Build Hygiene
+
+- Removed the stray `package-lock.json` and untracked `tsconfig.tsbuildinfo`
+  (both now gitignored); Bun + `bun.lock` remain the only dependency path
+  ([4822918](https://github.com/Dicklesworthstone/cmaes_explainer/commit/4822918))
+- `bootstrap_and_deploy.sh` now uses `bun install` / `bun run build` instead
+  of npm ([57899a3](https://github.com/Dicklesworthstone/cmaes_explainer/commit/57899a3))
+
+---
+
+## 2026-08-23 -- Sections Visible Again, WASM Engine Ships, Math Fixed
+
+### Section Visibility
+
+- Fixed three permanently invisible sections (When Gradients Disappear,
+  Wing Walkthrough, Technical Addendum): `Section`'s `whileInView` fade-in
+  required 20% of the section to be visible, geometrically impossible for
+  sections taller than five viewports (no-gradients is 978% of viewport
+  height); any-intersection now triggers the fade
+  ([549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322))
+
+### WASM Demo Engine
+
+- Shipped the prebuilt `pkg/` and `pkg-par/` engine bundles in-repo: Vercel
+  builds never ran `pull_wasm_demo.sh`, so the embedded demo 404'd its engine
+  and rendered an unstyled shell
+  ([64b9ba7](https://github.com/Dicklesworthstone/cmaes_explainer/commit/64b9ba7),
+  [549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322))
+- `/wasm-demo/*` is now served with `Cross-Origin-Embedder-Policy:
+  credentialless` instead of `require-corp`, which was blocking the demo's
+  CDN scripts (tailwind, jsDelivr) that send no CORP headers; credentialless
+  keeps crossOriginIsolated for the threaded pkg-par build
+  ([549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322))
+
+### Math Rendering
+
+- Fixed `\to` rendering as TAB + "o" (`f : R"oR`) from a single-backslash
+  escape inside a TS string
+  ([549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322))
+- Fixed JSX newline-trimming that glued words to inline math and code spans
+  across CmaesIntro, TechnicalAddendum, WingWalkthrough, and WasmDemo
+  ([549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322),
+  [8235357](https://github.com/Dicklesworthstone/cmaes_explainer/commit/8235357))
+- ActiveCovarianceDemo defers its simulation setState via rAF, resolving the
+  `react-hooks/set-state-in-effect` lint error
+  ([549e322](https://github.com/Dicklesworthstone/cmaes_explainer/commit/549e322))
+
+---
+
+
 ## 2026-02-21 -- Licensing Update and Social Preview
 
 ### Licensing
@@ -333,6 +425,6 @@ compatibility issues in the CA pattern gallery's canvas pixel rendering:
 | Repository | [Dicklesworthstone/cmaes_explainer](https://github.com/Dicklesworthstone/cmaes_explainer) |
 | Deployment | Vercel |
 | Tags / Releases | None (all changes shipped directly on `main`) |
-| Total commits | 57 |
+| Total commits | 73 |
 | First commit | 2025-11-22 |
-| Latest commit | 2026-02-21 |
+| Latest commit | 2026-08-24 |
