@@ -1,194 +1,205 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Switch } from "@headlessui/react";
-import { Layers, Shuffle, Target, Zap } from "lucide-react";
+import { Layers, Shuffle, Sparkles, Cpu, Binary, Gauge, ArrowRight, CheckCircle2 } from "lucide-react";
+import { MathJax } from "better-react-mathjax";
 
-function reflect(value: number, min = 0, max = 1) {
-  if (value >= min && value <= max) return value;
-  const span = max - min;
-  const over = value - min;
-  const mod = ((over % span) + span) % span;
-  const wraps = Math.floor(over / span);
-  return wraps % 2 === 0 ? min + mod : max - mod;
-}
-
-function clamp(value: number, min = 0, max = 1) {
-  return Math.min(max, Math.max(min, value));
-}
-
-const categories = ["GELU", "SwiGLU", "ReLU", "Mish"] as const;
+const activations = ["SwiGLU", "GELU", "ReLU", "Mish"] as const;
+const optimizers = ["AdamW", "Lion", "Muon", "SGD-Momentum"] as const;
 
 export function EncodeDecodePlayground() {
-  const [continuous, setContinuous] = useState(0.6);
-  const [logScale, setLogScale] = useState(true);
-  const [categorical, setCategorical] = useState(0.32);
-  const [reflectMode, setReflectMode] = useState(true);
-  const [unbounded, setUnbounded] = useState(0.4); // normalized for demo
+  const [zLr, setZLr] = useState(0.55); // Continuous log-scale [1e-5, 1e-1]
+  const [zAct, setZAct] = useState(0.35); // Categorical discrete [0, 1] -> 4 bins
+  const [zLayers, setZLayers] = useState(0.42); // Integer discrete [6, 48]
+  const [zWeightDecay, setZWeightDecay] = useState(0.68); // Continuous linear [0.0, 0.2]
 
+  // Decoded physical configurations
   const decoded = useMemo(() => {
-    // Continuous bounded [1e-3, 1e1] with optional log
-    const minC = 1e-3;
-    const maxC = 1e1;
-    const c = logScale
-      ? Math.exp(Math.log(minC) + (Math.log(maxC) - Math.log(minC)) * continuous)
-      : minC + (maxC - minC) * continuous;
+    // 1. Log-scale learning rate
+    const minLr = 1e-5;
+    const maxLr = 1e-1;
+    const lr = Math.exp(Math.log(minLr) + zLr * (Math.log(maxLr) - Math.log(minLr)));
 
-    // Categorical split into equal intervals
-    const bins = categories.length;
-    const width = 1 / bins;
-    const catIdx = Math.min(bins - 1, Math.floor(categorical / width));
+    // 2. Categorical activation function
+    const actIdx = Math.min(activations.length - 1, Math.floor(zAct * activations.length));
+    const act = activations[actIdx];
 
-    // Unbounded via tanh/squash; reflect if requested
-    const rawUnbounded = (unbounded - 0.5) * 8; // [-4,4]
-    const squashed = Math.tanh(rawUnbounded); // (-1,1)
-    const mapped = (squashed + 1) / 2; // (0,1)
-    const finalU = reflectMode ? reflect(mapped) : clamp(mapped);
+    // 3. Discrete layer count
+    const minLayers = 6;
+    const maxLayers = 48;
+    const layers = Math.floor(minLayers + zLayers * (maxLayers - minLayers + 1));
 
-    return { c, catIdx, finalU, mapped };
-  }, [continuous, categorical, reflectMode, logScale, unbounded]);
+    // 4. Weight decay
+    const wd = zWeightDecay * 0.2;
+
+    return { lr, act, actIdx, layers, wd };
+  }, [zLr, zAct, zLayers, zWeightDecay]);
+
+  // Sample a Gaussian offspring vector in unit cube
+  const handleRandomSample = () => {
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    const randNorm = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.3;
+    setZLr(clamp01(zLr + randNorm()));
+    setZAct(clamp01(zAct + randNorm()));
+    setZLayers(clamp01(zLayers + randNorm()));
+    setZWeightDecay(clamp01(zWeightDecay + randNorm()));
+  };
 
   return (
-    <div className="glass-card p-6 space-y-6">
-      <div className="flex items-center gap-2.5">
-        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
-          <Layers className="h-4 w-4 text-sky-400" />
+    <div className="glass-card p-6 md:p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+            <Layers className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white font-display">
+              Universal Encode/Decode Latent Box Mapping
+            </h3>
+            <p className="text-xs text-slate-400">
+              Mapping mixed continuous, log-scale, and discrete integer knobs into an isotropic $[0, 1]^n$ unit cube
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Encode/Decode Playground</h3>
-          <p className="text-xs text-slate-400">Map messy world to clean [0,1] vectors</p>
-        </div>
+
+        <button
+          onClick={handleRandomSample}
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-sky-300 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-colors shadow-glow-sm"
+        >
+          <Shuffle className="h-3.5 w-3.5" />
+          <span>Sample Gaussian Step</span>
+        </button>
       </div>
-      
-      <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-        Map messy real-world knobs into a clean <code className="text-xs bg-white/10 px-1 py-0.5 rounded border border-white/10 font-mono">[0,1]</code> vector, then decode back. Late quantization keeps search continuous; reflection avoids wasting samples beyond bounds.
-      </p>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-5">
-          <ControlBlock
-            title="Continuous (Learning Rate)"
-            value={continuous}
-            onChange={setContinuous}
-            subtitle={logScale ? "Log-scale: 1e-3 → 1e1" : "Linear: 1e-3 → 1e1"}
-            readout={decoded.c.toExponential(3)}
-          />
-
-          <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5 flex items-center justify-between">
-             <span className="text-xs text-slate-300 font-medium">Log Scale Interpolation</span>
-             <Switch
-                checked={logScale}
-                onChange={setLogScale}
-                className={`${logScale ? "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
-              >
-                <span className={`${logScale ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
-              </Switch>
+      <div className="grid gap-8 lg:grid-cols-2 items-start">
+        {/* Normalized Latent Box Inputs [0, 1] */}
+        <div className="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-white/5">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sky-300">
+            <span>Latent Space Representation $z \in [0, 1]^4$</span>
+            <span className="font-mono text-slate-500 text-[0.7rem]">Normalized</span>
           </div>
 
-          <ControlBlock
-            title="Categorical (Activation)"
-            value={categorical}
-            onChange={setCategorical}
-            subtitle="Intervals map to GELU / SwiGLU / ReLU / Mish"
-            readout={categories[decoded.catIdx]}
-          />
-
-          <ControlBlock
-            title="Unbounded (Tanh Squash)"
-            value={unbounded}
-            onChange={setUnbounded}
-            subtitle="Raw (-∞,∞) → tanh → [0,1]"
-            readout={decoded.finalU.toFixed(3)}
-          >
-            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-               <span className="text-xs text-slate-300 font-medium">Reflect Out-of-Bounds</span>
-               <Switch
-                  checked={reflectMode}
-                  onChange={setReflectMode}
-                  className={`${reflectMode ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
-                >
-                  <span className={`${reflectMode ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
-                </Switch>
+          {/* z1: Learning Rate */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-slate-300">$z_1$ (Log-scale Learning Rate)</span>
+              <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
+                {zLr.toFixed(3)}
+              </span>
             </div>
-          </ControlBlock>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={zLr}
+              onChange={(e) => setZLr(parseFloat(e.target.value))}
+              className="w-full accent-sky-400"
+            />
+          </div>
+
+          {/* z2: Categorical Activation */}
+          <div className="space-y-1.5 pt-2 border-t border-white/5">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-slate-300">$z_2$ (Categorical Slicing)</span>
+              <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                {zAct.toFixed(3)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={zAct}
+              onChange={(e) => setZAct(parseFloat(e.target.value))}
+              className="w-full accent-purple-400"
+            />
+          </div>
+
+          {/* z3: Discrete Layers */}
+          <div className="space-y-1.5 pt-2 border-t border-white/5">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-slate-300">$z_3$ (Discrete Integer Layers)</span>
+              <span className="text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                {zLayers.toFixed(3)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={zLayers}
+              onChange={(e) => setZLayers(parseFloat(e.target.value))}
+              className="w-full accent-emerald-400"
+            />
+          </div>
+
+          {/* z4: Weight Decay */}
+          <div className="space-y-1.5 pt-2 border-t border-white/5">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-slate-300">$z_4$ (Linear Bounded Weight Decay)</span>
+              <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                {zWeightDecay.toFixed(3)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={zWeightDecay}
+              onChange={(e) => setZWeightDecay(parseFloat(e.target.value))}
+              className="w-full accent-amber-400"
+            />
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-900/50 to-slate-900/30 rounded-2xl p-5 border border-white/5 shadow-inner space-y-4 h-fit">
-          <div className="flex items-center gap-2 pb-2 border-b border-white/5 text-sm font-semibold text-emerald-200">
-            <Target className="h-4 w-4" /> Decoded Summary
+        {/* Decoded Real-World Physical Output */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-300">
+            <span>Decoded Physical Hyperparameters</span>
+            <span className="font-mono text-slate-500 text-[0.7rem]">Evaluation Form</span>
           </div>
-          <div className="space-y-2.5">
-            <SummaryRow label="Continuous (Decoded)">
-              <span className="font-mono text-sky-300">{decoded.c.toExponential(3)}</span>
-              <span className="text-slate-500 text-[0.7rem] ml-2">({logScale ? "Log" : "Lin"})</span>
-            </SummaryRow>
-            <SummaryRow label="Categorical Bin">
-              <span className="font-mono text-amber-300">{categories[decoded.catIdx]}</span>
-            </SummaryRow>
-            <SummaryRow label="Unbounded Squashed">
-               <span className="font-mono text-slate-300 opacity-60">{decoded.mapped.toFixed(3)}</span>
-            </SummaryRow>
-            <SummaryRow label="Final [0,1] Value">
-               <span className="font-mono text-emerald-300 font-bold">{decoded.finalU.toFixed(3)}</span>
-            </SummaryRow>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20 space-y-1">
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Learning Rate ($\eta$)</div>
+              <div className="text-base font-bold text-sky-200 font-mono">{decoded.lr.toExponential(3)}</div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">Log range [1e-5, 1e-1]</div>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-purple-500/20 space-y-1">
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Activation Function</div>
+              <div className="text-base font-bold text-purple-200">{decoded.act}</div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">Bin {decoded.actIdx + 1} of 4</div>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20 space-y-1">
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Transformer Layers ($L$)</div>
+              <div className="text-base font-bold text-emerald-200 font-mono">{decoded.layers} Layers</div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">Integer [6, 48]</div>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-amber-500/20 space-y-1">
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Weight Decay</div>
+              <div className="text-base font-bold text-amber-200 font-mono">{decoded.wd.toFixed(4)}</div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">Linear [0.0, 0.2]</div>
+            </div>
           </div>
-          
-          <div className="mt-4 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl text-xs text-slate-300 leading-relaxed">
-             <div className="flex gap-2 mb-1">
-                <Zap className="h-3.5 w-3.5 text-amber-300 shrink-0" />
-                <strong className="text-emerald-200">Pro Tip</strong>
-             </div>
-             Late quantization + reflection keeps CMA-ES in continuous mode as long as possible. This prevents covariance learning from breaking on hard edges.
+
+          <div className="p-4 rounded-2xl bg-sky-500/5 border border-sky-500/20 text-xs text-slate-300 space-y-1.5 leading-relaxed">
+            <div className="font-bold text-sky-200 flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+              <span>Late Quantization Principle</span>
+            </div>
+            <p>
+              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <MathJax inline>{"$\\mathcal{N}(m, \\sigma^2 C)$"}</MathJax> moves smoothly across discrete boundaries without gradient breakdown or combinatorial explosion.
+            </p>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ControlBlock({
-  title,
-  subtitle,
-  value,
-  onChange,
-  readout,
-  children
-}: {
-  title: string;
-  subtitle: string;
-  value: number;
-  onChange: (v: number) => void;
-  readout: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5 transition-all hover:bg-slate-950/40 hover:border-white/10">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="font-semibold text-slate-200 text-xs uppercase tracking-wide">{title}</div>
-          <div className="text-[0.65rem] text-slate-500 font-medium mt-0.5">{subtitle}</div>
-        </div>
-        <div className="font-mono text-xs text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 shadow-sm">{readout}</div>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.01}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-sky-500"
-      />
-      {children}
-    </div>
-  );
-}
-
-function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex justify-between items-center rounded-lg bg-black/20 px-3 py-2.5 text-xs border border-white/5">
-      <span className="text-slate-400 font-medium">{label}</span>
-      <span>{children}</span>
     </div>
   );
 }

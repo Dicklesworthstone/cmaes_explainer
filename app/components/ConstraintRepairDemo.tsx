@@ -36,9 +36,44 @@ export function ConstraintRepairDemo() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
-  const [history, setHistory] = useState<CMAESGenerationState[]>([]);
 
-  const initOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
+  const getOrInitOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
+    if (!optimizerRef.current) {
+      optimizerRef.current = new CMAESOptimizer(
+        (x, y) => {
+          const [rx, ry] = repairPoint([x, y], strat);
+          return objectiveFn(rx, ry);
+        },
+        {
+          dim: 2,
+          initialMean: [0.2, 0.2],
+          initialSigma: 0.35,
+          lambda: 14,
+          bounds: [-0.4, 1.6]
+        }
+      );
+    }
+    return optimizerRef.current;
+  }, []);
+
+  const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
+    const opt = new CMAESOptimizer(
+      (x, y) => {
+        const [rx, ry] = repairPoint([x, y], "reflect");
+        return objectiveFn(rx, ry);
+      },
+      {
+        dim: 2,
+        initialMean: [0.2, 0.2],
+        initialSigma: 0.35,
+        lambda: 14,
+        bounds: [-0.4, 1.6]
+      }
+    );
+    return [opt.step()];
+  });
+
+  const resetOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
     const opt = new CMAESOptimizer(
       (x, y) => {
         const [rx, ry] = repairPoint([x, y], strat);
@@ -53,26 +88,34 @@ export function ConstraintRepairDemo() {
       }
     );
     optimizerRef.current = opt;
-    const s0 = opt.step();
-    setHistory([s0]);
+    setHistory([opt.step()]);
     setGeneration(0);
     setIsPlaying(false);
   }, []);
 
-  useEffect(() => {
-    initOptimizer(strategy);
-  }, [strategy, initOptimizer]);
+  const handleSelectStrategy = (strat: "reflect" | "clamp" | "logit") => {
+    setStrategy(strat);
+    resetOptimizer(strat);
+  };
 
   const stepOptimizer = useCallback(() => {
-    if (!optimizerRef.current) return;
-    const nextState = optimizerRef.current.step();
+    const opt = getOrInitOptimizer(strategy);
+    const nextState = opt.step();
     setHistory((prev) => [...prev, nextState]);
     setGeneration((g) => g + 1);
-  }, []);
+  }, [strategy, getOrInitOptimizer]);
 
   useEffect(() => {
     if (!isPlaying) return;
     const interval = setInterval(() => {
+      if (generation >= 35) {
+        setIsPlaying(false);
+        return;
+      }
+      stepOptimizer();
+    }, 140);
+    return () => clearInterval(interval);
+  }, [isPlaying, generation, stepOptimizer]);
       if (generation >= 35) {
         setIsPlaying(false);
         return;
@@ -258,7 +301,7 @@ export function ConstraintRepairDemo() {
           {(["reflect", "clamp", "logit"] as const).map((strat) => (
             <button
               key={strat}
-              onClick={() => setStrategy(strat)}
+              onClick={() => handleSelectStrategy(strat)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-xl capitalize transition-all ${
                 strategy === strat
                   ? "bg-sky-500 text-white shadow-glow-sm"
@@ -311,7 +354,7 @@ export function ConstraintRepairDemo() {
               </button>
 
               <button
-                onClick={() => initOptimizer(strategy)}
+                onClick={() => resetOptimizer(strategy)}
                 className="p-2 rounded-xl bg-slate-900 border border-white/5 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
                 title="Reset"
               >

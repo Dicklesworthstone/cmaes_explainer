@@ -20,9 +20,34 @@ export function ActiveCovarianceDemo() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
-  const [history, setHistory] = useState<CMAESGenerationState[]>([]);
 
-  const initOptimizer = useCallback((useActive: boolean) => {
+  const getOrInitOptimizer = useCallback((useActive: boolean) => {
+    if (!optimizerRef.current) {
+      optimizerRef.current = new CMAESOptimizer(objectiveFn, {
+        dim: 2,
+        initialMean: [-1.4, -0.8],
+        initialSigma: 0.5,
+        lambda: 16,
+        activeCMA: useActive,
+        bounds: [-DOMAIN, DOMAIN]
+      });
+    }
+    return optimizerRef.current;
+  }, []);
+
+  const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
+    const opt = new CMAESOptimizer(objectiveFn, {
+      dim: 2,
+      initialMean: [-1.4, -0.8],
+      initialSigma: 0.5,
+      lambda: 16,
+      activeCMA: true,
+      bounds: [-DOMAIN, DOMAIN]
+    });
+    return [opt.step()];
+  });
+
+  const resetOptimizer = useCallback((useActive: boolean) => {
     const opt = new CMAESOptimizer(objectiveFn, {
       dim: 2,
       initialMean: [-1.4, -0.8],
@@ -32,22 +57,23 @@ export function ActiveCovarianceDemo() {
       bounds: [-DOMAIN, DOMAIN]
     });
     optimizerRef.current = opt;
-    const s0 = opt.step();
-    setHistory([s0]);
+    setHistory([opt.step()]);
     setGeneration(0);
     setIsPlaying(false);
   }, []);
 
-  useEffect(() => {
-    initOptimizer(activeCMA);
-  }, [activeCMA, initOptimizer]);
+  const handleToggleActive = () => {
+    const next = !activeCMA;
+    setActiveCMA(next);
+    resetOptimizer(next);
+  };
 
   const stepOptimizer = useCallback(() => {
-    if (!optimizerRef.current) return;
-    const nextState = optimizerRef.current.step();
+    const opt = getOrInitOptimizer(activeCMA);
+    const nextState = opt.step();
     setHistory((prev) => [...prev, nextState]);
     setGeneration((g) => g + 1);
-  }, []);
+  }, [activeCMA, getOrInitOptimizer]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -232,7 +258,7 @@ export function ActiveCovarianceDemo() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setActiveCMA(!activeCMA)}
+            onClick={handleToggleActive}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               activeCMA
                 ? "bg-sky-500 text-white shadow-glow-sm"
@@ -300,7 +326,7 @@ export function ActiveCovarianceDemo() {
               </button>
 
               <button
-                onClick={() => initOptimizer(activeCMA)}
+                onClick={() => resetOptimizer(activeCMA)}
                 className="p-2 rounded-xl bg-slate-900 border border-white/5 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
                 title="Reset"
               >
