@@ -116,14 +116,6 @@ export function ConstraintRepairDemo() {
     }, 140);
     return () => clearInterval(interval);
   }, [isPlaying, generation, stepOptimizer]);
-      if (generation >= 35) {
-        setIsPlaying(false);
-        return;
-      }
-      stepOptimizer();
-    }, 140);
-    return () => clearInterval(interval);
-  }, [isPlaying, generation, stepOptimizer]);
 
   const latestState = history[history.length - 1];
 

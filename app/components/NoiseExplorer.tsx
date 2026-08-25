@@ -20,10 +20,6 @@ export function NoiseExplorer() {
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
 
-  const [history, setHistory] = useState<CMAESGenerationState[]>([]);
-  const [trueLossHistory, setTrueLossHistory] = useState<number[]>([]);
-  const [noisyLossHistory, setNoisyLossHistory] = useState<number[]>([]);
-
   // True underlying physical function (smooth 2D parabolic bowl with slight ripples)
   const trueFn = (x: number, y: number) => {
     return x * x + y * y + 0.3 * Math.cos(4 * x) + 0.3 * Math.sin(4 * y);
@@ -110,7 +106,7 @@ export function NoiseExplorer() {
     setNoisyLossHistory([s0.bestFitness]);
     setGeneration(0);
     setIsPlaying(false);
-  }, [lambda, sampleNoise]);
+  }, [lambda, sampleNoise, setHistory, setTrueLossHistory, setNoisyLossHistory]);
 
   const stepOptimizer = useCallback(() => {
     const opt = getOrInitOptimizer();
@@ -121,7 +117,7 @@ export function NoiseExplorer() {
     setTrueLossHistory((prev) => [...prev, trueBest]);
     setNoisyLossHistory((prev) => [...prev, nextState.bestFitness]);
     setGeneration((g) => g + 1);
-  }, [getOrInitOptimizer]);
+  }, [getOrInitOptimizer, setHistory, setTrueLossHistory, setNoisyLossHistory]);
 
   useEffect(() => {
     if (!isPlaying) return;

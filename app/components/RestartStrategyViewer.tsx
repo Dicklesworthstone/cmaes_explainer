@@ -22,6 +22,9 @@ export function RestartStrategyViewer() {
   const [globalBestFitness, setGlobalBestFitness] = useState<number>(40);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const optimizerRef = useRef<CMAESOptimizer | null>(null);
+
   const getOrInitOptimizer = useCallback((popSize: number, sigmaInit: number) => {
     if (!optimizerRef.current) {
       const startX = (Math.random() - 0.5) * 5.0;
@@ -119,7 +122,7 @@ export function RestartStrategyViewer() {
 
       spawnRestart(nextPop, nextSigma);
     }
-  }, [currentLambda, evalBudget, globalBestFitness, restartCount, strategy, spawnRestart]);
+  }, [currentLambda, evalBudget, globalBestFitness, restartCount, strategy, spawnRestart, getOrInitOptimizer]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -315,7 +318,7 @@ export function RestartStrategyViewer() {
           {(["ipop", "bipop"] as const).map((m) => (
             <button
               key={m}
-              onClick={() => setStrategy(m)}
+              onClick={() => handleSelectStrategy(m)}
               className={`px-3 py-1.5 text-xs font-semibold rounded-xl uppercase transition-all ${
                 strategy === m
                   ? "bg-sky-500 text-white shadow-glow-sm"
