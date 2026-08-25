@@ -1,246 +1,364 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Switch } from "@headlessui/react";
-import { Square, Wand2, MoveRight, Shuffle, Paintbrush } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Square, Wand2, MoveRight, Shuffle, Paintbrush, Play, Pause, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
+import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
-const SIZE = 320;
+const SIZE = 400;
 
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (1664525 * s + 1013904223) >>> 0;
-    return s / 0xffffffff;
-  };
+// Objective whose unconstrained minimum is at (1.35, 1.35), outside the [0, 1]^2 box
+const unconstrainedOptimum = [1.35, 1.35];
+const objectiveFn = (x: number, y: number) => {
+  return (x - 1.35) ** 2 + 2.5 * (y - 1.35) ** 2 + 0.1 * Math.sin(6 * x);
+};
+
+function repairPoint(raw: [number, number], strategy: "reflect" | "clamp" | "logit"): [number, number] {
+  if (strategy === "clamp") {
+    return [Math.max(0, Math.min(1, raw[0])), Math.max(0, Math.min(1, raw[1]))];
+  } else if (strategy === "reflect") {
+    const reflectVal = (v: number) => {
+      if (v >= 0 && v <= 1) return v;
+      const mod = Math.abs(v) % 2;
+      return mod > 1 ? 2 - mod : mod;
+    };
+    return [reflectVal(raw[0]), reflectVal(raw[1])];
+  } else {
+    // Logit sigmoid mapping from R to (0, 1)
+    const sig = (v: number) => 1 / (1 + Math.exp(-v * 3));
+    return [sig(raw[0] - 0.5), sig(raw[1] - 0.5)];
+  }
 }
-
-function clamp01(v: number) {
-  return Math.min(1, Math.max(0, v));
-}
-
-function reflect01(v: number) {
-  if (v >= 0 && v <= 1) return v;
-  const span = 1;
-  const over = v - 0;
-  const mod = ((over % span) + span) % span;
-  const wraps = Math.floor(over / span);
-  return wraps % 2 === 0 ? 0 + mod : 1 - mod;
-}
-
-function logitTransform(v: number) {
-  // squash from (-inf, inf) to (0,1)
-  return 1 / (1 + Math.exp(-v));
-}
-
-const strategies = [
-  { key: "clip", label: "Clip", desc: "Clamp to [0,1]" },
-  { key: "reflect", label: "Reflect", desc: "Bounce at edges" },
-  { key: "logit", label: "Logit", desc: "Optimize unconstrained, logit back" }
-] as const;
-
-type Strat = (typeof strategies)[number]["key"];
 
 export function ConstraintRepairDemo() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [strategy, setStrategy] = useState<Strat>("reflect");
-  const [seed, setSeed] = useState(7);
-  const [showMean, setShowMean] = useState(true);
-   const [showArrows, setShowArrows] = useState(true);
+  const [strategy, setStrategy] = useState<"reflect" | "clamp" | "logit">("reflect");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [generation, setGeneration] = useState(0);
 
-  const samples = useMemo(() => {
-    const rand = rng(seed);
-    const pts: { raw: [number, number]; fixed: [number, number]; mean: boolean }[] = [];
-    for (let i = 0; i < 80; i++) {
-      const raw: [number, number] = [rand() * 1.6 - 0.3, rand() * 1.6 - 0.3]; // overshoot box
-      const fixed: [number, number] = fix(raw, strategy);
-      pts.push({ raw, fixed, mean: i === 0 });
-    }
-    return pts;
-  }, [seed, strategy]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const optimizerRef = useRef<CMAESOptimizer | null>(null);
+  const [history, setHistory] = useState<CMAESGenerationState[]>([]);
+
+  const initOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
+    const opt = new CMAESOptimizer(
+      (x, y) => {
+        const [rx, ry] = repairPoint([x, y], strat);
+        return objectiveFn(rx, ry);
+      },
+      {
+        dim: 2,
+        initialMean: [0.2, 0.2],
+        initialSigma: 0.35,
+        lambda: 14,
+        bounds: [-0.4, 1.6]
+      }
+    );
+    optimizerRef.current = opt;
+    const s0 = opt.step();
+    setHistory([s0]);
+    setGeneration(0);
+    setIsPlaying(false);
+  }, []);
 
   useEffect(() => {
+    initOptimizer(strategy);
+  }, [strategy, initOptimizer]);
+
+  const stepOptimizer = useCallback(() => {
+    if (!optimizerRef.current) return;
+    const nextState = optimizerRef.current.step();
+    setHistory((prev) => [...prev, nextState]);
+    setGeneration((g) => g + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      if (generation >= 35) {
+        setIsPlaying(false);
+        return;
+      }
+      stepOptimizer();
+    }, 140);
+    return () => clearInterval(interval);
+  }, [isPlaying, generation, stepOptimizer]);
+
+  const latestState = history[history.length - 1];
+
+  // Render Canvas
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !latestState) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, SIZE, SIZE);
+    const W = canvas.width;
+    const H = canvas.height;
+    const DOMAIN_MIN = -0.3;
+    const DOMAIN_MAX = 1.6;
 
-    // gradient backdrop
-    const grad = ctx.createLinearGradient(0, 0, SIZE, SIZE);
-    grad.addColorStop(0, "#0b1224");
-    grad.addColorStop(1, "#0f172a");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, SIZE, SIZE);
+    const toPxX = (x: number) => ((x - DOMAIN_MIN) / (DOMAIN_MAX - DOMAIN_MIN)) * W;
+    const toPxY = (y: number) => H - ((y - DOMAIN_MIN) / (DOMAIN_MAX - DOMAIN_MIN)) * H;
 
-    // box glow
-    ctx.strokeStyle = "rgba(14,165,233,0.35)";
-    ctx.lineWidth = 8;
-    ctx.strokeRect(36, 36, SIZE - 72, SIZE - 72);
+    ctx.clearRect(0, 0, W, H);
 
-    // box
-    ctx.strokeStyle = "rgba(148,163,184,0.7)";
+    // 1. Draw Heatmap
+    const imgData = ctx.createImageData(W, H);
+    for (let py = 0; py < H; py += 2) {
+      const y = DOMAIN_MAX - (py / H) * (DOMAIN_MAX - DOMAIN_MIN);
+      for (let px = 0; px < W; px += 2) {
+        const x = DOMAIN_MIN + (px / W) * (DOMAIN_MAX - DOMAIN_MIN);
+        const [rx, ry] = repairPoint([x, y], strategy);
+        const v = objectiveFn(rx, ry);
+        const norm = Math.max(0, Math.min(1, Math.sqrt(v) / 2));
+
+        const r = Math.floor(12 + 15 * norm);
+        const g = Math.floor(18 + 70 * (1 - norm));
+        const b = Math.floor(35 + 110 * (1 - norm));
+
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const idx = ((py + dy) * W + (px + dx)) * 4;
+            imgData.data[idx] = r;
+            imgData.data[idx + 1] = g;
+            imgData.data[idx + 2] = b;
+            imgData.data[idx + 3] = 255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    // 2. Draw [0, 1]^2 Feasible Region Box
+    const b0X = toPxX(0);
+    const b0Y = toPxY(1);
+    const b1X = toPxX(1);
+    const b1Y = toPxY(0);
+    const boxW = b1X - b0X;
+    const boxH = b1Y - b0Y;
+
+    // Glowing boundary outline
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(b0X, b0Y, boxW, boxH);
+
+    ctx.strokeStyle = "#38bdf8";
     ctx.lineWidth = 2;
-    ctx.strokeRect(40, 40, SIZE - 80, SIZE - 80);
+    ctx.strokeRect(b0X, b0Y, boxW, boxH);
 
-    // draw arrows raw -> fixed for first N
-    if (showArrows) {
-      ctx.strokeStyle = "rgba(248,113,113,0.35)";
-      ctx.lineWidth = 1.5;
-      samples.slice(0, 25).forEach((s) => {
-        const [rx, ry] = toPix(s.raw);
-        const [fx, fy] = toPix(s.fixed);
-        ctx.beginPath();
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(fx, fy);
-        ctx.stroke();
+    // Infeasible Shading
+    ctx.fillStyle = "rgba(2, 6, 23, 0.5)";
+    ctx.fillRect(0, 0, W, b0Y);
+    ctx.fillRect(0, b1Y, W, H - b1Y);
+    ctx.fillRect(0, b0Y, b0X, boxH);
+    ctx.fillRect(b1X, b0Y, W - b1X, boxH);
+
+    // Box label
+    ctx.fillStyle = "#38bdf8";
+    ctx.font = "bold 10px Inter, monospace";
+    ctx.fillText("Feasible Domain [0, 1]²", b0X + 10, b0Y + 20);
+
+    // Unconstrained minimum marker (outside box)
+    const optPx = toPxX(unconstrainedOptimum[0]);
+    const optPy = toPxY(unconstrainedOptimum[1]);
+    ctx.fillStyle = "#f43f5e";
+    ctx.beginPath();
+    ctx.arc(optPx, optPy, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillText("Unconstrained Min (1.35, 1.35)", optPx + 8, optPy + 4);
+
+    // Constrained global optimum (Corner at 1.0, 1.0)
+    const constrPx = toPxX(1.0);
+    const constrPy = toPxY(1.0);
+    ctx.strokeStyle = "#34d399";
+    ctx.fillStyle = "#34d399";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(constrPx, constrPy, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillText("Constrained Target (1.0, 1.0)", constrPx - 160, constrPy - 8);
+
+    // 3. Draw Trajectory Line
+    if (history.length > 1) {
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      history.forEach((st, i) => {
+        const [rx, ry] = repairPoint(st.mean as [number, number], strategy);
+        const mx = toPxX(rx);
+        const my = toPxY(ry);
+        if (i === 0) ctx.moveTo(mx, my);
+        else ctx.lineTo(mx, my);
       });
-    }
-
-    // raw samples
-    ctx.fillStyle = "rgba(248,113,113,0.6)";
-    samples.forEach((s) => {
-      const [x, y] = toPix(s.raw);
-      ctx.beginPath();
-      ctx.arc(x, y, 4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // repaired samples
-    ctx.fillStyle = "rgba(34,211,238,0.9)";
-    samples.forEach((s) => {
-      const [x, y] = toPix(s.fixed);
-      ctx.beginPath();
-      ctx.arc(x, y, 4.6, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // mean marker
-    if (showMean) {
-      const meanRaw: [number, number] = [
-        samples.reduce((a, s) => a + s.raw[0], 0) / samples.length,
-        samples.reduce((a, s) => a + s.raw[1], 0) / samples.length
-      ];
-      const meanFix: [number, number] = [
-        samples.reduce((a, s) => a + s.fixed[0], 0) / samples.length,
-        samples.reduce((a, s) => a + s.fixed[1], 0) / samples.length
-      ];
-      const [rx, ry] = toPix(meanRaw);
-      const [fx, fy] = toPix(meanFix);
-      ctx.strokeStyle = "rgba(244,244,245,0.8)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(rx, ry);
-      ctx.lineTo(fx, fy);
       ctx.stroke();
-      ctx.fillStyle = "#fbbf24";
-      ctx.beginPath();
-      ctx.arc(rx, ry, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#22c55e";
-      ctx.beginPath();
-      ctx.arc(fx, fy, 6, 0, Math.PI * 2);
-      ctx.fill();
     }
-  }, [samples, showMean, showArrows]);
+
+    // 4. Draw Raw vs Repaired Offspring Samples
+    latestState.samples.forEach((s) => {
+      const rawX = s.x[0];
+      const rawY = s.x[1];
+      const [fixX, fixY] = repairPoint([rawX, rawY], strategy);
+
+      const rpx = toPxX(rawX);
+      const rpy = toPxY(rawY);
+      const fpx = toPxX(fixX);
+      const fpy = toPxY(fixY);
+
+      // If point was out of bounds, draw repair ray
+      if (Math.hypot(rpx - fpx, rpy - fpy) > 2) {
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.4)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(rpx, rpy);
+        ctx.lineTo(fpx, fpy);
+        ctx.stroke();
+
+        // Raw sample (Crimson ghost)
+        ctx.fillStyle = "rgba(244, 63, 94, 0.4)";
+        ctx.beginPath();
+        ctx.arc(rpx, rpy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Repaired sample in feasible domain
+      ctx.fillStyle = s.isElite ? "#34d399" : "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(fpx, fpy, s.isElite ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 5. Draw Current Mean
+    const [curMeanFixX, curMeanFixY] = repairPoint(latestState.mean as [number, number], strategy);
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(toPxX(curMeanFixX), toPxY(curMeanFixY), 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }, [latestState, history, strategy]);
 
   return (
-    <div className="glass-card p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-             <Square className="h-4 w-4 text-emerald-400" />
+    <div className="glass-card p-6 md:p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+            <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Constraint Repair</h3>
-             <p className="text-xs text-slate-400">Handling bounds in black-box optimization</p>
+            <h3 className="text-base font-bold text-white font-display">
+              Box Constraint Handling & Boundary Repair
+            </h3>
+            <p className="text-xs text-slate-400">
+              Navigating hard boundary constraints without destroying covariance conditioning
+            </p>
           </div>
         </div>
-        <button
-          onClick={() => setSeed((s) => s + 1)}
-          className="flex items-center gap-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-white/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 transition-colors shadow-sm"
-        >
-          <Shuffle className="h-3.5 w-3.5 opacity-70" /> Resample
-        </button>
+
+        <div className="flex items-center gap-1.5 bg-slate-950/60 p-1.5 rounded-2xl border border-white/10">
+          {(["reflect", "clamp", "logit"] as const).map((strat) => (
+            <button
+              key={strat}
+              onClick={() => setStrategy(strat)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl capitalize transition-all ${
+                strategy === strat
+                  ? "bg-sky-500 text-white shadow-glow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {strat}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
-        What happens when the optimizer suggests points outside the box? Compare strategies to bring them back.
-      </p>
+      <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] items-start">
+        {/* Visualizer Canvas */}
+        <div className="space-y-3">
+          <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
+            <canvas ref={canvasRef} width={SIZE} height={SIZE} className="w-full h-auto block" />
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] items-start">
-        <div className="relative group">
-           <div className="absolute -inset-0.5 bg-gradient-to-br from-emerald-500/20 to-sky-500/20 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-500" />
-           <canvas ref={canvasRef} width={SIZE} height={SIZE} className="relative w-full rounded-xl border border-white/10 bg-[#0B1121] shadow-inner" />
-        </div>
+            {latestState && (
+              <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
+                <div className="text-emerald-400 font-bold">Best f(x): {latestState.bestFitness.toFixed(4)}</div>
+                <div className="text-sky-300">Step σ: {latestState.sigma.toFixed(4)}</div>
+                <div className="text-slate-400">Gen: {generation}/35</div>
+              </div>
+            )}
+          </div>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-3 gap-2">
-            {strategies.map((s) => (
+          {/* Controls Bar */}
+          <div className="flex items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/5">
+            <div className="flex items-center gap-2">
               <button
-                key={s.key}
-                onClick={() => setStrategy(s.key)}
-                className={`rounded-xl border px-3 py-3 text-center text-xs font-semibold transition-all duration-300 ${
-                  strategy === s.key
-                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
-                    : "border-white/5 bg-slate-900/40 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all ${
+                  isPlaying
+                    ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                    : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
                 }`}
               >
-                <div className="mb-1">{s.label}</div>
-                <div className="text-[0.65rem] opacity-70 font-normal">{s.desc}</div>
+                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                <span>{isPlaying ? "Pause" : "Run Evolution"}</span>
               </button>
-            ))}
+
+              <button
+                onClick={stepOptimizer}
+                disabled={isPlaying}
+                className="p-2 rounded-xl bg-slate-900 border border-white/5 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 transition-colors"
+                title="Step 1 Gen"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+
+              <button
+                onClick={() => initOptimizer(strategy)}
+                className="p-2 rounded-xl bg-slate-900 border border-white/5 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Reset"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
+
+            <span className="text-xs font-mono text-slate-400 capitalize">Strategy: {strategy}</span>
+          </div>
+        </div>
+
+        {/* Strategy Comparison Breakdown */}
+        <div className="space-y-3.5 text-xs">
+          <div className={`p-4 rounded-2xl border transition-all ${
+            strategy === "reflect" ? "bg-sky-500/10 border-sky-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
+          }`}>
+            <div className="font-bold uppercase tracking-wider text-[0.7rem] text-sky-300 mb-1">
+              1. Boundary Reflection (Recommended)
+            </div>
+            <p className="leading-relaxed">
+              When samples overshoot bounds (<code className="text-sky-300 font-mono">x &gt; 1</code>), reflect them back into the interior (<code className="text-sky-300 font-mono">2 - x</code>). Preserves kinetic step variance without collapsing covariance eigenvalues.
+            </p>
           </div>
 
-          <div className="space-y-4 bg-slate-950/30 rounded-xl p-4 border border-white/5">
-            <div className="flex items-center justify-between text-sm text-slate-300">
-              <span className="flex items-center gap-2"><Wand2 className="h-4 w-4 text-amber-400" /> Show Mean Shift</span>
-              <Switch
-                checked={showMean}
-                onChange={setShowMean}
-                className={`${showMean ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
-              >
-                 <span className={`${showMean ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
-              </Switch>
+          <div className={`p-4 rounded-2xl border transition-all ${
+            strategy === "clamp" ? "bg-amber-500/10 border-amber-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
+          }`}>
+            <div className="font-bold uppercase tracking-wider text-[0.7rem] text-amber-300 mb-1">
+              2. Hard Clamping / Projection
             </div>
-            <div className="flex items-center justify-between text-sm text-slate-300">
-              <span className="flex items-center gap-2"><Paintbrush className="h-4 w-4 text-sky-400" /> Show Repair Vectors</span>
-              <Switch
-                checked={showArrows}
-                onChange={setShowArrows}
-                className={`${showArrows ? "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.4)]" : "bg-slate-700"} group relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300`}
-              >
-                <span className={`${showArrows ? "translate-x-6" : "translate-x-1"} inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300`} />
-              </Switch>
-            </div>
+            <p className="leading-relaxed">
+              Piles up multiple samples onto the boundary line (<code className="text-amber-300 font-mono">x = 1.0</code>). Wastes degrees of freedom and causes severe covariance matrix condition number degradation along normal vectors.
+            </p>
           </div>
 
-          <div className="rounded-xl bg-slate-900/40 p-4 border border-white/5 text-xs text-slate-400 space-y-2">
-            <div className="font-semibold text-slate-200 flex items-center gap-2">
-               <MoveRight className="h-3.5 w-3.5 text-slate-500" />
-               Analysis
+          <div className={`p-4 rounded-2xl border transition-all ${
+            strategy === "logit" ? "bg-purple-500/10 border-purple-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
+          }`}>
+            <div className="font-bold uppercase tracking-wider text-[0.7rem] text-purple-300 mb-1">
+              3. Logit / Sigmoid Mapping
             </div>
-            <ul className="space-y-1.5 list-disc pl-4 marker:text-slate-600">
-              <li><strong>Clip:</strong> Simplest, but piles samples on the boundary.</li>
-              <li><strong>Reflect:</strong> Preserves density near edges; good default.</li>
-              <li><strong>Logit:</strong> Search in unconstrained space; mathematically cleanest.</li>
-            </ul>
+            <p className="leading-relaxed">
+              Search operates in unbounded <code className="text-purple-300 font-mono">ℝⁿ</code>; a smooth sigmoid <code className="text-purple-300 font-mono">σ(z) = 1/(1+e⁻ᶻ)</code> maps to <code className="text-purple-300 font-mono">(0, 1)</code>. Derivatives vanish near edges, avoiding boundary overshoots naturally.
+            </p>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-function fix([x, y]: [number, number], strat: Strat): [number, number] {
-  if (strat === "clip") return [clamp01(x), clamp01(y)];
-  if (strat === "reflect") return [reflect01(x), reflect01(y)];
-  // logit: assume internal search unbounded; here we just squash
-  return [logitTransform(x * 3 - 1.5), logitTransform(y * 3 - 1.5)];
-}
-
-function toPix([x, y]: [number, number]) {
-  const px = (val: number) => 40 + val * (SIZE - 80);
-  const py = (val: number) => 40 + (1 - val) * (SIZE - 80);
-  return [px(x), py(y)] as [number, number];
 }

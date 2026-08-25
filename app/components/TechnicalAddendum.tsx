@@ -2,179 +2,221 @@
 
 import { MathJax } from "better-react-mathjax";
 import { CovarianceMinimap } from "./CovarianceMinimap";
+import { PracticalPlaybook } from "./PracticalPlaybook";
+import { DLHybrids } from "./DLHybrids";
+import { CommunitySplit } from "./CommunitySplit";
+import {
+  Compass,
+  Layers,
+  Sparkles,
+  ShieldCheck,
+  TrendingDown,
+  Activity,
+  Cpu,
+  RefreshCw,
+  Sigma,
+  BookOpen,
+  ArrowRight
+} from "lucide-react";
 
 export function TechnicalAddendum() {
   return (
-    <div className="prose-cmaes">
-      <p>
-        This is the “OK, but show me the real math and design principles” section, distilled from
-        Hansen & Auger’s long CMA-ES tutorial deck. The central abstraction is simple: you are not
-        optimizing <MathJax inline>{"$f(x)$"}</MathJax> directly; you are optimizing a probability
-        distribution over <MathJax inline>{"$x$"}</MathJax>.
-      </p>
+    <div className="space-y-16">
+      {/* Intro to Theory */}
+      <div className="prose-cmaes">
+        <p className="text-lg text-slate-300 leading-relaxed font-normal">
+          This technical addendum provides the rigorous mathematical foundations of CMA-ES, synthesized from
+          Nikolaus Hansen and Anne Auger’s seminal publications, Akimoto et al.’s information-geometric natural
+          gradient proofs, and practical production engineering considerations.
+        </p>
 
-      <h3>The search distribution</h3>
-      <p>
-        CMA-ES maintains{" "}
-        <MathJax inline>{"$x \\sim \\mathcal{N}(m, \\sigma^2 C)$"}</MathJax> with parameters mean{" "}
-        <MathJax inline>{"$m$"}</MathJax>, scalar step size <MathJax inline>{"$\\sigma$"}</MathJax>,{" "}
-        and covariance <MathJax inline>{"$C$"}</MathJax>. All adaptation happens in this distribution
-        space, not directly in parameter space. The Gaussian is chosen because it is maximum entropy
-        for a given variance, rotationally invariant when isotropic, and analytically convenient.
-      </p>
+        <blockquote className="border-l-4 border-sky-400 bg-slate-900/40 p-5 rounded-r-2xl my-6 text-slate-200 text-base md:text-lg italic leading-relaxed">
+          &ldquo;CMA-ES is not an ad-hoc heuristic. It is the canonical, coordinate-invariant natural gradient
+          step on the Riemannian manifold of multivariate Gaussian distributions.&rdquo;
+        </blockquote>
+      </div>
 
-      <p>
-        Another way to say it: you optimize the <em>distribution</em>, not individual points. That is
-        why the algorithm stays stable under odd objective scalings and why the update lines up with a
-        sampled natural gradient step on the manifold of Gaussians.
-      </p>
+      {/* Chapter 1: The Maximum Entropy Distribution */}
+      <div className="space-y-6">
+        <div className="prose-cmaes">
+          <h2>1. The Search Distribution as an Optimization Object</h2>
+          <p>
+            In classical optimization, one maintains a candidate point <MathJax inline>{"$x \\in \\mathbb{R}^n$"}</MathJax>.
+            In CMA-ES, one maintains a parameterized probability density{" "}
+            <MathJax inline>{"$P_\\theta(x)$"}</MathJax> on <MathJax inline>{"$\\mathbb{R}^n$"}</MathJax>, where{" "}
+            <MathJax inline>{"$\\theta = \\{m, \\sigma, C\\}$"}</MathJax>:
+          </p>
 
-      <div className="mt-4">
+          <MathJax dynamic>
+            {"$$x \\sim \\mathcal{N}(m, \\sigma^2 C) = m + \\sigma \\, \\mathcal{N}(0, C) = m + \\sigma \\, B D \\, \\mathcal{N}(0, I_n)$$"}
+          </MathJax>
+
+          <p>
+            where:
+          </p>
+          <ul>
+            <li><MathJax inline>{"$m \\in \\mathbb{R}^n$"}</MathJax> is the distribution mean (best estimate of optimum).</li>
+            <li><MathJax inline>{"$\\sigma \\in \\mathbb{R}_+$"}</MathJax> is the global scale / step-size.</li>
+            <li><MathJax inline>{"$C \\in \\mathbb{R}^{n \\times n}$"}</MathJax> is a symmetric, positive-definite covariance matrix (<MathJax inline>{"$C = B D^2 B^\\top$"}</MathJax>, where <MathJax inline>{"$B$"}</MathJax> is orthogonal and <MathJax inline>{"$D$"}</MathJax> is diagonal).</li>
+          </ul>
+
+          <p>
+            <strong>Why a Gaussian?</strong> By the Principle of Maximum Entropy, the multivariate normal distribution is the unique distribution that maximizes information entropy for a specified mean and covariance matrix. It represents the <em>least committal prior</em> under second-order ignorance.
+          </p>
+        </div>
+
         <CovarianceMinimap />
       </div>
 
-      <p>
-        Information-geometry lens: maximize expected fitness under a Gaussian while staying invariant
-        to coordinate choices. The natural gradient with the Fisher metric gives exactly the CMA-ES
-        mean/covariance updates (Akimoto et al.), making the algorithm more than a heuristic—it is the
-        canonical move given “I search with a Gaussian.”
-      </p>
+      {/* Chapter 2: Information Geometry & Natural Gradients */}
+      <div className="prose-cmaes space-y-6">
+        <h2>2. Information Geometry & The Sampled Natural Gradient</h2>
 
-      <h3>Invariance as a design principle</h3>
-      <p>
-        CMA-ES is rank-based: only the ordering of{" "}
-        <MathJax inline>{"$f(x_i)$"}</MathJax> matters, so any strictly increasing transform of the
-        objective leaves the trajectory unchanged. With full covariance adaptation it is also
-        invariant to rigid linear transforms of the search space (rotations, reflections,
-        translations). Those invariances make a single benchmark represent a whole equivalence class
-        of problems.
-      </p>
+        <p>
+          Suppose our objective is to maximize the expected fitness under the search distribution:
+        </p>
 
-      <p>
-        Practically this means you can change units, rotate the basis, or cobble together composite
-        scores without breaking the optimizer’s intuition—it will relearn the metric on the fly.
-      </p>
+        <MathJax dynamic>
+          {"$$J(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [-f(x)] = \\int_{\\mathbb{R}^n} -f(x) \\, P_\\theta(x) \\, dx$$"}
+        </MathJax>
 
-      <p>
-        Kriging parallel: kriging builds the best linear unbiased predictor with a Gaussian process;
-        CMA-ES builds the best-behaving Gaussian proposal it can from samples. Both start with
-        maximum-entropy ignorance and let covariance carry the learning burden.
-      </p>
+        <p>
+          Standard Euclidean steepest ascent on <MathJax inline>{"$\\nabla_\\theta J$"}</MathJax> depends arbitrarily on how we parameterize the distribution (e.g. Cholesky vs Eigendecomposition vs Matrix Logarithm).
+        </p>
 
-      <h3>Step-size control (CSA)</h3>
-      <p>
-        The evolution path <MathJax inline>{"$p_\\sigma$"}</MathJax> is an exponentially weighted sum
-        of normalized mean shifts. Under pure random selection it behaves like a random walk with
-        expected length <MathJax inline>{"$\\mathbb{E}|N(0,I)|$"}</MathJax>. CSA compares the empirical
-        length to that expectation and updates
-        <MathJax dynamic>{"$$\\sigma^{(g+1)} = \\sigma^{(g)} \\exp\\left(\\tfrac{c_\\sigma}{d_\\sigma} \\left( \\tfrac{|p_\\sigma^{(g+1)}|}{\\mathbb{E}|N(0,I)|} - 1 \\right) \\right).$$"}</MathJax>
-        Long path → increase <MathJax inline>{"$\\sigma$"}</MathJax>; short path → decrease it.
-      </p>
+        <p>
+          To achieve coordinate invariance, information geometry equips the statistical manifold with the <strong>Fisher Information Metric</strong>:
+        </p>
 
-      <h3>Covariance adaptation</h3>
-      <p>
-        The covariance update blends three pieces:
-      </p>
-        <MathJax dynamic>{"$$C^{(g+1)} = (1 - c_1 - c_\\mu) C^{(g)} + c_1\\, p_c p_c^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i\\, y_{i:\\lambda} y_{i:\\lambda}^\\top$$"}</MathJax>
-      <p>
-        where <MathJax inline>{"$y_{i:\\lambda} = (x_{i:\\lambda} - m^{(g)})/\\sigma^{(g)}$"}</MathJax> are{" "}
-        normalized steps of the top <MathJax inline>{"$\\mu$"}</MathJax> samples and{" "}
-        <MathJax inline>{"$p_c$"}</MathJax> is a cumulated path of mean shifts. The rank‑1 term is an{" "}
-        online PCA of where the mean has been moving; the rank‑
-        <MathJax inline>{"$\\mu$"}</MathJax> term is a weighted covariance of successful steps. On a
-        quadratic <MathJax inline>{"$f(x)=x^\\top H x$"}</MathJax> this drives{" "}
-        <MathJax inline>{"$C \\propto H^{-1}$"}</MathJax>, i.e., it learns an inverse Hessian metric
-        from zero‑order data.
-      </p>
+        <MathJax dynamic>
+          {"$$F(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} \\left[ \\nabla_\\theta \\ln P_\\theta(x) \\, \\nabla_\\theta \\ln P_\\theta(x)^\\top \\right]$$"}
+        </MathJax>
 
-      <p>
-        Active CMA layers in negative weights for clearly bad samples to shrink variance along harmful
-        directions faster, sharpening the short axes while keeping <MathJax inline>{"$C$"}</MathJax>{" "}
-        positive definite.
-      </p>
+        <p>
+          The canonical steepest ascent direction invariant to reparameterization is the <strong>Natural Gradient</strong>:
+        </p>
 
-      <h3>Active covariance and rank‑µ</h3>
-      <p>
-        Using only the best steps is the standard rank‑
-	        <MathJax inline>{"$\\mu$"}</MathJax> update. Active CMA adds negative weights for some of the
-        worst samples to <em>shrink</em> variance along clearly bad directions, sharpening the short
-        axes faster while keeping <MathJax inline>{"$C$"}</MathJax> positive definite.
-      </p>
+        <MathJax dynamic>
+          {"$$\\tilde{\\nabla}_\\theta J(\\theta) = F(\\theta)^{-1} \\nabla_\\theta J(\\theta)$$"}
+        </MathJax>
 
-      <h3>Restarts for multimodality</h3>
-      <p>
-        Multimodal landscapes benefit from restarts. IPOP‑CMA‑ES grows the population size each
-        restart for broader exploration; BIPOP alternates large and small populations so you sweep
-        both global and local regimes without manual tuning.
-      </p>
+        <p>
+          Akimoto et al. and Ollivier et al. demonstrated that when rank-based weights <MathJax inline>{"$w_i$"}</MathJax> are substituted for raw fitness values <MathJax inline>{"$f(x_i)$"}</MathJax>, the CMA-ES mean and covariance updates correspond <em>identically</em> to a sampled natural gradient step on the Gaussian manifold!
+        </p>
+      </div>
 
-      <p>
-        The effect is that you get global sweeps and local refinement without retuning a dozen knobs;
-        it is a big part of why CMA-ES feels close to parameter-free in practice.
-      </p>
+      {/* Chapter 3: Cumulative Step-Size Adaptation (CSA) */}
+      <div className="prose-cmaes space-y-6">
+        <h2>3. Cumulative Step-Size Adaptation (CSA)</h2>
 
-      <h3>Complexity and variants</h3>
-      <p>
-        Full CMA-ES costs <MathJax inline>{"$O(n^2)$"}</MathJax> per evaluation internally. That is
-        negligible when each evaluation is a massive CFD/FEA run but expensive for cheap objectives
-        in high dimensions. Diagonal (sep‑CMA‑ES) and limited‑memory (LM‑CMA) variants trade fidelity
-        for <MathJax inline>{"$O(n)$"}</MathJax> or low‑rank scaling.
-      </p>
+        <p>
+          Adapting step-size <MathJax inline>{"$\\sigma$"}</MathJax> via standard 1/5th success rules fails in non-spherical landscapes. CMA-ES solves this by tracking an exponentially smoothed <strong>evolution path</strong> <MathJax inline>{"$p_\\sigma$"}</MathJax> in whitened coordinate space:
+        </p>
 
-      <p>
-        Rule of thumb: keep full covariance when each sample is precious and geometry learning pays
-        for itself; drop to diagonal/LM when you are in thousands of dimensions with inexpensive
-        evaluations.
-      </p>
+        <MathJax dynamic>
+          {"$$p_\\sigma^{(g+1)} = (1 - c_\\sigma) p_\\sigma^{(g)} + \\sqrt{c_\\sigma (2 - c_\\sigma) \\mu_{\\text{eff}}} \\, C^{(g)^{-1/2}} \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}$$"}
+        </MathJax>
 
-      <h3>Big-picture summary</h3>
-      <ul>
-        <li>Multivariate normal search because it is the least committal distribution with a given variance.</li>
-	        <li>Rank-based selection gives invariance to monotone transforms of <MathJax inline>{"$f$"}</MathJax>.</li>
-	        <li>Step-size control via evolution paths yields near-optimal linear convergence rates.</li>
-	        <li>Covariance adaptation learns a variable metric that approximates <MathJax inline>{"$H^{-1}$"}</MathJax> without gradients.</li>
-      </ul>
-      <p>
-        Problems that were “impossible” for plain evolution strategies become solvable with orders of
-        magnitude fewer evaluations once you add covariance adaptation and good step-size control.
-      </p>
+        <p>
+          Under random selection (a neutral fitness landscape), <MathJax inline>{"$p_\\sigma$"}</MathJax> behaves as a stationary Gaussian process with <MathJax inline>{"$p_\\sigma \\sim \\mathcal{N}(0, I_n)$"}</MathJax>. The expected length of a standard normal vector is:
+        </p>
 
-      <h3>Why this matters beyond toy functions</h3>
-      <p>
-        The same machinery carries over to neural architecture search, physics sims, robotics
-        controllers, and continuous cellular automata scored on “visual interestingness.” When the
-        gradient is missing or misleading, CMA-ES turns scarce evaluations into a learned metric and a
-        reliable walk toward good regions.
-      </p>
+        <MathJax dynamic>
+          {"$$\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\| = \\sqrt{2}\\, \\frac{\\Gamma((n+1)/2)}{\\Gamma(n/2)} \\approx \\sqrt{n} \\left(1 - \\frac{1}{4n} + \\frac{1}{21n^2}\\right)$$"}
+        </MathJax>
 
-      <h3>Where this came from</h3>
-      <p>
-        CMA-ES descends from the German evolution-strategies line (Rechenberg/Schwefel) and sits
-        next to genetic algorithms: small populations, Gaussian mutations, self-adapting strategy
-        parameters instead of crossover on bitstrings. The key leap was to treat the <em>search
-        distribution</em> as the optimization object and let symmetry/invariance drive the design:
-        start isotropic, learn anisotropy from data. That’s close in spirit to kriging/geostatistics:
-        begin with a maximum-entropy prior, then bend it with evidence. It’s also kin to
-        estimation-of-distribution and cross-entropy methods, all phrased as “fit a distribution to
-        elites.”
-      </p>
+        <p>
+          CSA compares the empirical path length <MathJax inline>{"$\\|p_\\sigma^{(g+1)}\\|$"}</MathJax> to its expectation under random selection:
+        </p>
 
-      <h3>Two communities that mostly ignore each other</h3>
-      <p>
-        There is a long-running black-box optimization community (GECCO and friends) with its own
-        language, benchmarks, and heroes. The deep learning world (NeurIPS, ICML) often rediscovers the
-        same ideas with new names. Projects like Le Jepa overlap with CMA-ES thinking, but the two ships
-        still pass in the night. Bridging them is low-hanging fruit.
-      </p>
+        <MathJax dynamic>
+          {"$$\\sigma^{(g+1)} = \\sigma^{(g)} \\exp\\left( \\frac{c_\\sigma}{d_\\sigma} \\left( \\frac{\\|p_\\sigma^{(g+1)}\\|}{\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\|} - 1 \\right) \\right)$$"}
+        </MathJax>
 
-      <h3>Why it still matters with modern AI</h3>
-      <p>
-        You can bolt CMA-ES onto things that have no clean gradients or where the gradients tell you the
-        wrong story. Example: evolving continuous cellular automata for “visual interestingness” and
-        spatial complexity; define a scalar score, wire up the parameters that drive your CA, and let the
-        optimizer roam. The same pattern applies to neural architecture search, physics sims, robotics
-        controllers, and any case where each evaluation is expensive but you still need to search.
-      </p>
+        <ul>
+          <li><strong>Consistently aligned steps:</strong> <MathJax inline>{"$\\|p_\\sigma\\| > \\mathbb{E}\\|\\mathcal{N}(0, I)\\|$"}</MathJax> <MathJax inline>{"$\\implies \\sigma$"}</MathJax> increases (accelerates across flat valleys).</li>
+          <li><strong>Oscillating / Canceling steps:</strong> <MathJax inline>{"$\\|p_\\sigma\\| < \\mathbb{E}\\|\\mathcal{N}(0, I)\\|$"}</MathJax> <MathJax inline>{"$\\implies \\sigma$"}</MathJax> decreases (precision zoom into local minima).</li>
+        </ul>
+      </div>
+
+      {/* Chapter 4: Covariance Adaptation Derivation */}
+      <div className="prose-cmaes space-y-6">
+        <h2>4. Covariance Matrix Adaptation (Rank-1 & Rank-µ Updates)</h2>
+
+        <p>
+          The full covariance update blends three distinct mechanisms:
+        </p>
+
+        <MathJax dynamic>
+          {"$$C^{(g+1)} = (1 - c_1 - c_\\mu) C^{(g)} + c_1 \\underbrace{p_c^{(g+1)} {p_c^{(g+1)}}^\\top}_{\\text{Rank-1 update}} + c_\\mu \\underbrace{\\sum_{i=1}^{\\mu} w_i y_{i:\\lambda}^{(g+1)} {y_{i:\\lambda}^{(g+1)}}^\\top}_{\\text{Rank-}\\mu \\text{ update}} + \\underbrace{\\Delta C_{\\text{active}}}_{\\text{Active Negative Weights}}$$"}
+        </MathJax>
+
+        <p>
+          where <MathJax inline>{"$y_{i:\\lambda} = (x_{i:\\lambda} - m^{(g)}) / \\sigma^{(g)}$"}</MathJax> and <MathJax inline>{"$p_c$"}</MathJax> is the cumulated evolution path in parameter coordinates:
+        </p>
+
+        <MathJax dynamic>
+          {"$$p_c^{(g+1)} = (1 - c_c) p_c^{(g)} + h_\\sigma \\sqrt{c_c (2 - c_c) \\mu_{\\text{eff}}} \\, \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}$$"}
+        </MathJax>
+
+        <ul>
+          <li><strong>Rank-1 Update (<MathJax inline>{"$c_1$"}</MathJax>):</strong> Exploits correlations between consecutive generations. It acts like an online Principal Component Analysis (PCA) of the trajectory of the mean.</li>
+          <li><strong>Rank-<MathJax inline>{"$\\mu$"}</MathJax> Update (<MathJax inline>{"$c_\\mu$"}</MathJax>):</strong> Exploits intra-generation variance among the top <MathJax inline>{"$\\mu$"}</MathJax> elite points in the current batch. Crucial for large populations.</li>
+          <li><strong>Active CMA (<MathJax inline>{"$\\Delta C_{\\text{active}}$"}</MathJax>):</strong> Uses negative weights on the worst <MathJax inline>{"$\\mu$"}</MathJax> offspring to actively shrink variance along harmful directions.</li>
+        </ul>
+      </div>
+
+      {/* Chapter 5: Invariance Properties */}
+      <div className="prose-cmaes space-y-6">
+        <h2>5. Fundamental Invariance Properties</h2>
+
+        <p>
+          A core reason CMA-ES is considered mathematically &ldquo;complete&rdquo; under black-box assumptions is its dual invariance:
+        </p>
+
+        <div className="grid gap-4 not-prose my-6 sm:grid-cols-2">
+          <div className="glass-card p-5 border-white/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-300">
+              <ShieldCheck className="h-4 w-4" />
+              <span>Order Invariance</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Invariance to strictly increasing transformations of the objective function:
+            </p>
+            <div className="font-mono text-xs text-sky-300 bg-slate-950/60 p-2 rounded-lg border border-white/5">
+              <MathJax dynamic>{"$$\\forall g: \\mathbb{R} \\to \\mathbb{R}, \\quad g'(x) > 0 \\implies \\arg\\min f(x) = \\arg\\min (g \\circ f)(x)$$"}</MathJax>
+            </div>
+            <p className="text-[0.7rem] text-slate-400">
+              Units, scalings, logarithmic rewards, or cutoff bounds do not alter the optimization trajectory in any way.
+            </p>
+          </div>
+
+          <div className="glass-card p-5 border-white/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300">
+              <Compass className="h-4 w-4" />
+              <span>Affine Coordinate Invariance</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Invariance to rigid linear transformations of the search space:
+            </p>
+            <div className="font-mono text-xs text-emerald-300 bg-slate-950/60 p-2 rounded-lg border border-white/5">
+              <MathJax dynamic>{"$$y = A x + b, \\quad A \\in \\text{GL}(n, \\mathbb{R})$$"}</MathJax>
+            </div>
+            <p className="text-[0.7rem] text-slate-400">
+              Rotating, translating, or scaling coordinates leaves the algorithm behavior invariant once covariance adapts.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Practical Playbook Integration */}
+      <PracticalPlaybook />
+
+      {/* Deep Learning & Creative Hybrids */}
+      <DLHybrids />
+
+      {/* Community Split */}
+      <CommunitySplit />
     </div>
   );
 }

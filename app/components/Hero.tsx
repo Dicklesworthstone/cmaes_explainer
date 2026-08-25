@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wand2, Cpu } from "lucide-react";
+import { Wand2, Cpu, Sparkles, Compass, ArrowDownRight, Layers, BarChart3 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -45,32 +45,34 @@ export function Hero() {
   }, [prefersReducedMotion]);
 
   return (
-    <section className="relative overflow-hidden pt-12 pb-20 lg:pt-24 lg:pb-32">
+    <section className="relative overflow-hidden pt-8 pb-16 lg:pt-16 lg:pb-28">
+      {/* Dynamic ambient backdrops */}
       <div
         ref={gradientRef}
         className="pointer-events-none absolute inset-0 bg-radial-soft mix-blend-screen opacity-60"
       />
-
-      <div className="pointer-events-none absolute -right-20 top-10 h-64 w-64 rounded-full bg-sky-500/10 blur-[100px]" />
-      <div className="pointer-events-none absolute -left-12 top-40 h-64 w-64 rounded-full bg-emerald-500/10 blur-[100px]" />
+      <div className="pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-sky-500/15 blur-[120px]" />
+      <div className="pointer-events-none absolute -left-12 top-40 h-80 w-80 rounded-full bg-indigo-500/15 blur-[120px]" />
+      <div className="pointer-events-none absolute left-1/3 top-1/2 h-64 w-64 rounded-full bg-emerald-500/10 blur-[100px]" />
 
       <div className="mx-auto flex max-w-7xl flex-col gap-12 px-6 sm:gap-16 lg:flex-row lg:items-center">
+        {/* Left Column: Pedagogical Thesis & Call to Action */}
         <div className="relative z-10 max-w-2xl space-y-8">
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-500/10 px-3.5 py-1.5 text-xs font-medium text-sky-200 shadow-[0_0_10px_rgba(14,165,233,0.15)] backdrop-blur-sm"
+            className="inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-gradient-to-r from-sky-500/10 via-cyan-500/10 to-indigo-500/10 px-4 py-1.5 text-xs font-semibold text-sky-200 shadow-[0_0_15px_rgba(14,165,233,0.2)] backdrop-blur-md"
           >
-            <Cpu className="h-3.5 w-3.5" />
-            <span>Derivative-free • Geometry-aware • Surprisingly elegant</span>
+            <Sparkles className="h-3.5 w-3.5 text-cyan-300 animate-pulse" />
+            <span>Interactive Explorable • Derivations • Live Simulations</span>
           </motion.div>
 
           <motion.h1
             initial={prefersReducedMotion ? false : { opacity: 0, y: 14 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.1 }}
-            className="text-balance font-display text-5xl font-bold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl drop-shadow-lg"
+            className="text-balance font-display text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-6xl lg:text-7xl drop-shadow-lg"
           >
             CMA-ES: <br />
             <span className="bg-gradient-to-r from-sky-300 via-cyan-200 to-amber-100 bg-clip-text text-transparent">
@@ -78,25 +80,29 @@ export function Hero() {
             </span>
           </motion.h1>
 
-          <div className="space-y-6 text-lg leading-relaxed text-slate-300">
+          <div className="space-y-4 text-base sm:text-lg leading-relaxed text-slate-300">
             <motion.p
               initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
               animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               transition={{ duration: 0.75, delay: 0.2 }}
               className="text-balance max-w-xl"
             >
-              If you have gradients, use them. But when gradients don’t exist—like in aircraft wing design, bridge engineering, or neural architecture search—<strong className="text-sky-100 font-semibold">CMA-ES quietly shines.</strong>
+              If you have cheap, smooth gradients, use Adam or SGD. But when gradients{" "}
+              <strong className="text-sky-200 font-semibold">do not exist, lie, or cost hours per evaluation</strong>
+              —like aircraft aerodynamics, suspension bridge FEA, or discrete neural architecture search—CMA-ES is the undisputed gold standard.
             </motion.p>
+
             <motion.p
               initial={prefersReducedMotion ? false : { opacity: 0, y: 10 }}
               animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               transition={{ duration: 0.75, delay: 0.25 }}
-              className="text-balance max-w-xl text-base text-slate-400"
+              className="text-balance max-w-xl text-sm sm:text-base text-slate-400"
             >
-              This is a walkthrough of why it works, how it morphs a Gaussian into an inverse-Hessian stand‑in, and how to run it yourself without touching a single derivative.
+              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong> and iteratively morphs its mean and covariance matrix to mirror the objective&apos;s inverse Hessian—learning the curvature of the landscape without a single derivative.
             </motion.p>
           </div>
 
+          {/* Interactive CTAs */}
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
@@ -105,58 +111,86 @@ export function Hero() {
           >
             <a
               href="#what-is-cmaes"
-              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-sky-500 px-6 py-3 text-sm font-bold text-white shadow-[0_0_20px_rgba(14,165,233,0.3)] transition-all duration-300 hover:bg-sky-400 hover:scale-105 hover:shadow-[0_0_30px_rgba(14,165,233,0.5)] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_25px_rgba(14,165,233,0.4)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_35px_rgba(14,165,233,0.6)] focus:outline-none focus:ring-2 focus:ring-sky-400"
             >
-              <span className="relative z-10 flex items-center gap-2">
-                <Wand2 className="h-4 w-4" />
-                Start the explainer
-              </span>
-              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
+              <Compass className="h-4 w-4 transition-transform group-hover:rotate-45" />
+              <span>Explore Chapter 1: The Core Idea</span>
             </a>
+
             <a
               href="#live-demo"
-              className="group inline-flex items-center justify-center gap-2 rounded-full border border-slate-700 bg-slate-900/40 px-6 py-3 text-sm font-medium text-slate-200 backdrop-blur-sm transition-all duration-300 hover:border-emerald-500/50 hover:bg-slate-900/60 hover:text-white hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+              className="group inline-flex items-center justify-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/60 px-6 py-3.5 text-sm font-medium text-slate-200 backdrop-blur-md transition-all duration-300 hover:border-emerald-500/50 hover:bg-slate-900/90 hover:text-white hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] group-hover:shadow-[0_0_12px_#34d399]" />
-              Skip to live demo
+              <span>Launch Live Playground</span>
             </a>
           </motion.div>
 
+          {/* Micro-Features Row */}
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="mt-8 grid max-w-lg grid-cols-1 gap-4 sm:grid-cols-2"
+            className="grid max-w-xl grid-cols-1 gap-3.5 sm:grid-cols-3 pt-2"
           >
-            <div className="glass-card p-4">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Designed for</div>
-              <div className="mt-1.5 text-sm font-semibold text-slate-200 leading-snug">
-                Expensive simulations, weird search spaces, no gradients
+            <div className="glass-card p-3.5 border-white/5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-300">
+                <Layers className="h-3.5 w-3.5 text-sky-400" />
+                <span>Zero Gradients</span>
+              </div>
+              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
+                Only needs function evaluations; invariant to monotone scaling.
               </div>
             </div>
-            <div className="glass-card p-4">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Powered by</div>
-              <div className="mt-1.5 text-sm font-semibold text-slate-200 leading-snug">
-                Rust CMA-ES cores for browser + Python, plus live WASM demo
+
+            <div className="glass-card p-3.5 border-white/5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
+                <Compass className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Learns Geometry</span>
+              </div>
+              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
+                Covariance stretches along valleys and shrinks across ridges.
+              </div>
+            </div>
+
+            <div className="glass-card p-3.5 border-white/5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-300">
+                <Cpu className="h-3.5 w-3.5 text-purple-400" />
+                <span>WASM + Rust Core</span>
+              </div>
+              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
+                Production-grade SIMD speed in browser and Python.
               </div>
             </div>
           </motion.div>
         </div>
 
+        {/* Right Column: Interactive 3D Covariance Stage */}
         <motion.div
           initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.95 }}
           animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
           transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
-          className="relative z-0 mt-12 flex-1 lg:mt-0 lg:ml-12"
+          className="relative z-0 flex-1 lg:ml-6"
         >
-          <div className="relative aspect-square max-h-[500px] w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-900/30 shadow-2xl backdrop-blur-sm">
+          <div className="relative aspect-square max-h-[540px] w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60 shadow-[0_20px_70px_rgba(0,0,0,0.7)] backdrop-blur-md">
             <CovarianceScene />
-            <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_100px_rgba(2,6,23,0.6)]" />
-            <div className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/5 bg-slate-950/60 p-4 backdrop-blur-md">
-               <p className="text-xs text-slate-300 leading-relaxed">
-                <strong className="text-sky-300">Interactive:</strong> The glowing ellipsoid is the current covariance matrix; points are sampled candidate designs. As CMA-ES learns the landscape, the ellipsoid tilts and shrinks into the optimal valley.
-              </p>
+            
+            {/* Soft edge vignette */}
+            <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(2,6,23,0.8)]" />
+          </div>
+
+          <div className="mt-3 flex items-center justify-between px-2 text-[0.75rem] text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+              <span>Interactive 3D Simulation • Drag to rotate camera • Scrub timeline</span>
             </div>
+            <a
+              href="#technical-addendum"
+              className="text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 font-medium transition-colors"
+            >
+              <span>See the Math</span>
+              <ArrowDownRight className="h-3 w-3" />
+            </a>
           </div>
         </motion.div>
       </div>

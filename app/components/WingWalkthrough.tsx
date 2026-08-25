@@ -1,111 +1,191 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { MathJax } from "better-react-mathjax";
 import { WingViz } from "./WingViz";
+import {
+  Compass,
+  ArrowRight,
+  ChevronRight,
+  ChevronLeft,
+  Sparkles,
+  Layers,
+  Activity,
+  Cpu,
+  RefreshCw,
+  TrendingDown
+} from "lucide-react";
 
 export function WingWalkthrough() {
+  const [activeStep, setActiveStep] = useState(0);
+
   const steps = [
     {
-      title: "State of CMA-ES",
-      text: `Keep a mean m ∈ ℝ³, step size σ, covariance C ∈ ℝ^{3×3}, and two evolution paths p_σ, p_c. Pick a population λ and elite size μ with weights w₁…w_μ. For the toy wing start at m⁰ = (0.5,0.5,0.5), σ⁰ = 0.3, C⁰ = I, p_σ = p_c = 0.`
+      step: 1,
+      title: "Initial State & Normalization",
+      subtitle: "Center the Gaussian prior in the unit box [0,1]³",
+      math: "m^{(0)} = (0.5, 0.5, 0.5)^\\top, \\quad \\sigma^{(0)} = 0.3, \\quad C^{(0)} = I_3",
+      desc: "All physical ranges are mapped linearly into the unit cube: Aspect Ratio (6 to 14) → [0, 1], Sweep (0° to 40°) → [0, 1], and Airfoil Family Index (5 discrete bins) → [0, 1]. Starting with C = I ensures our initial ignorance is completely isotropic.",
+      tag: "Setup"
     },
     {
-      title: "Generation 1: blind exploration",
-      text: `Sample λ points x_i ~ 𝒩(m⁰, (σ⁰)² C⁰). Map back to physical wing parameters, quantize the airfoil index, run CFD, get scores f(x_i). Rank, take a weighted average of the best μ to get m¹, record the shift Δm = m¹ − m⁰.`
+      step: 2,
+      title: "Generation 1: Blind Exploration",
+      subtitle: "Sample λ offspring & run expensive CFD",
+      math: "x_i^{(1)} \\sim \\mathcal{N}(m^{(0)}, (\\sigma^{(0)})^2 I_3), \\quad i = 1, \\dots, \\lambda",
+      desc: "Sample λ = 12 candidate wings. For each vector: decode to physical NACA parameters, build the 3D surface mesh, run multi-regime CFD, and compute the blended aerodynamic score f(x_i). Sort samples by rank.",
+      tag: "Sampling"
     },
     {
-      title: "Evolution paths",
-      text: `Feed the normalized step into p_σ (in C-whitened coords) and into p_c (in original coords). If the mean keeps moving in one direction, paths grow; if it jitters, they shrink. These paths are the memory that lets the updates stay data-efficient.`
+      step: 3,
+      title: "Recombination & Mean Shift",
+      subtitle: "Move mean toward the weighted top μ elites",
+      math: "m^{(1)} = \\sum_{i=1}^{\\mu} w_i x_{i:\\lambda}^{(1)}, \\quad \\Delta m = m^{(1)} - m^{(0)}",
+      desc: "Compute the new center of mass as a weighted average of the best μ = 4 wings. The shift Δm represents the empirical direction of positive aerodynamic progress.",
+      tag: "Recombination"
     },
     {
-      title: "Covariance adaptation",
-      text: `Update C with a rank‑1 term from p_c p_cᵀ and a rank‑μ term from deviations of the top μ. Good directions stretch; bad ones shrink. This is online PCA of successful steps, turning the ellipsoid into a rotated cigar along safe directions.`
+      step: 4,
+      title: "Accumulating Evolution Paths",
+      subtitle: "Track momentum for step size (p_σ) and covariance (p_c)",
+      math: "p_\\sigma \\leftarrow (1-c_\\sigma) p_\\sigma + \\sqrt{c_\\sigma(2-c_\\sigma)\\mu_{\\text{eff}}}\\, C^{-1/2} \\frac{\\Delta m}{\\sigma}",
+      desc: "The path p_σ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, p_σ grows long (telling the optimizer to expand σ). If steps oscillate or jitter, p_σ shrinks.",
+      tag: "Memory"
     },
     {
-      title: "Step-size control",
-      text: `Compare |p_σ| to the expected length of a random walk under 𝒩(0,I). If it is longer, increase σ; if shorter, decrease σ. That is cumulative step-size adaptation (CSA).`
+      step: 5,
+      title: "Covariance Adaptation (Rank-1 & Rank-μ)",
+      subtitle: "Stretch the ellipsoid along safe aerodynamic ridges",
+      math: "C^{(1)} = (1 - c_1 - c_\\mu) C^{(0)} + c_1 p_c p_c^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i y_i y_i^\\top",
+      desc: "Rank-1 updates elongate C along the historical momentum path p_c. Rank-μ updates align the ellipsoid with the spread of the current elite cloud. The Gaussian morphs from a sphere into an elongated cigar.",
+      tag: "Adaptation"
     },
     {
-      title: "Generations 5–15: learning the geometry",
-      text: `After a few batches of CFD, the mean moves into a promising region, σ shrinks, and C elongates along “safe” directions (e.g., aspect ratio and sweep together) while squeezing dangerous ones. By generation ~15 you are in local refinement with a skinny, well oriented ellipsoid.`
+      step: 6,
+      title: "Generations 5–15: Geometry Learning",
+      subtitle: "Approximating the transonic inverse Hessian H⁻¹",
+      math: "C \\approx H^{-1}_{\\text{aero}}, \\quad \\sigma \\text{ automatically contracts}",
+      desc: "After several CFD batches, CMA-ES discovers that increasing aspect ratio while simultaneously increasing sweep angle is benign, whereas increasing aspect ratio with zero sweep causes severe shock stall. The ellipsoid aligns perfectly with the benign diagonal ridge.",
+      tag: "Curvature"
     },
     {
-      title: "Restarts when you need global search",
-      text: `If progress stalls or you suspect multiple basins, restart CMA‑ES with a larger population (IPOP) or alternate big and small populations (BIPOP). You keep the same encode/decode trick; everything stays in [0,1]³ with categories carved into intervals; the restart policy trades exploration for exploitation automatically.`
+      step: 7,
+      title: "Local Refinement & Restarts",
+      subtitle: "Precision convergence and IPOP/BIPOP global sweeps",
+      math: "\\sigma \\to 10^{-4}, \\quad x^* = \\arg\\max L/D",
+      desc: "In late generations, σ shrinks to micro-scale, performing tight precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, IPOP/BIPOP restarts with doubled population size automatically.",
+      tag: "Convergence"
     }
   ];
 
   return (
-    <div className="prose-cmaes space-y-6">
-      <p>
-        Let’s simplify the wing to just three normalized parameters{" "}
-        <MathJax inline>{"$x_1, x_2, x_3 \\in [0,1]$"}</MathJax>: aspect ratio, sweep, and an airfoil
-        family index. Physical ranges map linearly into the unit cube; the categorical airfoil index
-        is carved into five sub-intervals and later quantized. Normalizing like this keeps the
-        initial Gaussian honest; every direction starts equally plausible. The real pipeline would
-        be hours of meshing + CFD per point, so every generation has to count — that’s the regime
-        where CMA-ES earns its keep.
-      </p>
+    <div className="space-y-10">
+      <div className="prose-cmaes">
+        <p className="text-lg text-slate-300 leading-relaxed">
+          Let&apos;s trace CMA-ES in slow motion through a concrete engineering challenge: designing an optimal
+          transonic aircraft wing in three design dimensions{" "}
+          <MathJax inline>{"$x_1, x_2, x_3 \\in [0, 1]$"}</MathJax>.
+        </p>
 
-      <p>
-        The rhythm looks like this: sample a batch, run the expensive simulator, rank, and update.
-        The evolving ellipsoid is an online PCA of “what worked,” steadily aligning to benign
-        directions (e.g., sweep + aspect ratio together) and squeezing dangerous ones (high aspect
-        ratio with low sweep). By the mid-game generations you’ve converted ignorance into a tailored
-        metric without ever seeing a gradient.
-      </p>
-
-      <div className="space-y-6">
-        <div className="bg-slate-900/30 border border-white/5 rounded-xl p-5">
-          <h3 className="font-semibold text-slate-100 mb-3 text-sm flex items-center gap-2">
-             <span className="w-1 h-4 bg-emerald-500 rounded-full" />
-             Practical Tricks
-          </h3>
-          <ul className="space-y-2 text-slate-300 text-sm list-disc pl-4 marker:text-emerald-500">
-            <li>Reflect or squash out-of-bounds samples rather than rejecting them to keep data flowing.</li>
-            <li>Quantize categorical dimensions as late as possible so the search stays continuous.</li>
-            <li>Keep seeds and ask/tell logs so you can replay a run; determinism makes debugging sane.</li>
-          </ul>
-        </div>
+        <p>
+          Every single CFD evaluation costs hours of supercomputer meshing. Every generation must extract
+          maximal geometric information about which combinations of aspect ratio, sweep, and camber yield high
+          lift-to-drag (<MathJax inline>{"$L/D$"}</MathJax>) while avoiding structural failure.
+        </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] items-start mt-12">
-        <div className="space-y-4">
-          {steps.map((s, i) => (
-            <motion.div
-              key={s.title}
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.5, delay: i * 0.05 }}
-              className="glass-card p-5 hover:border-sky-500/30 transition-colors group"
-            >
-              <div className="mb-2 text-xs font-bold text-sky-200 uppercase tracking-wider flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-[0.6rem] text-sky-400 font-mono">
-                   {i + 1}
-                </span>
-                {s.title}
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed group-hover:text-slate-200 transition-colors">
-                <MathJax dynamic>{s.text}</MathJax>
+      {/* 3D Interactive Wing Wind Tunnel Component */}
+      <WingViz />
+
+      {/* Step-by-Step Interactive Slow Motion Scrubber */}
+      <div className="glass-card p-6 md:p-8 space-y-6 border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+              <Compass className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white font-display">
+                CMA-ES Generation Lifecycle in Slow Motion
+              </h3>
+              <p className="text-xs text-slate-400">
+                Click through the 7 algorithmic phases to understand the internal linear algebra
               </p>
-            </motion.div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+              disabled={activeStep === 0}
+              className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="font-mono text-xs text-sky-300 px-3 py-1 bg-sky-500/10 rounded-lg border border-sky-500/20">
+              Step {activeStep + 1} of {steps.length}
+            </span>
+            <button
+              onClick={() => setActiveStep((prev) => Math.min(steps.length - 1, prev + 1))}
+              disabled={activeStep === steps.length - 1}
+              className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Step Navigation Tabs */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+          {steps.map((s, idx) => (
+            <button
+              key={s.step}
+              onClick={() => setActiveStep(idx)}
+              className={`p-2.5 rounded-xl text-left border transition-all ${
+                activeStep === idx
+                  ? "bg-sky-500/15 border-sky-500/50 text-white shadow-glow-sm"
+                  : "bg-slate-950/40 border-white/5 text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+              }`}
+            >
+              <div className="text-[0.65rem] font-mono text-sky-400 font-bold uppercase">Phase {s.step}</div>
+              <div className="text-xs font-semibold truncate mt-0.5">{s.tag}</div>
+            </button>
           ))}
         </div>
-        <div className="lg:sticky lg:top-24">
-           <WingViz />
-        </div>
-      </div>
 
-      <p className="mt-6">
-        The important part is what we <em>don’t</em> assume. We never assume the objective is convex
-        or even smooth. We just assume that sampling around the current mean and steering the
-        covariance toward where good things have happened in the past is a reasonable meta-strategy.
-        CMA-ES is the formalization of that idea with careful math underneath: invariance from
-        rank-based selection, natural-gradient flavored updates in distribution space, and restart
-        policies (IPOP/BIPOP) when you need to sweep multiple basins.
-      </p>
+        {/* Active Step Showcase Card */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeStep}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-2xl bg-slate-950/60 p-6 border border-white/10 space-y-4 shadow-inner"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-bold text-white font-display flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 flex items-center justify-center text-xs font-mono">
+                    {steps[activeStep].step}
+                  </span>
+                  <span>{steps[activeStep].title}</span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">{steps[activeStep].subtitle}</p>
+              </div>
+
+              <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs font-mono">
+                <MathJax dynamic>{`$${steps[activeStep].math}$`}</MathJax>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed pt-2 border-t border-white/5">
+              {steps[activeStep].desc}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

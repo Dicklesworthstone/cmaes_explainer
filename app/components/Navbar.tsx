@@ -93,7 +93,7 @@ export function Navbar() {
               <span className="hidden xl:inline">Source</span>
             </a>
             <a
-              href="#"
+              href="#live-demo"
               className="flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-all hover:bg-sky-400 hover:scale-105"
             >
               <Rocket className="h-3 w-3" />

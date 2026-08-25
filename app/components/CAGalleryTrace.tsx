@@ -1,189 +1,293 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, RouteIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Sparkles, Play, Pause, RotateCcw, Sliders, Activity, Compass, Flame } from "lucide-react";
+import { CMAESOptimizer } from "../lib/cmaesEngine";
 
-const SIZE = 96;
-const GRID = 5; // grid of thumbnails
-const STEPS = GRID * GRID; // 25
+const GRID_SIZE = 64;
 
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (1664525 * s + 1013904223) >>> 0;
-    return s / 0xffffffff;
-  };
-}
+// Continuous Cellular Automata simulation step (Lenia / Neural CA hybrid)
+function stepCA(
+  grid: Float32Array,
+  next: Float32Array,
+  mu: number,
+  sigma: number,
+  dt = 0.15
+): number {
+  const n = GRID_SIZE;
+  let totalEntropy = 0;
 
-// Simulate a simple CA and return a single RGBA snapshot for the given params
-// keeping the output length exactly width*height*4 to avoid ImageData errors.
-function simulateCA(params: [number, number, number], seed = 1) {
-  const n = SIZE;
-  const rand = rng(seed);
-  let state = new Float32Array(n * n);
-  for (let i = 0; i < state.length; i++) state[i] = rand() > 0.9 ? 1 : 0;
-
-  const [k1, k2, blend] = params;
-  const kernel = [
-    0.05 * k1,
-    0.1 * k2,
-    0.05 * k1,
-    0.1 * k2,
-    0.4,
-    0.1 * k2,
-    0.05 * k1,
-    0.1 * k2,
-    0.05 * k1
-  ];
-
-  let snapshot: Uint8ClampedArray | null = null;
-  for (let step = 0; step < 40; step++) {
-    const next = new Float32Array(n * n);
-    for (let y = 0; y < n; y++) {
-      for (let x = 0; x < n; x++) {
-        let acc = 0;
-        let idx = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const xx = (x + dx + n) % n;
-            const yy = (y + dy + n) % n;
-            acc += kernel[idx++] * state[yy * n + xx];
-          }
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      // 3x3 Moore neighborhood convolution
+      let sum = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const xx = (x + dx + n) % n;
+          const yy = (y + dy + n) % n;
+          sum += grid[yy * n + xx];
         }
-        const activated = 1 / (1 + Math.exp(-4 * (acc - 0.5)));
-        const mixed = state[y * n + x] * (1 - blend) + activated * blend;
-        next[y * n + x] = mixed;
       }
-    }
-    state = next;
-    if (step === 36) {
-      const img = new Uint8ClampedArray(n * n * 4);
-      for (let i = 0; i < n * n; i++) {
-        const v = state[i];
-        const c = Math.floor(255 * v);
-        img[i * 4 + 0] = c;
-        img[i * 4 + 1] = Math.floor(255 * Math.pow(v, 0.6));
-        img[i * 4 + 2] = 255 - c;
-        img[i * 4 + 3] = 255;
+      const avg = sum / 8;
+
+      // Bell-shaped growth mapping G(avg; mu, sigma) = 2 * exp(-(avg - mu)^2 / (2*sigma^2)) - 1
+      const dist = (avg - mu) / Math.max(1e-4, sigma);
+      const growth = 2 * Math.exp(-0.5 * dist * dist) - 1;
+
+      // State update
+      const cur = grid[y * n + x];
+      const updated = Math.max(0, Math.min(1, cur + dt * growth));
+      next[y * n + x] = updated;
+
+      // Compute spatial entropy/complexity
+      if (updated > 0.05 && updated < 0.95) {
+        totalEntropy += 1;
       }
-      snapshot = img;
     }
   }
-  return snapshot ?? new Uint8ClampedArray(n * n * 4);
-}
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t;
+  return totalEntropy / (n * n);
 }
 
 export function CAGalleryTrace() {
-  const [pathT, setPathT] = useState(0.6);
-  const [seed, setSeed] = useState(3);
+  const [mu, setMu] = useState(0.28); // Growth center
+  const [sigma, setSigma] = useState(0.045); // Growth width
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [entropy, setEntropy] = useState(0.35);
 
-  const path = useMemo(() => {
-    // CMA-ES like path from random corners to clustered region
-    const pts: [number, number, number][] = [];
-    const start: [number, number, number] = [0.2, 0.8, 0.6];
-    const end: [number, number, number] = [0.55, 0.45, 0.28];
-    for (let i = 0; i < STEPS; i++) {
-      const t = i / (STEPS - 1);
-      pts.push([
-        lerp(start[0], end[0], t),
-        lerp(start[1], end[1], t * (0.6 + 0.4 * pathT)),
-        lerp(start[2], end[2], t)
-      ]);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optGen, setOptGen] = useState(0);
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const gridStateRef = useRef<{ current: Float32Array; next: Float32Array }>({
+    current: new Float32Array(GRID_SIZE * GRID_SIZE),
+    next: new Float32Array(GRID_SIZE * GRID_SIZE)
+  });
+
+  // Seed random initial soup
+  const resetGrid = useCallback(() => {
+    const arr = gridStateRef.current.current;
+    for (let i = 0; i < arr.length; i++) {
+      arr[i] = Math.random() > 0.75 ? Math.random() : 0;
     }
-    return pts;
-  }, [pathT]);
-
-  const snapshots = useMemo(() => path.map((p, i) => simulateCA(p, seed + i)), [path, seed]);
-
-  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  }, []);
 
   useEffect(() => {
-    snapshots.forEach((img, idx) => {
-      const canvas = canvasRefs.current[idx];
+    resetGrid();
+  }, [resetGrid]);
+
+  // Main Continuous CA animation loop
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      const { current, next } = gridStateRef.current;
+      const ent = stepCA(current, next, mu, sigma);
+      gridStateRef.current.current = next;
+      gridStateRef.current.next = current;
+      setEntropy(ent);
+
+      // Render to canvas
+      const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const arr = new Uint8ClampedArray(img.length);
-      arr.set(img as unknown as ArrayLike<number>);
-      const imageData = new ImageData(arr, SIZE, SIZE);
-      ctx.putImageData(imageData, 0, 0);
-    });
-  }, [snapshots]);
+
+      const img = ctx.createImageData(GRID_SIZE, GRID_SIZE);
+      for (let i = 0; i < current.length; i++) {
+        const v = current[i];
+        const idx = i * 4;
+        // Electric organic neon cyan/purple palette
+        img.data[idx] = Math.floor(20 + 220 * Math.pow(v, 1.4)); // R
+        img.data[idx + 1] = Math.floor(40 + 200 * Math.sin(v * Math.PI)); // G
+        img.data[idx + 2] = Math.floor(80 + 175 * (1 - v)); // B
+        img.data[idx + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    }, 40);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, mu, sigma]);
+
+  // Run CMA-ES Evolutionary Search for Living Pattern Complexity
+  const handleRunOptimizer = () => {
+    if (isOptimizing) {
+      setIsOptimizing(false);
+      return;
+    }
+    setIsOptimizing(true);
+    setOptGen(0);
+
+    // Optimize mu in [0.15, 0.45] and sigma in [0.02, 0.09] to maximize sustained spatial complexity
+    const optimizer = new CMAESOptimizer(
+      (mVal, sVal) => {
+        // Evaluate CA score over 15 simulation steps
+        let testGrid = new Float32Array(gridStateRef.current.current);
+        let testNext = new Float32Array(GRID_SIZE * GRID_SIZE);
+        let scoreSum = 0;
+        for (let s = 0; s < 15; s++) {
+          const e = stepCA(testGrid, testNext, mVal, sVal, 0.2);
+          testGrid = testNext;
+          scoreSum += e;
+        }
+        // Maximize entropy -> minimize negative entropy
+        return -scoreSum / 15;
+      },
+      {
+        dim: 2,
+        initialMean: [mu, sigma],
+        initialSigma: 0.05,
+        lambda: 10,
+        bounds: [0.01, 0.5]
+      }
+    );
+
+    let g = 0;
+    const maxG = 20;
+    const interval = setInterval(() => {
+      g++;
+      const state = optimizer.step();
+      const newMu = Math.max(0.12, Math.min(0.48, state.bestX[0]));
+      const newSigma = Math.max(0.015, Math.min(0.09, state.bestX[1]));
+      setMu(newMu);
+      setSigma(newSigma);
+      setOptGen(g);
+
+      if (g >= maxG) {
+        clearInterval(interval);
+        setIsOptimizing(false);
+      }
+    }, 200);
+  };
 
   return (
     <div className="glass-card p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20">
-            <Sparkles className="h-4 w-4 text-sky-400" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+            <Sparkles className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">CA Pattern Gallery</h3>
-            <p className="text-xs text-slate-400">Tracing the CMA-ES path</p>
+            <h3 className="text-base font-bold text-white font-display">
+              Continuous Cellular Automata Evolutionary Search
+            </h3>
+            <p className="text-xs text-slate-400">
+              Evolving non-differentiable convolution kernels for artificial life & visual emergence
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-950/30 px-3 py-1.5 rounded-full border border-white/5">
-            <span className="font-medium">Tightness</span>
-            <input
-              aria-label="Path tightness"
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={pathT}
-              onChange={(e) => setPathT(parseFloat(e.target.value))}
-              className="w-24 accent-sky-500"
-            />
-          </div>
-          <button
-            onClick={() => setSeed((s) => s + 7)}
-            className="flex items-center gap-2 rounded-full bg-slate-800 hover:bg-slate-700 border border-white/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 transition-colors shadow-sm"
-          >
-            <RouteIcon className="w-3 h-3 opacity-70" />
-            Resample
-          </button>
+
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+            Entropy: {(entropy * 100).toFixed(1)}%
+          </span>
         </div>
       </div>
 
-      <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
-        Each thumbnail is a Cellular Automata snapshot along a CMA-ES-like path. The optimizer drags parameters from broad random exploration (top-left) toward a clustered region of coherent structures (bottom-right).
-      </p>
-
-      <div className="grid grid-cols-5 gap-3">
-        {snapshots.map((_, i) => (
-          <div key={i} className="relative group aspect-square">
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr] items-start">
+        {/* Continuous CA Canvas */}
+        <div className="space-y-3">
+          <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
             <canvas
-              ref={(el) => {
-                canvasRefs.current[i] = el;
-              }}
-              width={SIZE}
-              height={SIZE}
-              className="w-full h-full rounded-lg border border-white/5 bg-[#0B1121] shadow-inner transition-transform duration-300 group-hover:scale-[1.02] group-hover:border-sky-500/30"
+              ref={canvasRef}
+              width={GRID_SIZE}
+              height={GRID_SIZE}
+              className="w-full h-full block image-rendering-pixelated"
             />
-            {i === snapshots.length - 1 && (
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                <div className="rounded-full bg-emerald-500/90 backdrop-blur-sm px-2.5 py-1 text-[0.65rem] font-bold text-white shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
-                  BEST
-                </div>
+
+            {isOptimizing && (
+              <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-purple-500/40 shadow-glow-sm">
+                <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
+                <span className="text-xs font-mono font-bold text-purple-200">
+                  CMA-ES Evolving Life: Gen {optGen}/20
+                </span>
               </div>
             )}
-             <div className="absolute top-1 left-1 text-[0.55rem] font-mono text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                #{i + 1}
-             </div>
           </div>
-        ))}
-      </div>
-      
-      <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/30 p-3 rounded-lg border border-white/5">
-        <div className="w-1.5 h-1.5 rounded-full bg-sky-400 shadow-[0_0_5px_#38bdf8] shrink-0" />
-         <p>
-          Adjust <strong>path tightness</strong> to see how quickly the search converges to the &quot;sweet spot&quot; of complex behavior.
-        </p>
+
+          <div className="flex items-center justify-between gap-2 bg-slate-950/40 p-2.5 rounded-xl border border-white/5">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              </button>
+              <button
+                onClick={resetGrid}
+                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                title="Reseed Random Soup"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <span className="text-[0.68rem] text-slate-400 font-mono">64×64 Continuous Field</span>
+          </div>
+        </div>
+
+        {/* Knobs & Optimization Controls */}
+        <div className="space-y-4">
+          <div className="bg-slate-950/40 rounded-2xl p-5 border border-white/5 space-y-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-purple-200">
+              CA Growth Kernel Parameters
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">Growth Center ($\mu$)</span>
+                <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                  {mu.toFixed(3)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.12}
+                max={0.48}
+                step={0.005}
+                value={mu}
+                onChange={(e) => setMu(parseFloat(e.target.value))}
+                className="w-full accent-purple-400"
+              />
+            </div>
+
+            <div className="space-y-1.5 pt-2 border-t border-white/5">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">Growth Width ($\sigma$)</span>
+                <span className="text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
+                  {sigma.toFixed(3)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.015}
+                max={0.09}
+                step={0.002}
+                value={sigma}
+                onChange={(e) => setSigma(parseFloat(e.target.value))}
+                className="w-full accent-pink-400"
+              />
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs text-slate-300 space-y-2">
+            <p className="leading-relaxed">
+              Living cellular automata exhibit complex solitary wave structures (solitons) only in narrow chaotic bands of parameter space. CMA-ES treats the whole CA simulator as a black box and maximizes structural entropy.
+            </p>
+          </div>
+
+          <button
+            onClick={handleRunOptimizer}
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-all shadow-lg ${
+              isOptimizing
+                ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
+                : "bg-gradient-to-r from-purple-500 to-pink-500 hover:scale-[1.02] shadow-purple-500/30"
+            }`}
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>{isOptimizing ? "Stop Evolution" : "Evolve Life Patterns with CMA-ES"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
