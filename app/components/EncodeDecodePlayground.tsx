@@ -27,7 +27,7 @@ export function EncodeDecodePlayground() {
     // 3. Discrete layer count
     const minLayers = 6;
     const maxLayers = 48;
-    const layers = Math.floor(minLayers + zLayers * (maxLayers - minLayers + 1));
+    const layers = Math.min(maxLayers, Math.floor(minLayers + zLayers * (maxLayers - minLayers + 1)));
 
     // 4. Weight decay
     const wd = zWeightDecay * 0.2;

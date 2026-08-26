@@ -252,7 +252,7 @@ fn main() {
             <ul className="space-y-2 mb-6 text-xs text-slate-300">
               <li className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>Rich terminal UI displaying live step size $\sigma$, condition number $\kappa(C)$, and best fitness.</span>
+                <span>Rich terminal UI displaying live step size <code className="text-amber-300 font-bold">σ</code>, condition number <code className="text-purple-300 font-bold">κ(C)</code>, and best fitness.</span>
               </li>
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-sky-400 shrink-0" />

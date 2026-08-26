@@ -354,15 +354,27 @@ export function TransformerViz() {
       setWidth(newW);
       setOptGen(g);
 
-      // Add to evaluated list
+      // Add to evaluated list and recalculate Pareto frontier
       const l = Math.round(2 + newD * 5);
       const dm = Math.round(128 + newW * 512);
       const fl = (l * dm * dm * 12) / 1e5;
       const ls = 1.4 + 1.2 / Math.sqrt(l * 0.4 + dm * 0.005);
-      setArchList((prev) => [
-        ...prev,
-        { id: prev.length, depth: newD, width: newW, heads, flopsGiga: fl, valLoss: ls, isPareto: true }
-      ]);
+      setArchList((prev) => {
+        const nextList: ArchPoint[] = [
+          ...prev,
+          { id: prev.length, depth: newD, width: newW, heads, flopsGiga: fl, valLoss: ls, isPareto: false }
+        ];
+        nextList.forEach((p1) => {
+          const dominated = nextList.some(
+            (p2) =>
+              p2.flopsGiga <= p1.flopsGiga &&
+              p2.valLoss <= p1.valLoss &&
+              (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
+          );
+          p1.isPareto = !dominated;
+        });
+        return nextList;
+      });
 
       if (g >= maxG) {
         if (optIntervalRef.current) clearInterval(optIntervalRef.current);
@@ -407,20 +419,20 @@ export function TransformerViz() {
             </Canvas>
 
             {/* Orbit & Interaction Badge */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
-              <Compass className="h-3.5 w-3.5 text-violet-400" />
-              <span>Drag to orbit • Scroll to zoom</span>
+            <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.62rem] sm:text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+              <Compass className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-violet-400" />
+              <span>Drag to orbit</span>
             </div>
 
-            <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs font-mono text-violet-300">
-              <BrainCircuit className="h-3.5 w-3.5 text-violet-400" />
-              <span>{layersCount} Layers • {hiddenDim} Dim • {attentionHeads} Heads</span>
+            <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex items-center gap-1.5 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-white/10 text-[0.65rem] sm:text-xs font-mono text-violet-300">
+              <BrainCircuit className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-violet-400" />
+              <span>{layersCount}L • {hiddenDim}D • {attentionHeads}H</span>
             </div>
 
             {isOptimizing && (
-              <div className="absolute top-4 left-4 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-purple-500/40 shadow-glow-sm">
+              <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full border border-purple-500/40 shadow-glow-sm">
                 <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
-                <span className="text-xs font-mono font-bold text-purple-200">
+                <span className="text-[0.68rem] sm:text-xs font-mono font-bold text-purple-200">
                   NAS CMA-ES: Gen {optGen}/20
                 </span>
               </div>

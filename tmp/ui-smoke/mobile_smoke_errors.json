@@ -1,0 +1,14 @@
+[
+  {
+    "viewport": "desktop",
+    "kind": "console",
+    "message": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "ts": 1787711742767
+  },
+  {
+    "viewport": "mobile",
+    "kind": "console",
+    "message": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "ts": 1787711744903
+  }
+]

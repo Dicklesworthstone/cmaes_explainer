@@ -3,12 +3,35 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { PerspectiveCamera, Environment, Line, OrbitControls } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import * as THREE from "three";
-import { Play, Pause, RotateCcw, Sparkles, Building2, ShieldCheck, Activity, Zap, Compass } from "lucide-react";
-import { CMAESOptimizer } from "../lib/cmaesEngine";
-
-// --- Physics & Colormap Helpers ---
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Sparkles,
+  Building2,
+  ShieldCheck,
+  Activity,
+  Zap,
+  Compass,
+  Layers,
+  Sliders,
+  Eye,
+  Info
+} from "lucide-react";
+import {
+  BridgeParams,
+  TrussTopology,
+  MaterialGrade,
+  BRIDGE_PARAM_SPECS,
+  evaluateBridgePhysics,
+  decodeParameter,
+  encodeParameter
+} from "../lib/frankensimPhysics";
+import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { FrankenSimBadge } from "./FrankenSimBadge";
+import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
 
 // Turbo colormap approximation for FEA stress representation
 const TURBO_COLORS = [
@@ -43,7 +66,7 @@ function Water() {
 
   return (
     <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
-      <planeGeometry args={[36, 36, 16, 16]} />
+      <planeGeometry args={[48, 48, 16, 16]} />
       <meshPhysicalMaterial
         color="#082f49"
         metalness={0.9}
@@ -57,49 +80,62 @@ function Water() {
   );
 }
 
-function Towers({ height, span }: { height: number; span: number }) {
-  const h = 2.5 + height * 1.5;
+function Towers({ height, span, material }: { height: number; span: number; material: MaterialGrade }) {
+  const h = 2.5 + height * 2.0;
   const x = span;
+
+  const matColor = useMemo(() => {
+    switch (material) {
+      case "Ti-6Al-4V Titanium":
+        return "#cbd5e1";
+      case "CFRP Carbon Fiber":
+        return "#1e293b";
+      case "A992 High-Strength Steel":
+        return "#94a3b8";
+      default:
+        return "#64748b";
+    }
+  }, [material]);
 
   return (
     <group>
       {/* Left Tower */}
       <group position={[-x, h / 2 - 1.5, 0]}>
-        <mesh castShadow receiveShadow position={[0, 0, 0.6]}>
-          <boxGeometry args={[0.25, h, 0.25]} />
-          <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.5} />
+        <mesh castShadow receiveShadow position={[0, 0, 0.65]}>
+          <boxGeometry args={[0.28, h, 0.28]} />
+          <meshStandardMaterial color={matColor} roughness={0.35} metalness={0.6} />
         </mesh>
-        <mesh castShadow receiveShadow position={[0, 0, -0.6]}>
-          <boxGeometry args={[0.25, h, 0.25]} />
-          <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.5} />
+        <mesh castShadow receiveShadow position={[0, 0, -0.65]}>
+          <boxGeometry args={[0.28, h, 0.28]} />
+          <meshStandardMaterial color={matColor} roughness={0.35} metalness={0.6} />
         </mesh>
-        <mesh position={[0, h * 0.3, 0]}>
-          <boxGeometry args={[0.2, 0.2, 1.4]} />
-          <meshStandardMaterial color="#cbd5e1" roughness={0.4} />
+        <mesh position={[0, h * 0.32, 0]}>
+          <boxGeometry args={[0.22, 0.22, 1.5]} />
+          <meshStandardMaterial color={matColor} roughness={0.4} />
         </mesh>
-        <mesh position={[0, -h * 0.3, 0]}>
-          <boxGeometry args={[0.2, 0.2, 1.4]} />
-          <meshStandardMaterial color="#cbd5e1" roughness={0.4} />
+        <mesh position={[0, -h * 0.25, 0]}>
+          <boxGeometry args={[0.22, 0.22, 1.5]} />
+          <meshStandardMaterial color={matColor} roughness={0.4} />
         </mesh>
       </group>
 
       {/* Right Tower */}
       <group position={[x, h / 2 - 1.5, 0]}>
-        <mesh castShadow receiveShadow position={[0, 0, 0.6]}>
-          <boxGeometry args={[0.25, h, 0.25]} />
-          <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.5} />
+        <mesh castShadow receiveShadow position={[0, 0, 0.65]}>
+          <boxGeometry args={[0.28, h, 0.28]} />
+          <meshStandardMaterial color={matColor} roughness={0.35} metalness={0.6} />
         </mesh>
-        <mesh castShadow receiveShadow position={[0, 0, -0.6]}>
-          <boxGeometry args={[0.25, h, 0.25]} />
-          <meshStandardMaterial color="#94a3b8" roughness={0.3} metalness={0.5} />
+        <mesh castShadow receiveShadow position={[0, 0, -0.65]}>
+          <boxGeometry args={[0.28, h, 0.28]} />
+          <meshStandardMaterial color={matColor} roughness={0.35} metalness={0.6} />
         </mesh>
-        <mesh position={[0, h * 0.3, 0]}>
-          <boxGeometry args={[0.2, 0.2, 1.4]} />
-          <meshStandardMaterial color="#cbd5e1" roughness={0.4} />
+        <mesh position={[0, h * 0.32, 0]}>
+          <boxGeometry args={[0.22, 0.22, 1.5]} />
+          <meshStandardMaterial color={matColor} roughness={0.4} />
         </mesh>
-        <mesh position={[0, -h * 0.3, 0]}>
-          <boxGeometry args={[0.2, 0.2, 1.4]} />
-          <meshStandardMaterial color="#cbd5e1" roughness={0.4} />
+        <mesh position={[0, -h * 0.25, 0]}>
+          <boxGeometry args={[0.22, 0.22, 1.5]} />
+          <meshStandardMaterial color={matColor} roughness={0.4} />
         </mesh>
       </group>
     </group>
@@ -109,78 +145,140 @@ function Towers({ height, span }: { height: number; span: number }) {
 function MainCables({ span, sag, towerHeight }: { span: number; sag: number; towerHeight: number }) {
   const points = useMemo(() => {
     const p: THREE.Vector3[] = [];
-    const h = 2.5 + towerHeight * 1.5;
+    const h = 2.5 + towerHeight * 2.0;
     const steps = 60;
     for (let i = 0; i <= steps; i++) {
       const x = -span + (i / steps) * (2 * span);
       const y = (sag / (span * span)) * x * x + (h - sag);
-      p.push(new THREE.Vector3(x, y, 0.6));
+      p.push(new THREE.Vector3(x, y, 0.65));
     }
     return p;
   }, [span, sag, towerHeight]);
 
-  const points2 = useMemo(() => points.map((v) => new THREE.Vector3(v.x, v.y, -0.6)), [points]);
+  const points2 = useMemo(() => points.map((v) => new THREE.Vector3(v.x, v.y, -0.65)), [points]);
 
   return (
     <group>
-      <Line points={points} color="#64748b" lineWidth={3.5} />
-      <Line points={points2} color="#64748b" lineWidth={3.5} />
+      <Line points={points} color="#475569" lineWidth={3.5} />
+      <Line points={points2} color="#475569" lineWidth={3.5} />
     </group>
   );
 }
 
-function Suspenders({ span, sag, towerHeight }: { span: number; sag: number; towerHeight: number }) {
-  const count = 20;
+function Suspenders({
+  span,
+  sag,
+  towerHeight,
+  count
+}: {
+  span: number;
+  sag: number;
+  towerHeight: number;
+  count: number;
+}) {
   const lines = useMemo(() => {
     const els = [];
-    const h = 2.5 + towerHeight * 1.5;
+    const h = 2.5 + towerHeight * 2.0;
+    const n = Math.max(8, Math.min(48, count));
 
-    for (let i = 1; i < count; i++) {
-      const x = -span + (i / count) * (2 * span);
+    for (let i = 1; i < n; i++) {
+      const x = -span + (i / n) * (2 * span);
       const topY = (sag / (span * span)) * x * x + (h - sag);
       const botY = 0;
       els.push(
-        <mesh key={`f-${i}`} position={[x, (topY + botY) / 2, 0.6]}>
+        <mesh key={`f-${i}`} position={[x, (topY + botY) / 2, 0.65]}>
           <cylinderGeometry args={[0.015, 0.015, topY - botY]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.8} />
         </mesh>
       );
       els.push(
-        <mesh key={`b-${i}`} position={[x, (topY + botY) / 2, -0.6]}>
+        <mesh key={`b-${i}`} position={[x, (topY + botY) / 2, -0.65]}>
           <cylinderGeometry args={[0.015, 0.015, topY - botY]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.8} />
         </mesh>
       );
     }
     return els;
-  }, [span, sag, towerHeight]);
+  }, [span, sag, towerHeight, count]);
 
   return <group>{lines}</group>;
+}
+
+function TrussWebbing({
+  span,
+  topology,
+  stiffness
+}: {
+  span: number;
+  topology: TrussTopology;
+  stiffness: number;
+}) {
+  const segments = 16;
+  const lines = useMemo(() => {
+    const p: THREE.Vector3[] = [];
+    const hTruss = 0.25 + stiffness * 0.35;
+    const dx = (2 * span) / segments;
+
+    for (let i = 0; i < segments; i++) {
+      const x1 = -span + i * dx;
+      const x2 = x1 + dx;
+
+      // Top & bottom chords
+      p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x2, 0, 0.65));
+      p.push(new THREE.Vector3(x1, -hTruss, 0.65), new THREE.Vector3(x2, -hTruss, 0.65));
+
+      // Web diagonals depending on topology
+      if (topology === "Warren") {
+        if (i % 2 === 0) {
+          p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x2, -hTruss, 0.65));
+        } else {
+          p.push(new THREE.Vector3(x1, -hTruss, 0.65), new THREE.Vector3(x2, 0, 0.65));
+        }
+      } else if (topology === "Pratt") {
+        p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x1, -hTruss, 0.65));
+        p.push(new THREE.Vector3(x1, -hTruss, 0.65), new THREE.Vector3(x2, 0, 0.65));
+      } else if (topology === "Bowstring Arch") {
+        const archY = -hTruss + Math.sin((i / segments) * Math.PI) * 0.4;
+        p.push(new THREE.Vector3(x1, archY, 0.65), new THREE.Vector3(x2, archY, 0.65));
+        p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x1, archY, 0.65));
+      } else {
+        // Howe / K-Truss default
+        p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x1, -hTruss, 0.65));
+        p.push(new THREE.Vector3(x1, 0, 0.65), new THREE.Vector3(x2, -hTruss, 0.65));
+      }
+    }
+    return p;
+  }, [span, topology, stiffness]);
+
+  return (
+    <group>
+      <Line points={lines} color="#334155" lineWidth={1.8} />
+    </group>
+  );
 }
 
 function DeckAnimator({
   span,
   stiffness,
-  loadMass,
   loadPos,
-  windVibration
+  maxStress,
+  yieldLimit
 }: {
   span: number;
   stiffness: number;
-  loadMass: number;
   loadPos: number;
-  windVibration: number;
+  maxStress: number;
+  yieldLimit: number;
 }) {
-  const segments = 50;
+  const segments = 48;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const tempColor = useMemo(() => new THREE.Color(), []);
 
   const getDeflection = (x: number, a: number) => {
     const dist = Math.abs(x - a);
-    const peak = (loadMass * 0.55) / (0.1 + stiffness * 1.8);
-    const flutter = windVibration * Math.sin(x * 3.5) * 0.08;
-    return -peak * Math.exp(-(dist * dist) / (0.25 + stiffness * 0.35)) + flutter;
+    const peak = 0.45 / (0.15 + stiffness * 1.5);
+    return -peak * Math.exp(-(dist * dist) / (0.35 + stiffness * 0.4));
   };
 
   useFrame(() => {
@@ -189,20 +287,15 @@ function DeckAnimator({
     for (let i = 0; i < segments; i++) {
       const t = i / (segments - 1);
       const x = -span + t * (2 * span);
-
       const y = getDeflection(x, loadPos);
 
-      // Real FEA stress calculation: bending stress sigma_b + tensile hanger reaction
       const d = Math.abs(x - loadPos);
-      const localStress = Math.max(0, 1.0 - d * 1.4) * (loadMass / (0.2 + stiffness));
-      const towerStress = Math.exp(-Math.pow(Math.abs(x) - span, 2) / 0.15) * 0.6;
-      const windStress = windVibration * 0.3;
-
-      const totalStressNormalized = Math.min(1, 0.05 + localStress * 0.65 + towerStress + windStress);
-      getTurboColor(totalStressNormalized, tempColor);
+      const localStressRatio = Math.max(0, 1.0 - d * 1.2) * (maxStress / yieldLimit);
+      const totalStressNorm = Math.min(1, 0.08 + localStressRatio * 0.85);
+      getTurboColor(totalStressNorm, tempColor);
 
       dummy.position.set(x, y, 0);
-      dummy.scale.set(((2 * span) / segments) * 1.02, 0.14, 1.25);
+      dummy.scale.set(((2 * span) / segments) * 1.02, 0.14, 1.3);
       dummy.updateMatrix();
 
       meshRef.current.setMatrixAt(i, dummy.matrix);
@@ -219,70 +312,123 @@ function DeckAnimator({
         <meshStandardMaterial roughness={0.3} metalness={0.6} />
       </instancedMesh>
 
-      {/* Moving Heavy Vehicle Visual Indicator */}
+      {/* Moving Heavy Vehicle */}
       <mesh position={[loadPos, getDeflection(loadPos, loadPos) + 0.35, 0]}>
-        <boxGeometry args={[0.4, 0.25, 0.5]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#fbbf24" emissiveIntensity={1.5} />
+        <boxGeometry args={[0.45, 0.25, 0.55]} />
+        <meshStandardMaterial color="#f59e0b" emissive="#fbbf24" emissiveIntensity={1.2} />
       </mesh>
     </group>
   );
 }
 
-// --- Main BridgeViz Component with Real CMA-ES Auto-Optimizer ---
+// --- Main Interactive BridgeViz Component ---
 
 export function BridgeViz() {
-  const [span, setSpan] = useState(1.6);
-  const [sag, setSag] = useState(1.1);
-  const [stiffness, setStiffness] = useState(0.45);
-  const [load, setLoad] = useState(0.5); // 0 to 1
-  const [wind, setWind] = useState(0.3); // 0 to 1
-  const [autoRun, setAutoRun] = useState(true);
+  // 8 Physical Input Parameters
+  const [params, setParams] = useState<BridgeParams>({
+    spanLength: 180,
+    cableSag: 18,
+    deckStiffness: 0.45,
+    trussTopology: "Warren",
+    materialGrade: "A36 Mild Steel",
+    suspenderCount: 24,
+    towerAspect: 0.35,
+    vibrationDamping: 0.05
+  });
 
-  // CMA-ES Optimizer state
+  const [activeTab, setActiveTab] = useState<"viewport" | "phase_space">("viewport");
+  const [autoRun, setAutoRun] = useState(true);
+  const [loadPos, setLoadPos] = useState(0);
+
+  // CMA-ES State
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
-  const [optFitness, setOptFitness] = useState<number | null>(null);
-
-  // Moving truck position
-  const [loadPos, setLoadPos] = useState(0);
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Convert 8 parameters to/from [0, 1]^8 vector
+  const paramVector = useMemo(() => {
+    return [
+      encodeParameter(params.spanLength, BRIDGE_PARAM_SPECS[0]),
+      encodeParameter(params.cableSag, BRIDGE_PARAM_SPECS[1]),
+      encodeParameter(params.deckStiffness, BRIDGE_PARAM_SPECS[2]),
+      encodeParameter(params.trussTopology, BRIDGE_PARAM_SPECS[3]),
+      encodeParameter(params.materialGrade, BRIDGE_PARAM_SPECS[4]),
+      encodeParameter(params.suspenderCount, BRIDGE_PARAM_SPECS[5]),
+      encodeParameter(params.towerAspect, BRIDGE_PARAM_SPECS[6]),
+      encodeParameter(params.vibrationDamping, BRIDGE_PARAM_SPECS[7])
+    ];
+  }, [params]);
+
+  // Decode a unit vector [0, 1]^8 back to physical BridgeParams
+  const decodeVectorToParams = useCallback((v: number[]): BridgeParams => {
+    return {
+      spanLength: Number(decodeParameter(v[0], BRIDGE_PARAM_SPECS[0]).value),
+      cableSag: Number(decodeParameter(v[1], BRIDGE_PARAM_SPECS[1]).value),
+      deckStiffness: Number(decodeParameter(v[2], BRIDGE_PARAM_SPECS[2]).value),
+      trussTopology: String(decodeParameter(v[3], BRIDGE_PARAM_SPECS[3]).value) as TrussTopology,
+      materialGrade: String(decodeParameter(v[4], BRIDGE_PARAM_SPECS[4]).value) as MaterialGrade,
+      suspenderCount: Number(decodeParameter(v[5], BRIDGE_PARAM_SPECS[5]).value),
+      towerAspect: Number(decodeParameter(v[6], BRIDGE_PARAM_SPECS[6]).value),
+      vibrationDamping: Number(decodeParameter(v[7], BRIDGE_PARAM_SPECS[7]).value)
+    };
+  }, []);
+
+  // Real physical analysis output
+  const analysis = useMemo(() => {
+    return evaluateBridgePhysics(params, loadPos);
+  }, [params, loadPos]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (optIntervalRef.current) clearInterval(optIntervalRef.current);
     };
   }, []);
 
+  // Initialize generation 0 state for phase space viewer on mount
+  useEffect(() => {
+    const optimizer = new CMAESOptimizerND(
+      (zVec) => {
+        const decoded = decodeVectorToParams(zVec);
+        const result = evaluateBridgePhysics(decoded, 0);
+        return result.costScore;
+      },
+      {
+        dim: 8,
+        initialMean: [
+          encodeParameter(180, BRIDGE_PARAM_SPECS[0]),
+          encodeParameter(18, BRIDGE_PARAM_SPECS[1]),
+          encodeParameter(0.45, BRIDGE_PARAM_SPECS[2]),
+          encodeParameter("Warren", BRIDGE_PARAM_SPECS[3]),
+          encodeParameter("A36 Mild Steel", BRIDGE_PARAM_SPECS[4]),
+          encodeParameter(24, BRIDGE_PARAM_SPECS[5]),
+          encodeParameter(0.35, BRIDGE_PARAM_SPECS[6]),
+          encodeParameter(0.05, BRIDGE_PARAM_SPECS[7])
+        ],
+        initialSigma: 0.25,
+        lambda: 16,
+        bounds: [0.0, 1.0]
+      }
+    );
+    const initialStep = optimizer.step();
+    setLatestStateND(initialStep);
+    setHistoryND([initialStep]);
+  }, [decodeVectorToParams]);
+
+  // Moving truck animation loop
   useEffect(() => {
     if (!autoRun) return;
     let t = 0;
     const interval = setInterval(() => {
       t += 0.04;
-      setLoadPos(Math.sin(t) * (span - 0.3));
+      setLoadPos(Math.sin(t) * (params.spanLength * 0.01 - 0.3));
     }, 30);
     return () => clearInterval(interval);
-  }, [autoRun, span]);
+  }, [autoRun, params.spanLength]);
 
-  // Bridge structural cost function:
-  // Objective: Minimize total bridge steel mass (M) subject to MaxStress <= 350 MPa
-  const bridgeObjective = (pSpan: number, pSag: number, pStiff: number) => {
-    // Structural mass: main cable steel (proportional to span^2 / sag) + deck steel + towers
-    const cableMass = (pSpan * pSpan) / Math.max(0.2, pSag) * 12;
-    const deckMass = pSpan * (0.5 + pStiff * 2.5) * 15;
-    const towerMass = (2.5 + pSag * 0.8) * 8;
-    const totalMass = cableMass + deckMass + towerMass;
-
-    // Peak stress calculation
-    const maxLocalStress = (1.5 / (0.15 + pStiff * 1.8)) * 250;
-    const maxCableTension = (pSpan * pSpan) / (8 * Math.max(0.2, pSag)) * 40;
-    const peakStress = maxLocalStress + maxCableTension + wind * 80;
-
-    // Constraint penalty if peakStress > 350 MPa limit
-    const penalty = peakStress > 350 ? Math.pow(peakStress - 350, 2) * 5 : 0;
-    return totalMass + penalty;
-  };
-
-  // Run live CMA-ES Optimization loop
+  // Run live 8D CMA-ES Optimization with 3D Phase-Space PCA Projection
   const handleRunOptimizer = () => {
     if (isOptimizing) {
       if (optIntervalRef.current) clearInterval(optIntervalRef.current);
@@ -292,248 +438,420 @@ export function BridgeViz() {
 
     setIsOptimizing(true);
     setOptGen(0);
+    setHistoryND([]);
 
-    // Optimize 3 parameters: span in [1.2, 2.2], sag in [0.5, 2.0], stiffness in [0.2, 1.0]
-    const optimizer = new CMAESOptimizer(
-      (x, y) => {
-        // x maps to sag [0.5, 2.0], y maps to stiffness [0.2, 1.0]
-        return bridgeObjective(span, x, y);
+    const optimizer = new CMAESOptimizerND(
+      (zVec) => {
+        const decoded = decodeVectorToParams(zVec);
+        const result = evaluateBridgePhysics(decoded, 0);
+        return result.costScore;
       },
       {
-        dim: 2,
-        initialMean: [sag, stiffness],
+        dim: 8,
+        initialMean: [...paramVector],
         initialSigma: 0.25,
-        lambda: 12,
-        bounds: [0.2, 2.2]
+        lambda: 16,
+        bounds: [0.0, 1.0]
       }
     );
 
-    let currentGen = 0;
+    let g = 0;
     const maxG = 25;
     if (optIntervalRef.current) clearInterval(optIntervalRef.current);
     optIntervalRef.current = setInterval(() => {
-      currentGen++;
+      g++;
       const state = optimizer.step();
-      setSag(Math.max(0.5, Math.min(2.0, state.bestX[0])));
-      setStiffness(Math.max(0.15, Math.min(1.0, state.bestX[1])));
-      setOptGen(currentGen);
-      setOptFitness(state.bestFitness);
+      const bestP = decodeVectorToParams(state.bestX);
+      setParams(bestP);
+      setOptGen(g);
+      setLatestStateND(state);
+      setHistoryND((prev) => [...prev, state]);
 
-      if (currentGen >= maxG) {
+      if (g >= maxG) {
         if (optIntervalRef.current) clearInterval(optIntervalRef.current);
         setIsOptimizing(false);
       }
     }, 180);
   };
 
-  // Max stress estimate for UI
-  const currentMaxStress = useMemo(() => {
-    const maxLocalStress = (1.5 / (0.15 + stiffness * 1.8)) * 250;
-    const maxCableTension = (span * span) / (8 * Math.max(0.2, sag)) * 40;
-    return Math.min(500, Math.round(maxLocalStress + maxCableTension + wind * 80));
-  }, [span, sag, stiffness, wind]);
-
-  const estimatedMassTons = useMemo(() => {
-    const cableMass = (span * span) / Math.max(0.2, sag) * 12;
-    const deckMass = span * (0.5 + stiffness * 2.5) * 15;
-    const towerMass = (2.5 + sag * 0.8) * 8;
-    return Math.round((cableMass + deckMass + towerMass) * 10);
-  }, [span, sag, stiffness]);
+  // Normalized 3D scale values for Three.js
+  const span3D = params.spanLength * 0.01;
+  const sag3D = params.cableSag * 0.06;
 
   return (
-    <div className="glass-card p-6 space-y-6">
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
-        {/* 3D Viewport */}
-        <div className="lg:w-[65%] w-full relative group aspect-[16/10] sm:aspect-auto lg:h-[480px]">
-          <div className="absolute -inset-1 bg-gradient-to-br from-amber-500/10 to-red-500/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
-          <div className="relative h-full w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
-            <Canvas shadows dpr={[1, 2]} events={safePointerEvents}>
-              {/* Centered isometric perspective showing full span symmetrically */}
-              <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
-              <color attach="background" args={["#0b1120"]} />
-              <fog attach="fog" args={["#0b1120", 6, 26]} />
-
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
-              <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
-              <Environment preset="sunset" />
-
-              <OrbitControls
-                makeDefault
-                enableDamping
-                dampingFactor={0.06}
-                minDistance={3.5}
-                maxDistance={14}
-                maxPolarAngle={Math.PI / 2 + 0.05}
-                target={[0, 0.3, 0]}
-              />
-
-              <group position={[0, -0.4, 0]}>
-                <Water />
-                <Towers height={0.5} span={span} />
-                <MainCables span={span} sag={sag} towerHeight={0.5} />
-                <Suspenders span={span} sag={sag} towerHeight={0.5} />
-                <DeckAnimator
-                  span={span}
-                  stiffness={stiffness}
-                  loadMass={0.6 + load * 1.2}
-                  loadPos={loadPos}
-                  windVibration={wind}
-                />
-              </group>
-            </Canvas>
-
-            {/* Orbit & Interaction Badge */}
-            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
-              <Compass className="h-3.5 w-3.5 text-amber-400" />
-              <span>Drag to orbit • Scroll to zoom</span>
-            </div>
-
-            {/* FEA Stress Colormap Legend */}
-            <div className="absolute bottom-4 right-4 p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex flex-col gap-2 w-52 shadow-2xl">
-              <div className="flex items-center justify-between text-[0.68rem] font-bold text-slate-200 uppercase tracking-wider">
-                <span>von Mises Stress</span>
-                <span className={currentMaxStress > 350 ? "text-rose-400 font-mono" : "text-emerald-400 font-mono"}>
-                  {currentMaxStress} MPa
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
-              <div className="flex justify-between text-[0.62rem] text-slate-400 font-mono">
-                <span>0 MPa (Safe)</span>
-                <span>350 (Limit)</span>
-                <span>500 (Yield)</span>
-              </div>
-            </div>
-
-            {/* Live Optimizer HUD Badge */}
-            {isOptimizing && (
-              <div className="absolute top-4 left-4 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-sky-500/40 shadow-glow-sm">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs font-mono font-bold text-sky-200">
-                  CMA-ES Optimizing: Gen {optGen}/25
-                </span>
-              </div>
-            )}
+    <div className="glass-card p-6 md:p-8 space-y-6">
+      {/* Top Header with FrankenSim Badge */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-5 w-5 text-amber-400" />
+          <div>
+            <h3 className="font-display font-bold text-lg text-white">
+              Multi-Parameter Bridge Structural Optimization
+            </h3>
+            <p className="text-xs text-slate-400">
+              8-Dimensional Mixed Continuous, Discrete & Categorical Parameter Search
+            </p>
           </div>
         </div>
 
-        {/* Controls & Optimization Panel */}
-        <div className="flex-1 space-y-6 w-full py-1">
-          <div>
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300 mb-2">
-              <Building2 className="h-4 w-4" />
-              <span>Structural FEA Simulation</span>
+        {/* FrankenSim.org Physics Badge */}
+        <FrankenSimBadge />
+      </div>
+
+      {/* Main Grid: Viewport/Phase-Space & Control Panel */}
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
+        {/* 3D Viewport / Phase Space Container */}
+        <div className="lg:w-[62%] w-full space-y-3">
+          {/* Tab Switcher */}
+          <div className="flex items-center justify-between bg-slate-950/60 p-1.5 rounded-2xl border border-white/10 text-xs font-semibold">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setActiveTab("viewport")}
+                className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                  activeTab === "viewport"
+                    ? "bg-sky-500 text-white shadow-glow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                3D Structural FEA View
+              </button>
+              <button
+                onClick={() => setActiveTab("phase_space")}
+                className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
+                  activeTab === "phase_space"
+                    ? "bg-purple-500 text-white shadow-glow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>3D PCA Covariance Ellipsoid</span>
+              </button>
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Solve the nonlinear structural trade-off: deep cable sag reduces tensile tension but increases wind flutter; stiffening the deck prevents local deflection but adds deadweight.
-            </p>
+
+            {isOptimizing && (
+              <div className="flex items-center gap-1.5 text-[0.68rem] font-mono text-emerald-400 px-2 py-0.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                <span>CMA-ES Gen {optGen}/25</span>
+              </div>
+            )}
           </div>
 
-          {/* Sliders */}
-          <div className="space-y-4 bg-slate-900/40 rounded-2xl p-5 border border-white/5">
-            <div className="space-y-1.5">
+          {activeTab === "phase_space" ? (
+            <CMAESPhaseSpaceViewer
+              latestState={latestStateND}
+              history={historyND}
+              title="8D Bridge Parameter Covariance Ellipsoid (Top 3 PCA Axes)"
+            />
+          ) : (
+            <div className="relative group aspect-[16/10] sm:aspect-auto lg:h-[490px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
+              <Canvas shadows dpr={[1, 2]} events={safePointerEvents}>
+                <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
+                <color attach="background" args={["#0b1120"]} />
+                <fog attach="fog" args={["#0b1120", 6, 28]} />
+
+                <ambientLight intensity={0.5} />
+                <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
+                <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
+                <Environment preset="sunset" />
+
+                <OrbitControls
+                  makeDefault
+                  enableDamping
+                  dampingFactor={0.06}
+                  minDistance={3.5}
+                  maxDistance={14}
+                  maxPolarAngle={Math.PI / 2 + 0.05}
+                  target={[0, 0.3, 0]}
+                />
+
+                <group position={[0, -0.4, 0]}>
+                  <Water />
+                  <Towers height={params.towerAspect} span={span3D} material={params.materialGrade} />
+                  <MainCables span={span3D} sag={sag3D} towerHeight={params.towerAspect} />
+                  <Suspenders
+                    span={span3D}
+                    sag={sag3D}
+                    towerHeight={params.towerAspect}
+                    count={params.suspenderCount}
+                  />
+                  <TrussWebbing
+                    span={span3D}
+                    topology={params.trussTopology}
+                    stiffness={params.deckStiffness}
+                  />
+                  <DeckAnimator
+                    span={span3D}
+                    stiffness={params.deckStiffness}
+                    loadPos={loadPos}
+                    maxStress={analysis.maxVonMisesStressMPa}
+                    yieldLimit={analysis.yieldLimitMPa}
+                  />
+                </group>
+              </Canvas>
+
+              {/* Orbit hint */}
+              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.62rem] sm:text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+                <Compass className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400" />
+                <span>Drag to orbit</span>
+              </div>
+
+              {/* FEA Stress Colormap Legend */}
+              <div className="absolute top-3 left-3 sm:top-auto sm:bottom-4 sm:right-4 p-2.5 sm:p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex flex-col gap-1.5 w-44 sm:w-56 shadow-2xl pointer-events-none">
+                <div className="flex items-center justify-between text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-200 uppercase tracking-wider">
+                  <span>FEA Stress</span>
+                  <span
+                    className={
+                      analysis.maxVonMisesStressMPa > analysis.yieldLimitMPa
+                        ? "text-rose-400 font-mono"
+                        : "text-emerald-400 font-mono"
+                    }
+                  >
+                    {analysis.maxVonMisesStressMPa} MPa
+                  </span>
+                </div>
+                <div className="h-1.5 sm:h-2 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
+                <div className="flex justify-between text-[0.58rem] sm:text-[0.62rem] text-slate-400 font-mono">
+                  <span>0 MPa</span>
+                  <span>Yield: {analysis.yieldLimitMPa}</span>
+                  <span>&gt;500</span>
+                </div>
+              </div>
+
+              {/* Status Pill */}
+              <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex flex-col gap-1.5 pointer-events-none">
+                <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">Total Mass:</span>
+                  <span className="font-mono font-bold text-xs sm:text-sm text-amber-200">{analysis.totalMassTons} Tons</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 8-Parameter Control Panel */}
+        <div className="flex-1 space-y-5 w-full">
+          <div className="space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center justify-between">
+              <span>Bridge Design Parameters</span>
+              <span className="font-mono text-[0.68rem] text-slate-400">8D Parameter Space</span>
+            </div>
+            <p className="text-xs text-slate-300">
+              Discrete topologies & materials are smoothly partitioned across continuous <code className="text-amber-300 font-mono">[0, 1]</code> interval bins.
+            </p>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() =>
+                  setParams({
+                    spanLength: 280,
+                    cableSag: 28,
+                    deckStiffness: 0.35,
+                    trussTopology: "Warren",
+                    materialGrade: "A992 High-Strength Steel",
+                    suspenderCount: 32,
+                    towerAspect: 0.42,
+                    vibrationDamping: 0.06
+                  })
+                }
+                className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+              >
+                🌉 Golden Gate Long Span
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setParams({
+                    spanLength: 140,
+                    cableSag: 12,
+                    deckStiffness: 0.85,
+                    trussTopology: "Bowstring Arch",
+                    materialGrade: "A36 Mild Steel",
+                    suspenderCount: 20,
+                    towerAspect: 0.3,
+                    vibrationDamping: 0.08
+                  })
+                }
+                className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-300 border border-orange-500/20 hover:bg-orange-500/20 transition-colors"
+              >
+                🏗️ Heavy Transit Arch
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setParams({
+                    spanLength: 200,
+                    cableSag: 22,
+                    deckStiffness: 0.5,
+                    trussTopology: "Pratt",
+                    materialGrade: "Ti-6Al-4V Titanium",
+                    suspenderCount: 28,
+                    towerAspect: 0.38,
+                    vibrationDamping: 0.04
+                  })
+                }
+                className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
+              >
+                ⚡ Titanium Aero-Truss
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3.5 bg-slate-900/50 rounded-2xl p-4 border border-white/5 max-h-[440px] overflow-y-auto pr-2">
+            {/* 1. Span Length */}
+            <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Main Span Length <span className="font-mono text-amber-400">(L)</span></span>
-                <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                  {(span * 100).toFixed(0)} m
-                </span>
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[0].label}</span>
+                <span className="text-amber-300 font-mono text-xs">{params.spanLength} m</span>
               </div>
               <input
                 type="range"
-                aria-label="Main Span Length"
-                min={1.2}
-                max={2.2}
-                step={0.05}
-                value={span}
-                onChange={(e) => setSpan(parseFloat(e.target.value))}
+                min={BRIDGE_PARAM_SPECS[0].min}
+                max={BRIDGE_PARAM_SPECS[0].max}
+                step={BRIDGE_PARAM_SPECS[0].step}
+                value={params.spanLength}
+                onChange={(e) => setParams({ ...params, spanLength: parseFloat(e.target.value) })}
                 className="w-full accent-amber-400"
               />
             </div>
 
-            <div className="space-y-1.5">
+            {/* 2. Cable Sag */}
+            <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Cable Sag <span className="font-mono text-sky-400">(s)</span></span>
-                <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-                  {(sag * 20).toFixed(1)} m
-                </span>
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[1].label}</span>
+                <span className="text-sky-300 font-mono text-xs">{params.cableSag.toFixed(1)} m</span>
               </div>
               <input
                 type="range"
-                aria-label="Cable Sag"
-                min={0.5}
-                max={2.0}
-                step={0.05}
-                value={sag}
-                onChange={(e) => setSag(parseFloat(e.target.value))}
+                min={BRIDGE_PARAM_SPECS[1].min}
+                max={BRIDGE_PARAM_SPECS[1].max}
+                step={BRIDGE_PARAM_SPECS[1].step}
+                value={params.cableSag}
+                onChange={(e) => setParams({ ...params, cableSag: parseFloat(e.target.value) })}
                 className="w-full accent-sky-400"
               />
             </div>
 
-            <div className="space-y-1.5">
+            {/* 3. Deck Stiffness */}
+            <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Deck Truss Stiffness <span className="font-mono text-emerald-400">(k)</span></span>
-                <span className="text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  {(stiffness * 100).toFixed(0)}%
-                </span>
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[2].label}</span>
+                <span className="text-emerald-300 font-mono text-xs">{Math.round(params.deckStiffness * 100)}%</span>
               </div>
               <input
                 type="range"
-                aria-label="Deck Truss Stiffness"
-                min={0.15}
-                max={1.0}
-                step={0.02}
-                value={stiffness}
-                onChange={(e) => setStiffness(parseFloat(e.target.value))}
+                min={BRIDGE_PARAM_SPECS[2].min}
+                max={BRIDGE_PARAM_SPECS[2].max}
+                step={BRIDGE_PARAM_SPECS[2].step}
+                value={params.deckStiffness}
+                onChange={(e) => setParams({ ...params, deckStiffness: parseFloat(e.target.value) })}
                 className="w-full accent-emerald-400"
               />
             </div>
 
-            <div className="space-y-1.5">
+            {/* 4. Categorical Truss Web Topology */}
+            <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Wind Vortex Flutter <span className="font-mono text-purple-400">(v)</span></span>
-                <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                  {(wind * 100).toFixed(0)} km/h
-                </span>
+                <span className="text-slate-300">Truss Web Topology</span>
+                <span className="text-purple-300 font-mono text-[0.68rem]">{params.trussTopology}</span>
+              </div>
+              <select
+                value={params.trussTopology}
+                onChange={(e) => setParams({ ...params, trussTopology: e.target.value as TrussTopology })}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-400"
+              >
+                {BRIDGE_PARAM_SPECS[3].categories?.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. Categorical Structural Material */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">Material Grade</span>
+                <span className="text-indigo-300 font-mono text-[0.68rem]">{params.materialGrade}</span>
+              </div>
+              <select
+                value={params.materialGrade}
+                onChange={(e) => setParams({ ...params, materialGrade: e.target.value as MaterialGrade })}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-400"
+              >
+                {BRIDGE_PARAM_SPECS[4].categories?.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 6. Discrete Suspender Cables */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[5].label}</span>
+                <span className="text-cyan-300 font-mono text-xs">{params.suspenderCount}</span>
               </div>
               <input
                 type="range"
-                aria-label="Wind Vortex Flutter"
-                min={0.0}
-                max={1.0}
-                step={0.05}
-                value={wind}
-                onChange={(e) => setWind(parseFloat(e.target.value))}
-                className="w-full accent-purple-400"
+                min={BRIDGE_PARAM_SPECS[5].min}
+                max={BRIDGE_PARAM_SPECS[5].max}
+                step={BRIDGE_PARAM_SPECS[5].step}
+                value={params.suspenderCount}
+                onChange={(e) => setParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })}
+                className="w-full accent-cyan-400"
+              />
+            </div>
+
+            {/* 7. Tower Pylon Aspect */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[6].label}</span>
+                <span className="text-rose-300 font-mono text-xs">{params.towerAspect.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min={BRIDGE_PARAM_SPECS[6].min}
+                max={BRIDGE_PARAM_SPECS[6].max}
+                step={BRIDGE_PARAM_SPECS[6].step}
+                value={params.towerAspect}
+                onChange={(e) => setParams({ ...params, towerAspect: parseFloat(e.target.value) })}
+                className="w-full accent-rose-400"
+              />
+            </div>
+
+            {/* 8. Tuned Mass Damping */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">{BRIDGE_PARAM_SPECS[7].label}</span>
+                <span className="text-teal-300 font-mono text-xs">{(params.vibrationDamping * 100).toFixed(1)}%</span>
+              </div>
+              <input
+                type="range"
+                min={BRIDGE_PARAM_SPECS[7].min}
+                max={BRIDGE_PARAM_SPECS[7].max}
+                step={BRIDGE_PARAM_SPECS[7].step}
+                value={params.vibrationDamping}
+                onChange={(e) => setParams({ ...params, vibrationDamping: parseFloat(e.target.value) })}
+                className="w-full accent-teal-400"
               />
             </div>
           </div>
 
-          {/* Diagnostic Metrics */}
-          <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/5">
-              <div className="text-[0.65rem] text-slate-500 uppercase">Estimated Mass</div>
-              <div className="text-base font-bold text-slate-200 mt-0.5">{estimatedMassTons} Tons</div>
-            </div>
-            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/5">
-              <div className="text-[0.65rem] text-slate-500 uppercase">Safety Envelope</div>
-              <div className={`text-base font-bold mt-0.5 ${currentMaxStress <= 350 ? "text-emerald-400" : "text-rose-400"}`}>
-                {currentMaxStress <= 350 ? "Compliant" : "Violated"}
-              </div>
-            </div>
-          </div>
-
-          {/* Live CMA-ES Trigger & Traffic Button */}
+          {/* Action Buttons */}
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleRunOptimizer}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-all shadow-lg ${
                 isOptimizing
                   ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
-                  : "bg-gradient-to-r from-sky-500 to-indigo-500 hover:scale-[1.02] shadow-sky-500/30"
+                  : "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:scale-[1.02] shadow-orange-500/30"
               }`}
             >
               <Sparkles className="h-4 w-4" />
-              <span>{isOptimizing ? "Stop Optimization" : "Run Live CMA-ES Optimizer"}</span>
+              <span>{isOptimizing ? "Stop Optimization" : "Run 8D CMA-ES Optimization"}</span>
             </button>
 
             <button

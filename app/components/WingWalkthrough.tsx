@@ -24,17 +24,17 @@ export function WingWalkthrough() {
     {
       step: 1,
       title: "Initial State & Normalization",
-      subtitle: "Center the Gaussian prior in the unit box [0,1]³",
-      math: "m^{(0)} = (0.5, 0.5, 0.5)^\\top, \\quad \\sigma^{(0)} = 0.3, \\quad C^{(0)} = I_3",
-      desc: "All physical ranges are mapped linearly into the unit cube: Aspect Ratio (6 to 14) → [0, 1], Sweep (0° to 40°) → [0, 1], and Airfoil Family Index (5 discrete bins) → [0, 1]. Starting with C = I ensures our initial ignorance is completely isotropic.",
+      subtitle: "Center the Gaussian prior in the 8D unit hypercube [0,1]⁸",
+      math: "m^{(0)} = (0.5, \\dots, 0.5)^\\top \\in \\mathbb{R}^8, \\quad \\sigma^{(0)} = 0.25, \\quad C^{(0)} = I_8",
+      desc: "All 8 physical parameters are encoded into the unit hypercube [0, 1]⁸: aspect ratio, sweep angle, thickness ratio, camber, camber position, taper ratio, categorical airfoil family bins, and internal structural ribs. Initializing with C = I₈ establishes an isotropic, unbiased prior across all design dimensions.",
       tag: "Setup"
     },
     {
       step: 2,
-      title: "Generation 1: Blind Exploration",
-      subtitle: "Sample λ offspring & run expensive CFD",
-      math: "x_i^{(1)} \\sim \\mathcal{N}(m^{(0)}, (\\sigma^{(0)})^2 I_3), \\quad i = 1, \\dots, \\lambda",
-      desc: "Sample λ = 12 candidate wings. For each vector: decode to physical NACA parameters, build the 3D surface mesh, run multi-regime CFD, and compute the blended aerodynamic score f(x_i). Sort samples by rank.",
+      title: "Generation 1: Exploration",
+      subtitle: "Sample λ offspring & run CFD evaluations",
+      math: "x_i^{(1)} \\sim \\mathcal{N}(m^{(0)}, (\\sigma^{(0)})^2 I_8), \\quad i = 1, \\dots, \\lambda",
+      desc: "Sample λ = 12 candidate wings. For each vector, decode to physical NACA parameters, construct the 3D surface mesh, execute multi-regime aerodynamic solver runs, and compute scalar performance f(x_i). Sort samples by relative rank.",
       tag: "Sampling"
     },
     {
@@ -42,7 +42,7 @@ export function WingWalkthrough() {
       title: "Recombination & Mean Shift",
       subtitle: "Move mean toward the weighted top μ elites",
       math: "m^{(1)} = \\sum_{i=1}^{\\mu} w_i x_{i:\\lambda}^{(1)}, \\quad \\Delta m = m^{(1)} - m^{(0)}",
-      desc: "Compute the new center of mass as a weighted average of the best μ = 4 wings. The shift Δm represents the empirical direction of positive aerodynamic progress.",
+      desc: "Compute the new distribution center as a weighted average of the best μ = 4 wings. The shift Δm represents the empirical direction of positive aerodynamic performance.",
       tag: "Recombination"
     },
     {
@@ -50,15 +50,15 @@ export function WingWalkthrough() {
       title: "Accumulating Evolution Paths",
       subtitle: "Track momentum for step size (p_σ) and covariance (p_c)",
       math: "p_\\sigma \\leftarrow (1-c_\\sigma) p_\\sigma + \\sqrt{c_\\sigma(2-c_\\sigma)\\mu_{\\text{eff}}}\\, C^{-1/2} \\frac{\\Delta m}{\\sigma}",
-      desc: "The path p_σ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, p_σ grows long (telling the optimizer to expand σ). If steps oscillate or jitter, p_σ shrinks.",
+      desc: "The path p_σ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, p_σ grows longer (triggering σ expansion). If steps oscillate, p_σ contracts.",
       tag: "Memory"
     },
     {
       step: 5,
       title: "Covariance Adaptation (Rank-1 & Rank-μ)",
-      subtitle: "Stretch the ellipsoid along safe aerodynamic ridges",
+      subtitle: "Stretch the ellipsoid along aerodynamic ridges",
       math: "C^{(1)} = (1 - c_1 - c_\\mu) C^{(0)} + c_1 p_c p_c^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i y_i y_i^\\top",
-      desc: "Rank-1 updates elongate C along the historical momentum path p_c. Rank-μ updates align the ellipsoid with the spread of the current elite cloud. The Gaussian morphs from a sphere into an elongated cigar.",
+      desc: "Rank-1 updates elongate C along historical momentum path p_c. Rank-μ updates align the ellipsoid with the spread of the current elite cloud. The Gaussian transforms from a sphere into an elongated ellipsoid.",
       tag: "Adaptation"
     },
     {
@@ -66,7 +66,7 @@ export function WingWalkthrough() {
       title: "Generations 5–15: Geometry Learning",
       subtitle: "Approximating the transonic inverse Hessian H⁻¹",
       math: "C \\approx H^{-1}_{\\text{aero}}, \\quad \\sigma \\text{ automatically contracts}",
-      desc: "After several CFD batches, CMA-ES discovers that increasing aspect ratio while simultaneously increasing sweep angle is benign, whereas increasing aspect ratio with zero sweep causes severe shock stall. The ellipsoid aligns perfectly with the benign diagonal ridge.",
+      desc: "Over successive batches, CMA-ES discovers that increasing aspect ratio while simultaneously increasing sweep angle is benign, whereas increasing aspect ratio with zero sweep causes severe shock stall. The ellipsoid aligns with the benign diagonal ridge.",
       tag: "Curvature"
     },
     {
@@ -74,7 +74,7 @@ export function WingWalkthrough() {
       title: "Local Refinement & Restarts",
       subtitle: "Precision convergence and IPOP/BIPOP global sweeps",
       math: "\\sigma \\to 10^{-4}, \\quad x^* = \\arg\\max L/D",
-      desc: "In late generations, σ shrinks to micro-scale, performing tight precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, IPOP/BIPOP restarts with doubled population size automatically.",
+      desc: "In late generations, σ shrinks to micro-scale, performing precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, IPOP/BIPOP restarts with increased population size.",
       tag: "Convergence"
     }
   ];
@@ -83,15 +83,15 @@ export function WingWalkthrough() {
     <div className="space-y-10">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
-          Let&apos;s trace CMA-ES in slow motion through a concrete engineering challenge: designing an optimal
-          transonic aircraft wing in three design dimensions{" "}
-          <MathJax inline>{"$x_1, x_2, x_3 \\in [0, 1]$"}</MathJax>.
+          Let&apos;s trace CMA-ES through a concrete engineering challenge: designing an optimal
+          transonic aircraft wing across an 8-dimensional mixed parameter space{" "}
+          <MathJax inline>{"$x \\in [0, 1]^8$"}</MathJax> spanning continuous planform geometry,
+          discrete structural rib counts, and categorical airfoil family profiles.
         </p>
 
         <p>
-          Every single CFD evaluation costs hours of supercomputer meshing. Every generation must extract
-          maximal geometric information about which combinations of aspect ratio, sweep, and camber yield high
-          lift-to-drag (<MathJax inline>{"$L/D$"}</MathJax>) while avoiding structural failure.
+          Every single aerodynamic evaluation balances lift-to-drag (<MathJax inline>{"$L/D$"}</MathJax>) against
+          transonic wave drag divergence, skin friction, and wing root bending moment limits.
         </p>
       </div>
 

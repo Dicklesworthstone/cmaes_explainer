@@ -8,31 +8,31 @@ export function WhyILove() {
       icon: Compass,
       color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
       title: "Principled Distribution-Space Updates",
-      desc: "Maintains an explicit multivariate normal search distribution. Updates are not ad-hoc genetic hacks, but canonical natural-gradient steps on the Riemannian manifold of Gaussians with the Fisher information metric."
+      desc: "Maintains an explicit multivariate normal search distribution. Updates are canonical natural-gradient steps on the Riemannian manifold of Gaussians with the Fisher information metric."
     },
     {
       icon: Shield,
       color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
       title: "Total Invariance to Units & Monotone Warping",
-      desc: "Rank-based selection ignores raw values—so scaling, shifting, or applying any strictly increasing transformation g(f(x)) (e.g. logarithmic or exponential scoring) leaves the optimizer's trajectory completely identical."
+      desc: "Rank-based selection evaluates only relative ordering, so scaling, shifting, or applying any strictly increasing transformation g(f(x)) (such as logarithmic or exponential rewards) leaves the optimization path identical."
     },
     {
       icon: Zap,
       color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
       title: "Converts Expensive Evals into Geometry Learning",
-      desc: "When each simulator run takes hours on a supercomputer cluster, zero data can be wasted. CMA-ES extracts every ounce of curvature information, adapting covariance C ∝ H⁻¹ to glide down ill-conditioned ridges."
+      desc: "When each simulation run takes hours on a compute cluster, every sample must count. CMA-ES extracts maximal curvature information, adapting covariance C ∝ H⁻¹ to navigate ill-conditioned ravines."
     },
     {
       icon: Cpu,
       color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
       title: "Mixed Discrete/Continuous Versatility",
-      desc: "By normalizing all parameters into [0, 1]ⁿ and decoding at simulator boundaries, CMA-ES handles continuous dimensions, quantized integers, and categorical knobs in one unified search vector."
+      desc: "By normalizing parameters into a [0, 1]ⁿ unit cube and decoding at simulation boundaries, CMA-ES handles continuous dimensions, quantized integers, and categorical choices in a single search vector."
     },
     {
       icon: Sparkles,
       color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
       title: "Virtually Parameter-Free Out of the Box",
-      desc: "Default heuristics (λ ≈ 4 + 3 ln n, CSA damping constants, recombination weights) work flawlessly across almost all domains without tedious manual hyperparameter tuning."
+      desc: "Default heuristics (λ ≈ 4 + 3 ln n, CSA damping constants, recombination weights) function reliably across diverse problem domains without tedious manual hyperparameter sweeps."
     }
   ];
 

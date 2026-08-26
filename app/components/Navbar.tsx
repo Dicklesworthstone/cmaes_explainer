@@ -17,22 +17,26 @@ const sections = [
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const activeId = useScrollSpy(sections.map((s) => s.id));
 
-  // Handle scroll background for desktop
+  // Handle scroll background & reading progress
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
+    const handler = () => {
+      setScrolled(window.scrollY > 20);
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (totalHeight > 0) {
+        setScrollProgress(Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100)));
+      }
+    };
     handler();
-    window.addEventListener("scroll", handler);
+    window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
-    // Lock body scroll only while the mobile menu is open. When closing,
-    // remove the inline override entirely so the stylesheet's overflow-x
-    // rule keeps applying (an inline "unset" would clobber it forever).
     if (mobileMenuOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -42,6 +46,13 @@ export function Navbar() {
 
   return (
     <>
+      {/* Top Reading Progress Bar */}
+      <div className="fixed top-0 inset-x-0 h-1 z-[100] bg-slate-950/40 pointer-events-none">
+        <div
+          className="h-full bg-gradient-to-r from-sky-400 via-cyan-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)] transition-all duration-75 ease-out"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
       {/* --- Desktop Header --- */}
       <header
         className={`fixed top-0 inset-x-0 z-50 transition-[background-color,border-color,padding] duration-500 hidden lg:block ${

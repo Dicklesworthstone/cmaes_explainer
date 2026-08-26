@@ -106,7 +106,7 @@ export function NoiseExplorer() {
     setNoisyLossHistory([s0.bestFitness]);
     setGeneration(0);
     setIsPlaying(false);
-  }, [lambda, sampleNoise, setHistory, setTrueLossHistory, setNoisyLossHistory]);
+  }, [lambda, sampleNoise]);
 
   const stepOptimizer = useCallback(() => {
     const opt = getOrInitOptimizer();
@@ -117,7 +117,7 @@ export function NoiseExplorer() {
     setTrueLossHistory((prev) => [...prev, trueBest]);
     setNoisyLossHistory((prev) => [...prev, nextState.bestFitness]);
     setGeneration((g) => g + 1);
-  }, [getOrInitOptimizer, setHistory, setTrueLossHistory, setNoisyLossHistory]);
+  }, [getOrInitOptimizer]);
 
   useEffect(() => {
     if (!isPlaying) return;

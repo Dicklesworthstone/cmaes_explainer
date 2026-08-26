@@ -75,7 +75,7 @@ export function CommunitySplit() {
           <span>The Unified Insight</span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Both paradigms reach peak mathematical elegance when they abandon raw point-based updates in favor of <strong>optimizing probability distributions with Natural Gradients</strong> under the Fisher Information metric. Bridging these communities unlocks immense leverage for modern AI systems.
+          Both paradigms converge when they optimize parameter probability distributions with natural gradients under the Fisher Information metric. Bridging zero-order distribution updates with first-order automatic differentiation enables robust exploration across both physical engineering models and neural architectures.
         </p>
       </div>
     </div>

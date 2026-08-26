@@ -142,7 +142,7 @@ export function WasmDemo() {
     const newStart: [number, number] = [-1.5, 1.8];
     setStartPoint(newStart);
     setIsPlaying(false);
-    const { initialStep, gd, rs } = createOptimizerState(
+    const { initialStep, gd, adam, rs } = createOptimizerState(
       bench,
       newStart,
       initialSigma,
@@ -153,6 +153,7 @@ export function WasmDemo() {
     );
     setHistory([initialStep]);
     setGdHistory(gd);
+    setAdamHistory(adam);
     setRsHistory(rs);
   };
 
@@ -676,10 +677,10 @@ export function WasmDemo() {
 
                 {/* Live Diagnostics HUD */}
                 {latestState && (
-                  <div className="absolute bottom-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono space-y-1 shadow-2xl pointer-events-none">
-                    <div className="text-emerald-400 font-bold">Best f(x): {latestState.bestFitness.toExponential(3)}</div>
-                    <div className="text-sky-300">Step σ: {latestState.sigma.toFixed(4)}</div>
-                    <div className="text-purple-300">Cond κ(C): {latestState.conditionNumber.toFixed(1)}</div>
+                  <div className="absolute bottom-3 right-3 bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/10 text-[0.68rem] sm:text-xs font-mono space-y-0.5 sm:space-y-1 shadow-2xl pointer-events-none">
+                    <div className="text-emerald-400 font-bold">Best: {latestState.bestFitness < 1e-3 ? latestState.bestFitness.toExponential(2) : latestState.bestFitness.toFixed(3)}</div>
+                    <div className="text-sky-300">σ: {latestState.sigma.toFixed(3)}</div>
+                    <div className="text-purple-300">κ(C): {latestState.conditionNumber.toFixed(1)}</div>
                     <div className="text-slate-400">Evals: {latestState.evalCount}</div>
                   </div>
                 )}

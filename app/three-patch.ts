@@ -24,8 +24,8 @@ function patchTimerTimer(timerCtor: TimerCtor | undefined) {
     
     return original.call(this, doc);
   };
-  if (typeof console !== "undefined") {
-    console.log("[three-patch] Timer.connect patched");
+  if (process.env.NODE_ENV === "development" && typeof console !== "undefined") {
+    console.debug("[three-patch] Timer.connect patched");
   }
 }
 

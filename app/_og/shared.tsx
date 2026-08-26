@@ -163,20 +163,20 @@ function sampleDot(alongMajor: number, alongMinor: number, r: number, fill: stri
 }
 
 // Hand-authored Gaussian-ish cloud stretched along the covariance major axis.
-const D0 = sampleDot(46, -4, 3.6, "#34d399", 0.95);
-const D1 = sampleDot(20, 9, 3.2, "#34d399", 0.95);
-const D2 = sampleDot(-32, 7, 3.4, "#34d399", 0.95);
-const D3 = sampleDot(-8, -14, 3.0, "#34d399", 0.85);
-const D4 = sampleDot(11, -17, 2.9, "#38bdf8", 0.8);
-const D5 = sampleDot(-13, -12, 2.8, "#38bdf8", 0.8);
-const D6 = sampleDot(-50, -3, 3.1, "#38bdf8", 0.75);
-const D7 = sampleDot(-72, 7, 2.6, "#818cf8", 0.65);
-const D8 = sampleDot(27, 19, 2.9, "#38bdf8", 0.75);
-const D9 = sampleDot(-26, 21, 3.0, "#38bdf8", 0.7);
-const D10 = sampleDot(62, -11, 2.7, "#818cf8", 0.6);
-const D11 = sampleDot(-61, 17, 2.5, "#818cf8", 0.55);
-const D12 = sampleDot(43, -21, 2.4, "#818cf8", 0.55);
-const D13 = sampleDot(6, 25, 2.6, "#38bdf8", 0.65);
+const D0 = sampleDot(56, -5, 4.4, "#34d399", 0.95);
+const D1 = sampleDot(24, 11, 4.0, "#34d399", 0.95);
+const D2 = sampleDot(-39, 9, 4.2, "#34d399", 0.95);
+const D3 = sampleDot(-10, -17, 3.7, "#34d399", 0.85);
+const D4 = sampleDot(13, -21, 3.6, "#38bdf8", 0.85);
+const D5 = sampleDot(-16, -15, 3.5, "#38bdf8", 0.85);
+const D6 = sampleDot(-61, -4, 3.8, "#38bdf8", 0.8);
+const D7 = sampleDot(-88, 9, 3.2, "#818cf8", 0.7);
+const D8 = sampleDot(33, 23, 3.6, "#38bdf8", 0.8);
+const D9 = sampleDot(-32, 26, 3.7, "#38bdf8", 0.75);
+const D10 = sampleDot(75, -14, 3.3, "#818cf8", 0.65);
+const D11 = sampleDot(-74, 21, 3.1, "#818cf8", 0.6);
+const D12 = sampleDot(52, -26, 3.0, "#818cf8", 0.6);
+const D13 = sampleDot(7, 31, 3.2, "#38bdf8", 0.7);
 
 // ---------------------------------------------------------------------------
 // The card.
@@ -324,7 +324,7 @@ export async function renderShareCard(width: number, height: number): Promise<Im
               color: "#94a3b8",
             }}
           >
-            Watch a population learn the shape of a landscape — then run the real
+            Watch a population learn the shape of a landscape, then run the real
             Rust engine live in your browser.
           </div>
 

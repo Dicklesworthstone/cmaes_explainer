@@ -281,10 +281,10 @@ function FiniteDifferenceFailDemo() {
           <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20 text-xs text-slate-300 space-y-2">
             <div className="flex items-center gap-1.5 font-bold text-rose-300 uppercase tracking-wide">
               <Flame className="h-3.5 w-3.5" />
-              <span>The Fatal Dilemma of Numerical Gradients</span>
+              <span>The Limit of Numerical Gradients</span>
             </div>
             <p className="leading-relaxed">
-              If (n = 20) dimensions, finite differences require <strong>21 expensive multi-hour simulation runs per step</strong>, and the resulting vector is pointing completely in the wrong direction due to high-frequency noise. CMA-ES bypasses this by estimating distribution shifts over the whole population.
+              With $n = 20$ dimensions, forward finite differences require <strong>21 simulation runs per step</strong>, and localized perturbation noise points the resulting vector in a misleading direction. CMA-ES estimates collective distribution shifts over the population to remain stable.
             </p>
           </div>
         </div>
@@ -299,14 +299,14 @@ export function NoGradientExamples() {
       id: "wing",
       icon: PlaneTakeoff,
       title: "1. Transonic Aircraft Wing Aerodynamics",
-      subtitle: "10–20 geometry parameters; 3 hours per CFD run; discrete airfoil families",
+      subtitle: "10–20 geometry parameters; hours per CFD run; discrete airfoil families",
       metrics: [
-        "Full Navier-Stokes CFD meshing & turbulence boundary layer switching",
-        "Blended scalar penalty: Lift/Drag ratio, wave drag, stall onset, root bending stress",
-        "Categorical NACA airfoil family choices introduce discrete step discontinuities",
-        "Grid search is impossible: 10 values across 15 dimensions = 10¹⁵ simulations"
+        "Navier-Stokes CFD meshing with turbulence boundary layer transitions",
+        "Blended scalar penalty: lift-to-drag ratio, wave drag, stall onset, root bending stress",
+        "Categorical NACA airfoil family indices introduce discrete step discontinuities",
+        "Grid search is intractable: 10 sample points across 15 dimensions requires 10¹⁵ evaluations"
       ],
-      solution: "CMA-ES discovers the optimal sweep and aspect ratio in ~40 generations (~300 evaluations)."
+      solution: "CMA-ES discovers optimal sweep and aspect ratio combinations in ~40 generations."
     },
     {
       id: "bridge",
@@ -314,12 +314,12 @@ export function NoGradientExamples() {
       title: "2. Nonlinear Structural FEA Suspension Bridge",
       subtitle: "Mode crossings, wind vortex resonance, stress envelope constraints",
       metrics: [
-        "Solve massive nonlinear elasticity equations under dead, live, wind, and seismic load cases",
-        "Sharp step changes when buckling modes cross or tensile stress exceeds 500 MPa safety limits",
-        "Non-smooth constraint penalties ruin second-order Hessian Taylor approximations",
-        "Rank-based selection naturally handles discontinuous penalty boundaries"
+        "Solves nonlinear elasticity systems under dead, live, wind, and seismic load combinations",
+        "Step changes occur when buckling modes cross or tensile stress exceeds 500 MPa safety limits",
+        "Non-smooth constraint penalties degrade second-order Taylor approximations",
+        "Rank-based selection handles discontinuous penalty boundaries without numerical overflow"
       ],
-      solution: "CMA-ES adapts covariance to eliminate high-stress zones while minimizing total steel tonnage."
+      solution: "CMA-ES adapts covariance to relieve high-stress zones while minimizing total steel tonnage."
     },
     {
       id: "transformer",
@@ -327,12 +327,12 @@ export function NoGradientExamples() {
       title: "3. Neural Architecture & Mixed Hyperparameter Search",
       subtitle: "Mixed continuous/discrete knobs, stochastic validation noise, budget ~200 evals",
       metrics: [
-        "Continuous parameters: Learning rate schedule, weight decay, SwiGLU beta, LayerNorm eps",
-        "Discrete architectural integers: Number of layers L ∈ [6..48], d_model, attention heads",
-        "Evaluation requires days of TPU pod training with noisy stochastic validation scores",
-        "Encode/decode unit box mapping smoothly bridges discrete choices without custom algorithms"
+        "Continuous parameters: learning rate schedule, weight decay, SwiGLU beta, LayerNorm eps",
+        "Discrete architectural integers: layer count L ∈ [6..48], d_model, attention head counts",
+        "Evaluation requires multi-hour cluster training with stochastic validation scores",
+        "Unit-box encoding maps discrete choices into continuous search space without custom heuristics"
       ],
-      solution: "CMA-ES navigates the multi-objective Pareto frontier of accuracy vs inference latency."
+      solution: "CMA-ES navigates multi-objective trade-offs between validation accuracy and inference latency."
     }
   ];
 
@@ -340,14 +340,11 @@ export function NoGradientExamples() {
     <div className="space-y-12">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
-          When people first hear &ldquo;black-box optimization without gradients,&rdquo; it sounds like a
-          minor inconvenience. <em>&ldquo;Just approximate the derivative with finite differences,&rdquo;</em> they say.
+          When people first encounter optimization without analytic gradients, a common suggestion is to approximate derivatives via finite differences.
         </p>
 
         <p>
-          In reality, real-world physical simulators, complex engineering pipelines, and neural training runs
-          are filled with numerical noise, turbulence switches, finite-element meshing jumps, and categorical choices.
-          Finite differences amplify noise and produce completely bogus gradient directions.
+          In production engineering pipelines, simulations contain turbulence switches, finite-element meshing boundaries, and categorical parameters. Finite difference quotients amplify localized noise into arbitrary vectors.
         </p>
       </div>
 

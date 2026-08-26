@@ -41,9 +41,11 @@ export function RestartStrategyViewer() {
   }, []);
 
   const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
+    const startX = (Math.random() - 0.5) * 5.0;
+    const startY = (Math.random() - 0.5) * 5.0;
     const opt = new CMAESOptimizer(multimodalFn, {
       dim: 2,
-      initialMean: [1.5, 1.5],
+      initialMean: [startX, startY],
       initialSigma: 0.6,
       lambda: 8,
       bounds: [-3.5, 3.5]

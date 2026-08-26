@@ -122,13 +122,14 @@ export function CAGalleryTrace() {
     // Optimize mu in [0.15, 0.45] and sigma in [0.02, 0.09] to maximize sustained spatial complexity
     const optimizer = new CMAESOptimizer(
       (mVal, sVal) => {
-        // Evaluate CA score over 15 simulation steps
-        let testGrid = new Float32Array(gridStateRef.current.current);
-        let testNext = new Float32Array(GRID_SIZE * GRID_SIZE);
+        // Evaluate CA score over 15 simulation steps using alternating ping-pong buffers
+        const bufA = new Float32Array(gridStateRef.current.current);
+        const bufB = new Float32Array(GRID_SIZE * GRID_SIZE);
         let scoreSum = 0;
         for (let s = 0; s < 15; s++) {
-          const e = stepCA(testGrid, testNext, mVal, sVal, 0.2);
-          testGrid = testNext;
+          const src = s % 2 === 0 ? bufA : bufB;
+          const dst = s % 2 === 0 ? bufB : bufA;
+          const e = stepCA(src, dst, mVal, sVal, 0.2);
           scoreSum += e;
         }
         // Maximize entropy -> minimize negative entropy
@@ -243,7 +244,7 @@ export function CAGalleryTrace() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Growth Center ($\mu$)</span>
+                <span className="text-slate-300">Growth Center <span className="text-purple-300 font-bold font-mono">(μ)</span></span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {mu.toFixed(3)}
                 </span>
@@ -262,7 +263,7 @@ export function CAGalleryTrace() {
 
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Growth Width ($\sigma$)</span>
+                <span className="text-slate-300">Growth Width <span className="text-pink-300 font-bold font-mono">(σ)</span></span>
                 <span className="text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
                   {sigma.toFixed(3)}
                 </span>

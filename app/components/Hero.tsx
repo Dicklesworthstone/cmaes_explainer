@@ -87,9 +87,9 @@ export function Hero() {
               transition={{ duration: 0.75, delay: 0.2 }}
               className="text-balance max-w-xl"
             >
-              If you have cheap, smooth gradients, use Adam or SGD. But when gradients{" "}
-              <strong className="text-sky-200 font-semibold">do not exist, lie, or cost hours per evaluation</strong>
-              —like aircraft aerodynamics, suspension bridge FEA, or discrete neural architecture search—CMA-ES is the undisputed gold standard.
+              When gradients are cheap and smooth, Adam and SGD excel. But when gradients{" "}
+              <strong className="text-sky-200 font-semibold">do not exist, suffer from severe noise, or cost hours per evaluation</strong>
+              , such as in aircraft CFD, suspension bridge FEA, or discrete neural architecture search, CMA-ES is the standard workhorse.
             </motion.p>
 
             <motion.p
@@ -98,7 +98,7 @@ export function Hero() {
               transition={{ duration: 0.75, delay: 0.25 }}
               className="text-balance max-w-xl text-sm sm:text-base text-slate-400"
             >
-              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong> and iteratively morphs its mean and covariance matrix to mirror the objective&apos;s inverse Hessian—learning the curvature of the landscape without a single derivative.
+              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong> and iteratively reshapes its mean and covariance matrix to mirror the objective&apos;s inverse Hessian, discovering landscape curvature without calculating derivatives.
             </motion.p>
           </div>
 

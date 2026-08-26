@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MathJax } from "better-react-mathjax";
 import { Sliders, Activity, Compass, ArrowRight, Sparkles } from "lucide-react";
 import { eigen2x2 } from "../lib/cmaesEngine";
 
