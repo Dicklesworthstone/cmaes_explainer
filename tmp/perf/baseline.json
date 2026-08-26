@@ -1,0 +1,73 @@
+{
+  "main": {
+    "missing": false,
+    "fps": 0.4,
+    "p95": 5065.9,
+    "worst": 5065.9,
+    "longTasks": 1,
+    "canvases": 23
+  },
+  "what-is-cmaes": {
+    "missing": false,
+    "fps": 0.4,
+    "p95": 4467.4,
+    "worst": 4467.4,
+    "longTasks": 0,
+    "canvases": 23
+  },
+  "no-gradients": {
+    "missing": false,
+    "fps": 53.8,
+    "p95": 30.9,
+    "worst": 4276.9,
+    "longTasks": 1,
+    "canvases": 23
+  },
+  "wing-walkthrough": {
+    "missing": false,
+    "fps": 0.7,
+    "p95": 5110.3,
+    "worst": 5110.3,
+    "longTasks": 2,
+    "canvases": 23
+  },
+  "engines": {
+    "missing": false,
+    "fps": 42.9,
+    "p95": 78.2,
+    "worst": 205,
+    "longTasks": 4,
+    "canvases": 23
+  },
+  "live-demo": {
+    "missing": false,
+    "fps": 39.9,
+    "p95": 58.1,
+    "worst": 78.6,
+    "longTasks": 0,
+    "canvases": 23
+  },
+  "internals": {
+    "missing": false,
+    "fps": 0.2,
+    "p95": 12968.8,
+    "worst": 12968.8,
+    "longTasks": 0,
+    "canvases": 23
+  },
+  "technical-addendum": {
+    "missing": false,
+    "fps": 46.5,
+    "p95": 50.6,
+    "worst": 398.9,
+    "longTasks": 5,
+    "canvases": 23
+  },
+  "_scrollPass": {
+    "samples": 63,
+    "p50": 51.329999923706055,
+    "p95": 209.75999999046326,
+    "worst": 267
+  },
+  "_consoleErrors": []
+}

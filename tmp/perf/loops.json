@@ -1,0 +1,188 @@
+{
+  "inv": {
+    "intervals": [
+      {
+        "delay": 1000,
+        "stack": "    at <anonymous>:15:5 |     at <anonymous>:16:5 |     at <anonymous>:17:7"
+      },
+      {
+        "delay": 250,
+        "stack": "    at e.enable (http://localhost:3312/_next/static/chunks/91f6d8f3bf57730b.js:767:129984) |     at e.register (http://localhost:3312/_next/static/chunks/91f6d8f3bf57730b.js:767:128097) |     at tE (http://localhost:3312/_next/static/chunks/91f6d8f3bf57730b.js:767:36413)"
+      },
+      {
+        "delay": 100,
+        "stack": "    at http://localhost:3312/_next/static/chunks/91f6d8f3bf57730b.js:767:915743 |     at ih (http://localhost:3312/_next/static/chunks/25a0b016763f1e27.js:1:102171) |     at uf (http://localhost:3312/_next/static/chunks/25a0b016763f1e27.js:1:126021)"
+      },
+      {
+        "delay": 180,
+        "stack": "    at i (http://localhost:3312/_next/static/chunks/91f6d8f3bf57730b.js:767:144352) |     at ih (http://localhost:3312/_next/static/chunks/25a0b016763f1e27.js:1:102171) |     at uf (http://localhost:3312/_next/static/chunks/25a0b016763f1e27.js:1:126021)"
+      }
+    ],
+    "rafPerSec": 8,
+    "canvasCount": 23,
+    "canvases": [
+      {
+        "w": 446,
+        "h": 446,
+        "inView": true,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 1080,
+        "h": 760,
+        "inView": false,
+        "webglProbe": true,
+        "cls": "w-full h-auto block cursor-crosshair touch-none select-none"
+      },
+      {
+        "w": 1080,
+        "h": 600,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 300,
+        "h": 150,
+        "inView": false,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 164,
+        "h": 164,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-full block"
+      },
+      {
+        "w": 300,
+        "h": 150,
+        "inView": false,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 960,
+        "h": 480,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block cursor-crosshair focus:outline-none focu"
+      },
+      {
+        "w": 300,
+        "h": 150,
+        "inView": false,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 164,
+        "h": 164,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-full block"
+      },
+      {
+        "w": 1120,
+        "h": 840,
+        "inView": false,
+        "webglProbe": true,
+        "cls": "w-full h-auto block cursor-crosshair focus:outline-none focu"
+      },
+      {
+        "w": 840,
+        "h": 400,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 300,
+        "h": 150,
+        "inView": false,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 376,
+        "h": 96,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "block"
+      },
+      {
+        "w": 760,
+        "h": 520,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 300,
+        "h": 150,
+        "inView": false,
+        "webglProbe": true,
+        "cls": ""
+      },
+      {
+        "w": 376,
+        "h": 96,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "block"
+      },
+      {
+        "w": 920,
+        "h": 520,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 920,
+        "h": 280,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 800,
+        "h": 800,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 960,
+        "h": 640,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 960,
+        "h": 520,
+        "inView": false,
+        "webglProbe": false,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 960,
+        "h": 240,
+        "inView": false,
+        "webglProbe": true,
+        "cls": "w-full h-auto block"
+      },
+      {
+        "w": 96,
+        "h": 96,
+        "inView": false,
+        "webglProbe": true,
+        "cls": "w-full h-full block image-rendering-pixelated select-none"
+      }
+    ]
+  },
+  "failed": []
+}
