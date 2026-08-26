@@ -1,251 +1,284 @@
 /**
- * High-Dimensional N-D CMA-ES Engine with 3D PCA Phase-Space Projection
+ * Numerically robust N-dimensional CMA-ES engine with a centered 3-D PCA view.
  *
- * Implements:
- * 1. Full N-Dimensional Covariance Matrix Adaptation Evolution Strategy (Hansen 2016).
- * 2. Exact Jacobi Symmetric Eigendecomposition (O(N^3) stable rotation).
- * 3. 3D Principal Component Analysis (PCA) projection of the N-dimensional Gaussian
- *    distribution N(m, sigma^2 C) down to 3D phase space.
- * 4. Real-time 3D Covariance Ellipsoid parameter extraction (radii, orientation, elite cloud).
+ * The optimizer uses Hansen's active-CMA defaults: logarithmic positive and
+ * negative covariance weights, Mahalanobis-length normalization for negative
+ * updates, cumulative step-size adaptation, and the h_sigma covariance
+ * correction. Each returned phase-space snapshot is expressed in one coherent
+ * frame: the updated mean is the origin, and the samples, paths, and covariance
+ * ellipsoid all use the updated covariance's top principal directions.
  */
 
 export type VectorND = number[];
 export type MatrixND = number[][];
 
+const TWO_POW_32 = 0x100000000;
+const RELATIVE_EIGENVALUE_FLOOR = 1e-14;
+
 export function createZeroVector(dim: number): VectorND {
+  if (!Number.isInteger(dim) || dim < 0) throw new RangeError("Vector dimension must be a non-negative integer.");
   return new Array(dim).fill(0);
 }
 
 export function createZeroMatrix(dim: number): MatrixND {
+  if (!Number.isInteger(dim) || dim < 0) throw new RangeError("Matrix dimension must be a non-negative integer.");
   return Array.from({ length: dim }, () => new Array(dim).fill(0));
 }
 
 export function createIdentityMatrix(dim: number): MatrixND {
-  const m = createZeroMatrix(dim);
-  for (let i = 0; i < dim; i++) m[i][i] = 1;
-  return m;
+  const matrix = createZeroMatrix(dim);
+  for (let i = 0; i < dim; i++) matrix[i][i] = 1;
+  return matrix;
 }
 
-export function cloneVector(v: VectorND): VectorND {
-  return [...v];
+export function cloneVector(vector: VectorND): VectorND {
+  return [...vector];
 }
 
-export function cloneMatrix(m: MatrixND): MatrixND {
-  return m.map((r) => [...r]);
+export function cloneMatrix(matrix: MatrixND): MatrixND {
+  return matrix.map((row) => [...row]);
+}
+
+function assertSameLength(a: VectorND, b: VectorND, operation: string): void {
+  if (a.length !== b.length) {
+    throw new RangeError(`${operation} requires vectors of equal length; received ${a.length} and ${b.length}.`);
+  }
 }
 
 export function vecDot(a: VectorND, b: VectorND): number {
+  assertSameLength(a, b, "vecDot");
   let sum = 0;
-  const n = a.length;
-  for (let i = 0; i < n; i++) sum += a[i] * b[i];
+  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
   return sum;
 }
 
-export function vecNorm(a: VectorND): number {
-  return Math.sqrt(Math.max(0, vecDot(a, a)));
+export function vecNorm(vector: VectorND): number {
+  return Math.sqrt(Math.max(0, vecDot(vector, vector)));
 }
 
-export function matVecMult(m: MatrixND, v: VectorND): VectorND {
-  const dim = m.length;
-  const vLen = v.length;
-  const res = new Array(dim);
-  for (let i = 0; i < dim; i++) {
-    let sum = 0;
-    const row = m[i];
-    for (let j = 0; j < vLen; j++) {
-      sum += row[j] * v[j];
-    }
-    res[i] = sum;
+export function matVecMult(matrix: MatrixND, vector: VectorND): VectorND {
+  if (matrix.some((row) => row.length !== vector.length)) {
+    throw new RangeError("matVecMult requires every matrix row to match the vector length.");
   }
-  return res;
+  return matrix.map((row) => vecDot(row, vector));
 }
 
 export function matMult(a: MatrixND, b: MatrixND): MatrixND {
-  const n = a.length;
-  const res: MatrixND = new Array(n);
-  for (let i = 0; i < n; i++) {
-    const row = new Array(n);
-    const aRow = a[i];
-    for (let j = 0; j < n; j++) {
+  if (a.length === 0 || b.length === 0) return [];
+  const inner = b.length;
+  const columns = b[0].length;
+  if (a.some((row) => row.length !== inner) || b.some((row) => row.length !== columns)) {
+    throw new RangeError("matMult received incompatible or ragged matrices.");
+  }
+  return a.map((row) =>
+    Array.from({ length: columns }, (_, column) => {
       let sum = 0;
-      for (let k = 0; k < n; k++) {
-        sum += aRow[k] * b[k][j];
-      }
-      row[j] = sum;
-    }
-    res[i] = row;
-  }
-  return res;
+      for (let k = 0; k < inner; k++) sum += row[k] * b[k][column];
+      return sum;
+    })
+  );
 }
 
-/**
- * Classical Jacobi Eigenvalue Algorithm for symmetric matrices C = C^T
- * Computes all eigenvalues and orthogonal eigenvector matrix V such that C = V * diag(eigenvalues) * V^T.
- * Uses flat Float64Array memory layout for cache locality and cyclic threshold sweeps.
- */
-export function jacobiEigenSymmetric(matrix: MatrixND, maxIter = 50, tol = 1e-12): {
+export interface SymmetricEigendecompositionND {
   eigenvalues: number[];
-  eigenvectors: MatrixND; // Columns are eigenvectors
-} {
+  eigenvectors: MatrixND;
+}
+
+function validateSquareFiniteMatrix(matrix: MatrixND): number {
   const n = matrix.length;
-  const A = new Float64Array(n * n);
-  const V = new Float64Array(n * n);
-
-  for (let i = 0; i < n; i++) {
-    const row = matrix[i];
-    const offset = i * n;
-    for (let j = 0; j < n; j++) {
-      A[offset + j] = row[j];
-    }
-    V[offset + i] = 1.0;
+  if (n < 1 || matrix.some((row) => row.length !== n || row.some((value) => !Number.isFinite(value)))) {
+    throw new RangeError("A finite, non-empty square matrix is required.");
   }
-
-  for (let iter = 0; iter < maxIter; iter++) {
-    let maxOffDiag = 0;
-
-    for (let p = 0; p < n - 1; p++) {
-      const pOff = p * n;
-      for (let q = p + 1; q < n; q++) {
-        const qOff = q * n;
-        const apq = A[pOff + q];
-        const absApq = Math.abs(apq);
-        if (absApq > maxOffDiag) maxOffDiag = absApq;
-
-        if (absApq < tol) continue;
-
-        const app = A[pOff + p];
-        const aqq = A[qOff + q];
-        const phi = (aqq - app) / (2 * apq);
-        const t = phi >= 0
-          ? 1 / (phi + Math.sqrt(1 + phi * phi))
-          : -1 / (-phi + Math.sqrt(1 + phi * phi));
-
-        const c = 1 / Math.sqrt(1 + t * t);
-        const s = t * c;
-        const tau = s / (1 + c);
-
-        A[pOff + p] = app - t * apq;
-        A[qOff + q] = aqq + t * apq;
-        A[pOff + q] = 0;
-        A[qOff + p] = 0;
-
-        for (let k = 0; k < n; k++) {
-          if (k !== p && k !== q) {
-            const kOff = k * n;
-            const akp = A[kOff + p];
-            const akq = A[kOff + q];
-            const newAkp = akp - s * (akq + tau * akp);
-            const newAkq = akq + s * (akp - tau * akq);
-            A[kOff + p] = newAkp;
-            A[pOff + k] = newAkp;
-            A[kOff + q] = newAkq;
-            A[qOff + k] = newAkq;
-          }
-        }
-
-        for (let k = 0; k < n; k++) {
-          const kOff = k * n;
-          const vkp = V[kOff + p];
-          const vkq = V[kOff + q];
-          V[kOff + p] = vkp - s * (vkq + tau * vkp);
-          V[kOff + q] = vkq + s * (vkp - tau * vkq);
-        }
-      }
-    }
-
-    if (maxOffDiag < tol) break;
-  }
-
-  const indices = new Int32Array(n);
-  for (let i = 0; i < n; i++) indices[i] = i;
-  indices.sort((i, j) => Math.max(1e-12, A[j * n + j]) - Math.max(1e-12, A[i * n + i]));
-
-  const sortedEigenvalues: number[] = new Array(n);
-  const sortedEigenvectors: MatrixND = Array.from({ length: n }, () => new Array(n));
-
-  for (let j = 0; j < n; j++) {
-    const origCol = indices[j];
-    sortedEigenvalues[j] = Math.max(1e-12, A[origCol * n + origCol]);
-    for (let i = 0; i < n; i++) {
-      sortedEigenvectors[i][j] = V[i * n + origCol];
-    }
-  }
-
-  return {
-    eigenvalues: sortedEigenvalues,
-    eigenvectors: sortedEigenvectors
-  };
+  return n;
 }
 
 /**
- * Computes C^{1/2} and C^{-1/2} from eigendecomposition exploiting matrix symmetry
+ * Cyclic Jacobi eigendecomposition for a real symmetric matrix. Columns of the
+ * returned eigenvector matrix correspond to eigenvalues sorted largest-first.
+ * The input is symmetrized against roundoff, and tiny non-positive eigenvalues
+ * are floored relative to the matrix scale for covariance square roots.
  */
-export function computeCovariancePowers(eigenvalues: number[], eigenvectors: MatrixND): {
-  sqrtC: MatrixND;
-  invSqrtC: MatrixND;
-} {
-  const n = eigenvalues.length;
-  const sqrtC: MatrixND = Array.from({ length: n }, () => new Array(n).fill(0));
-  const invSqrtC: MatrixND = Array.from({ length: n }, () => new Array(n).fill(0));
+export function jacobiEigenSymmetric(
+  matrix: MatrixND,
+  maxSweeps = 50,
+  tolerance = 1e-12
+): SymmetricEigendecompositionND {
+  const n = validateSquareFiniteMatrix(matrix);
+  if (!Number.isInteger(maxSweeps) || maxSweeps < 1) throw new RangeError("maxSweeps must be a positive integer.");
+  if (!Number.isFinite(tolerance) || tolerance <= 0) throw new RangeError("tolerance must be a finite positive number.");
 
-  const sVals = new Float64Array(n);
-  const isVals = new Float64Array(n);
-  for (let k = 0; k < n; k++) {
-    const s = Math.sqrt(eigenvalues[k]);
-    sVals[k] = s;
-    isVals[k] = 1 / s;
+  const a = new Float64Array(n * n);
+  const v = new Float64Array(n * n);
+  let scale = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const value = 0.5 * (matrix[i][j] + matrix[j][i]);
+      a[i * n + j] = value;
+      scale = Math.max(scale, Math.abs(value));
+    }
+    v[i * n + i] = 1;
   }
 
-  for (let i = 0; i < n; i++) {
-    const rowEigI = eigenvectors[i];
-    const rowSqrt = sqrtC[i];
-    const rowInvSqrt = invSqrtC[i];
+  const absoluteTolerance = tolerance * Math.max(Number.MIN_VALUE, scale);
+  let residual = Infinity;
+  for (let sweep = 0; sweep < maxSweeps; sweep++) {
+    residual = 0;
+    for (let p = 0; p < n - 1; p++) {
+      for (let q = p + 1; q < n; q++) {
+        const pp = p * n + p;
+        const qq = q * n + q;
+        const pq = p * n + q;
+        const apq = a[pq];
+        residual = Math.max(residual, Math.abs(apq));
+        if (Math.abs(apq) <= absoluteTolerance) continue;
 
-    for (let j = i; j < n; j++) {
-      const rowEigJ = eigenvectors[j];
-      let sumSqrt = 0;
-      let sumInv = 0;
+        const app = a[pp];
+        const aqq = a[qq];
+        const tau = (aqq - app) / (2 * apq);
+        const t = tau >= 0
+          ? 1 / (tau + Math.hypot(1, tau))
+          : -1 / (-tau + Math.hypot(1, tau));
+        const cosine = 1 / Math.sqrt(1 + t * t);
+        const sine = t * cosine;
 
-      for (let k = 0; k < n; k++) {
-        const prod = rowEigI[k] * rowEigJ[k];
-        sumSqrt += prod * sVals[k];
-        sumInv += prod * isVals[k];
-      }
+        for (let k = 0; k < n; k++) {
+          if (k === p || k === q) continue;
+          const kp = k * n + p;
+          const kq = k * n + q;
+          const akp = a[kp];
+          const akq = a[kq];
+          const rotatedP = cosine * akp - sine * akq;
+          const rotatedQ = sine * akp + cosine * akq;
+          a[kp] = rotatedP;
+          a[p * n + k] = rotatedP;
+          a[kq] = rotatedQ;
+          a[q * n + k] = rotatedQ;
+        }
 
-      rowSqrt[j] = sumSqrt;
-      rowInvSqrt[j] = sumInv;
-      if (i !== j) {
-        sqrtC[j][i] = sumSqrt;
-        invSqrtC[j][i] = sumInv;
+        a[pp] = cosine * cosine * app - 2 * sine * cosine * apq + sine * sine * aqq;
+        a[qq] = sine * sine * app + 2 * sine * cosine * apq + cosine * cosine * aqq;
+        a[pq] = 0;
+        a[q * n + p] = 0;
+
+        for (let k = 0; k < n; k++) {
+          const kp = k * n + p;
+          const kq = k * n + q;
+          const vkp = v[kp];
+          const vkq = v[kq];
+          v[kp] = cosine * vkp - sine * vkq;
+          v[kq] = sine * vkp + cosine * vkq;
+        }
       }
     }
+    if (residual <= absoluteTolerance) break;
   }
 
-  return { sqrtC, invSqrtC };
+  if (residual > Math.max(absoluteTolerance * 100, scale * 1e-8)) {
+    throw new RangeError(`Jacobi eigendecomposition did not converge; residual off-diagonal magnitude is ${residual}.`);
+  }
+
+  const ordering = Array.from({ length: n }, (_, index) => index).sort(
+    (left, right) => a[right * n + right] - a[left * n + left]
+  );
+  const rawEigenvalues = ordering.map((index) => a[index * n + index]);
+  const eigenScale = Math.max(Number.MIN_VALUE, ...rawEigenvalues.map(Math.abs));
+  const floor = Math.max(1e-300, RELATIVE_EIGENVALUE_FLOOR * eigenScale);
+  const eigenvalues = rawEigenvalues.map((value) => Math.max(floor, value));
+  const eigenvectors = Array.from({ length: n }, () => new Array<number>(n));
+  for (let column = 0; column < n; column++) {
+    const sourceColumn = ordering[column];
+    for (let row = 0; row < n; row++) eigenvectors[row][column] = v[row * n + sourceColumn];
+  }
+  return { eigenvalues, eigenvectors };
+}
+
+export function computeCovariancePowers(
+  eigenvalues: number[],
+  eigenvectors: MatrixND
+): { sqrtC: MatrixND; invSqrtC: MatrixND } {
+  const n = eigenvalues.length;
+  if (
+    n < 1 ||
+    eigenvectors.length !== n ||
+    eigenvectors.some((row) => row.length !== n || row.some((value) => !Number.isFinite(value))) ||
+    eigenvalues.some((value) => !Number.isFinite(value) || value <= 0)
+  ) {
+    throw new RangeError("computeCovariancePowers requires positive finite eigenvalues and a matching finite eigenvector matrix.");
+  }
+
+  const sqrtValues = eigenvalues.map(Math.sqrt);
+  const inverseSqrtValues = sqrtValues.map((value) => 1 / value);
+  const compose = (diagonal: number[]): MatrixND => {
+    const result = createZeroMatrix(n);
+    for (let i = 0; i < n; i++) {
+      for (let j = i; j < n; j++) {
+        let sum = 0;
+        for (let k = 0; k < n; k++) sum += eigenvectors[i][k] * diagonal[k] * eigenvectors[j][k];
+        result[i][j] = sum;
+        result[j][i] = sum;
+      }
+    }
+    return result;
+  };
+  return { sqrtC: compose(sqrtValues), invSqrtC: compose(inverseSqrtValues) };
+}
+
+function reconstructSymmetric(eigenvalues: number[], eigenvectors: MatrixND): MatrixND {
+  const n = eigenvalues.length;
+  const result = createZeroMatrix(n);
+  for (let i = 0; i < n; i++) {
+    for (let j = i; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < n; k++) sum += eigenvectors[i][k] * eigenvalues[k] * eigenvectors[j][k];
+      result[i][j] = sum;
+      result[j][i] = sum;
+    }
+  }
+  return result;
+}
+
+function nextOpenUnit(rng: () => number): number {
+  for (let attempts = 0; attempts < 1024; attempts++) {
+    const value = rng();
+    if (Number.isFinite(value) && value > 0 && value < 1) return value;
+  }
+  throw new RangeError("Gaussian sampling requires an RNG that produces values strictly between 0 and 1.");
+}
+
+function nextHalfOpenUnit(rng: () => number): number {
+  for (let attempts = 0; attempts < 1024; attempts++) {
+    const value = rng();
+    if (Number.isFinite(value) && value >= 0 && value < 1) return value;
+  }
+  throw new RangeError("Gaussian sampling requires an RNG that produces values in [0, 1).");
 }
 
 export function sampleGaussian(rng: () => number = Math.random): number {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = rng();
-  while (v === 0) v = rng();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  const u = nextOpenUnit(rng);
+  const v = nextHalfOpenUnit(rng);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
 export function sampleGaussianVectorND(dim: number, rng: () => number = Math.random): VectorND {
-  return Array.from({ length: dim }, () => sampleGaussian(rng));
+  if (!Number.isInteger(dim) || dim < 1) throw new RangeError("sampleGaussianVectorND requires a positive integer dimension.");
+  const result = new Array<number>(dim);
+  for (let i = 0; i < dim; i += 2) {
+    const u = nextOpenUnit(rng);
+    const v = nextHalfOpenUnit(rng);
+    const magnitude = Math.sqrt(-2 * Math.log(u));
+    const angle = 2 * Math.PI * v;
+    result[i] = magnitude * Math.cos(angle);
+    if (i + 1 < dim) result[i + 1] = magnitude * Math.sin(angle);
+  }
+  return result;
 }
-
-// ============================================================================
-// N-D Candidate & Generation State
-// ============================================================================
 
 export interface CandidateSampleND {
   id: number;
-  rawX: VectorND; // Unbounded sample in [0, 1]^N
-  x: VectorND; // Repaired sample in [0, 1]^N
-  z: VectorND; // N(0, I) white noise sample
-  projected3D: [number, number, number]; // 3D PCA projection
+  rawX: VectorND;
+  x: VectorND;
+  z: VectorND;
+  projected3D: [number, number, number];
   fitness: number;
   trueFitness: number;
   rank: number;
@@ -254,7 +287,7 @@ export interface CandidateSampleND {
 
 export interface PhaseSpace3DProjection {
   projectedMean: [number, number, number];
-  ellipsoidRadii: [number, number, number]; // sigma * sqrt(lambda_1, lambda_2, lambda_3)
+  ellipsoidRadii: [number, number, number];
   principalAxes3D: [
     [number, number, number],
     [number, number, number],
@@ -291,9 +324,22 @@ export interface CMAESOptionsND {
   lambda?: number;
   activeCMA?: boolean;
   seed?: number;
-  bounds?: [number, number]; // Defaults to [0, 1]
-  repairStrategy?: "clip" | "reflect";
+  bounds?: [number, number];
+  repairStrategy?: "clip" | "reflect" | "none";
   noiseLevel?: number;
+}
+
+function requireFiniteVector(name: string, vector: VectorND, expectedLength: number): void {
+  if (vector.length !== expectedLength || !vector.every(Number.isFinite)) {
+    throw new RangeError(`${name} must contain exactly ${expectedLength} finite values.`);
+  }
+}
+
+function safeObjectiveValue(value: number): number {
+  if (Number.isNaN(value) || value === -Infinity) {
+    throw new RangeError("The objective returned NaN or -Infinity; candidates must have an orderable minimization score.");
+  }
+  return value;
 }
 
 export class CMAESOptimizerND {
@@ -307,7 +353,9 @@ export class CMAESOptimizerND {
   readonly lambda: number;
   readonly mu: number;
   readonly weights: number[];
+  readonly covarianceWeights: number[];
   readonly mueff: number;
+  readonly mueffMinus: number;
 
   readonly cc: number;
   readonly cs: number;
@@ -318,251 +366,261 @@ export class CMAESOptimizerND {
 
   readonly activeCMA: boolean;
   readonly bounds: [number, number];
-  readonly repairStrategy: "clip" | "reflect";
+  readonly repairStrategy: "clip" | "reflect" | "none";
   readonly noiseLevel: number;
 
-  generation: number = 0;
-  evalCount: number = 0;
-  bestFitness: number = Infinity;
+  generation = 0;
+  evalCount = 0;
+  bestFitness = Infinity;
   bestX: VectorND;
   history: CMAESGenerationStateND[] = [];
 
-  private rng: () => number;
+  private readonly rng: () => number;
+  private readonly covarianceWeightSum: number;
+  private previousProjectionBasis: MatrixND | null = null;
 
-  constructor(
-    private objective: (x: VectorND) => number,
-    options: CMAESOptionsND
-  ) {
+  constructor(private readonly objective: (x: VectorND) => number, options: CMAESOptionsND) {
     this.dim = options.dim;
+    if (!Number.isInteger(this.dim) || this.dim < 1) throw new RangeError("dim must be a positive integer.");
+
     this.mean = options.initialMean ? [...options.initialMean] : new Array(this.dim).fill(0.5);
+    requireFiniteVector("initialMean", this.mean, this.dim);
+
     this.sigma = options.initialSigma ?? 0.25;
+    if (!Number.isFinite(this.sigma) || this.sigma <= 0) throw new RangeError("initialSigma must be a finite positive number.");
+
+    this.lambda = options.lambda ?? 4 + Math.floor(3 * Math.log(this.dim));
+    if (!Number.isInteger(this.lambda) || this.lambda < 2) throw new RangeError("lambda must be an integer of at least 2.");
+
+    this.activeCMA = options.activeCMA ?? true;
+    this.noiseLevel = options.noiseLevel ?? 0;
+    if (!Number.isFinite(this.noiseLevel) || this.noiseLevel < 0) throw new RangeError("noiseLevel must be a finite non-negative number.");
+
+    this.bounds = options.bounds ? [...options.bounds] as [number, number] : [0, 1];
+    if (!this.bounds.every(Number.isFinite) || this.bounds[0] >= this.bounds[1]) {
+      throw new RangeError("bounds must contain finite values with min < max.");
+    }
+    this.repairStrategy = options.repairStrategy ?? "reflect";
+
+    const seed = options.seed ?? 4242;
+    if (!Number.isFinite(seed)) throw new RangeError("seed must be finite.");
+    let state = Math.trunc(seed) >>> 0;
+    this.rng = () => {
+      state = (1664525 * state + 1013904223) >>> 0;
+      return state / TWO_POW_32;
+    };
+
     this.C = createIdentityMatrix(this.dim);
     this.pSigma = createZeroVector(this.dim);
     this.pC = createZeroVector(this.dim);
-    this.activeCMA = options.activeCMA ?? true;
-    this.bounds = options.bounds ?? [0, 1];
-    this.repairStrategy = options.repairStrategy ?? "reflect";
-    this.noiseLevel = options.noiseLevel ?? 0;
+    this.bestX = [...this.mean];
 
-    const seed = options.seed ?? 4242;
-    let s = seed >>> 0;
-    this.rng = () => {
-      s = (1664525 * s + 1013904223) >>> 0;
-      return s / 0xffffffff;
-    };
+    const rawWeights = Array.from(
+      { length: this.lambda },
+      (_, index) => Math.log((this.lambda + 1) / 2) - Math.log(index + 1)
+    );
+    this.mu = rawWeights.filter((weight) => weight > 0).length;
+    const positiveSum = rawWeights.slice(0, this.mu).reduce((sum, weight) => sum + weight, 0);
+    this.weights = rawWeights.slice(0, this.mu).map((weight) => weight / positiveSum);
+    this.mueff = 1 / this.weights.reduce((sum, weight) => sum + weight * weight, 0);
 
-    // Population size: lambda = 4 + floor(3 * ln(N))
-    this.lambda = options.lambda ?? Math.max(8, 4 + Math.floor(3 * Math.log(this.dim)));
-    this.mu = Math.max(1, Math.floor(this.lambda / 2));
-
-    // Recombination weights
-    const rawWeights: number[] = [];
-    for (let i = 0; i < this.mu; i++) {
-      rawWeights.push(Math.log(this.mu + 0.5) - Math.log(i + 1));
-    }
-    const sumW = rawWeights.reduce((a, b) => a + b, 0);
-    this.weights = rawWeights.map((w) => w / sumW);
-
-    const sumSqW = this.weights.reduce((a, b) => a + b * b, 0);
-    this.mueff = 1 / sumSqW;
-
-    // Strategy parameters
-    this.cc = (4 + this.mueff / this.dim) / (this.dim + 4 + (2 * this.mueff) / this.dim);
+    this.cc = (4 + this.mueff / this.dim) / (this.dim + 4 + 2 * this.mueff / this.dim);
     this.cs = (this.mueff + 2) / (this.dim + this.mueff + 5);
-    this.c1 = 2 / (Math.pow(this.dim + 1.3, 2) + this.mueff);
-    this.cmu = Math.min(
-      1 - this.c1,
-      (2 * (this.mueff - 2 + 1 / this.mueff)) / (Math.pow(this.dim + 2, 2) + this.mueff)
+    this.c1 = 2 / ((this.dim + 1.3) ** 2 + this.mueff);
+    this.cmu = Math.max(
+      0,
+      Math.min(1 - this.c1, 2 * (this.mueff - 2 + 1 / this.mueff) / ((this.dim + 2) ** 2 + this.mueff))
     );
     this.damps = 1 + 2 * Math.max(0, Math.sqrt((this.mueff - 1) / (this.dim + 1)) - 1) + this.cs;
     this.chiN = Math.sqrt(this.dim) * (1 - 1 / (4 * this.dim) + 1 / (21 * this.dim * this.dim));
 
-    this.bestX = [...this.mean];
-  }
+    const negativeRaw = rawWeights.slice(this.mu);
+    const negativeAbsSum = negativeRaw.reduce((sum, weight) => sum + Math.abs(weight), 0);
+    const negativeSquareSum = negativeRaw.reduce((sum, weight) => sum + weight * weight, 0);
+    this.mueffMinus = negativeSquareSum > 0 ? negativeAbsSum ** 2 / negativeSquareSum : 0;
 
-  private repair(x: number): number {
-    const [min, max] = this.bounds;
-    if (this.repairStrategy === "clip") {
-      return Math.min(max, Math.max(min, x));
+    let negativeScale = 0;
+    if (this.activeCMA && negativeAbsSum > 0 && this.cmu > 0) {
+      const alphaMu = 1 + this.c1 / this.cmu;
+      const alphaMueff = 1 + 2 * this.mueffMinus / (this.mueff + 2);
+      const alphaPositiveDefinite = (1 - this.c1 - this.cmu) / (this.dim * this.cmu);
+      negativeScale = Math.max(0, Math.min(alphaMu, alphaMueff, alphaPositiveDefinite));
     }
-    if (x >= min && x <= max) return x;
+
+    this.covarianceWeights = rawWeights.map((weight, index) => {
+      if (index < this.mu) return weight / positiveSum;
+      return negativeAbsSum > 0 ? weight * negativeScale / negativeAbsSum : 0;
+    });
+    this.covarianceWeightSum = this.covarianceWeights.reduce((sum, weight) => sum + weight, 0);
+  }
+
+  private repair(value: number): number {
+    if (this.repairStrategy === "none") return value;
+    const [min, max] = this.bounds;
+    if (this.repairStrategy === "clip") return Math.min(max, Math.max(min, value));
+    if (value >= min && value <= max) return value;
     const span = max - min;
-    const over = x - min;
-    const mod = ((over % span) + span) % span;
-    const wraps = Math.floor(over / span);
-    return wraps % 2 === 0 ? min + mod : max - mod;
+    const period = 2 * span;
+    const phase = ((value - min) % period + period) % period;
+    return phase <= span ? min + phase : max - (phase - span);
   }
 
-  /**
-   * Projects an N-dimensional vector down to 3D space using top 3 PCA eigenvectors
-   */
-  projectTo3D(v: VectorND, basis: MatrixND): [number, number, number] {
-    const p0 = vecDot(v, basis.map((r) => r[0]));
-    const p1 = vecDot(v, basis.map((r) => r[1]));
-    const p2 = this.dim >= 3 ? vecDot(v, basis.map((r) => r[2])) : 0;
-    return [p0, p1, p2];
+  projectTo3D(vector: VectorND, basis: MatrixND): [number, number, number] {
+    requireFiniteVector("projected vector", vector, this.dim);
+    if (basis.length !== this.dim || basis.some((row) => row.length !== this.dim)) {
+      throw new RangeError("The PCA basis must be a square matrix matching the optimizer dimension.");
+    }
+    const coordinate = (column: number): number => {
+      if (column >= this.dim) return 0;
+      let sum = 0;
+      for (let row = 0; row < this.dim; row++) sum += vector[row] * basis[row][column];
+      return sum;
+    };
+    return [coordinate(0), coordinate(1), coordinate(2)];
   }
 
-  /**
-   * Executes one full N-D CMA-ES generation step and computes 3D PCA projection
-   */
+  private alignProjectionBasis(eigenvectors: MatrixND): MatrixND {
+    const aligned = cloneMatrix(eigenvectors);
+    if (this.previousProjectionBasis) {
+      for (let column = 0; column < Math.min(3, this.dim); column++) {
+        let agreement = 0;
+        for (let row = 0; row < this.dim; row++) {
+          agreement += aligned[row][column] * this.previousProjectionBasis[row][column];
+        }
+        if (agreement < 0) {
+          for (let row = 0; row < this.dim; row++) aligned[row][column] *= -1;
+        }
+      }
+    }
+    this.previousProjectionBasis = cloneMatrix(aligned);
+    return aligned;
+  }
+
   step(): CMAESGenerationStateND {
-    const { eigenvalues, eigenvectors } = jacobiEigenSymmetric(this.C);
-    const { sqrtC, invSqrtC } = computeCovariancePowers(eigenvalues, eigenvectors);
+    const currentEigen = jacobiEigenSymmetric(this.C);
+    this.C = reconstructSymmetric(currentEigen.eigenvalues, currentEigen.eigenvectors);
+    const { sqrtC, invSqrtC } = computeCovariancePowers(currentEigen.eigenvalues, currentEigen.eigenvectors);
+    const oldMean = [...this.mean];
+    const oldSigma = this.sigma;
 
-    // 1. Sample lambda offspring in N dimensions
     const candidates: CandidateSampleND[] = [];
-    for (let i = 0; i < this.lambda; i++) {
+    for (let id = 0; id < this.lambda; id++) {
       const z = sampleGaussianVectorND(this.dim, this.rng);
-      const scaledZ = matVecMult(sqrtC, z);
-      const rawX = this.mean.map((m, idx) => m + this.sigma * scaledZ[idx]);
-      const x = rawX.map((val) => this.repair(val));
-
-      const trueFitness = this.objective(x);
-      const noise = this.noiseLevel > 0 ? sampleGaussian(this.rng) * this.noiseLevel : 0;
-      const fitness = trueFitness + noise;
-      this.evalCount++;
-
-      const proj3D = this.projectTo3D(x.map((val, idx) => val - this.mean[idx]), eigenvectors);
-
+      const transformed = matVecMult(sqrtC, z);
+      const rawX = oldMean.map((mean, index) => mean + oldSigma * transformed[index]);
+      const x = rawX.map((value) => this.repair(value));
+      const trueFitness = safeObjectiveValue(this.objective(x));
+      const noise = this.noiseLevel > 0 ? this.noiseLevel * sampleGaussian(this.rng) : 0;
       candidates.push({
-        id: i,
+        id,
         rawX,
         x,
         z,
-        projected3D: proj3D,
-        fitness,
+        projected3D: [0, 0, 0],
+        fitness: trueFitness + noise,
         trueFitness,
         rank: 0,
         isElite: false
       });
+      this.evalCount++;
     }
 
-    // 2. Sort by fitness
-    candidates.sort((a, b) => a.fitness - b.fitness);
-    candidates.forEach((c, idx) => {
-      c.rank = idx;
-      c.isElite = idx < this.mu;
+    candidates.sort((a, b) => a.fitness - b.fitness || a.id - b.id);
+    candidates.forEach((candidate, rank) => {
+      candidate.rank = rank;
+      candidate.isElite = rank < this.mu;
+      if (candidate.trueFitness < this.bestFitness) {
+        this.bestFitness = candidate.trueFitness;
+        this.bestX = [...candidate.x];
+      }
     });
 
-    if (candidates[0].trueFitness < this.bestFitness) {
-      this.bestFitness = candidates[0].trueFitness;
-      this.bestX = [...candidates[0].x];
-    }
-
-    // 3. Selection & Recombination: update mean
-    const oldMean = [...this.mean];
-    const newMean = createZeroVector(this.dim);
-    for (let i = 0; i < this.mu; i++) {
-      const elite = candidates[i];
-      for (let d = 0; d < this.dim; d++) {
-        newMean[d] += this.weights[i] * elite.x[d];
+    this.mean = createZeroVector(this.dim);
+    for (let rank = 0; rank < this.mu; rank++) {
+      for (let dimension = 0; dimension < this.dim; dimension++) {
+        this.mean[dimension] += this.weights[rank] * candidates[rank].x[dimension];
       }
     }
-    this.mean = newMean;
 
-    // Mean displacement vectors
-    const meanShift = this.mean.map((m, d) => (m - oldMean[d]) / this.sigma);
-    const zMean = matVecMult(invSqrtC, meanShift);
+    const meanShift = this.mean.map((value, dimension) => (value - oldMean[dimension]) / oldSigma);
+    const whitenedMeanShift = matVecMult(invSqrtC, meanShift);
+    const pSigmaScale = Math.sqrt(this.cs * (2 - this.cs) * this.mueff);
+    this.pSigma = this.pSigma.map(
+      (value, dimension) => (1 - this.cs) * value + pSigmaScale * whitenedMeanShift[dimension]
+    );
+    const pSigmaNorm = vecNorm(this.pSigma);
+    const pathNormalizer = Math.sqrt(1 - (1 - this.cs) ** (2 * (this.generation + 1)));
+    const hSigma = pSigmaNorm / Math.max(Number.EPSILON, pathNormalizer) / this.chiN < 1.4 + 2 / (this.dim + 1) ? 1 : 0;
 
-    // 4. Cumulative Step-size Adaptation (CSA) path pSigma
-    const pSigmaCoeff = Math.sqrt(this.cs * (2 - this.cs) * this.mueff);
-    this.pSigma = this.pSigma.map((ps, d) => (1 - this.cs) * ps + pSigmaCoeff * zMean[d]);
-    const normPSigma = vecNorm(this.pSigma);
+    const pCScale = Math.sqrt(this.cc * (2 - this.cc) * this.mueff);
+    this.pC = this.pC.map(
+      (value, dimension) => (1 - this.cc) * value + hSigma * pCScale * meanShift[dimension]
+    );
 
-    // Heaviside stall indicator
-    const hsig =
-      normPSigma /
-        Math.sqrt(1 - Math.pow(1 - this.cs, 2 * (this.generation + 1))) /
-        this.chiN <
-      1.4 + 2 / (this.dim + 1)
-        ? 1
+    const normalizedSteps = candidates.map((candidate) =>
+      candidate.x.map((value, dimension) => (value - oldMean[dimension]) / oldSigma)
+    );
+    const adjustedCovarianceWeights = [...this.covarianceWeights];
+    for (let rank = this.mu; rank < this.lambda; rank++) {
+      if (adjustedCovarianceWeights[rank] >= 0) continue;
+      const whitenedStep = matVecMult(invSqrtC, normalizedSteps[rank]);
+      const mahalanobisSquared = vecDot(whitenedStep, whitenedStep);
+      adjustedCovarianceWeights[rank] = mahalanobisSquared > 0
+        ? adjustedCovarianceWeights[rank] * this.dim / mahalanobisSquared
         : 0;
-
-    // Covariance path pC
-    const pCCoeff = Math.sqrt(this.cc * (2 - this.cc) * this.mueff);
-    this.pC = this.pC.map((pc, d) => (1 - this.cc) * pc + hsig * pCCoeff * meanShift[d]);
-
-    // 5. Covariance matrix adaptation (Rank-1 + Rank-mu + Active update)
-    const newC = createZeroMatrix(this.dim);
-    const c1Coeff = this.c1;
-    const cmuCoeff = this.cmu;
-    const oldCoeff = 1 - c1Coeff - cmuCoeff + (1 - hsig) * this.c1 * this.cc * (2 - this.cc);
-
-    for (let r = 0; r < this.dim; r++) {
-      for (let c = 0; c < this.dim; c++) {
-        let rankMuSum = 0;
-        for (let i = 0; i < this.mu; i++) {
-          const elite = candidates[i];
-          const y_r = (elite.x[r] - oldMean[r]) / this.sigma;
-          const y_c = (elite.x[c] - oldMean[c]) / this.sigma;
-          rankMuSum += this.weights[i] * y_r * y_c;
-        }
-
-        let activeSum = 0;
-        if (this.activeCMA) {
-          const cActive = this.cmu * 0.4;
-          for (let i = this.lambda - this.mu; i < this.lambda; i++) {
-            const worst = candidates[i];
-            const y_r = (worst.x[r] - oldMean[r]) / this.sigma;
-            const y_c = (worst.x[c] - oldMean[c]) / this.sigma;
-            const negW = this.weights[this.lambda - 1 - i];
-            activeSum -= cActive * negW * y_r * y_c;
-          }
-        }
-
-        newC[r][c] =
-          oldCoeff * this.C[r][c] +
-          c1Coeff * this.pC[r] * this.pC[c] +
-          cmuCoeff * rankMuSum +
-          activeSum;
-      }
-      newC[r][r] += 1e-10; // Stabilization
     }
-    this.C = newC;
 
-    // 6. Update step-size sigma
-    this.sigma = this.sigma * Math.exp((this.cs / this.damps) * (normPSigma / this.chiN - 1));
-    this.sigma = Math.min(5.0, Math.max(1e-8, this.sigma));
+    const deltaHSigma = (1 - hSigma) * this.cc * (2 - this.cc);
+    const oldCoefficient = 1 + this.c1 * deltaHSigma - this.c1 - this.cmu * this.covarianceWeightSum;
+    const provisional = createZeroMatrix(this.dim);
+    for (let row = 0; row < this.dim; row++) {
+      for (let column = row; column < this.dim; column++) {
+        let rankMu = 0;
+        for (let rank = 0; rank < this.lambda; rank++) {
+          rankMu += adjustedCovarianceWeights[rank] * normalizedSteps[rank][row] * normalizedSteps[rank][column];
+        }
+        const value =
+          oldCoefficient * this.C[row][column] +
+          this.c1 * this.pC[row] * this.pC[column] +
+          this.cmu * rankMu;
+        provisional[row][column] = value;
+        provisional[column][row] = value;
+      }
+    }
+    const repairedEigen = jacobiEigenSymmetric(provisional, Math.max(50, 5 * this.dim));
+    this.C = reconstructSymmetric(repairedEigen.eigenvalues, repairedEigen.eigenvectors);
 
+    this.sigma = oldSigma * Math.exp(this.cs / this.damps * (pSigmaNorm / this.chiN - 1));
+    if (!Number.isFinite(this.sigma)) this.sigma = this.sigma > 0 ? 1e16 : 1e-16;
+    this.sigma = Math.min(1e16, Math.max(1e-16, this.sigma));
     this.generation++;
 
-    // Compute updated eigensystem for PCA projection
     const updatedEigen = jacobiEigenSymmetric(this.C);
-    const condNum = updatedEigen.eigenvalues[0] / Math.max(1e-12, updatedEigen.eigenvalues[this.dim - 1]);
+    const projectionBasis = this.alignProjectionBasis(updatedEigen.eigenvectors);
+    candidates.forEach((candidate) => {
+      const centered = candidate.x.map((value, dimension) => value - this.mean[dimension]);
+      candidate.projected3D = this.projectTo3D(centered, projectionBasis);
+    });
 
-    const totalVar = updatedEigen.eigenvalues.reduce((a, b) => a + b, 0);
-    const varPct: [number, number, number] = [
-      (updatedEigen.eigenvalues[0] / totalVar) * 100,
-      ((updatedEigen.eigenvalues[1] || 0) / totalVar) * 100,
-      ((updatedEigen.eigenvalues[2] || 0) / totalVar) * 100
-    ];
-
-    const r0 = this.sigma * Math.sqrt(updatedEigen.eigenvalues[0]);
-    const r1 = this.sigma * Math.sqrt(updatedEigen.eigenvalues[1] || 1e-4);
-    const r2 = this.sigma * Math.sqrt(updatedEigen.eigenvalues[2] || 1e-4);
-
-    const pMean = this.projectTo3D(this.mean, updatedEigen.eigenvectors);
-    const pPath = this.projectTo3D(this.pC, updatedEigen.eigenvectors);
-    const pSigmaPath = this.projectTo3D(this.pSigma, updatedEigen.eigenvectors);
+    const totalVariance = updatedEigen.eigenvalues.reduce((sum, value) => sum + value, 0);
+    const variancePercent = (index: number): number =>
+      index < this.dim && totalVariance > 0 ? 100 * updatedEigen.eigenvalues[index] / totalVariance : 0;
+    const radius = (index: number): number =>
+      index < this.dim ? this.sigma * Math.sqrt(updatedEigen.eigenvalues[index]) : 0;
+    const conditionNumber = updatedEigen.eigenvalues[0] / updatedEigen.eigenvalues[this.dim - 1];
 
     const phaseSpace3D: PhaseSpace3DProjection = {
-      projectedMean: pMean,
-      ellipsoidRadii: [r0, r1, r2],
-      principalAxes3D: [
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1]
-      ],
-      eigenvalues: updatedEigen.eigenvalues,
-      conditionNumber: condNum,
-      varianceExplainedPercent: varPct,
-      evolutionPath3D: pPath,
-      evolutionPathSigma3D: pSigmaPath
+      projectedMean: [0, 0, 0],
+      ellipsoidRadii: [radius(0), radius(1), radius(2)],
+      principalAxes3D: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+      eigenvalues: [...updatedEigen.eigenvalues],
+      conditionNumber,
+      varianceExplainedPercent: [variancePercent(0), variancePercent(1), variancePercent(2)],
+      evolutionPath3D: this.projectTo3D(this.pC, projectionBasis),
+      evolutionPathSigma3D: this.projectTo3D(this.pSigma, projectionBasis)
     };
 
-    const variancePerDim = this.C.map((row, i) => row[i]);
-
+    const variancePerDim = this.C.map((row, dimension) => this.sigma ** 2 * row[dimension]);
     const state: CMAESGenerationStateND = {
       generation: this.generation,
       mean: [...this.mean],
@@ -573,13 +631,12 @@ export class CMAESOptimizerND {
       samples: candidates,
       bestFitness: this.bestFitness,
       bestX: [...this.bestX],
-      eigenvalues: updatedEigen.eigenvalues,
-      conditionNumber: condNum,
+      eigenvalues: [...updatedEigen.eigenvalues],
+      conditionNumber,
       evalCount: this.evalCount,
       phaseSpace3D,
       variancePerDim
     };
-
     this.history.push(state);
     return state;
   }
