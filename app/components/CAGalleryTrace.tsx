@@ -19,13 +19,34 @@ import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 import { useInView } from "../hooks/useScrollSpy";
 import { LatexRenderer } from "./LatexRenderer";
+import {
+  initFrankenSimLenia,
+  leniaInit,
+  leniaClear,
+  leniaSeedRing,
+  leniaStep,
+  leniaImageData,
+  leniaSnapshotEval,
+  leniaEval
+} from "../lib/frankensimLenia";
 
 // ============================================================================
 // 1. Simulation Constants & Precomputed Concentric Lenia Kernel
 // ============================================================================
 
-const GRID_SIZE = 96; // 96x96 continuous simulation field
+// The TypeScript fallback field: 96² with a direct O(N²·R²) convolution.
+const GRID_SIZE = 96;
 const KERNEL_RADIUS = 5;
+
+// The FrankenSim WASM field: the same model at 256² through an O(N² log N)
+// FFT (fs-lenia-wasm), with CMA-ES fitness rollouts at 128². The kernel
+// radius scales with the field so morphology is preserved (5/96 of the size),
+// and all seed geometry below is expressed relative to GRID_SIZE and scaled.
+const WASM_GRID_SIZE = 256;
+const WASM_EVAL_SIZE = 128;
+const REL_KERNEL_RADIUS = KERNEL_RADIUS / GRID_SIZE;
+
+type LeniaEngine = "pending" | "wasm" | "js";
 
 interface KernelOffset {
   dx: number;
@@ -173,6 +194,12 @@ export function CAGalleryTrace() {
   const [dt, setDt] = useState(0.22);
   const [brushMode, setBrushMode] = useState<"seed" | "pulse">("pulse");
 
+  // Which engine drives the field: the FrankenSim FFT kernel at 256² when it
+  // loads, the 96² TypeScript fallback otherwise ("pending" behaves as js so
+  // the canvas is alive from the first frame).
+  const [engine, setEngine] = useState<LeniaEngine>("pending");
+  const [gridSize, setGridSize] = useState(GRID_SIZE);
+
   const [isPlaying, setIsPlaying] = useState(true);
   const [entropy, setEntropy] = useState(0.42);
   const [organismMass, setOrganismMass] = useState(0.18);
@@ -215,8 +242,8 @@ export function CAGalleryTrace() {
     next: new Float32Array(GRID_SIZE * GRID_SIZE)
   });
 
-  // Seed glowing Soliton / Ring Organism into the continuous field
-  const injectOrganism = useCallback((cx: number, cy: number, radius = 9, intensity = 0.95) => {
+  // Seed a hollow gaussian ring (soliton seed) into the JS fallback field.
+  const injectOrganismJs = useCallback((cx: number, cy: number, radius = 9, intensity = 0.95) => {
     const arr = gridStateRef.current.current;
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -232,6 +259,58 @@ export function CAGalleryTrace() {
     }
   }, []);
 
+  // Engine-aware ring seeding. Coordinates and radius are in the given
+  // field's grid cells; the wasm ring width scales with the field the same
+  // way the kernel radius does, so seeds keep their morphology at 256².
+  const seedRingAny = useCallback(
+    (engineKind: LeniaEngine, size: number, cx: number, cy: number, radius: number, intensity: number) => {
+      if (engineKind === "wasm") {
+        leniaSeedRing(cx, cy, radius, 0.55, 2.2 * (size / GRID_SIZE), intensity);
+      } else {
+        injectOrganismJs(cx, cy, radius, intensity);
+      }
+    },
+    [injectOrganismJs]
+  );
+
+  // Preset seed geometry, expressed relative to the field size so the same
+  // organisms appear at 96² (fallback) and 256² (wasm).
+  const seedPresetInto = useCallback(
+    (presetId: string, engineKind: LeniaEngine, size: number) => {
+      const s = size / GRID_SIZE;
+      if (engineKind === "wasm") {
+        leniaClear();
+      } else {
+        gridStateRef.current.current.fill(0);
+      }
+
+      if (presetId === "orbium") {
+        // Dual solitons
+        seedRingAny(engineKind, size, size * 0.35, size * 0.45, 10 * s, 0.9);
+        seedRingAny(engineKind, size, size * 0.65, size * 0.55, 10 * s, 0.9);
+      } else if (presetId === "mitosis") {
+        // Central dividing organism
+        seedRingAny(engineKind, size, size * 0.5, size * 0.5, 12 * s, 1.0);
+      } else if (presetId === "biolattice") {
+        // Organic seed array
+        for (let i = 0; i < 9; i++) {
+          const gx = size * (0.25 + (i % 3) * 0.25);
+          const gy = size * (0.25 + Math.floor(i / 3) * 0.25);
+          seedRingAny(engineKind, size, gx, gy, 6 * s, 0.85);
+        }
+      } else {
+        // Multi-vortex chaotic ring
+        for (let a = 0; a < 5; a++) {
+          const angle = (a / 5) * Math.PI * 2;
+          const gx = size * 0.5 + Math.cos(angle) * 22 * s;
+          const gy = size * 0.5 + Math.sin(angle) * 22 * s;
+          seedRingAny(engineKind, size, gx, gy, 8 * s, 0.95);
+        }
+      }
+    },
+    [seedRingAny]
+  );
+
   // Reset grid with iconic soliton seeds
   const resetToPreset = useCallback(
     (presetId: string) => {
@@ -240,65 +319,65 @@ export function CAGalleryTrace() {
       setMu(p.mu);
       setSigma(p.sigma);
       setDt(p.dt);
-
-      const arr = gridStateRef.current.current;
-      arr.fill(0);
-
-      if (presetId === "orbium") {
-        // Dual gliding solitons
-        injectOrganism(GRID_SIZE * 0.35, GRID_SIZE * 0.45, 10, 0.9);
-        injectOrganism(GRID_SIZE * 0.65, GRID_SIZE * 0.55, 10, 0.9);
-      } else if (presetId === "mitosis") {
-        // Central dividing organism
-        injectOrganism(GRID_SIZE * 0.5, GRID_SIZE * 0.5, 12, 1.0);
-      } else if (presetId === "biolattice") {
-        // Organic seed array
-        for (let i = 0; i < 9; i++) {
-          const gx = GRID_SIZE * (0.25 + (i % 3) * 0.25);
-          const gy = GRID_SIZE * (0.25 + Math.floor(i / 3) * 0.25);
-          injectOrganism(gx, gy, 6, 0.85);
-        }
-      } else {
-        // Multi-vortex chaotic ring
-        for (let a = 0; a < 5; a++) {
-          const angle = (a / 5) * Math.PI * 2;
-          const gx = GRID_SIZE * 0.5 + Math.cos(angle) * 22;
-          const gy = GRID_SIZE * 0.5 + Math.sin(angle) * 22;
-          injectOrganism(gx, gy, 8, 0.95);
-        }
-      }
+      seedPresetInto(p.id, engine, gridSize);
     },
-    [injectOrganism]
+    [seedPresetInto, engine, gridSize]
   );
 
-  // Main 60FPS Continuous Simulation & Colormap Pipeline
+  // Bring up the FrankenSim FFT kernel; on success move the field to 256²
+  // and reseed the active preset there. All state updates run inside promise
+  // callbacks (asynchronous); failure of any step falls back to the JS path.
+  const activePresetRef = useRef(activePreset);
   useEffect(() => {
-    if (!isPlaying || !isInView) return;
-    let frameCount = 0;
+    activePresetRef.current = activePreset;
+  }, [activePreset]);
 
-    const interval = setInterval(() => {
-      const { current, next } = gridStateRef.current;
-      const metrics = stepLeniaContinuous(current, next, kernel, mu, sigma, dt);
-      gridStateRef.current.current = next;
-      gridStateRef.current.next = current;
-
-      frameCount++;
-      if (frameCount % 4 === 0) {
-        setEntropy(metrics.entropy);
-        setOrganismMass(metrics.mass);
+  useEffect(() => {
+    let live = true;
+    initFrankenSimLenia().then((status) => {
+      if (!live) return;
+      const wasmReady =
+        status.source === "wasm" && leniaInit(WASM_GRID_SIZE, WASM_EVAL_SIZE, REL_KERNEL_RADIUS);
+      if (!wasmReady) {
+        setEngine("js");
+        return;
       }
+      seedPresetInto(activePresetRef.current, "wasm", WASM_GRID_SIZE);
+      setEngine("wasm");
+      setGridSize(WASM_GRID_SIZE);
+    });
+    return () => {
+      live = false;
+    };
+  }, [seedPresetInto]);
 
-      // Render to canvas using high-performance 32-bit direct buffer
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d", { willReadFrequently: false });
-      if (!ctx) return;
+  // Live growth parameters behind a ref so slider drags and the optimizer's
+  // per-generation updates do NOT tear down and restart the render loop
+  // (which would freeze the field for the duration of a drag).
+  const paramsRef = useRef({ mu, sigma, dt });
+  useEffect(() => {
+    paramsRef.current = { mu, sigma, dt };
+  }, [mu, sigma, dt]);
 
-      if (!imgDataRef.current) {
+  // Main simulation & render loop. requestAnimationFrame renders EVERY frame
+  // (so brush strokes show while paused), while physics steps run on a fixed
+  // ~31 steps/s accumulator — the same dynamics pace at 60 Hz and at
+  // ProMotion 120 Hz, with at most two catch-up steps after a slow frame.
+  useEffect(() => {
+    if (!isInView) return;
+    let raf = 0;
+    let last = performance.now();
+    let accumulatorMs = 0;
+    let stepCount = 0;
+    const STEP_MS = 32;
+
+    const renderJsGrid = (ctx: CanvasRenderingContext2D) => {
+      if (!imgDataRef.current || imgDataRef.current.width !== GRID_SIZE) {
         imgDataRef.current = ctx.createImageData(GRID_SIZE, GRID_SIZE);
       }
       const img = imgDataRef.current;
       const buf32 = new Uint32Array(img.data.buffer);
+      const current = gridStateRef.current.current;
 
       const len = GRID_SIZE * GRID_SIZE;
       for (let i = 0; i < len; i++) {
@@ -334,10 +413,63 @@ export function CAGalleryTrace() {
         }
       }
       ctx.putImageData(img, 0, 0);
-    }, 32);
+    };
 
-    return () => clearInterval(interval);
-  }, [isPlaying, mu, sigma, dt, kernel, isInView]);
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const elapsed = Math.min(120, now - last);
+      last = now;
+
+      let steps = 0;
+      if (isPlaying) {
+        accumulatorMs += elapsed;
+        while (accumulatorMs >= STEP_MS && steps < 2) {
+          accumulatorMs -= STEP_MS;
+          steps++;
+        }
+        // Drop any further backlog instead of spiraling on slow devices.
+        if (accumulatorMs > STEP_MS) accumulatorMs = STEP_MS;
+      } else {
+        accumulatorMs = 0;
+      }
+
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d", { willReadFrequently: false });
+      if (!canvas || !ctx) return;
+
+      const { mu: liveMu, sigma: liveSigma, dt: liveDt } = paramsRef.current;
+      if (engine === "wasm") {
+        if (steps > 0) {
+          const metrics = leniaStep(liveMu, liveSigma, liveDt, steps);
+          stepCount += steps;
+          if (metrics && stepCount % 4 < steps) {
+            setEntropy(metrics.interface);
+            setOrganismMass(metrics.mass);
+          }
+        }
+        // Colormapped inside wasm; the ImageData wraps the kernel's RGBA
+        // buffer directly (zero per-pixel JS work).
+        const img = leniaImageData();
+        if (img && img.width === canvas.width) ctx.putImageData(img, 0, 0);
+      } else {
+        for (let s = 0; s < steps; s++) {
+          const { current, next } = gridStateRef.current;
+          const metrics = stepLeniaContinuous(current, next, kernel, liveMu, liveSigma, liveDt);
+          gridStateRef.current.current = next;
+          gridStateRef.current.next = current;
+          stepCount++;
+          if (stepCount % 4 === 0) {
+            setEntropy(metrics.entropy);
+            setOrganismMass(metrics.mass);
+          }
+        }
+        if (canvas.width === GRID_SIZE) renderJsGrid(ctx);
+      }
+    };
+
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [engine, isPlaying, kernel, isInView]);
 
   // Run 3D Multi-Objective CMA-ES for Soliton Stability & Complexity
   const handleRunOptimizer = () => {
@@ -350,11 +482,19 @@ export function CAGalleryTrace() {
     setOptGen(0);
     setHistoryND([]);
 
-    // Freeze the current grid as the evaluation seed for the whole search.
+    // Freeze the current field as the evaluation seed for the whole search.
     // Scoring against the live, still-evolving display grid would make the
     // objective non-stationary: every generation would grade a different
     // initial condition and the convergence trace would be meaningless.
-    const seedGrid = new Float32Array(gridStateRef.current.current);
+    // The wasm kernel snapshots internally (box-averaged to 128²) and rolls
+    // each candidate out there; the fallback snapshots the 96² CPU grid.
+    const useWasmEval = engine === "wasm";
+    let seedGrid: Float32Array | null = null;
+    if (useWasmEval) {
+      leniaSnapshotEval();
+    } else {
+      seedGrid = new Float32Array(gridStateRef.current.current);
+    }
 
     // Optimize continuous parameters in normalized [0, 1]^3 space
     const optimizer = new CMAESOptimizerND(
@@ -363,7 +503,16 @@ export function CAGalleryTrace() {
         const sVal = 0.015 + zVec[1] * 0.060;
         const dtVal = 0.10 + zVec[2] * 0.25;
 
-        const bufA = new Float32Array(seedGrid);
+        if (useWasmEval) {
+          // Kernel-side rollout of the same objective:
+          // mean over 18 steps of (interface - 2|mass - 0.25|).
+          const score = leniaEval(mVal, sVal, dtVal, 18);
+          if (score !== null) return -score;
+          console.warn("[fs-lenia] eval call failed; scoring candidate as neutral");
+          return 0;
+        }
+
+        const bufA = new Float32Array(seedGrid!);
         const bufB = new Float32Array(GRID_SIZE * GRID_SIZE);
         let scoreSum = 0;
 
@@ -422,14 +571,15 @@ export function CAGalleryTrace() {
     };
   }, []);
 
-  // Handle Canvas Mouse Drag Drawing
+  // Handle Canvas Mouse Drag Drawing (brush radius scales with the field)
   const handleCanvasInteraction = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const gx = ((clientX - rect.left) / rect.width) * GRID_SIZE;
-    const gy = ((clientY - rect.top) / rect.height) * GRID_SIZE;
-    injectOrganism(gx, gy, brushMode === "pulse" ? 8 : 12, 0.95);
+    const gx = ((clientX - rect.left) / rect.width) * gridSize;
+    const gy = ((clientY - rect.top) / rect.height) * gridSize;
+    const scale = gridSize / GRID_SIZE;
+    seedRingAny(engine, gridSize, gx, gy, (brushMode === "pulse" ? 8 : 12) * scale, 0.95);
   };
 
   return (
@@ -501,9 +651,9 @@ export function CAGalleryTrace() {
               <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl group cursor-crosshair">
                 <canvas
                   ref={canvasRef}
-                  width={GRID_SIZE}
-                  height={GRID_SIZE}
-                  className="w-full h-full block image-rendering-pixelated select-none"
+                  width={gridSize}
+                  height={gridSize}
+                  className={`w-full h-full block select-none ${engine === "wasm" ? "" : "image-rendering-pixelated"}`}
                   onMouseDown={(e) => {
                     isDraggingRef.current = true;
                     handleCanvasInteraction(e.clientX, e.clientY);
@@ -521,7 +671,8 @@ export function CAGalleryTrace() {
                   }}
                 />
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-pink-300 backdrop-blur-md">
-                  Lenia 2D Cellular PDE
+                  Lenia 2D Cellular PDE ·{" "}
+                  {engine === "wasm" ? `FrankenSim WASM FFT ${gridSize}²` : `TS engine ${gridSize}²`}
                 </div>
               </div>
 
@@ -538,9 +689,10 @@ export function CAGalleryTrace() {
             <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_50px_rgba(0,0,0,0.8)] group cursor-crosshair">
               <canvas
                 ref={canvasRef}
-                width={GRID_SIZE}
-                height={GRID_SIZE}
-                className="w-full h-full block image-rendering-pixelated select-none"
+                width={gridSize}
+                height={gridSize}
+                className={`w-full h-full block select-none ${engine === "wasm" ? "" : "image-rendering-pixelated"}`}
+                style={{ touchAction: "none" }}
                 onMouseDown={(e) => {
                   isDraggingRef.current = true;
                   handleCanvasInteraction(e.clientX, e.clientY);
@@ -570,15 +722,22 @@ export function CAGalleryTrace() {
                 <span>Click or drag to seed life</span>
               </div>
 
-              {/* Top-Left Search Status */}
-              {isOptimizing && (
-                <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-pink-500/50 shadow-glow-sm">
-                  <span className="h-2 w-2 rounded-full bg-pink-400 animate-ping" />
-                  <span className="text-xs font-mono font-bold text-pink-200">
-                    CMA-ES Evolving Lenia: Gen {optGen}/22
-                  </span>
+              {/* Top-Left: Engine Provenance + Search Status */}
+              <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5 pointer-events-none">
+                <div className="px-2.5 py-1 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.62rem] font-mono text-slate-300">
+                  {engine === "wasm"
+                    ? `FrankenSim WASM FFT · ${gridSize}×${gridSize}`
+                    : `TS engine · ${gridSize}×${gridSize}`}
                 </div>
-              )}
+                {isOptimizing && (
+                  <div className="flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-pink-500/50 shadow-glow-sm">
+                    <span className="h-2 w-2 rounded-full bg-pink-400 animate-ping" />
+                    <span className="text-xs font-mono font-bold text-pink-200">
+                      CMA-ES Evolving Lenia: Gen {optGen}/22
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {/* Bottom Spectrum Legend */}
               <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-[0.65rem] font-mono text-slate-300 pointer-events-none">
