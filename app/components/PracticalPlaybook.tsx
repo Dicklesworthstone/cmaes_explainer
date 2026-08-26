@@ -293,7 +293,7 @@ export function PracticalPlaybook() {
           <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/5 p-5">
             <div className="mb-3 text-xs font-bold text-emerald-200 uppercase tracking-wide">Noise & Budgets</div>
              <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-emerald-500">
-              <li>For noisy f: enlarge λ, reevaluate elites and average their fitness, or lower the two covariance learning rates. Active (negative-weight) updates amplify misranked samples, so they are no noise remedy.</li>
+              <li>For noisy f: enlarge λ, reevaluate elites and average their fitness, or lower the two covariance learning rates. Active (negative-weight) updates amplify misranked samples, so they are not a noise remedy.</li>
               <li>Budgeting: λ = 4 + ⌊3 ln n⌋; expect on the order of n to n² generations when C must adapt; restart if stalled.</li>
               <li>Keep seeds and ask/tell logs so you can replay and debug; determinism saves days.</li>
             </ul>

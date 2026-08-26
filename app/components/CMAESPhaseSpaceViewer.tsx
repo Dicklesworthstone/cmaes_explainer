@@ -214,6 +214,29 @@ function EvolutionPaths({
   );
 }
 
+/**
+ * Scales children by the ratio of the lerped scene scale to the ideal scale,
+ * so lines whose points were computed with idealScale track the ellipsoid's
+ * animated size instead of snapping a generation ahead of it.
+ */
+function ScaleSync({
+  idealScale,
+  scaleRef,
+  children
+}: {
+  idealScale: number;
+  scaleRef: React.RefObject<number>;
+  children: React.ReactNode;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (!groupRef.current) return;
+    const ratio = (scaleRef.current ?? idealScale) / Math.max(idealScale, 1e-9);
+    groupRef.current.scale.setScalar(ratio);
+  });
+  return <group ref={groupRef}>{children}</group>;
+}
+
 function DynamicSceneRig({
   radii,
   sigma,
@@ -287,10 +310,12 @@ function DynamicSceneRig({
           sigma={sigma}
           scaleRef={currentScaleRef}
         />
-        <PrincipalAxes
-          radii={radii}
-          scale={idealScale}
-        />
+        <ScaleSync idealScale={idealScale} scaleRef={currentScaleRef}>
+          <PrincipalAxes
+            radii={radii}
+            scale={idealScale}
+          />
+        </ScaleSync>
       </group>
 
       {/* Candidate Offspring Population Cloud & Elites */}
@@ -300,11 +325,13 @@ function DynamicSceneRig({
       />
 
       {/* Evolution Paths (p_c & p_sigma) */}
-      <EvolutionPaths
-        pC={pC}
-        pSigma={pSigma}
-        scale={idealScale}
-      />
+      <ScaleSync idealScale={idealScale} scaleRef={currentScaleRef}>
+        <EvolutionPaths
+          pC={pC}
+          pSigma={pSigma}
+          scale={idealScale}
+        />
+      </ScaleSync>
     </group>
   );
 }

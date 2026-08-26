@@ -348,7 +348,7 @@ export function ConstraintRepairDemo() {
                   <span>Step <LatexRenderer math="\sigma" block={false} />:</span>
                   <span>{latestState.sigma.toFixed(4)}</span>
                 </div>
-                <div className="text-slate-400">Gen: {generation}/35</div>
+                <div className="text-slate-400">Gen: {latestState.generation}/36</div>
               </div>
             )}
           </div>

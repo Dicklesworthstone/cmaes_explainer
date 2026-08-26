@@ -314,7 +314,7 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
       },
     ],
     pedagogicalNote: "If consecutive steps point in the same direction, ||p_σ|| > E||N(0, I)||, causing the exponent to be positive (exp(>0) > 1), which expands σ. If steps oscillate or cancel, ||p_σ|| < E||N(0, I)||, causing exp(<0) < 1, which contracts σ.",
-    takeaway: "CSA dynamically maintains optimal step sizes across both flat plains and narrow canyons without manual schedule tuning.",
+    takeaway: "CSA keeps the step size well calibrated across both flat plains and narrow canyons without manual schedule tuning.",
   },
 
   "cmaes-covariance-update": {
@@ -689,7 +689,7 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
       },
     ],
     pedagogicalNote: "A nonlinear monotone rescaling such as exp(f) leaves the minimizer unchanged but can make gradients explode or vanish, so gradient methods must re-tune their step sizes. CMA-ES reads only the relative rank order, which the rescaling leaves untouched, so it takes the identical sequence of steps.",
-    takeaway: "Order invariance ensures that hyperparameter choices remain optimal across diverse fitness reward formulations.",
+    takeaway: "Order invariance means tuned hyperparameters carry over across diverse fitness reward formulations.",
   },
 
   "cmaes-affine-invariance": {

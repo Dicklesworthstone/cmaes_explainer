@@ -342,7 +342,12 @@ export function WasmDemo() {
       a.sigma += (latestState.sigma - a.sigma) * lerp;
       a.l1 += (latestState.eigenvalues[0] - a.l1) * lerp;
       a.l2 += (latestState.eigenvalues[1] - a.l2) * lerp;
-      a.angle += (latestState.ellipseAngle - a.angle) * lerp;
+      // Ellipse orientation has period pi: lerp along the shortest equivalent
+      // rotation so an eigen-angle wrap (e.g. +88 deg -> -88 deg) does not
+      // sweep the ellipse through ~176 deg of wrong orientations.
+      let dAngle = latestState.ellipseAngle - a.angle;
+      dAngle -= Math.PI * Math.round(dAngle / Math.PI);
+      a.angle += dAngle * lerp;
       a.pc0 += (latestState.pC[0] - a.pc0) * lerp;
       a.pc1 += (latestState.pC[1] - a.pc1) * lerp;
 

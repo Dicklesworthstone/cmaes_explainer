@@ -428,7 +428,16 @@ export function NoiseExplorer() {
           {/* Action Bar */}
           <div className="flex flex-wrap gap-2.5">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                // At the 40-generation cap the interval would immediately
+                // re-pause; restart the run instead of a dead Play button.
+                if (!isPlaying && generation >= 40) {
+                  resetOptimizer();
+                  setIsPlaying(true);
+                  return;
+                }
+                setIsPlaying(!isPlaying);
+              }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
                 isPlaying
                   ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"

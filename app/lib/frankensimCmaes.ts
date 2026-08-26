@@ -267,6 +267,13 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 
   return run.generations.map((gen) => {
     const lambda = gen.se.length;
+    // Defensive spectrum sanitizing: kernel v0.2.0 repairs C to positive
+    // definite before snapshotting, but a stale v0.1.0 bundle cached by a
+    // browser could still report an indefinite spectrum with an absurd cond.
+    const eigenvalues = gen.eigvals.map((v) => Math.max(v, 0));
+    const evMin = eigenvalues[0];
+    const evMax = eigenvalues[eigenvalues.length - 1];
+    const conditionNumber = evMin > 0 ? evMax / evMin : Infinity;
     // The viewer pins the mean/ellipsoid at its origin, so samples must be
     // projected relative to the CURRENT mean (like the TS engine's x − mean),
     // not the run-level pooled PCA center; otherwise the cloud drifts off the
@@ -317,7 +324,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     const covariance: number[][] = Array.from({ length: n }, (_, i) =>
       Array.from({ length: n }, (_, k) => {
         let acc = 0;
-        for (let j = 0; j < n; j++) acc += Math.max(gen.eigvals[j], 0) * gen.eigvecs[i * n + j] * gen.eigvecs[k * n + j];
+        for (let j = 0; j < n; j++) acc += eigenvalues[j] * gen.eigvecs[i * n + j] * gen.eigvecs[k * n + j];
         return acc;
       })
     );
@@ -332,8 +339,8 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       samples,
       bestFitness: gen.best_f,
       bestX: run.best_x,
-      eigenvalues: gen.eigvals,
-      conditionNumber: gen.cond,
+      eigenvalues,
+      conditionNumber,
       evalCount: gen.evals,
       phaseSpace3D: {
         projectedMean: gen.proj_mean,

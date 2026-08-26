@@ -64,7 +64,8 @@ export function RestartStrategyViewer() {
         initialMean: [startX, startY],
         initialSigma: sigmaInit,
         lambda: popSize,
-        bounds: [-3.5, 3.5]
+        bounds: [-3.5, 3.5],
+        seed: (Math.random() * 0xffffffff) >>> 0
       });
     }
     return optimizerRef.current;
@@ -77,12 +78,16 @@ export function RestartStrategyViewer() {
   const spawnRestart = useCallback((popSize: number, sigmaInit: number) => {
     const startX = (Math.random() - 0.5) * 5.0;
     const startY = (Math.random() - 0.5) * 5.0;
+    // A fresh seed per restart: with the engine's default seed every restart
+    // at the same lambda would replay the identical offspring stream, and the
+    // demo's premise is that restarts sample the basin structure independently.
     const opt = new CMAESOptimizer(multimodalFn, {
       dim: 2,
       initialMean: [startX, startY],
       initialSigma: sigmaInit,
       lambda: popSize,
-      bounds: [-3.5, 3.5]
+      bounds: [-3.5, 3.5],
+      seed: (Math.random() * 0xffffffff) >>> 0
     });
     optimizerRef.current = opt;
     setCurrentLambda(popSize);
@@ -133,11 +138,14 @@ export function RestartStrategyViewer() {
       { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: currentLambda }
     ]);
 
-    // Detect stagnation or convergence to trigger the restart policy
+    // Detect stagnation or convergence to trigger the restart policy. The
+    // comparison spans 10 generations including the one just computed,
+    // matching the trigger list in the policy card.
     const isStagnant =
       nextState.sigma < 1e-3 ||
       nextState.conditionNumber > 1e7 ||
-      (history.length > 18 && Math.abs(history[history.length - 1].bestFitness - history[history.length - 10]?.bestFitness || 0) < 1e-4);
+      (history.length > 18 &&
+        Math.abs(nextState.bestFitness - history[history.length - 10].bestFitness) < 1e-4);
 
     if (isStagnant) {
       let nextPop = currentLambda;
@@ -467,7 +475,16 @@ export function RestartStrategyViewer() {
 
           <div className="flex flex-wrap gap-2.5">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={() => {
+                // At the terminal state the interval would immediately
+                // re-pause; restart the comparison instead of a dead button.
+                if (!isPlaying && (evalBudget >= 2500 || globalBestFitness <= 0.05)) {
+                  resetAll();
+                  setIsPlaying(true);
+                  return;
+                }
+                setIsPlaying(!isPlaying);
+              }}
               className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
                 isPlaying
                   ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"

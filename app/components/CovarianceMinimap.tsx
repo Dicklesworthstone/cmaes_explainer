@@ -44,6 +44,19 @@ export function CovarianceMinimap() {
   const fn = objectives[objKey];
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Mirrors the canvas pass's gradient check so the legend never advertises
+  // arrows the drawing suppressed: at the optimum the finite difference is
+  // numerical residue and there is no descent direction to draw.
+  const arrowsVisible = useMemo(() => {
+    const [optX, optY] = fn.optimum;
+    const mx = 1.5 + (optX - 1.5) * progress;
+    const my = 1.2 + (optY - 1.2) * progress;
+    const eps = 1e-4;
+    const gx = (fn.f(mx + eps, my) - fn.f(mx - eps, my)) / (2 * eps);
+    const gy = (fn.f(mx, my + eps) - fn.f(mx, my - eps)) / (2 * eps);
+    return Math.hypot(gx, gy) > 1e-3;
+  }, [fn, progress]);
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     const offscreen = document.createElement("canvas");
@@ -204,25 +217,27 @@ export function CovarianceMinimap() {
     // data-to-pixel transform so anisotropic pixel scaling cannot skew them.
     const stepData = 0.45;
 
-    // Euclidean descent direction (Rose): -grad f
-    ctx.strokeStyle = "#f43f5e";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(toPxX(curMean[0] - nGradX * stepData), toPxY(curMean[1] - nGradY * stepData));
-    ctx.stroke();
-
-    // Natural-gradient descent direction (Emerald): -C grad f
-    if (showNaturalGrad) {
-      ctx.strokeStyle = "#34d399";
-      ctx.lineWidth = 4.5;
+    if (showArrows) {
+      // Euclidean descent direction (Rose): -grad f
+      ctx.strokeStyle = "#f43f5e";
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(
-        toPxX(curMean[0] - nNatX * stepData * 1.25),
-        toPxY(curMean[1] - nNatY * stepData * 1.25)
-      );
+      ctx.lineTo(toPxX(curMean[0] - nGradX * stepData), toPxY(curMean[1] - nGradY * stepData));
       ctx.stroke();
+
+      // Natural-gradient descent direction (Emerald): -C grad f
+      if (showNaturalGrad) {
+        ctx.strokeStyle = "#34d399";
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(
+          toPxX(curMean[0] - nNatX * stepData * 1.25),
+          toPxY(curMean[1] - nNatY * stepData * 1.25)
+        );
+        ctx.stroke();
+      }
     }
 
     // Mean Point
@@ -274,14 +289,20 @@ export function CovarianceMinimap() {
           <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full h-auto block" />
 
           <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] font-mono">
-            <div className="flex items-center gap-1.5 text-rose-400">
-              <span className="w-2.5 h-0.5 bg-rose-500" />
-              <span>Euclidean descent −∇f</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <span className="w-2.5 h-0.5 bg-emerald-400" />
-              <span>Natural-gradient descent −C∇f</span>
-            </div>
+            {arrowsVisible ? (
+              <>
+                <div className="flex items-center gap-1.5 text-rose-400">
+                  <span className="w-2.5 h-0.5 bg-rose-500" />
+                  <span>Euclidean descent −∇f</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-emerald-400">
+                  <span className="w-2.5 h-0.5 bg-emerald-400" />
+                  <span>Natural-gradient descent −C∇f</span>
+                </div>
+              </>
+            ) : (
+              <span className="text-slate-400">At the optimum ∇f ≈ 0: no descent direction to draw</span>
+            )}
           </div>
         </div>
 

@@ -326,7 +326,7 @@ export function ActiveCovarianceDemo() {
                   <span>Cond <LatexRenderer math="\kappa(C)" block={false} />:</span>
                   <span>{latestState.conditionNumber.toFixed(1)}</span>
                 </div>
-                <div className="text-slate-400">Gen: {generation}/45</div>
+                <div className="text-slate-400">Gen: {latestState.generation}/46</div>
               </div>
             )}
 
