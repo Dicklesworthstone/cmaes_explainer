@@ -517,7 +517,7 @@ export function BridgeViz() {
                   shadows
                   dpr={[1, 2]}
                   events={safePointerEvents}
-                  frameloop={isInView ? "always" : "never"}
+                  frameloop={isInView ? "always" : "demand"}
                 >
                   <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
                   <color attach="background" args={["#0b1120"]} />
@@ -584,7 +584,7 @@ export function BridgeViz() {
                 shadows
                 dpr={[1, 2]}
                 events={safePointerEvents}
-                frameloop={isInView ? "always" : "never"}
+                frameloop={isInView ? "always" : "demand"}
               >
                 <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
                 <color attach="background" args={["#0b1120"]} />

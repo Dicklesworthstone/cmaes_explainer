@@ -161,6 +161,96 @@ export function WasmDemo() {
     setRsHistory(rs);
   };
 
+  // Quick Preset Scenarios
+  const handleApplyPreset = (preset: "rosenbrock" | "rastrigin" | "cigar" | "ackley") => {
+    setIsPlaying(false);
+    if (preset === "rosenbrock") {
+      setSelectedBenchId("rosenbrock");
+      setInitialSigma(0.4);
+      setLambda(16);
+      setActiveCMA(true);
+      const bench = BENCHMARKS.find((b) => b.id === "rosenbrock") || BENCHMARKS[0];
+      const newStart: [number, number] = [-1.6, -1.0];
+      setStartPoint(newStart);
+      const { initialStep, gd, adam, rs } = createOptimizerState(
+        bench,
+        newStart,
+        0.4,
+        16,
+        true,
+        noiseLevel,
+        compareMode
+      );
+      setHistory([initialStep]);
+      setGdHistory(gd);
+      setAdamHistory(adam);
+      setRsHistory(rs);
+    } else if (preset === "rastrigin") {
+      setSelectedBenchId("rastrigin");
+      setInitialSigma(0.8);
+      setLambda(24);
+      setActiveCMA(true);
+      const bench = BENCHMARKS.find((b) => b.id === "rastrigin") || BENCHMARKS[0];
+      const newStart: [number, number] = [3.2, -2.8];
+      setStartPoint(newStart);
+      const { initialStep, gd, adam, rs } = createOptimizerState(
+        bench,
+        newStart,
+        0.8,
+        24,
+        true,
+        noiseLevel,
+        compareMode
+      );
+      setHistory([initialStep]);
+      setGdHistory(gd);
+      setAdamHistory(adam);
+      setRsHistory(rs);
+    } else if (preset === "cigar") {
+      setSelectedBenchId("cigar");
+      setInitialSigma(0.5);
+      setLambda(16);
+      setActiveCMA(true);
+      const bench = BENCHMARKS.find((b) => b.id === "cigar") || BENCHMARKS[0];
+      const newStart: [number, number] = [2.5, 2.5];
+      setStartPoint(newStart);
+      const { initialStep, gd, adam, rs } = createOptimizerState(
+        bench,
+        newStart,
+        0.5,
+        16,
+        true,
+        noiseLevel,
+        compareMode
+      );
+      setHistory([initialStep]);
+      setGdHistory(gd);
+      setAdamHistory(adam);
+      setRsHistory(rs);
+    } else if (preset === "ackley") {
+      setSelectedBenchId("ackley");
+      setInitialSigma(0.6);
+      setLambda(20);
+      setActiveCMA(true);
+      const bench = BENCHMARKS.find((b) => b.id === "ackley") || BENCHMARKS[0];
+      const newStart: [number, number] = [-3.2, 3.2];
+      setStartPoint(newStart);
+      const { initialStep, gd, adam, rs } = createOptimizerState(
+        bench,
+        newStart,
+        0.6,
+        20,
+        true,
+        noiseLevel,
+        compareMode
+      );
+      setHistory([initialStep]);
+      setGdHistory(gd);
+      setAdamHistory(adam);
+      setRsHistory(rs);
+    }
+  };
+
   // Step the optimizer
   const stepOptimization = useCallback(() => {
     const opt = getOrInitOptimizer();
@@ -598,6 +688,32 @@ export function WasmDemo() {
         </motion.div>
       ) : (
         <div className="glass-card p-6 md:p-8 space-y-6">
+          {/* Curated Presets Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-sky-950/40 via-indigo-950/20 to-purple-950/30 border border-sky-500/20 shadow-inner">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
+              <span className="text-xs font-bold text-white font-display">Instant Stress-Test Presets:</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: "rosenbrock", label: "🍌 Ill-Conditioned Canyon", tip: "Condition > 1000" },
+                { id: "rastrigin", label: "🏔️ Deceptive Multimodal", tip: "Deep local traps" },
+                { id: "cigar", label: "⚡ Extreme Aspect Ratio (1000:1)", tip: "1000:1 Valley" },
+                { id: "ackley", label: "🎯 Sharp Funnel", tip: "Flat outer plateau" }
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleApplyPreset(p.id as any)}
+                  title={p.tip}
+                  className="px-3 py-1 text-xs font-semibold rounded-xl bg-slate-900/80 hover:bg-slate-800 text-sky-200 border border-sky-500/20 hover:border-sky-400/50 hover:text-white transition-[background-color,border-color,color,transform] active:scale-95 shadow-sm"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Top Control Bar: Benchmark Selector */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
             <div className="flex flex-wrap items-center gap-2">

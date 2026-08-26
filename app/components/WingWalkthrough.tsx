@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LatexRenderer, TextWithLatex } from "./LatexRenderer";
 import { WingViz } from "./WingViz";
@@ -14,11 +14,14 @@ import {
   Activity,
   Cpu,
   RefreshCw,
-  TrendingDown
+  TrendingDown,
+  Play,
+  Pause
 } from "lucide-react";
 
 export function WingWalkthrough() {
   const [activeStep, setActiveStep] = useState(0);
+  const [isAutoplaying, setIsAutoplaying] = useState(false);
 
   const steps = [
     {
@@ -79,6 +82,20 @@ export function WingWalkthrough() {
     }
   ];
 
+  // Autoplay step cycler
+  useEffect(() => {
+    if (!isAutoplaying) return;
+    const interval = setInterval(() => {
+      setActiveStep((prev) => (prev + 1) % steps.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isAutoplaying, steps.length]);
+
+  const handleManualStep = (idx: number) => {
+    setIsAutoplaying(false);
+    setActiveStep(idx);
+  };
+
   return (
     <div className="space-y-10">
       <div className="prose-cmaes">
@@ -110,14 +127,39 @@ export function WingWalkthrough() {
                 CMA-ES Generation Lifecycle in Slow Motion
               </h3>
               <p className="text-xs text-slate-400">
-                Click through the 7 algorithmic phases to understand the internal linear algebra
+                Click through the 7 algorithmic phases or press Play to watch the live step-by-step cycle
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+              onClick={() => setIsAutoplaying((prev) => !prev)}
+              aria-label={isAutoplaying ? "Pause walkthrough" : "Play slow-motion walkthrough"}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-[background-color,border-color,color,box-shadow] ${
+                isAutoplaying
+                  ? "bg-sky-500 text-white border-sky-400 shadow-glow-sm"
+                  : "bg-slate-900 border-white/10 text-slate-300 hover:text-white"
+              }`}
+            >
+              {isAutoplaying ? (
+                <>
+                  <Pause className="h-3.5 w-3.5" />
+                  <span>Pause</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  <span>Auto-Play</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setIsAutoplaying(false);
+                setActiveStep((prev) => Math.max(0, prev - 1));
+              }}
               disabled={activeStep === 0}
               aria-label="Previous algorithmic step"
               className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -128,7 +170,10 @@ export function WingWalkthrough() {
               Step {activeStep + 1} of {steps.length}
             </span>
             <button
-              onClick={() => setActiveStep((prev) => Math.min(steps.length - 1, prev + 1))}
+              onClick={() => {
+                setIsAutoplaying(false);
+                setActiveStep((prev) => Math.min(steps.length - 1, prev + 1));
+              }}
               disabled={activeStep === steps.length - 1}
               aria-label="Next algorithmic step"
               className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -143,10 +188,10 @@ export function WingWalkthrough() {
           {steps.map((s, idx) => (
             <button
               key={s.step}
-              onClick={() => setActiveStep(idx)}
+              onClick={() => handleManualStep(idx)}
               className={`p-2.5 rounded-xl text-left border transition-[background-color,border-color,color,box-shadow] ${
                 activeStep === idx
-                  ? "bg-sky-500/15 border-sky-500/50 text-white shadow-glow-sm"
+                  ? "bg-sky-500/20 border-sky-500/60 text-white shadow-glow-sm"
                   : "bg-slate-950/40 border-white/5 text-slate-400 hover:bg-slate-900 hover:text-slate-200"
               }`}
             >

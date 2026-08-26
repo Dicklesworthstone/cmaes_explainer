@@ -334,7 +334,7 @@ export function CMAESPhaseSpaceViewer({
           events={safePointerEvents}
           shadows
           dpr={[1, 2]}
-          frameloop={isInView ? "always" : "never"}
+          frameloop={isInView ? "always" : "demand"}
         >
           <PerspectiveCamera makeDefault position={[2.2, 1.6, 2.8]} fov={40} />
           <color attach="background" args={["#030712"]} />

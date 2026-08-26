@@ -873,7 +873,7 @@ export function TransformerViz() {
             <Canvas
               dpr={[1, 2]}
               events={safePointerEvents}
-              frameloop={isInView ? "always" : "never"}
+              frameloop={isInView ? "always" : "demand"}
             >
               <PerspectiveCamera makeDefault position={[4.6, 2.8, 4.8]} fov={38} />
               <color attach="background" args={["#030014"]} />

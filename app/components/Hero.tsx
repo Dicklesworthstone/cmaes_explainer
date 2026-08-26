@@ -127,40 +127,50 @@ export function Hero() {
             </a>
           </motion.div>
 
-          {/* Micro-Features Row */}
+          {/* Four Foundational Pillars of CMA-ES */}
           <motion.div
             initial={prefersReducedMotion ? false : { opacity: 0, y: 12 }}
             animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
-            className="grid max-w-xl grid-cols-1 gap-3.5 sm:grid-cols-3 pt-2"
+            className="grid max-w-2xl grid-cols-2 sm:grid-cols-4 gap-3 pt-2"
           >
-            <div className="glass-card p-3.5 border-white/5">
+            <div className="glass-card p-3 border-white/5 hover:border-sky-500/30 transition-colors">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-300">
-                <Layers className="h-3.5 w-3.5 text-sky-400" />
-                <span>Zero Gradients</span>
+                <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                <span>Rank Invariant</span>
               </div>
-              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
-                Only needs function evaluations; invariant to monotone scaling.
+              <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
+                Invariant to strictly monotone transformations <code className="font-mono text-sky-300 text-[0.65rem]">g(f(x))</code>.
               </div>
             </div>
 
-            <div className="glass-card p-3.5 border-white/5">
+            <div className="glass-card p-3 border-white/5 hover:border-emerald-500/30 transition-colors">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
-                <Compass className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Learns Geometry</span>
+                <Compass className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <span>Affine Invariant</span>
               </div>
-              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
-                Covariance stretches along valleys and shrinks across ridges.
+              <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
+                Identical convergence under linear coordinate shifts <code className="font-mono text-emerald-300 text-[0.65rem]">Ax + b</code>.
               </div>
             </div>
 
-            <div className="glass-card p-3.5 border-white/5">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-300">
-                <Cpu className="h-3.5 w-3.5 text-purple-400" />
-                <span>WASM + Rust Core</span>
+            <div className="glass-card p-3 border-white/5 hover:border-amber-500/30 transition-colors">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span>Learns <code className="font-mono font-bold text-amber-300">H⁻¹</code></span>
               </div>
-              <div className="mt-1 text-[0.75rem] text-slate-400 leading-snug">
-                Production-grade SIMD speed in browser and Python.
+              <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
+                Covariance <code className="font-mono text-amber-300 text-[0.65rem]">C</code> mimics inverse Hessian without derivatives.
+              </div>
+            </div>
+
+            <div className="glass-card p-3 border-white/5 hover:border-purple-500/30 transition-colors">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-300">
+                <Cpu className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                <span>WASM + Rust</span>
+              </div>
+              <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
+                Sub-millisecond SIMD parallel engine running live in browser.
               </div>
             </div>
           </motion.div>

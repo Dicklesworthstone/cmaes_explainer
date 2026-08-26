@@ -417,7 +417,7 @@ export function WingViz() {
                   events={safePointerEvents}
                   shadows
                   dpr={[1, 2]}
-                  frameloop={isInView ? "always" : "never"}
+                  frameloop={isInView ? "always" : "demand"}
                   className="w-full h-full"
                 >
                   <PerspectiveCamera makeDefault position={[3.2, 1.9, 4.2]} fov={38} />
@@ -475,7 +475,7 @@ export function WingViz() {
                 events={safePointerEvents}
                 shadows
                 dpr={[1, 2]}
-                frameloop={isInView ? "always" : "never"}
+                frameloop={isInView ? "always" : "demand"}
                 className="w-full h-full"
               >
                 <PerspectiveCamera makeDefault position={[3.2, 1.9, 4.2]} fov={38} />

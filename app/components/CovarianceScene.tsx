@@ -289,7 +289,7 @@ export function CovarianceScene() {
         <Canvas
           events={safePointerEvents}
           dpr={[1, 2]}
-          frameloop={inView ? "always" : "never"}
+          frameloop={inView ? "always" : "demand"}
           camera={{ position: [2.8, 2.0, 3.6], fov: 38 }}
           className="h-full w-full"
         >
