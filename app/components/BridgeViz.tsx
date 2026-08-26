@@ -2,10 +2,10 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Environment, Line } from "@react-three/drei";
+import { PerspectiveCamera, Environment, Line, OrbitControls } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
-import { Play, Pause, RotateCcw, Sparkles, Building2, ShieldCheck, Activity, Zap } from "lucide-react";
+import { Play, Pause, RotateCcw, Sparkles, Building2, ShieldCheck, Activity, Zap, Compass } from "lucide-react";
 import { CMAESOptimizer } from "../lib/cmaesEngine";
 
 // --- Physics & Colormap Helpers ---
@@ -43,7 +43,7 @@ function Water() {
 
   return (
     <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.5, 0]} receiveShadow>
-      <planeGeometry args={[24, 24, 16, 16]} />
+      <planeGeometry args={[36, 36, 16, 16]} />
       <meshPhysicalMaterial
         color="#082f49"
         metalness={0.9}
@@ -335,18 +335,29 @@ export function BridgeViz() {
     <div className="glass-card p-6 space-y-6">
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Viewport */}
-        <div className="lg:w-[65%] w-full relative group aspect-[4/3] lg:aspect-auto lg:h-[480px]">
+        <div className="lg:w-[65%] w-full relative group aspect-[16/10] sm:aspect-auto lg:h-[480px]">
           <div className="absolute -inset-1 bg-gradient-to-br from-amber-500/10 to-red-500/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
           <div className="relative h-full w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
             <Canvas shadows dpr={[1, 2]} events={safePointerEvents}>
-              <PerspectiveCamera makeDefault position={[4.5, 3.2, 5.5]} fov={42} />
+              {/* Centered isometric perspective showing full span symmetrically */}
+              <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
               <color attach="background" args={["#0b1120"]} />
-              <fog attach="fog" args={["#0b1120", 6, 24]} />
+              <fog attach="fog" args={["#0b1120", 6, 26]} />
 
               <ambientLight intensity={0.5} />
               <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
               <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
               <Environment preset="sunset" />
+
+              <OrbitControls
+                makeDefault
+                enableDamping
+                dampingFactor={0.06}
+                minDistance={3.5}
+                maxDistance={14}
+                maxPolarAngle={Math.PI / 2 + 0.05}
+                target={[0, 0.3, 0]}
+              />
 
               <group position={[0, -0.4, 0]}>
                 <Water />
@@ -362,6 +373,12 @@ export function BridgeViz() {
                 />
               </group>
             </Canvas>
+
+            {/* Orbit & Interaction Badge */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+              <Compass className="h-3.5 w-3.5 text-amber-400" />
+              <span>Drag to orbit • Scroll to zoom</span>
+            </div>
 
             {/* FEA Stress Colormap Legend */}
             <div className="absolute bottom-4 right-4 p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex flex-col gap-2 w-52 shadow-2xl">
@@ -407,7 +424,7 @@ export function BridgeViz() {
           <div className="space-y-4 bg-slate-900/40 rounded-2xl p-5 border border-white/5">
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Main Span Length</span>
+                <span className="text-slate-300">Main Span Length <span className="font-mono text-amber-400">(L)</span></span>
                 <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                   {(span * 100).toFixed(0)} m
                 </span>
@@ -425,7 +442,7 @@ export function BridgeViz() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Cable Sag ($s$)</span>
+                <span className="text-slate-300">Cable Sag <span className="font-mono text-sky-400">(s)</span></span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {(sag * 20).toFixed(1)} m
                 </span>
@@ -443,7 +460,7 @@ export function BridgeViz() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Deck Truss Stiffness</span>
+                <span className="text-slate-300">Deck Truss Stiffness <span className="font-mono text-emerald-400">(k)</span></span>
                 <span className="text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                   {(stiffness * 100).toFixed(0)}%
                 </span>
@@ -461,7 +478,7 @@ export function BridgeViz() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Wind Vortex Flutter</span>
+                <span className="text-slate-300">Wind Vortex Flutter <span className="font-mono text-purple-400">(v)</span></span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {(wind * 100).toFixed(0)} km/h
                 </span>

@@ -2,10 +2,10 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Environment, Float } from "@react-three/drei";
+import { PerspectiveCamera, Environment, Float, OrbitControls } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
-import { Play, Pause, Sparkles, Wind, PlaneTakeoff, Gauge, Activity } from "lucide-react";
+import { Play, Pause, Sparkles, Wind, PlaneTakeoff, Gauge, Activity, Compass } from "lucide-react";
 import { CMAESOptimizer } from "../lib/cmaesEngine";
 
 // --- NACA 4-Digit Airfoil & 3D Wing Geometry Generator ---
@@ -292,11 +292,11 @@ export function WingViz() {
     <div className="glass-card p-6 space-y-6">
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Wind Tunnel Canvas */}
-        <div className="w-full lg:w-[65%] relative group aspect-[16/10] lg:aspect-auto lg:h-[480px]">
+        <div className="w-full lg:w-[65%] relative group aspect-[16/10] sm:aspect-auto lg:h-[480px]">
           <div className="absolute -inset-1 bg-gradient-to-br from-cyan-500/20 to-blue-600/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
           <div className="relative h-full w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]">
             <Canvas events={safePointerEvents} shadows dpr={[1, 2]} className="w-full h-full">
-              <PerspectiveCamera makeDefault position={[4.2, 2.4, 4.5]} fov={38} />
+              <PerspectiveCamera makeDefault position={[3.2, 1.9, 4.2]} fov={38} />
               <color attach="background" args={["#020617"]} />
               <fog attach="fog" args={["#020617", 5, 20]} />
 
@@ -304,6 +304,16 @@ export function WingViz() {
               <spotLight position={[10, 10, 10]} angle={0.2} penumbra={1} intensity={1.5} castShadow />
               <pointLight position={[-8, -4, -6]} intensity={0.7} color="#38bdf8" />
               <Environment preset="city" />
+
+              <OrbitControls
+                makeDefault
+                enableDamping
+                dampingFactor={0.06}
+                minDistance={2.8}
+                maxDistance={12}
+                maxPolarAngle={Math.PI / 2 + 0.05}
+                target={[0, 0, 0]}
+              />
 
               <group position={[0, -0.2, 0]}>
                 <ParametricWingMesh
@@ -313,9 +323,15 @@ export function WingViz() {
                   camber={camber}
                 />
                 <CFDStreamlines speed={1.4} liftStrength={aero.CL} />
-                <gridHelper args={[20, 20, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
+                <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
               </group>
             </Canvas>
+
+            {/* Orbit & Interaction Badge */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+              <Compass className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Drag to orbit • Scroll to zoom</span>
+            </div>
 
             {/* Aerodynamic Telemetry Overlay */}
             <div className="absolute bottom-4 left-4 flex flex-col gap-1.5 pointer-events-none">
@@ -338,11 +354,6 @@ export function WingViz() {
                 </span>
               </div>
             )}
-
-            <div className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-slate-950/60 text-[0.7rem] font-mono text-emerald-400 backdrop-blur-sm border border-emerald-500/30 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>3D CFD Wind Tunnel Active</span>
-            </div>
           </div>
         </div>
 

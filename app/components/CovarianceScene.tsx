@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo, useState, useEffect } from "react";
-import { PerspectiveCamera, Float, Line } from "@react-three/drei";
+import { PerspectiveCamera, Float, Line, OrbitControls } from "@react-three/drei";
 import { Play, Pause, RotateCcw, FastForward, Sparkles, Sliders } from "lucide-react";
 
 // --- 3D CMA-ES Mathematical Simulator for Hero ---
@@ -307,7 +307,7 @@ export function CovarianceScene() {
         <Canvas
           events={safePointerEvents}
           dpr={[1, 2]}
-          camera={{ position: [3.2, 2.4, 3.8], fov: 38 }}
+          camera={{ position: [2.8, 2.0, 3.6], fov: 38 }}
           className="h-full w-full"
         >
           <color attach="background" args={["#020617"]} />
@@ -317,6 +317,16 @@ export function CovarianceScene() {
           <directionalLight position={[5, 8, 4]} intensity={1.5} color="#e0f2fe" />
           <pointLight position={[-4, -3, -4]} intensity={0.8} color="#38bdf8" />
           <pointLight position={[currentState.mean[0], currentState.mean[1] + 1, currentState.mean[2]]} intensity={2} color="#34d399" distance={4} />
+
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.06}
+            minDistance={2.5}
+            maxDistance={9}
+            maxPolarAngle={Math.PI / 2 + 0.08}
+            target={[0, 0, 0]}
+          />
 
           <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.2}>
             <group position={[0, -0.2, 0]}>

@@ -2,10 +2,10 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Float } from "@react-three/drei";
+import { PerspectiveCamera, Float, OrbitControls } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
-import { Play, Pause, Sparkles, BrainCircuit, Activity, Zap, BarChart2 } from "lucide-react";
+import { Play, Pause, Sparkles, BrainCircuit, Activity, Zap, BarChart2, Compass } from "lucide-react";
 import { CMAESOptimizer } from "../lib/cmaesEngine";
 
 // --- 3D Architecture Visuals ---
@@ -350,17 +350,27 @@ export function TransformerViz() {
     <div className="glass-card p-6 space-y-6">
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Visualizer */}
-        <div className="w-full lg:w-[60%] relative group aspect-[16/10] lg:aspect-auto lg:h-[480px]">
+        <div className="w-full lg:w-[60%] relative group aspect-[16/10] sm:aspect-auto lg:h-[480px]">
           <div className="absolute -inset-1 bg-gradient-to-br from-violet-600/20 to-teal-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-700" />
           <div className="relative h-full w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030014]">
             <Canvas dpr={[1, 2]} events={safePointerEvents}>
-              <PerspectiveCamera makeDefault position={[5.5, 2.5, 5.5]} fov={40} />
+              <PerspectiveCamera makeDefault position={[4.6, 2.2, 4.6]} fov={40} />
               <color attach="background" args={["#030014"]} />
               <fog attach="fog" args={["#030014", 6, 20]} />
 
               <ambientLight intensity={0.3} />
               <pointLight position={[6, 6, 6]} intensity={1.2} color="#2dd4bf" />
               <pointLight position={[-6, -6, -6]} intensity={0.6} color="#a78bfa" />
+
+              <OrbitControls
+                makeDefault
+                enableDamping
+                dampingFactor={0.06}
+                minDistance={3.0}
+                maxDistance={12}
+                maxPolarAngle={Math.PI / 2 + 0.05}
+                target={[0, 0, 0]}
+              />
 
               <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.2}>
                 <group position={[0, 0, 0]} rotation={[0, Math.PI / 4, 0]}>
@@ -371,13 +381,19 @@ export function TransformerViz() {
               <gridHelper position={[0, -2, 0]} args={[20, 20, "#1e1b4b", "#0f172a"]} />
             </Canvas>
 
-            <div className="absolute top-4 left-4 flex items-center gap-2 bg-slate-950/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs font-mono text-violet-300">
+            {/* Orbit & Interaction Badge */}
+            <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+              <Compass className="h-3.5 w-3.5 text-violet-400" />
+              <span>Drag to orbit • Scroll to zoom</span>
+            </div>
+
+            <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs font-mono text-violet-300">
               <BrainCircuit className="h-3.5 w-3.5 text-violet-400" />
               <span>{layersCount} Layers • {hiddenDim} Dim • {attentionHeads} Heads</span>
             </div>
 
             {isOptimizing && (
-              <div className="absolute top-4 right-4 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-purple-500/40 shadow-glow-sm">
+              <div className="absolute top-4 left-4 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-purple-500/40 shadow-glow-sm">
                 <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
                 <span className="text-xs font-mono font-bold text-purple-200">
                   NAS CMA-ES: Gen {optGen}/20
