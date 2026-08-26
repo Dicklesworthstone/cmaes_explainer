@@ -5,16 +5,13 @@ import { Activity, Shuffle, Waves, Play, Pause, RotateCcw, Sparkles, Sliders, Tr
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
-const WIDTH = 460;
-const HEIGHT = 260;
+const WIDTH = 920;
+const HEIGHT = 520;
 
 export function NoiseExplorer() {
   const [lambda, setLambda] = useState(16);
   const [noiseLevel, setNoiseLevel] = useState(0.8);
   const [noiseType, setNoiseType] = useState<"gaussian" | "cauchy">("gaussian");
-  const [reevaluate, setReevaluate] = useState(true);
-
-  const [isPlaying, setIsPlaying] = useState(false);
   const [generation, setGeneration] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -62,10 +59,9 @@ export function NoiseExplorer() {
   const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
     const opt = new CMAESOptimizer(
       (x, y) => {
-        const u1 = Math.random() || 1e-6;
-        const u2 = Math.random();
-        const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * 0.8;
-        return trueFn(x, y) + noise;
+        const trueVal = trueFn(x, y);
+        const noise = sampleNoise();
+        return trueVal + noise;
       },
       {
         dim: 2,
@@ -78,11 +74,16 @@ export function NoiseExplorer() {
     return [opt.step()];
   });
 
-  const [trueLossHistory, setTrueLossHistory] = useState<number[]>(() => {
-    const pt = [1.8, 1.6];
-    return [trueFn(pt[0], pt[1])];
-  });
-  const [noisyLossHistory, setNoisyLossHistory] = useState<number[]>([5.2]);
+  const latestState = history[history.length - 1];
+
+  const [trueLossHistory, setTrueLossHistory] = useState<number[]>(() => [
+    trueFn(history[0].mean[0], history[0].mean[1])
+  ]);
+  const [noisyLossHistory, setNoisyLossHistory] = useState<number[]>(() => [
+    history[0].bestFitness
+  ]);
+
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const resetOptimizer = useCallback(() => {
     const opt = new CMAESOptimizer(
@@ -100,11 +101,10 @@ export function NoiseExplorer() {
       }
     );
     optimizerRef.current = opt;
-    const s0 = opt.step();
-    setHistory([s0]);
-    const initTrue = trueFn(s0.bestX[0], s0.bestX[1]);
-    setTrueLossHistory([initTrue]);
-    setNoisyLossHistory([s0.bestFitness]);
+    const st0 = opt.step();
+    setHistory([st0]);
+    setTrueLossHistory([trueFn(st0.mean[0], st0.mean[1])]);
+    setNoisyLossHistory([st0.bestFitness]);
     setGeneration(0);
     setIsPlaying(false);
   }, [lambda, sampleNoise]);
@@ -112,9 +112,9 @@ export function NoiseExplorer() {
   const stepOptimizer = useCallback(() => {
     const opt = getOrInitOptimizer();
     const nextState = opt.step();
-    const trueBest = trueFn(nextState.bestX[0], nextState.bestX[1]);
-
     setHistory((prev) => [...prev, nextState]);
+
+    const trueBest = trueFn(nextState.mean[0], nextState.mean[1]);
     setTrueLossHistory((prev) => [...prev, trueBest]);
     setNoisyLossHistory((prev) => [...prev, nextState.bestFitness]);
     setGeneration((g) => g + 1);
@@ -132,7 +132,7 @@ export function NoiseExplorer() {
     return () => clearInterval(interval);
   }, [isPlaying, generation, stepOptimizer]);
 
-  // Pre-rendered static objective heatmap canvas (memoized)
+  // Pre-rendered high-definition static objective heatmap canvas (memoized)
   const bgCanvas = useMemo(() => {
     if (typeof document === "undefined") return null;
     const offscreen = document.createElement("canvas");
@@ -146,33 +146,28 @@ export function NoiseExplorer() {
     const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
 
     const imgData = ctx.createImageData(WIDTH, HEIGHT);
-    for (let py = 0; py < HEIGHT; py += 2) {
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    for (let py = 0; py < HEIGHT; py++) {
       const y = toCoordY(py);
-      for (let px = 0; px < WIDTH; px += 2) {
+      const rowOffset = py * WIDTH;
+      for (let px = 0; px < WIDTH; px++) {
         const x = toCoordX(px);
         const v = trueFn(x, y);
         const norm = Math.max(0, Math.min(1, v / 8));
 
-        const r = Math.floor(10 + 15 * norm);
-        const g = Math.floor(20 + 75 * (1 - norm));
-        const b = Math.floor(40 + 120 * (1 - norm));
+        const r = (10 + 15 * norm) | 0;
+        const g = (20 + 75 * (1 - norm)) | 0;
+        const b = (40 + 120 * (1 - norm)) | 0;
 
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * WIDTH + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
     }
     ctx.putImageData(imgData, 0, 0);
     return offscreen;
   }, []);
 
-  // Render 2D Contour Canvas
+  // Render 2D Contour Canvas with High-DPI Sharpness
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
@@ -196,7 +191,7 @@ export function NoiseExplorer() {
     // 2. Draw Historical Trajectory
     if (history.length > 1) {
       ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       history.forEach((st, i) => {
         const mx = toPxX(st.mean[0]);
@@ -218,8 +213,8 @@ export function NoiseExplorer() {
     ctx.translate(cx, cy);
     ctx.rotate(-latestState.ellipseAngle);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
-    ctx.lineWidth = 2;
-    ctx.fillStyle = "rgba(14, 165, 233, 0.15)";
+    ctx.lineWidth = 3.5;
+    ctx.fillStyle = "rgba(14, 165, 233, 0.18)";
     ctx.beginPath();
     ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -231,18 +226,21 @@ export function NoiseExplorer() {
       const sx = toPxX(s.x[0]);
       const sy = toPxY(s.x[1]);
 
-      ctx.fillStyle = s.isElite ? "#34d399" : "rgba(168, 85, 247, 0.7)";
+      ctx.fillStyle = s.isElite ? "#34d399" : "rgba(168, 85, 247, 0.85)";
       ctx.beginPath();
-      ctx.arc(sx, sy, s.isElite ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.arc(sx, sy, s.isElite ? 7.5 : 5, 0, Math.PI * 2);
       ctx.fill();
     });
 
     // 5. Draw Mean Point
     ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
-  }, [latestState, history]);
+    ctx.stroke();
+  }, [latestState, history, bgCanvas]);
 
   // Render True vs Noisy Convergence Curve Canvas
   useEffect(() => {
@@ -257,7 +255,7 @@ export function NoiseExplorer() {
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, W, H);
 
-    const PADDING = 30;
+    const PADDING = 45;
     const maxGen = Math.max(20, trueLossHistory.length);
     const toPxX = (g: number) => PADDING + (g / maxGen) * (W - 2 * PADDING);
 
@@ -267,8 +265,8 @@ export function NoiseExplorer() {
     const toPxY = (v: number) => H - PADDING - ((v - minVal) / (maxVal - minVal + 1e-6)) * (H - 2 * PADDING);
 
     // Draw grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1.5;
     for (let v = 0; v <= 4; v += 1) {
       const y = toPxY(v);
       ctx.beginPath();
@@ -278,8 +276,8 @@ export function NoiseExplorer() {
     }
 
     // Draw Noisy Observed Loss (Purple Jitter)
-    ctx.strokeStyle = "rgba(168, 85, 247, 0.7)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(168, 85, 247, 0.75)";
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     noisyLossHistory.forEach((v, i) => {
       const x = toPxX(i);
@@ -291,7 +289,7 @@ export function NoiseExplorer() {
 
     // Draw True Latent Loss (Cyan Smooth)
     ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     trueLossHistory.forEach((v, i) => {
       const x = toPxX(i);
@@ -302,8 +300,8 @@ export function NoiseExplorer() {
     ctx.stroke();
 
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "10px Inter, sans-serif";
-    ctx.fillText("Generations →", W - 85, H - 8);
+    ctx.font = "bold 16px Inter, sans-serif";
+    ctx.fillText("Generations →", W - 140, H - 14);
   }, [trueLossHistory, noisyLossHistory]);
 
   return (
@@ -364,7 +362,7 @@ export function NoiseExplorer() {
               </div>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
-              <canvas ref={chartCanvasRef} width={WIDTH} height={140} className="w-full h-auto block" />
+              <canvas ref={chartCanvasRef} width={WIDTH} height={280} className="w-full h-auto block" />
             </div>
           </div>
         </div>

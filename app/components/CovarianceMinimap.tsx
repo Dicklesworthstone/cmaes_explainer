@@ -5,8 +5,8 @@ import { Sliders, Activity, Compass, ArrowRight, Sparkles } from "lucide-react";
 import { eigen2x2 } from "../lib/cmaesEngine";
 import { LatexRenderer } from "./LatexRenderer";
 
-const WIDTH = 380;
-const HEIGHT = 260;
+const WIDTH = 760;
+const HEIGHT = 520;
 const DOMAIN = 2.4;
 
 const objectives = {
@@ -52,12 +52,11 @@ export function CovarianceMinimap() {
     const imgData = ctx.createImageData(WIDTH, HEIGHT);
     const buf32 = new Uint32Array(imgData.data.buffer);
 
-    for (let py = 0; py < HEIGHT; py += 2) {
+    for (let py = 0; py < HEIGHT; py++) {
       const y = toCoordY(py);
-      const row0 = py * WIDTH;
-      const row1 = Math.min(HEIGHT - 1, py + 1) * WIDTH;
+      const rowOffset = py * WIDTH;
 
-      for (let px = 0; px < WIDTH; px += 2) {
+      for (let px = 0; px < WIDTH; px++) {
         const x = toCoordX(px);
         const v = fn.f(x, y);
         const norm = Math.tanh(v / 30);
@@ -65,13 +64,7 @@ export function CovarianceMinimap() {
         const r = (10 + 15 * norm) | 0;
         const g = (25 + 75 * (1 - norm)) | 0;
         const b = (45 + 120 * (1 - norm)) | 0;
-        const color = (255 << 24) | (b << 16) | (g << 8) | r;
-
-        const px1 = Math.min(WIDTH - 1, px + 1);
-        buf32[row0 + px] = color;
-        buf32[row0 + px1] = color;
-        buf32[row1 + px] = color;
-        buf32[row1 + px1] = color;
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -94,12 +87,12 @@ export function CovarianceMinimap() {
 
     // 1. Draw Cached Heatmap Contours
     if (bgCanvasRef.current) {
-      ctx.drawImage(bgCanvasRef.current, 0, 0);
+      ctx.drawImage(bgCanvasRef.current, 0, 0, W, H);
     }
 
     // 2. Draw Subtle Axes
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(W / 2, 0);
     ctx.lineTo(W / 2, H);
@@ -138,7 +131,6 @@ export function CovarianceMinimap() {
     const [l1, l2] = eigen.eigenvalues;
     const s1 = Math.sqrt(l1) * 0.6 * (W / (2 * DOMAIN));
     const s2 = Math.sqrt(l2) * 0.6 * (H / (2 * DOMAIN));
-
     const cx = toPxX(curMean[0]);
     const cy = toPxY(curMean[1]);
 
@@ -146,79 +138,74 @@ export function CovarianceMinimap() {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(-eigen.angle);
-
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
-    ctx.lineWidth = 2.5;
-    ctx.fillStyle = "rgba(14, 165, 233, 0.15)";
-
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+    ctx.lineWidth = 3.5;
+    ctx.fillStyle = "rgba(14, 165, 233, 0.2)";
     ctx.beginPath();
     ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Principal axes
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
-    ctx.lineWidth = 1.5;
+    // Draw Principal Axes
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(-s1, 0);
     ctx.lineTo(s1, 0);
     ctx.moveTo(0, -s2);
     ctx.lineTo(0, s2);
     ctx.stroke();
-
     ctx.restore();
 
-    // 5. Draw Euclidean Gradient (Red) vs Natural Gradient (Mint)
+    // 5. Draw Euclidean vs Natural Gradient Vectors
+    // Numerical gradient at curMean
     const eps = 1e-4;
-    const f0 = fn.f(curMean[0], curMean[1]);
-    const gx = (fn.f(curMean[0] + eps, curMean[1]) - f0) / eps;
-    const gy = (fn.f(curMean[0], curMean[1] + eps) - f0) / eps;
+    const gradX = (fn.f(curMean[0] + eps, curMean[1]) - fn.f(curMean[0] - eps, curMean[1])) / (2 * eps);
+    const gradY = (fn.f(curMean[0], curMean[1] + eps) - fn.f(curMean[0], curMean[1] - eps)) / (2 * eps);
+    const gradLen = Math.hypot(gradX, gradY) || 1;
+    const nGradX = gradX / gradLen;
+    const nGradY = gradY / gradLen;
 
-    // Euclidean downhill direction
-    const euclid = [-gx, -gy];
-    const euclidNorm = Math.hypot(euclid[0], euclid[1]) || 1;
-    const euclidUnit: [number, number] = [euclid[0] / euclidNorm, euclid[1] / euclidNorm];
+    // Natural gradient: C * grad
+    const natGradX = curC[0] * nGradX + curC[1] * nGradY;
+    const natGradY = curC[2] * nGradX + curC[3] * nGradY;
+    const natLen = Math.hypot(natGradX, natGradY) || 1;
+    const nNatX = natGradX / natLen;
+    const nNatY = natGradY / natLen;
 
-    // Natural gradient direction: C * (-grad)
-    const nat = [
-      curC[0] * euclid[0] + curC[1] * euclid[1],
-      curC[2] * euclid[0] + curC[3] * euclid[1]
-    ];
-    const natNorm = Math.hypot(nat[0], nat[1]) || 1;
-    const natUnit: [number, number] = [nat[0] / natNorm, nat[1] / natNorm];
+    const arrowScale = 65;
 
-    const arrowLen = 50;
-
-    // Draw Euclidean Arrow (Rose / Red)
-    const exX = cx + euclidUnit[0] * arrowLen;
-    const exY = cy - euclidUnit[1] * arrowLen;
+    // Draw Euclidean Gradient Vector (Rose)
+    const euclidEndX = cx - nGradX * arrowScale;
+    const euclidEndY = cy + nGradY * arrowScale;
     ctx.strokeStyle = "#f43f5e";
-    ctx.fillStyle = "#f43f5e";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.lineTo(exX, exY);
+    ctx.lineTo(euclidEndX, euclidEndY);
     ctx.stroke();
 
-    // Draw Natural Gradient Arrow (Mint / Emerald)
+    // Draw Natural Gradient Vector (Emerald)
     if (showNaturalGrad) {
-      const nxX = cx + natUnit[0] * arrowLen * 1.2;
-      const nxY = cy - natUnit[1] * arrowLen * 1.2;
+      const natEndX = cx - nNatX * arrowScale * 1.25;
+      const natEndY = cy + nNatY * arrowScale * 1.25;
       ctx.strokeStyle = "#34d399";
-      ctx.fillStyle = "#34d399";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(nxX, nxY);
+      ctx.lineTo(natEndX, natEndY);
       ctx.stroke();
     }
 
     // Mean Point
     ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
-  }, [objKey, progress, showNaturalGrad, fn]);
+    ctx.stroke();
+  }, [fn, progress, showNaturalGrad]);
 
   return (
     <div className="glass-card p-6 my-6 space-y-5">
@@ -242,7 +229,7 @@ export function CovarianceMinimap() {
             <button
               key={k}
               onClick={() => setObjKey(k)}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-[background-color,color,box-shadow] ${
                 objKey === k
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"

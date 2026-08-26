@@ -24,6 +24,8 @@ function trustInteractiveTokenMarkup(context: TrustContext): boolean {
   return context.command === "\\htmlClass" || context.command === "\\htmlData";
 }
 
+const katexCache = new Map<string, string>();
+
 export function LatexRenderer({
   math,
   latex,
@@ -36,14 +38,20 @@ export function LatexRenderer({
 
   const html = useMemo(() => {
     if (!expression) return "";
+    const cacheKey = `${displayMode ? "B:" : "I:"}${expression}`;
+    const cached = katexCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
     try {
-      return katex.renderToString(expression, {
+      const rendered = katex.renderToString(expression, {
         displayMode,
         throwOnError: false,
         output: "html",
         trust: true,
         strict: false,
       });
+      katexCache.set(cacheKey, rendered);
+      return rendered;
     } catch {
       return null;
     }

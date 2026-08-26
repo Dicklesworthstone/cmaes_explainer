@@ -84,7 +84,7 @@
 }
 
 .prose-cmaes a {
-  @apply text-sky-400 font-medium no-underline border-b border-sky-500/30 transition-all duration-200;
+  @apply text-sky-400 font-medium no-underline border-b border-sky-500/30 transition-colors duration-200;
 }
 .prose-cmaes a:hover {
   @apply border-sky-400 text-sky-300;
@@ -117,7 +117,7 @@
 /* --- Glass Card System --- */
 
 .glass-card {
-  @apply bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-glass transition-all duration-500 relative overflow-hidden;
+  @apply bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-glass transition-[border-color,box-shadow,transform] duration-500 relative overflow-hidden;
 }
 
 .glass-card::before {

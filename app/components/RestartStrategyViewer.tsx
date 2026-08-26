@@ -5,8 +5,8 @@ import { RefreshCw, Timer, Activity, Play, Pause, RotateCcw, Sparkles, Layers, T
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
-const WIDTH = 480;
-const HEIGHT = 260;
+const WIDTH = 960;
+const HEIGHT = 520;
 
 // Highly multimodal Rastrigin-like 2D landscape with multiple deceptively deep local basins
 const multimodalFn = (x: number, y: number) => {
@@ -60,7 +60,6 @@ export function RestartStrategyViewer() {
   const spawnRestart = useCallback((popSize: number, sigmaInit: number) => {
     const startX = (Math.random() - 0.5) * 5.0;
     const startY = (Math.random() - 0.5) * 5.0;
-
     const opt = new CMAESOptimizer(multimodalFn, {
       dim: 2,
       initialMean: [startX, startY],
@@ -69,17 +68,22 @@ export function RestartStrategyViewer() {
       bounds: [-3.5, 3.5]
     });
     optimizerRef.current = opt;
+    setCurrentLambda(popSize);
+    setRestartCount((r) => r + 1);
     const s0 = opt.step();
     setHistory([s0]);
-    setCurrentLambda(popSize);
   }, []);
 
+  const latestState = history[history.length - 1];
+
   const resetAll = useCallback(() => {
-    setIsPlaying(false);
+    optimizerRef.current = null;
     setRestartCount(0);
+    setCurrentLambda(8);
     setEvalBudget(0);
     setGlobalBestFitness(40);
     setFitnessTimeline([]);
+    setIsPlaying(false);
     spawnRestart(8, 0.6);
   }, [spawnRestart]);
 
@@ -88,33 +92,36 @@ export function RestartStrategyViewer() {
     resetAll();
   };
 
-  // Step the optimizer and check restart triggers
   const stepOptimizer = useCallback(() => {
     const opt = getOrInitOptimizer(currentLambda, 0.6);
     const nextState = opt.step();
     setHistory((prev) => [...prev, nextState]);
 
-    const newEval = evalBudget + currentLambda;
-    setEvalBudget(newEval);
+    const newEvals = evalBudget + currentLambda;
+    setEvalBudget(newEvals);
 
-    const bestNow = Math.min(globalBestFitness, nextState.bestFitness);
-    setGlobalBestFitness(bestNow);
-    setFitnessTimeline((prev) => [...prev, { evals: newEval, fit: bestNow, lambda: currentLambda }]);
+    let currentBest = globalBestFitness;
+    if (nextState.bestFitness < globalBestFitness) {
+      currentBest = nextState.bestFitness;
+      setGlobalBestFitness(currentBest);
+    }
 
-    // Restart triggers: step-size collapse (sigma < 0.02) or stagnation (> 15 gens in this restart)
-    if (nextState.sigma < 0.02 || nextState.generation >= 16) {
-      const nextRestart = restartCount + 1;
-      setRestartCount(nextRestart);
+    setFitnessTimeline((prev) => [...prev, { evals: newEvals, fit: currentBest, lambda: currentLambda }]);
 
+    // Detect stagnation or convergence to trigger restart policy
+    const isStagnant = nextState.sigma < 1e-3 || (history.length > 18 && Math.abs(history[history.length - 1].bestFitness - history[history.length - 10]?.bestFitness || 0) < 1e-4);
+
+    if (isStagnant) {
       let nextPop = currentLambda;
       let nextSigma = 0.6;
 
       if (strategy === "ipop") {
-        // IPOP: Doubling population size
+        // IPOP doubles/triples population size systematically
         nextPop = Math.min(128, currentLambda * 2);
+        nextSigma = 0.7;
       } else {
-        // BIPOP: Alternating between large population (exploration) and small population (deep exploitation)
-        if (nextRestart % 2 === 1) {
+        // BIPOP alternates large and small population exploration regimes
+        if (restartCount % 2 === 0) {
           nextPop = Math.min(96, currentLambda * 3);
           nextSigma = 0.8;
         } else {
@@ -125,7 +132,7 @@ export function RestartStrategyViewer() {
 
       spawnRestart(nextPop, nextSigma);
     }
-  }, [currentLambda, evalBudget, globalBestFitness, restartCount, strategy, spawnRestart, getOrInitOptimizer]);
+  }, [currentLambda, evalBudget, globalBestFitness, restartCount, strategy, spawnRestart, getOrInitOptimizer, history]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -139,9 +146,43 @@ export function RestartStrategyViewer() {
     return () => clearInterval(interval);
   }, [isPlaying, evalBudget, globalBestFitness, stepOptimizer]);
 
-  const latestState = history[history.length - 1];
+  // Pre-rendered high-definition Rastrigin heatmap canvas (memoized)
+  const bgCanvas = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = WIDTH;
+    offscreen.height = HEIGHT;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
 
-  // Render 2D Multimodal Landscape
+    const DOMAIN = 3.5;
+    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
+    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
+
+    const imgData = ctx.createImageData(WIDTH, HEIGHT);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    for (let py = 0; py < HEIGHT; py++) {
+      const y = toCoordY(py);
+      const rowOffset = py * WIDTH;
+
+      for (let px = 0; px < WIDTH; px++) {
+        const x = toCoordX(px);
+        const v = multimodalFn(x, y);
+        const norm = Math.max(0, Math.min(1, v / 50));
+
+        const r = (10 + 15 * norm) | 0;
+        const g = (20 + 75 * (1 - norm)) | 0;
+        const b = (40 + 120 * (1 - norm)) | 0;
+
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return offscreen;
+  }, []);
+
+  // Render 2D Multimodal Landscape with High-DPI Sharpness
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
@@ -154,57 +195,34 @@ export function RestartStrategyViewer() {
 
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw Rastrigin Contours
-    const imgData = ctx.createImageData(W, H);
-    for (let py = 0; py < H; py += 2) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += 2) {
-        const x = toCoordX(px);
-        const v = multimodalFn(x, y);
-        const norm = Math.max(0, Math.min(1, v / 50));
-
-        const r = Math.floor(10 + 15 * norm);
-        const g = Math.floor(20 + 75 * (1 - norm));
-        const b = Math.floor(40 + 120 * (1 - norm));
-
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // 1. Draw Cached Rastrigin Contours
+    if (bgCanvas) {
+      ctx.drawImage(bgCanvas, 0, 0, W, H);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // 2. Draw Global Minimum Star at (0, 0)
     ctx.strokeStyle = "#fbbf24";
     ctx.fillStyle = "#fbbf24";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3.5;
     const opx = toPxX(0);
     const opy = toPxY(0);
     ctx.beginPath();
-    ctx.arc(opx, opy, 6, 0, Math.PI * 2);
+    ctx.arc(opx, opy, 10, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(opx - 8, opy);
-    ctx.lineTo(opx + 8, opy);
-    ctx.moveTo(opx, opy - 8);
-    ctx.lineTo(opx, opy + 8);
+    ctx.moveTo(opx - 14, opy);
+    ctx.lineTo(opx + 14, opy);
+    ctx.moveTo(opx, opy - 14);
+    ctx.lineTo(opx, opy + 14);
     ctx.stroke();
 
     // 3. Draw Historical Trajectory of current restart
     if (history.length > 1) {
       ctx.strokeStyle = "#38bdf8";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       history.forEach((st, i) => {
         const mx = toPxX(st.mean[0]);
@@ -226,8 +244,8 @@ export function RestartStrategyViewer() {
     ctx.translate(cx, cy);
     ctx.rotate(-latestState.ellipseAngle);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
-    ctx.lineWidth = 2;
-    ctx.fillStyle = "rgba(14, 165, 233, 0.15)";
+    ctx.lineWidth = 3.5;
+    ctx.fillStyle = "rgba(14, 165, 233, 0.18)";
     ctx.beginPath();
     ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -240,18 +258,21 @@ export function RestartStrategyViewer() {
       const sy = toPxY(s.x[1]);
       ctx.fillStyle = s.isElite ? "#34d399" : "#94a3b8";
       ctx.beginPath();
-      ctx.arc(sx, sy, s.isElite ? 4.5 : 2.5, 0, Math.PI * 2);
+      ctx.arc(sx, sy, s.isElite ? 7.5 : 4.5, 0, Math.PI * 2);
       ctx.fill();
     });
 
     // 6. Draw Mean Point
     ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
-  }, [latestState, history]);
+    ctx.stroke();
+  }, [latestState, history, bgCanvas]);
 
-  // Render Convergence Chart
+  // Render Convergence Chart with High-DPI Sharpness
   useEffect(() => {
     const canvas = chartCanvasRef.current;
     if (!canvas || fitnessTimeline.length === 0) return;
@@ -264,7 +285,7 @@ export function RestartStrategyViewer() {
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, W, H);
 
-    const PADDING = 30;
+    const PADDING = 45;
     const maxEvals = Math.max(500, fitnessTimeline[fitnessTimeline.length - 1].evals);
     const toPxX = (e: number) => PADDING + (e / maxEvals) * (W - 2 * PADDING);
 
@@ -273,8 +294,8 @@ export function RestartStrategyViewer() {
     const toPxY = (f: number) => H - PADDING - ((f - minFit) / (maxFit - minFit)) * (H - 2 * PADDING);
 
     // Grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1.5;
     for (let f = 0; f <= 40; f += 10) {
       const y = toPxY(f);
       ctx.beginPath();
@@ -285,7 +306,7 @@ export function RestartStrategyViewer() {
 
     // Convergence curve
     ctx.strokeStyle = "#34d399";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     fitnessTimeline.forEach((pt, i) => {
       const x = toPxX(pt.evals);
@@ -296,8 +317,8 @@ export function RestartStrategyViewer() {
     ctx.stroke();
 
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "10px Inter, sans-serif";
-    ctx.fillText("Function Evaluations →", W - 125, H - 8);
+    ctx.font = "bold 16px Inter, sans-serif";
+    ctx.fillText("Function Evaluations →", W - 190, H - 14);
   }, [fitnessTimeline]);
 
   return (
@@ -322,7 +343,7 @@ export function RestartStrategyViewer() {
             <button
               key={m}
               onClick={() => handleSelectStrategy(m)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-xl uppercase transition-all ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl uppercase transition-[background-color,color,box-shadow] ${
                 strategy === m
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-white"
@@ -361,7 +382,7 @@ export function RestartStrategyViewer() {
               <span className="font-mono text-[0.68rem] text-slate-400">{evalBudget} Evals</span>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
-              <canvas ref={chartCanvasRef} width={WIDTH} height={120} className="w-full h-auto block" />
+              <canvas ref={chartCanvasRef} width={WIDTH} height={240} className="w-full h-auto block" />
             </div>
           </div>
         </div>
@@ -405,7 +426,7 @@ export function RestartStrategyViewer() {
           <div className="flex flex-wrap gap-2.5">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-all shadow-lg ${
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
                 isPlaying
                   ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                   : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"

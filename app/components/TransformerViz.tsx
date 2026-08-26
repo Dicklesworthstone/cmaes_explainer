@@ -394,10 +394,10 @@ function ParetoFrontierCanvas({
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, W, H);
 
-    const PAD_LEFT = 52;
-    const PAD_RIGHT = 24;
-    const PAD_TOP = 24;
-    const PAD_BOTTOM = 42;
+    const PAD_LEFT = 80;
+    const PAD_RIGHT = 36;
+    const PAD_TOP = 36;
+    const PAD_BOTTOM = 64;
 
     const minFlops = 1.0;
     const maxFlops = 50.0;
@@ -408,18 +408,18 @@ function ParetoFrontierCanvas({
     const toPxY = (l: number) => H - PAD_BOTTOM - ((l - minLoss) / (maxLoss - minLoss)) * (H - PAD_TOP - PAD_BOTTOM);
 
     // Subtle Grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1.5;
     for (let f = 10; f <= 50; f += 10) {
       ctx.beginPath();
       ctx.moveTo(toPxX(f), PAD_TOP);
       ctx.lineTo(toPxX(f), H - PAD_BOTTOM);
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
-      ctx.font = "10px JetBrains Mono, monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.font = "bold 14px JetBrains Mono, monospace";
       ctx.textAlign = "center";
-      ctx.fillText(`${f}G`, toPxX(f), H - PAD_BOTTOM + 16);
+      ctx.fillText(`${f}G`, toPxX(f), H - PAD_BOTTOM + 24);
     }
 
     for (let l = 1.5; l <= 3.5; l += 0.5) {
@@ -428,10 +428,10 @@ function ParetoFrontierCanvas({
       ctx.lineTo(W - PAD_RIGHT, toPxY(l));
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
-      ctx.font = "10px JetBrains Mono, monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.font = "bold 14px JetBrains Mono, monospace";
       ctx.textAlign = "right";
-      ctx.fillText(l.toFixed(1), PAD_LEFT - 8, toPxY(l) + 3);
+      ctx.fillText(l.toFixed(1), PAD_LEFT - 12, toPxY(l) + 4);
     }
 
     // Shaded Area Under Pareto Frontier Curve
@@ -446,16 +446,16 @@ function ParetoFrontierCanvas({
       ctx.closePath();
 
       const grad = ctx.createLinearGradient(0, PAD_TOP, 0, H - PAD_BOTTOM);
-      grad.addColorStop(0, "rgba(16, 185, 129, 0.18)");
+      grad.addColorStop(0, "rgba(16, 185, 129, 0.22)");
       grad.addColorStop(1, "rgba(16, 185, 129, 0.01)");
       ctx.fillStyle = grad;
       ctx.fill();
 
       // Glowing Pareto Boundary Line
       ctx.strokeStyle = "#10b981";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4;
       ctx.shadowColor = "#10b981";
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 14;
       ctx.beginPath();
       ctx.moveTo(toPxX(paretoPoints[0].flopsGiga), toPxY(paretoPoints[0].valLoss));
       paretoPoints.forEach((p) => {
@@ -473,15 +473,15 @@ function ParetoFrontierCanvas({
       if (pt.isPareto) {
         ctx.fillStyle = "#34d399";
         ctx.shadowColor = "#34d399";
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
       } else {
-        ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+        ctx.fillStyle = "rgba(148, 163, 184, 0.45)";
         ctx.beginPath();
-        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
         ctx.fill();
       }
     });
@@ -490,8 +490,9 @@ function ParetoFrontierCanvas({
     const curPx = toPxX(currentPoint.flopsGiga);
     const curPy = toPxY(currentPoint.valLoss);
 
-    ctx.strokeStyle = "rgba(168, 85, 247, 0.4)";
-    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "rgba(168, 85, 247, 0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
     ctx.beginPath();
     ctx.moveTo(curPx, PAD_TOP);
     ctx.lineTo(curPx, H - PAD_BOTTOM);
@@ -503,26 +504,26 @@ function ParetoFrontierCanvas({
     // Glowing Pulse Ring for Current Selection
     ctx.fillStyle = "#a855f7";
     ctx.shadowColor = "#c084fc";
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 18;
     ctx.beginPath();
-    ctx.arc(curPx, curPy, 6.5, 0, Math.PI * 2);
+    ctx.arc(curPx, curPy, 10, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(curPx, curPy, 8.5, 0, Math.PI * 2);
+    ctx.arc(curPx, curPy, 13, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
 
     // Axis Titles
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "10px Inter, sans-serif";
+    ctx.font = "bold 14px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Computational Cost (GFLOPs / Forward Pass) →", (W + PAD_LEFT) / 2, H - 10);
+    ctx.fillText("Computational Cost (GFLOPs / Forward Pass) →", (W + PAD_LEFT) / 2, H - 16);
 
     ctx.save();
-    ctx.translate(16, (H + PAD_TOP - PAD_BOTTOM) / 2);
+    ctx.translate(24, (H + PAD_TOP - PAD_BOTTOM) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText("Validation Loss (Lower is Better) →", 0, 0);
     ctx.restore();
@@ -550,6 +551,8 @@ function ParetoFrontierCanvas({
       <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
         <canvas
           ref={canvasRef}
+          width={960}
+          height={480}
           tabIndex={0}
           role="button"
           aria-label="Pareto frontier architecture picker"
@@ -570,10 +573,10 @@ function ParetoFrontierCanvas({
             const clickX = ((e.clientX - rect.left) / rect.width) * canvas.width;
             const clickY = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
-            const PAD_LEFT = 52;
-            const PAD_RIGHT = 24;
-            const PAD_TOP = 24;
-            const PAD_BOTTOM = 42;
+            const PAD_LEFT = 80;
+            const PAD_RIGHT = 36;
+            const PAD_TOP = 36;
+            const PAD_BOTTOM = 64;
 
             // Find closest evaluated arch
             let closest: ArchPoint | null = null;
@@ -582,7 +585,7 @@ function ParetoFrontierCanvas({
               const px = PAD_LEFT + ((pt.flopsGiga - 1.0) / 49.0) * (canvas.width - PAD_LEFT - PAD_RIGHT);
               const py = canvas.height - PAD_BOTTOM - ((pt.valLoss - 1.1) / 2.5) * (canvas.height - PAD_TOP - PAD_BOTTOM);
               const dist = Math.hypot(clickX - px, clickY - py);
-              if (dist < minDist && dist < 24) {
+              if (dist < minDist && dist < 48) {
                 minDist = dist;
                 closest = pt;
               }
@@ -1027,7 +1030,7 @@ export function TransformerViz() {
                     <button
                       key={t}
                       onClick={() => setAttnType(t)}
-                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-all ${
+                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
                         attnType === t
                           ? "bg-sky-500 text-white shadow-glow-sm"
                           : "bg-slate-900 text-slate-400 hover:text-white"
@@ -1046,7 +1049,7 @@ export function TransformerViz() {
                     <button
                       key={a}
                       onClick={() => setActType(a)}
-                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-all ${
+                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
                         actType === a
                           ? "bg-purple-500 text-white shadow-glow-sm"
                           : "bg-slate-900 text-slate-400 hover:text-white"
@@ -1077,7 +1080,7 @@ export function TransformerViz() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleToggleSearch}
-              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs font-bold text-white transition-all shadow-xl ${
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs font-bold text-white transition-[background-color,box-shadow,transform,opacity] shadow-xl ${
                 isSearching
                   ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
                   : "bg-gradient-to-r from-purple-500 via-indigo-500 to-teal-500 hover:opacity-95 shadow-purple-500/30 hover:scale-[1.01]"

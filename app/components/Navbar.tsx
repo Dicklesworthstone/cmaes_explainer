@@ -152,7 +152,7 @@ export function Navbar() {
               <a
                 key={s.id}
                 href={`#${s.id}`}
-                className={`px-4 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                className={`px-4 py-2.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
                   activeId === s.id 
                     ? "bg-sky-500 text-white shadow-glow-sm" 
                     : "text-slate-400 hover:text-slate-200"

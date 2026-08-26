@@ -351,7 +351,7 @@ export function CovarianceScene() {
                 setLandscape(l);
                 setGenIndex(0);
               }}
-              className={`px-2.5 py-1 text-[0.65rem] font-semibold rounded-lg capitalize transition-all ${
+              className={`px-2.5 py-1 text-[0.65rem] font-semibold rounded-lg capitalize transition-[background-color,color,box-shadow] ${
                 landscape === l
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
@@ -369,7 +369,7 @@ export function CovarianceScene() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`p-2 rounded-xl border transition-all ${
+              className={`p-2 rounded-xl border transition-[background-color,color,border-color] ${
                 isPlaying
                   ? "bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30"
                   : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30"

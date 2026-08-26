@@ -113,7 +113,7 @@ function HyperparameterCalculator() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsMultimodal(!isMultimodal)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-[background-color,color,border-color] ${
               isMultimodal
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                 : "bg-slate-900 text-slate-400 border-white/5 hover:text-white"
@@ -185,7 +185,7 @@ function HyperparameterCalculator() {
                 <button
                   key={lvl}
                   onClick={() => setNoiseLevel(lvl)}
-                  className={`py-2 text-xs font-semibold rounded-xl capitalize border transition-all ${
+                  className={`py-2 text-xs font-semibold rounded-xl capitalize border transition-[background-color,color,border-color,box-shadow] ${
                     noiseLevel === lvl
                       ? "bg-purple-500/20 text-purple-200 border-purple-500/50 shadow-glow-sm"
                       : "bg-slate-900 text-slate-400 border-white/5 hover:text-white"

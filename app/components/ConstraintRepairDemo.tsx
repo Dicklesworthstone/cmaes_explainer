@@ -5,7 +5,7 @@ import { Square, Wand2, MoveRight, Shuffle, Paintbrush, Play, Pause, RotateCcw, 
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
-const SIZE = 400;
+const SIZE = 800;
 
 // Objective whose unconstrained minimum is at (1.35, 1.35), outside the [0, 1]^2 box
 const unconstrainedOptimum = [1.35, 1.35];
@@ -74,6 +74,8 @@ export function ConstraintRepairDemo() {
     return [opt.step()];
   });
 
+  const latestState = history[history.length - 1];
+
   const resetOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
     const opt = new CMAESOptimizer(
       (x, y) => {
@@ -118,7 +120,7 @@ export function ConstraintRepairDemo() {
     return () => clearInterval(interval);
   }, [isPlaying, generation, stepOptimizer]);
 
-  // Pre-rendered heatmap canvas (memoized per strategy)
+  // Pre-rendered high-definition heatmap canvas (memoized per strategy)
   const bgCanvas = useMemo(() => {
     if (typeof document === "undefined") return null;
     const offscreen = document.createElement("canvas");
@@ -131,34 +133,29 @@ export function ConstraintRepairDemo() {
     const DOMAIN_MAX = 1.6;
 
     const imgData = ctx.createImageData(SIZE, SIZE);
-    for (let py = 0; py < SIZE; py += 2) {
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    for (let py = 0; py < SIZE; py++) {
       const y = DOMAIN_MAX - (py / SIZE) * (DOMAIN_MAX - DOMAIN_MIN);
-      for (let px = 0; px < SIZE; px += 2) {
+      const rowOffset = py * SIZE;
+      for (let px = 0; px < SIZE; px++) {
         const x = DOMAIN_MIN + (px / SIZE) * (DOMAIN_MAX - DOMAIN_MIN);
         const [rx, ry] = repairPoint([x, y], strategy);
         const v = objectiveFn(rx, ry);
         const norm = Math.max(0, Math.min(1, Math.sqrt(v) / 2));
 
-        const r = Math.floor(12 + 15 * norm);
-        const g = Math.floor(18 + 70 * (1 - norm));
-        const b = Math.floor(35 + 110 * (1 - norm));
+        const r = (12 + 15 * norm) | 0;
+        const g = (18 + 70 * (1 - norm)) | 0;
+        const b = (35 + 110 * (1 - norm)) | 0;
 
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * SIZE + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
     }
     ctx.putImageData(imgData, 0, 0);
     return offscreen;
   }, [strategy]);
 
-  // Render Canvas
+  // Render Canvas with High-DPI Sharpness
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
@@ -190,15 +187,15 @@ export function ConstraintRepairDemo() {
 
     // Glowing boundary outline
     ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 10;
     ctx.strokeRect(b0X, b0Y, boxW, boxH);
 
     ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3.5;
     ctx.strokeRect(b0X, b0Y, boxW, boxH);
 
     // Infeasible Shading
-    ctx.fillStyle = "rgba(2, 6, 23, 0.5)";
+    ctx.fillStyle = "rgba(2, 6, 23, 0.55)";
     ctx.fillRect(0, 0, W, b0Y);
     ctx.fillRect(0, b1Y, W, H - b1Y);
     ctx.fillRect(0, b0Y, b0X, boxH);
@@ -206,33 +203,35 @@ export function ConstraintRepairDemo() {
 
     // Box label
     ctx.fillStyle = "#38bdf8";
-    ctx.font = "bold 10px Inter, monospace";
-    ctx.fillText("Feasible Domain [0, 1]²", b0X + 10, b0Y + 20);
+    ctx.font = "bold 18px Inter, monospace";
+    ctx.fillText("Feasible Domain [0, 1]²", b0X + 16, b0Y + 32);
 
     // Unconstrained minimum marker (outside box)
     const optPx = toPxX(unconstrainedOptimum[0]);
     const optPy = toPxY(unconstrainedOptimum[1]);
     ctx.fillStyle = "#f43f5e";
     ctx.beginPath();
-    ctx.arc(optPx, optPy, 4.5, 0, Math.PI * 2);
+    ctx.arc(optPx, optPy, 8, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillText("Unconstrained Min (1.35, 1.35)", optPx + 8, optPy + 4);
+    ctx.font = "bold 15px Inter, sans-serif";
+    ctx.fillText("Unconstrained Min (1.35, 1.35)", optPx + 14, optPy + 5);
 
     // Constrained global optimum (Corner at 1.0, 1.0)
     const constrPx = toPxX(1.0);
     const constrPy = toPxY(1.0);
     ctx.strokeStyle = "#34d399";
     ctx.fillStyle = "#34d399";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.arc(constrPx, constrPy, 6, 0, Math.PI * 2);
+    ctx.arc(constrPx, constrPy, 11, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillText("Constrained Target (1.0, 1.0)", constrPx - 160, constrPy - 8);
+    ctx.font = "bold 15px Inter, sans-serif";
+    ctx.fillText("Constrained Target (1.0, 1.0)", constrPx - 250, constrPy - 14);
 
     // 3. Draw Trajectory Line
     if (history.length > 1) {
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       history.forEach((st, i) => {
         const [rx, ry] = repairPoint(st.mean as [number, number], strategy);
@@ -257,24 +256,24 @@ export function ConstraintRepairDemo() {
 
       // If point was out of bounds, draw repair ray
       if (Math.hypot(rpx - fpx, rpy - fpy) > 2) {
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.4)";
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.6)";
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.moveTo(rpx, rpy);
         ctx.lineTo(fpx, fpy);
         ctx.stroke();
 
         // Raw sample (Crimson ghost)
-        ctx.fillStyle = "rgba(244, 63, 94, 0.4)";
+        ctx.fillStyle = "rgba(244, 63, 94, 0.6)";
         ctx.beginPath();
-        ctx.arc(rpx, rpy, 2.5, 0, Math.PI * 2);
+        ctx.arc(rpx, rpy, 4.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
       // Repaired sample in feasible domain
       ctx.fillStyle = s.isElite ? "#34d399" : "#38bdf8";
       ctx.beginPath();
-      ctx.arc(fpx, fpy, s.isElite ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.arc(fpx, fpy, s.isElite ? 7.5 : 5, 0, Math.PI * 2);
       ctx.fill();
     });
 
@@ -282,12 +281,12 @@ export function ConstraintRepairDemo() {
     const [curMeanFixX, curMeanFixY] = repairPoint(latestState.mean as [number, number], strategy);
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = "#0284c7";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.arc(toPxX(curMeanFixX), toPxY(curMeanFixY), 6, 0, Math.PI * 2);
+    ctx.arc(toPxX(curMeanFixX), toPxY(curMeanFixY), 10, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }, [latestState, history, strategy]);
+  }, [latestState, history, strategy, bgCanvas]);
 
   return (
     <div className="glass-card p-6 md:p-8 space-y-6">

@@ -408,7 +408,7 @@ export function CmaesInternalsLab() {
                   setIsPlaying(!isPlaying);
                 }
               }}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-lg transition-all ${
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-lg transition-[background-color,box-shadow] ${
                 isPlaying && cursor < states.length - 1 ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
               }`}
             >

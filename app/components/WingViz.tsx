@@ -764,7 +764,7 @@ export function WingViz() {
           {/* Action Buttons */}
           <button
             onClick={handleRunOptimizer}
-            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-all shadow-lg ${
+            className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
               isOptimizing
                 ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
                 : "bg-gradient-to-r from-cyan-500 to-blue-600 hover:scale-[1.02] shadow-cyan-500/30"

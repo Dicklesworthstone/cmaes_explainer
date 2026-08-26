@@ -194,8 +194,8 @@ export function WasmDemo() {
   useEffect(() => {
     if (typeof document === "undefined") return;
     const offscreen = document.createElement("canvas");
-    const W = 560;
-    const H = 420;
+    const W = 1120;
+    const H = 840;
     offscreen.width = W;
     offscreen.height = H;
     const ctx = offscreen.getContext("2d");
@@ -207,14 +207,12 @@ export function WasmDemo() {
 
     const imgData = ctx.createImageData(W, H);
     const buf32 = new Uint32Array(imgData.data.buffer);
-    const stepSize = 2;
 
-    for (let py = 0; py < H; py += stepSize) {
+    for (let py = 0; py < H; py++) {
       const y = toCoordY(py);
-      const row0 = py * W;
-      const row1 = Math.min(H - 1, py + 1) * W;
+      const rowOffset = py * W;
 
-      for (let px = 0; px < W; px += stepSize) {
+      for (let px = 0; px < W; px++) {
         const x = toCoordX(px);
         const f = currentBench.eval(x, y);
         const logF = Math.log10(Math.max(1e-4, f + 1e-4));
@@ -223,13 +221,7 @@ export function WasmDemo() {
         const r = (6 + 18 * norm) | 0;
         const g = (16 + 85 * (1 - norm)) | 0;
         const b = (32 + 130 * (1 - norm)) | 0;
-        const color = (255 << 24) | (b << 16) | (g << 8) | r;
-
-        const px1 = Math.min(W - 1, px + 1);
-        buf32[row0 + px] = color;
-        buf32[row0 + px1] = color;
-        buf32[row1 + px] = color;
-        buf32[row1 + px1] = color;
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -268,12 +260,12 @@ export function WasmDemo() {
 
       // 1. Draw Cached Vector Field / Contour Heatmap
       if (bgCanvasRef.current) {
-        ctx.drawImage(bgCanvasRef.current, 0, 0);
+        ctx.drawImage(bgCanvasRef.current, 0, 0, W, H);
       }
 
       // 2. Draw Subtle Coordinate Grid
       ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.5;
       for (let g = Math.ceil(dMin); g <= dMax; g += 1) {
         ctx.beginPath();
         ctx.moveTo(toPxX(g), 0);
@@ -290,26 +282,26 @@ export function WasmDemo() {
       const [optX, optY] = currentBench.optimum;
       ctx.strokeStyle = "#fbbf24";
       ctx.fillStyle = "#fbbf24";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3.5;
       const opx = toPxX(optX);
       const opy = toPxY(optY);
       ctx.beginPath();
-      ctx.arc(opx, opy, 6, 0, Math.PI * 2);
+      ctx.arc(opx, opy, 10, 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(opx - 9, opy);
-      ctx.lineTo(opx + 9, opy);
-      ctx.moveTo(opx, opy - 9);
-      ctx.lineTo(opx, opy + 9);
+      ctx.moveTo(opx - 14, opy);
+      ctx.lineTo(opx + 14, opy);
+      ctx.moveTo(opx, opy - 14);
+      ctx.lineTo(opx, opy + 14);
       ctx.stroke();
 
       // 4. Draw Comparison Baselines (Gradient Descent & Adam)
       if (compareMode) {
         // Gradient Descent Trajectory (Rose Red)
         if (gdHistory.length > 1) {
-          ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
-          ctx.lineWidth = 1.8;
-          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = "rgba(244, 63, 94, 0.85)";
+          ctx.lineWidth = 3.0;
+          ctx.setLineDash([6, 6]);
           ctx.beginPath();
           gdHistory.forEach((pt, i) => {
             const gx = toPxX(pt.currentX[0]);
@@ -323,9 +315,9 @@ export function WasmDemo() {
 
         // Adam Optimizer Trajectory (Amber Gold)
         if (adamHistory.length > 1) {
-          ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
-          ctx.lineWidth = 2.0;
-          ctx.setLineDash([4, 2]);
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+          ctx.lineWidth = 3.2;
+          ctx.setLineDash([8, 4]);
           ctx.beginPath();
           adamHistory.forEach((pt, i) => {
             const ax = toPxX(pt.currentX[0]);
@@ -340,8 +332,8 @@ export function WasmDemo() {
 
       // 5. Draw Historical CMA-ES Mean Trajectory (Cyan Ribbon)
       if (history.length > 1) {
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
+        ctx.lineWidth = 4.5;
         ctx.beginPath();
         history.forEach((st, i) => {
           const mx = toPxX(st.mean[0]);
@@ -363,9 +355,9 @@ export function WasmDemo() {
         ctx.translate(cx, cy);
         ctx.rotate(-a.angle);
 
-        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
-        ctx.lineWidth = k === 1 ? 2.5 : 1.2;
-        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
+        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.95)" : "rgba(56, 189, 248, 0.4)";
+        ctx.lineWidth = k === 1 ? 4 : 2;
+        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.15)" : "transparent";
 
         ctx.beginPath();
         ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
@@ -374,8 +366,8 @@ export function WasmDemo() {
 
         // Draw principal axes on 1-sigma ellipse
         if (k === 1) {
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.moveTo(-s1, 0);
           ctx.lineTo(s1, 0);
@@ -392,7 +384,7 @@ export function WasmDemo() {
       const pcY = cy - a.pc1 * pcScale;
 
       ctx.strokeStyle = "#c084fc";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(pcX, pcY);
@@ -407,20 +399,20 @@ export function WasmDemo() {
           // Glowing Emerald for top mu elites
           ctx.fillStyle = "#34d399";
           ctx.shadowColor = "#34d399";
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = 10;
           ctx.beginPath();
-          ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 7.5, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
 
           ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 2.5;
           ctx.stroke();
         } else {
           // Cyan/Slate for other offspring
-          ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+          ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
           ctx.beginPath();
-          ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 5, 0, Math.PI * 2);
           ctx.fill();
         }
       });
@@ -428,9 +420,9 @@ export function WasmDemo() {
       // 9. Draw Mean Point
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#0284c7";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
@@ -441,7 +433,7 @@ export function WasmDemo() {
     return () => cancelAnimationFrame(animId);
   }, [currentBench, latestState, history, compareMode, gdHistory, adamHistory, isInView]);
 
-  // --- Render Log-Loss Convergence Chart ---
+  // --- Render Log-Loss Convergence Chart with High-DPI Sharpness ---
   useEffect(() => {
     const canvas = lossCanvasRef.current;
     if (!canvas || history.length === 0) return;
@@ -452,7 +444,7 @@ export function WasmDemo() {
     const H = canvas.height;
 
     // Draw background
-    ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
+    ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
     ctx.fillRect(0, 0, W, H);
 
     // Compute bounds
@@ -461,33 +453,33 @@ export function WasmDemo() {
       ...history.map((s) => s.evalCount),
       ...(compareMode && gdHistory ? gdHistory.map((s) => s.evalCount) : [1])
     );
-    const toPxX = (evals: number) => (evals / maxEvals) * (W - 40) + 30;
+    const toPxX = (evals: number) => (evals / maxEvals) * (W - 70) + 50;
     const toPxY = (logLoss: number) => {
       const minLog = -8;
       const maxLog = 4;
-      return H - 25 - ((logLoss - minLog) / (maxLog - minLog)) * (H - 45);
+      return H - 35 - ((logLoss - minLog) / (maxLog - minLog)) * (H - 70);
     };
 
     // Draw Grid & Axes
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     for (let logL = -8; logL <= 4; logL += 2) {
       const y = toPxY(logL);
       ctx.beginPath();
-      ctx.moveTo(30, y);
-      ctx.lineTo(W - 10, y);
+      ctx.moveTo(50, y);
+      ctx.lineTo(W - 20, y);
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
-      ctx.font = "9px monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
+      ctx.font = "bold 13px monospace";
       ctx.textAlign = "right";
-      ctx.fillText(`1e${logL}`, 26, y + 3);
+      ctx.fillText(`1e${logL}`, 44, y + 4);
     }
 
-    // Draw GD Convergence Curve (Amber)
+    // Draw GD Convergence Curve (Rose)
     if (compareMode && gdHistory && gdHistory.length > 0) {
-      ctx.strokeStyle = "#f59e0b";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#f43f5e";
+      ctx.lineWidth = 3;
       ctx.beginPath();
       gdHistory.forEach((s, i) => {
         const x = toPxX(s.evalCount);
@@ -502,7 +494,7 @@ export function WasmDemo() {
     // Draw Comparison Adam Curve (Amber)
     if (compareMode && adamHistory.length > 0) {
       ctx.strokeStyle = "#fbbf24";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       adamHistory.forEach((s, i) => {
         const x = toPxX(s.evalCount);
@@ -516,7 +508,7 @@ export function WasmDemo() {
 
     // Draw CMA-ES Convergence Curve (Cyan)
     ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     history.forEach((s, i) => {
       const x = toPxX(s.evalCount);
@@ -529,8 +521,8 @@ export function WasmDemo() {
 
     // Axis Labels
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "10px Inter, sans-serif";
-    ctx.fillText("Function Evaluations →", W - 130, H - 10);
+    ctx.font = "bold 15px Inter, sans-serif";
+    ctx.fillText("Function Evaluations →", W - 180, H - 12);
   }, [history, currentBench, compareMode, gdHistory, adamHistory, lambda]);
 
   return (
@@ -547,7 +539,7 @@ export function WasmDemo() {
         <div className="flex items-center gap-2 bg-slate-950/60 p-1.5 rounded-2xl border border-white/10">
           <button
             onClick={() => setViewMode("native")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-[background-color,color,box-shadow] ${
               viewMode === "native"
                 ? "bg-sky-500 text-white shadow-glow-sm"
                 : "text-slate-400 hover:text-slate-200"
@@ -557,7 +549,7 @@ export function WasmDemo() {
           </button>
           <button
             onClick={() => setViewMode("wasm_iframe")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-[background-color,color,box-shadow] ${
               viewMode === "wasm_iframe"
                 ? "bg-sky-500 text-white shadow-glow-sm"
                 : "text-slate-400 hover:text-slate-200"
@@ -598,6 +590,7 @@ export function WasmDemo() {
             <iframe
               src="/wasm-demo/examples/viz-benchmarks.html"
               sandbox="allow-scripts allow-same-origin"
+              loading="lazy"
               className="h-full w-full border-0"
               title="CMA-ES WASM standalone benchmarks"
             />
@@ -612,7 +605,7 @@ export function WasmDemo() {
                 <button
                   key={b.id}
                   onClick={() => handleSelectBench(b.id)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-[background-color,color,box-shadow,border-color] ${
                     selectedBenchId === b.id
                       ? "bg-sky-500 text-white shadow-glow-sm"
                       : "bg-slate-950/60 text-slate-400 hover:bg-slate-900 hover:text-white border border-white/5"
@@ -664,8 +657,8 @@ export function WasmDemo() {
               <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
                 <canvas
                   ref={canvasRef}
-                  width={560}
-                  height={420}
+                  width={1120}
+                  height={840}
                   tabIndex={0}
                   aria-label="Interactive 2D Benchmark Landscape Contour Map. Click or use arrow keys to reposition initial mean m0."
                   className="w-full h-auto block cursor-crosshair focus:outline-none focus:ring-2 focus:ring-sky-500/50"
@@ -747,7 +740,7 @@ export function WasmDemo() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsPlaying(!isPlaying)}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all ${
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-[background-color,box-shadow,transform] ${
                       isPlaying
                         ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                         : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
@@ -821,7 +814,7 @@ export function WasmDemo() {
                   </div>
                 </div>
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-inner bg-[#030712]">
-                  <canvas ref={lossCanvasRef} width={420} height={200} className="w-full h-auto block" />
+                  <canvas ref={lossCanvasRef} width={840} height={400} className="w-full h-auto block" />
                 </div>
               </div>
 

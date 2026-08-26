@@ -394,12 +394,12 @@ function GaussianDistributionSandbox() {
 
   // Pre-render background heatmap offscreen once per landscape switch
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-
+  // Pre-render Background Heatmap whenever landscape changes (Offscreen Canvas)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const offscreen = document.createElement("canvas");
-    const W = 540;
-    const H = 380;
+    const W = 1080;
+    const H = 760;
     offscreen.width = W;
     offscreen.height = H;
     const ctx = offscreen.getContext("2d");
@@ -413,12 +413,11 @@ function GaussianDistributionSandbox() {
     const buf32 = new Uint32Array(imgData.data.buffer);
     const denom = activeLandscapeKey === "cigar" ? 25 : 8;
 
-    for (let py = 0; py < H; py += 2) {
+    for (let py = 0; py < H; py++) {
       const y = toCoordY(py);
-      const row0 = py * W;
-      const row1 = Math.min(H - 1, py + 1) * W;
+      const rowOffset = py * W;
 
-      for (let px = 0; px < W; px += 2) {
+      for (let px = 0; px < W; px++) {
         const x = toCoordX(px);
         const f = landscape.fn(x, y);
         const norm = Math.tanh(f / denom);
@@ -426,13 +425,7 @@ function GaussianDistributionSandbox() {
         const r = (8 + 22 * norm) | 0;
         const g = (20 + 70 * (1 - norm)) | 0;
         const b = (40 + 130 * (1 - norm)) | 0;
-        const color = (255 << 24) | (b << 16) | (g << 8) | r;
-
-        const px1 = Math.min(W - 1, px + 1);
-        buf32[row0 + px] = color;
-        buf32[row0 + px1] = color;
-        buf32[row1 + px] = color;
-        buf32[row1 + px1] = color;
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -470,12 +463,12 @@ function GaussianDistributionSandbox() {
 
       // Blit pre-rendered background heatmap instantly
       if (bgCanvasRef.current) {
-        ctx.drawImage(bgCanvasRef.current, 0, 0);
+        ctx.drawImage(bgCanvasRef.current, 0, 0, W, H);
       }
 
       // Draw grid lines
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let gx = -2; gx <= 2; gx += 1) {
         ctx.moveTo(toPxX(gx), 0);
@@ -492,22 +485,22 @@ function GaussianDistributionSandbox() {
       const optPxX = toPxX(optX);
       const optPxY = toPxY(optY);
 
-      ctx.strokeStyle = "rgba(250, 204, 21, 0.8)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.85)";
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(optPxX, optPxY, 8, 0, Math.PI * 2);
+      ctx.arc(optPxX, optPxY, 14, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.fillStyle = "#facc15";
       ctx.beginPath();
-      ctx.arc(optPxX, optPxY, 2.5, 0, Math.PI * 2);
+      ctx.arc(optPxX, optPxY, 5, 0, Math.PI * 2);
       ctx.fill();
 
       // Draw Trajectory History Trail
       if (history.length > 1) {
-        ctx.strokeStyle = "rgba(250, 204, 21, 0.45)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(250, 204, 21, 0.5)";
+        ctx.lineWidth = 3.5;
+        ctx.setLineDash([6, 6]);
         ctx.beginPath();
         history.forEach((h, idx) => {
           const hx = toPxX(h.x);
@@ -520,9 +513,9 @@ function GaussianDistributionSandbox() {
 
         // Draw history nodes
         history.forEach((h) => {
-          ctx.fillStyle = "rgba(250, 204, 21, 0.6)";
+          ctx.fillStyle = "rgba(250, 204, 21, 0.7)";
           ctx.beginPath();
-          ctx.arc(toPxX(h.x), toPxY(h.y), 2.5, 0, Math.PI * 2);
+          ctx.arc(toPxX(h.x), toPxY(h.y), 4.5, 0, Math.PI * 2);
           ctx.fill();
         });
       }
@@ -542,9 +535,9 @@ function GaussianDistributionSandbox() {
         ctx.translate(cx, cy);
         ctx.rotate(-angleRad); // Canvas y is inverted
 
-        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
-        ctx.lineWidth = k === 1 ? 2 : 1;
-        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
+        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.95)" : "rgba(56, 189, 248, 0.4)";
+        ctx.lineWidth = k === 1 ? 3.5 : 2;
+        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.15)" : "transparent";
 
         ctx.beginPath();
         ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
@@ -553,7 +546,8 @@ function GaussianDistributionSandbox() {
 
         // Principal Axes (for 1-sigma)
         if (k === 1) {
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+          ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.moveTo(-s1, 0);
           ctx.lineTo(s1, 0);
@@ -570,7 +564,7 @@ function GaussianDistributionSandbox() {
       const emY = toPxY(a.emY);
 
       ctx.strokeStyle = "rgba(52, 211, 153, 0.95)";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(emX, emY);
@@ -578,7 +572,7 @@ function GaussianDistributionSandbox() {
 
       // Arrowhead for mean shift
       const arrowAng = Math.atan2(emY - cy, emX - cx);
-      const ahLen = 9;
+      const ahLen = 14;
       ctx.fillStyle = "#34d399";
       ctx.beginPath();
       ctx.moveTo(emX, emY);
@@ -602,33 +596,34 @@ function GaussianDistributionSandbox() {
           // Glowing Emerald for Elites
           ctx.fillStyle = "#34d399";
           ctx.shadowColor = "#34d399";
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = 10;
           ctx.beginPath();
-          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.arc(px, py, 7.5, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
 
           ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 2.5;
           ctx.stroke();
         } else {
-          // Dim Cyan for non-elites
-          ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+          // Dim Slate for non-elites
+          ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
           ctx.beginPath();
-          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.arc(px, py, 5, 0, Math.PI * 2);
           ctx.fill();
         }
       });
 
-      // Current Mean Point
+      // Draw Current Distribution Center (Mean m)
       ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#0284c7";
-      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#38bdf8";
+      ctx.shadowBlur = 12;
       ctx.beginPath();
-      ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
+      ctx.shadowBlur = 0;
 
+      ctx.strokeStyle = "#0284c7";
       // New Proposed Elite Mean Point
       ctx.fillStyle = "#34d399";
       ctx.strokeStyle = "#ffffff";
@@ -675,7 +670,7 @@ function GaussianDistributionSandbox() {
                 key={key}
                 type="button"
                 onClick={() => handleSelectLandscape(key)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-[background-color,color,box-shadow] ${
                   isSel
                     ? "bg-sky-500 text-white shadow-glow-sm"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
@@ -694,8 +689,8 @@ function GaussianDistributionSandbox() {
           <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
             <canvas
               ref={canvasRef}
-              width={540}
-              height={380}
+              width={1080}
+              height={760}
               className="w-full h-auto block cursor-crosshair touch-none select-none"
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -741,7 +736,7 @@ function GaussianDistributionSandbox() {
               <button
                 type="button"
                 onClick={() => setIsPlaying((p) => !p)}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
+                className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition-[background-color,color,box-shadow] shadow-sm ${
                   isPlaying
                     ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
                     : "bg-sky-500 text-white hover:bg-sky-400 shadow-glow-sm"

@@ -333,7 +333,7 @@ export function ColorizedEquation({
           {/* Active Variable Spotlight Card */}
           {activeVar && (
             <div
-              className={`rounded-2xl border p-5 md:p-6 space-y-4 transition-all duration-300 bg-slate-950/70 ${
+              className={`rounded-2xl border p-5 md:p-6 space-y-4 transition-[border-color,box-shadow] duration-300 bg-slate-950/70 ${
                 COLOR_STYLES[activeVar.color].borderClass
               } ${COLOR_STYLES[activeVar.color].glowClass}`}
             >

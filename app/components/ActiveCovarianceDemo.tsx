@@ -5,8 +5,8 @@ import { Scissors, Sparkles, Activity, Play, Pause, RotateCcw, ShieldAlert, Arro
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState, eigen2x2 } from "../lib/cmaesEngine";
 
-const WIDTH = 480;
-const HEIGHT = 320;
+const WIDTH = 960;
+const HEIGHT = 640;
 const DOMAIN = 2.5;
 
 // Sharp banana canyon with deceptive ridges
@@ -64,9 +64,9 @@ export function ActiveCovarianceDemo() {
   }, []);
 
   const handleToggleActive = () => {
-    const next = !activeCMA;
-    setActiveCMA(next);
-    resetOptimizer(next);
+    const nextVal = !activeCMA;
+    setActiveCMA(nextVal);
+    resetOptimizer(nextVal);
   };
 
   const stepOptimizer = useCallback(() => {
@@ -90,7 +90,42 @@ export function ActiveCovarianceDemo() {
 
   const latestState = history[history.length - 1];
 
-  // Render 2D Simulation Stage
+  // Pre-rendered high-definition contour map canvas (memoized)
+  const bgCanvas = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = WIDTH;
+    offscreen.height = HEIGHT;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
+
+    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
+    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
+
+    const imgData = ctx.createImageData(WIDTH, HEIGHT);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    for (let py = 0; py < HEIGHT; py++) {
+      const y = toCoordY(py);
+      const rowOffset = py * WIDTH;
+
+      for (let px = 0; px < WIDTH; px++) {
+        const x = toCoordX(px);
+        const v = objectiveFn(x, y);
+        const norm = Math.max(0, Math.min(1, Math.log10(1 + v) / 2.2));
+
+        const r = (10 + 20 * norm) | 0;
+        const g = (20 + 75 * (1 - norm)) | 0;
+        const b = (40 + 115 * (1 - norm)) | 0;
+
+        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return offscreen;
+  }, []);
+
+  // Render Canvas with High-DPI Sharpness
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
@@ -102,41 +137,18 @@ export function ActiveCovarianceDemo() {
 
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw High-Performance Vectorized Contour Map
-    const imgData = ctx.createImageData(W, H);
-    for (let py = 0; py < H; py += 2) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += 2) {
-        const x = toCoordX(px);
-        const v = objectiveFn(x, y);
-        const norm = Math.max(0, Math.min(1, Math.log10(v + 1) / 3));
-
-        const r = Math.floor(10 + 20 * norm);
-        const g = Math.floor(20 + 80 * (1 - norm));
-        const b = Math.floor(40 + 130 * (1 - norm));
-
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // 1. Draw Cached Contour Map
+    if (bgCanvas) {
+      ctx.drawImage(bgCanvas, 0, 0, W, H);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // 2. Draw Historical Mean Trajectory (Cyan Ribbon)
     if (history.length > 1) {
       ctx.strokeStyle = activeCMA ? "#38bdf8" : "#94a3b8";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
       history.forEach((st, i) => {
         const mx = toPxX(st.mean[0]);
@@ -162,12 +174,12 @@ export function ActiveCovarianceDemo() {
       ctx.strokeStyle = activeCMA
         ? k === 1
           ? "rgba(56, 189, 248, 0.95)"
-          : "rgba(56, 189, 248, 0.3)"
+          : "rgba(56, 189, 248, 0.35)"
         : k === 1
           ? "rgba(244, 63, 94, 0.9)"
-          : "rgba(244, 63, 94, 0.3)";
-      ctx.lineWidth = k === 1 ? 2.5 : 1.2;
-      ctx.fillStyle = activeCMA ? "rgba(14, 165, 233, 0.12)" : "rgba(244, 63, 94, 0.08)";
+          : "rgba(244, 63, 94, 0.35)";
+      ctx.lineWidth = k === 1 ? 4 : 2;
+      ctx.fillStyle = activeCMA ? "rgba(14, 165, 233, 0.15)" : "rgba(244, 63, 94, 0.1)";
 
       ctx.beginPath();
       ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
@@ -175,8 +187,8 @@ export function ActiveCovarianceDemo() {
       ctx.stroke();
 
       if (k === 1) {
-        ctx.strokeStyle = activeCMA ? "rgba(56, 189, 248, 0.6)" : "rgba(244, 63, 94, 0.6)";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = activeCMA ? "rgba(56, 189, 248, 0.7)" : "rgba(244, 63, 94, 0.7)";
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(-s1, 0);
         ctx.lineTo(s1, 0);
@@ -199,33 +211,33 @@ export function ActiveCovarianceDemo() {
         // Top Elite
         ctx.fillStyle = "#34d399";
         ctx.shadowColor = "#34d399";
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 7.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2.5;
         ctx.stroke();
       } else if (activeCMA && idx >= sorted.length - mu) {
         // Worst Offspring (Negative Active Forces)
         ctx.fillStyle = "#f43f5e";
         ctx.beginPath();
-        ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 7, 0, Math.PI * 2);
         ctx.fill();
 
         // Draw negative active repulsion vector toward mean
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.6)";
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(cx, cy);
         ctx.stroke();
       } else {
         // Standard Offspring
-        ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+        ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
         ctx.beginPath();
-        ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 5, 0, Math.PI * 2);
         ctx.fill();
       }
     });
@@ -233,12 +245,12 @@ export function ActiveCovarianceDemo() {
     // 5. Draw Mean Point
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = activeCMA ? "#0284c7" : "#e11d48";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
-    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }, [latestState, history, activeCMA]);
+  }, [latestState, history, activeCMA, bgCanvas]);
 
   return (
     <div className="glass-card p-6 md:p-8 space-y-6">
@@ -260,7 +272,7 @@ export function ActiveCovarianceDemo() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleToggleActive}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-[background-color,color,box-shadow] flex items-center gap-2 ${
               activeCMA
                 ? "bg-sky-500 text-white shadow-glow-sm"
                 : "bg-slate-800 text-slate-400 hover:text-white"
@@ -316,7 +328,7 @@ export function ActiveCovarianceDemo() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all ${
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition-[background-color,box-shadow,transform] ${
                   isPlaying
                     ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                     : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"

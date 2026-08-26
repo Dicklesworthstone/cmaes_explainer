@@ -75,8 +75,8 @@ function FiniteDifferenceFailDemo() {
     ctx.fillRect(0, 0, W, H);
 
     // Grid lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1.5;
     for (let gx = 0; gx <= 2.0; gx += 0.5) {
       ctx.beginPath();
       ctx.moveTo(toPxX(gx), 0);
@@ -85,10 +85,10 @@ function FiniteDifferenceFailDemo() {
     }
 
     // Draw True Objective Smooth Curve (Blue)
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.8)";
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    for (let x = X_MIN; x <= X_MAX; x += 0.02) {
+    for (let x = X_MIN; x <= X_MAX; x += 0.01) {
       const y = trueFn(x);
       if (x === X_MIN) ctx.moveTo(toPxX(x), toPxY(y));
       else ctx.lineTo(toPxX(x), toPxY(y));
@@ -96,10 +96,10 @@ function FiniteDifferenceFailDemo() {
     ctx.stroke();
 
     // Draw Noisy Black-Box Simulation Surface (Purple / Magenta)
-    ctx.strokeStyle = "rgba(192, 132, 252, 0.85)";
-    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = "rgba(192, 132, 252, 0.9)";
+    ctx.lineWidth = 3.0;
     ctx.beginPath();
-    for (let x = X_MIN; x <= X_MAX; x += 0.005) {
+    for (let x = X_MIN; x <= X_MAX; x += 0.003) {
       const y = noisySimFn(x);
       if (x === X_MIN) ctx.moveTo(toPxX(x), toPxY(y));
       else ctx.lineTo(toPxX(x), toPxY(y));
@@ -122,7 +122,7 @@ function FiniteDifferenceFailDemo() {
     const endY = y1 + fdGrad * extLen;
 
     ctx.strokeStyle = "#f43f5e";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(toPxX(startX), toPxY(startY));
     ctx.lineTo(toPxX(endX), toPxY(endY));
@@ -132,8 +132,8 @@ function FiniteDifferenceFailDemo() {
     const tStartY = trueFn(sampleX) - trueGrad * extLen;
     const tEndY = trueFn(sampleX) + trueGrad * (epsilon + extLen);
     ctx.strokeStyle = "#34d399";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 3.5;
+    ctx.setLineDash([8, 8]);
     ctx.beginPath();
     ctx.moveTo(toPxX(startX), toPxY(tStartY));
     ctx.lineTo(toPxX(endX), toPxY(tEndY));
@@ -143,16 +143,16 @@ function FiniteDifferenceFailDemo() {
     // Sample Points Dots
     ctx.fillStyle = "#f43f5e";
     ctx.beginPath();
-    ctx.arc(px0, py0, 5, 0, Math.PI * 2);
-    ctx.arc(px1, py1, 5, 0, Math.PI * 2);
+    ctx.arc(px0, py0, 9, 0, Math.PI * 2);
+    ctx.arc(px1, py1, 9, 0, Math.PI * 2);
     ctx.fill();
 
     // Perturbation bar dx = epsilon
     ctx.strokeStyle = "#fbbf24";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(px0, py0 + 15);
-    ctx.lineTo(px1, py0 + 15);
+    ctx.moveTo(px0, py0 + 26);
+    ctx.lineTo(px1, py0 + 26);
     ctx.stroke();
   }, [sampleX, epsilon, fdGrad, trueGrad, noisySimFn]);
 
@@ -184,7 +184,7 @@ function FiniteDifferenceFailDemo() {
         {/* Canvas Plot */}
         <div className="space-y-3">
           <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
-            <canvas ref={canvasRef} width={540} height={300} className="w-full h-auto block" />
+            <canvas ref={canvasRef} width={1080} height={600} className="w-full h-auto block" />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 bg-slate-950/40 p-3 rounded-xl border border-white/5 font-mono">

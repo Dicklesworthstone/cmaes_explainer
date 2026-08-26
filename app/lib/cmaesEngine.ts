@@ -33,19 +33,31 @@ export function cloneMatrix(m: Matrix): Matrix {
 }
 
 export function vecAdd(a: Vector, b: Vector): Vector {
-  return a.map((val, i) => val + b[i]);
+  const n = a.length;
+  const res = new Array(n);
+  for (let i = 0; i < n; i++) res[i] = a[i] + b[i];
+  return res;
 }
 
 export function vecSub(a: Vector, b: Vector): Vector {
-  return a.map((val, i) => val - b[i]);
+  const n = a.length;
+  const res = new Array(n);
+  for (let i = 0; i < n; i++) res[i] = a[i] - b[i];
+  return res;
 }
 
 export function vecScale(a: Vector, s: number): Vector {
-  return a.map((val) => val * s);
+  const n = a.length;
+  const res = new Array(n);
+  for (let i = 0; i < n; i++) res[i] = a[i] * s;
+  return res;
 }
 
 export function vecDot(a: Vector, b: Vector): number {
-  return a.reduce((sum, val, i) => sum + val * b[i], 0);
+  let sum = 0;
+  const n = a.length;
+  for (let i = 0; i < n; i++) sum += a[i] * b[i];
+  return sum;
 }
 
 export function vecNorm(a: Vector): number {
@@ -54,11 +66,12 @@ export function vecNorm(a: Vector): number {
 
 export function matVecMult(m: Matrix, v: Vector): Vector {
   const dim = v.length;
-  const res = new Array(dim).fill(0);
+  const res = new Array(dim);
   for (let i = 0; i < dim; i++) {
     let sum = 0;
+    const row = m[i];
     for (let j = 0; j < dim; j++) {
-      sum += m[i][j] * v[j];
+      sum += row[j] * v[j];
     }
     res[i] = sum;
   }
@@ -68,11 +81,14 @@ export function matVecMult(m: Matrix, v: Vector): Vector {
 export function outerProduct(a: Vector, b: Vector): Matrix {
   const dimA = a.length;
   const dimB = b.length;
-  const res = createZeroMatrix(dimA);
+  const res: Matrix = new Array(dimA);
   for (let i = 0; i < dimA; i++) {
+    const row = new Array(dimB);
+    const ai = a[i];
     for (let j = 0; j < dimB; j++) {
-      res[i][j] = a[i] * b[j];
+      row[j] = ai * b[j];
     }
+    res[i] = row;
   }
   return res;
 }

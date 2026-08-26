@@ -905,7 +905,7 @@ export function BridgeViz() {
           <div className="flex flex-wrap gap-3">
             <button
               onClick={handleRunOptimizer}
-              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-all shadow-lg ${
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
                 isOptimizing
                   ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
                   : "bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:scale-[1.02] shadow-orange-500/30"

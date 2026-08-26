@@ -83,7 +83,7 @@ export function WhyILove() {
         {pillars.map((p, idx) => (
           <div
             key={p.title}
-            className={`rounded-2xl border p-5 bg-slate-950/40 border-white/5 hover:border-white/15 transition-all flex flex-col justify-between space-y-3 ${
+            className={`rounded-2xl border p-5 bg-slate-950/40 border-white/5 hover:border-white/15 transition-[border-color,background-color] flex flex-col justify-between space-y-3 ${
               idx === 0 ? "sm:col-span-2 lg:col-span-1" : ""
             }`}
           >
