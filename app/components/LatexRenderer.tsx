@@ -10,8 +10,10 @@ import katex from "katex";
 import React, { useMemo } from "react";
 
 interface LatexRendererProps {
-  math: string;
+  math?: string;
+  latex?: string;
   block?: boolean;
+  inline?: boolean;
   className?: string;
 }
 
@@ -22,21 +24,30 @@ function trustInteractiveTokenMarkup(context: TrustContext): boolean {
   return context.command === "\\htmlClass" || context.command === "\\htmlData";
 }
 
-export function LatexRenderer({ math, block = false, className = "" }: LatexRendererProps) {
+export function LatexRenderer({
+  math,
+  latex,
+  block = false,
+  inline,
+  className = "",
+}: LatexRendererProps) {
+  const expression = math ?? latex ?? "";
+  const displayMode = inline !== undefined ? !inline : block;
+
   const html = useMemo(() => {
-    if (!math) return "";
+    if (!expression) return "";
     try {
-      return katex.renderToString(math, {
-        displayMode: block,
+      return katex.renderToString(expression, {
+        displayMode,
         throwOnError: false,
-        output: "htmlAndMathml",
-        trust: trustInteractiveTokenMarkup,
+        output: "html",
+        trust: true,
         strict: false,
       });
     } catch {
       return null;
     }
-  }, [math, block]);
+  }, [expression, displayMode]);
 
   if (!html) {
     return (
@@ -45,8 +56,17 @@ export function LatexRenderer({ math, block = false, className = "" }: LatexRend
         aria-label="Mathematical notation unavailable"
         className={`latex-container inline-block rounded border border-amber-500/50 bg-amber-950/40 px-2 py-1 font-sans text-xs text-amber-200 ${className}`}
       >
-        {math}
+        {expression}
       </span>
+    );
+  }
+
+  if (displayMode) {
+    return (
+      <div
+        className={`latex-container block overflow-x-auto ${className}`}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     );
   }
 

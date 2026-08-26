@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Layers, Shuffle, Sparkles, Cpu, Binary, Gauge, ArrowRight, CheckCircle2 } from "lucide-react";
-import { MathJax } from "better-react-mathjax";
+import { LatexRenderer } from "./LatexRenderer";
 
 const activations = ["SwiGLU", "GELU", "ReLU", "Mish"] as const;
 const optimizers = ["AdamW", "Lion", "Muon", "SGD-Momentum"] as const;
@@ -56,8 +56,10 @@ export function EncodeDecodePlayground() {
             <h3 className="text-base font-bold text-white font-display">
               Universal Encode/Decode Latent Box Mapping
             </h3>
-            <p className="text-xs text-slate-400">
-              Mapping mixed continuous, log-scale, and discrete integer knobs into an isotropic $[0, 1]^n$ unit cube
+            <p className="text-xs text-slate-400 flex items-center gap-1">
+              <span>Mapping mixed continuous, log-scale, and discrete integer knobs into an isotropic</span>
+              <LatexRenderer math="[0, 1]^n" block={false} />
+              <span>unit cube</span>
             </p>
           </div>
         </div>
@@ -75,14 +77,19 @@ export function EncodeDecodePlayground() {
         {/* Normalized Latent Box Inputs [0, 1] */}
         <div className="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-white/5">
           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-sky-300">
-            <span>Latent Space Representation $z \in [0, 1]^4$</span>
+            <span className="flex items-center gap-1.5">
+              <span>Latent Space Representation</span>
+              <LatexRenderer math="z \in [0, 1]^4" block={false} />
+            </span>
             <span className="font-mono text-slate-500 text-[0.7rem]">Normalized</span>
           </div>
 
           {/* z1: Learning Rate */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">$z_1$ (Log-scale Learning Rate)</span>
+            <div className="flex justify-between items-center text-xs font-medium">
+              <span className="text-slate-300 flex items-center gap-1">
+                <LatexRenderer math="z_1" block={false} /> <span>(Log-scale Learning Rate)</span>
+              </span>
               <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                 {zLr.toFixed(3)}
               </span>
@@ -101,8 +108,10 @@ export function EncodeDecodePlayground() {
 
           {/* z2: Categorical Activation */}
           <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">$z_2$ (Categorical Slicing)</span>
+            <div className="flex justify-between items-center text-xs font-medium">
+              <span className="text-slate-300 flex items-center gap-1">
+                <LatexRenderer math="z_2" block={false} /> <span>(Categorical Slicing)</span>
+              </span>
               <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                 {zAct.toFixed(3)}
               </span>
@@ -121,8 +130,10 @@ export function EncodeDecodePlayground() {
 
           {/* z3: Discrete Layers */}
           <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">$z_3$ (Discrete Integer Layers)</span>
+            <div className="flex justify-between items-center text-xs font-medium">
+              <span className="text-slate-300 flex items-center gap-1">
+                <LatexRenderer math="z_3" block={false} /> <span>(Discrete Integer Layers)</span>
+              </span>
               <span className="text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                 {zLayers.toFixed(3)}
               </span>
@@ -141,8 +152,10 @@ export function EncodeDecodePlayground() {
 
           {/* z4: Weight Decay */}
           <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">$z_4$ (Linear Bounded Weight Decay)</span>
+            <div className="flex justify-between items-center text-xs font-medium">
+              <span className="text-slate-300 flex items-center gap-1">
+                <LatexRenderer math="z_4" block={false} /> <span>(Linear Bounded Weight Decay)</span>
+              </span>
               <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 {zWeightDecay.toFixed(3)}
               </span>
@@ -169,7 +182,9 @@ export function EncodeDecodePlayground() {
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Learning Rate ($\eta$)</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
+                <span>Learning Rate (</span><LatexRenderer math="\eta" block={false} /><span>)</span>
+              </div>
               <div className="text-base font-bold text-sky-200 font-mono">{decoded.lr.toExponential(3)}</div>
               <div className="text-[0.62rem] text-slate-500 font-mono">Log range [1e-5, 1e-1]</div>
             </div>
@@ -181,7 +196,9 @@ export function EncodeDecodePlayground() {
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Transformer Layers ($L$)</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
+                <span>Transformer Layers (</span><LatexRenderer math="L" block={false} /><span>)</span>
+              </div>
               <div className="text-base font-bold text-emerald-200 font-mono">{decoded.layers} Layers</div>
               <div className="text-[0.62rem] text-slate-500 font-mono">Integer [6, 48]</div>
             </div>
@@ -199,7 +216,7 @@ export function EncodeDecodePlayground() {
               <span>Late Quantization Principle</span>
             </div>
             <p>
-              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <MathJax inline>{"$\\mathcal{N}(m, \\sigma^2 C)$"}</MathJax> moves smoothly across discrete boundaries without gradient breakdown or combinatorial explosion.
+              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} /> moves smoothly across discrete boundaries without gradient breakdown or combinatorial explosion.
             </p>
           </div>
         </div>

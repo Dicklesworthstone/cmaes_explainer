@@ -21,7 +21,6 @@ import {
   ChevronRight,
   TrendingDown
 } from "lucide-react";
-import { MathJax } from "better-react-mathjax";
 import {
   BENCHMARKS,
   BenchmarkFunction,
@@ -179,6 +178,53 @@ export function WasmDemo() {
   }, [isPlaying, history.length, speedMs, stepOptimization]);
 
   const latestState = history[history.length - 1] || null;
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Pre-render background heatmap offscreen once per benchmark switch
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const offscreen = document.createElement("canvas");
+    const W = 560;
+    const H = 420;
+    offscreen.width = W;
+    offscreen.height = H;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return;
+
+    const [dMin, dMax] = currentBench.domain;
+    const toCoordX = (px: number) => (px / W) * (dMax - dMin) + dMin;
+    const toCoordY = (py: number) => ((H - py) / H) * (dMax - dMin) + dMin;
+
+    const imgData = ctx.createImageData(W, H);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+    const stepSize = 2;
+
+    for (let py = 0; py < H; py += stepSize) {
+      const y = toCoordY(py);
+      const row0 = py * W;
+      const row1 = Math.min(H - 1, py + 1) * W;
+
+      for (let px = 0; px < W; px += stepSize) {
+        const x = toCoordX(px);
+        const f = currentBench.eval(x, y);
+        const logF = Math.log10(Math.max(1e-4, f + 1e-4));
+        const norm = Math.max(0, Math.min(1, logF / 4));
+
+        const r = (6 + 18 * norm) | 0;
+        const g = (16 + 85 * (1 - norm)) | 0;
+        const b = (32 + 130 * (1 - norm)) | 0;
+        const color = (255 << 24) | (b << 16) | (g << 8) | r;
+
+        const px1 = Math.min(W - 1, px + 1);
+        buf32[row0 + px] = color;
+        buf32[row0 + px1] = color;
+        buf32[row1 + px] = color;
+        buf32[row1 + px1] = color;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    bgCanvasRef.current = offscreen;
+  }, [currentBench]);
 
   // --- Render 2D Contour Map, Samples, Ellipses, Paths ---
   useEffect(() => {
@@ -193,39 +239,13 @@ export function WasmDemo() {
 
     const toPxX = (x: number) => ((x - dMin) / (dMax - dMin)) * W;
     const toPxY = (y: number) => H - ((y - dMin) / (dMax - dMin)) * H;
-    const toCoordX = (px: number) => (px / W) * (dMax - dMin) + dMin;
-    const toCoordY = (py: number) => ((H - py) / H) * (dMax - dMin) + dMin;
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw High-Performance Vector Field / Contour Heatmap
-    const imgData = ctx.createImageData(W, H);
-    const stepSize = 2; // 2px blocks for 60fps rendering
-    for (let py = 0; py < H; py += stepSize) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += stepSize) {
-        const x = toCoordX(px);
-        const f = currentBench.eval(x, y);
-        const logF = Math.log10(Math.max(1e-4, f + 1e-4));
-        const norm = Math.max(0, Math.min(1, logF / 4));
-
-        // Dark nebula palette: deep midnight navy -> luminous teal -> cyan
-        const r = Math.floor(6 + 18 * norm);
-        const g = Math.floor(16 + 85 * (1 - norm));
-        const b = Math.floor(32 + 130 * (1 - norm));
-
-        for (let dy = 0; dy < stepSize; dy++) {
-          for (let dx = 0; dx < stepSize; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // 1. Draw Cached Vector Field / Contour Heatmap
+    if (bgCanvasRef.current) {
+      ctx.drawImage(bgCanvasRef.current, 0, 0);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // 2. Draw Subtle Coordinate Grid
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
@@ -672,8 +692,9 @@ export function WasmDemo() {
                 />
 
                 {/* Click hint overlay */}
-                <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none">
-                  Click contour map to reposition starting point $m_0$
+                <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none flex items-center gap-1.5">
+                  <span>Click contour map to reposition starting point</span>
+                  <LatexRenderer math="m_0" block={false} />
                 </div>
 
                 {/* Live Diagnostics HUD */}
@@ -758,8 +779,10 @@ export function WasmDemo() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-300">Population Size ($\lambda$)</span>
+                  <div className="flex justify-between items-center text-xs font-medium">
+                    <span className="text-slate-300 flex items-center gap-1">
+                      Population Size (<LatexRenderer math="\lambda" block={false} />)
+                    </span>
                     <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                       {lambda}
                     </span>
@@ -794,8 +817,10 @@ export function WasmDemo() {
                 </div>
 
                 <div className="space-y-1.5 pt-2 border-t border-white/5">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-300">Initial Step Size ($\sigma_0$)</span>
+                  <div className="flex justify-between items-center text-xs font-medium">
+                    <span className="text-slate-300 flex items-center gap-1">
+                      Initial Step Size (<LatexRenderer math="\sigma_0" block={false} />)
+                    </span>
                     <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                       {initialSigma.toFixed(2)}
                     </span>

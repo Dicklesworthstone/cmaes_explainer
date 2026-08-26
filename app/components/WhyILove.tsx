@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Heart, Shield, Sparkles, Zap, Cpu, Compass } from "lucide-react";
+import { LatexRenderer } from "./LatexRenderer";
 
 export function WhyILove() {
   const pillars = [
@@ -8,31 +9,51 @@ export function WhyILove() {
       icon: Compass,
       color: "text-sky-400 bg-sky-500/10 border-sky-500/20",
       title: "Principled Distribution-Space Updates",
-      desc: "Maintains an explicit multivariate normal search distribution. Updates are canonical natural-gradient steps on the Riemannian manifold of Gaussians with the Fisher information metric."
+      desc: (
+        <span>
+          Maintains an explicit multivariate normal search distribution. Updates are canonical natural-gradient steps on the Riemannian manifold of Gaussians with the Fisher information metric.
+        </span>
+      )
     },
     {
       icon: Shield,
       color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
       title: "Total Invariance to Units & Monotone Warping",
-      desc: "Rank-based selection evaluates only relative ordering, so scaling, shifting, or applying any strictly increasing transformation g(f(x)) (such as logarithmic or exponential rewards) leaves the optimization path identical."
+      desc: (
+        <span>
+          Rank-based selection evaluates only relative ordering, so scaling, shifting, or applying any strictly increasing transformation <LatexRenderer math="g(f(x))" block={false} /> (such as logarithmic or exponential rewards) leaves the optimization path identical.
+        </span>
+      )
     },
     {
       icon: Zap,
       color: "text-amber-400 bg-amber-500/10 border-amber-500/20",
       title: "Converts Expensive Evals into Geometry Learning",
-      desc: "When each simulation run takes hours on a compute cluster, every sample must count. CMA-ES extracts maximal curvature information, adapting covariance C ∝ H⁻¹ to navigate ill-conditioned ravines."
+      desc: (
+        <span>
+          When each simulation run takes hours on a compute cluster, every sample must count. CMA-ES extracts maximal curvature information, adapting covariance <LatexRenderer math="C \propto H^{-1}" block={false} /> to navigate ill-conditioned ravines.
+        </span>
+      )
     },
     {
       icon: Cpu,
       color: "text-purple-400 bg-purple-500/10 border-purple-500/20",
       title: "Mixed Discrete/Continuous Versatility",
-      desc: "By normalizing parameters into a [0, 1]ⁿ unit cube and decoding at simulation boundaries, CMA-ES handles continuous dimensions, quantized integers, and categorical choices in a single search vector."
+      desc: (
+        <span>
+          By normalizing parameters into a <LatexRenderer math="[0, 1]^n" block={false} /> unit cube and decoding at simulation boundaries, CMA-ES handles continuous dimensions, quantized integers, and categorical choices in a single search vector.
+        </span>
+      )
     },
     {
       icon: Sparkles,
       color: "text-rose-400 bg-rose-500/10 border-rose-500/20",
       title: "Virtually Parameter-Free Out of the Box",
-      desc: "Default heuristics (λ ≈ 4 + 3 ln n, CSA damping constants, recombination weights) function reliably across diverse problem domains without tedious manual hyperparameter sweeps."
+      desc: (
+        <span>
+          Default heuristics (<LatexRenderer math="\lambda \approx 4 + 3 \ln n" block={false} />, CSA damping constants, recombination weights) function reliably across diverse problem domains without tedious manual hyperparameter sweeps.
+        </span>
+      )
     }
   ];
 

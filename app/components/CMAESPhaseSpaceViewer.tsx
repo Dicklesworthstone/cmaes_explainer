@@ -166,7 +166,7 @@ function EvolutionPaths({
   pSigma
 }: {
   pC: [number, number, number];
-  pSigma: [number, number, number];
+  pSigma?: [number, number, number];
 }) {
   const linePC = useMemo(() => {
     return [
@@ -176,6 +176,7 @@ function EvolutionPaths({
   }, [pC]);
 
   const linePSigma = useMemo(() => {
+    if (!pSigma) return [];
     return [
       new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(pSigma[0] * SCALE_FACTOR * 0.8, pSigma[1] * SCALE_FACTOR * 0.8, pSigma[2] * SCALE_FACTOR * 0.8)
@@ -187,7 +188,9 @@ function EvolutionPaths({
       {/* Covariance Path p_c (Purple) */}
       <Line points={linePC} color="#c084fc" lineWidth={3.2} />
       {/* Step-size Path p_sigma (Amber) */}
-      <Line points={linePSigma} color="#fbbf24" lineWidth={2.5} dashed dashScale={15} />
+      {linePSigma.length > 0 && (
+        <Line points={linePSigma} color="#fbbf24" lineWidth={2.5} dashed dashScale={15} />
+      )}
     </group>
   );
 }

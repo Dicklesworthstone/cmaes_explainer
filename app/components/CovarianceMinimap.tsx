@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sliders, Activity, Compass, ArrowRight, Sparkles } from "lucide-react";
 import { eigen2x2 } from "../lib/cmaesEngine";
+import { LatexRenderer } from "./LatexRenderer";
 
 const WIDTH = 380;
 const HEIGHT = 260;
@@ -297,7 +298,7 @@ export function CovarianceMinimap() {
               <span>Why Natural Gradients Win</span>
             </div>
             <p>
-              In ill-conditioned valleys, standard Euclidean descent (red) points perpendicular to the valley floor, causing catastrophic zig-zagging. The natural gradient (mint), preconditioned by covariance $C$, aims directly down the canyon.
+              In ill-conditioned valleys, standard Euclidean descent (red) points perpendicular to the valley floor, causing catastrophic zig-zagging. The natural gradient (mint), preconditioned by covariance <LatexRenderer math="C" block={false} />, aims directly down the canyon.
             </p>
           </div>
         </div>

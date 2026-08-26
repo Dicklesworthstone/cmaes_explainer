@@ -14,9 +14,9 @@ import {
   TrendingDown,
   Shuffle
 } from "lucide-react";
-import { MathJax } from "better-react-mathjax";
 import { BridgeViz } from "./BridgeViz";
 import { TransformerViz } from "./TransformerViz";
+import { LatexRenderer } from "./LatexRenderer";
 
 /**
  * Interactive "Why Finite-Differences Fail" Simulator Widget:
@@ -216,8 +216,10 @@ function FiniteDifferenceFailDemo() {
 
             {/* Perturbation Step Epsilon */}
             <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Finite-Difference Step ($\varepsilon$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Finite-Difference Step (<LatexRenderer math="\varepsilon" block={false} />)
+                </span>
                 <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                   {epsilon.toFixed(3)}
                 </span>
@@ -232,8 +234,8 @@ function FiniteDifferenceFailDemo() {
                 onChange={(e) => setEpsilon(parseFloat(e.target.value))}
                 className="w-full accent-amber-400"
               />
-              <p className="text-[0.68rem] text-slate-500">
-                Smaller $\varepsilon$ explodes noise; larger $\varepsilon$ causes severe truncation bias.
+              <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
+                <span>Smaller</span> <LatexRenderer math="\varepsilon" block={false} /> <span>explodes noise; larger</span> <LatexRenderer math="\varepsilon" block={false} /> <span>causes severe truncation bias.</span>
               </p>
             </div>
 
@@ -259,8 +261,10 @@ function FiniteDifferenceFailDemo() {
 
             {/* Evaluation Point */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Evaluation Point ($x$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Evaluation Point (<LatexRenderer math="x" block={false} />)
+                </span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {sampleX.toFixed(2)}
                 </span>
@@ -284,7 +288,7 @@ function FiniteDifferenceFailDemo() {
               <span>The Limit of Numerical Gradients</span>
             </div>
             <p className="leading-relaxed">
-              With $n = 20$ dimensions, forward finite differences require <strong>21 simulation runs per step</strong>, and localized perturbation noise points the resulting vector in a misleading direction. CMA-ES estimates collective distribution shifts over the population to remain stable.
+              With <LatexRenderer math="n = 20" block={false} /> dimensions, forward finite differences require <strong>21 simulation runs per step</strong>, and localized perturbation noise points the resulting vector in a misleading direction. CMA-ES estimates collective distribution shifts over the population to remain stable.
             </p>
           </div>
         </div>

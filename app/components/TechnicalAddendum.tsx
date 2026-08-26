@@ -1,11 +1,12 @@
 "use client";
 
-import { MathJax } from "better-react-mathjax";
+import { LatexRenderer } from "./LatexRenderer";
 import { CovarianceMinimap } from "./CovarianceMinimap";
 import { PracticalPlaybook } from "./PracticalPlaybook";
 import { DLHybrids } from "./DLHybrids";
 import { CommunitySplit } from "./CommunitySplit";
 import { ColorizedEquation } from "./ColorizedEquation";
+import { CmaesInternalsLab } from "./CmaesInternalsLab";
 import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
 import {
   Compass,
@@ -43,10 +44,10 @@ export function TechnicalAddendum() {
         <div className="prose-cmaes">
           <h2>1. The Search Distribution as an Optimization Object</h2>
           <p>
-            In classical optimization, one maintains a single candidate vector <MathJax inline>{"$x \\in \\mathbb{R}^n$"}</MathJax>.
+            In classical optimization, one maintains a single candidate vector <LatexRenderer math="x \in \mathbb{R}^n" block={false} />.
             In CMA-ES, one maintains a parameterized probability density{" "}
-            <MathJax inline>{"$P_\\theta(x)$"}</MathJax> on <MathJax inline>{"$\\mathbb{R}^n$"}</MathJax>, where{" "}
-            <MathJax inline>{"$\\theta = \\{m, \\sigma, C\\}$"}</MathJax>:
+            <LatexRenderer math="P_\theta(x)" block={false} /> on <LatexRenderer math="\mathbb{R}^n" block={false} />, where{" "}
+            <LatexRenderer math="\theta = \{m, \sigma, C\}" block={false} />:
           </p>
         </div>
 
@@ -68,8 +69,8 @@ export function TechnicalAddendum() {
           <h2>2. Information Geometry & The Sampled Natural Gradient</h2>
 
           <p>
-            Suppose the objective is to maximize expected performance under the search distribution <MathJax inline>{"$J(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [-f(x)]$"}</MathJax>.
-            Standard Euclidean steepest ascent on <MathJax inline>{"$\\nabla_\\theta J$"}</MathJax> depends arbitrarily on how the distribution is parameterized (such as Cholesky vs eigendecomposition vs matrix logarithm).
+            Suppose the objective is to maximize expected performance under the search distribution <LatexRenderer math="J(\theta) = \mathbb{E}_{x \sim P_\theta} [-f(x)]" block={false} />.
+            Standard Euclidean steepest ascent on <LatexRenderer math="\nabla_\theta J" block={false} /> depends arbitrarily on how the distribution is parameterized (such as Cholesky vs eigendecomposition vs matrix logarithm).
           </p>
 
           <p>
@@ -86,7 +87,7 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <p>
-            Akimoto et al. and Ollivier et al. demonstrated that when rank-based weights <MathJax inline>{"$w_i$"}</MathJax> are substituted for raw fitness values <MathJax inline>{"$f(x_i)$"}</MathJax>, the CMA-ES mean and covariance updates correspond <em>identically</em> to a sampled natural gradient step on the Gaussian manifold.
+            Akimoto et al. and Ollivier et al. demonstrated that when rank-based weights <LatexRenderer math="w_i" block={false} /> are substituted for raw fitness values <LatexRenderer math="f(x_i)" block={false} />, the CMA-ES mean and covariance updates correspond <em>identically</em> to a sampled natural gradient step on the Gaussian manifold.
           </p>
         </div>
       </div>
@@ -97,7 +98,7 @@ export function TechnicalAddendum() {
           <h2>3. Cumulative Step-Size Adaptation (CSA)</h2>
 
           <p>
-            Adapting step size <MathJax inline>{"$\\sigma$"}</MathJax> via standard 1/5th success rules fails in non-spherical landscapes. CMA-ES tracks an exponentially smoothed <strong>evolution path</strong> <MathJax inline>{"$p_\\sigma$"}</MathJax> in whitened coordinate space:
+            Adapting step size <LatexRenderer math="\sigma" block={false} /> via standard 1/5th success rules fails in non-spherical landscapes. CMA-ES tracks an exponentially smoothed <strong>evolution path</strong> <LatexRenderer math="p_\sigma" block={false} /> in whitened coordinate space:
           </p>
         </div>
 
@@ -106,7 +107,7 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes space-y-4">
           <p>
-            Under random selection in a neutral fitness landscape, <MathJax inline>{"$p_\\sigma$"}</MathJax> behaves as a stationary Gaussian process with <MathJax inline>{"$p_\\sigma \\sim \\mathcal{N}(0, I_n)$"}</MathJax>. The expected length of a standard normal vector serves as the baseline:
+            Under random selection in a neutral fitness landscape, <LatexRenderer math="p_\sigma" block={false} /> behaves as a stationary Gaussian process with <LatexRenderer math="p_\sigma \sim \mathcal{N}(0, I_n)" block={false} />. The expected length of a standard normal vector serves as the baseline:
           </p>
         </div>
 
@@ -115,7 +116,7 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes space-y-4">
           <p>
-            CSA compares the empirical path length <MathJax inline>{"$\\|p_\\sigma^{(g+1)}\\|$"}</MathJax> to its expectation under random selection:
+            CSA compares the empirical path length <LatexRenderer math="\|p_\sigma^{(g+1)}\|" block={false} /> to its expectation under random selection:
           </p>
         </div>
 
@@ -124,8 +125,8 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <ul>
-            <li><strong>Consistently aligned steps:</strong> <MathJax inline>{"$\\|p_\\sigma\\| > \\mathbb{E}\\|\\mathcal{N}(0, I)\\|$"}</MathJax> causes <MathJax inline>{"$\\sigma$"}</MathJax> to increase (accelerating across flat valleys).</li>
-            <li><strong>Oscillating or canceling steps:</strong> <MathJax inline>{"$\\|p_\\sigma\\| < \\mathbb{E}\\|\\mathcal{N}(0, I)\\|$"}</MathJax> causes <MathJax inline>{"$\\sigma$"}</MathJax> to decrease (zooming in around local minima).</li>
+            <li><strong>Consistently aligned steps:</strong> <LatexRenderer math="\|p_\sigma\| > \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /> causes <LatexRenderer math="\sigma" block={false} /> to increase (accelerating across flat valleys).</li>
+            <li><strong>Oscillating or canceling steps:</strong> <LatexRenderer math="\|p_\sigma\| < \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /> causes <LatexRenderer math="\sigma" block={false} /> to decrease (zooming in around local minima).</li>
           </ul>
         </div>
       </div>
@@ -136,7 +137,7 @@ export function TechnicalAddendum() {
           <h2>4. Covariance Matrix Adaptation (Rank-1 & Rank-µ Updates)</h2>
 
           <p>
-            The full covariance update blends historical memory, rank-1 momentum path <MathJax inline>{"$p_c$"}</MathJax>, rank-µ batch spread, and active negative updates:
+            The full covariance update blends historical memory, rank-1 momentum path <LatexRenderer math="p_c" block={false} />, rank-µ batch spread, and active negative updates:
           </p>
         </div>
 
@@ -145,7 +146,7 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <p>
-            where the rank-1 anisotropic evolution path <MathJax inline>{"$p_c$"}</MathJax> accumulates momentum in parameter coordinates:
+            where the rank-1 anisotropic evolution path <LatexRenderer math="p_c" block={false} /> accumulates momentum in parameter coordinates:
           </p>
         </div>
 
@@ -154,9 +155,9 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <ul>
-            <li><strong>Rank-1 Update (<MathJax inline>{"$c_1$"}</MathJax>):</strong> Exploits correlations between consecutive generations. It acts like an online Principal Component Analysis (PCA) along the trajectory of the mean.</li>
-            <li><strong>Rank-<MathJax inline>{"$\\mu$"}</MathJax> Update (<MathJax inline>{"$c_\\mu$"}</MathJax>):</strong> Exploits intra-generation variance among the top <MathJax inline>{"$\\mu$"}</MathJax> elite points in the current batch; crucial for large parallel populations.</li>
-            <li><strong>Active CMA (<MathJax inline>{"$\\Delta C_{\\text{active}}$"}</MathJax>):</strong> Uses negative weights on the worst <MathJax inline>{"$\\mu$"}</MathJax> offspring to actively shrink variance along harmful directions.</li>
+            <li><strong>Rank-1 Update (<LatexRenderer math="c_1" block={false} />):</strong> Exploits correlations between consecutive generations. It acts like an online Principal Component Analysis (PCA) along the trajectory of the mean.</li>
+            <li><strong>Rank-<LatexRenderer math="\mu" block={false} /> Update (<LatexRenderer math="c_\mu" block={false} />):</strong> Exploits intra-generation variance among the top <LatexRenderer math="\mu" block={false} /> elite points in the current batch; crucial for large parallel populations.</li>
+            <li><strong>Active CMA (<LatexRenderer math="\Delta C_{\text{active}}" block={false} />):</strong> Uses negative weights on the worst <LatexRenderer math="\mu" block={false} /> offspring to actively shrink variance along harmful directions.</li>
           </ul>
         </div>
       </div>
@@ -176,6 +177,17 @@ export function TechnicalAddendum() {
 
         {/* Colorized Equation 10: Affine Coordinate Invariance */}
         <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-affine-invariance"]} />
+      </div>
+
+      {/* Interactive 3D CMA-ES Mechanics & Parameter Lab */}
+      <div className="space-y-6">
+        <div className="prose-cmaes">
+          <h2>6. Multi-Dimensional Phase Space & Internals Lab</h2>
+          <p>
+            Explore high-dimensional covariance adaptation and trajectory momentum in real time. Switch between canonical test landscapes, vary search dimensionality from 2D to 12D, and observe the live 3D PCA projection as CMA-ES whitens ill-conditioned ravines and avoids multimodal traps.
+          </p>
+        </div>
+        <CmaesInternalsLab />
       </div>
 
       {/* Practical Playbook Integration */}

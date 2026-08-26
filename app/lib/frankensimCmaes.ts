@@ -194,6 +194,7 @@ type PhaseSpace3DProjection = {
   conditionNumber: number;
   varianceExplainedPercent: [number, number, number];
   evolutionPath3D: [number, number, number];
+  evolutionPathSigma3D: [number, number, number];
 };
 
 export type CMAESGenerationStateND = {
@@ -283,6 +284,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     ];
     const projCond = gen.proj_eigvals[0] > 1e-18 ? gen.proj_eigvals[2] / gen.proj_eigvals[0] : 0;
     const evolutionPath3D = projectPoint(gen.p_c, basis, center, n);
+    const evolutionPathSigma3D = projectPoint(gen.p_sigma, basis, center, n);
 
     // Full covariance for HUD/telemetry consumers (V·Λ·Vᵀ).
     const covariance: number[][] = Array.from({ length: n }, (_, i) =>
@@ -314,6 +316,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
         conditionNumber: projCond,
         varianceExplainedPercent: varianceExplained,
         evolutionPath3D,
+        evolutionPathSigma3D,
       },
       variancePerDim: gen.eigvals.map((v) => gen.sigma * gen.sigma * Math.max(v, 0)),
     };

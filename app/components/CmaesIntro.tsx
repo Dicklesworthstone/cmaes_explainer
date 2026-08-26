@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { MathJax } from "better-react-mathjax";
+import { LatexRenderer } from "./LatexRenderer";
 import { WhyILove } from "./WhyILove";
 import { ColorizedEquation } from "./ColorizedEquation";
 import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
@@ -59,7 +59,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "rosenbrock",
     name: "Rosenbrock Banana Valley",
     subtitle: "Curved non-convex ravine with minimum at (1, 1)",
-    formula: "f(x, y) = 10(y - x^2)^2 + (1 - x)^2",
+    formula: "f(x, y) = 10(\\textcolor{#60a5fa}{y} - \\textcolor{#60a5fa}{x}^2)^2 + (1 - \\textcolor{#60a5fa}{x})^2",
     fn: (x, y) => 10 * Math.pow(y - x * x, 2) + Math.pow(1 - x, 2),
     initialMean: [-1.4, 1.4],
     globalOpt: [1.0, 1.0],
@@ -71,7 +71,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "cigar",
     name: "Sharp Cigar Ravine",
     subtitle: "Highly ill-conditioned ridge rotated by 35°",
-    formula: "f(x, y) = u^2 + 80 v^2, \\quad \\kappa(H) = 80",
+    formula: "f(x, y) = \\textcolor{#60a5fa}{u}^2 + 80 \\textcolor{#60a5fa}{v}^2, \\quad \\kappa(H) = 80",
     fn: (x, y) => {
       const rot = 0.61;
       const u = x * Math.cos(rot) + y * Math.sin(rot);
@@ -88,7 +88,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "rastrigin",
     name: "Rastrigin Multimodal",
     subtitle: "Grid of deceptive local minima surrounding the origin",
-    formula: "f(x, y) = 20 + x^2 + y^2 - 10(\\cos 2\\pi x + \\cos 2\\pi y)",
+    formula: "f(x, y) = 20 + \\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2 - 10(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})",
     fn: (x, y) => 20 + x * x + y * y - 10 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y)),
     initialMean: [-1.5, -1.5],
     globalOpt: [0.0, 0.0],
@@ -100,7 +100,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "ackley",
     name: "Ackley Basin",
     subtitle: "Flat outer plateau with steep central exponential bowl",
-    formula: "f(x, y) = -20 e^{-0.2\\|x\\|} - e^{0.5\\sum \\cos 2\\pi x_i} + 20 + e",
+    formula: "f(x, y) = -20 e^{-0.2\\|\\textcolor{#60a5fa}{x}\\|} - e^{0.5\\sum \\cos 2\\pi \\textcolor{#60a5fa}{x_i}} + 20 + e",
     fn: (x, y) =>
       -20 * Math.exp(-0.2 * Math.sqrt(0.5 * (x * x + y * y))) -
       Math.exp(0.5 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y))) +
@@ -664,8 +664,9 @@ function GaussianDistributionSandbox() {
             />
 
             {/* Click/Drag hint overlay */}
-            <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none">
-              Drag to reposition Mean $m$
+            <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none flex items-center gap-1.5">
+              <span>Drag to reposition Mean</span>
+              <LatexRenderer math="m" block={false} />
             </div>
 
             {/* Live Telemetry Badge */}
@@ -675,7 +676,7 @@ function GaussianDistributionSandbox() {
                 <span className="text-sky-300 font-bold">{generation}</span>
               </div>
               <div className="flex items-center justify-between gap-3 text-slate-400">
-                <span>$f(m)$:</span>
+                <span className="flex items-center"><LatexRenderer math="f(m)" block={false} />:</span>
                 <span className="text-emerald-300 font-bold">{currentFitness < 1e-3 ? currentFitness.toExponential(2) : currentFitness.toFixed(3)}</span>
               </div>
             </div>
@@ -746,8 +747,10 @@ function GaussianDistributionSandbox() {
 
             {/* Step Size Slider */}
             <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Global Step Size ($\sigma$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Global Step Size (<LatexRenderer math="\sigma" block={false} />)
+                </span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {sigma.toFixed(2)}
                 </span>
@@ -767,8 +770,10 @@ function GaussianDistributionSandbox() {
 
             {/* Anisotropy (Eigenvalue Ratio) */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Anisotropy ($\lambda_1 / \lambda_2$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Anisotropy (<LatexRenderer math="\lambda_1 / \lambda_2" block={false} />)
+                </span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {eigenRatio.toFixed(1)} : 1
                 </span>
@@ -783,15 +788,17 @@ function GaussianDistributionSandbox() {
                 onChange={(e) => setEigenRatio(parseFloat(e.target.value))}
                 className="w-full accent-purple-400"
               />
-              <p className="text-[0.68rem] text-slate-500">
-                Stretches covariance $C$ along the ill-conditioned valley.
+              <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
+                <span>Stretches covariance</span> <LatexRenderer math="C" block={false} /> <span>along the ill-conditioned valley.</span>
               </p>
             </div>
 
             {/* Rotation Angle */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Principal Orientation ($\theta$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Principal Orientation (<LatexRenderer math="\theta" block={false} />)
+                </span>
                 <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                   {angleDeg}°
                 </span>
@@ -813,8 +820,10 @@ function GaussianDistributionSandbox() {
 
             {/* Population Size Lambda */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Population Batch ($\lambda$)</span>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-slate-300 flex items-center gap-1">
+                  Population Batch (<LatexRenderer math="\lambda" block={false} />)
+                </span>
                 <span className="text-emerald-300 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                   {sampleCount} samples
                 </span>
@@ -879,7 +888,7 @@ export function CmaesIntro() {
         </blockquote>
 
         <p>
-          Suppose you want to minimize an unknown black-box objective function <MathJax inline>{"$f: \\mathbb{R}^n \\to \\mathbb{R}$"}</MathJax>. You supply CMA-ES with the dimension <MathJax inline>{"$n$"}</MathJax>, an initial mean vector <MathJax inline>{"$m^{(0)}$"}</MathJax>, and an initial step size <MathJax inline>{"$\\sigma^{(0)}$"}</MathJax>.
+          Suppose you want to minimize an unknown black-box objective function <LatexRenderer math="f: \mathbb{R}^n \to \mathbb{R}" block={false} />. You supply CMA-ES with the dimension <LatexRenderer math="n" block={false} />, an initial mean vector <LatexRenderer math="m^{(0)}" block={false} />, and an initial step size <LatexRenderer math="\sigma^{(0)}" block={false} />.
         </p>
       </div>
 
@@ -890,7 +899,7 @@ export function CmaesIntro() {
 
       <div className="prose-cmaes space-y-6">
         <p>
-          In each generation <MathJax inline>{"$g$"}</MathJax>, the algorithm executes a four-beat cycle:
+          In each generation <LatexRenderer math="g" block={false} />, the algorithm executes a four-beat cycle:
         </p>
 
         <div className="grid gap-4 my-8 not-prose">
@@ -898,25 +907,25 @@ export function CmaesIntro() {
             {
               step: "1",
               title: "Sampling Offspring",
-              math: "x_i \\sim \\mathcal{N}(m^{(g)}, (\\sigma^{(g)})^2 C^{(g)})",
+              math: "\\textcolor{#60a5fa}{x_i} \\sim \\mathcal{N}(\\textcolor{#c084fc}{m^{(g)}}, (\\textcolor{#fbbf24}{\\sigma^{(g)}})^2 \\textcolor{#34d399}{C^{(g)}})",
               desc: "Generate a batch of λ candidate designs from the current multivariate normal distribution. Initially, C is spherical; over successive iterations, it stretches along the valley floor."
             },
             {
               step: "2",
               title: "Black-Box Evaluation",
-              math: "y_i = f(x_i), \\quad i = 1, \\dots, \\lambda",
+              math: "\\textcolor{#60a5fa}{y_i} = f(\\textcolor{#60a5fa}{x_i}), \\quad i = 1, \\dots, \\lambda",
               desc: "Evaluate the simulator, finite-element solver, or hyperparameter training run for each candidate vector to obtain scalar performance scores."
             },
             {
               step: "3",
               title: "Rank-Based Selection",
-              math: "f(x_{1:\\lambda}) \\le f(x_{2:\\lambda}) \\le \\dots \\le f(x_{\\lambda:\\lambda})",
+              math: "f(\\textcolor{#60a5fa}{x_{1:\\lambda}}) \\le f(\\textcolor{#60a5fa}{x_{2:\\lambda}}) \\le \\dots \\le f(\\textcolor{#60a5fa}{x_{\\lambda:\\lambda}})",
               desc: "Sort the population by relative rank. CMA-ES ignores raw magnitudes and tracks only order, providing invariance to any strictly increasing monotonic transformation g(f(x))."
             },
             {
               step: "4",
               title: "Distribution Update",
-              math: "m^{(g+1)} = \\sum_{i=1}^{\\mu} w_i x_{i:\\lambda}, \\quad C^{(g+1)} = \\text{Adapt}(C^{(g)}, p_c, \\{x_{i:\\lambda}\\}), \\quad \\sigma^{(g+1)} = \\text{CSA}(\\sigma^{(g)}, p_\\sigma)",
+              math: "\\textcolor{#c084fc}{m^{(g+1)}} = \\sum_{i=1}^{\\mu} \\textcolor{#fb923c}{w_i} \\textcolor{#60a5fa}{x_{i:\\lambda}}, \\quad \\textcolor{#34d399}{C^{(g+1)}} = \\text{Adapt}(\\textcolor{#34d399}{C^{(g)}}, \\textcolor{#fb7185}{p_c}), \\quad \\textcolor{#fbbf24}{\\sigma^{(g+1)}} = \\text{CSA}(\\textcolor{#fbbf24}{\\sigma^{(g)}}, \\textcolor{#fb7185}{p_\\sigma})",
               desc: "Shift mean m toward weighted elite designs, adapt covariance matrix C via rank-1 trajectory memory and rank-μ batch spread, and adjust step size σ using path momentum."
             }
           ].map((item) => (
@@ -931,7 +940,7 @@ export function CmaesIntro() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-sm font-bold text-white">{item.title}</h4>
                   <div className="font-mono text-xs text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-                    <MathJax inline>{`$${item.math}$`}</MathJax>
+                    <LatexRenderer math={item.math} block={false} />
                   </div>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">{item.desc}</p>
@@ -950,11 +959,11 @@ export function CmaesIntro() {
         <h2>Why CMA-ES Implicitly Learns the Inverse Hessian</h2>
 
         <p>
-          On an ill-conditioned quadratic bowl <MathJax inline>{"$f(x) = \\frac{1}{2} x^\\top H x$"}</MathJax>, isotropic search struggles because steep directions oscillate while shallow directions crawl. Newton&apos;s method resolves this by preconditioning gradients with <MathJax inline>{"$H^{-1}$"}</MathJax>, transforming elliptical contours into spherical circles where steepest descent points directly at the minimum.
+          On an ill-conditioned quadratic bowl <LatexRenderer math="f(x) = \frac{1}{2} x^\top H x" block={false} />, isotropic search struggles because steep directions oscillate while shallow directions crawl. Newton&apos;s method resolves this by preconditioning gradients with <LatexRenderer math="H^{-1}" block={false} />, transforming elliptical contours into spherical circles where steepest descent points directly at the minimum.
         </p>
 
         <p>
-          CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. Through the accumulation of successful steps along the evolution paths, the covariance matrix <MathJax inline>{"$C$"}</MathJax> asymptotically adapts such that:
+          CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. Through the accumulation of successful steps along the evolution paths, the covariance matrix <LatexRenderer math="C" block={false} /> asymptotically adapts such that:
         </p>
 
         <div className="my-6 not-prose">
@@ -962,7 +971,7 @@ export function CmaesIntro() {
         </div>
 
         <p>
-          Sampling from <MathJax inline>{"$\\mathcal{N}(m, \\sigma^2 H^{-1})$"}</MathJax> whitens the search landscape, enabling optimal linear convergence rates on ill-conditioned problems that stall standard genetic algorithms or random search.
+          Sampling from <LatexRenderer math="\mathcal{N}(m, \sigma^2 H^{-1})" block={false} /> whitens the search landscape, enabling optimal linear convergence rates on ill-conditioned problems that stall standard genetic algorithms or random search.
         </p>
       </div>
 

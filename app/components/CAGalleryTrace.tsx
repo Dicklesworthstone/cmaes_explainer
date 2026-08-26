@@ -124,6 +124,7 @@ export function CAGalleryTrace() {
   // Run CMA-ES Evolutionary Search for Living Pattern Complexity
   const handleRunOptimizer = () => {
     if (isOptimizing) {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
       setIsOptimizing(false);
       return;
     }

@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ShieldCheck, Waves, Calculator, Sliders, Timer, Zap, Sparkles, CheckCircle2, ArrowRight } from "lucide-react";
+import {
+  Compass,
+  Cpu,
+  Layers,
+  Sparkles,
+  Zap,
+  CheckCircle2,
+  AlertTriangle,
+  Flame,
+  ShieldCheck,
+  Calculator,
+  Sliders,
+  Timer,
+  ArrowRight,
+  Waves
+} from "lucide-react";
 import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 import { NoiseExplorer } from "./NoiseExplorer";
 import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
 import { ActiveCovarianceDemo } from "./ActiveCovarianceDemo";
 import { RestartStrategyViewer } from "./RestartStrategyViewer";
-import { MathJax } from "better-react-mathjax";
+import { LatexRenderer } from "./LatexRenderer";
 
 /**
  * Interactive CMA-ES Hyperparameter & Problem Sizing Calculator
@@ -222,7 +237,7 @@ function HyperparameterCalculator() {
               <span>Zero-Hyperparameter Principle</span>
             </div>
             <p>
-              Unlike stochastic gradient descent (which requires meticulously tuning learning rates, momentum, decay schedules, and weight decay for every model), CMA-ES computes all internal learning rates purely as deterministic functions of dimension <MathJax inline>{"$n$"}</MathJax>.
+              Unlike stochastic gradient descent (which requires meticulously tuning learning rates, momentum, decay schedules, and weight decay for every model), CMA-ES computes all internal learning rates purely as deterministic functions of dimension <LatexRenderer math="n" block={false} />.
             </p>
           </div>
         </div>

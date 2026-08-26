@@ -12,6 +12,7 @@ import { TechnicalAddendum } from "./components/TechnicalAddendum";
 import { BackToTop } from "./components/BackToTop";
 import { ThreePatch } from "./components/ThreePatch";
 import { MathProvider } from "./components/MathProvider";
+import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -46,6 +47,9 @@ export default function Page() {
               </Section>
               <Section id="live-demo" title="Live CMA-ES landscape explorer (WASM)">
                 <WasmDemo />
+              </Section>
+              <Section id="internals" title="Inside the optimizer: covariance geometry in 3D (frankensim WASM)">
+                <CmaesInternalsLab />
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">
                 <TechnicalAddendum />

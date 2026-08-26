@@ -77,56 +77,62 @@ export function ColorizedEquation({
     }
   }, [pinnedVarId]);
 
+  // Extract variable ID from any hovered/clicked element inside formula
+  const getVariableIdFromElement = useCallback(
+    (el: HTMLElement | null): string | null => {
+      if (!el) return null;
+      // 1. Direct data-var attribute from \htmlData{var=...}
+      const dataVarEl = el.closest("[data-var]");
+      if (dataVarEl) {
+        const id = dataVarEl.getAttribute("data-var");
+        if (id) {
+          const match = equation.variables.find(
+            (v) => v.id === id || v.id.toLowerCase() === id.toLowerCase()
+          );
+          if (match) return match.id;
+        }
+      }
+
+      // 2. Class-based fallback from \htmlClass{... eq-term-<id>}
+      const termEl = el.closest(".eq-term");
+      if (termEl) {
+        const classList = Array.from(termEl.classList);
+        for (const cls of classList) {
+          if (cls.startsWith("eq-term-") && cls !== "eq-term-active") {
+            const candidate = cls.replace("eq-term-", "");
+            const match = equation.variables.find(
+              (v) => v.id === candidate || v.id.toLowerCase() === candidate.toLowerCase()
+            );
+            if (match) return match.id;
+          }
+        }
+      }
+
+      return null;
+    },
+    [equation.variables]
+  );
+
   // Interactive formula event delegation: hover on any KaTeX term inside equation
   const handleFormulaMouseOver = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const target = (e.target as HTMLElement).closest("[data-var], [class*='eq-term-']");
-      if (!target) return;
-      let varId = target.getAttribute("data-var");
-      if (!varId && typeof target.className === "string") {
-        const match = target.className.match(/\beq-term-([a-zA-Z0-9_-]+)\b/);
-        if (match) varId = match[1];
-      }
+      const varId = getVariableIdFromElement(e.target as HTMLElement);
       if (varId) {
-        const matchingVar = equation.variables.find(
-          (v) =>
-            v.id === varId ||
-            v.id.toLowerCase() === varId?.toLowerCase() ||
-            varId?.startsWith(`var_${v.id}`) ||
-            v.id.includes(varId || "")
-        );
-        if (matchingVar) {
-          setActiveVarId(matchingVar.id);
-        }
+        setActiveVarId(varId);
       }
     },
-    [equation.variables]
+    [getVariableIdFromElement]
   );
 
   // Interactive formula event delegation: click on any KaTeX term inside equation
   const handleFormulaClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const target = (e.target as HTMLElement).closest("[data-var], [class*='eq-term-']");
-      if (!target) return;
-      let varId = target.getAttribute("data-var");
-      if (!varId && typeof target.className === "string") {
-        const match = target.className.match(/\beq-term-([a-zA-Z0-9_-]+)\b/);
-        if (match) varId = match[1];
-      }
+      const varId = getVariableIdFromElement(e.target as HTMLElement);
       if (varId) {
-        const matchingVar = equation.variables.find(
-          (v) =>
-            v.id === varId ||
-            v.id.toLowerCase() === varId?.toLowerCase() ||
-            varId?.startsWith(`var_${v.id}`) ||
-            v.id.includes(varId || "")
-        );
-        if (matchingVar) {
-          handleSelectVar(matchingVar.id, true);
-        }
+        handleSelectVar(varId, true);
       }
     },
-    [equation.variables, handleSelectVar]
+    [getVariableIdFromElement, handleSelectVar]
   );
 
   // Sync active CSS classes inside KaTeX DOM when activeVarId changes

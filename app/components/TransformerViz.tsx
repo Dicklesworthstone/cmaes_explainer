@@ -7,6 +7,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { Play, Pause, Sparkles, BrainCircuit, Activity, Zap, BarChart2, Compass } from "lucide-react";
 import { CMAESOptimizer } from "../lib/cmaesEngine";
+import { LatexRenderer } from "./LatexRenderer";
 
 // --- 3D Architecture Visuals ---
 
@@ -447,8 +448,10 @@ export function TransformerViz() {
               <BrainCircuit className="h-4 w-4" />
               <span>Mixed-Integer NAS & Hyperparameter Space</span>
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Searching non-differentiable discrete architecture topologies by embedding all choices into a continuous <code className="text-xs font-mono bg-white/10 px-1 py-0.5 rounded">[0, 1]ⁿ</code> box.
+            <p className="text-sm text-slate-300 leading-relaxed flex items-center gap-1.5 flex-wrap">
+              <span>Searching non-differentiable discrete architecture topologies by embedding all choices into a continuous</span>
+              <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-xs"><LatexRenderer math="[0, 1]^n" block={false} /></span>
+              <span>box.</span>
             </p>
           </div>
 

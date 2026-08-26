@@ -2,6 +2,7 @@
 
 import { Cpu, Palette, Workflow, Sparkles, BrainCircuit, Bot, Layers } from "lucide-react";
 import { CAGalleryTrace } from "./CAGalleryTrace";
+import { LatexRenderer } from "./LatexRenderer";
 
 export function DLHybrids() {
   return (
@@ -33,7 +34,7 @@ export function DLHybrids() {
             <span>NAS & Hyperparameter Curricula</span>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Encode learning rate schedules, dropout probabilities, normalization epsilons, and discrete layer topologies into a unified <code className="text-xs font-mono bg-white/10 px-1 py-0.5 rounded">[0, 1]ⁿ</code> box. CMA-ES learns which parameter interactions matter without backprop through training loops.
+            Encode learning rate schedules, dropout probabilities, normalization epsilons, and discrete layer topologies into a unified <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-xs inline-block"><LatexRenderer math="[0, 1]^n" block={false} /></span> box. CMA-ES learns which parameter interactions matter without backprop through training loops.
           </p>
           <ul className="space-y-1.5 text-xs text-slate-400 list-disc pl-4 marker:text-sky-400">
             <li>Vectorized ask/tell loops for massive cluster parallelism.</li>
