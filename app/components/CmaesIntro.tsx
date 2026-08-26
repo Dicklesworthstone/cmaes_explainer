@@ -22,7 +22,7 @@ import {
   Zap,
   Target
 } from "lucide-react";
-import { eigen2x2, sampleGaussian } from "../lib/cmaesEngine";
+import { eigen2x2, sampleGaussian, sampleGaussian2D } from "../lib/cmaesEngine";
 
 interface InteractiveSample {
   x: number;
@@ -217,8 +217,7 @@ function GaussianDistributionSandbox() {
 
     const pts: InteractiveSample[] = [];
     for (let i = 0; i < sampleCount; i++) {
-      const z0 = sampleGaussian();
-      const z1 = sampleGaussian();
+      const [z0, z1] = sampleGaussian2D();
 
       // Transform by sqrt(C) * sigma
       const lx = z0 * s1;
@@ -1025,7 +1024,6 @@ function GaussianDistributionSandbox() {
             </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );

@@ -186,16 +186,12 @@ export function WasmDemo() {
 
   // Animation Loop
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || history.length >= 60) return;
     const interval = setInterval(() => {
-      if (history.length >= 60) {
-        setIsPlaying(false);
-        return;
-      }
       stepOptimization();
     }, speedMs);
     return () => clearInterval(interval);
-  }, [isPlaying, history.length, speedMs, stepOptimization]);
+  }, [isPlaying, history.length >= 60, speedMs, stepOptimization]);
 
   const latestState = history[history.length - 1] || null;
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -741,23 +737,23 @@ export function WasmDemo() {
 
                 {/* Click hint overlay */}
                 <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none flex items-center gap-1.5">
-                  <span>Click contour map to reposition starting point</span>
+                  <span>Click to reposition starting point</span>
                   <LatexRenderer math="m_0" block={false} />
                 </div>
 
                 {/* Live Diagnostics HUD */}
                 {latestState && (
-                  <div className="absolute bottom-3 right-3 bg-slate-950/85 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/10 text-[0.68rem] sm:text-xs font-mono space-y-0.5 sm:space-y-1 shadow-2xl pointer-events-none">
-                    <div className="text-emerald-400 font-bold">Best: {latestState.bestFitness < 1e-3 ? latestState.bestFitness.toExponential(2) : latestState.bestFitness.toFixed(3)}</div>
-                    <div className="text-sky-300">σ: {latestState.sigma.toFixed(3)}</div>
-                    <div className="text-purple-300">κ(C): {latestState.conditionNumber.toFixed(1)}</div>
-                    <div className="text-slate-400">Evals: {latestState.evalCount}</div>
+                  <div className="absolute bottom-3 right-3 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] font-mono shadow-2xl pointer-events-none flex items-center gap-2">
+                    <span className="text-slate-400">Best:</span>
+                    <span className="text-emerald-400 font-bold">
+                      {latestState.bestFitness < 1e-3 ? latestState.bestFitness.toExponential(2) : latestState.bestFitness.toFixed(3)}
+                    </span>
                   </div>
                 )}
               </div>
 
               {/* Playback Control Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/5">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-white/5">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsPlaying(!isPlaying)}
@@ -791,10 +787,30 @@ export function WasmDemo() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                {/* Speed Controls & Metadata */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-400 font-mono">
+                  <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-white/5">
+                    <span className="text-[0.65rem] text-slate-500">Speed:</span>
+                    {[
+                      { label: "Slow", ms: 650 },
+                      { label: "Normal", ms: 350 },
+                      { label: "Fast", ms: 120 }
+                    ].map((s) => (
+                      <button
+                        key={s.ms}
+                        type="button"
+                        onClick={() => setSpeedMs(s.ms)}
+                        className={`px-1.5 py-0.5 rounded text-[0.65rem] transition-colors ${
+                          speedMs === s.ms ? "bg-sky-500 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <span className="text-slate-600 hidden sm:inline">|</span>
                   <span>Gen {latestState ? latestState.generation : 0}</span>
-                  <span className="text-slate-600">|</span>
-                  <span>λ = {lambda}</span>
                 </div>
               </div>
             </div>
@@ -803,12 +819,12 @@ export function WasmDemo() {
             <div className="space-y-5">
               {/* Log Loss Convergence Canvas */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-200">
                   <span className="flex items-center gap-1.5">
                     <TrendingDown className="h-3.5 w-3.5 text-sky-400" />
                     Log-Loss Convergence
                   </span>
-                  <div className="flex flex-wrap items-center gap-2.5 font-mono text-[0.68rem]">
+                  <div className="flex items-center gap-2.5 font-mono text-[0.68rem] shrink-0">
                     <span className="text-sky-400 font-bold">● CMA-ES</span>
                     {compareMode && <span className="text-amber-400 font-bold">● Adam</span>}
                     {compareMode && <span className="text-rose-400 font-bold">● GD</span>}
@@ -904,7 +920,9 @@ export function WasmDemo() {
 
                 <div className="space-y-1.5 pt-2 border-t border-white/5">
                   <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-300">Objective Noise (σ_noise)</span>
+                    <span className="text-slate-300 flex items-center gap-1">
+                      Objective Noise (<LatexRenderer math="\sigma_{\text{noise}}" block={false} />)
+                    </span>
                     <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                       {noiseLevel.toFixed(2)}
                     </span>
@@ -940,6 +958,110 @@ export function WasmDemo() {
               </div>
             </div>
           </div>
+
+          {/* Live Simulation Internal Algebraic State Telemetry Card */}
+          {latestState && (
+            <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-slate-950/90 via-slate-900/80 to-sky-950/30 p-5 md:p-6 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    <Activity className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white font-display flex items-center gap-2">
+                      <span>Live Simulation Internal Algebraic State</span>
+                      <span className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
+                        isPlaying ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse" : "bg-slate-800 border-white/10 text-slate-400"
+                      }`}>
+                        {isPlaying ? "Running CMA-ES" : "Paused / Stepping"}
+                      </span>
+                    </h4>
+                    <p className="text-[0.7rem] text-slate-400">
+                      Real-time covariance eigensystem, evolution path momentum, and step-size adaptation
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span className="text-slate-400">Gen {latestState.generation} / 60</span>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-sky-300">Evals: {latestState.evalCount}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+                {/* Card 1: Distribution Mean */}
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+                  <div className="text-[0.65rem] font-bold uppercase tracking-wider text-purple-400 flex items-center justify-between">
+                    <span>Distribution Mean</span>
+                    <LatexRenderer math="m" block={false} />
+                  </div>
+                  <div className="font-mono text-white text-sm font-semibold">
+                    ({latestState.mean[0].toFixed(2)}, {latestState.mean[1].toFixed(2)})
+                  </div>
+                  <div className="text-[0.68rem] text-slate-400 font-mono">
+                    Target: ({currentBench.optimum[0].toFixed(1)}, {currentBench.optimum[1].toFixed(1)})
+                  </div>
+                </div>
+
+                {/* Card 2: Global Step Size */}
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+                  <div className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+                    <span>Global Step-Size</span>
+                    <LatexRenderer math="\sigma" block={false} />
+                  </div>
+                  <div className="font-mono text-amber-300 text-sm font-semibold">
+                    {latestState.sigma.toFixed(3)}
+                  </div>
+                  <div className="text-[0.68rem] text-slate-400 font-mono">
+                    <LatexRenderer math="\|p_\sigma\|" block={false} /> = {Math.hypot(latestState.pSigma[0], latestState.pSigma[1]).toFixed(2)} (vs 1.13)
+                  </div>
+                </div>
+
+                {/* Card 3: Covariance Condition Number */}
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+                  <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+                    <span>Condition Number</span>
+                    <LatexRenderer math="\kappa(C)" block={false} />
+                  </div>
+                  <div className="font-mono text-emerald-300 text-sm font-semibold">
+                    {latestState.conditionNumber.toFixed(1)} : 1
+                  </div>
+                  <div className="text-[0.68rem] text-slate-400 font-mono">
+                    <LatexRenderer math="\theta" block={false} /> = {((latestState.ellipseAngle * 180) / Math.PI).toFixed(0)}° orientation
+                  </div>
+                </div>
+
+                {/* Card 4: Evolution Path pc */}
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+                  <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-400 flex items-center justify-between">
+                    <span>Covariance Path</span>
+                    <LatexRenderer math="p_c" block={false} />
+                  </div>
+                  <div className="font-mono text-rose-300 text-sm font-semibold">
+                    <LatexRenderer math="\|p_c\|" block={false} /> = {Math.hypot(latestState.pC[0], latestState.pC[1]).toFixed(2)}
+                  </div>
+                  <div className="text-[0.68rem] text-slate-400">
+                    {activeCMA ? "Active rank-(1+μ) CMA" : "Standard CMA"}
+                  </div>
+                </div>
+
+                {/* Card 5: Best Fitness */}
+                <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1 sm:col-span-2 lg:col-span-1">
+                  <div className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-400 flex items-center justify-between">
+                    <span>Current Best</span>
+                    <LatexRenderer math="f(x^*)" block={false} />
+                  </div>
+                  <div className="font-mono text-sky-300 text-sm font-semibold">
+                    {latestState.bestFitness < 1e-4 ? latestState.bestFitness.toExponential(3) : latestState.bestFitness.toFixed(4)}
+                  </div>
+                  <div className="text-[0.68rem] text-slate-400 font-mono">
+                    Optimum: {currentBench.optimumValue.toFixed(1)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
