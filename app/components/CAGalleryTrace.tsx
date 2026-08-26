@@ -15,7 +15,8 @@ import {
   Zap,
   Info
 } from "lucide-react";
-import { CMAESOptimizer } from "../lib/cmaesEngine";
+import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 import { useInView } from "../hooks/useScrollSpy";
 import { LatexRenderer } from "./LatexRenderer";
 
@@ -177,6 +178,10 @@ export function CAGalleryTrace() {
   const [optGen, setOptGen] = useState(0);
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
+  const [isExpanded3D, setIsExpanded3D] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imgDataRef = useRef<ImageData | null>(null);
   const isDraggingRef = useRef(false);
@@ -331,7 +336,7 @@ export function CAGalleryTrace() {
     return () => clearInterval(interval);
   }, [isPlaying, mu, sigma, dt, kernel, isInView]);
 
-  // Run 4D Multi-Objective CMA-ES for Soliton Stability & Complexity
+  // Run 3D Multi-Objective CMA-ES for Soliton Stability & Complexity
   const handleRunOptimizer = () => {
     if (isOptimizing) {
       if (optIntervalRef.current) clearInterval(optIntervalRef.current);
@@ -340,11 +345,15 @@ export function CAGalleryTrace() {
     }
     setIsOptimizing(true);
     setOptGen(0);
+    setHistoryND([]);
 
-    // Optimize mu in [0.12, 0.40] and sigma in [0.02, 0.07] to maximize sustained biological entropy
-    // Objective penalizes both complete extinction (mass -> 0) and solid saturation (mass -> 1)
-    const optimizer = new CMAESOptimizer(
-      (mVal, sVal) => {
+    // Optimize continuous parameters in normalized [0, 1]^3 space
+    const optimizer = new CMAESOptimizerND(
+      (zVec) => {
+        const mVal = 0.10 + zVec[0] * 0.32;
+        const sVal = 0.015 + zVec[1] * 0.060;
+        const dtVal = 0.10 + zVec[2] * 0.25;
+
         const bufA = new Float32Array(gridStateRef.current.current);
         const bufB = new Float32Array(GRID_SIZE * GRID_SIZE);
         let scoreSum = 0;
@@ -352,7 +361,7 @@ export function CAGalleryTrace() {
         for (let s = 0; s < 18; s++) {
           const src = s % 2 === 0 ? bufA : bufB;
           const dst = s % 2 === 0 ? bufB : bufA;
-          const res = stepLeniaContinuous(src, dst, kernel, mVal, sVal, 0.22);
+          const res = stepLeniaContinuous(src, dst, kernel, mVal, sVal, dtVal);
           // Ideal mass is around 0.15 - 0.35; high entropy indicates living perimeter complexity
           const massPenalty = Math.abs(res.mass - 0.25) * 2.0;
           const fitness = res.entropy - massPenalty;
@@ -361,11 +370,15 @@ export function CAGalleryTrace() {
         return -scoreSum / 18; // Minimize negative fitness
       },
       {
-        dim: 2,
-        initialMean: [mu, sigma],
-        initialSigma: 0.04,
+        dim: 3,
+        initialMean: [
+          Math.max(0, Math.min(1, (mu - 0.10) / 0.32)),
+          Math.max(0, Math.min(1, (sigma - 0.015) / 0.060)),
+          Math.max(0, Math.min(1, (dt - 0.10) / 0.25))
+        ],
+        initialSigma: 0.22,
         lambda: 12,
-        bounds: [0.08, 0.45]
+        bounds: [0.0, 1.0]
       }
     );
 
@@ -376,12 +389,16 @@ export function CAGalleryTrace() {
     optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
-      const newMu = Math.max(0.1, Math.min(0.42, state.bestX[0]));
-      const newSigma = Math.max(0.015, Math.min(0.075, state.bestX[1]));
+      const newMu = 0.10 + state.bestX[0] * 0.32;
+      const newSigma = 0.015 + state.bestX[1] * 0.060;
+      const newDt = 0.10 + state.bestX[2] * 0.25;
 
       setMu(newMu);
       setSigma(newSigma);
+      setDt(newDt);
       setOptGen(g);
+      setLatestStateND(state);
+      setHistoryND((prev) => [...prev, state]);
 
       if (g >= maxG) {
         if (optIntervalRef.current) clearInterval(optIntervalRef.current);
@@ -467,74 +484,115 @@ export function CAGalleryTrace() {
 
       {/* Main Simulation Stage */}
       <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] items-start">
-        {/* Left Column: Interactive Simulation Viewport */}
+        {/* Left Column: Interactive Simulation Viewport (Single or Split 3D View) */}
         <div className="space-y-3">
-          <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_50px_rgba(0,0,0,0.8)] group cursor-crosshair">
-            <canvas
-              ref={canvasRef}
-              width={GRID_SIZE}
-              height={GRID_SIZE}
-              className="w-full h-full block image-rendering-pixelated select-none"
-              onMouseDown={(e) => {
-                isDraggingRef.current = true;
-                handleCanvasInteraction(e.clientX, e.clientY);
-              }}
-              onMouseMove={(e) => {
-                if (isDraggingRef.current) {
-                  handleCanvasInteraction(e.clientX, e.clientY);
-                }
-              }}
-              onMouseUp={() => {
-                isDraggingRef.current = false;
-              }}
-              onMouseLeave={() => {
-                isDraggingRef.current = false;
-              }}
-              onTouchStart={(e) => {
-                if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
-              }}
-              onTouchMove={(e) => {
-                if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
-              }}
-            />
-
-            {/* Top-Right Interactive Drawing Hint */}
-            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-pink-300 pointer-events-none shadow-lg">
-              <MousePointer2 className="h-3.5 w-3.5 text-pink-400" />
-              <span>Click or drag to seed life</span>
-            </div>
-
-            {/* Top-Left Search Status */}
-            {isOptimizing && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-pink-500/50 shadow-glow-sm">
-                <span className="h-2 w-2 rounded-full bg-pink-400 animate-ping" />
-                <span className="text-xs font-mono font-bold text-pink-200">
-                  CMA-ES Evolving Lenia: Gen {optGen}/22
-                </span>
+          {isExpanded3D ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Lenia 2D Field */}
+              <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl group cursor-crosshair">
+                <canvas
+                  ref={canvasRef}
+                  width={GRID_SIZE}
+                  height={GRID_SIZE}
+                  className="w-full h-full block image-rendering-pixelated select-none"
+                  onMouseDown={(e) => {
+                    isDraggingRef.current = true;
+                    handleCanvasInteraction(e.clientX, e.clientY);
+                  }}
+                  onMouseMove={(e) => {
+                    if (isDraggingRef.current) {
+                      handleCanvasInteraction(e.clientX, e.clientY);
+                    }
+                  }}
+                  onMouseUp={() => {
+                    isDraggingRef.current = false;
+                  }}
+                  onMouseLeave={() => {
+                    isDraggingRef.current = false;
+                  }}
+                />
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-pink-300 backdrop-blur-md">
+                  Lenia 2D Cellular PDE
+                </div>
               </div>
-            )}
 
-            {/* Bottom Spectrum Legend */}
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-[0.65rem] font-mono text-slate-300 pointer-events-none">
-              <span className="text-slate-500">Void (0.0)</span>
-              <div className="flex-1 mx-3 h-1.5 rounded-full bg-gradient-to-r from-[#06b6d4] via-[#a855f7] to-[#fbbf24]" />
-              <span className="text-amber-300 font-bold">Soliton Core (1.0)</span>
+              {/* 3D PCA Covariance Phase Space Canvas */}
+              <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
+                <CMAESPhaseSpaceViewer
+                  latestState={latestStateND}
+                  history={historyND}
+                  title="3D PCA Parameter Space"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="relative aspect-square w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_50px_rgba(0,0,0,0.8)] group cursor-crosshair">
+              <canvas
+                ref={canvasRef}
+                width={GRID_SIZE}
+                height={GRID_SIZE}
+                className="w-full h-full block image-rendering-pixelated select-none"
+                onMouseDown={(e) => {
+                  isDraggingRef.current = true;
+                  handleCanvasInteraction(e.clientX, e.clientY);
+                }}
+                onMouseMove={(e) => {
+                  if (isDraggingRef.current) {
+                    handleCanvasInteraction(e.clientX, e.clientY);
+                  }
+                }}
+                onMouseUp={() => {
+                  isDraggingRef.current = false;
+                }}
+                onMouseLeave={() => {
+                  isDraggingRef.current = false;
+                }}
+                onTouchStart={(e) => {
+                  if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                }}
+                onTouchMove={(e) => {
+                  if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                }}
+              />
+
+              {/* Top-Right Interactive Drawing Hint */}
+              <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-pink-300 pointer-events-none shadow-lg">
+                <MousePointer2 className="h-3.5 w-3.5 text-pink-400" />
+                <span>Click or drag to seed life</span>
+              </div>
+
+              {/* Top-Left Search Status */}
+              {isOptimizing && (
+                <div className="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-pink-500/50 shadow-glow-sm">
+                  <span className="h-2 w-2 rounded-full bg-pink-400 animate-ping" />
+                  <span className="text-xs font-mono font-bold text-pink-200">
+                    CMA-ES Evolving Lenia: Gen {optGen}/22
+                  </span>
+                </div>
+              )}
+
+              {/* Bottom Spectrum Legend */}
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-[0.65rem] font-mono text-slate-300 pointer-events-none">
+                <span className="text-slate-500">Void (0.0)</span>
+                <div className="flex-1 mx-3 h-1.5 rounded-full bg-gradient-to-r from-[#06b6d4] via-[#a855f7] to-[#fbbf24]" />
+                <span className="text-amber-300 font-bold">Soliton Core (1.0)</span>
+              </div>
+            </div>
+          )}
 
           {/* Controls Strip */}
           <div className="flex items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/10">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-2 transition-colors border border-white/10"
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-2 transition-[background-color] border border-white/10"
               >
                 {isPlaying ? <Pause className="h-3.5 w-3.5 text-amber-400" /> : <Play className="h-3.5 w-3.5 text-emerald-400" />}
                 <span>{isPlaying ? "Pause Simulation" : "Resume"}</span>
               </button>
               <button
                 onClick={() => resetToPreset(activePreset)}
-                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors border border-white/10"
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition-[background-color,color] border border-white/10"
                 title="Reseed Active Organism"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -545,7 +603,7 @@ export function CAGalleryTrace() {
               <span className="text-slate-400">Brush:</span>
               <button
                 onClick={() => setBrushMode("pulse")}
-                className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-colors ${
+                className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-[background-color,color] ${
                   brushMode === "pulse" ? "bg-pink-500 text-white font-bold" : "bg-slate-900 text-slate-400"
                 }`}
               >
@@ -553,7 +611,7 @@ export function CAGalleryTrace() {
               </button>
               <button
                 onClick={() => setBrushMode("seed")}
-                className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-colors ${
+                className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-[background-color,color] ${
                   brushMode === "seed" ? "bg-pink-500 text-white font-bold" : "bg-slate-900 text-slate-400"
                 }`}
               >
@@ -666,6 +724,18 @@ export function CAGalleryTrace() {
           </button>
         </div>
       </div>
+
+      {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
+      <CMAESTelemetryHUD
+        latestState={latestStateND}
+        history={historyND}
+        isOptimizing={isOptimizing}
+        maxGen={22}
+        onToggleExpand3D={() => setIsExpanded3D((prev) => !prev)}
+        isExpanded3D={isExpanded3D}
+        accentColor="purple"
+        objectiveName="Living Entropy"
+      />
     </div>
   );
 }

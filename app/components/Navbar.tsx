@@ -255,6 +255,12 @@ export function Navbar() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="button"
+              tabIndex={0}
+              aria-label="Close modal"
+              onKeyDown={(e) => {
+                if (e.key === "Escape" || e.key === "Enter") setShortcutsModalOpen(false);
+              }}
               onClick={() => setShortcutsModalOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
@@ -276,6 +282,7 @@ export function Navbar() {
                 </div>
                 <button
                   onClick={() => setShortcutsModalOpen(false)}
+                  aria-label="Close keyboard shortcuts"
                   className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 hover:bg-white/10"
                 >
                   <X className="h-5 w-5" />

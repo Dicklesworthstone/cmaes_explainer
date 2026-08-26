@@ -2,28 +2,24 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Float, OrbitControls, Line } from "@react-three/drei";
+import { PerspectiveCamera, Float, OrbitControls } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
 import {
-  Play,
-  Pause,
   Sparkles,
   BrainCircuit,
-  Activity,
-  Zap,
   BarChart2,
   Compass,
-  Layers,
   RotateCcw,
   Sliders,
-  CheckCircle2,
-  Cpu,
-  TrendingDown,
-  Info
+  Maximize2,
+  Minimize2,
+  Info,
+  TrendingDown
 } from "lucide-react";
-import { CMAESOptimizer } from "../lib/cmaesEngine";
+import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 import { LatexRenderer } from "./LatexRenderer";
 
 // ============================================================================
@@ -48,6 +44,61 @@ export interface ArchPoint {
   generation?: number;
 }
 
+// Decode continuous latent vector z in [0, 1]^5 to physical model architecture
+function decodeVectorToArch(z: number[]): ArchPoint {
+  const zL = Math.max(0, Math.min(1, z[0] ?? 0.45));
+  const zD = Math.max(0, Math.min(1, z[1] ?? 0.48));
+  const zH = Math.max(0, Math.min(1, z[2] ?? 0.4));
+  const zAttn = Math.max(0, Math.min(1, z[3] ?? 0.5));
+  const zAct = Math.max(0, Math.min(1, z[4] ?? 0.2));
+
+  const layers = Math.max(2, Math.min(16, Math.round(2 + zL * 14)));
+  const dim = Math.max(128, Math.min(1024, Math.round(128 + zD * 896)));
+  const heads = Math.max(2, Math.min(16, Math.round(2 + zH * 14)));
+  const attnType: AttentionType = zAttn < 0.33 ? "MHA" : zAttn < 0.67 ? "GQA" : "MQA";
+  const actType: ActivationType = zAct < 0.33 ? "SwiGLU" : zAct < 0.67 ? "GELU" : "Mish";
+
+  // Exact Chinchilla-scaling parameter calculation
+  const vocab = 32000;
+  const dFF = actType === "SwiGLU" ? Math.round((8 / 3) * dim) : 4 * dim;
+  const attnFactor = attnType === "MHA" ? 4 : attnType === "GQA" ? 2.5 : 2;
+  const attnParamsPerLayer = attnFactor * dim * dim;
+  const mlpParamsPerLayer = (actType === "SwiGLU" ? 3 : 2) * dim * dFF;
+  const totalParams = vocab * dim + layers * (attnParamsPerLayer + mlpParamsPerLayer + 4 * dim);
+  const paramsM = totalParams / 1e6;
+
+  // GFLOPs per forward pass (batch size 1, 2048 sequence length)
+  const flopsGiga = Math.max(1.5, Math.min(48, (2 * totalParams * 2048) / 1e11));
+  const valLoss = Math.max(
+    1.08,
+    1.12 + 3.2 / Math.sqrt(layers * 0.7 + (dim / 128) * 2.2) +
+      (attnType === "MQA" ? 0.06 : attnType === "GQA" ? 0.02 : 0) +
+      (actType === "GELU" ? 0.06 : actType === "Mish" ? 0.03 : 0)
+  );
+  const latencyMs = layers * 0.75 + (dim / 256) * 1.1 + (attnType === "MHA" ? 0.4 : 0);
+
+  return {
+    id: 0,
+    layers,
+    dim,
+    heads,
+    attnType,
+    actType,
+    paramsM,
+    flopsGiga,
+    valLoss,
+    latencyMs,
+    isPareto: false
+  };
+}
+
+// Multi-Objective Fitness Evaluation: Scalarizes Accuracy vs Compute
+function evaluateArchFitness(z: number[]): number {
+  const arch = decodeVectorToArch(z);
+  // Scalarized objective: ValLoss + normalized compute penalty
+  return arch.valLoss + 0.032 * arch.flopsGiga;
+}
+
 // ============================================================================
 // 2. 3D Neural Architecture Sub-Components (Three.js / R3F)
 // ============================================================================
@@ -64,20 +115,20 @@ function ResidualStreamParticles({
   layerSpacing: number;
   stackRadius: number;
 }) {
-  const count = 48;
+  const count = 36;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const tempColor = useMemo(() => new THREE.Color(), []);
 
-  const totalHeight = (layerCount - 1) * layerSpacing + 1.2;
-  const startY = -totalHeight / 2 - 0.2;
+  const totalHeight = (layerCount - 1) * layerSpacing + 0.8;
+  const startY = -totalHeight / 2;
 
   const particleData = useMemo(() => {
     return Array.from({ length: count }, (_, i) => {
       const angle = (i / count) * Math.PI * 2;
-      const speed = 0.4 + (i % 5) * 0.12;
-      const offset = (i / count);
-      const radiusOffset = ((i % 3) - 1) * 0.08;
+      const speed = 0.35 + (i % 4) * 0.1;
+      const offset = i / count;
+      const radiusOffset = ((i % 3) - 1) * 0.06;
       return { angle, speed, offset, radiusOffset };
     });
   }, [count]);
@@ -91,19 +142,17 @@ function ResidualStreamParticles({
       const progress = (time * p.speed + p.offset) % 1.0;
       const y = startY + progress * totalHeight;
 
-      // Spiral gently along the residual highway perimeter
-      const currentAngle = p.angle + progress * Math.PI * 0.5;
-      const r = stackRadius + 0.35 + p.radiusOffset;
+      const currentAngle = p.angle + progress * Math.PI * 0.6;
+      const r = stackRadius + 0.28 + p.radiusOffset;
       const x = Math.cos(currentAngle) * r;
       const z = Math.sin(currentAngle) * r;
 
       dummy.position.set(x, y, z);
-      const scale = (0.04 + Math.sin(progress * Math.PI) * 0.045);
+      const scale = 0.035 + Math.sin(progress * Math.PI) * 0.03;
       dummy.scale.setScalar(scale);
       dummy.updateMatrix();
 
-      // Cyan to purple gradient as token ascends
-      tempColor.setHSL(0.52 + progress * 0.25, 0.9, 0.65);
+      tempColor.setHSL(0.52 + progress * 0.28, 0.95, 0.65);
       meshRef.current.setMatrixAt(i, dummy.matrix);
       meshRef.current.setColorAt(i, tempColor);
     }
@@ -113,7 +162,7 @@ function ResidualStreamParticles({
 
   return (
     <instancedMesh ref={meshRef} args={[undefined as any, undefined as any, count]}>
-      <sphereGeometry args={[1, 12, 12]} />
+      <sphereGeometry args={[1, 10, 10]} />
       <meshBasicMaterial toneMapped={false} />
     </instancedMesh>
   );
@@ -126,21 +175,23 @@ function AttentionHeadCluster({
   headCount,
   attnType,
   radius,
-  yPos
+  yPos,
+  scale = 1.0
 }: {
   headCount: number;
   attnType: AttentionType;
   radius: number;
   yPos: number;
+  scale?: number;
 }) {
   const heads = useMemo(() => {
     const arr = [];
-    const count = Math.min(headCount, 16);
+    const count = Math.min(headCount, 12);
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
-      const x = Math.cos(angle) * (radius * 0.82);
-      const z = Math.sin(angle) * (radius * 0.82);
-      const linePoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-x, 0, -z)];
+      const x = Math.cos(angle) * (radius * 0.78);
+      const z = Math.sin(angle) * (radius * 0.78);
+      const linePoints = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(x, 0, z)];
       arr.push({ x, z, angle, linePoints });
     }
     return arr;
@@ -153,42 +204,42 @@ function AttentionHeadCluster({
     <group position={[0, yPos, 0]}>
       {/* Central Query/Key Fusion Ring */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[radius * 0.82, 0.02, 12, 32]} />
-        <meshBasicMaterial color={color} transparent opacity={0.6} />
+        <torusGeometry args={[radius * 0.78, 0.015 * scale, 10, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.65} />
       </mesh>
 
       {/* Individual Attention Head Nodes */}
       {heads.map((h, idx) => (
         <group key={`head-${idx}-${h.x.toFixed(2)}`} position={[h.x, 0, h.z]}>
           <mesh>
-            <sphereGeometry args={[0.075, 16, 16]} />
+            <sphereGeometry args={[0.06 * scale, 12, 12]} />
             <meshStandardMaterial
               color={color}
               emissive={emissive}
-              emissiveIntensity={2.5}
+              emissiveIntensity={2.2}
               roughness={0.2}
               metalness={0.8}
             />
           </mesh>
-          {/* Projection beam to center */}
+          {/* Subtle Projection Spoke */}
           <line>
             <bufferGeometry setFromPoints={h.linePoints} />
-            <lineBasicMaterial color={color} transparent opacity={0.35} />
+            <lineBasicMaterial color={color} transparent opacity={0.3} />
           </line>
         </group>
       ))}
 
       {/* Core Attention Projection Hub */}
       <mesh position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.12, 0.12, 0.08, 16]} />
-        <meshStandardMaterial color="#ffffff" emissive="#38bdf8" emissiveIntensity={1.8} />
+        <cylinderGeometry args={[0.09 * scale, 0.09 * scale, 0.06 * scale, 16]} />
+        <meshStandardMaterial color="#ffffff" emissive="#38bdf8" emissiveIntensity={1.6} />
       </mesh>
     </group>
   );
 }
 
 /**
- * Single Holographic Transformer Block in 3D
+ * Single Non-Clipping Holographic Transformer Block in 3D
  */
 function TransformerBlock3D({
   layerIndex,
@@ -208,69 +259,61 @@ function TransformerBlock3D({
   layerSpacing: number;
 }) {
   const totalHeight = (totalLayers - 1) * layerSpacing;
-  const yCenter = (layerIndex * layerSpacing) - totalHeight / 2;
+  const yCenter = layerIndex * layerSpacing - totalHeight / 2;
 
-  // Normalized width factor [0.8 to 1.8]
-  const widthFactor = 0.75 + (dim / 1024) * 0.9;
-  const mlpExpansion = actType === "SwiGLU" ? 1.45 : 1.25;
+  // Normalized width factor [0.7 to 1.5]
+  const widthFactor = 0.65 + (dim / 1024) * 0.75;
+  const blockScale = Math.min(1.0, layerSpacing / 0.85);
 
   return (
     <group position={[0, yCenter, 0]}>
       {/* 1. Input RMSNorm Ring */}
-      <mesh position={[0, -0.22, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[widthFactor * 0.75, 0.018, 12, 36]} />
-        <meshStandardMaterial color="#2dd4bf" emissive="#0d9488" emissiveIntensity={2.0} />
+      <mesh position={[0, -0.16 * blockScale, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[widthFactor * 0.72, 0.015 * blockScale, 10, 32]} />
+        <meshStandardMaterial color="#2dd4bf" emissive="#0d9488" emissiveIntensity={1.8} />
       </mesh>
 
       {/* 2. Multi-Head Attention Mechanism */}
       <AttentionHeadCluster
         headCount={heads}
         attnType={attnType}
-        radius={widthFactor * 0.8}
-        yPos={-0.08}
+        radius={widthFactor * 0.75}
+        yPos={-0.05 * blockScale}
+        scale={blockScale}
       />
 
       {/* 3. Mid-layer RMSNorm Ring */}
-      <mesh position={[0, 0.08, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[widthFactor * 0.75, 0.018, 12, 36]} />
-        <meshStandardMaterial color="#818cf8" emissive="#4f46e5" emissiveIntensity={2.0} />
+      <mesh position={[0, 0.06 * blockScale, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[widthFactor * 0.72, 0.015 * blockScale, 10, 32]} />
+        <meshStandardMaterial color="#818cf8" emissive="#4f46e5" emissiveIntensity={1.8} />
       </mesh>
 
       {/* 4. SwiGLU / MLP Feed-Forward Core (Hexagonal Prism) */}
-      <mesh position={[0, 0.22, 0]}>
-        <cylinderGeometry args={[widthFactor * mlpExpansion * 0.55, widthFactor * mlpExpansion * 0.65, 0.14, 6]} />
+      <mesh position={[0, 0.16 * blockScale, 0]}>
+        <cylinderGeometry
+          args={[
+            widthFactor * 0.55,
+            widthFactor * 0.62,
+            0.11 * blockScale,
+            6
+          ]}
+        />
         <meshPhysicalMaterial
           color="#c084fc"
           emissive="#7e22ce"
           emissiveIntensity={1.2}
           transmission={0.65}
           roughness={0.2}
-          thickness={0.6}
+          thickness={0.5}
           transparent
-          opacity={0.8}
-        />
-      </mesh>
-
-      {/* 5. Glass Enclosure Shield for the Transformer Layer */}
-      <mesh position={[0, 0, 0]}>
-        <cylinderGeometry args={[widthFactor * 1.05, widthFactor * 1.05, 0.62, 24, 1, true]} />
-        <meshPhysicalMaterial
-          color="#0f172a"
-          emissive="#38bdf8"
-          emissiveIntensity={0.15}
-          transmission={0.9}
-          roughness={0.1}
-          transparent
-          opacity={0.18}
-          side={THREE.DoubleSide}
-          depthWrite={false}
+          opacity={0.85}
         />
       </mesh>
 
       {/* Outer Neon Layer Bounding Ring */}
       <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[widthFactor * 1.04, widthFactor * 1.06, 32]} />
-        <meshBasicMaterial color="#38bdf8" transparent opacity={0.3} side={THREE.DoubleSide} />
+        <ringGeometry args={[widthFactor * 0.88, widthFactor * 0.90, 32]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
@@ -293,27 +336,27 @@ function HolographicTransformerStack({
   actType: ActivationType;
 }) {
   const stackRef = useRef<THREE.Group>(null);
-  const layerSpacing = Math.max(0.72, Math.min(1.1, 4.2 / Math.max(2, layers)));
-  const widthFactor = 0.75 + (dim / 1024) * 0.9;
+  const layerSpacing = Math.max(0.55, Math.min(1.0, 3.8 / Math.max(2, layers)));
+  const widthFactor = 0.65 + (dim / 1024) * 0.75;
   const totalHeight = (layers - 1) * layerSpacing;
 
   useFrame((_, delta) => {
     if (stackRef.current) {
-      stackRef.current.rotation.y += delta * 0.25;
+      stackRef.current.rotation.y += delta * 0.15;
     }
   });
 
   return (
     <group ref={stackRef}>
       {/* Base Token Embedding Pedestal */}
-      <group position={[0, -totalHeight / 2 - 0.5, 0]}>
+      <group position={[0, -totalHeight / 2 - 0.4, 0]}>
         <mesh>
-          <cylinderGeometry args={[widthFactor * 1.25, widthFactor * 1.35, 0.16, 32]} />
-          <meshStandardMaterial color="#0f172a" metalness={0.9} roughness={0.2} />
+          <cylinderGeometry args={[widthFactor * 1.05, widthFactor * 1.15, 0.14, 32]} />
+          <meshStandardMaterial color="#0b0f19" metalness={0.85} roughness={0.25} />
         </mesh>
-        <mesh position={[0, 0.09, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[widthFactor * 0.9, widthFactor * 1.2, 32]} />
-          <meshBasicMaterial color="#2dd4bf" transparent opacity={0.6} side={THREE.DoubleSide} />
+        <mesh position={[0, 0.08, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[widthFactor * 0.75, widthFactor * 1.0, 32]} />
+          <meshBasicMaterial color="#2dd4bf" transparent opacity={0.55} side={THREE.DoubleSide} />
         </mesh>
       </group>
 
@@ -332,19 +375,19 @@ function HolographicTransformerStack({
       ))}
 
       {/* Top Unembedding & Logits Head */}
-      <group position={[0, totalHeight / 2 + 0.45, 0]}>
+      <group position={[0, totalHeight / 2 + 0.38, 0]}>
         <mesh>
-          <octahedronGeometry args={[0.22, 0]} />
+          <octahedronGeometry args={[0.18, 0]} />
           <meshStandardMaterial
             color="#fbbf24"
             emissive="#d97706"
-            emissiveIntensity={2.8}
+            emissiveIntensity={2.5}
             roughness={0.1}
           />
         </mesh>
-        <mesh position={[0, -0.12, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.28, 0.32, 24]} />
-          <meshBasicMaterial color="#fbbf24" transparent opacity={0.7} side={THREE.DoubleSide} />
+        <mesh position={[0, -0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.22, 0.26, 24]} />
+          <meshBasicMaterial color="#fbbf24" transparent opacity={0.65} side={THREE.DoubleSide} />
         </mesh>
       </group>
 
@@ -352,7 +395,7 @@ function HolographicTransformerStack({
       <ResidualStreamParticles
         layerCount={layers}
         layerSpacing={layerSpacing}
-        stackRadius={widthFactor * 1.05}
+        stackRadius={widthFactor * 0.92}
       />
     </group>
   );
@@ -372,8 +415,8 @@ function ParetoFrontierCanvas({
   onSelectArch: (p: ArchPoint) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<ArchPoint | null>(null);
 
-  // Compute Pareto Frontier
   const paretoPoints = useMemo(() => {
     return evaluatedArchs
       .filter((p) => p.isPareto)
@@ -390,36 +433,36 @@ function ParetoFrontierCanvas({
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
-    // Deep sci-fi backdrop
+    // Dark sleek background
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, W, H);
 
-    const PAD_LEFT = 80;
-    const PAD_RIGHT = 36;
-    const PAD_TOP = 36;
-    const PAD_BOTTOM = 64;
+    const PAD_LEFT = 70;
+    const PAD_RIGHT = 30;
+    const PAD_TOP = 28;
+    const PAD_BOTTOM = 54;
 
     const minFlops = 1.0;
     const maxFlops = 50.0;
-    const minLoss = 1.1;
+    const minLoss = 1.0;
     const maxLoss = 3.6;
 
     const toPxX = (f: number) => PAD_LEFT + ((f - minFlops) / (maxFlops - minFlops)) * (W - PAD_LEFT - PAD_RIGHT);
     const toPxY = (l: number) => H - PAD_BOTTOM - ((l - minLoss) / (maxLoss - minLoss)) * (H - PAD_TOP - PAD_BOTTOM);
 
-    // Subtle Grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1.5;
+    // Subtle Grid Lines
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+    ctx.lineWidth = 1.0;
     for (let f = 10; f <= 50; f += 10) {
       ctx.beginPath();
       ctx.moveTo(toPxX(f), PAD_TOP);
       ctx.lineTo(toPxX(f), H - PAD_BOTTOM);
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
-      ctx.font = "bold 14px JetBrains Mono, monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+      ctx.font = "bold 11px JetBrains Mono, monospace";
       ctx.textAlign = "center";
-      ctx.fillText(`${f}G`, toPxX(f), H - PAD_BOTTOM + 24);
+      ctx.fillText(`${f}G`, toPxX(f), H - PAD_BOTTOM + 18);
     }
 
     for (let l = 1.5; l <= 3.5; l += 0.5) {
@@ -428,10 +471,10 @@ function ParetoFrontierCanvas({
       ctx.lineTo(W - PAD_RIGHT, toPxY(l));
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
-      ctx.font = "bold 14px JetBrains Mono, monospace";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+      ctx.font = "bold 11px JetBrains Mono, monospace";
       ctx.textAlign = "right";
-      ctx.fillText(l.toFixed(1), PAD_LEFT - 12, toPxY(l) + 4);
+      ctx.fillText(l.toFixed(1), PAD_LEFT - 10, toPxY(l) + 4);
     }
 
     // Shaded Area Under Pareto Frontier Curve
@@ -446,53 +489,53 @@ function ParetoFrontierCanvas({
       ctx.closePath();
 
       const grad = ctx.createLinearGradient(0, PAD_TOP, 0, H - PAD_BOTTOM);
-      grad.addColorStop(0, "rgba(16, 185, 129, 0.22)");
+      grad.addColorStop(0, "rgba(16, 185, 129, 0.18)");
       grad.addColorStop(1, "rgba(16, 185, 129, 0.01)");
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Glowing Pareto Boundary Line
-      ctx.strokeStyle = "#10b981";
-      ctx.lineWidth = 4;
-      ctx.shadowColor = "#10b981";
-      ctx.shadowBlur = 14;
+      // Glowing Line
       ctx.beginPath();
       ctx.moveTo(toPxX(paretoPoints[0].flopsGiga), toPxY(paretoPoints[0].valLoss));
       paretoPoints.forEach((p) => {
         ctx.lineTo(toPxX(p.flopsGiga), toPxY(p.valLoss));
       });
+      ctx.strokeStyle = "#10b981";
+      ctx.lineWidth = 2.5;
       ctx.stroke();
-      ctx.shadowBlur = 0;
     }
 
-    // Evaluated Sample Points
-    evaluatedArchs.forEach((pt) => {
-      const px = toPxX(pt.flopsGiga);
-      const py = toPxY(pt.valLoss);
+    // Evaluated Samples (Scatter points)
+    evaluatedArchs.forEach((p) => {
+      const px = toPxX(p.flopsGiga);
+      const py = toPxY(p.valLoss);
 
-      if (pt.isPareto) {
-        ctx.fillStyle = "#34d399";
-        ctx.shadowColor = "#34d399";
-        ctx.shadowBlur = 10;
+      if (p.isPareto) {
+        ctx.fillStyle = "#10b981";
         ctx.beginPath();
-        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.4)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(px, py, 7.5, 0, Math.PI * 2);
+        ctx.stroke();
       } else {
         ctx.fillStyle = "rgba(148, 163, 184, 0.45)";
         ctx.beginPath();
-        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
     });
 
-    // Current Selected Architecture Crosshairs & Halo
+    // Active Design Crosshair & Glow Ring
     const curPx = toPxX(currentPoint.flopsGiga);
     const curPy = toPxY(currentPoint.valLoss);
 
-    ctx.strokeStyle = "rgba(168, 85, 247, 0.5)";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = "rgba(192, 132, 252, 0.4)";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(curPx, PAD_TOP);
     ctx.lineTo(curPx, H - PAD_BOTTOM);
@@ -501,29 +544,25 @@ function ParetoFrontierCanvas({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Glowing Pulse Ring for Current Selection
-    ctx.fillStyle = "#a855f7";
-    ctx.shadowColor = "#c084fc";
-    ctx.shadowBlur = 18;
+    ctx.fillStyle = "#c084fc";
     ctx.beginPath();
-    ctx.arc(curPx, curPy, 10, 0, Math.PI * 2);
+    ctx.arc(curPx, curPy, 6.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(curPx, curPy, 13, 0, Math.PI * 2);
+    ctx.arc(curPx, curPy, 9.5, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
-    // Axis Titles
+    // Axis Labels
     ctx.fillStyle = "#94a3b8";
-    ctx.font = "bold 14px Inter, sans-serif";
+    ctx.font = "bold 11px Inter, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Computational Cost (GFLOPs / Forward Pass) →", (W + PAD_LEFT) / 2, H - 16);
+    ctx.fillText("Forward Pass Compute (GFLOPs) →", (W + PAD_LEFT) / 2, H - 12);
 
     ctx.save();
-    ctx.translate(24, (H + PAD_TOP - PAD_BOTTOM) / 2);
+    ctx.translate(18, (H + PAD_TOP - PAD_BOTTOM) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillText("Validation Loss (Lower is Better) →", 0, 0);
     ctx.restore();
@@ -539,7 +578,7 @@ function ParetoFrontierCanvas({
         <div className="flex items-center gap-3 font-mono text-[0.68rem]">
           <span className="text-emerald-400 flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            Pareto Optimal
+            Pareto Optimal ({paretoPoints.length})
           </span>
           <span className="text-purple-400 flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-purple-400" />
@@ -551,48 +590,62 @@ function ParetoFrontierCanvas({
       <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
         <canvas
           ref={canvasRef}
-          width={960}
-          height={480}
+          width={760}
+          height={380}
           tabIndex={0}
           role="button"
           aria-label="Pareto frontier architecture picker"
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              // Select first Pareto optimal architecture
               const paretoFirst = evaluatedArchs.find((p) => p.isPareto);
-              if (paretoFirst) {
-                onSelectArch(paretoFirst);
-              }
+              if (paretoFirst) onSelectArch(paretoFirst);
             }
           }}
-          className="w-full h-auto block cursor-crosshair focus:outline-none focus:ring-1 focus:ring-sky-400"
-          onClick={(e) => {
+          onMouseMove={(e) => {
             const canvas = canvasRef.current;
             if (!canvas) return;
             const rect = canvas.getBoundingClientRect();
             const clickX = ((e.clientX - rect.left) / rect.width) * canvas.width;
             const clickY = ((e.clientY - rect.top) / rect.height) * canvas.height;
 
-            const PAD_LEFT = 80;
-            const PAD_RIGHT = 36;
-            const PAD_TOP = 36;
-            const PAD_BOTTOM = 64;
+            const PAD_LEFT = 70;
+            const PAD_RIGHT = 30;
+            const PAD_TOP = 28;
+            const PAD_BOTTOM = 54;
 
-            // Find closest evaluated arch
             let closest: ArchPoint | null = null;
             let minDist = Infinity;
             evaluatedArchs.forEach((pt) => {
               const px = PAD_LEFT + ((pt.flopsGiga - 1.0) / 49.0) * (canvas.width - PAD_LEFT - PAD_RIGHT);
-              const py = canvas.height - PAD_BOTTOM - ((pt.valLoss - 1.1) / 2.5) * (canvas.height - PAD_TOP - PAD_BOTTOM);
+              const py = canvas.height - PAD_BOTTOM - ((pt.valLoss - 1.0) / 2.6) * (canvas.height - PAD_TOP - PAD_BOTTOM);
               const dist = Math.hypot(clickX - px, clickY - py);
-              if (dist < minDist && dist < 48) {
+              if (dist < minDist && dist < 32) {
                 minDist = dist;
                 closest = pt;
               }
             });
-            if (closest) onSelectArch(closest);
+            setHoveredPoint(closest);
           }}
+          onMouseLeave={() => setHoveredPoint(null)}
+          onClick={() => {
+            if (hoveredPoint) onSelectArch(hoveredPoint);
+          }}
+          className="w-full h-auto block cursor-crosshair focus:outline-none focus:ring-1 focus:ring-purple-400"
         />
+
+        {/* Hover Tooltip Overlay */}
+        {hoveredPoint && (
+          <div className="absolute top-3 right-3 p-2.5 rounded-xl bg-slate-950/90 border border-purple-500/40 backdrop-blur-md text-[0.7rem] font-mono text-slate-200 shadow-xl pointer-events-none space-y-1">
+            <div className="font-bold text-purple-300">
+              {hoveredPoint.layers}L • {hoveredPoint.dim}d • {hoveredPoint.heads}H ({hoveredPoint.attnType})
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <span>Params: <strong className="text-emerald-300">{hoveredPoint.paramsM.toFixed(1)}M</strong></span>
+              <span>Loss: <strong className="text-sky-300">{hoveredPoint.valLoss.toFixed(3)}</strong></span>
+              <span>Compute: <strong className="text-amber-300">{hoveredPoint.flopsGiga.toFixed(1)}G</strong></span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -606,91 +659,36 @@ export function TransformerViz() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
 
-  // Continuous Latent Hyperparameter Coordinates [0, 1]
-  const [zLayers, setZLayers] = useState(0.45); // Maps to 2..16 layers
-  const [zDim, setZDim] = useState(0.48); // Maps to 128..1024 d_model
-  const [zHeads, setZHeads] = useState(0.4); // Maps to 2..16 heads
-  const [attnType, setAttnType] = useState<AttentionType>("GQA");
-  const [actType, setActType] = useState<ActivationType>("SwiGLU");
-
+  // 5D Hyperparameter Vector z in [0, 1]^5: [Layers, Dim, Heads, Attn, Act]
+  const [paramVector, setParamVector] = useState<number[]>([0.45, 0.48, 0.4, 0.5, 0.2]);
   const [isSearching, setIsSearching] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [isExpanded3D, setIsExpanded3D] = useState(false);
 
-  // Decode continuous z into physical model parameters
+  // Live CMA-ES Internal Telemetry State
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
+
+  // Decode current architecture
   const currentArch: ArchPoint = useMemo(() => {
-    const layers = Math.max(2, Math.min(16, Math.round(2 + zLayers * 14)));
-    const dim = Math.max(128, Math.min(1024, Math.round(128 + zDim * 896)));
-    const heads = Math.max(2, Math.min(16, Math.round(2 + zHeads * 14)));
+    return decodeVectorToArch(paramVector);
+  }, [paramVector]);
 
-    // Exact parameter scaling formula:
-    // Params = Embeddings (Vocab*d) + Layers * [ 4*d^2 (Attn) + 2*d*d_ff (MLP) + LayerNorms ]
-    const vocab = 32000;
-    const dFF = actType === "SwiGLU" ? Math.round((8 / 3) * dim) : 4 * dim;
-    const attnParamsPerLayer = attnType === "MHA" ? 4 * dim * dim : attnType === "GQA" ? 2.5 * dim * dim : 2 * dim * dim;
-    const mlpParamsPerLayer = actType === "SwiGLU" ? 3 * dim * dFF : 2 * dim * dFF;
-    const totalParams = vocab * dim + layers * (attnParamsPerLayer + mlpParamsPerLayer + 4 * dim);
-    const paramsM = totalParams / 1e6;
-
-    // GFLOPs per token forward pass
-    const flopsGiga = (2 * totalParams) / 1e9 * 2048 / 100; // Normalized forward pass batch cost
-    const valLoss = Math.max(
-      1.15,
-      1.25 + 2.8 / Math.sqrt(layers * 0.6 + (dim / 128) * 1.8) + (attnType === "MQA" ? 0.08 : 0) + (actType === "GELU" ? 0.08 : actType === "Mish" ? 0.04 : 0)
-    );
-    const latencyMs = (layers * 0.8) + (dim / 256) * 1.2;
-
-    return {
-      id: 0,
-      layers,
-      dim,
-      heads,
-      attnType,
-      actType,
-      paramsM,
-      flopsGiga: Math.max(1.5, Math.min(48, flopsGiga)),
-      valLoss,
-      latencyMs,
-      isPareto: false
-    };
-  }, [zLayers, zDim, zHeads, attnType, actType]);
-
-  // Initial synthetic evaluated database
+  // Initial synthetic database of evaluated candidate architectures
   const [archHistory, setArchHistory] = useState<ArchPoint[]>(() => {
     const list: ArchPoint[] = [];
-    for (let i = 0; i < 45; i++) {
-      const s1 = Math.sin(i * 13.37 + 1.23);
-      const s2 = Math.cos(i * 42.19 + 4.56);
-      const s3 = Math.sin(i * 99.81 + 7.89);
+    for (let i = 0; i < 40; i++) {
+      const s1 = Math.abs(Math.sin(i * 13.37 + 1.23));
+      const s2 = Math.abs(Math.cos(i * 42.19 + 4.56));
+      const s3 = Math.abs(Math.sin(i * 99.81 + 7.89));
+      const s4 = (i % 3) * 0.35;
+      const s5 = (i % 3) * 0.35;
 
-      const zl = Math.abs(s1);
-      const zd = Math.abs(s2);
-      const zh = Math.abs(s3);
-
-      const l = Math.max(2, Math.round(2 + zl * 14));
-      const d = Math.max(128, Math.round(128 + zd * 896));
-      const h = Math.max(2, Math.round(2 + zh * 14));
-      const at: AttentionType = i % 3 === 0 ? "MHA" : i % 3 === 1 ? "GQA" : "MQA";
-      const ac: ActivationType = i % 2 === 0 ? "SwiGLU" : "GELU";
-
-      const fl = Math.max(2, Math.min(48, ((l * d * d * 14) / 1e5)));
-      const ls = Math.max(1.18, 1.25 + 2.8 / Math.sqrt(l * 0.6 + (d / 128) * 1.8) + (s1 * 0.04));
-
-      list.push({
-        id: i + 1,
-        layers: l,
-        dim: d,
-        heads: h,
-        attnType: at,
-        actType: ac,
-        paramsM: (l * d * d * 12) / 1e6,
-        flopsGiga: fl,
-        valLoss: ls,
-        latencyMs: l * 0.9,
-        isPareto: false
-      });
+      const arch = decodeVectorToArch([s1, s2, s3, s4, s5]);
+      arch.id = i + 1;
+      list.push(arch);
     }
 
-    // Mark initial Pareto frontier
     list.forEach((p1) => {
       p1.isPareto = !list.some(
         (p2) => p2.flopsGiga <= p1.flopsGiga && p2.valLoss <= p1.valLoss && (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
@@ -707,7 +705,7 @@ export function TransformerViz() {
     };
   }, []);
 
-  // Multi-Objective CMA-ES Search Execution
+  // Multi-Objective 5D CMA-ES Search Execution
   const handleToggleSearch = useCallback(() => {
     if (isSearching) {
       if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
@@ -717,22 +715,16 @@ export function TransformerViz() {
 
     setIsSearching(true);
     setGeneration(0);
+    setHistoryND([]);
 
-    // Multi-objective scalarizer: f(z) = ValLoss + 0.035 * GFLOPs
-    const optimizer = new CMAESOptimizer(
-      (zl, zd) => {
-        const l = Math.max(2, Math.round(2 + zl * 14));
-        const d = Math.max(128, Math.round(128 + zd * 896));
-        const fl = Math.max(2, (l * d * d * 14) / 1e5);
-        const ls = 1.25 + 2.8 / Math.sqrt(l * 0.6 + (d / 128) * 1.8);
-        return ls + 0.035 * fl;
-      },
+    const optimizer = new CMAESOptimizerND(
+      (zVec) => evaluateArchFitness(zVec),
       {
-        dim: 2,
-        initialMean: [zLayers, zDim],
+        dim: 5,
+        initialMean: [...paramVector],
         initialSigma: 0.22,
-        lambda: 12,
-        bounds: [0.05, 0.95]
+        lambda: 14,
+        bounds: [0.0, 1.0]
       }
     );
 
@@ -743,38 +735,17 @@ export function TransformerViz() {
     searchIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
-      const nextZL = Math.max(0.05, Math.min(0.95, state.bestX[0]));
-      const nextZD = Math.max(0.05, Math.min(0.95, state.bestX[1]));
-
-      setZLayers(nextZL);
-      setZDim(nextZD);
+      setParamVector([...state.bestX]);
       setGeneration(g);
+      setLatestStateND(state);
+      setHistoryND((prev) => [...prev, state]);
 
-      // Evaluate new batch and update Pareto frontier
-      const l = Math.max(2, Math.round(2 + nextZL * 14));
-      const d = Math.max(128, Math.round(128 + nextZD * 896));
-      const fl = Math.max(2, (l * d * d * 14) / 1e5);
-      const ls = 1.25 + 2.8 / Math.sqrt(l * 0.6 + (d / 128) * 1.8);
+      const candidateArch = decodeVectorToArch(state.bestX);
+      candidateArch.id = Date.now();
+      candidateArch.generation = g;
 
       setArchHistory((prev) => {
-        const next: ArchPoint[] = [
-          ...prev,
-          {
-            id: prev.length + 1,
-            layers: l,
-            dim: d,
-            heads: Math.max(2, Math.round(2 + zHeads * 14)),
-            attnType,
-            actType,
-            paramsM: (l * d * d * 12) / 1e6,
-            flopsGiga: fl,
-            valLoss: ls,
-            latencyMs: l * 0.9,
-            isPareto: false,
-            generation: g
-          }
-        ];
-
+        const next = [...prev, candidateArch];
         next.forEach((p1) => {
           p1.isPareto = !next.some(
             (p2) => p2.flopsGiga <= p1.flopsGiga && p2.valLoss <= p1.valLoss && (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
@@ -788,30 +759,18 @@ export function TransformerViz() {
         setIsSearching(false);
       }
     }, 180);
-  }, [isSearching, zLayers, zDim, zHeads, attnType, actType]);
+  }, [isSearching, paramVector]);
 
   // Preset Architecture Selectors
   const applyPreset = (preset: "edge" | "balanced" | "scale") => {
     setIsSearching(false);
     if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
     if (preset === "edge") {
-      setZLayers(0.18); // 4 Layers
-      setZDim(0.25); // 352 Dim
-      setZHeads(0.2); // 4 Heads
-      setAttnType("MQA");
-      setActType("SwiGLU");
+      setParamVector([0.18, 0.25, 0.2, 0.8, 0.1]); // 4 Layers, 352 Dim, 4 Heads, MQA, SwiGLU
     } else if (preset === "balanced") {
-      setZLayers(0.48); // 8 Layers
-      setZDim(0.55); // 620 Dim
-      setZHeads(0.45); // 8 Heads
-      setAttnType("GQA");
-      setActType("SwiGLU");
+      setParamVector([0.48, 0.55, 0.45, 0.5, 0.1]); // 8 Layers, 620 Dim, 8 Heads, GQA, SwiGLU
     } else {
-      setZLayers(0.88); // 14 Layers
-      setZDim(0.85); // 890 Dim
-      setZHeads(0.85); // 14 Heads
-      setAttnType("MHA");
-      setActType("SwiGLU");
+      setParamVector([0.88, 0.85, 0.85, 0.1, 0.1]); // 14 Layers, 890 Dim, 14 Heads, MHA, SwiGLU
     }
   };
 
@@ -827,11 +786,11 @@ export function TransformerViz() {
             <h3 className="text-xl font-bold text-white font-display flex items-center gap-2.5">
               <span>Holographic Neural Architecture Search (NAS)</span>
               <span className="text-[0.65rem] font-mono px-2.5 py-0.5 rounded-full border bg-purple-500/15 border-purple-500/40 text-purple-300">
-                Mixed Discrete-Continuous
+                5D Mixed Discrete-Continuous
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Discover compute-optimal Transformer Pareto frontiers using covariance adaptation in latent continuous hypercubes
+              Discover compute-optimal Transformer Pareto frontiers using covariance adaptation in continuous latent spaces
             </p>
           </div>
         </div>
@@ -840,19 +799,19 @@ export function TransformerViz() {
         <div className="flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-white/10 text-xs font-medium">
           <button
             onClick={() => applyPreset("edge")}
-            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-[background-color,color]"
           >
             Edge Mobile
           </button>
           <button
             onClick={() => applyPreset("balanced")}
-            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-[background-color,color]"
           >
             Balanced 7B
           </button>
           <button
             onClick={() => applyPreset("scale")}
-            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-colors"
+            className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-[background-color,color]"
           >
             High-Capacity
           </button>
@@ -860,86 +819,129 @@ export function TransformerViz() {
       </div>
 
       {/* Main Dual Stage */}
-      <div className="grid gap-8 lg:grid-cols-[1.25fr_1fr] items-start">
-        {/* Left Column: 3D Holographic Stage */}
+      <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr] items-start">
+        {/* Left Column: 3D Holographic Stage (Single or Split 3D View) */}
         <div className="space-y-3">
-          <div
-            ref={containerRef}
-            className="relative aspect-square sm:aspect-[16/11] lg:h-[500px] w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030014] shadow-[0_20px_60px_rgba(0,0,0,0.8)] group"
-          >
-            {/* Holographic Vignette */}
-            <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_90px_rgba(3,0,20,0.85)] z-10" />
+          {isExpanded3D ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* 3D Transformer Model */}
+              <div
+                ref={containerRef}
+                className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl"
+              >
+                <Canvas
+                  dpr={[1, 2]}
+                  events={safePointerEvents}
+                  frameloop={isInView ? "always" : "demand"}
+                >
+                  <PerspectiveCamera makeDefault position={[4.2, 2.5, 4.4]} fov={38} />
+                  <color attach="background" args={["#030712"]} />
+                  <fog attach="fog" args={["#030712", 8, 22]} />
 
-            <Canvas
-              dpr={[1, 2]}
-              events={safePointerEvents}
-              frameloop={isInView ? "always" : "demand"}
-            >
-              <PerspectiveCamera makeDefault position={[4.6, 2.8, 4.8]} fov={38} />
-              <color attach="background" args={["#030014"]} />
-              <fog attach="fog" args={["#030014", 8, 22]} />
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[5, 10, 6]} intensity={1.2} />
+                  <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
+                  <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
 
-              <ambientLight intensity={0.4} />
-              <pointLight position={[5, 8, 5]} intensity={1.8} color="#38bdf8" />
-              <pointLight position={[-5, -4, -5]} intensity={1.0} color="#a855f7" />
+                  <OrbitControls
+                    makeDefault
+                    enableDamping
+                    dampingFactor={0.06}
+                    minDistance={3.0}
+                    maxDistance={12}
+                    maxPolarAngle={Math.PI / 2 + 0.05}
+                    target={[0, 0, 0]}
+                  />
 
-              <OrbitControls
-                makeDefault
-                enableDamping
-                dampingFactor={0.06}
-                minDistance={3.2}
-                maxDistance={14}
-                maxPolarAngle={Math.PI / 2 + 0.05}
-                target={[0, 0, 0]}
-              />
+                  <Float speed={1.2} rotationIntensity={0.1} floatIntensity={0.1}>
+                    <HolographicTransformerStack
+                      layers={currentArch.layers}
+                      dim={currentArch.dim}
+                      heads={currentArch.heads}
+                      attnType={currentArch.attnType}
+                      actType={currentArch.actType}
+                    />
+                  </Float>
+                </Canvas>
 
-              <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.15}>
-                <HolographicTransformerStack
-                  layers={currentArch.layers}
-                  dim={currentArch.dim}
-                  heads={currentArch.heads}
-                  attnType={currentArch.attnType}
-                  actType={currentArch.actType}
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-purple-300 backdrop-blur-md">
+                  3D Transformer Stack
+                </div>
+              </div>
+
+              {/* 3D PCA Covariance Phase Space Canvas */}
+              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
+                <CMAESPhaseSpaceViewer
+                  latestState={latestStateND}
+                  history={historyND}
+                  title="3D PCA Covariance Ellipsoid"
                 />
-              </Float>
-
-              {/* Cybernetic Coordinate Grid */}
-              <gridHelper position={[0, -2.4, 0]} args={[16, 16, "#1e1b4b", "#09051c"]} />
-            </Canvas>
-
-            {/* Top-Right Orbit Badge */}
-            <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/80 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
-              <Compass className="h-3.5 w-3.5 text-sky-400" />
-              <span>3D Orbit Active</span>
-            </div>
-
-            {/* Bottom-Left Live Architecture Telemetry HUD */}
-            <div className="absolute bottom-3 left-3 z-20 flex flex-col gap-1 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono text-slate-200 shadow-2xl pointer-events-none">
-              <div className="flex items-center gap-2 text-purple-300 font-bold text-sm font-display">
-                <BrainCircuit className="h-4 w-4 text-purple-400" />
-                <span>{currentArch.layers} Layers • {currentArch.dim} <LatexRenderer math="d_{\text{model}}" block={false} /> • {currentArch.heads} Heads</span>
-              </div>
-              <div className="flex items-center gap-3 text-[0.7rem] text-slate-400 pt-1 border-t border-white/10">
-                <span>Attn: <strong className="text-sky-300">{currentArch.attnType}</strong></span>
-                <span>MLP: <strong className="text-purple-300">{currentArch.actType}</strong></span>
-                <span>Params: <strong className="text-emerald-300">{currentArch.paramsM.toFixed(1)}M</strong></span>
               </div>
             </div>
+          ) : (
+            <div
+              ref={containerRef}
+              className="relative aspect-square sm:aspect-[16/11] lg:h-[460px] w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_60px_rgba(0,0,0,0.8)] group"
+            >
+              <Canvas
+                dpr={[1, 2]}
+                events={safePointerEvents}
+                frameloop={isInView ? "always" : "demand"}
+              >
+                <PerspectiveCamera makeDefault position={[4.4, 2.6, 4.6]} fov={38} />
+                <color attach="background" args={["#030712"]} />
+                <fog attach="fog" args={["#030712", 8, 22]} />
 
-            {/* Live Search Status Pill */}
-            {isSearching && (
-              <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-purple-500/50 shadow-glow-sm">
-                <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
-                <span className="text-xs font-mono font-bold text-purple-200">
-                  CMA-ES Optimizing: Gen {generation}/25
-                </span>
+                <ambientLight intensity={0.6} />
+                <directionalLight position={[5, 10, 6]} intensity={1.2} />
+                <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
+                <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
+
+                <OrbitControls
+                  makeDefault
+                  enableDamping
+                  dampingFactor={0.06}
+                  minDistance={3.0}
+                  maxDistance={14}
+                  maxPolarAngle={Math.PI / 2 + 0.05}
+                  target={[0, 0, 0]}
+                />
+
+                <Float speed={1.2} rotationIntensity={0.12} floatIntensity={0.12}>
+                  <HolographicTransformerStack
+                    layers={currentArch.layers}
+                    dim={currentArch.dim}
+                    heads={currentArch.heads}
+                    attnType={currentArch.attnType}
+                    actType={currentArch.actType}
+                  />
+                </Float>
+              </Canvas>
+
+              {/* Top-Right Orbit Badge */}
+              <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/80 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
+                <Compass className="h-3.5 w-3.5 text-purple-400" />
+                <span>Drag to orbit 3D architecture</span>
               </div>
-            )}
-          </div>
+
+              {/* Bottom-Left Live Architecture Telemetry HUD */}
+              <div className="absolute bottom-3 left-3 z-20 flex flex-col gap-1 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono text-slate-200 shadow-2xl pointer-events-none">
+                <div className="flex items-center gap-2 text-purple-300 font-bold text-sm font-display">
+                  <BrainCircuit className="h-4 w-4 text-purple-400" />
+                  <span>{currentArch.layers} Layers • {currentArch.dim} <LatexRenderer math="d_{\text{model}}" block={false} /> • {currentArch.heads} Heads</span>
+                </div>
+                <div className="flex items-center gap-3 text-[0.7rem] text-slate-400 pt-1 border-t border-white/10">
+                  <span>Attn: <strong className="text-sky-300">{currentArch.attnType}</strong></span>
+                  <span>MLP: <strong className="text-purple-300">{currentArch.actType}</strong></span>
+                  <span>Params: <strong className="text-emerald-300">{currentArch.paramsM.toFixed(1)}M</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between px-2 text-[0.72rem] text-slate-400 font-mono">
-            <span>Rotary Positional Embeddings • RMSNorm • Residual Highways</span>
-            <span className="text-sky-400">~{currentArch.latencyMs.toFixed(1)}ms / token</span>
+            <span>Rotary Embeddings • RMSNorm • Residual Streams</span>
+            <span className="text-purple-300 font-bold">~{currentArch.latencyMs.toFixed(1)}ms / token</span>
           </div>
         </div>
 
@@ -971,8 +973,11 @@ export function TransformerViz() {
                 min={0.0}
                 max={1.0}
                 step={0.02}
-                value={zLayers}
-                onChange={(e) => setZLayers(parseFloat(e.target.value))}
+                value={paramVector[0]}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setParamVector((prev) => [val, prev[1], prev[2], prev[3], prev[4]]);
+                }}
                 className="w-full accent-sky-400"
               />
             </div>
@@ -993,8 +998,11 @@ export function TransformerViz() {
                 min={0.0}
                 max={1.0}
                 step={0.02}
-                value={zDim}
-                onChange={(e) => setZDim(parseFloat(e.target.value))}
+                value={paramVector[1]}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setParamVector((prev) => [prev[0], val, prev[2], prev[3], prev[4]]);
+                }}
                 className="w-full accent-indigo-400"
               />
             </div>
@@ -1015,8 +1023,11 @@ export function TransformerViz() {
                 min={0.0}
                 max={1.0}
                 step={0.02}
-                value={zHeads}
-                onChange={(e) => setZHeads(parseFloat(e.target.value))}
+                value={paramVector[2]}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setParamVector((prev) => [prev[0], prev[1], val, prev[3], prev[4]]);
+                }}
                 className="w-full accent-purple-400"
               />
             </div>
@@ -1026,38 +1037,50 @@ export function TransformerViz() {
               <div>
                 <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">Attention Style</span>
                 <div className="grid grid-cols-3 gap-1">
-                  {(["MHA", "GQA", "MQA"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setAttnType(t)}
-                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
-                        attnType === t
-                          ? "bg-sky-500 text-white shadow-glow-sm"
-                          : "bg-slate-900 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                  {(["MHA", "GQA", "MQA"] as const).map((t, idx) => {
+                    const active = currentArch.attnType === t;
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => {
+                          const val = idx === 0 ? 0.15 : idx === 1 ? 0.5 : 0.85;
+                          setParamVector((prev) => [prev[0], prev[1], prev[2], val, prev[4]]);
+                        }}
+                        className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
+                          active
+                            ? "bg-sky-500 text-white shadow-glow-sm"
+                            : "bg-slate-900 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <div>
                 <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">Activation</span>
                 <div className="grid grid-cols-3 gap-1">
-                  {(["SwiGLU", "GELU", "Mish"] as const).map((a) => (
-                    <button
-                      key={a}
-                      onClick={() => setActType(a)}
-                      className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
-                        actType === a
-                          ? "bg-purple-500 text-white shadow-glow-sm"
-                          : "bg-slate-900 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      {a}
-                    </button>
-                  ))}
+                  {(["SwiGLU", "GELU", "Mish"] as const).map((a, idx) => {
+                    const active = currentArch.actType === a;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => {
+                          const val = idx === 0 ? 0.15 : idx === 1 ? 0.5 : 0.85;
+                          setParamVector((prev) => [prev[0], prev[1], prev[2], prev[3], val]);
+                        }}
+                        className={`py-1 text-[0.7rem] font-bold rounded-lg transition-[background-color,color,box-shadow] ${
+                          active
+                            ? "bg-purple-500 text-white shadow-glow-sm"
+                            : "bg-slate-900 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {a}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -1068,11 +1091,12 @@ export function TransformerViz() {
             currentPoint={currentArch}
             evaluatedArchs={archHistory}
             onSelectArch={(p) => {
-              setZLayers((p.layers - 2) / 14);
-              setZDim((p.dim - 128) / 896);
-              setZHeads((p.heads - 2) / 14);
-              setAttnType(p.attnType);
-              setActType(p.actType);
+              const zl = (p.layers - 2) / 14;
+              const zd = (p.dim - 128) / 896;
+              const zh = (p.heads - 2) / 14;
+              const zat = p.attnType === "MHA" ? 0.15 : p.attnType === "GQA" ? 0.5 : 0.85;
+              const zac = p.actType === "SwiGLU" ? 0.15 : p.actType === "GELU" ? 0.5 : 0.85;
+              setParamVector([zl, zd, zh, zat, zac]);
             }}
           />
 
@@ -1087,18 +1111,16 @@ export function TransformerViz() {
               }`}
             >
               <Sparkles className="h-4 w-4" />
-              <span>{isSearching ? "Halt NAS Evolution" : "Run Multi-Objective CMA-ES Architecture Search"}</span>
+              <span>{isSearching ? "Halt NAS Evolution" : "Run 5D Multi-Objective CMA-ES Architecture Search"}</span>
             </button>
 
             <button
               onClick={() => {
                 setIsSearching(false);
                 if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-                setZLayers(0.45);
-                setZDim(0.48);
-                setZHeads(0.4);
+                setParamVector([0.45, 0.48, 0.4, 0.5, 0.2]);
               }}
-              className="p-3.5 rounded-2xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-3.5 rounded-2xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 transition-[background-color,color]"
               title="Reset Architecture"
             >
               <RotateCcw className="h-4 w-4" />
@@ -1106,7 +1128,18 @@ export function TransformerViz() {
           </div>
         </div>
       </div>
+
+      {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
+      <CMAESTelemetryHUD
+        latestState={latestStateND}
+        history={historyND}
+        isOptimizing={isSearching}
+        maxGen={25}
+        onToggleExpand3D={() => setIsExpanded3D((prev) => !prev)}
+        isExpanded3D={isExpanded3D}
+        accentColor="purple"
+        objectiveName="Loss + Compute"
+      />
     </div>
   );
 }
-
