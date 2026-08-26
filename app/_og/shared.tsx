@@ -200,8 +200,8 @@ export async function renderShareCard(width: number, height: number): Promise<Im
           background: "#020617",
           color: "#f8fafc",
           overflow: "hidden",
-          fontFamily: "Geist",
-          padding: compact ? "44px 56px" : "56px 64px",
+          fontFamily: "Manrope", // registered font — "Geist" was never loaded and falls back
+          padding: compact ? "44px 48px" : "56px 48px",
           alignItems: "center",
           justifyContent: "space-between",
         }}
@@ -250,7 +250,7 @@ export async function renderShareCard(width: number, height: number): Promise<Im
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            width: 668,
+            width: 600,
             paddingLeft: padLeft,
             paddingRight: 8,
           }}
