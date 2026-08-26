@@ -127,6 +127,7 @@ function HyperparameterCalculator() {
             </div>
             <input
               type="range"
+              aria-label="Problem Dimension n"
               min={2}
               max={100}
               step={1}
@@ -146,6 +147,7 @@ function HyperparameterCalculator() {
             </div>
             <input
               type="range"
+              aria-label="Single Evaluation Wall-Clock Cost"
               min={5}
               max={5000}
               step={25}

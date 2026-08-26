@@ -136,6 +136,37 @@ function CovarianceEllipsoid({
 
   const [rx, ry, rz] = state.axes;
 
+  const axisXGeo = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    geo.setFromPoints([
+      new THREE.Vector3(-rx * 1.8, 0, 0),
+      new THREE.Vector3(rx * 1.8, 0, 0)
+    ]);
+    return geo;
+  }, [rx]);
+
+  const axisYGeo = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    geo.setFromPoints([
+      new THREE.Vector3(0, -ry * 1.8, 0),
+      new THREE.Vector3(0, ry * 1.8, 0)
+    ]);
+    return geo;
+  }, [ry]);
+
+  const axisZGeo = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    geo.setFromPoints([
+      new THREE.Vector3(0, 0, -rz * 1.8),
+      new THREE.Vector3(0, 0, rz * 1.8)
+    ]);
+    return geo;
+  }, [rz]);
+
+  const lineX = useMemo(() => new THREE.Line(axisXGeo, new THREE.LineBasicMaterial({ color: "#38bdf8" })), [axisXGeo]);
+  const lineY = useMemo(() => new THREE.Line(axisYGeo, new THREE.LineBasicMaterial({ color: "#a855f7" })), [axisYGeo]);
+  const lineZ = useMemo(() => new THREE.Line(axisZGeo, new THREE.LineBasicMaterial({ color: "#34d399" })), [axisZGeo]);
+
   return (
     <group position={state.mean} rotation={state.rotation}>
       {/* Semi-transparent glowing volume */}
@@ -160,33 +191,9 @@ function CovarianceEllipsoid({
       </mesh>
 
       {/* Principal Eigenvector Axes */}
-      <line>
-        <bufferGeometry
-          setFromPoints={[
-            new THREE.Vector3(-rx * 1.8, 0, 0),
-            new THREE.Vector3(rx * 1.8, 0, 0)
-          ]}
-        />
-        <lineBasicMaterial color="#38bdf8" linewidth={2} />
-      </line>
-      <line>
-        <bufferGeometry
-          setFromPoints={[
-            new THREE.Vector3(0, -ry * 1.8, 0),
-            new THREE.Vector3(0, ry * 1.8, 0)
-          ]}
-        />
-        <lineBasicMaterial color="#a855f7" linewidth={2} />
-      </line>
-      <line>
-        <bufferGeometry
-          setFromPoints={[
-            new THREE.Vector3(0, 0, -rz * 1.8),
-            new THREE.Vector3(0, 0, rz * 1.8)
-          ]}
-        />
-        <lineBasicMaterial color="#34d399" linewidth={2} />
-      </line>
+      <primitive object={lineX} />
+      <primitive object={lineY} />
+      <primitive object={lineZ} />
 
       {/* Center Mean Marker */}
       <mesh>
@@ -422,6 +429,7 @@ export function CovarianceScene() {
           <div className="flex-1 flex items-center gap-2 px-2">
             <input
               type="range"
+              aria-label="Generation Scrubber Timeline"
               min={0}
               max={trajectory.length - 1}
               value={genIndex}

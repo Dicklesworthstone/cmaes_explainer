@@ -395,6 +395,7 @@ function GaussianDistributionSandbox() {
               </div>
               <input
                 type="range"
+                aria-label="Search Distribution Step Size sigma"
                 min={0.2}
                 max={1.2}
                 step={0.02}
@@ -415,6 +416,7 @@ function GaussianDistributionSandbox() {
               </div>
               <input
                 type="range"
+                aria-label="Covariance Anisotropy Ratio"
                 min={1.0}
                 max={6.0}
                 step={0.1}
@@ -437,6 +439,7 @@ function GaussianDistributionSandbox() {
               </div>
               <input
                 type="range"
+                aria-label="Principal Orientation Angle theta"
                 min={-90}
                 max={90}
                 step={1}
@@ -459,6 +462,7 @@ function GaussianDistributionSandbox() {
               </div>
               <input
                 type="range"
+                aria-label="Offspring Population Size lambda"
                 min={8}
                 max={32}
                 step={2}
@@ -570,7 +574,7 @@ export function CmaesIntro() {
           ].map((item) => (
             <div
               key={item.step}
-              className="glass-card p-5 border-white/5 hover:border-sky-500/30 transition-all flex flex-col sm:flex-row items-start gap-4"
+              className="glass-card p-5 border-white/5 hover:border-sky-500/30 transition-colors duration-300 flex flex-col sm:flex-row items-start gap-4"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 border border-sky-500/30 text-sm font-bold font-mono text-sky-300">
                 {item.step}

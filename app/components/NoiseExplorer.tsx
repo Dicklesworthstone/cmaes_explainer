@@ -371,6 +371,7 @@ export function NoiseExplorer() {
               </div>
               <input
                 type="range"
+                aria-label="Evaluation Noise Amplitude"
                 min={0.0}
                 max={2.0}
                 step={0.1}
@@ -390,6 +391,7 @@ export function NoiseExplorer() {
               </div>
               <input
                 type="range"
+                aria-label="Population Size lambda"
                 min={6}
                 max={48}
                 step={2}

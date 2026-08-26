@@ -131,12 +131,20 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
   const tempColor = useMemo(() => new THREE.Color(), []);
 
   const particles = useMemo(() => {
-    return Array.from({ length: count }, () => ({
-      x: (Math.random() - 0.5) * 12,
-      y: (Math.random() - 0.5) * 4.5,
-      z: (Math.random() - 0.5) * 6.5,
-      speed: 0.8 + Math.random() * 0.6
-    }));
+    return Array.from({ length: count }, (_, i) => {
+      const s1 = Math.sin(i * 12.9898 + 1.234) * 43758.5453;
+      const s2 = Math.sin(i * 78.233 + 4.567) * 43758.5453;
+      const s3 = Math.sin(i * 39.346 + 9.876) * 43758.5453;
+      const r1 = s1 - Math.floor(s1);
+      const r2 = s2 - Math.floor(s2);
+      const r3 = s3 - Math.floor(s3);
+      return {
+        x: (r1 - 0.5) * 12,
+        y: (r2 - 0.5) * 4.5,
+        z: (r3 - 0.5) * 6.5,
+        speed: 0.8 + r1 * 0.6
+      };
+    });
   }, [count]);
 
   useFrame((_, delta) => {
@@ -147,8 +155,10 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
 
       if (p.x > 6) {
         p.x = -6;
-        p.y = (Math.random() - 0.5) * 4.5;
-        p.z = (Math.random() - 0.5) * 6.5;
+        const s2 = Math.sin(i * 78.233 + p.x) * 43758.5453;
+        const s3 = Math.sin(i * 39.346 + p.x) * 43758.5453;
+        p.y = (s2 - Math.floor(s2) - 0.5) * 4.5;
+        p.z = (s3 - Math.floor(s3) - 0.5) * 6.5;
       }
 
       // Aerodynamic downwash deflection (Bernoulli effect)
@@ -250,9 +260,18 @@ export function WingViz() {
     return -LD + stressPenalty;
   };
 
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
+
   // Run live CMA-ES Optimizer
   const handleRunOptimizer = () => {
     if (isOptimizing) {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
       setIsOptimizing(false);
       return;
     }
@@ -274,7 +293,8 @@ export function WingViz() {
 
     let g = 0;
     const maxG = 25;
-    const interval = setInterval(() => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
       setAspect(Math.max(0, Math.min(1, state.bestX[0])));
@@ -282,7 +302,7 @@ export function WingViz() {
       setOptGen(g);
 
       if (g >= maxG) {
-        clearInterval(interval);
+        if (optIntervalRef.current) clearInterval(optIntervalRef.current);
         setIsOptimizing(false);
       }
     }, 180);
@@ -379,6 +399,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label="Wing Aspect Ratio"
                 min={0}
                 max={1}
                 step={0.01}
@@ -397,6 +418,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label="Wing Sweep Angle"
                 min={0}
                 max={1}
                 step={0.01}
@@ -415,6 +437,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label="Airfoil Thickness"
                 min={0}
                 max={1}
                 step={0.01}
@@ -433,6 +456,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label="NACA Max Camber"
                 min={0}
                 max={1}
                 step={0.01}

@@ -119,6 +119,7 @@ export function WingWalkthrough() {
             <button
               onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
               disabled={activeStep === 0}
+              aria-label="Previous algorithmic step"
               className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -129,6 +130,7 @@ export function WingWalkthrough() {
             <button
               onClick={() => setActiveStep((prev) => Math.min(steps.length - 1, prev + 1))}
               disabled={activeStep === steps.length - 1}
+              aria-label="Next algorithmic step"
               className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="h-4 w-4" />

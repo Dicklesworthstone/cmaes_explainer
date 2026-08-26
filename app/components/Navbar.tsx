@@ -44,7 +44,7 @@ export function Navbar() {
     <>
       {/* --- Desktop Header --- */}
       <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 hidden lg:block ${
+        className={`fixed top-0 inset-x-0 z-50 transition-[background-color,border-color,padding] duration-500 hidden lg:block ${
           scrolled
             ? "bg-[#020617]/80 backdrop-blur-xl border-b border-white/5 py-4"
             : "bg-transparent border-b border-transparent py-6"
@@ -52,7 +52,7 @@ export function Navbar() {
       >
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-8">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-indigo-500/20 border border-white/10 flex items-center justify-center shadow-inner group-hover:shadow-glow-sm transition-all duration-300 group-hover:scale-105">
+            <div className="relative h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-indigo-500/20 border border-white/10 flex items-center justify-center shadow-inner group-hover:shadow-glow-sm transition-[transform,box-shadow] duration-300 group-hover:scale-105">
               <Brain className="h-5 w-5 text-sky-300" />
             </div>
             <div className="flex flex-col">
@@ -71,7 +71,7 @@ export function Navbar() {
               <a
                 key={s.id}
                 href={`#${s.id}`}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 ${
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-[background-color,color] duration-300 ${
                   activeId === s.id 
                     ? "bg-white/10 text-white shadow-sm" 
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
@@ -94,7 +94,7 @@ export function Navbar() {
             </a>
             <a
               href="#live-demo"
-              className="flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-all hover:bg-sky-400 hover:scale-105"
+              className="flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-[background-color,transform] hover:bg-sky-400 hover:scale-105"
             >
               <Rocket className="h-3 w-3" />
               <span>Run Demo</span>

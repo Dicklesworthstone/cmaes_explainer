@@ -27,7 +27,7 @@ export function DLHybrids() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 text-sm">
-        <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/30 to-slate-950/40 p-6 space-y-3 hover:border-sky-500/40 transition-all">
+        <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/30 to-slate-950/40 p-6 space-y-3 hover:border-sky-500/40 transition-colors duration-300">
           <div className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wide text-sky-300">
             <BrainCircuit className="h-4 w-4" />
             <span>NAS & Hyperparameter Curricula</span>
@@ -41,7 +41,7 @@ export function DLHybrids() {
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-slate-950/40 p-6 space-y-3 hover:border-purple-500/40 transition-all">
+        <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-slate-950/40 p-6 space-y-3 hover:border-purple-500/40 transition-colors duration-300">
           <div className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wide text-purple-300">
             <Palette className="h-4 w-4" />
             <span>Latent Exploration & Artificial Life</span>

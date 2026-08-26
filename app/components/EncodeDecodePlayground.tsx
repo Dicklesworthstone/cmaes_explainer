@@ -89,6 +89,7 @@ export function EncodeDecodePlayground() {
             </div>
             <input
               type="range"
+              aria-label="Latent Learning Rate z1"
               min={0}
               max={1}
               step={0.01}
@@ -108,6 +109,7 @@ export function EncodeDecodePlayground() {
             </div>
             <input
               type="range"
+              aria-label="Latent Activation Slice z2"
               min={0}
               max={1}
               step={0.01}
@@ -127,6 +129,7 @@ export function EncodeDecodePlayground() {
             </div>
             <input
               type="range"
+              aria-label="Latent Layer Count z3"
               min={0}
               max={1}
               step={0.01}
@@ -146,6 +149,7 @@ export function EncodeDecodePlayground() {
             </div>
             <input
               type="range"
+              aria-label="Latent Weight Decay z4"
               min={0}
               max={1}
               step={0.01}

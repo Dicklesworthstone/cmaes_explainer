@@ -99,7 +99,7 @@ fn main() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="glass-card p-6 md:p-8 flex flex-col justify-between border-white/10 hover:border-sky-500/30 transition-all shadow-2xl"
+          className="glass-card p-6 md:p-8 flex flex-col justify-between border-white/10 hover:border-sky-500/30 transition-colors duration-300 shadow-2xl"
         >
           <div>
             <div className="flex items-center justify-between mb-5">
@@ -190,7 +190,7 @@ fn main() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="glass-card p-6 md:p-8 flex flex-col justify-between border-white/10 hover:border-emerald-500/30 transition-all shadow-2xl"
+          className="glass-card p-6 md:p-8 flex flex-col justify-between border-white/10 hover:border-emerald-500/30 transition-colors duration-300 shadow-2xl"
         >
           <div>
             <div className="flex items-center justify-between mb-5">

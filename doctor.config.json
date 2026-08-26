@@ -1,0 +1,20 @@
+{
+  "ignore": ["public/**", "tmp/**"],
+  "rules": {
+    "react-doctor/no-giant-component": "off",
+    "react-doctor/no-eval": "off",
+    "react-doctor/react-compiler-no-manual-memoization": "off",
+    "react-doctor/use-lazy-motion": "off",
+    "react-doctor/prefer-use-effect-event": "off",
+    "react-doctor/prefer-useReducer": "off",
+    "react-doctor/r3f-prefer-gpu-instanced-animation": "off",
+    "react-doctor/rerender-state-only-in-handlers": "off",
+    "react-hooks-js/todo": "off",
+    "react-doctor/effect-needs-cleanup": "warn",
+    "deslop/unused-file": "off",
+    "deslop/unused-export": "off",
+    "deslop/unused-dependency": "off",
+    "deslop/unused-dev-dependency": "off",
+    "react-doctor/no-vulnerable-react-server-components": "off"
+  }
+}

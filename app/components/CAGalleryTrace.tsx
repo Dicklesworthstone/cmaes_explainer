@@ -58,6 +58,7 @@ export function CAGalleryTrace() {
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const gridStateRef = useRef<{ current: Float32Array; next: Float32Array }>({
@@ -144,7 +145,8 @@ export function CAGalleryTrace() {
 
     let g = 0;
     const maxG = 20;
-    const interval = setInterval(() => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
       const newMu = Math.max(0.12, Math.min(0.48, state.bestX[0]));
@@ -154,11 +156,17 @@ export function CAGalleryTrace() {
       setOptGen(g);
 
       if (g >= maxG) {
-        clearInterval(interval);
+        if (optIntervalRef.current) clearInterval(optIntervalRef.current);
         setIsOptimizing(false);
       }
     }, 200);
   };
+
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
 
   return (
     <div className="glass-card p-6 space-y-6">
@@ -242,6 +250,7 @@ export function CAGalleryTrace() {
               </div>
               <input
                 type="range"
+                aria-label="Continuous CA Growth Center"
                 min={0.12}
                 max={0.48}
                 step={0.005}
@@ -260,6 +269,7 @@ export function CAGalleryTrace() {
               </div>
               <input
                 type="range"
+                aria-label="Continuous CA Growth Width"
                 min={0.015}
                 max={0.09}
                 step={0.002}

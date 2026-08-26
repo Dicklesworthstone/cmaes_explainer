@@ -224,6 +224,7 @@ function FiniteDifferenceFailDemo() {
               </div>
               <input
                 type="range"
+                aria-label="Finite-Difference Perturbation Step epsilon"
                 min={0.01}
                 max={0.25}
                 step={0.005}
@@ -246,6 +247,7 @@ function FiniteDifferenceFailDemo() {
               </div>
               <input
                 type="range"
+                aria-label="Simulation Discretization Noise Amplitude"
                 min={0.0}
                 max={0.2}
                 step={0.01}
@@ -265,6 +267,7 @@ function FiniteDifferenceFailDemo() {
               </div>
               <input
                 type="range"
+                aria-label="Evaluation Point x"
                 min={0.2}
                 max={2.0}
                 step={0.05}
@@ -360,7 +363,7 @@ export function NoGradientExamples() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.2 }}
             transition={{ duration: 0.6, delay: idx * 0.1 }}
-            className="glass-card p-6 flex flex-col justify-between border-white/10 hover:border-sky-500/30 transition-all group"
+            className="glass-card p-6 flex flex-col justify-between border-white/10 hover:border-sky-500/30 transition-colors duration-300 group"
           >
             <div>
               <div className="mb-4 flex items-center justify-between">
@@ -377,8 +380,8 @@ export function NoGradientExamples() {
               <p className="text-xs text-slate-400 mb-4 font-medium leading-relaxed">{a.subtitle}</p>
 
               <ul className="space-y-2 mb-6 text-xs text-slate-300">
-                {a.metrics.map((m, i) => (
-                  <li key={i} className="flex items-start gap-2 leading-relaxed">
+                {a.metrics.map((m) => (
+                  <li key={m} className="flex items-start gap-2 leading-relaxed">
                     <span className="h-1.5 w-1.5 rounded-full bg-sky-400 mt-1.5 shrink-0" />
                     <span>{m}</span>
                   </li>

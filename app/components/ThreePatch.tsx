@@ -32,19 +32,5 @@ function patchNow() {
 
 export function ThreePatch({ children }: { children: ReactNode }) {
   patchNow();
-  useEffect(() => {
-    // Also patch the actual module instance used by turbopack/r3f
-    import("three/src/core/Timer.js")
-      .then((mod: { default?: TimerConstructor; Timer?: TimerConstructor }) => {
-        const Timer = mod.default || mod.Timer || (mod as unknown as TimerConstructor);
-        if (Timer && !Timer.__patchedConnect) {
-          Timer.__patchedConnect = true;
-          Timer.prototype.connect = function safeConnect(doc?: Document | null) {
-            return; // no-op
-          };
-        }
-      })
-      .catch(() => {});
-  }, []);
   return <>{children}</>;
 }

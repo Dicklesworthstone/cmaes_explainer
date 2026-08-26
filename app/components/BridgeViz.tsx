@@ -245,6 +245,13 @@ export function BridgeViz() {
 
   // Moving truck position
   const [loadPos, setLoadPos] = useState(0);
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!autoRun) return;
@@ -278,6 +285,7 @@ export function BridgeViz() {
   // Run live CMA-ES Optimization loop
   const handleRunOptimizer = () => {
     if (isOptimizing) {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
       setIsOptimizing(false);
       return;
     }
@@ -302,7 +310,8 @@ export function BridgeViz() {
 
     let currentGen = 0;
     const maxG = 25;
-    const interval = setInterval(() => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    optIntervalRef.current = setInterval(() => {
       currentGen++;
       const state = optimizer.step();
       setSag(Math.max(0.5, Math.min(2.0, state.bestX[0])));
@@ -311,7 +320,7 @@ export function BridgeViz() {
       setOptFitness(state.bestFitness);
 
       if (currentGen >= maxG) {
-        clearInterval(interval);
+        if (optIntervalRef.current) clearInterval(optIntervalRef.current);
         setIsOptimizing(false);
       }
     }, 180);
@@ -431,6 +440,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label="Main Span Length"
                 min={1.2}
                 max={2.2}
                 step={0.05}
@@ -449,6 +459,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label="Cable Sag"
                 min={0.5}
                 max={2.0}
                 step={0.05}
@@ -467,6 +478,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label="Deck Truss Stiffness"
                 min={0.15}
                 max={1.0}
                 step={0.02}
@@ -485,6 +497,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label="Wind Vortex Flutter"
                 min={0.0}
                 max={1.0}
                 step={0.05}

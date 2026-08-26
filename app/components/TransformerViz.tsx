@@ -12,10 +12,15 @@ import { CMAESOptimizer } from "../lib/cmaesEngine";
 
 function DataPacket({ path }: { path: THREE.Vector3[] }) {
   const ref = useRef<THREE.Mesh>(null);
-  const { speed, offset } = useMemo(() => ({
-    speed: 0.8 + Math.random() * 0.4,
-    offset: Math.random()
-  }), []);
+  const { speed, offset } = useMemo(() => {
+    const seed = path.length * 17.13;
+    const r = Math.sin(seed) * 10000;
+    const norm = r - Math.floor(r);
+    return {
+      speed: 0.8 + norm * 0.4,
+      offset: norm
+    };
+  }, [path.length]);
 
   useFrame((state) => {
     if (!ref.current) return;
@@ -84,9 +89,9 @@ function NetworkTopology({ depth, width, heads }: { depth: number; width: number
   return (
     <group>
       {layers.map((nodes, i) => (
-        <group key={i}>
-          {nodes.map((pos, j) => (
-            <mesh key={`node-${i}-${j}`} position={pos}>
+        <group key={`layer-group-${i}-${nodes.length}`}>
+          {nodes.map((pos) => (
+            <mesh key={`node-point-${pos.x.toFixed(2)}-${pos.z.toFixed(2)}`} position={pos}>
               <boxGeometry args={[0.18, 0.18, 0.06]} />
               <meshStandardMaterial color="#2dd4bf" emissive="#0f766e" emissiveIntensity={2.5} toneMapped={false} />
             </mesh>
@@ -106,7 +111,14 @@ function Connections({ from, to, density }: { from: THREE.Vector3[]; to: THREE.V
     for (let j = 0; j < to.length; j++) {
       const hash = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453;
       if (hash - Math.floor(hash) < 0.35 + density * 0.55) {
-        els.push(<LayerConnection key={`${i}-${j}`} start={from[i]} end={to[j]} activity={0.8} />);
+        els.push(
+          <LayerConnection
+            key={`conn-${from[i].x.toFixed(2)}-${from[i].z.toFixed(2)}-${to[j].x.toFixed(2)}-${to[j].z.toFixed(2)}`}
+            start={from[i]}
+            end={to[j]}
+            activity={0.8}
+          />
+        );
       }
     }
   }
@@ -255,14 +267,17 @@ export function TransformerViz() {
   const initialArchs = useMemo(() => {
     const pts: ArchPoint[] = [];
     for (let i = 0; i < 40; i++) {
-      const d = Math.random();
-      const w = Math.random();
-      const h = Math.random();
+      const s1 = Math.sin(i * 12.9898 + 1.234) * 43758.5453;
+      const s2 = Math.sin(i * 78.233 + 4.567) * 43758.5453;
+      const s3 = Math.sin(i * 39.346 + 9.876) * 43758.5453;
+      const d = s1 - Math.floor(s1);
+      const w = s2 - Math.floor(s2);
+      const h = s3 - Math.floor(s3);
       const layers = Math.round(2 + d * 5);
       const dim = Math.round(128 + w * 512);
       const hd = Math.round(2 + h * 6);
       const flops = (layers * dim * dim * 12) / 1e5;
-      const loss = 1.4 + 1.2 / Math.sqrt(layers * 0.4 + dim * 0.005) + Math.abs(hd - 6) * 0.05 + (Math.random() - 0.5) * 0.08;
+      const loss = 1.4 + 1.2 / Math.sqrt(layers * 0.4 + dim * 0.005) + Math.abs(hd - 6) * 0.05 + (d - 0.5) * 0.08;
       pts.push({
         id: i,
         depth: d,
@@ -291,9 +306,18 @@ export function TransformerViz() {
   const attentionHeads = Math.round(2 + heads * 6);
   const estFlops = ((layersCount * hiddenDim * hiddenDim * 12) / 1e5).toFixed(1);
 
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
+
   // Run live CMA-ES NAS Optimization
   const handleRunOptimizer = () => {
     if (isOptimizing) {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
       setIsOptimizing(false);
       return;
     }
@@ -320,7 +344,8 @@ export function TransformerViz() {
 
     let g = 0;
     const maxG = 20;
-    const interval = setInterval(() => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
       const newD = Math.max(0, Math.min(1, state.bestX[0]));
@@ -340,7 +365,7 @@ export function TransformerViz() {
       ]);
 
       if (g >= maxG) {
-        clearInterval(interval);
+        if (optIntervalRef.current) clearInterval(optIntervalRef.current);
         setIsOptimizing(false);
       }
     }, 200);
@@ -425,6 +450,7 @@ export function TransformerViz() {
               </div>
               <input
                 type="range"
+                aria-label="Transformer Depth Layers"
                 min={0}
                 max={1}
                 step={0.01}
@@ -443,6 +469,7 @@ export function TransformerViz() {
               </div>
               <input
                 type="range"
+                aria-label="Model Dimension d_model"
                 min={0}
                 max={1}
                 step={0.01}
@@ -461,6 +488,7 @@ export function TransformerViz() {
               </div>
               <input
                 type="range"
+                aria-label="Attention Heads Count"
                 min={0}
                 max={1}
                 step={0.01}

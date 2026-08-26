@@ -111,7 +111,7 @@ export function Hero() {
           >
             <a
               href="#what-is-cmaes"
-              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_25px_rgba(14,165,233,0.4)] transition-all duration-300 hover:scale-105 hover:shadow-[0_0_35px_rgba(14,165,233,0.6)] focus:outline-none focus:ring-2 focus:ring-sky-400"
+              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_25px_rgba(14,165,233,0.4)] transition-[transform,box-shadow] duration-300 hover:scale-105 hover:shadow-[0_0_35px_rgba(14,165,233,0.6)] focus:outline-none focus:ring-2 focus:ring-sky-400"
             >
               <Compass className="h-4 w-4 transition-transform group-hover:rotate-45" />
               <span>Explore Chapter 1: The Core Idea</span>
@@ -119,7 +119,7 @@ export function Hero() {
 
             <a
               href="#live-demo"
-              className="group inline-flex items-center justify-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/60 px-6 py-3.5 text-sm font-medium text-slate-200 backdrop-blur-md transition-all duration-300 hover:border-emerald-500/50 hover:bg-slate-900/90 hover:text-white hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+              className="group inline-flex items-center justify-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/60 px-6 py-3.5 text-sm font-medium text-slate-200 backdrop-blur-md transition-[border-color,background-color,color,box-shadow] duration-300 hover:border-emerald-500/50 hover:bg-slate-900/90 hover:text-white hover:shadow-[0_0_20px_rgba(16,185,129,0.2)]"
             >
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] group-hover:shadow-[0_0_12px_#34d399]" />
               <span>Launch Live Playground</span>

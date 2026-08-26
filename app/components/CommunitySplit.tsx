@@ -27,7 +27,7 @@ export function CommunitySplit() {
 
       <div className="grid gap-6 md:grid-cols-2 text-sm">
         {/* GECCO / Black-Box Camp */}
-        <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/30 to-slate-950/40 p-6 space-y-4 hover:border-sky-500/40 transition-all">
+        <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-950/30 to-slate-950/40 p-6 space-y-4 hover:border-sky-500/40 transition-colors duration-300">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wide text-sky-300">
               <Cpu className="h-4 w-4" />
@@ -48,7 +48,7 @@ export function CommunitySplit() {
         </div>
 
         {/* NeurIPS / Deep-Learning Camp */}
-        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 to-slate-950/40 p-6 space-y-4 hover:border-emerald-500/40 transition-all">
+        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 to-slate-950/40 p-6 space-y-4 hover:border-emerald-500/40 transition-colors duration-300">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
               <Brain className="h-4 w-4" />

@@ -43,22 +43,22 @@ export function MathProvider(props: { children: ReactNode }) {
   // whole tree has hydrated, so this can never re-trigger the #418 race.
   // Poll until the async MathJax script has actually registered itself.
   useEffect(() => {
-    let cancelled = false;
+    let count = 0;
     const w = window as unknown as {
       MathJax?: { typesetPromise?: () => Promise<unknown> };
     };
-    const attempt = (n: number) => {
-      if (cancelled) return;
+    const interval = setInterval(() => {
+      count++;
       const typeset = w.MathJax?.typesetPromise;
       if (typeset) {
+        clearInterval(interval);
         typeset.call(w.MathJax).catch(() => {});
-      } else if (n < 100) {
-        setTimeout(() => attempt(n + 1), 100);
+      } else if (count >= 100) {
+        clearInterval(interval);
       }
-    };
-    attempt(0);
+    }, 100);
     return () => {
-      cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 

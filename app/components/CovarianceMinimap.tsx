@@ -260,6 +260,7 @@ export function CovarianceMinimap() {
             </div>
             <input
               type="range"
+              aria-label="Covariance Matrix Adaptation Progress"
               min={0}
               max={1}
               step={0.02}

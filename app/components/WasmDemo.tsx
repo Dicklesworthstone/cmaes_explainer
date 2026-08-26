@@ -541,6 +541,7 @@ export function WasmDemo() {
           <div className="aspect-[16/10] w-full bg-[#030712]">
             <iframe
               src="/wasm-demo/examples/viz-benchmarks.html"
+              sandbox="allow-scripts allow-same-origin"
               className="h-full w-full border-0"
               title="CMA-ES WASM standalone benchmarks"
             />
@@ -609,7 +610,39 @@ export function WasmDemo() {
                   ref={canvasRef}
                   width={560}
                   height={420}
-                  className="w-full h-auto block cursor-crosshair"
+                  tabIndex={0}
+                  aria-label="Interactive 2D Benchmark Landscape Contour Map. Click or use arrow keys to reposition initial mean m0."
+                  className="w-full h-auto block cursor-crosshair focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                  onKeyDown={(e) => {
+                    const step = 0.2;
+                    let dx = 0;
+                    let dy = 0;
+                    if (e.key === "ArrowLeft") dx = -step;
+                    else if (e.key === "ArrowRight") dx = step;
+                    else if (e.key === "ArrowUp") dy = step;
+                    else if (e.key === "ArrowDown") dy = -step;
+                    else return;
+                    e.preventDefault();
+                    const [dMin, dMax] = currentBench.domain;
+                    const newX = Math.max(dMin, Math.min(dMax, startPoint[0] + dx));
+                    const newY = Math.max(dMin, Math.min(dMax, startPoint[1] + dy));
+                    const newStart: [number, number] = [parseFloat(newX.toFixed(2)), parseFloat(newY.toFixed(2))];
+                    setStartPoint(newStart);
+                    setIsPlaying(false);
+                    const { initialStep, gd, adam, rs } = createOptimizerState(
+                      currentBench,
+                      newStart,
+                      initialSigma,
+                      lambda,
+                      activeCMA,
+                      noiseLevel,
+                      compareMode
+                    );
+                    setHistory([initialStep]);
+                    setGdHistory(gd);
+                    setAdamHistory(adam);
+                    setRsHistory(rs);
+                  }}
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const px = e.clientX - rect.left;
@@ -731,6 +764,7 @@ export function WasmDemo() {
                   </div>
                   <input
                     type="range"
+                    aria-label="Population Size lambda"
                     min={4}
                     max={48}
                     step={2}
@@ -739,7 +773,7 @@ export function WasmDemo() {
                       const newL = parseInt(e.target.value, 10);
                       setLambda(newL);
                       setIsPlaying(false);
-                      const { initialStep, gd, rs } = createOptimizerState(
+                      const { initialStep, gd, adam, rs } = createOptimizerState(
                         currentBench,
                         startPoint,
                         initialSigma,
@@ -750,6 +784,7 @@ export function WasmDemo() {
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
+                      setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
                     className="w-full accent-sky-400"
@@ -765,6 +800,7 @@ export function WasmDemo() {
                   </div>
                   <input
                     type="range"
+                    aria-label="Initial Step Size sigma"
                     min={0.1}
                     max={1.5}
                     step={0.05}
@@ -773,7 +809,7 @@ export function WasmDemo() {
                       const newS = parseFloat(e.target.value);
                       setInitialSigma(newS);
                       setIsPlaying(false);
-                      const { initialStep, gd, rs } = createOptimizerState(
+                      const { initialStep, gd, adam, rs } = createOptimizerState(
                         currentBench,
                         startPoint,
                         newS,
@@ -784,6 +820,7 @@ export function WasmDemo() {
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
+                      setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
                     className="w-full accent-amber-400"
@@ -799,6 +836,7 @@ export function WasmDemo() {
                   </div>
                   <input
                     type="range"
+                    aria-label="Objective Noise Level"
                     min={0.0}
                     max={1.0}
                     step={0.05}
@@ -807,7 +845,7 @@ export function WasmDemo() {
                       const newN = parseFloat(e.target.value);
                       setNoiseLevel(newN);
                       setIsPlaying(false);
-                      const { initialStep, gd, rs } = createOptimizerState(
+                      const { initialStep, gd, adam, rs } = createOptimizerState(
                         currentBench,
                         startPoint,
                         initialSigma,
@@ -818,6 +856,7 @@ export function WasmDemo() {
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
+                      setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
                     className="w-full accent-purple-400"
