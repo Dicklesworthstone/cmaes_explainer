@@ -38,13 +38,20 @@ import {
 const GRID_SIZE = 96;
 const KERNEL_RADIUS = 5;
 
-// The FrankenSim WASM field: the same model at 256² through an O(N² log N)
-// FFT (fs-lenia-wasm), with CMA-ES fitness rollouts at 128². The kernel
-// radius scales with the field so morphology is preserved (5/96 of the size),
-// and all seed geometry below is expressed relative to GRID_SIZE and scaled.
-const WASM_GRID_SIZE = 256;
+// The FrankenSim WASM field: the same model at 512² or 256² through an
+// O(N² log N) FFT (fs-lenia-wasm), with CMA-ES fitness rollouts at 128².
+// The resolution is chosen per device: 512² only when a timed probe on the
+// actual hardware sustains it, 256² as the floor (measured ~2 ms/step even
+// in wasm, safe everywhere the kernel loads). The kernel radius scales with
+// the field so morphology is preserved (5/96 of the size), and all seed
+// geometry below is expressed relative to GRID_SIZE and scaled.
+const WASM_GRID_SIZES = [512, 256] as const;
 const WASM_EVAL_SIZE = 128;
 const REL_KERNEL_RADIUS = KERNEL_RADIUS / GRID_SIZE;
+// Budget for one 512² step, measured on-device at init. ~31 steps/s means a
+// 10 ms step spends a third of the main thread; anything slower belongs at
+// 256². (This Mac measures ~8.6 ms in wasm; older phones far exceed it.)
+const WASM_512_STEP_BUDGET_MS = 10;
 
 type LeniaEngine = "pending" | "wasm" | "js";
 
@@ -336,15 +343,35 @@ export function CAGalleryTrace() {
     let live = true;
     initFrankenSimLenia().then((status) => {
       if (!live) return;
-      const wasmReady =
-        status.source === "wasm" && leniaInit(WASM_GRID_SIZE, WASM_EVAL_SIZE, REL_KERNEL_RADIUS);
-      if (!wasmReady) {
+      if (status.source !== "wasm") {
         setEngine("js");
         return;
       }
-      seedPresetInto(activePresetRef.current, "wasm", WASM_GRID_SIZE);
+      // Pick the field resolution THIS device can sustain: try 512² and time
+      // a few real steps (first call also warms the JIT and builds the LUT);
+      // fall to the 256² floor when the probe misses the budget. leniaInit
+      // reallocates the sim, so a rejected probe leaves no residue.
+      let chosen: number | null = null;
+      for (const size of WASM_GRID_SIZES) {
+        if (!leniaInit(size, WASM_EVAL_SIZE, REL_KERNEL_RADIUS)) continue;
+        if (size === 512) {
+          const s = size / GRID_SIZE;
+          leniaSeedRing(size * 0.5, size * 0.5, 10 * s, 0.55, 2.2 * s, 0.9);
+          leniaStep(0.152, 0.038, 0.22, 1);
+          const t0 = performance.now();
+          leniaStep(0.152, 0.038, 0.22, 3);
+          if ((performance.now() - t0) / 3 > WASM_512_STEP_BUDGET_MS) continue;
+        }
+        chosen = size;
+        break;
+      }
+      if (chosen === null) {
+        setEngine("js");
+        return;
+      }
+      seedPresetInto(activePresetRef.current, "wasm", chosen);
       setEngine("wasm");
-      setGridSize(WASM_GRID_SIZE);
+      setGridSize(chosen);
     });
     return () => {
       live = false;
@@ -654,6 +681,7 @@ export function CAGalleryTrace() {
                   width={gridSize}
                   height={gridSize}
                   className={`w-full h-full block select-none ${engine === "wasm" ? "" : "image-rendering-pixelated"}`}
+                  style={{ touchAction: "none" }}
                   onMouseDown={(e) => {
                     isDraggingRef.current = true;
                     handleCanvasInteraction(e.clientX, e.clientY);
@@ -668,6 +696,12 @@ export function CAGalleryTrace() {
                   }}
                   onMouseLeave={() => {
                     isDraggingRef.current = false;
+                  }}
+                  onTouchStart={(e) => {
+                    if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                  }}
+                  onTouchMove={(e) => {
+                    if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
                   }}
                 />
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-pink-300 backdrop-blur-md">

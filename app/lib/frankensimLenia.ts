@@ -9,8 +9,8 @@
  *
  * The kernel computes the exact same model as the TS fallback (ring kernel,
  * gaussian growth, toroidal wrap — verified FFT-vs-direct in the crate's
- * tests) but through an O(N² log N) FFT, which is what makes a 256² field
- * viable on phones.
+ * tests) but through a planned, cache-tuned O(N² log N) FFT, which is what
+ * makes a 256²–512² field viable on phones.
  */
 
 export type LeniaKernelSource = "wasm" | "ts-fallback" | "unloaded";

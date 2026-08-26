@@ -2,7 +2,7 @@
   "name": "fs-lenia-wasm",
   "type": "module",
   "description": "Browser (WASM) surface for the CMA-ES explainer site's continuous Lenia field — FFT-accelerated toroidal convolution, growth-function LUT, in-memory RGBA colormap, and a snapshot-seeded fitness evaluator for the site's CMA-ES search.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "files": [
     "fs_lenia_wasm_bg.wasm",
     "fs_lenia_wasm.js",
