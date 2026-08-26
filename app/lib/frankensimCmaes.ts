@@ -1,0 +1,321 @@
+/**
+ * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
+ *
+ * Loads the committed wasm-pack bundle under /wasm/fs-cmaes/ via the Blob-URL
+ * trick (dodging Turbopack's mangling of wasm-bindgen `--target web` glue —
+ * the same sanctioned pattern as frankensimPhysics.ts), capability-probes the
+ * exports, and degrades honestly: `source: "wasm" | "ts-fallback" | "unloaded"`.
+ *
+ * The adapter maps the kernel's per-generation snapshot stream onto the
+ * CMAESGenerationStateND shape consumed by CMAESPhaseSpaceViewer, so the
+ * viewer renders identically whether the kernel was WASM or the TS fallback.
+ */
+
+export type CmaesKernelSource = "wasm" | "ts-fallback" | "unloaded";
+
+export interface CmaesKernelStatus {
+  source: CmaesKernelSource;
+  kernelVersion: string | null;
+  error: string | null;
+}
+
+export interface CmaesVizParams {
+  dim: number;
+  x0: number[];
+  sigma0: number;
+  lambda: number;
+  active: boolean;
+  seed: number;
+  generations: number;
+  /** 0 sphere · 1 rosenbrock · 2 cigar · 3 rastrigin · 4 elli */
+  landscape: number;
+  noise: number;
+  boundsEnabled: boolean;
+  boundMin: number;
+  boundMax: number;
+  /** NaN disables the early-stop target. */
+  fTarget: number;
+}
+
+export interface CmaesVizGeneration {
+  g: number;
+  mean: number[];
+  sigma: number;
+  eigvals: number[];
+  eigvecs: number[];
+  cond: number;
+  best_f: number;
+  evals: number;
+  proj_mean: [number, number, number];
+  proj_eigvals: [number, number, number];
+  proj_eigvecs: [number, number, number, number, number, number, number, number, number];
+  sx: number[];
+  sz: number[];
+  sf: number[];
+  se: number[];
+  p_sigma: number[];
+  p_c: number[];
+}
+
+export interface CmaesVizRun {
+  kernel: string;
+  dim: number;
+  landscape: number;
+  stop_reason: string;
+  best_f: number;
+  best_x: number[];
+  total_evals: number;
+  generations: CmaesVizGeneration[];
+  pca_basis: number[];
+  pca_center: number[];
+  pca_pool_eigvals: number[];
+}
+
+// ---------------------------------------------------------------------------
+// Loader (Blob-URL + webpackIgnore; single-flight, memoized).
+// ---------------------------------------------------------------------------
+
+type WasmModule = {
+  cmaes_viz_run?: (...args: unknown[]) => string;
+  cmaes_viz_kernel_version?: () => string;
+};
+
+let fsCmaesModule: WasmModule | null = null;
+let loadAttempted = false;
+let loadPromise: Promise<CmaesKernelStatus> | null = null;
+
+async function loadWasmModule(jsPath: string, wasmPath: string): Promise<WasmModule> {
+  if (typeof window === "undefined") throw new Error("SSR context");
+  const jsText = await fetch(jsPath, { signal: AbortSignal.timeout(10_000) }).then((r) => {
+    if (!r.ok) throw new Error(`fetch ${jsPath}: ${r.status}`);
+    return r.text();
+  });
+  const blobUrl = URL.createObjectURL(new Blob([jsText], { type: "text/javascript" }));
+  try {
+    // Dynamic import is REQUIRED here: the specifier is a runtime-created
+    // Blob URL wrapping fetched wasm-bindgen glue. A static import cannot
+    // express a runtime URL, and webpackIgnore stops Turbopack from mangling
+    // the glue (the sanctioned frankensim loader pattern).
+    const mod = (await import(/* webpackIgnore: true */ blobUrl)) as {
+      default?: (opts: { module_or_path: string }) => Promise<unknown>;
+    } & WasmModule;
+    if (typeof mod.default === "function") {
+      await mod.default({ module_or_path: wasmPath });
+    }
+    return mod;
+  } finally {
+    URL.revokeObjectURL(blobUrl); // no blob leaks
+  }
+}
+
+/**
+ * Instantiate the kernel. Safe to call repeatedly; the load is single-flight
+ * and memoized. Any failure resolves with source "ts-fallback" (never throws).
+ */
+export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
+  if (loadAttempted && loadPromise) return loadPromise;
+  loadAttempted = true;
+  loadPromise = (async (): Promise<CmaesKernelStatus> => {
+    try {
+      const mod = await loadWasmModule("/wasm/fs-cmaes/fs_cmaes_viz_wasm.js", "/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm");
+      if (typeof mod.cmaes_viz_run !== "function") {
+        return { source: "ts-fallback", kernelVersion: null, error: "missing export cmaes_viz_run" };
+      }
+      fsCmaesModule = mod;
+      const version = typeof mod.cmaes_viz_kernel_version === "function" ? mod.cmaes_viz_kernel_version() : null;
+      return { source: "wasm", kernelVersion: version, error: null };
+    } catch (err) {
+      return { source: "ts-fallback", kernelVersion: null, error: err instanceof Error ? err.message : String(err) };
+    }
+  })();
+  return loadPromise;
+}
+
+export function kernelSourceNow(): CmaesKernelSource {
+  return fsCmaesModule ? "wasm" : loadAttempted ? "ts-fallback" : "unloaded";
+}
+
+/**
+ * Run the kernel batch. Returns null when the module is missing or the
+ * envelope is a refusal — callers must fall through to the TS engine for
+ * that call (per-call fallback, not just load-time).
+ */
+export function runCmaesViz(params: CmaesVizParams): CmaesVizRun | null {
+  const mod = fsCmaesModule;
+  if (!mod || typeof mod.cmaes_viz_run !== "function") return null;
+  const x = [params.x0[0] ?? 0, params.x0[1] ?? 0, params.x0[2] ?? 0, params.x0[3] ?? 0, params.x0[4] ?? 0, params.x0[5] ?? 0];
+  try {
+    const raw = mod.cmaes_viz_run(
+      params.dim,
+      x[0], x[1], x[2], x[3], x[4], x[5],
+      params.sigma0,
+      params.lambda,
+      params.active,
+      params.seed,
+      params.generations,
+      params.landscape,
+      params.noise,
+      params.boundsEnabled,
+      params.boundMin,
+      params.boundMax,
+      params.fTarget
+    );
+    const parsed = JSON.parse(raw) as { ok?: CmaesVizRun; refusal?: { code: string; message: string } };
+    if (parsed.ok) return parsed.ok;
+    console.warn("[fs-cmaes] kernel refusal:", parsed.refusal?.code, parsed.refusal?.message);
+    return null;
+  } catch (err) {
+    console.warn("[fs-cmaes] kernel call failed:", err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Adapter: kernel snapshots → CMAESGenerationStateND (viewer-compatible).
+// ---------------------------------------------------------------------------
+
+type CandidateSampleND = {
+  id: number;
+  rawX: number[];
+  x: number[];
+  z: number[];
+  projected3D: [number, number, number];
+  fitness: number;
+  trueFitness: number;
+  rank: number;
+  isElite: boolean;
+};
+
+type PhaseSpace3DProjection = {
+  projectedMean: [number, number, number];
+  ellipsoidRadii: [number, number, number];
+  principalAxes3D: [[number, number, number], [number, number, number], [number, number, number]];
+  eigenvalues: number[];
+  conditionNumber: number;
+  varianceExplainedPercent: [number, number, number];
+  evolutionPath3D: [number, number, number];
+};
+
+export type CMAESGenerationStateND = {
+  generation: number;
+  mean: number[];
+  sigma: number;
+  covariance: number[][];
+  pSigma: number[];
+  pC: number[];
+  samples: CandidateSampleND[];
+  bestFitness: number;
+  bestX: number[];
+  eigenvalues: number[];
+  conditionNumber: number;
+  evalCount: number;
+  phaseSpace3D: PhaseSpace3DProjection;
+  variancePerDim: number[];
+};
+
+/**
+ * Project one n-D point through the kernel's PCA frame.
+ * proj[r] = Σ basis[r·n+i]·(x[i] − center[i]).
+ */
+function projectPoint(point: number[], basis: number[], center: number[], n: number): [number, number, number] {
+  const out: [number, number, number] = [0, 0, 0];
+  for (let r = 0; r < 3; r++) {
+    let acc = 0;
+    for (let i = 0; i < n; i++) acc += basis[r * n + i] * (point[i] - center[i]);
+    out[r] = acc;
+  }
+  return out;
+}
+
+/**
+ * Map a kernel run onto the viewer's state list. The kernel emits ascending
+ * eigenvalues; the viewer expects ellipsoidRadii/principalAxes ordered
+ * largest-first, so the projection triples are reversed here.
+ */
+export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
+  const n = run.dim;
+  const basis = run.pca_basis;
+  const center = run.pca_center;
+  const pool = run.pca_pool_eigvals;
+  const poolSum = pool.reduce((a, b) => a + Math.max(b, 0), 0) || 1;
+  // Top-3 pooled eigenvalues (largest last in the ascending spectrum).
+  const top3 = [pool[pool.length - 1] ?? 0, pool[pool.length - 2] ?? 0, pool[pool.length - 3] ?? 0];
+  const varianceExplained: [number, number, number] = [
+    (100 * Math.max(top3[0], 0)) / poolSum,
+    (100 * Math.max(top3[1], 0)) / poolSum,
+    (100 * Math.max(top3[2], 0)) / poolSum,
+  ];
+
+  return run.generations.map((gen) => {
+    const lambda = gen.se.length;
+    const samples: CandidateSampleND[] = [];
+    for (let s = 0; s < lambda; s++) {
+      const x = gen.sx.slice(s * n, (s + 1) * n);
+      const z = gen.sz.slice(s * n, (s + 1) * n);
+      samples.push({
+        id: s,
+        rawX: x,
+        x,
+        z,
+        projected3D: projectPoint(x, basis, center, n),
+        fitness: gen.sf[s],
+        trueFitness: gen.sf[s],
+        rank: s,
+        isElite: gen.se[s] === 1,
+      });
+    }
+
+    // 3×3 marginal: radii/axes largest-first from ascending proj_eigvals.
+    const radii: [number, number, number] = [
+      Math.sqrt(Math.max(gen.proj_eigvals[2], 0)),
+      Math.sqrt(Math.max(gen.proj_eigvals[1], 0)),
+      Math.sqrt(Math.max(gen.proj_eigvals[0], 0)),
+    ];
+    const col = (j: number): [number, number, number] => [
+      gen.proj_eigvecs[j],
+      gen.proj_eigvecs[3 + j],
+      gen.proj_eigvecs[6 + j],
+    ];
+    const principalAxes3D: [[number, number, number], [number, number, number], [number, number, number]] = [
+      col(2),
+      col(1),
+      col(0),
+    ];
+    const projCond = gen.proj_eigvals[0] > 1e-18 ? gen.proj_eigvals[2] / gen.proj_eigvals[0] : 0;
+    const evolutionPath3D = projectPoint(gen.p_c, basis, center, n);
+
+    // Full covariance for HUD/telemetry consumers (V·Λ·Vᵀ).
+    const covariance: number[][] = Array.from({ length: n }, (_, i) =>
+      Array.from({ length: n }, (_, k) => {
+        let acc = 0;
+        for (let j = 0; j < n; j++) acc += Math.max(gen.eigvals[j], 0) * gen.eigvecs[i * n + j] * gen.eigvecs[k * n + j];
+        return acc;
+      })
+    );
+
+    return {
+      generation: gen.g,
+      mean: gen.mean,
+      sigma: gen.sigma,
+      covariance,
+      pSigma: gen.p_sigma,
+      pC: gen.p_c,
+      samples,
+      bestFitness: gen.best_f,
+      bestX: run.best_x,
+      eigenvalues: gen.eigvals,
+      conditionNumber: gen.cond,
+      evalCount: gen.evals,
+      phaseSpace3D: {
+        projectedMean: gen.proj_mean,
+        ellipsoidRadii: radii,
+        principalAxes3D,
+        eigenvalues: [gen.proj_eigvals[2], gen.proj_eigvals[1], gen.proj_eigvals[0]],
+        conditionNumber: projCond,
+        varianceExplainedPercent: varianceExplained,
+        evolutionPath3D,
+      },
+      variancePerDim: gen.eigvals.map((v) => gen.sigma * gen.sigma * Math.max(v, 0)),
+    };
+  });
+}
