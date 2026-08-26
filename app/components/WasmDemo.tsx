@@ -133,6 +133,16 @@ export function WasmDemo() {
     setGdHistory(gd);
     setAdamHistory(adam);
     setRsHistory(rs);
+    animPosRef.current = {
+      m0: startPoint[0],
+      m1: startPoint[1],
+      sigma: initialSigma,
+      l1: 1,
+      l2: 1,
+      angle: 0,
+      pc0: 0,
+      pc1: 0,
+    };
   }, [createOptimizerState, currentBench, startPoint, initialSigma, lambda, activeCMA, noiseLevel, compareMode]);
 
   // Handle benchmark change
@@ -155,6 +165,16 @@ export function WasmDemo() {
     setGdHistory(gd);
     setAdamHistory(adam);
     setRsHistory(rs);
+    animPosRef.current = {
+      m0: newStart[0],
+      m1: newStart[1],
+      sigma: initialSigma,
+      l1: 1,
+      l2: 1,
+      angle: 0,
+      pc0: 0,
+      pc1: 0,
+    };
   };
 
   // Step the optimizer
@@ -179,6 +199,16 @@ export function WasmDemo() {
 
   const latestState = history[history.length - 1] || null;
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animPosRef = useRef({
+    m0: startPoint[0],
+    m1: startPoint[1],
+    sigma: initialSigma,
+    l1: 1,
+    l2: 1,
+    angle: 0,
+    pc0: 0,
+    pc1: 0,
+  });
 
   // Pre-render background heatmap offscreen once per benchmark switch
   useEffect(() => {
@@ -226,8 +256,9 @@ export function WasmDemo() {
     bgCanvasRef.current = offscreen;
   }, [currentBench]);
 
-  // --- Render 2D Contour Map, Samples, Ellipses, Paths ---
+  // --- Render 2D Contour Map, Samples, Ellipses, Paths with smooth 60fps interpolation ---
   useEffect(() => {
+    let animId: number;
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
     const ctx = canvas.getContext("2d");
@@ -240,176 +271,193 @@ export function WasmDemo() {
     const toPxX = (x: number) => ((x - dMin) / (dMax - dMin)) * W;
     const toPxY = (y: number) => H - ((y - dMin) / (dMax - dMin)) * H;
 
-    ctx.clearRect(0, 0, W, H);
+    const render = () => {
+      const a = animPosRef.current;
+      const lerp = 0.22;
+      a.m0 += (latestState.mean[0] - a.m0) * lerp;
+      a.m1 += (latestState.mean[1] - a.m1) * lerp;
+      a.sigma += (latestState.sigma - a.sigma) * lerp;
+      a.l1 += (latestState.eigenvalues[0] - a.l1) * lerp;
+      a.l2 += (latestState.eigenvalues[1] - a.l2) * lerp;
+      a.angle += (latestState.ellipseAngle - a.angle) * lerp;
+      a.pc0 += (latestState.pC[0] - a.pc0) * lerp;
+      a.pc1 += (latestState.pC[1] - a.pc1) * lerp;
 
-    // 1. Draw Cached Vector Field / Contour Heatmap
-    if (bgCanvasRef.current) {
-      ctx.drawImage(bgCanvasRef.current, 0, 0);
-    }
+      ctx.clearRect(0, 0, W, H);
 
-    // 2. Draw Subtle Coordinate Grid
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-    ctx.lineWidth = 1;
-    for (let g = Math.ceil(dMin); g <= dMax; g += 1) {
-      ctx.beginPath();
-      ctx.moveTo(toPxX(g), 0);
-      ctx.lineTo(toPxX(g), H);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(0, toPxY(g));
-      ctx.lineTo(W, toPxY(g));
-      ctx.stroke();
-    }
-
-    // 3. Draw Global Optimum Star Marker
-    const [optX, optY] = currentBench.optimum;
-    ctx.strokeStyle = "#fbbf24";
-    ctx.fillStyle = "#fbbf24";
-    ctx.lineWidth = 2;
-    const opx = toPxX(optX);
-    const opy = toPxY(optY);
-    ctx.beginPath();
-    ctx.arc(opx, opy, 6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(opx - 9, opy);
-    ctx.lineTo(opx + 9, opy);
-    ctx.moveTo(opx, opy - 9);
-    ctx.lineTo(opx, opy + 9);
-    ctx.stroke();
-
-    // 4. Draw Comparison Baselines (Gradient Descent & Adam)
-    if (compareMode) {
-      // Gradient Descent Trajectory (Rose Red)
-      if (gdHistory.length > 1) {
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        gdHistory.forEach((pt, i) => {
-          const gx = toPxX(pt.currentX[0]);
-          const gy = toPxY(pt.currentX[1]);
-          if (i === 0) ctx.moveTo(gx, gy);
-          else ctx.lineTo(gx, gy);
-        });
-        ctx.stroke();
-        ctx.setLineDash([]);
+      // 1. Draw Cached Vector Field / Contour Heatmap
+      if (bgCanvasRef.current) {
+        ctx.drawImage(bgCanvasRef.current, 0, 0);
       }
 
-      // Adam Optimizer Trajectory (Amber Gold)
-      if (adamHistory.length > 1) {
-        ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
-        ctx.lineWidth = 2.0;
-        ctx.setLineDash([4, 2]);
+      // 2. Draw Subtle Coordinate Grid
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 1;
+      for (let g = Math.ceil(dMin); g <= dMax; g += 1) {
         ctx.beginPath();
-        adamHistory.forEach((pt, i) => {
-          const ax = toPxX(pt.currentX[0]);
-          const ay = toPxY(pt.currentX[1]);
-          if (i === 0) ctx.moveTo(ax, ay);
-          else ctx.lineTo(ax, ay);
+        ctx.moveTo(toPxX(g), 0);
+        ctx.lineTo(toPxX(g), H);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, toPxY(g));
+        ctx.lineTo(W, toPxY(g));
+        ctx.stroke();
+      }
+
+      // 3. Draw Global Optimum Star Marker
+      const [optX, optY] = currentBench.optimum;
+      ctx.strokeStyle = "#fbbf24";
+      ctx.fillStyle = "#fbbf24";
+      ctx.lineWidth = 2;
+      const opx = toPxX(optX);
+      const opy = toPxY(optY);
+      ctx.beginPath();
+      ctx.arc(opx, opy, 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(opx - 9, opy);
+      ctx.lineTo(opx + 9, opy);
+      ctx.moveTo(opx, opy - 9);
+      ctx.lineTo(opx, opy + 9);
+      ctx.stroke();
+
+      // 4. Draw Comparison Baselines (Gradient Descent & Adam)
+      if (compareMode) {
+        // Gradient Descent Trajectory (Rose Red)
+        if (gdHistory.length > 1) {
+          ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          gdHistory.forEach((pt, i) => {
+            const gx = toPxX(pt.currentX[0]);
+            const gy = toPxY(pt.currentX[1]);
+            if (i === 0) ctx.moveTo(gx, gy);
+            else ctx.lineTo(gx, gy);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Adam Optimizer Trajectory (Amber Gold)
+        if (adamHistory.length > 1) {
+          ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
+          ctx.lineWidth = 2.0;
+          ctx.setLineDash([4, 2]);
+          ctx.beginPath();
+          adamHistory.forEach((pt, i) => {
+            const ax = toPxX(pt.currentX[0]);
+            const ay = toPxY(pt.currentX[1]);
+            if (i === 0) ctx.moveTo(ax, ay);
+            else ctx.lineTo(ax, ay);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // 5. Draw Historical CMA-ES Mean Trajectory (Cyan Ribbon)
+      if (history.length > 1) {
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        history.forEach((st, i) => {
+          const mx = toPxX(st.mean[0]);
+          const my = toPxY(st.mean[1]);
+          if (i === 0) ctx.moveTo(mx, my);
+          else ctx.lineTo(mx, my);
         });
         ctx.stroke();
-        ctx.setLineDash([]);
       }
-    }
 
-    // 5. Draw Historical CMA-ES Mean Trajectory (Cyan Ribbon)
-    if (history.length > 1) {
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
+      // 6. Draw Covariance 1-sigma & 2-sigma Confidence Ellipses
+      const s1 = Math.sqrt(Math.max(1e-10, a.l1)) * a.sigma * (W / (dMax - dMin));
+      const s2 = Math.sqrt(Math.max(1e-10, a.l2)) * a.sigma * (H / (dMax - dMin));
+      const cx = toPxX(a.m0);
+      const cy = toPxY(a.m1);
+
+      [1, 2].forEach((k) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-a.angle);
+
+        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
+        ctx.lineWidth = k === 1 ? 2.5 : 1.2;
+        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw principal axes on 1-sigma ellipse
+        if (k === 1) {
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-s1, 0);
+          ctx.lineTo(s1, 0);
+          ctx.moveTo(0, -s2);
+          ctx.lineTo(0, s2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+
+      // 7. Draw Evolution Path Vector p_c (Purple Arrow)
+      const pcScale = 1.5 * (W / (dMax - dMin));
+      const pcX = cx + a.pc0 * pcScale;
+      const pcY = cy - a.pc1 * pcScale;
+
+      ctx.strokeStyle = "#c084fc";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      history.forEach((st, i) => {
-        const mx = toPxX(st.mean[0]);
-        const my = toPxY(st.mean[1]);
-        if (i === 0) ctx.moveTo(mx, my);
-        else ctx.lineTo(mx, my);
-      });
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(pcX, pcY);
       ctx.stroke();
-    }
 
-    // 6. Draw Covariance 1-sigma & 2-sigma Confidence Ellipses
-    const [l1, l2] = latestState.eigenvalues;
-    const s1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma * (W / (dMax - dMin));
-    const s2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma * (H / (dMax - dMin));
-    const cx = toPxX(latestState.mean[0]);
-    const cy = toPxY(latestState.mean[1]);
+      // 8. Draw Candidate Population Samples
+      latestState.samples.forEach((s) => {
+        const sx = toPxX(s.x[0]);
+        const sy = toPxY(s.x[1]);
 
-    [1, 2].forEach((k) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-latestState.ellipseAngle);
+        if (s.isElite) {
+          // Glowing Emerald for top mu elites
+          ctx.fillStyle = "#34d399";
+          ctx.shadowColor = "#34d399";
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
 
-      ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
-      ctx.lineWidth = k === 1 ? 2.5 : 1.2;
-      ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          // Cyan/Slate for other offspring
+          ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
 
+      // 9. Draw Mean Point
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      // Draw principal axes on 1-sigma ellipse
-      if (k === 1) {
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-s1, 0);
-        ctx.lineTo(s1, 0);
-        ctx.moveTo(0, -s2);
-        ctx.lineTo(0, s2);
-        ctx.stroke();
-      }
-      ctx.restore();
-    });
+      animId = requestAnimationFrame(render);
+    };
 
-    // 7. Draw Evolution Path Vector p_c (Purple Arrow) & p_sigma (Mint Arrow)
-    const pcScale = 1.5 * (W / (dMax - dMin));
-    const pcX = cx + latestState.pC[0] * pcScale;
-    const pcY = cy - latestState.pC[1] * pcScale;
-
-    ctx.strokeStyle = "#c084fc";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(pcX, pcY);
-    ctx.stroke();
-
-    // 8. Draw Candidate Population Samples
-    latestState.samples.forEach((s) => {
-      const sx = toPxX(s.x[0]);
-      const sy = toPxY(s.x[1]);
-
-      if (s.isElite) {
-        // Glowing Emerald for top mu elites
-        ctx.fillStyle = "#34d399";
-        ctx.shadowColor = "#34d399";
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      } else {
-        // Cyan/Slate for other offspring
-        ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
-        ctx.beginPath();
-        ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-
-    // 9. Draw Mean Point
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#0284c7";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
   }, [currentBench, latestState, history, compareMode, gdHistory, adamHistory]);
 
   // --- Render Log-Loss Convergence Chart ---

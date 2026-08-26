@@ -153,18 +153,12 @@ export function CmaesInternalsLab() {
 
   // Playback.
   useEffect(() => {
-    if (!isPlaying || reducedMotion.current) return;
+    if (!isPlaying || reducedMotion.current || cursor >= states.length - 1) return;
     const t = window.setInterval(() => {
-      setCursor((c) => {
-        if (c >= states.length - 1) {
-          setIsPlaying(false);
-          return c;
-        }
-        return c + 1;
-      });
+      setCursor((c) => Math.min(states.length - 1, c + 1));
     }, speedMs);
     return () => window.clearInterval(t);
-  }, [isPlaying, states.length, speedMs]);
+  }, [isPlaying, states.length, speedMs, cursor]);
 
   const latest = states[Math.min(cursor, states.length - 1)] ?? null;
   const currentLandscape = LANDSCAPES[landscape] ?? LANDSCAPES[0];
@@ -210,73 +204,118 @@ export function CmaesInternalsLab() {
       </div>
 
       {/* Control deck */}
-      <div className="grid gap-4 lg:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">Landscape</span>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Landscape */}
+        <div className="space-y-1.5">
+          <label htmlFor="internals-landscape-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+            Landscape
+          </label>
           <select
+            id="internals-landscape-select"
+            aria-label="Landscape Benchmark"
             value={landscape}
-            onChange={(e) => setLandscape(Number(e.target.value))}
-            className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!Number.isNaN(val)) setLandscape(val);
+            }}
+            className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
           >
             {LANDSCAPES.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
+              <option key={l.id} value={l.id} className="bg-slate-900 text-slate-200">
+                {l.name}
+              </option>
             ))}
           </select>
-        </label>
+        </div>
 
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
-            Dimension <span className="text-sky-300 font-mono">{dim}</span>
-          </span>
-          <input type="range" min={2} max={6} step={1} value={dim} onChange={(e) => setDim(Number(e.target.value))} className="w-full accent-sky-400" />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
-            Population λ <span className="text-sky-300 font-mono">{lambda}</span>
-          </span>
-          <input type="range" min={4} max={48} step={2} value={lambda} onChange={(e) => setLambda(Number(e.target.value))} className="w-full accent-sky-400" />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
-            Initial σ₀ <span className="text-sky-300 font-mono">{sigma0.toFixed(2)}</span>
-          </span>
-          <input
-            type="range" min={0.02} max={1.5} step={0.01} value={sigma0}
-            onChange={(e) => setSigma0(Number(e.target.value))}
-            className="w-full accent-sky-400"
-          />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
-            Generations <span className="text-sky-300 font-mono">{generations}</span>
-          </span>
-          <input type="range" min={20} max={200} step={10} value={generations} onChange={(e) => setGenerations(Number(e.target.value))} className="w-full accent-sky-400" />
-        </label>
-
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
-            Eval noise σ <span className="text-sky-300 font-mono">{noise.toFixed(2)}</span>
-          </span>
-          <input type="range" min={0} max={0.5} step={0.01} value={noise} onChange={(e) => setNoise(Number(e.target.value))} className="w-full accent-sky-400" />
-        </label>
-
+        {/* Dimension */}
         <div className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">Strategy</span>
+          <label htmlFor="internals-dim-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+            Dimension n
+          </label>
+          <select
+            id="internals-dim-select"
+            aria-label="Search Dimensionality n"
+            value={dim}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!Number.isNaN(val)) setDim(val);
+            }}
+            className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+          >
+            {[2, 3, 4, 6, 8, 12].map((d) => (
+              <option key={d} value={d} className="bg-slate-900 text-slate-200">
+                {d}D
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Population */}
+        <div className="space-y-1.5">
+          <label htmlFor="internals-lambda-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+            Population λ
+          </label>
+          <select
+            id="internals-lambda-select"
+            aria-label="Population Size lambda"
+            value={lambda}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              if (!Number.isNaN(val)) setLambda(val);
+            }}
+            className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+          >
+            {[8, 12, 16, 24, 32, 64].map((l) => (
+              <option key={l} value={l} className="bg-slate-900 text-slate-200">
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Initial sigma */}
+        <div className="space-y-1.5">
+          <label htmlFor="internals-sigma0-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+            Initial σ₀
+          </label>
+          <select
+            id="internals-sigma0-select"
+            aria-label="Initial Step Size sigma0"
+            value={sigma0}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!Number.isNaN(val)) setSigma0(val);
+            }}
+            className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+          >
+            {[0.2, 0.4, 0.6, 1.0, 1.5].map((s) => (
+              <option key={s} value={s} className="bg-slate-900 text-slate-200">
+                {s.toFixed(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Active CMA + bounds */}
+        <div className="space-y-1.5">
+          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+            Options
+          </span>
           <div className="flex gap-2">
             <button
-              onClick={() => setActive(!active)}
+              type="button"
+              onClick={() => setActive((a) => !a)}
               className={`flex-1 rounded-xl px-2 py-2 text-xs font-semibold border transition-colors ${
                 active ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300" : "border-white/10 bg-slate-950/70 text-slate-400"
               }`}
-              title="Active CMA: negative weights let bad samples shrink the covariance too"
+              title="Active (negative) covariance updates on worst offspring"
             >
               Active {active ? "on" : "off"}
             </button>
             <button
-              onClick={() => setBoundsEnabled(!boundsEnabled)}
+              type="button"
+              onClick={() => setBoundsEnabled((b) => !b)}
               className={`flex-1 rounded-xl px-2 py-2 text-xs font-semibold border transition-colors ${
                 boundsEnabled ? "border-sky-500/50 bg-sky-500/15 text-sky-300" : "border-white/10 bg-slate-950/70 text-slate-400"
               }`}
@@ -287,16 +326,24 @@ export function CmaesInternalsLab() {
           </div>
         </div>
 
-        <label className="space-y-1.5">
-          <span className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold">
+        <div className="space-y-1.5">
+          <label htmlFor="internals-seed-input" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
             Seed <span className="text-sky-300 font-mono">{seed}</span>
-          </span>
+          </label>
           <div className="flex gap-2">
             <input
-              type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value) >>> 0)}
+              id="internals-seed-input"
+              type="number"
+              aria-label="Optimization Random Seed"
+              value={seed}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!Number.isNaN(val)) setSeed(val >>> 0);
+              }}
               className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-200 font-mono focus:outline-none focus:ring-2 focus:ring-sky-500/50"
             />
             <button
+              type="button"
               onClick={randomizeStart}
               className="shrink-0 rounded-xl border border-white/10 bg-slate-950/70 p-2 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
               title="New random seed + starting point"
@@ -304,7 +351,7 @@ export function CmaesInternalsLab() {
               <Dices className="h-4 w-4" />
             </button>
           </div>
-        </label>
+        </div>
       </div>
 
       {/* Categorical-encoding strip: how discrete choices ride the [0,1] cube */}
@@ -352,15 +399,24 @@ export function CmaesInternalsLab() {
           {/* Playback bar */}
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/5 bg-slate-950/60 p-3">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              type="button"
+              onClick={() => {
+                if (cursor >= states.length - 1) {
+                  setCursor(0);
+                  setIsPlaying(true);
+                } else {
+                  setIsPlaying(!isPlaying);
+                }
+              }}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-lg transition-all ${
-                isPlaying ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
+                isPlaying && cursor < states.length - 1 ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
               }`}
             >
-              {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-              {isPlaying ? "Pause" : "Play evolution"}
+              {isPlaying && cursor < states.length - 1 ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              {isPlaying && cursor < states.length - 1 ? "Pause" : "Play evolution"}
             </button>
             <button
+              type="button"
               onClick={() => { setIsPlaying(false); setCursor((c) => Math.min(c + 1, states.length - 1)); }}
               className="rounded-xl border border-white/5 bg-slate-900 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
               title="Step one generation"
@@ -368,6 +424,7 @@ export function CmaesInternalsLab() {
               <FastForward className="h-4 w-4" />
             </button>
             <button
+              type="button"
               onClick={() => { setIsPlaying(false); setCursor(0); }}
               className="rounded-xl border border-white/5 bg-slate-900 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
               title="Back to generation 0"
@@ -376,7 +433,13 @@ export function CmaesInternalsLab() {
             </button>
             <input
               type="range" min={0} max={Math.max(0, states.length - 1)} value={Math.min(cursor, states.length - 1)}
-              onChange={(e) => { setIsPlaying(false); setCursor(Number(e.target.value)); }}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!Number.isNaN(val)) {
+                  setIsPlaying(false);
+                  setCursor(val);
+                }
+              }}
               className="min-w-[140px] flex-1 accent-sky-400"
               aria-label="Generation scrubber"
             />
@@ -385,7 +448,10 @@ export function CmaesInternalsLab() {
             </span>
             <select
               value={speedMs}
-              onChange={(e) => setSpeedMs(Number(e.target.value))}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!Number.isNaN(val)) setSpeedMs(val);
+              }}
               className="rounded-lg border border-white/10 bg-slate-950/70 px-2 py-1 text-xs text-slate-300"
               aria-label="Playback speed"
             >

@@ -7,8 +7,8 @@ export function Footer() {
     <footer className="mx-auto mt-28 sm:mt-36 max-w-7xl px-4 sm:px-6 pb-16 pt-12 border-t border-white/10">
       {/* Author & Creator Spotlight Card */}
       <div className="mb-12 rounded-3xl border border-sky-500/20 bg-gradient-to-br from-slate-900/90 via-sky-950/20 to-purple-950/20 p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
-        <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl group-hover:bg-sky-500/20 transition-all duration-700 pointer-events-none" />
-        <div className="absolute -left-16 -top-16 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-700 pointer-events-none" />
+        <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl group-hover:bg-sky-500/20 transition-[background-color] duration-700 pointer-events-none" />
+        <div className="absolute -left-16 -top-16 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-[background-color] duration-700 pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
@@ -38,7 +38,7 @@ export function Footer() {
               href="https://jeffreyemanuel.com/"
               target="_blank"
               rel="noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/40 hover:scale-[1.02] active:scale-95 transition-all min-h-[48px] touch-manipulation"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/40 hover:scale-[1.02] active:scale-95 transition-[transform,background-image,box-shadow] min-h-[48px] touch-manipulation"
             >
               <Globe2 className="h-4 w-4" />
               <span>JeffreyEmanuel.com</span>
@@ -49,7 +49,7 @@ export function Footer() {
               href="https://github.com/Dicklesworthstone/cmaes_explainer"
               target="_blank"
               rel="noreferrer"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 hover:border-white/20 px-5 py-3.5 text-sm font-semibold text-slate-200 hover:text-white transition-all min-h-[48px] touch-manipulation active:scale-95"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 hover:border-white/20 px-5 py-3.5 text-sm font-semibold text-slate-200 hover:text-white transition-[background-color,border-color,color,transform] min-h-[48px] touch-manipulation active:scale-95"
             >
               <Github className="h-4 w-4" />
               <span>GitHub</span>

@@ -135,6 +135,10 @@ function GaussianDistributionSandbox() {
   // CMA-ES Internal Evolution State
   const [generation, setGeneration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [speedMs, setSpeedMs] = useState(480);
+  const [pSigmaNorm, setPSigmaNorm] = useState(0);
+  const [pCNorm, setPCNorm] = useState(0);
+  const [deltaMNorm, setDeltaMNorm] = useState(0);
   const [history, setHistory] = useState<TrajectoryNode[]>([
     { x: landscape.initialMean[0], y: landscape.initialMean[1], fitness: landscape.fn(landscape.initialMean[0], landscape.initialMean[1]), gen: 0 }
   ]);
@@ -147,6 +151,15 @@ function GaussianDistributionSandbox() {
   ]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animPosRef = useRef({
+    x: landscape.initialMean[0],
+    y: landscape.initialMean[1],
+    sigma: landscape.initialSigma,
+    eigenRatio: landscape.initialEigenRatio,
+    angleDeg: landscape.initialAngle,
+    emX: landscape.initialMean[0],
+    emY: landscape.initialMean[1],
+  });
 
   // Switch landscape preset
   const handleSelectLandscape = (key: LandscapeKey) => {
@@ -159,12 +172,24 @@ function GaussianDistributionSandbox() {
     setEigenRatio(spec.initialEigenRatio);
     setAngleDeg(spec.initialAngle);
     setGeneration(0);
+    setPSigmaNorm(0);
+    setPCNorm(0);
+    setDeltaMNorm(0);
     pSigmaRef.current = [0, 0];
     pCRef.current = [0, 0];
     covRef.current = [
       [1, 0],
       [0, 1]
     ];
+    animPosRef.current = {
+      x: spec.initialMean[0],
+      y: spec.initialMean[1],
+      sigma: spec.initialSigma,
+      eigenRatio: spec.initialEigenRatio,
+      angleDeg: spec.initialAngle,
+      emX: spec.initialMean[0],
+      emY: spec.initialMean[1],
+    };
     setHistory([{ x: spec.initialMean[0], y: spec.initialMean[1], fitness: spec.fn(spec.initialMean[0], spec.initialMean[1]), gen: 0 }]);
   };
 
@@ -338,6 +363,12 @@ function GaussianDistributionSandbox() {
     const nextAngleDeg = (angle * 180) / Math.PI;
 
     // Apply updates to UI state
+    const dmLen = Math.hypot(dm[0], dm[1]);
+    setDeltaMNorm(parseFloat(dmLen.toFixed(3)));
+    setPSigmaNorm(parseFloat(pSigNorm.toFixed(2)));
+    const pcLen = Math.hypot(newPC[0], newPC[1]);
+    setPCNorm(parseFloat(pcLen.toFixed(2)));
+
     setMeanX(parseFloat(newM[0].toFixed(3)));
     setMeanY(parseFloat(newM[1].toFixed(3)));
     setSigma(parseFloat(newSigma.toFixed(3)));
@@ -354,9 +385,9 @@ function GaussianDistributionSandbox() {
     if (!isPlaying) return;
     const timer = setInterval(() => {
       stepGeneration();
-    }, 180);
+    }, speedMs);
     return () => clearInterval(timer);
-  }, [isPlaying, stepGeneration]);
+  }, [isPlaying, speedMs, stepGeneration]);
 
   // Pre-render background heatmap offscreen once per landscape switch
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -405,8 +436,9 @@ function GaussianDistributionSandbox() {
     bgCanvasRef.current = offscreen;
   }, [activeLandscapeKey, landscape]);
 
-  // Render contour plot, Gaussian confidence ellipses, samples, and mean shift
+  // Smooth 60fps Animation Loop with linear interpolation
   useEffect(() => {
+    let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -419,177 +451,194 @@ function GaussianDistributionSandbox() {
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
 
-    ctx.clearRect(0, 0, W, H);
+    const render = () => {
+      const a = animPosRef.current;
+      const lerp = 0.22;
+      a.x += (meanX - a.x) * lerp;
+      a.y += (meanY - a.y) * lerp;
+      a.sigma += (sigma - a.sigma) * lerp;
+      a.eigenRatio += (eigenRatio - a.eigenRatio) * lerp;
+      a.angleDeg += (angleDeg - a.angleDeg) * lerp;
+      a.emX += (eliteMean[0] - a.emX) * lerp;
+      a.emY += (eliteMean[1] - a.emY) * lerp;
 
-    // Blit pre-rendered background heatmap instantly
-    if (bgCanvasRef.current) {
-      ctx.drawImage(bgCanvasRef.current, 0, 0);
-    }
+      ctx.clearRect(0, 0, W, H);
 
-    // Draw grid lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let gx = -2; gx <= 2; gx += 1) {
-      ctx.moveTo(toPxX(gx), 0);
-      ctx.lineTo(toPxX(gx), H);
-    }
-    for (let gy = -2; gy <= 2; gy += 1) {
-      ctx.moveTo(0, toPxY(gy));
-      ctx.lineTo(W, toPxY(gy));
-    }
-    ctx.stroke();
+      // Blit pre-rendered background heatmap instantly
+      if (bgCanvasRef.current) {
+        ctx.drawImage(bgCanvasRef.current, 0, 0);
+      }
 
-    // Draw Global Optimum Target Marker
-    const [optX, optY] = landscape.globalOpt;
-    const optPxX = toPxX(optX);
-    const optPxY = toPxY(optY);
-
-    ctx.strokeStyle = "rgba(250, 204, 21, 0.8)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(optPxX, optPxY, 8, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.fillStyle = "#facc15";
-    ctx.beginPath();
-    ctx.arc(optPxX, optPxY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Draw Trajectory History Trail
-    if (history.length > 1) {
-      ctx.strokeStyle = "rgba(250, 204, 21, 0.4)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([3, 3]);
+      // Draw grid lines
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      history.forEach((h, idx) => {
-        const hx = toPxX(h.x);
-        const hy = toPxY(h.y);
-        if (idx === 0) ctx.moveTo(hx, hy);
-        else ctx.lineTo(hx, hy);
-      });
+      for (let gx = -2; gx <= 2; gx += 1) {
+        ctx.moveTo(toPxX(gx), 0);
+        ctx.lineTo(toPxX(gx), H);
+      }
+      for (let gy = -2; gy <= 2; gy += 1) {
+        ctx.moveTo(0, toPxY(gy));
+        ctx.lineTo(W, toPxY(gy));
+      }
       ctx.stroke();
-      ctx.setLineDash([]);
 
-      // Draw history nodes
-      history.forEach((h) => {
-        ctx.fillStyle = "rgba(250, 204, 21, 0.6)";
-        ctx.beginPath();
-        ctx.arc(toPxX(h.x), toPxY(h.y), 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    }
+      // Draw Global Optimum Target Marker
+      const [optX, optY] = landscape.globalOpt;
+      const optPxX = toPxX(optX);
+      const optPxY = toPxY(optY);
 
-    // Draw 1-sigma, 2-sigma Gaussian confidence ellipses
-    const angleRad = (angleDeg * Math.PI) / 180;
-    const l1 = eigenRatio * 0.5;
-    const l2 = 0.5;
-    const s1 = Math.sqrt(l1) * sigma * (W / (2 * DOMAIN));
-    const s2 = Math.sqrt(l2) * sigma * (H / (2 * DOMAIN));
-
-    const cx = toPxX(meanX);
-    const cy = toPxY(meanY);
-
-    [1, 2].forEach((k) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-angleRad); // Canvas y is inverted
-
-      ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
-      ctx.lineWidth = k === 1 ? 2 : 1;
-      ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
-
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.8)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
+      ctx.arc(optPxX, optPxY, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      ctx.arc(optPxX, optPxY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw Trajectory History Trail
+      if (history.length > 1) {
+        ctx.strokeStyle = "rgba(250, 204, 21, 0.45)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        history.forEach((h, idx) => {
+          const hx = toPxX(h.x);
+          const hy = toPxY(h.y);
+          if (idx === 0) ctx.moveTo(hx, hy);
+          else ctx.lineTo(hx, hy);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw history nodes
+        history.forEach((h) => {
+          ctx.fillStyle = "rgba(250, 204, 21, 0.6)";
+          ctx.beginPath();
+          ctx.arc(toPxX(h.x), toPxY(h.y), 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // Draw 1-sigma, 2-sigma Gaussian confidence ellipses
+      const angleRad = (a.angleDeg * Math.PI) / 180;
+      const l1 = a.eigenRatio * 0.5;
+      const l2 = 0.5;
+      const s1 = Math.sqrt(Math.max(1e-4, l1)) * a.sigma * (W / (2 * DOMAIN));
+      const s2 = Math.sqrt(Math.max(1e-4, l2)) * a.sigma * (H / (2 * DOMAIN));
+
+      const cx = toPxX(a.x);
+      const cy = toPxY(a.y);
+
+      [1, 2].forEach((k) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(-angleRad); // Canvas y is inverted
+
+        ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
+        ctx.lineWidth = k === 1 ? 2 : 1;
+        ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.12)" : "transparent";
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Principal Axes (for 1-sigma)
+        if (k === 1) {
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+          ctx.beginPath();
+          ctx.moveTo(-s1, 0);
+          ctx.lineTo(s1, 0);
+          ctx.moveTo(0, -s2);
+          ctx.lineTo(0, s2);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      });
+
+      // Draw Mean Shift Vector (Delta m)
+      const emX = toPxX(a.emX);
+      const emY = toPxY(a.emY);
+
+      ctx.strokeStyle = "rgba(52, 211, 153, 0.95)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(emX, emY);
+      ctx.stroke();
+
+      // Arrowhead for mean shift
+      const arrowAng = Math.atan2(emY - cy, emX - cx);
+      const ahLen = 9;
+      ctx.fillStyle = "#34d399";
+      ctx.beginPath();
+      ctx.moveTo(emX, emY);
+      ctx.lineTo(
+        emX - ahLen * Math.cos(arrowAng - Math.PI / 6),
+        emY - ahLen * Math.sin(arrowAng - Math.PI / 6)
+      );
+      ctx.lineTo(
+        emX - ahLen * Math.cos(arrowAng + Math.PI / 6),
+        emY - ahLen * Math.sin(arrowAng + Math.PI / 6)
+      );
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw Samples
+      samples.forEach((s) => {
+        const px = toPxX(s.x);
+        const py = toPxY(s.y);
+
+        if (s.isElite) {
+          // Glowing Emerald for Elites
+          ctx.fillStyle = "#34d399";
+          ctx.shadowColor = "#34d399";
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          // Dim Cyan for non-elites
+          ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // Current Mean Point
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      // Principal Axes (for 1-sigma)
-      if (k === 1) {
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-        ctx.beginPath();
-        ctx.moveTo(-s1, 0);
-        ctx.lineTo(s1, 0);
-        ctx.moveTo(0, -s2);
-        ctx.lineTo(0, s2);
-        ctx.stroke();
-      }
+      // New Proposed Elite Mean Point
+      ctx.fillStyle = "#34d399";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(emX, emY, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
 
-      ctx.restore();
-    });
+      animId = requestAnimationFrame(render);
+    };
 
-    // Draw Mean Shift Vector (Delta m)
-    const emX = toPxX(eliteMean[0]);
-    const emY = toPxY(eliteMean[1]);
-
-    ctx.strokeStyle = "rgba(52, 211, 153, 0.95)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(emX, emY);
-    ctx.stroke();
-
-    // Arrowhead for mean shift
-    const arrowAng = Math.atan2(emY - cy, emX - cx);
-    const ahLen = 9;
-    ctx.fillStyle = "#34d399";
-    ctx.beginPath();
-    ctx.moveTo(emX, emY);
-    ctx.lineTo(
-      emX - ahLen * Math.cos(arrowAng - Math.PI / 6),
-      emY - ahLen * Math.sin(arrowAng - Math.PI / 6)
-    );
-    ctx.lineTo(
-      emX - ahLen * Math.cos(arrowAng + Math.PI / 6),
-      emY - ahLen * Math.sin(arrowAng + Math.PI / 6)
-    );
-    ctx.closePath();
-    ctx.fill();
-
-    // Draw Samples
-    samples.forEach((s) => {
-      const px = toPxX(s.x);
-      const py = toPxY(s.y);
-
-      if (s.isElite) {
-        // Glowing Emerald for Elites
-        ctx.fillStyle = "#34d399";
-        ctx.shadowColor = "#34d399";
-        ctx.shadowBlur = 8;
-        ctx.beginPath();
-        ctx.arc(px, py, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      } else {
-        // Dim Cyan for non-elites
-        ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
-        ctx.beginPath();
-        ctx.arc(px, py, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-
-    // Current Mean Point
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#0284c7";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // New Proposed Elite Mean Point
-    ctx.fillStyle = "#34d399";
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(emX, emY, 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
   }, [meanX, meanY, sigma, eigenRatio, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey]);
 
   const currentFitness = landscape.fn(meanX, meanY);
@@ -683,12 +732,12 @@ function GaussianDistributionSandbox() {
           </div>
 
           {/* Interactive Playback & Stepping Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-slate-950/60 border border-white/5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-white/5">
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setIsPlaying((p) => !p)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all shadow-sm ${
+                className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
                   isPlaying
                     ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
                     : "bg-sky-500 text-white hover:bg-sky-400 shadow-glow-sm"
@@ -702,10 +751,10 @@ function GaussianDistributionSandbox() {
                 type="button"
                 onClick={stepGeneration}
                 disabled={isPlaying}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-800 border border-white/10 text-slate-200 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-800 border border-white/10 text-slate-200 hover:text-white hover:bg-slate-700 disabled:opacity-40 transition-colors"
               >
                 <StepForward className="h-3.5 w-3.5" />
-                <span>Step Generation</span>
+                <span>Step</span>
               </button>
 
               <button
@@ -718,19 +767,42 @@ function GaussianDistributionSandbox() {
               </button>
             </div>
 
-            <div className="flex items-center gap-3 text-[0.68rem] text-slate-400 font-mono">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-white border border-sky-500" />
-                <span>Mean (m)</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span>Elites</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-yellow-400" />
-                <span>Optimum</span>
-              </span>
+            {/* Speed & Legend Row */}
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 text-[0.68rem] text-slate-400 font-mono">
+              <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-white/5">
+                <span className="text-slate-500">Speed:</span>
+                {[
+                  { label: "Slow", ms: 700 },
+                  { label: "Normal", ms: 450 },
+                  { label: "Fast", ms: 160 }
+                ].map((s) => (
+                  <button
+                    key={s.ms}
+                    type="button"
+                    onClick={() => setSpeedMs(s.ms)}
+                    className={`px-1.5 py-0.5 rounded text-[0.65rem] transition-colors ${
+                      speedMs === s.ms ? "bg-sky-500 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-white border border-sky-500" />
+                  <span>Mean</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span>Elites</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                  <span>Optimum</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -851,6 +923,109 @@ function GaussianDistributionSandbox() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Live CMA-ES Internal Algebraic State Telemetry Card */}
+      <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-slate-950/90 via-slate-900/80 to-sky-950/30 p-5 md:p-6 space-y-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+              <Activity className="h-4 w-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white font-display flex items-center gap-2">
+                <span>Live Simulation Internal Algebraic State</span>
+                <span className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
+                  isPlaying ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse" : "bg-slate-800 border-white/10 text-slate-400"
+                }`}>
+                  {isPlaying ? "Live Evolution Step" : "Static State"}
+                </span>
+              </h4>
+              <p className="text-[0.7rem] text-slate-400">
+                Real-time mathematical parameters governing the Gaussian distribution manifold
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="text-slate-400">Gen {generation}</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-sky-300">Evals: {generation * sampleCount}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          {/* Card 1: Distribution Mean */}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-purple-400 flex items-center justify-between">
+              <span>Distribution Mean</span>
+              <LatexRenderer math="m" block={false} />
+            </div>
+            <div className="font-mono text-white text-sm font-semibold">
+              ({meanX.toFixed(2)}, {meanY.toFixed(2)})
+            </div>
+            <div className="text-[0.68rem] text-slate-400 font-mono">
+              <LatexRenderer math="\|\Delta m\|" block={false} /> = {deltaMNorm.toFixed(3)}
+            </div>
+          </div>
+
+          {/* Card 2: Step Size sigma */}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+              <span>Step-Size (CSA)</span>
+              <LatexRenderer math="\sigma" block={false} />
+            </div>
+            <div className="font-mono text-amber-300 text-sm font-semibold">
+              {sigma.toFixed(3)}
+            </div>
+            <div className="text-[0.68rem] text-slate-400 font-mono">
+              <LatexRenderer math="\|p_\sigma\|" block={false} /> = {pSigmaNorm.toFixed(2)} (vs 1.13)
+            </div>
+          </div>
+
+          {/* Card 3: Covariance Condition */}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+              <span>Covariance Shape</span>
+              <LatexRenderer math="\kappa(C)" block={false} />
+            </div>
+            <div className="font-mono text-emerald-300 text-sm font-semibold">
+              {eigenRatio.toFixed(1)} : 1
+            </div>
+            <div className="text-[0.68rem] text-slate-400 font-mono">
+              <LatexRenderer math="\theta" block={false} /> = {angleDeg}° orientation
+            </div>
+          </div>
+
+          {/* Card 4: Evolution Path pc */}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-400 flex items-center justify-between">
+              <span>Covariance Path</span>
+              <LatexRenderer math="p_c" block={false} />
+            </div>
+            <div className="font-mono text-rose-300 text-sm font-semibold">
+              <LatexRenderer math="\|p_c\|" block={false} /> = {pCNorm.toFixed(2)}
+            </div>
+            <div className="text-[0.68rem] text-slate-400">
+              Rank-1 directional memory
+            </div>
+          </div>
+
+          {/* Card 5: Elite Selection */}
+          <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1 sm:col-span-2 lg:col-span-1">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-400 flex items-center justify-between">
+              <span>Elite Selection</span>
+              <span><LatexRenderer math="\mu / \lambda" block={false} /></span>
+            </div>
+            <div className="font-mono text-sky-300 text-sm font-semibold">
+              {Math.max(1, Math.floor(sampleCount * eliteFraction))} / {sampleCount}
+            </div>
+            <div className="text-[0.68rem] text-slate-400 font-mono">
+              Best <LatexRenderer math="f" block={false} />: {currentFitness < 1e-3 ? currentFitness.toExponential(2) : currentFitness.toFixed(3)}
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   );
