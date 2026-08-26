@@ -7,6 +7,7 @@ import { CMAESOptimizer } from "../lib/cmaesEngine";
 const GRID_SIZE = 64;
 
 // Continuous Cellular Automata simulation step (Lenia / Neural CA hybrid)
+// Optimized with bitwise toroidal wrapping ((coord & 63)) and unrolled 8-neighbor stencil
 function stepCA(
   grid: Float32Array,
   next: Float32Array,
@@ -14,40 +15,44 @@ function stepCA(
   sigma: number,
   dt = 0.15
 ): number {
-  const n = GRID_SIZE;
+  const invSigma = 1 / Math.max(1e-4, sigma);
+  const invEight = 0.125;
   let totalEntropy = 0;
 
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      // 3x3 Moore neighborhood convolution
-      let sum = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const xx = (x + dx + n) % n;
-          const yy = (y + dy + n) % n;
-          sum += grid[yy * n + xx];
-        }
-      }
-      const avg = sum / 8;
+  for (let y = 0; y < 64; y++) {
+    const ym = ((y - 1) & 63) << 6;
+    const y0 = y << 6;
+    const yp = ((y + 1) & 63) << 6;
+
+    for (let x = 0; x < 64; x++) {
+      const xm = (x - 1) & 63;
+      const xp = (x + 1) & 63;
+
+      // Unrolled 8-Moore neighborhood stencil without branches or modulo arithmetic
+      const sum =
+        grid[ym + xm] + grid[ym + x] + grid[ym + xp] +
+        grid[y0 + xm]                + grid[y0 + xp] +
+        grid[yp + xm] + grid[yp + x] + grid[yp + xp];
+
+      const avg = sum * invEight;
 
       // Bell-shaped growth mapping G(avg; mu, sigma) = 2 * exp(-(avg - mu)^2 / (2*sigma^2)) - 1
-      const dist = (avg - mu) / Math.max(1e-4, sigma);
+      const dist = (avg - mu) * invSigma;
       const growth = 2 * Math.exp(-0.5 * dist * dist) - 1;
 
       // State update
-      const cur = grid[y * n + x];
+      const cur = grid[y0 + x];
       const updated = Math.max(0, Math.min(1, cur + dt * growth));
-      next[y * n + x] = updated;
+      next[y0 + x] = updated;
 
       // Compute spatial entropy/complexity
       if (updated > 0.05 && updated < 0.95) {
-        totalEntropy += 1;
+        totalEntropy++;
       }
     }
   }
 
-  return totalEntropy / (n * n);
+  return totalEntropy * (1 / 4096);
 }
 
 export function CAGalleryTrace() {
@@ -61,6 +66,7 @@ export function CAGalleryTrace() {
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imgDataRef = useRef<ImageData | null>(null);
   const gridStateRef = useRef<{ current: Float32Array; next: Float32Array }>({
     current: new Float32Array(GRID_SIZE * GRID_SIZE),
     next: new Float32Array(GRID_SIZE * GRID_SIZE)
@@ -78,7 +84,7 @@ export function CAGalleryTrace() {
     resetGrid();
   }, [resetGrid]);
 
-  // Main Continuous CA animation loop
+  // Main Continuous CA animation loop with zero-allocation 32-bit pixel pipeline
   useEffect(() => {
     if (!isPlaying) return;
     const interval = setInterval(() => {
@@ -88,21 +94,26 @@ export function CAGalleryTrace() {
       gridStateRef.current.next = current;
       setEntropy(ent);
 
-      // Render to canvas
+      // Render to canvas using preallocated 32-bit pixel buffer
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: false });
       if (!ctx) return;
 
-      const img = ctx.createImageData(GRID_SIZE, GRID_SIZE);
-      for (let i = 0; i < current.length; i++) {
+      if (!imgDataRef.current) {
+        imgDataRef.current = ctx.createImageData(GRID_SIZE, GRID_SIZE);
+      }
+      const img = imgDataRef.current;
+      const buf32 = new Uint32Array(img.data.buffer);
+
+      for (let i = 0; i < 4096; i++) {
         const v = current[i];
-        const idx = i * 4;
         // Electric organic neon cyan/purple palette
-        img.data[idx] = Math.floor(20 + 220 * Math.pow(v, 1.4)); // R
-        img.data[idx + 1] = Math.floor(40 + 200 * Math.sin(v * Math.PI)); // G
-        img.data[idx + 2] = Math.floor(80 + 175 * (1 - v)); // B
-        img.data[idx + 3] = 255;
+        const r = (20 + 220 * Math.pow(v, 1.4)) | 0;
+        const g = (40 + 200 * Math.sin(v * Math.PI)) | 0;
+        const b = (80 + 175 * (1 - v)) | 0;
+        // Little-endian packed 0xAABBGGRR
+        buf32[i] = (255 << 24) | (b << 16) | (g << 8) | r;
       }
       ctx.putImageData(img, 0, 0);
     }, 40);

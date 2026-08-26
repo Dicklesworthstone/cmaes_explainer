@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { LatexRenderer } from "./LatexRenderer";
 import {
   Play,
   Pause,
@@ -597,8 +598,8 @@ export function WasmDemo() {
               <div className="font-bold text-white text-sm font-display">{currentBench.name}</div>
               <p className="text-slate-400 mt-0.5">{currentBench.description}</p>
             </div>
-            <div className="font-mono text-sky-300 bg-sky-500/10 px-3 py-1.5 rounded-xl border border-sky-500/20 shrink-0">
-              <MathJax dynamic>{`$${currentBench.formula}$`}</MathJax>
+            <div className="font-mono text-sky-300 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-sky-500/30 shrink-0">
+              <LatexRenderer math={currentBench.formula} block={false} />
             </div>
           </div>
 

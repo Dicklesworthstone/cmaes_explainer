@@ -35,6 +35,47 @@ export function CovarianceMinimap() {
   const [showNaturalGrad, setShowNaturalGrad] = useState(true);
 
   const fn = objectives[objKey];
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = WIDTH;
+    offscreen.height = HEIGHT;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return;
+
+    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
+    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
+
+    const imgData = ctx.createImageData(WIDTH, HEIGHT);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    for (let py = 0; py < HEIGHT; py += 2) {
+      const y = toCoordY(py);
+      const row0 = py * WIDTH;
+      const row1 = Math.min(HEIGHT - 1, py + 1) * WIDTH;
+
+      for (let px = 0; px < WIDTH; px += 2) {
+        const x = toCoordX(px);
+        const v = fn.f(x, y);
+        const norm = Math.tanh(v / 30);
+
+        const r = (10 + 15 * norm) | 0;
+        const g = (25 + 75 * (1 - norm)) | 0;
+        const b = (45 + 120 * (1 - norm)) | 0;
+        const color = (255 << 24) | (b << 16) | (g << 8) | r;
+
+        const px1 = Math.min(WIDTH - 1, px + 1);
+        buf32[row0 + px] = color;
+        buf32[row0 + px1] = color;
+        buf32[row1 + px] = color;
+        buf32[row1 + px1] = color;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    bgCanvasRef.current = offscreen;
+  }, [fn]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -47,36 +88,13 @@ export function CovarianceMinimap() {
 
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw Heatmap Contours
-    const imgData = ctx.createImageData(W, H);
-    for (let py = 0; py < H; py += 2) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += 2) {
-        const x = toCoordX(px);
-        const v = fn.f(x, y);
-        const norm = Math.tanh(v / 30);
-
-        const r = Math.floor(10 + 15 * norm);
-        const g = Math.floor(25 + 75 * (1 - norm));
-        const b = Math.floor(45 + 120 * (1 - norm));
-
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // 1. Draw Cached Heatmap Contours
+    if (bgCanvasRef.current) {
+      ctx.drawImage(bgCanvasRef.current, 0, 0);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // 2. Draw Subtle Axes
     ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";

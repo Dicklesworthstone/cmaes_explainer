@@ -157,8 +157,31 @@ export function sampleGaussian(rng: () => number = Math.random): number {
   return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
+/**
+ * 2D Box-Muller generator producing two independent standard normals in a single transcendental pass
+ */
+export function sampleGaussian2D(rng: () => number = Math.random): [number, number] {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  const mag = Math.sqrt(-2.0 * Math.log(u));
+  const angle = 2.0 * Math.PI * v;
+  return [mag * Math.cos(angle), mag * Math.sin(angle)];
+}
+
 export function sampleGaussianVector(dim: number, rng: () => number = Math.random): Vector {
-  return Array.from({ length: dim }, () => sampleGaussian(rng));
+  const vec = new Array(dim);
+  for (let i = 0; i < dim; i += 2) {
+    if (i + 1 < dim) {
+      const [z0, z1] = sampleGaussian2D(rng);
+      vec[i] = z0;
+      vec[i + 1] = z1;
+    } else {
+      vec[i] = sampleGaussian(rng);
+    }
+  }
+  return vec;
 }
 
 // --- Benchmark Landscapes ---
@@ -185,7 +208,11 @@ export const BENCHMARKS: BenchmarkFunction[] = [
     domain: [-2.5, 2.5],
     optimum: [1.0, 1.0],
     optimumValue: 0.0,
-    eval: (x, y) => 100 * Math.pow(y - x * x, 2) + Math.pow(1 - x, 2)
+    eval: (x, y) => {
+      const t1 = y - x * x;
+      const t2 = 1 - x;
+      return 100 * t1 * t1 + t2 * t2;
+    }
   },
   {
     id: "rastrigin",
@@ -233,7 +260,11 @@ export const BENCHMARKS: BenchmarkFunction[] = [
     domain: [-4.0, 4.0],
     optimum: [3.0, 2.0],
     optimumValue: 0.0,
-    eval: (x, y) => Math.pow(x * x + y - 11, 2) + Math.pow(x + y * y - 7, 2)
+    eval: (x, y) => {
+      const t1 = x * x + y - 11;
+      const t2 = x + y * y - 7;
+      return t1 * t1 + t2 * t2;
+    }
   },
   {
     id: "step_ridge",
@@ -399,30 +430,41 @@ export class CMAESOptimizer {
    */
   step(): CMAESGenerationState {
     const eigen = eigen2x2(this.C[0][0], this.C[0][1], this.C[1][1]);
-    const sqrtC = eigen.sqrtMatrix;
-    const invSqrtC = eigen.invSqrtMatrix;
+    const s00 = eigen.sqrtMatrix[0][0];
+    const s01 = eigen.sqrtMatrix[0][1];
+    const s10 = eigen.sqrtMatrix[1][0];
+    const s11 = eigen.sqrtMatrix[1][1];
 
-    // 1. Sample lambda offspring
+    const is00 = eigen.invSqrtMatrix[0][0];
+    const is01 = eigen.invSqrtMatrix[0][1];
+    const is10 = eigen.invSqrtMatrix[1][0];
+    const is11 = eigen.invSqrtMatrix[1][1];
+
+    const m0 = this.mean[0];
+    const m1 = this.mean[1];
+    const sig = this.sigma;
+
+    // 1. Sample lambda offspring using 2D Box-Muller generator
     const candidates: CandidateSample[] = [];
     for (let i = 0; i < this.lambda; i++) {
-      const z: Vector = [sampleGaussian(this.rng), sampleGaussian(this.rng)];
-      const scaledZ = [sqrtC[0][0] * z[0] + sqrtC[0][1] * z[1], sqrtC[1][0] * z[0] + sqrtC[1][1] * z[1]];
-      const rawX: Vector = [
-        this.mean[0] + this.sigma * scaledZ[0],
-        this.mean[1] + this.sigma * scaledZ[1]
-      ];
-      const x: Vector = [this.repair(rawX[0]), this.repair(rawX[1])];
+      const [z0, z1] = sampleGaussian2D(this.rng);
+      const scaledZ0 = s00 * z0 + s01 * z1;
+      const scaledZ1 = s10 * z0 + s11 * z1;
+      const rawX0 = m0 + sig * scaledZ0;
+      const rawX1 = m1 + sig * scaledZ1;
+      const x0 = this.repair(rawX0);
+      const x1 = this.repair(rawX1);
 
-      const trueF = this.objective(x[0], x[1]);
+      const trueF = this.objective(x0, x1);
       const noise = this.noiseLevel > 0 ? sampleGaussian(this.rng) * this.noiseLevel : 0;
       const noisyF = trueF + noise;
       this.evalCount++;
 
       candidates.push({
         id: i,
-        rawX,
-        x,
-        z,
+        rawX: [rawX0, rawX1],
+        x: [x0, x1],
+        z: [z0, z1],
         fitness: noisyF,
         trueFitness: trueF,
         rank: 0,
@@ -458,8 +500,8 @@ export class CMAESOptimizer {
       (this.mean[1] - oldMean[1]) / this.sigma
     ];
     const zMean: Vector = [
-      invSqrtC[0][0] * meanShift[0] + invSqrtC[0][1] * meanShift[1],
-      invSqrtC[1][0] * meanShift[0] + invSqrtC[1][1] * meanShift[1]
+      is00 * meanShift[0] + is01 * meanShift[1],
+      is10 * meanShift[0] + is11 * meanShift[1]
     ];
 
     // 4. Update evolution paths

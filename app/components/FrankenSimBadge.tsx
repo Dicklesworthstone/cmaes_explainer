@@ -16,18 +16,26 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
-    initFrankenSim().then((res) => setStatus(res));
+    let active = true;
+    initFrankenSim().then((res) => {
+      if (active) setStatus(res);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const isWasm = status.source === "wasm";
 
   return (
-    <div className={`relative inline-block ${className}`}>
-      <div
-        className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 hover:bg-slate-900/90 border border-sky-500/30 hover:border-sky-400/60 backdrop-blur-md shadow-glow-sm transition-all cursor-pointer select-none"
+    <div className={`relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 hover:bg-slate-900/90 border border-sky-500/30 hover:border-sky-400/60 backdrop-blur-md shadow-glow-sm transition-[background-color,border-color,box-shadow] select-none ${className}`}>
+      {/* Glowing Engine Icon & Toggle */}
+      <button
+        type="button"
+        aria-label="Toggle FrankenSim physics telemetry"
         onClick={() => setShowDetails(!showDetails)}
+        className="inline-flex items-center gap-2 cursor-pointer focus:outline-none"
       >
-        {/* Glowing Engine Icon */}
         <div className="relative flex items-center justify-center">
           <span
             className={`absolute h-2 w-2 rounded-full ${
@@ -40,33 +48,33 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
             }`}
           />
         </div>
+        <span className="text-slate-300 text-xs font-semibold">Physics Powered by</span>
+      </button>
 
-        {/* Text */}
-        <div className="flex items-center gap-1.5 text-xs font-semibold">
-          <span className="text-slate-300">Physics Powered by</span>
-          <a
-            href="https://frankensim.org"
-            target="_blank"
-            rel="noreferrer"
-            className="text-sky-300 hover:text-sky-200 underline decoration-sky-400/40 hover:decoration-sky-300 font-bold inline-flex items-center gap-0.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <span>FrankenSim.org</span>
-            <ExternalLink className="h-2.5 w-2.5 opacity-70" />
-          </a>
-        </div>
+      {/* External Link */}
+      <a
+        href="https://frankensim.org"
+        target="_blank"
+        rel="noreferrer"
+        className="text-sky-300 hover:text-sky-200 underline decoration-sky-400/40 hover:decoration-sky-300 font-bold text-xs inline-flex items-center gap-0.5"
+      >
+        <span>FrankenSim.org</span>
+        <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+      </a>
 
-        {/* Engine Source Pill */}
-        <span
-          className={`text-[0.62rem] font-mono font-bold px-2 py-0.5 rounded-full border ${
-            isWasm
-              ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-              : "bg-amber-500/10 text-amber-300 border-amber-500/30"
-          }`}
-        >
-          {isWasm ? "WASM Kernel" : "TS Fallback"}
-        </span>
-      </div>
+      {/* Engine Source Pill */}
+      <button
+        type="button"
+        onClick={() => setShowDetails(!showDetails)}
+        aria-label="Toggle telemetry details"
+        className={`text-[0.62rem] font-mono font-bold px-2 py-0.5 rounded-full border cursor-pointer ${
+          isWasm
+            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+            : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+        }`}
+      >
+        {isWasm ? "WASM Kernel" : "TS Fallback"}
+      </button>
 
       {/* Popover Details on click */}
       {showDetails && (
@@ -77,8 +85,10 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
               <span>FrankenSim Physics Telemetry</span>
             </div>
             <button
+              type="button"
+              aria-label="Close telemetry popover"
               onClick={() => setShowDetails(false)}
-              className="text-slate-500 hover:text-slate-300 text-xs px-1"
+              className="text-slate-500 hover:text-slate-300 text-xs px-1.5 py-0.5 rounded focus:outline-none"
             >
               ✕
             </button>

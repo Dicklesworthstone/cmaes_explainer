@@ -53,7 +53,9 @@ async function loadWasmModule(jsPath: string, wasmPath: string): Promise<any> {
     }
     return mod;
   } catch (err) {
-    console.warn(`[FrankenSim] WASM load warning for ${jsPath}:`, err);
+    if (process.env.NODE_ENV === "development") {
+      console.warn(`[FrankenSim] WASM load warning for ${jsPath}:`, err);
+    }
     return null;
   }
 }
@@ -101,7 +103,9 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         hasBemt
       };
     } catch (err) {
-      console.warn("[FrankenSim] Falling back to high-fidelity TypeScript physics engine:", err);
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[FrankenSim] Falling back to high-fidelity TypeScript physics engine:", err);
+      }
       return {
         loaded: false,
         source: "ts-fallback",
@@ -386,16 +390,18 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   const liveTruckLoadKN = 400; // 40-ton moving vehicle
   const totalLinearLoad = deadLoadPerMeter + liveTruckLoadKN / spanLength;
 
-  const horizontalCableTensionKN = (totalLinearLoad * spanLength * spanLength) / (8 * Math.max(2, cableSag));
-  const maxCableTensionKN = horizontalCableTensionKN * Math.sqrt(1 + 16 * Math.pow(cableSag / spanLength, 2));
+  const spanSq = spanLength * spanLength;
+  const sagSpanRatio = cableSag / spanLength;
+  const horizontalCableTensionKN = (totalLinearLoad * spanSq) / (8 * Math.max(2, cableSag));
+  const maxCableTensionKN = horizontalCableTensionKN * Math.sqrt(1 + 16 * sagSpanRatio * sagSpanRatio);
 
   // Tower height: H_tower = spanLength * towerAspect
   const towerHeight = spanLength * towerAspect;
 
   // Deck bending stress & maximum deflection
-  const effectiveEI = mat.E * 1e9 * (0.015 + Math.pow(deckStiffness, 3) * 0.12 * topo.stiffnessFactor);
+  const effectiveEI = mat.E * 1e9 * (0.015 + deckStiffness * deckStiffness * deckStiffness * 0.12 * topo.stiffnessFactor);
   const maxDeflectionMm =
-    ((5 * totalLinearLoad * 1000 * Math.pow(spanLength, 4)) / (384 * effectiveEI)) *
+    ((5 * totalLinearLoad * 1000 * spanSq * spanSq) / (384 * effectiveEI)) *
     (1 / (1 + (8 * cableSag) / spanLength)) *
     1000;
 
@@ -411,16 +417,18 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
 
   // Aerodynamic flutter critical velocity (Selberg formula approximation)
   const massPerLengthKg = mat.density * (0.08 + deckStiffness * 0.15) * topo.massFactor;
-  const torsionalFreq = (1 / (2 * Math.PI)) * Math.sqrt((effectiveEI * 0.8) / (massPerLengthKg * Math.pow(spanLength, 4)));
+  const torsionalFreq = (1 / (2 * Math.PI)) * Math.sqrt((effectiveEI * 0.8) / (massPerLengthKg * spanSq * spanSq));
   const flutterCriticalSpeedKmh =
     3.7 * Math.sqrt((massPerLengthKg * torsionalFreq * torsionalFreq) / (1.225 * topo.aeroDrag)) * (1 + vibrationDamping * 4);
 
+  const directStress = deckBendingStressMPa + cableStressMPa * 0.35;
+  const shearStress = 15 * topo.aeroDrag;
   const maxVonMisesStressMPa = Math.round(
-    Math.sqrt(Math.pow(deckBendingStressMPa + cableStressMPa * 0.35, 2) + 3 * Math.pow(15 * topo.aeroDrag, 2))
+    Math.sqrt(directStress * directStress + 3 * shearStress * shearStress)
   );
 
   // Total bridge mass in metric tons
-  const cableMassTons = (cableAreaM2 * spanLength * (1 + (8 / 3) * Math.pow(cableSag / spanLength, 2)) * mat.density * 2) / 1000;
+  const cableMassTons = (cableAreaM2 * spanLength * (1 + (8 / 3) * sagSpanRatio * sagSpanRatio) * mat.density * 2) / 1000;
   const deckMassTons = (spanLength * (0.12 + deckStiffness * 0.28) * mat.density * topo.massFactor) / 1000;
   const suspenderMassTons = (suspenderCount * (cableSag * 0.6) * 0.002 * mat.density * 2) / 1000;
   const towerMassTons = (towerHeight * 0.8 * mat.density * 4) / 1000;
@@ -433,8 +441,8 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   const deflectionViolation = Math.max(0, maxDeflectionMm - spanLength * 2.5);
   const costScore =
     totalMassTons * mat.costFactor +
-    Math.pow(stressViolation, 2) * 8.0 +
-    Math.pow(deflectionViolation, 2) * 4.0;
+    stressViolation * stressViolation * 8.0 +
+    deflectionViolation * deflectionViolation * 4.0;
 
   return {
     source: wasmRan ? "wasm" : "ts-fallback",
@@ -612,9 +620,12 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   // 1. Lift Coefficient CL via 3D finite wing lifting line theory with sweep correction:
   // CL_alpha = (2 * pi * AR) / (2 + sqrt(4 + (AR * beta / eta)^2 * (1 + tan(sweep)^2 / beta^2)))
   const betaMach = Math.sqrt(Math.max(0.05, 1 - cruiseMach * cruiseMach));
+  const tanSweep = Math.tan(sweepRad);
+  const tanBetaRatio = tanSweep / betaMach;
+  const arBetaRatio = (aspectRatio * betaMach) / 0.95;
   const clAlpha =
     (2 * Math.PI * aspectRatio) /
-    (2 + Math.sqrt(4 + Math.pow((aspectRatio * betaMach) / 0.95, 2) * (1 + Math.pow(Math.tan(sweepRad) / betaMach, 2))));
+    (2 + Math.sqrt(4 + arBetaRatio * arBetaRatio * (1 + tanBetaRatio * tanBetaRatio)));
 
   const angleOfAttackRad = (3.5 * Math.PI) / 180; // 3.5 deg cruising AoA
   const camberLift = maxCamber * 7.5 * (1 + camberPosition * 0.5);
@@ -629,7 +640,8 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const inducedDragCDi = (liftCoeffCL * liftCoeffCL) / (Math.PI * oswaldEfficiency * aspectRatio);
 
   // 3. Parasite / Profile Drag CD0 (turbulent boundary layer wetted area friction + form drag):
-  const formFactor = 1 + 2.0 * thicknessRatio + 60 * Math.pow(thicknessRatio, 4);
+  const tcSq = thicknessRatio * thicknessRatio;
+  const formFactor = 1 + 2.0 * thicknessRatio + 60 * tcSq * tcSq;
   const cfTurbulent = 0.0032; // Skin friction at Re ~ 10^7
   const profileDragCD0 = (2 * cfTurbulent * formFactor + 0.002 * maxCamber) * family.cd0Bonus;
 
@@ -648,7 +660,8 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const wingAreaM2 = 28.0;
   const halfSpan = Math.sqrt(wingAreaM2 * aspectRatio) / 2;
   const rootChord = (2 * wingAreaM2) / (Math.sqrt(wingAreaM2 * aspectRatio) * (1 + taperRatio));
-  const dynamicPressure = 0.5 * 1.225 * Math.pow(cruiseMach * 340, 2);
+  const velocityMs = cruiseMach * 340;
+  const dynamicPressure = 0.5 * 1.225 * velocityMs * velocityMs;
   const totalLiftForceN = liftCoeffCL * dynamicPressure * wingAreaM2;
 
   // Root bending moment (elliptical lift centroid at 4/(3*pi) * b/2 ~ 0.424 b/2)

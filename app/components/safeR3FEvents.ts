@@ -10,8 +10,10 @@ export function safePointerEvents(store: RootStore) {
   const originalConnect = events.connect;
   events.connect = (target) => {
     if (!target || typeof (target as any).addEventListener !== "function") {
+      if (process.env.NODE_ENV === "development") {
         console.warn("[safeR3FEvents] connect() called with invalid target:", target);
-        return;
+      }
+      return;
     }
     return originalConnect?.(target);
   };

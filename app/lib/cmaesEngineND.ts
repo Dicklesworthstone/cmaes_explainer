@@ -73,90 +73,93 @@ export function matMult(a: MatrixND, b: MatrixND): MatrixND {
 /**
  * Classical Jacobi Eigenvalue Algorithm for symmetric matrices C = C^T
  * Computes all eigenvalues and orthogonal eigenvector matrix V such that C = V * diag(eigenvalues) * V^T.
+ * Uses flat Float64Array memory layout for cache locality and cyclic threshold sweeps.
  */
-export function jacobiEigenSymmetric(matrix: MatrixND, maxIter = 100, tol = 1e-12): {
+export function jacobiEigenSymmetric(matrix: MatrixND, maxIter = 50, tol = 1e-12): {
   eigenvalues: number[];
   eigenvectors: MatrixND; // Columns are eigenvectors
 } {
   const n = matrix.length;
-  const A = cloneMatrix(matrix);
-  const V = createIdentityMatrix(n);
+  const A = new Float64Array(n * n);
+  const V = new Float64Array(n * n);
+
+  for (let i = 0; i < n; i++) {
+    const row = matrix[i];
+    const offset = i * n;
+    for (let j = 0; j < n; j++) {
+      A[offset + j] = row[j];
+    }
+    V[offset + i] = 1.0;
+  }
 
   for (let iter = 0; iter < maxIter; iter++) {
-    // Find maximum off-diagonal element
     let maxOffDiag = 0;
-    let p = 0;
-    let q = 1;
 
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const absVal = Math.abs(A[i][j]);
-        if (absVal > maxOffDiag) {
-          maxOffDiag = absVal;
-          p = i;
-          q = j;
+    for (let p = 0; p < n - 1; p++) {
+      const pOff = p * n;
+      for (let q = p + 1; q < n; q++) {
+        const qOff = q * n;
+        const apq = A[pOff + q];
+        const absApq = Math.abs(apq);
+        if (absApq > maxOffDiag) maxOffDiag = absApq;
+
+        if (absApq < tol) continue;
+
+        const app = A[pOff + p];
+        const aqq = A[qOff + q];
+        const phi = (aqq - app) / (2 * apq);
+        const t = phi >= 0
+          ? 1 / (phi + Math.sqrt(1 + phi * phi))
+          : -1 / (-phi + Math.sqrt(1 + phi * phi));
+
+        const c = 1 / Math.sqrt(1 + t * t);
+        const s = t * c;
+        const tau = s / (1 + c);
+
+        A[pOff + p] = app - t * apq;
+        A[qOff + q] = aqq + t * apq;
+        A[pOff + q] = 0;
+        A[qOff + p] = 0;
+
+        for (let k = 0; k < n; k++) {
+          if (k !== p && k !== q) {
+            const kOff = k * n;
+            const akp = A[kOff + p];
+            const akq = A[kOff + q];
+            const newAkp = akp - s * (akq + tau * akp);
+            const newAkq = akq + s * (akp - tau * akq);
+            A[kOff + p] = newAkp;
+            A[pOff + k] = newAkp;
+            A[kOff + q] = newAkq;
+            A[qOff + k] = newAkq;
+          }
+        }
+
+        for (let k = 0; k < n; k++) {
+          const kOff = k * n;
+          const vkp = V[kOff + p];
+          const vkq = V[kOff + q];
+          V[kOff + p] = vkp - s * (vkq + tau * vkp);
+          V[kOff + q] = vkq + s * (vkp - tau * vkq);
         }
       }
     }
 
     if (maxOffDiag < tol) break;
-
-    // Calculate Jacobi rotation angle theta
-    const app = A[p][p];
-    const aqq = A[q][q];
-    const apq = A[p][q];
-
-    const phi = (aqq - app) / (2 * apq);
-    let t: number;
-    if (phi >= 0) {
-      t = 1 / (phi + Math.sqrt(1 + phi * phi));
-    } else {
-      t = -1 / (-phi + Math.sqrt(1 + phi * phi));
-    }
-
-    const c = 1 / Math.sqrt(1 + t * t);
-    const s = t * c;
-    const tau = s / (1 + c);
-
-    // Apply rotation to A
-    A[p][p] = app - t * apq;
-    A[q][q] = aqq + t * apq;
-    A[p][q] = 0;
-    A[q][p] = 0;
-
-    for (let k = 0; k < n; k++) {
-      if (k !== p && k !== q) {
-        const akp = A[k][p];
-        const akq = A[k][q];
-        A[k][p] = akp - s * (akq + tau * akp);
-        A[p][k] = A[k][p];
-        A[k][q] = akq + s * (akp - tau * akq);
-        A[q][k] = A[k][q];
-      }
-    }
-
-    // Accumulate eigenvectors in V
-    for (let k = 0; k < n; k++) {
-      const vkp = V[k][p];
-      const vkq = V[k][q];
-      V[k][p] = vkp - s * (vkq + tau * vkp);
-      V[k][q] = vkq + s * (vkp - tau * vkq);
-    }
   }
 
-  // Extract eigenvalues and sort descending
-  const eigenPairs = Array.from({ length: n }, (_, i) => ({
-    val: Math.max(1e-12, A[i][i]),
-    vec: V.map((row) => row[i])
-  }));
+  const indices = new Int32Array(n);
+  for (let i = 0; i < n; i++) indices[i] = i;
+  indices.sort((i, j) => Math.max(1e-12, A[j * n + j]) - Math.max(1e-12, A[i * n + i]));
 
-  eigenPairs.sort((a, b) => b.val - a.val);
+  const sortedEigenvalues: number[] = new Array(n);
+  const sortedEigenvectors: MatrixND = Array.from({ length: n }, () => new Array(n));
 
-  const sortedEigenvalues = eigenPairs.map((p) => p.val);
-  const sortedEigenvectors = createZeroMatrix(n);
-  for (let col = 0; col < n; col++) {
-    for (let row = 0; row < n; row++) {
-      sortedEigenvectors[row][col] = eigenPairs[col].vec[row];
+  for (let j = 0; j < n; j++) {
+    const origCol = indices[j];
+    sortedEigenvalues[j] = Math.max(1e-12, A[origCol * n + origCol]);
+    for (let i = 0; i < n; i++) {
+      sortedEigenvectors[i][j] = V[i * n + origCol];
     }
   }
 
@@ -167,29 +170,46 @@ export function jacobiEigenSymmetric(matrix: MatrixND, maxIter = 100, tol = 1e-1
 }
 
 /**
- * Computes C^{1/2} and C^{-1/2} from eigendecomposition
+ * Computes C^{1/2} and C^{-1/2} from eigendecomposition exploiting matrix symmetry
  */
 export function computeCovariancePowers(eigenvalues: number[], eigenvectors: MatrixND): {
   sqrtC: MatrixND;
   invSqrtC: MatrixND;
 } {
   const n = eigenvalues.length;
-  const sqrtC = createZeroMatrix(n);
-  const invSqrtC = createZeroMatrix(n);
+  const sqrtC: MatrixND = Array.from({ length: n }, () => new Array(n).fill(0));
+  const invSqrtC: MatrixND = Array.from({ length: n }, () => new Array(n).fill(0));
+
+  const sVals = new Float64Array(n);
+  const isVals = new Float64Array(n);
+  for (let k = 0; k < n; k++) {
+    const s = Math.sqrt(eigenvalues[k]);
+    sVals[k] = s;
+    isVals[k] = 1 / s;
+  }
 
   for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
+    const rowEigI = eigenvectors[i];
+    const rowSqrt = sqrtC[i];
+    const rowInvSqrt = invSqrtC[i];
+
+    for (let j = i; j < n; j++) {
+      const rowEigJ = eigenvectors[j];
       let sumSqrt = 0;
       let sumInv = 0;
+
       for (let k = 0; k < n; k++) {
-        const vk_i = eigenvectors[i][k];
-        const vk_j = eigenvectors[j][k];
-        const s = Math.sqrt(eigenvalues[k]);
-        sumSqrt += vk_i * s * vk_j;
-        sumInv += vk_i * (1 / s) * vk_j;
+        const prod = rowEigI[k] * rowEigJ[k];
+        sumSqrt += prod * sVals[k];
+        sumInv += prod * isVals[k];
       }
-      sqrtC[i][j] = sumSqrt;
-      invSqrtC[i][j] = sumInv;
+
+      rowSqrt[j] = sumSqrt;
+      rowInvSqrt[j] = sumInv;
+      if (i !== j) {
+        sqrtC[j][i] = sumSqrt;
+        invSqrtC[j][i] = sumInv;
+      }
     }
   }
 

@@ -7,15 +7,11 @@
 "use client";
 
 import {
-  Activity,
   ChevronDown,
   ChevronUp,
   Info,
-  Maximize2,
-  Minimize2,
   RotateCcw,
   Sparkles,
-  Zap,
   Copy,
   Check
 } from "lucide-react";
@@ -178,7 +174,7 @@ export function ColorizedEquation({
           <button
             type="button"
             onClick={handleCopyLatex}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-all"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-white/10 hover:border-white/20 transition-[background-color,border-color,color]"
             title="Copy raw LaTeX equation"
           >
             {copied ? (
@@ -196,6 +192,7 @@ export function ColorizedEquation({
 
           {pinnedVarId && (
             <button
+              type="button"
               onClick={handleReset}
               className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 bg-slate-900/60 px-2.5 py-1.5 rounded-xl border border-white/10 transition-colors"
               title="Reset variable selection"
@@ -206,6 +203,7 @@ export function ColorizedEquation({
           )}
 
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800/60 px-3 py-1.5 rounded-xl border border-white/10 transition-colors"
           >
@@ -228,10 +226,21 @@ export function ColorizedEquation({
       <div className="space-y-4">
         <div
           ref={formulaRef}
+          role="region"
+          aria-label={`Interactive formula for ${equation.title}`}
+          tabIndex={0}
           onMouseOver={handleFormulaMouseOver}
           onMouseLeave={handleFormulaMouseLeave}
+          onFocus={() => {}}
+          onBlur={handleFormulaMouseLeave}
           onClick={handleFormulaClick}
-          className="relative overflow-x-auto rounded-2xl bg-[#030712]/90 border border-white/10 p-4 sm:p-6 md:p-8 text-center select-none shadow-2xl transition-all"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              const firstVar = equation.variables[0];
+              if (firstVar) handleSelectVar(firstVar.id, true);
+            }
+          }}
+          className="relative overflow-x-auto rounded-2xl bg-[#030712]/90 border border-white/10 p-4 sm:p-6 md:p-8 text-center select-none shadow-2xl transition-[background-color,border-color,box-shadow] focus:outline-none focus:ring-1 focus:ring-sky-500/50"
         >
           <div className="text-lg sm:text-2xl md:text-3xl font-serif text-white tracking-wide">
             <LatexRenderer math={interactiveLatex} block={true} />
@@ -255,7 +264,7 @@ export function ColorizedEquation({
             <p className="text-slate-200">
               {equation.plainEnglishSentence.map((frag, idx) => {
                 if (!frag.variableId) {
-                  return <span key={idx}>{frag.text}</span>;
+                  return <span key={`frag-txt-${idx}`}>{frag.text}</span>;
                 }
                 const v = equation.variables.find((x) => x.id === frag.variableId);
                 const isActive = activeVarId === frag.variableId;
@@ -263,11 +272,11 @@ export function ColorizedEquation({
 
                 return (
                   <button
-                    key={idx}
+                    key={`frag-var-${frag.variableId}-${idx}`}
                     type="button"
                     onClick={() => handleSelectVar(frag.variableId!, true)}
                     onMouseEnter={() => handleSelectVar(frag.variableId!)}
-                    className={`inline font-bold px-1 py-0.5 mx-0.5 rounded transition-all cursor-pointer ${
+                    className={`inline font-bold px-1 py-0.5 mx-0.5 rounded transition-[background-color,color,box-shadow] cursor-pointer ${
                       isActive
                         ? `${cfg?.badgeBg || "bg-sky-500/20"} ${cfg?.textClass || "text-sky-300"} ring-1 ${cfg?.borderClass || "border-sky-400"}`
                         : `${cfg?.textClass || "text-sky-400"} hover:bg-white/5`
@@ -293,9 +302,10 @@ export function ColorizedEquation({
               return (
                 <button
                   key={v.id}
+                  type="button"
                   onClick={() => handleSelectVar(v.id, true)}
                   onMouseEnter={() => handleSelectVar(v.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-2 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-[background-color,border-color,box-shadow,transform] flex items-center gap-2 cursor-pointer ${
                     isActive
                       ? `${cfg.badgeBg} border-${v.color}-500/80 shadow-glow-sm scale-105`
                       : "bg-slate-950/40 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-900"

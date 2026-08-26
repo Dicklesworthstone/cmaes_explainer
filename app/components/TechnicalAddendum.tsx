@@ -48,20 +48,12 @@ export function TechnicalAddendum() {
             <MathJax inline>{"$P_\\theta(x)$"}</MathJax> on <MathJax inline>{"$\\mathbb{R}^n$"}</MathJax>, where{" "}
             <MathJax inline>{"$\\theta = \\{m, \\sigma, C\\}$"}</MathJax>:
           </p>
+        </div>
 
-          <MathJax dynamic>
-            {"$$x \\sim \\mathcal{N}(m, \\sigma^2 C) = m + \\sigma \\, \\mathcal{N}(0, C) = m + \\sigma \\, B D \\, \\mathcal{N}(0, I_n)$$"}
-          </MathJax>
+        {/* Colorized Equation 1: Sampling */}
+        <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-sampling"]} />
 
-          <p>
-            where:
-          </p>
-          <ul>
-            <li><MathJax inline>{"$m \\in \\mathbb{R}^n$"}</MathJax> is the distribution mean (the current best estimate of the optimum).</li>
-            <li><MathJax inline>{"$\\sigma \\in \\mathbb{R}_+$"}</MathJax> is the global scale and step size.</li>
-            <li><MathJax inline>{"$C \\in \\mathbb{R}^{n \\times n}$"}</MathJax> is a symmetric, positive-definite covariance matrix (<MathJax inline>{"$C = B D^2 B^\\top$"}</MathJax>, where <MathJax inline>{"$B$"}</MathJax> is orthogonal and <MathJax inline>{"$D$"}</MathJax> is diagonal).</li>
-          </ul>
-
+        <div className="prose-cmaes">
           <p>
             <strong>Why a Gaussian?</strong> By the Principle of Maximum Entropy, the multivariate normal distribution is the unique distribution that maximizes information entropy for a specified mean and covariance matrix. It represents the least committal prior under second-order ignorance.
           </p>
@@ -76,24 +68,13 @@ export function TechnicalAddendum() {
           <h2>2. Information Geometry & The Sampled Natural Gradient</h2>
 
           <p>
-            Suppose the objective is to maximize the expected performance under the search distribution:
-          </p>
-
-          <MathJax dynamic>
-            {"$$J(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [-f(x)] = \\int_{\\mathbb{R}^n} -f(x) \\, P_\\theta(x) \\, dx$$"}
-          </MathJax>
-
-          <p>
+            Suppose the objective is to maximize expected performance under the search distribution <MathJax inline>{"$J(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [-f(x)]$"}</MathJax>.
             Standard Euclidean steepest ascent on <MathJax inline>{"$\\nabla_\\theta J$"}</MathJax> depends arbitrarily on how the distribution is parameterized (such as Cholesky vs eigendecomposition vs matrix logarithm).
           </p>
 
           <p>
             To achieve coordinate invariance, information geometry equips the statistical manifold with the <strong>Fisher Information Metric</strong>:
           </p>
-
-          <MathJax dynamic>
-            {"$$F(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} \\left[ \\nabla_\\theta \\ln P_\\theta(x) \\, \\nabla_\\theta \\ln P_\\theta(x)^\\top \\right]$$"}
-          </MathJax>
 
           <p>
             The canonical steepest ascent direction invariant to reparameterization is the <strong>Natural Gradient</strong>:
@@ -125,13 +106,14 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes space-y-4">
           <p>
-            Under random selection in a neutral fitness landscape, <MathJax inline>{"$p_\\sigma$"}</MathJax> behaves as a stationary Gaussian process with <MathJax inline>{"$p_\\sigma \\sim \\mathcal{N}(0, I_n)$"}</MathJax>. The expected length of a standard normal vector in <MathJax inline>{"$n$"}</MathJax> dimensions is:
+            Under random selection in a neutral fitness landscape, <MathJax inline>{"$p_\\sigma$"}</MathJax> behaves as a stationary Gaussian process with <MathJax inline>{"$p_\\sigma \\sim \\mathcal{N}(0, I_n)$"}</MathJax>. The expected length of a standard normal vector serves as the baseline:
           </p>
+        </div>
 
-          <MathJax dynamic>
-            {"$$\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\| = \\sqrt{2}\\, \\frac{\\Gamma((n+1)/2)}{\\Gamma(n/2)} \\approx \\sqrt{n} \\left(1 - \\frac{1}{4n} + \\frac{1}{21n^2}\\right)$$"}
-          </MathJax>
+        {/* Colorized Equation 11: Expected Chi Length */}
+        <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-expected-chi"]} />
 
+        <div className="prose-cmaes space-y-4">
           <p>
             CSA compares the empirical path length <MathJax inline>{"$\\|p_\\sigma^{(g+1)}\\|$"}</MathJax> to its expectation under random selection:
           </p>
@@ -154,7 +136,7 @@ export function TechnicalAddendum() {
           <h2>4. Covariance Matrix Adaptation (Rank-1 & Rank-µ Updates)</h2>
 
           <p>
-            The full covariance update blends three distinct geometric mechanisms:
+            The full covariance update blends historical memory, rank-1 momentum path <MathJax inline>{"$p_c$"}</MathJax>, rank-µ batch spread, and active negative updates:
           </p>
         </div>
 
@@ -163,13 +145,14 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <p>
-            where <MathJax inline>{"$y_{i:\\lambda} = (x_{i:\\lambda} - m^{(g)}) / \\sigma^{(g)}$"}</MathJax> and <MathJax inline>{"$p_c$"}</MathJax> is the cumulated evolution path in parameter coordinates:
+            where the rank-1 anisotropic evolution path <MathJax inline>{"$p_c$"}</MathJax> accumulates momentum in parameter coordinates:
           </p>
+        </div>
 
-          <MathJax dynamic>
-            {"$$p_c^{(g+1)} = (1 - c_c) p_c^{(g)} + h_\\sigma \\sqrt{c_c (2 - c_c) \\mu_{\\text{eff}}} \\, \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}$$"}
-          </MathJax>
+        {/* Colorized Equation 7: Rank-1 Anisotropic Path */}
+        <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-pc-path"]} />
 
+        <div className="prose-cmaes">
           <ul>
             <li><strong>Rank-1 Update (<MathJax inline>{"$c_1$"}</MathJax>):</strong> Exploits correlations between consecutive generations. It acts like an online Principal Component Analysis (PCA) along the trajectory of the mean.</li>
             <li><strong>Rank-<MathJax inline>{"$\\mu$"}</MathJax> Update (<MathJax inline>{"$c_\\mu$"}</MathJax>):</strong> Exploits intra-generation variance among the top <MathJax inline>{"$\\mu$"}</MathJax> elite points in the current batch; crucial for large parallel populations.</li>
@@ -179,46 +162,20 @@ export function TechnicalAddendum() {
       </div>
 
       {/* Chapter 5: Invariance Properties */}
-      <div className="prose-cmaes space-y-6">
-        <h2>5. Fundamental Invariance Properties</h2>
+      <div className="space-y-6">
+        <div className="prose-cmaes">
+          <h2>5. Fundamental Invariance Properties</h2>
 
-        <p>
-          A central reason CMA-ES is mathematically complete under black-box assumptions is its dual invariance:
-        </p>
-
-        <div className="grid gap-4 not-prose my-6 sm:grid-cols-2">
-          <div className="glass-card p-5 border-white/5 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-300">
-              <ShieldCheck className="h-4 w-4" />
-              <span>Order Invariance</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Invariance to strictly increasing transformations of the objective function:
-            </p>
-            <div className="font-mono text-xs text-sky-300 bg-slate-950/60 p-2 rounded-lg border border-white/5">
-              <MathJax dynamic>{"$$\\forall g: \\mathbb{R} \\to \\mathbb{R}, \\quad g'(x) > 0 \\implies \\arg\\min f(x) = \\arg\\min (g \\circ f)(x)$$"}</MathJax>
-            </div>
-            <p className="text-[0.7rem] text-slate-400">
-              Units, scalings, logarithmic rewards, or cutoff bounds do not alter the optimization trajectory.
-            </p>
-          </div>
-
-          <div className="glass-card p-5 border-white/5 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300">
-              <Compass className="h-4 w-4" />
-              <span>Affine Coordinate Invariance</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Invariance to rigid linear transformations of the search space:
-            </p>
-            <div className="font-mono text-xs text-emerald-300 bg-slate-950/60 p-2 rounded-lg border border-white/5">
-              <MathJax dynamic>{"$$y = A x + b, \\quad A \\in \\text{GL}(n, \\mathbb{R})$$"}</MathJax>
-            </div>
-            <p className="text-[0.7rem] text-slate-400">
-              Rotating, translating, or scaling coordinates leaves algorithm behavior invariant once covariance adapts.
-            </p>
-          </div>
+          <p>
+            A central reason CMA-ES is mathematically complete under black-box assumptions is its dual invariance:
+          </p>
         </div>
+
+        {/* Colorized Equation 9: Monotone Rank Invariance */}
+        <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-rank-invariance"]} />
+
+        {/* Colorized Equation 10: Affine Coordinate Invariance */}
+        <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-affine-invariance"]} />
       </div>
 
       {/* Practical Playbook Integration */}

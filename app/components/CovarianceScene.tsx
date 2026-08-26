@@ -121,13 +121,19 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
 
 // --- 3D Scene Subcomponents ---
 
+const sphereGeo36 = new THREE.SphereGeometry(1, 32, 32);
+const edgeSphereGeo = new THREE.SphereGeometry(1, 20, 16);
+const edgeGeoMemo = new THREE.EdgesGeometry(edgeSphereGeo);
+const centerMeanGeo = new THREE.SphereGeometry(0.045, 16, 16);
+const eliteSphereGeo = new THREE.SphereGeometry(0.04, 16, 16);
+const otherSphereGeo = new THREE.SphereGeometry(0.025, 12, 12);
+
 function CovarianceEllipsoid({
   state
 }: {
   state: HeroGenerationState;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const edgeGeo = useMemo(() => new THREE.SphereGeometry(1, 24, 18), []);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
@@ -136,42 +142,10 @@ function CovarianceEllipsoid({
 
   const [rx, ry, rz] = state.axes;
 
-  const axisXGeo = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    geo.setFromPoints([
-      new THREE.Vector3(-rx * 1.8, 0, 0),
-      new THREE.Vector3(rx * 1.8, 0, 0)
-    ]);
-    return geo;
-  }, [rx]);
-
-  const axisYGeo = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    geo.setFromPoints([
-      new THREE.Vector3(0, -ry * 1.8, 0),
-      new THREE.Vector3(0, ry * 1.8, 0)
-    ]);
-    return geo;
-  }, [ry]);
-
-  const axisZGeo = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    geo.setFromPoints([
-      new THREE.Vector3(0, 0, -rz * 1.8),
-      new THREE.Vector3(0, 0, rz * 1.8)
-    ]);
-    return geo;
-  }, [rz]);
-
-  const lineX = useMemo(() => new THREE.Line(axisXGeo, new THREE.LineBasicMaterial({ color: "#38bdf8" })), [axisXGeo]);
-  const lineY = useMemo(() => new THREE.Line(axisYGeo, new THREE.LineBasicMaterial({ color: "#a855f7" })), [axisYGeo]);
-  const lineZ = useMemo(() => new THREE.Line(axisZGeo, new THREE.LineBasicMaterial({ color: "#34d399" })), [axisZGeo]);
-
   return (
     <group position={state.mean} rotation={state.rotation}>
       {/* Semi-transparent glowing volume */}
-      <mesh ref={meshRef} scale={[rx * 1.5, ry * 1.5, rz * 1.5]}>
-        <sphereGeometry args={[1, 36, 36]} />
+      <mesh ref={meshRef} geometry={sphereGeo36} scale={[rx * 1.5, ry * 1.5, rz * 1.5]}>
         <meshPhysicalMaterial
           color="#38bdf8"
           emissive="#0284c7"
@@ -184,20 +158,18 @@ function CovarianceEllipsoid({
           opacity={0.35}
           depthWrite={false}
         />
-        <lineSegments>
-          <edgesGeometry args={[edgeGeo]} />
+        <lineSegments geometry={edgeGeoMemo}>
           <lineBasicMaterial color="#7dd3fc" transparent opacity={0.4} />
         </lineSegments>
       </mesh>
 
       {/* Principal Eigenvector Axes */}
-      <primitive object={lineX} />
-      <primitive object={lineY} />
-      <primitive object={lineZ} />
+      <Line points={[[-rx * 1.8, 0, 0], [rx * 1.8, 0, 0]]} color="#38bdf8" lineWidth={2} />
+      <Line points={[[0, -ry * 1.8, 0], [0, ry * 1.8, 0]]} color="#a855f7" lineWidth={2} />
+      <Line points={[[0, 0, -rz * 1.8], [0, 0, rz * 1.8]]} color="#34d399" lineWidth={2} />
 
       {/* Center Mean Marker */}
-      <mesh>
-        <sphereGeometry args={[0.045, 16, 16]} />
+      <mesh geometry={centerMeanGeo}>
         <meshStandardMaterial color="#ffffff" emissive="#38bdf8" emissiveIntensity={3} />
       </mesh>
     </group>
@@ -239,9 +211,9 @@ function PopulationSamples({ samples }: { samples: Point3D[] }) {
       {/* Elite Offspring - Glowing Emerald */}
       <instancedMesh
         ref={eliteMeshRef}
+        geometry={eliteSphereGeo}
         args={[undefined as any, undefined as any, Math.max(1, elites.length)]}
       >
-        <sphereGeometry args={[0.04, 16, 16]} />
         <meshStandardMaterial
           color="#34d399"
           emissive="#10b981"
@@ -253,9 +225,9 @@ function PopulationSamples({ samples }: { samples: Point3D[] }) {
       {/* Other Samples - Cyan/Purple */}
       <instancedMesh
         ref={otherMeshRef}
+        geometry={otherSphereGeo}
         args={[undefined as any, undefined as any, Math.max(1, others.length)]}
       >
-        <sphereGeometry args={[0.025, 12, 12]} />
         <meshStandardMaterial
           color="#38bdf8"
           emissive="#0284c7"
@@ -268,10 +240,10 @@ function PopulationSamples({ samples }: { samples: Point3D[] }) {
   );
 }
 
-function TrajectoryRibbon({ states, currentGen }: { states: HeroGenerationState[]; currentGen: number }) {
+function TrajectoryRibbon({ allVectorPoints, currentGen }: { allVectorPoints: THREE.Vector3[]; currentGen: number }) {
   const points = useMemo(() => {
-    return states.slice(0, currentGen + 1).map((s) => new THREE.Vector3(...s.mean));
-  }, [states, currentGen]);
+    return allVectorPoints.slice(0, currentGen + 1);
+  }, [allVectorPoints, currentGen]);
 
   if (points.length < 2) return null;
 
@@ -296,6 +268,7 @@ export function CovarianceScene() {
   const [genIndex, setGenIndex] = useState(0);
 
   const trajectory = useMemo(() => generateHeroTrajectory(landscape), [landscape]);
+  const allVectorPoints = useMemo(() => trajectory.map((s) => new THREE.Vector3(...s.mean)), [trajectory]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -339,7 +312,7 @@ export function CovarianceScene() {
             <group position={[0, -0.2, 0]}>
               <CovarianceEllipsoid state={currentState} />
               <PopulationSamples samples={currentState.samples} />
-              <TrajectoryRibbon states={trajectory} currentGen={genIndex} />
+              <TrajectoryRibbon allVectorPoints={allVectorPoints} currentGen={genIndex} />
               
               {/* Subtle Grid Floor */}
               <gridHelper args={[10, 20, "#1e293b", "#0f172a"]} position={[0, -1.4, 0]} />

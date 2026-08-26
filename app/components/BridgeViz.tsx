@@ -323,6 +323,19 @@ function DeckAnimator({
 
 // --- Main Interactive BridgeViz Component ---
 
+function decodeBridgeVector(v: number[]): BridgeParams {
+  return {
+    spanLength: Number(decodeParameter(v[0], BRIDGE_PARAM_SPECS[0]).value),
+    cableSag: Number(decodeParameter(v[1], BRIDGE_PARAM_SPECS[1]).value),
+    deckStiffness: Number(decodeParameter(v[2], BRIDGE_PARAM_SPECS[2]).value),
+    trussTopology: String(decodeParameter(v[3], BRIDGE_PARAM_SPECS[3]).value) as TrussTopology,
+    materialGrade: String(decodeParameter(v[4], BRIDGE_PARAM_SPECS[4]).value) as MaterialGrade,
+    suspenderCount: Number(decodeParameter(v[5], BRIDGE_PARAM_SPECS[5]).value),
+    towerAspect: Number(decodeParameter(v[6], BRIDGE_PARAM_SPECS[6]).value),
+    vibrationDamping: Number(decodeParameter(v[7], BRIDGE_PARAM_SPECS[7]).value)
+  };
+}
+
 export function BridgeViz() {
   // 8 Physical Input Parameters
   const [params, setParams] = useState<BridgeParams>({
@@ -340,58 +353,13 @@ export function BridgeViz() {
   const [autoRun, setAutoRun] = useState(true);
   const [loadPos, setLoadPos] = useState(0);
 
-  // CMA-ES State
+  // CMA-ES State with lazy initialization
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
-  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
-  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
-  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Convert 8 parameters to/from [0, 1]^8 vector
-  const paramVector = useMemo(() => {
-    return [
-      encodeParameter(params.spanLength, BRIDGE_PARAM_SPECS[0]),
-      encodeParameter(params.cableSag, BRIDGE_PARAM_SPECS[1]),
-      encodeParameter(params.deckStiffness, BRIDGE_PARAM_SPECS[2]),
-      encodeParameter(params.trussTopology, BRIDGE_PARAM_SPECS[3]),
-      encodeParameter(params.materialGrade, BRIDGE_PARAM_SPECS[4]),
-      encodeParameter(params.suspenderCount, BRIDGE_PARAM_SPECS[5]),
-      encodeParameter(params.towerAspect, BRIDGE_PARAM_SPECS[6]),
-      encodeParameter(params.vibrationDamping, BRIDGE_PARAM_SPECS[7])
-    ];
-  }, [params]);
-
-  // Decode a unit vector [0, 1]^8 back to physical BridgeParams
-  const decodeVectorToParams = useCallback((v: number[]): BridgeParams => {
-    return {
-      spanLength: Number(decodeParameter(v[0], BRIDGE_PARAM_SPECS[0]).value),
-      cableSag: Number(decodeParameter(v[1], BRIDGE_PARAM_SPECS[1]).value),
-      deckStiffness: Number(decodeParameter(v[2], BRIDGE_PARAM_SPECS[2]).value),
-      trussTopology: String(decodeParameter(v[3], BRIDGE_PARAM_SPECS[3]).value) as TrussTopology,
-      materialGrade: String(decodeParameter(v[4], BRIDGE_PARAM_SPECS[4]).value) as MaterialGrade,
-      suspenderCount: Number(decodeParameter(v[5], BRIDGE_PARAM_SPECS[5]).value),
-      towerAspect: Number(decodeParameter(v[6], BRIDGE_PARAM_SPECS[6]).value),
-      vibrationDamping: Number(decodeParameter(v[7], BRIDGE_PARAM_SPECS[7]).value)
-    };
-  }, []);
-
-  // Real physical analysis output
-  const analysis = useMemo(() => {
-    return evaluateBridgePhysics(params, loadPos);
-  }, [params, loadPos]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
-    };
-  }, []);
-
-  // Initialize generation 0 state for phase space viewer on mount
-  useEffect(() => {
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(() => {
     const optimizer = new CMAESOptimizerND(
       (zVec) => {
-        const decoded = decodeVectorToParams(zVec);
+        const decoded = decodeBridgeVector(zVec);
         const result = evaluateBridgePhysics(decoded, 0);
         return result.costScore;
       },
@@ -412,10 +380,43 @@ export function BridgeViz() {
         bounds: [0.0, 1.0]
       }
     );
-    const initialStep = optimizer.step();
-    setLatestStateND(initialStep);
-    setHistoryND([initialStep]);
-  }, [decodeVectorToParams]);
+    return optimizer.step();
+  });
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>(() =>
+    latestStateND ? [latestStateND] : []
+  );
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Convert 8 parameters to/from [0, 1]^8 vector
+  const paramVector = useMemo(() => {
+    return [
+      encodeParameter(params.spanLength, BRIDGE_PARAM_SPECS[0]),
+      encodeParameter(params.cableSag, BRIDGE_PARAM_SPECS[1]),
+      encodeParameter(params.deckStiffness, BRIDGE_PARAM_SPECS[2]),
+      encodeParameter(params.trussTopology, BRIDGE_PARAM_SPECS[3]),
+      encodeParameter(params.materialGrade, BRIDGE_PARAM_SPECS[4]),
+      encodeParameter(params.suspenderCount, BRIDGE_PARAM_SPECS[5]),
+      encodeParameter(params.towerAspect, BRIDGE_PARAM_SPECS[6]),
+      encodeParameter(params.vibrationDamping, BRIDGE_PARAM_SPECS[7])
+    ];
+  }, [params]);
+
+  // Decode a unit vector [0, 1]^8 back to physical BridgeParams
+  const decodeVectorToParams = useCallback((v: number[]): BridgeParams => {
+    return decodeBridgeVector(v);
+  }, []);
+
+  // Real physical analysis output
+  const analysis = useMemo(() => {
+    return evaluateBridgePhysics(params, loadPos);
+  }, [params, loadPos]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
 
   // Moving truck animation loop
   useEffect(() => {
@@ -707,6 +708,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[0].label}
                 min={BRIDGE_PARAM_SPECS[0].min}
                 max={BRIDGE_PARAM_SPECS[0].max}
                 step={BRIDGE_PARAM_SPECS[0].step}
@@ -724,6 +726,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[1].label}
                 min={BRIDGE_PARAM_SPECS[1].min}
                 max={BRIDGE_PARAM_SPECS[1].max}
                 step={BRIDGE_PARAM_SPECS[1].step}
@@ -741,6 +744,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[2].label}
                 min={BRIDGE_PARAM_SPECS[2].min}
                 max={BRIDGE_PARAM_SPECS[2].max}
                 step={BRIDGE_PARAM_SPECS[2].step}
@@ -757,6 +761,7 @@ export function BridgeViz() {
                 <span className="text-purple-300 font-mono text-[0.68rem]">{params.trussTopology}</span>
               </div>
               <select
+                aria-label="Truss Web Topology"
                 value={params.trussTopology}
                 onChange={(e) => setParams({ ...params, trussTopology: e.target.value as TrussTopology })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-400"
@@ -776,6 +781,7 @@ export function BridgeViz() {
                 <span className="text-indigo-300 font-mono text-[0.68rem]">{params.materialGrade}</span>
               </div>
               <select
+                aria-label="Material Grade"
                 value={params.materialGrade}
                 onChange={(e) => setParams({ ...params, materialGrade: e.target.value as MaterialGrade })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-400"
@@ -796,6 +802,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[5].label}
                 min={BRIDGE_PARAM_SPECS[5].min}
                 max={BRIDGE_PARAM_SPECS[5].max}
                 step={BRIDGE_PARAM_SPECS[5].step}
@@ -813,6 +820,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[6].label}
                 min={BRIDGE_PARAM_SPECS[6].min}
                 max={BRIDGE_PARAM_SPECS[6].max}
                 step={BRIDGE_PARAM_SPECS[6].step}
@@ -830,6 +838,7 @@ export function BridgeViz() {
               </div>
               <input
                 type="range"
+                aria-label={BRIDGE_PARAM_SPECS[7].label}
                 min={BRIDGE_PARAM_SPECS[7].min}
                 max={BRIDGE_PARAM_SPECS[7].max}
                 step={BRIDGE_PARAM_SPECS[7].step}

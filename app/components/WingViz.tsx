@@ -241,6 +241,19 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
 
 // --- Main Interactive WingViz Component ---
 
+function decodeWingVector(v: number[]): WingParams {
+  return {
+    aspectRatio: Number(decodeParameter(v[0], WING_PARAM_SPECS[0]).value),
+    sweepAngle: Number(decodeParameter(v[1], WING_PARAM_SPECS[1]).value),
+    thicknessRatio: Number(decodeParameter(v[2], WING_PARAM_SPECS[2]).value),
+    maxCamber: Number(decodeParameter(v[3], WING_PARAM_SPECS[3]).value),
+    camberPosition: Number(decodeParameter(v[4], WING_PARAM_SPECS[4]).value),
+    taperRatio: Number(decodeParameter(v[5], WING_PARAM_SPECS[5]).value),
+    airfoilFamily: String(decodeParameter(v[6], WING_PARAM_SPECS[6]).value) as AirfoilFamily,
+    internalRibCount: Number(decodeParameter(v[7], WING_PARAM_SPECS[7]).value)
+  };
+}
+
 export function WingViz() {
   // 8 Physical Input Parameters
   const [params, setParams] = useState<WingParams>({
@@ -256,58 +269,13 @@ export function WingViz() {
 
   const [activeTab, setActiveTab] = useState<"viewport" | "phase_space">("viewport");
 
-  // CMA-ES State
+  // CMA-ES State with lazy initialization
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
-  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
-  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
-  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Convert 8 parameters to/from [0, 1]^8 unit cube
-  const paramVector = useMemo(() => {
-    return [
-      encodeParameter(params.aspectRatio, WING_PARAM_SPECS[0]),
-      encodeParameter(params.sweepAngle, WING_PARAM_SPECS[1]),
-      encodeParameter(params.thicknessRatio, WING_PARAM_SPECS[2]),
-      encodeParameter(params.maxCamber, WING_PARAM_SPECS[3]),
-      encodeParameter(params.camberPosition, WING_PARAM_SPECS[4]),
-      encodeParameter(params.taperRatio, WING_PARAM_SPECS[5]),
-      encodeParameter(params.airfoilFamily, WING_PARAM_SPECS[6]),
-      encodeParameter(params.internalRibCount, WING_PARAM_SPECS[7])
-    ];
-  }, [params]);
-
-  // Decode unit vector [0, 1]^8 back to physical WingParams
-  const decodeVectorToParams = useCallback((v: number[]): WingParams => {
-    return {
-      aspectRatio: Number(decodeParameter(v[0], WING_PARAM_SPECS[0]).value),
-      sweepAngle: Number(decodeParameter(v[1], WING_PARAM_SPECS[1]).value),
-      thicknessRatio: Number(decodeParameter(v[2], WING_PARAM_SPECS[2]).value),
-      maxCamber: Number(decodeParameter(v[3], WING_PARAM_SPECS[3]).value),
-      camberPosition: Number(decodeParameter(v[4], WING_PARAM_SPECS[4]).value),
-      taperRatio: Number(decodeParameter(v[5], WING_PARAM_SPECS[5]).value),
-      airfoilFamily: String(decodeParameter(v[6], WING_PARAM_SPECS[6]).value) as AirfoilFamily,
-      internalRibCount: Number(decodeParameter(v[7], WING_PARAM_SPECS[7]).value)
-    };
-  }, []);
-
-  // Real aerodynamic physics analysis output
-  const aero = useMemo(() => {
-    return evaluateWingPhysics(params, 0.78);
-  }, [params]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
-    };
-  }, []);
-
-  // Initialize generation 0 state for phase space viewer on mount
-  useEffect(() => {
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(() => {
     const optimizer = new CMAESOptimizerND(
       (zVec) => {
-        const decoded = decodeVectorToParams(zVec);
+        const decoded = decodeWingVector(zVec);
         const result = evaluateWingPhysics(decoded, 0.78);
         return result.costScore;
       },
@@ -328,10 +296,43 @@ export function WingViz() {
         bounds: [0.0, 1.0]
       }
     );
-    const initialStep = optimizer.step();
-    setLatestStateND(initialStep);
-    setHistoryND([initialStep]);
-  }, [decodeVectorToParams]);
+    return optimizer.step();
+  });
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>(() =>
+    latestStateND ? [latestStateND] : []
+  );
+  const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Convert 8 parameters to/from [0, 1]^8 unit cube
+  const paramVector = useMemo(() => {
+    return [
+      encodeParameter(params.aspectRatio, WING_PARAM_SPECS[0]),
+      encodeParameter(params.sweepAngle, WING_PARAM_SPECS[1]),
+      encodeParameter(params.thicknessRatio, WING_PARAM_SPECS[2]),
+      encodeParameter(params.maxCamber, WING_PARAM_SPECS[3]),
+      encodeParameter(params.camberPosition, WING_PARAM_SPECS[4]),
+      encodeParameter(params.taperRatio, WING_PARAM_SPECS[5]),
+      encodeParameter(params.airfoilFamily, WING_PARAM_SPECS[6]),
+      encodeParameter(params.internalRibCount, WING_PARAM_SPECS[7])
+    ];
+  }, [params]);
+
+  // Decode unit vector [0, 1]^8 back to physical WingParams
+  const decodeVectorToParams = useCallback((v: number[]): WingParams => {
+    return decodeWingVector(v);
+  }, []);
+
+  // Real aerodynamic physics analysis output
+  const aero = useMemo(() => {
+    return evaluateWingPhysics(params, 0.78);
+  }, [params]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    };
+  }, []);
 
   // Run live 8D CMA-ES Optimization with 3D PCA Phase-Space projection
   const handleRunOptimizer = () => {
@@ -578,6 +579,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[0].label}
                 min={WING_PARAM_SPECS[0].min}
                 max={WING_PARAM_SPECS[0].max}
                 step={WING_PARAM_SPECS[0].step}
@@ -595,6 +597,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[1].label}
                 min={WING_PARAM_SPECS[1].min}
                 max={WING_PARAM_SPECS[1].max}
                 step={WING_PARAM_SPECS[1].step}
@@ -612,6 +615,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[2].label}
                 min={WING_PARAM_SPECS[2].min}
                 max={WING_PARAM_SPECS[2].max}
                 step={WING_PARAM_SPECS[2].step}
@@ -629,6 +633,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[3].label}
                 min={WING_PARAM_SPECS[3].min}
                 max={WING_PARAM_SPECS[3].max}
                 step={WING_PARAM_SPECS[3].step}
@@ -646,6 +651,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[4].label}
                 min={WING_PARAM_SPECS[4].min}
                 max={WING_PARAM_SPECS[4].max}
                 step={WING_PARAM_SPECS[4].step}
@@ -663,6 +669,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[5].label}
                 min={WING_PARAM_SPECS[5].min}
                 max={WING_PARAM_SPECS[5].max}
                 step={WING_PARAM_SPECS[5].step}
@@ -679,6 +686,7 @@ export function WingViz() {
                 <span className="text-sky-300 font-mono text-[0.68rem]">{params.airfoilFamily}</span>
               </div>
               <select
+                aria-label="Airfoil Family"
                 value={params.airfoilFamily}
                 onChange={(e) => setParams({ ...params, airfoilFamily: e.target.value as AirfoilFamily })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400"
@@ -699,6 +707,7 @@ export function WingViz() {
               </div>
               <input
                 type="range"
+                aria-label={WING_PARAM_SPECS[7].label}
                 min={WING_PARAM_SPECS[7].min}
                 max={WING_PARAM_SPECS[7].max}
                 step={WING_PARAM_SPECS[7].step}

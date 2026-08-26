@@ -49,7 +49,7 @@ export function Navbar() {
       {/* Top Reading Progress Bar */}
       <div className="fixed top-0 inset-x-0 h-1 z-[100] bg-slate-950/40 pointer-events-none">
         <div
-          className="h-full bg-gradient-to-r from-sky-400 via-cyan-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)] transition-all duration-75 ease-out"
+          className="h-full bg-gradient-to-r from-sky-400 via-cyan-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)] transition-[width] duration-75 ease-out"
           style={{ width: `${scrollProgress}%` }}
         />
       </div>

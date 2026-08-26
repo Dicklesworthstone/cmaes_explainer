@@ -358,6 +358,53 @@ function GaussianDistributionSandbox() {
     return () => clearInterval(timer);
   }, [isPlaying, stepGeneration]);
 
+  // Pre-render background heatmap offscreen once per landscape switch
+  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const offscreen = document.createElement("canvas");
+    const W = 540;
+    const H = 380;
+    offscreen.width = W;
+    offscreen.height = H;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return;
+
+    const DOMAIN = 2.4;
+    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
+    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
+
+    const imgData = ctx.createImageData(W, H);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+    const denom = activeLandscapeKey === "cigar" ? 25 : 8;
+
+    for (let py = 0; py < H; py += 2) {
+      const y = toCoordY(py);
+      const row0 = py * W;
+      const row1 = Math.min(H - 1, py + 1) * W;
+
+      for (let px = 0; px < W; px += 2) {
+        const x = toCoordX(px);
+        const f = landscape.fn(x, y);
+        const norm = Math.tanh(f / denom);
+
+        const r = (8 + 22 * norm) | 0;
+        const g = (20 + 70 * (1 - norm)) | 0;
+        const b = (40 + 130 * (1 - norm)) | 0;
+        const color = (255 << 24) | (b << 16) | (g << 8) | r;
+
+        const px1 = Math.min(W - 1, px + 1);
+        buf32[row0 + px] = color;
+        buf32[row0 + px1] = color;
+        buf32[row1 + px] = color;
+        buf32[row1 + px1] = color;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    bgCanvasRef.current = offscreen;
+  }, [activeLandscapeKey, landscape]);
+
   // Render contour plot, Gaussian confidence ellipses, samples, and mean shift
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -371,37 +418,13 @@ function GaussianDistributionSandbox() {
 
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
 
     ctx.clearRect(0, 0, W, H);
 
-    // Draw objective function background heatmap
-    const imgData = ctx.createImageData(W, H);
-    for (let py = 0; py < H; py += 2) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += 2) {
-        const x = toCoordX(px);
-        const f = landscape.fn(x, y);
-        const norm = Math.tanh(f / (activeLandscapeKey === "cigar" ? 25 : 8));
-
-        // Dark navy to deep cyan/blue gradient
-        const r = Math.floor(8 + 22 * norm);
-        const g = Math.floor(20 + 70 * (1 - norm));
-        const b = Math.floor(40 + 130 * (1 - norm));
-
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // Blit pre-rendered background heatmap instantly
+    if (bgCanvasRef.current) {
+      ctx.drawImage(bgCanvasRef.current, 0, 0);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // Draw grid lines
     ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
@@ -934,7 +957,9 @@ export function CmaesIntro() {
           CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. Through the accumulation of successful steps along the evolution paths, the covariance matrix <MathJax inline>{"$C$"}</MathJax> asymptotically adapts such that:
         </p>
 
-        <MathJax dynamic>{"$$C \\propto H^{-1}$$"}</MathJax>
+        <div className="my-6 not-prose">
+          <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-hessian-inverse"]} />
+        </div>
 
         <p>
           Sampling from <MathJax inline>{"$\\mathcal{N}(m, \\sigma^2 H^{-1})$"}</MathJax> whitens the search landscape, enabling optimal linear convergence rates on ill-conditioned problems that stall standard genetic algorithms or random search.

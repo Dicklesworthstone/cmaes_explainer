@@ -25,26 +25,31 @@ function EllipsoidMesh({
   const wireRef = useRef<THREE.LineSegments>(null);
   const outerHullRef = useRef<THREE.Mesh>(null);
 
-  useFrame(() => {
+  const targetScale1Sigma = useMemo(() => new THREE.Vector3(), []);
+  const targetScale2Sigma = useMemo(() => new THREE.Vector3(), []);
+  const sphereGeom = useMemo(() => new THREE.SphereGeometry(1, 16, 12), []);
+
+  useFrame((_, delta) => {
     if (!meshRef.current) return;
-    const targetScale1Sigma = new THREE.Vector3(
+    targetScale1Sigma.set(
       Math.max(0.08, radii[0] * SCALE_FACTOR),
       Math.max(0.08, radii[1] * SCALE_FACTOR),
       Math.max(0.08, radii[2] * SCALE_FACTOR)
     );
-    const targetScale2Sigma = new THREE.Vector3(
+    targetScale2Sigma.set(
       Math.max(0.16, radii[0] * SCALE_FACTOR * 2.0),
       Math.max(0.16, radii[1] * SCALE_FACTOR * 2.0),
       Math.max(0.16, radii[2] * SCALE_FACTOR * 2.0)
     );
 
-    meshRef.current.scale.lerp(targetScale1Sigma, 0.25);
+    const lerpRate = Math.min(1, delta * 15);
+    meshRef.current.scale.lerp(targetScale1Sigma, lerpRate);
 
     if (wireRef.current) {
       wireRef.current.scale.copy(meshRef.current.scale);
     }
     if (outerHullRef.current) {
-      outerHullRef.current.scale.lerp(targetScale2Sigma, 0.25);
+      outerHullRef.current.scale.lerp(targetScale2Sigma, lerpRate);
     }
   });
 
@@ -68,7 +73,7 @@ function EllipsoidMesh({
 
       {/* 1-Sigma Wireframe Lattice */}
       <lineSegments ref={wireRef}>
-        <wireframeGeometry args={[new THREE.SphereGeometry(1, 16, 12)]} />
+        <wireframeGeometry args={[sphereGeom]} />
         <lineBasicMaterial color="#38bdf8" transparent opacity={0.65} />
       </lineSegments>
 

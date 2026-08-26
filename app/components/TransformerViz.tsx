@@ -452,61 +452,70 @@ export function TransformerViz() {
             </p>
           </div>
 
-          <div className="space-y-4 bg-slate-900/40 rounded-2xl p-5 border border-white/5">
-            <div className="space-y-1.5">
+          {/* Continuous Hyperparameter Sliders */}
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 space-y-5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-teal-400" />
+              <span>Continuous Architecture Dimensions</span>
+            </h4>
+
+            {/* Depth Slider */}
+            <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Depth (Layers $L$)</span>
-                <span className="text-violet-300 font-mono bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20">
-                  {layersCount} Layers
+                <span className="text-slate-300">Depth (Layers)</span>
+                <span className="text-teal-400 font-mono font-bold">
+                  {Math.max(3, Math.round(2 + depth * 5))} layers
                 </span>
               </div>
               <input
                 type="range"
-                aria-label="Transformer Depth Layers"
-                min={0}
-                max={1}
-                step={0.01}
+                aria-label="Depth (Layers)"
+                min="0"
+                max="1"
+                step="0.01"
                 value={depth}
                 onChange={(e) => setDepth(parseFloat(e.target.value))}
-                className="w-full accent-violet-400"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Model Dimension (d_model)</span>
-                <span className="text-teal-300 font-mono bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                  {hiddenDim} Dim
-                </span>
-              </div>
-              <input
-                type="range"
-                aria-label="Model Dimension d_model"
-                min={0}
-                max={1}
-                step={0.01}
-                value={width}
-                onChange={(e) => setWidth(parseFloat(e.target.value))}
                 className="w-full accent-teal-400"
               />
             </div>
 
-            <div className="space-y-1.5">
+            {/* Width Slider */}
+            <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Attention Heads ($H$)</span>
-                <span className="text-fuchsia-300 font-mono bg-fuchsia-500/10 px-2 py-0.5 rounded border border-fuchsia-500/20">
-                  {attentionHeads} Heads
+                <span className="text-slate-300">Width (Hidden Dim)</span>
+                <span className="text-indigo-400 font-mono font-bold">
+                  d_model = {Math.round(128 + width * 512)}
                 </span>
               </div>
               <input
                 type="range"
-                aria-label="Attention Heads Count"
-                min={0}
-                max={1}
-                step={0.01}
+                aria-label="Width (Hidden Dim)"
+                min="0"
+                max="1"
+                step="0.01"
+                value={width}
+                onChange={(e) => setWidth(parseFloat(e.target.value))}
+                className="w-full accent-indigo-400"
+              />
+            </div>
+
+            {/* Attention Heads Slider */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-medium">
+                <span className="text-slate-300">Attention Heads</span>
+                <span className="text-purple-400 font-mono font-bold">
+                  {Math.max(2, Math.round(1 + heads * 7) * 2)} heads
+                </span>
+              </div>
+              <input
+                type="range"
+                aria-label="Attention Heads"
+                min="0"
+                max="1"
+                step="0.01"
                 value={heads}
                 onChange={(e) => setHeads(parseFloat(e.target.value))}
-                className="w-full accent-fuchsia-400"
+                className="w-full accent-purple-400"
               />
             </div>
 

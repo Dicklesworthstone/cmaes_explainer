@@ -20,7 +20,6 @@ interface ThreeWithTimer {
 function patchNow() {
   const Timer = (THREE as unknown as ThreeWithTimer).Timer;
   if (!Timer || Timer.__patchedConnect) return;
-  const original = Timer.prototype.connect;
   Timer.__patchedConnect = true;
   Timer.prototype.connect = function safeConnect(doc?: Document | null) {
     if (!doc && typeof window !== "undefined") doc = window.document;

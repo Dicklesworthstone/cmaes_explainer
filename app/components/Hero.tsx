@@ -23,7 +23,7 @@ export function Hero() {
 
     const el = gradientRef.current;
 
-    gsap.fromTo(
+    const tween = gsap.fromTo(
       el,
       { y: 0, opacity: 0.8 },
       {
@@ -40,7 +40,8 @@ export function Hero() {
     );
 
     return () => {
-      ScrollTrigger.getAll().forEach((t) => t.kill());
+      tween.scrollTrigger?.kill();
+      tween.kill();
     };
   }, [prefersReducedMotion]);
 

@@ -9,7 +9,7 @@ export function BackToTop() {
   useEffect(() => {
     const handler = () => setVisible(window.scrollY > 480);
     handler();
-    window.addEventListener("scroll", handler);
+    window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
