@@ -282,13 +282,13 @@ export function ColorizedEquation({
                     type="button"
                     onClick={() => handleSelectVar(frag.variableId!, true)}
                     onMouseEnter={() => handleSelectVar(frag.variableId!)}
-                    className={`inline font-bold px-1 py-0.5 mx-0.5 rounded transition-[background-color,color,box-shadow] cursor-pointer ${
+                    className={`inline font-bold px-1.5 py-0.5 mx-0.5 rounded transition-[background-color,color,box-shadow] cursor-pointer ${
                       isActive
                         ? `${cfg?.badgeBg || "bg-sky-500/20"} ${cfg?.textClass || "text-sky-300"} ring-1 ${cfg?.borderClass || "border-sky-400"}`
                         : `${cfg?.textClass || "text-sky-400"} hover:bg-white/5`
                     }`}
                   >
-                    {frag.text}
+                    <LatexRenderer math={frag.text} block={false} />
                   </button>
                 );
               })}
@@ -318,10 +318,12 @@ export function ColorizedEquation({
                   }`}
                 >
                   <span
-                    className="w-2 h-2 rounded-full"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: cfg.hex }}
                   />
-                  <span className="font-mono font-bold text-white">{v.symbol}</span>
+                  <span className="font-bold text-white inline-flex items-center">
+                    <LatexRenderer math={v.symbol} block={false} />
+                  </span>
                   <span className="text-slate-300 text-[0.7rem]">{v.name}</span>
                 </button>
               );
@@ -338,13 +340,13 @@ export function ColorizedEquation({
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-mono text-base font-bold text-white border shadow-inner"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white border shadow-inner overflow-hidden"
                     style={{
                       backgroundColor: `${COLOR_STYLES[activeVar.color].hex}22`,
                       borderColor: COLOR_STYLES[activeVar.color].hex,
                     }}
                   >
-                    {activeVar.symbol}
+                    <LatexRenderer math={activeVar.symbol} block={false} />
                   </div>
                   <div>
                     <h4 className="text-base font-bold text-white flex items-center gap-2 font-display">
@@ -363,8 +365,11 @@ export function ColorizedEquation({
                   </div>
                 </div>
 
-                <div className="text-xs font-mono text-slate-400 bg-slate-900/80 px-3 py-1 rounded-lg border border-white/5">
-                  Symbol: <span className="text-white font-bold">{activeVar.symbol}</span>
+                <div className="text-xs font-mono text-slate-400 bg-slate-900/80 px-3 py-1 rounded-lg border border-white/5 flex items-center gap-1.5">
+                  <span>Symbol:</span>
+                  <span className="text-white font-bold inline-flex items-center">
+                    <LatexRenderer math={activeVar.symbol} block={false} />
+                  </span>
                 </div>
               </div>
 

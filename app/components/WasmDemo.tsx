@@ -133,16 +133,6 @@ export function WasmDemo() {
     setGdHistory(gd);
     setAdamHistory(adam);
     setRsHistory(rs);
-    animPosRef.current = {
-      m0: startPoint[0],
-      m1: startPoint[1],
-      sigma: initialSigma,
-      l1: 1,
-      l2: 1,
-      angle: 0,
-      pc0: 0,
-      pc1: 0,
-    };
   }, [createOptimizerState, currentBench, startPoint, initialSigma, lambda, activeCMA, noiseLevel, compareMode]);
 
   // Handle benchmark change
@@ -165,16 +155,6 @@ export function WasmDemo() {
     setGdHistory(gd);
     setAdamHistory(adam);
     setRsHistory(rs);
-    animPosRef.current = {
-      m0: newStart[0],
-      m1: newStart[1],
-      sigma: initialSigma,
-      l1: 1,
-      l2: 1,
-      angle: 0,
-      pc0: 0,
-      pc1: 0,
-    };
   };
 
   // Step the optimizer
@@ -191,7 +171,7 @@ export function WasmDemo() {
       stepOptimization();
     }, speedMs);
     return () => clearInterval(interval);
-  }, [isPlaying, history.length >= 60, speedMs, stepOptimization]);
+  }, [isPlaying, history.length, speedMs, stepOptimization]);
 
   const latestState = history[history.length - 1] || null;
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
