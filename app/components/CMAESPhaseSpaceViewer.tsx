@@ -39,9 +39,9 @@ function EllipsoidMesh({
       Math.max(0.06, radii[2] * s)
     );
     targetScale2Sigma.set(
-      Math.max(0.12, radii[0] * s * 1.8),
-      Math.max(0.12, radii[1] * s * 1.8),
-      Math.max(0.12, radii[2] * s * 1.8)
+      Math.max(0.12, radii[0] * s * 2.0),
+      Math.max(0.12, radii[1] * s * 2.0),
+      Math.max(0.12, radii[2] * s * 2.0)
     );
 
     const lerpRate = Math.min(1, delta * 9.0);
@@ -104,9 +104,11 @@ function PrincipalAxes({
   radii: [number, number, number];
   scale?: number;
 }) {
-  const rX = Math.max(0.15, radii[0] * scale * 1.4);
-  const rY = Math.max(0.15, radii[1] * scale * 1.4);
-  const rZ = Math.max(0.15, radii[2] * scale * 1.4);
+  // Axes end just past the 1-sigma surface so they read as that surface's
+  // principal radii rather than piercing far beyond it.
+  const rX = Math.max(0.1, radii[0] * scale * 1.02);
+  const rY = Math.max(0.1, radii[1] * scale * 1.02);
+  const rZ = Math.max(0.1, radii[2] * scale * 1.02);
 
   const lineX = useMemo(() => [new THREE.Vector3(-rX, 0, 0), new THREE.Vector3(rX, 0, 0)], [rX]);
   const lineY = useMemo(() => [new THREE.Vector3(0, -rY, 0), new THREE.Vector3(0, rY, 0)], [rY]);
@@ -228,11 +230,35 @@ function DynamicSceneRig({
   const currentScaleRef = useRef(3.5);
   const targetScaleRef = useRef(3.5);
 
-  // Compute adaptive visual scale so the covariance ellipse is ALWAYS prominent and visible,
-  // while faithfully preserving its real aspect ratio and condition number.
+  // Adaptive visual scale keeps the ellipse prominent: the longest axis is
+  // renormalized toward ~1.85 scene units, so ABSOLUTE size (sigma decay) is
+  // intentionally not shown here — read sigma from the telemetry. The per-axis
+  // display floor also caps the drawable aspect ratio around 30:1; the header
+  // kappa(C) readout reports the true, uncapped condition number.
   const maxRadius = Math.max(radii[0], radii[1], radii[2], 1e-6);
-  // Target comfortable visual extent ~1.6 - 2.0 scene units
   const idealScale = Math.min(160.0, Math.max(2.0, 1.85 / Math.max(maxRadius, 1e-4)));
+
+  // Orient the ellipsoid by the projected marginal's eigenvectors. In the TS
+  // engine path this basis is the identity; in the WASM path the 3x3 marginal
+  // is generally non-diagonal, so skipping this rotation would draw the
+  // ellipsoid axis-aligned with the wrong orientation.
+  const axesBasis = state.phaseSpace3D.principalAxes3D;
+  const orientation = useMemo(() => {
+    const v0 = new THREE.Vector3(axesBasis[0][0], axesBasis[0][1], axesBasis[0][2]);
+    const v1 = new THREE.Vector3(axesBasis[1][0], axesBasis[1][1], axesBasis[1][2]);
+    const v2 = new THREE.Vector3(axesBasis[2][0], axesBasis[2][1], axesBasis[2][2]);
+    if (v0.lengthSq() < 1e-12 || v1.lengthSq() < 1e-12 || v2.lengthSq() < 1e-12) {
+      return new THREE.Quaternion();
+    }
+    v0.normalize();
+    v1.normalize();
+    v2.normalize();
+    // Eigenvector sets can arrive left-handed (det = -1); flip the last axis
+    // so setFromRotationMatrix receives a proper rotation.
+    if (v0.clone().cross(v1).dot(v2) < 0) v2.negate();
+    const m = new THREE.Matrix4().makeBasis(v0, v1, v2);
+    return new THREE.Quaternion().setFromRotationMatrix(m);
+  }, [axesBasis]);
 
   useEffect(() => {
     targetScaleRef.current = idealScale;
@@ -254,18 +280,18 @@ function DynamicSceneRig({
         <meshBasicMaterial color="#ffffff" />
       </mesh>
 
-      {/* 3D Covariance Ellipsoid */}
-      <EllipsoidMesh
-        radii={radii}
-        sigma={sigma}
-        scaleRef={currentScaleRef}
-      />
-
-      {/* Principal Axes Vectors */}
-      <PrincipalAxes
-        radii={radii}
-        scale={idealScale}
-      />
+      {/* 3D Covariance Ellipsoid + its principal axes, in the eigenbasis */}
+      <group quaternion={orientation}>
+        <EllipsoidMesh
+          radii={radii}
+          sigma={sigma}
+          scaleRef={currentScaleRef}
+        />
+        <PrincipalAxes
+          radii={radii}
+          scale={idealScale}
+        />
+      </group>
 
       {/* Candidate Offspring Population Cloud & Elites */}
       <PopulationCloud
@@ -462,12 +488,21 @@ export function CMAESMiniRadar({
     const r0 = Math.max(3, radii[0] * scale);
     const r1 = Math.max(3, radii[1] * scale);
 
+    // Orientation of the marginal's eigenbasis within the radar plane. The
+    // TS engine path has the identity basis (rot = 0); the WASM path's
+    // projected marginal is generally rotated, and the samples live in the
+    // un-rotated PCA frame, so the ellipse must rotate to match them.
+    // Canvas y points down while sample py = cy − y·scale, hence −rot.
+    const axesBasis = phaseSpace3D.principalAxes3D;
+    const rot = Math.atan2(axesBasis[0][1], axesBasis[0][0]);
+    const rot2 = Math.atan2(axesBasis[1][1], axesBasis[1][0]);
+
     // 2. 2-Sigma Outer Confidence Ellipse (Translucent)
     ctx.fillStyle = "rgba(56, 189, 248, 0.08)";
     ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.ellipse(cx, cy, r0 * 1.8, r1 * 1.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, r0 * 2.0, r1 * 2.0, -rot, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -476,23 +511,23 @@ export function CMAESMiniRadar({
     ctx.strokeStyle = "#38bdf8";
     ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.ellipse(cx, cy, r0, r1, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy, r0, r1, -rot, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // 4. Principal Axes
+    // 4. Principal Axes (endpoints from the eigenvector directions)
     ctx.strokeStyle = "#f43f5e"; // PC1 Major Axis (Rose)
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx - r0, cy);
-    ctx.lineTo(cx + r0, cy);
+    ctx.moveTo(cx - r0 * Math.cos(rot), cy + r0 * Math.sin(rot));
+    ctx.lineTo(cx + r0 * Math.cos(rot), cy - r0 * Math.sin(rot));
     ctx.stroke();
 
     ctx.strokeStyle = "#34d399"; // PC2 Minor Axis (Emerald)
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - r1);
-    ctx.lineTo(cx, cy + r1);
+    ctx.moveTo(cx - r1 * Math.cos(rot2), cy + r1 * Math.sin(rot2));
+    ctx.lineTo(cx + r1 * Math.cos(rot2), cy - r1 * Math.sin(rot2));
     ctx.stroke();
 
     // 5. Candidate Offspring Samples

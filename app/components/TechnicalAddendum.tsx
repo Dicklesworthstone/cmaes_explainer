@@ -33,10 +33,10 @@ export function TechnicalAddendum() {
           gradient proofs, and practical production engineering considerations.
         </p>
 
-        <blockquote className="border-l-4 border-sky-400 bg-slate-900/40 p-5 rounded-r-2xl my-6 text-slate-200 text-base md:text-lg italic leading-relaxed">
-          &ldquo;CMA-ES is not an ad-hoc biological heuristic. It is the canonical, coordinate-invariant natural gradient
-          step on the Riemannian manifold of multivariate Gaussian distributions.&rdquo;
-        </blockquote>
+        <p className="border-l-4 border-sky-400 bg-slate-900/40 p-5 rounded-r-2xl my-6 text-slate-200 text-base md:text-lg leading-relaxed">
+          The thesis of this addendum: CMA-ES is no ad-hoc biological heuristic. Its core update is a
+          coordinate-invariant natural gradient step on the Riemannian manifold of multivariate Gaussian distributions.
+        </p>
       </div>
 
       {/* Chapter 1: The Maximum Entropy Distribution */}
@@ -87,7 +87,7 @@ export function TechnicalAddendum() {
 
         <div className="prose-cmaes">
           <p>
-            Akimoto et al. and Ollivier et al. demonstrated that when rank-based weights <LatexRenderer math="w_i" block={false} /> are substituted for raw fitness values <LatexRenderer math="f(x_i)" block={false} />, the CMA-ES mean and covariance updates correspond <em>identically</em> to a sampled natural gradient step on the Gaussian manifold.
+            Akimoto et al. and Ollivier et al. demonstrated that when rank-based weights <LatexRenderer math="w_i" block={false} /> are substituted for raw fitness values <LatexRenderer math="f(x_i)" block={false} />, the CMA-ES mean update and rank-μ covariance update correspond exactly to a sampled natural gradient step on the Gaussian manifold. The evolution paths, the rank-1 term, and step-size adaptation accumulate cross-generation history that lies outside this derivation.
           </p>
         </div>
       </div>
@@ -134,10 +134,10 @@ export function TechnicalAddendum() {
       {/* Chapter 4: Covariance Adaptation Derivation */}
       <div className="space-y-6">
         <div className="prose-cmaes">
-          <h2>4. Covariance Matrix Adaptation (Rank-1 & Rank-µ Updates)</h2>
+          <h2>4. Covariance Matrix Adaptation (Rank-1 & Rank-μ Updates)</h2>
 
           <p>
-            The full covariance update blends historical memory, rank-1 momentum path <LatexRenderer math="p_c" block={false} />, rank-µ batch spread, and active negative updates:
+            The full covariance update blends historical memory, rank-1 momentum path <LatexRenderer math="p_c" block={false} />, rank-μ batch spread, and active negative updates:
           </p>
         </div>
 
@@ -157,7 +157,7 @@ export function TechnicalAddendum() {
           <ul>
             <li><strong>Rank-1 Update (<LatexRenderer math="c_1" block={false} />):</strong> Exploits correlations between consecutive generations. It acts like an online Principal Component Analysis (PCA) along the trajectory of the mean.</li>
             <li><strong>Rank-<LatexRenderer math="\mu" block={false} /> Update (<LatexRenderer math="c_\mu" block={false} />):</strong> Exploits intra-generation variance among the top <LatexRenderer math="\mu" block={false} /> elite points in the current batch; crucial for large parallel populations.</li>
-            <li><strong>Active CMA (<LatexRenderer math="\Delta C_{\text{active}}" block={false} />):</strong> Uses negative weights on the worst <LatexRenderer math="\mu" block={false} /> offspring to actively shrink variance along harmful directions.</li>
+            <li><strong>Active CMA (<LatexRenderer math="\Delta C_{\text{active}}" block={false} />):</strong> Uses negative weights on the worst-ranked offspring (ranks <LatexRenderer math="\mu + 1, \dots, \lambda" block={false} />) to shrink variance along harmful directions.</li>
           </ul>
         </div>
       </div>
@@ -168,7 +168,7 @@ export function TechnicalAddendum() {
           <h2>5. Fundamental Invariance Properties</h2>
 
           <p>
-            A central reason CMA-ES is mathematically complete under black-box assumptions is its dual invariance:
+            A central reason CMA-ES is so well-behaved under black-box assumptions is its dual invariance:
           </p>
         </div>
 
@@ -184,7 +184,7 @@ export function TechnicalAddendum() {
         <div className="prose-cmaes">
           <h2>6. Multi-Dimensional Phase Space & Internals Lab</h2>
           <p>
-            Explore high-dimensional covariance adaptation and trajectory momentum in real time. Switch between canonical test landscapes, vary search dimensionality from 2D to 12D, and observe the live 3D PCA projection as CMA-ES whitens ill-conditioned ravines and avoids multimodal traps.
+            Explore high-dimensional covariance adaptation and trajectory momentum in real time. Switch between canonical test landscapes, vary search dimensionality from 2D to 12D, and observe the live 3D PCA projection as CMA-ES whitens ill-conditioned ravines and settles into multimodal basins (escaping them is the job of restart strategies).
           </p>
         </div>
         <CmaesInternalsLab />

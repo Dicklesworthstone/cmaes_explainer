@@ -42,7 +42,7 @@ export function CommunitySplit() {
 
           <ul className="space-y-2 text-xs text-slate-300 list-disc pl-4 marker:text-sky-400">
             <li><strong>Core Premise:</strong> Evaluations are precious, expensive, and opaque.</li>
-            <li><strong>Strength:</strong> Complete invariance to non-linear scalings and discontinuous bounds.</li>
+            <li><strong>Strength:</strong> Invariance to any monotone rescaling of the objective; tolerant of discontinuous, non-smooth landscapes.</li>
             <li><strong>Benchmark Arena:</strong> Robotics controllers, CFD, structural FEA, aerodynamic design.</li>
           </ul>
         </div>
@@ -64,7 +64,7 @@ export function CommunitySplit() {
           <ul className="space-y-2 text-xs text-slate-300 list-disc pl-4 marker:text-emerald-400">
             <li><strong>Core Premise:</strong> Differentiate billions of parameters with massive GPU throughput.</li>
             <li><strong>Blind Spot:</strong> Struggles whenever simulators contain discrete jumps or non-smooth loops.</li>
-            <li><strong>Re-invention:</strong> Natural Evolution Strategies (NES) and JEPA distribution matching mirror CMA-ES.</li>
+            <li><strong>Re-invention:</strong> Natural Evolution Strategies (NES/xNES) derive the same natural-gradient update CMA-ES approximates; OpenAI&apos;s ES for RL strips it down to a fixed isotropic Gaussian with a mean-only update.</li>
           </ul>
         </div>
       </div>

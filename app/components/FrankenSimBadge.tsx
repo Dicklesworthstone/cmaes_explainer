@@ -11,7 +11,8 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
     engineStamp: "Initializing...",
     hasTrusspath: false,
     hasFlyerAero: false,
-    hasBemt: false
+    hasBemt: false,
+    hasDemoPhysics: false
   });
   const [showDetails, setShowDetails] = useState(false);
 
@@ -98,24 +99,42 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
             <div className="flex justify-between">
               <span className="text-slate-400">Status:</span>
               <span className={isWasm ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
-                {isWasm ? "WebAssembly (Active)" : "High-Fidelity Fallback"}
+                {isWasm ? "WebAssembly (Loaded)" : "TS Analytic Models"}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Truss LP Solver:</span>
-              <span className={status.hasTrusspath ? "text-emerald-400" : "text-slate-500"}>
-                {status.hasTrusspath ? "crates/fs-wasm" : "Analytical FEA"}
+              <span className="text-slate-400">Wing/Bridge Physics:</span>
+              <span className={status.hasDemoPhysics ? "text-emerald-400" : "text-slate-500"}>
+                {status.hasDemoPhysics ? "fs-demo-physics-wasm" : "TS analytic model"}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Aero BEMT / Panel:</span>
-              <span className={status.hasBemt ? "text-emerald-400" : "text-slate-500"}>
-                {status.hasBemt ? "crates/fs-flyer-wasm" : "3D Lifting Line"}
-              </span>
-            </div>
+            {/* With the demo-physics kernel live, evaluations early-return
+                before the trusspath/BEMT probe paths, so those rows would
+                advertise code that no longer runs. */}
+            {!status.hasDemoPhysics && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Truss LP Solver:</span>
+                  <span className={status.hasTrusspath ? "text-emerald-400" : "text-slate-500"}>
+                    {status.hasTrusspath ? "crates/fs-wasm" : "Analytic beam model"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Aero BEMT Probe:</span>
+                  <span className={status.hasBemt ? "text-emerald-400" : "text-slate-500"}>
+                    {status.hasBemt ? "crates/fs-flyer-wasm" : "3D Lifting Line"}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between text-[0.65rem] text-slate-400 pt-1 border-t border-white/5">
               <span>Engine Stamp:</span>
               <span className="text-slate-300 truncate max-w-[150px]">{status.engineStamp}</span>
+            </div>
+            <div className="text-[0.62rem] text-slate-500 leading-snug pt-1 border-t border-white/5">
+              {status.hasDemoPhysics
+                ? "Wing and bridge numbers are computed by the FrankenSim fs-demo-physics-wasm kernel; the TS models are the verified-identical fallback."
+                : "Displayed numbers come from the analytic TS models; the WASM kernels are health-probed on each evaluation."}
             </div>
           </div>
         </div>

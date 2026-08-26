@@ -58,7 +58,8 @@ function decodeVectorToArch(z: number[]): ArchPoint {
   const attnType: AttentionType = zAttn < 0.33 ? "MHA" : zAttn < 0.67 ? "GQA" : "MQA";
   const actType: ActivationType = zAct < 0.33 ? "SwiGLU" : zAct < 0.67 ? "GELU" : "Mish";
 
-  // Exact Chinchilla-scaling parameter calculation
+  // Transformer parameter count: tied embeddings plus per-layer attention and
+  // MLP blocks (this is a plain count, not a Chinchilla scaling-law fit).
   const vocab = 32000;
   const dFF = actType === "SwiGLU" ? Math.round((8 / 3) * dim) : 4 * dim;
   const attnFactor = attnType === "MHA" ? 4 : attnType === "GQA" ? 2.5 : 2;
@@ -67,15 +68,22 @@ function decodeVectorToArch(z: number[]): ArchPoint {
   const totalParams = vocab * dim + layers * (attnParamsPerLayer + mlpParamsPerLayer + 4 * dim);
   const paramsM = totalParams / 1e6;
 
-  // GFLOPs per forward pass (batch size 1, 2048 sequence length)
-  const flopsGiga = Math.max(1.5, Math.min(48, (2 * totalParams * 2048) / 1e11));
+  // GFLOPs per forward pass ~ 2*N*T (batch 1, 2048 sequence). The generous
+  // clamp exists only to guard degenerate inputs; it never binds for real
+  // decodes, so the compute penalty keeps its gradient everywhere.
+  const flopsGiga = Math.max(1, Math.min(2000, (2 * totalParams * 2048) / 1e9));
+  // Hand-written surrogates: valLoss and latencyMs are toy closed forms for
+  // the demo, not measurements from training runs.
   const valLoss = Math.max(
     1.08,
     1.12 + 3.2 / Math.sqrt(layers * 0.7 + (dim / 128) * 2.2) +
       (attnType === "MQA" ? 0.06 : attnType === "GQA" ? 0.02 : 0) +
       (actType === "GELU" ? 0.06 : actType === "Mish" ? 0.03 : 0)
   );
-  const latencyMs = layers * 0.75 + (dim / 256) * 1.1 + (attnType === "MHA" ? 0.4 : 0);
+  // The mild per-head latency term stands in for scheduling and kernel-launch
+  // overhead in this surrogate; mainly it keeps z[2] from being a null
+  // direction the optimizer merely diffuses along.
+  const latencyMs = layers * 0.75 + (dim / 256) * 1.1 + heads * 0.12 + (attnType === "MHA" ? 0.4 : 0);
 
   return {
     id: 0,
@@ -92,11 +100,13 @@ function decodeVectorToArch(z: number[]): ArchPoint {
   };
 }
 
-// Multi-Objective Fitness Evaluation: Scalarizes Accuracy vs Compute
+// Weighted-sum scalarization of accuracy vs compute. One fixed weight means
+// the search converges to ONE point on the trade-off curve; the empirical
+// Pareto set shown in the chart comes from all evaluated architectures.
 function evaluateArchFitness(z: number[]): number {
   const arch = decodeVectorToArch(z);
-  // Scalarized objective: ValLoss + normalized compute penalty
-  return arch.valLoss + 0.032 * arch.flopsGiga;
+  // 0.00032 per true GFLOP (equivalent to the old 0.032 per 100 GFLOPs).
+  return arch.valLoss + 0.00032 * arch.flopsGiga;
 }
 
 // ============================================================================
@@ -442,8 +452,9 @@ function ParetoFrontierCanvas({
     const PAD_TOP = 28;
     const PAD_BOTTOM = 54;
 
-    const minFlops = 1.0;
-    const maxFlops = 50.0;
+    // True 2NT GFLOPs for these architectures span roughly 18-960 G
+    const minFlops = 0.0;
+    const maxFlops = 1000.0;
     const minLoss = 1.0;
     const maxLoss = 3.6;
 
@@ -453,7 +464,7 @@ function ParetoFrontierCanvas({
     // Subtle Grid Lines
     ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
     ctx.lineWidth = 1.0;
-    for (let f = 10; f <= 50; f += 10) {
+    for (let f = 200; f <= 1000; f += 200) {
       ctx.beginPath();
       ctx.moveTo(toPxX(f), PAD_TOP);
       ctx.lineTo(toPxX(f), H - PAD_BOTTOM);
@@ -766,9 +777,9 @@ export function TransformerViz() {
     setIsSearching(false);
     if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
     if (preset === "edge") {
-      setParamVector([0.18, 0.25, 0.2, 0.8, 0.1]); // 4 Layers, 352 Dim, 4 Heads, MQA, SwiGLU
+      setParamVector([0.18, 0.25, 0.2, 0.8, 0.1]); // 5 Layers, 352 Dim, 5 Heads, MQA, SwiGLU
     } else if (preset === "balanced") {
-      setParamVector([0.48, 0.55, 0.45, 0.5, 0.1]); // 8 Layers, 620 Dim, 8 Heads, GQA, SwiGLU
+      setParamVector([0.48, 0.55, 0.45, 0.5, 0.1]); // 9 Layers, 621 Dim, 8 Heads, GQA, SwiGLU
     } else {
       setParamVector([0.88, 0.85, 0.85, 0.1, 0.1]); // 14 Layers, 890 Dim, 14 Heads, MHA, SwiGLU
     }
@@ -790,7 +801,7 @@ export function TransformerViz() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Discover compute-optimal Transformer Pareto frontiers using covariance adaptation in continuous latent spaces
+              CMA-ES minimizes a weighted loss-plus-compute objective in a continuous latent space; the chart tracks the empirical Pareto set of every architecture evaluated. Loss and latency come from hand-written surrogates, not training runs.
             </p>
           </div>
         </div>
@@ -807,7 +818,7 @@ export function TransformerViz() {
             onClick={() => applyPreset("balanced")}
             className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-[background-color,color]"
           >
-            Balanced 7B
+            Balanced ~60M
           </button>
           <button
             onClick={() => applyPreset("scale")}
@@ -941,7 +952,7 @@ export function TransformerViz() {
 
           <div className="flex items-center justify-between px-2 text-[0.72rem] text-slate-400 font-mono">
             <span>Rotary Embeddings • RMSNorm • Residual Streams</span>
-            <span className="text-purple-300 font-bold">~{currentArch.latencyMs.toFixed(1)}ms / token</span>
+            <span className="text-purple-300 font-bold">~{currentArch.latencyMs.toFixed(1)}ms / token (surrogate)</span>
           </div>
         </div>
 
@@ -1111,7 +1122,7 @@ export function TransformerViz() {
               }`}
             >
               <Sparkles className="h-4 w-4" />
-              <span>{isSearching ? "Halt NAS Evolution" : "Run 5D Multi-Objective CMA-ES Architecture Search"}</span>
+              <span>{isSearching ? "Halt NAS Evolution" : "Run 5D CMA-ES Architecture Search (weighted-sum objective)"}</span>
             </button>
 
             <button

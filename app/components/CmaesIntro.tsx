@@ -71,7 +71,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
   cigar: {
     id: "cigar",
     name: "Sharp Cigar Ravine",
-    subtitle: "Highly ill-conditioned ridge rotated by 35°",
+    subtitle: "Moderately ill-conditioned ridge rotated by 35° (benchmark cigars reach 10⁶)",
     formula: "f(x, y) = \\textcolor{#60a5fa}{u}^2 + 80 \\textcolor{#60a5fa}{v}^2, \\quad \\kappa(H) = 80",
     fn: (x, y) => {
       const rot = 0.61;
@@ -101,7 +101,7 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "ackley",
     name: "Ackley Basin",
     subtitle: "Flat outer plateau with steep central exponential bowl",
-    formula: "f(x, y) = -20 e^{-0.2\\|\\textcolor{#60a5fa}{x}\\|} - e^{0.5\\sum \\cos 2\\pi \\textcolor{#60a5fa}{x_i}} + 20 + e",
+    formula: "f(x, y) = -20 e^{-0.2\\sqrt{\\frac{1}{2}(\\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2)}} - e^{0.5(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})} + 20 + e",
     fn: (x, y) =>
       -20 * Math.exp(-0.2 * Math.sqrt(0.5 * (x * x + y * y))) -
       Math.exp(0.5 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y))) +
@@ -133,7 +133,9 @@ function GaussianDistributionSandbox() {
   const [eigenRatio, setEigenRatio] = useState(landscape.initialEigenRatio);
   const [angleDeg, setAngleDeg] = useState(landscape.initialAngle);
   const [sampleCount, setSampleCount] = useState(16);
-  const [eliteFraction] = useState(0.4);
+  // Fixed at the canonical mu = lambda/2 selection ratio the equation cards
+  // describe.
+  const [eliteFraction] = useState(0.5);
   const [isDragging, setIsDragging] = useState(false);
 
   // CMA-ES Internal Evolution State
@@ -319,7 +321,8 @@ function GaussianDistributionSandbox() {
     pSigmaRef.current = newPSig;
 
     const pSigNorm = Math.sqrt(newPSig[0] * newPSig[0] + newPSig[1] * newPSig[1]);
-    const chiN = Math.sqrt(2) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
+    // E||N(0, I_n)|| ~ sqrt(n)(1 - 1/(4n) + 1/(21n^2)) ~ 1.254 for n = 2
+    const chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
     const newSigma = Math.max(0.02, Math.min(1.5, sigma * Math.exp((cSigma / dSigma) * (pSigNorm / chiN - 1))));
 
     // Update pc
@@ -520,43 +523,54 @@ function GaussianDistributionSandbox() {
         });
       }
 
-      // Draw 1-sigma, 2-sigma Gaussian confidence ellipses
+      // Draw 1-sigma, 2-sigma Gaussian confidence ellipses. The canvas pixels
+      // are not square relative to the domain, so build the path under the
+      // full data-to-pixel transform (rotate first, anisotropic scale after)
+      // and stroke it outside the transform; pre-scaling the radii before
+      // rotating would tilt the ellipse away from the covariance's true
+      // orientation and break its alignment with the heat map underneath.
       const angleRad = (a.angleDeg * Math.PI) / 180;
       const l1 = a.eigenRatio * 0.5;
       const l2 = 0.5;
-      const s1 = Math.sqrt(Math.max(1e-4, l1)) * a.sigma * (W / (2 * DOMAIN));
-      const s2 = Math.sqrt(Math.max(1e-4, l2)) * a.sigma * (H / (2 * DOMAIN));
+      const a1 = Math.sqrt(Math.max(1e-4, l1)) * a.sigma;
+      const a2 = Math.sqrt(Math.max(1e-4, l2)) * a.sigma;
+      const kxScale = W / (2 * DOMAIN);
+      const kyScale = H / (2 * DOMAIN);
 
       const cx = toPxX(a.x);
       const cy = toPxY(a.y);
 
       [1, 2].forEach((k) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-angleRad); // Canvas y is inverted
-
         ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.95)" : "rgba(56, 189, 248, 0.4)";
         ctx.lineWidth = k === 1 ? 3.5 : 2;
         ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.15)" : "transparent";
 
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(kxScale, -kyScale);
+        ctx.rotate(angleRad);
         ctx.beginPath();
-        ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.ellipse(0, 0, a1 * k, a2 * k, 0, 0, Math.PI * 2);
+        ctx.restore();
+        if (k === 1) ctx.fill();
         ctx.stroke();
 
         // Principal Axes (for 1-sigma)
         if (k === 1) {
           ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
           ctx.lineWidth = 2;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(kxScale, -kyScale);
+          ctx.rotate(angleRad);
           ctx.beginPath();
-          ctx.moveTo(-s1, 0);
-          ctx.lineTo(s1, 0);
-          ctx.moveTo(0, -s2);
-          ctx.lineTo(0, s2);
+          ctx.moveTo(-a1, 0);
+          ctx.lineTo(a1, 0);
+          ctx.moveTo(0, -a2);
+          ctx.lineTo(0, a2);
+          ctx.restore();
           ctx.stroke();
         }
-
-        ctx.restore();
       });
 
       // Draw Mean Shift Vector (Delta m)
@@ -918,7 +932,7 @@ function GaussianDistributionSandbox() {
               <span>What you are observing</span>
             </div>
             <p className="leading-relaxed">
-              As generations progress, the <strong className="text-sky-300">blue confidence ellipse</strong> automatically elongates and rotates to match the curvature of the ravine, while the <strong className="text-emerald-300">green arrow</strong> pulls the mean along the valley floor without evaluating gradients.
+              As generations progress, the <strong className="text-sky-300">blue confidence ellipse</strong> elongates and rotates to match the curvature of the ravine (this sandbox caps the drawn eigenvalue ratio at 8:1 for readability), while the <strong className="text-emerald-300">green arrow</strong> pulls the mean along the valley floor without evaluating gradients.
             </p>
           </div>
         </div>
@@ -978,7 +992,7 @@ function GaussianDistributionSandbox() {
               {sigma.toFixed(3)}
             </div>
             <div className="text-[0.68rem] text-slate-400 font-mono">
-              <LatexRenderer math="\|p_\sigma\|" block={false} /> = {pSigmaNorm.toFixed(2)} (vs 1.13)
+              <LatexRenderer math="\|p_\sigma\|" block={false} /> = {pSigmaNorm.toFixed(2)} (vs <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
             </div>
           </div>
 
@@ -992,7 +1006,7 @@ function GaussianDistributionSandbox() {
               {eigenRatio.toFixed(1)} : 1
             </div>
             <div className="text-[0.68rem] text-slate-400 font-mono">
-              <LatexRenderer math="\theta" block={false} /> = {angleDeg}° orientation
+              axes <LatexRenderer math="\sqrt{\kappa}" block={false} /> = {Math.sqrt(eigenRatio).toFixed(2)}:1 · <LatexRenderer math="\theta" block={false} /> = {angleDeg}°
             </div>
           </div>
 
@@ -1042,7 +1056,7 @@ export function CmaesIntro() {
         </p>
 
         <p>
-          CMA-ES provides a coordinate-invariant, sample-efficient method to navigate opaque, non-differentiable objective landscapes directly into the optimal basin.
+          CMA-ES provides a coordinate-invariant, sample-efficient method to navigate opaque, non-differentiable objective landscapes into a good basin; on strongly multimodal problems, restart strategies (IPOP/BIPOP) supply the global sweep.
         </p>
       </div>
 
@@ -1129,14 +1143,14 @@ export function CmaesIntro() {
       </div>
 
       <div className="prose-cmaes space-y-6">
-        <h2>Why CMA-ES Implicitly Learns the Inverse Hessian</h2>
+        <h2>Why CMA-ES Implicitly Learns Inverse-Hessian Geometry</h2>
 
         <p>
           On an ill-conditioned quadratic bowl <LatexRenderer math="f(x) = \frac{1}{2} x^\top H x" block={false} />, isotropic search struggles because steep directions oscillate while shallow directions crawl. Newton&apos;s method resolves this by preconditioning gradients with <LatexRenderer math="H^{-1}" block={false} />, transforming elliptical contours into spherical circles where steepest descent points directly at the minimum.
         </p>
 
         <p>
-          CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. Through the accumulation of successful steps along the evolution paths, the covariance matrix <LatexRenderer math="C" block={false} /> asymptotically adapts such that:
+          CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. The weighted covariance of selected steps (the rank-µ update), reinforced by the evolution path (rank-1), adapts <LatexRenderer math="C" block={false} /> until, approximately:
         </p>
 
         <div className="my-6 not-prose">
@@ -1144,7 +1158,7 @@ export function CmaesIntro() {
         </div>
 
         <p>
-          Sampling from <LatexRenderer math="\mathcal{N}(m, \sigma^2 H^{-1})" block={false} /> whitens the search landscape, enabling optimal linear convergence rates on ill-conditioned problems that stall standard genetic algorithms or random search.
+          Sampling from <LatexRenderer math="\mathcal{N}(m, \sigma^2 H^{-1})" block={false} /> whitens the search landscape, so the linear convergence rate becomes essentially independent of the problem&apos;s conditioning, where standard genetic algorithms or random search stall.
         </p>
       </div>
 

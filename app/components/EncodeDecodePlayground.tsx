@@ -38,7 +38,13 @@ export function EncodeDecodePlayground() {
   // Sample a Gaussian offspring vector in unit cube
   const handleRandomSample = () => {
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-    const randNorm = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.3;
+    // Box-Muller standard normal scaled to sigma = 0.15, so the step really is
+    // Gaussian (tails included) as the button label promises.
+    const randNorm = () => {
+      const u = Math.max(Math.random(), 1e-12);
+      const v = Math.random();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * 0.15;
+    };
     setZLr(clamp01(zLr + randNorm()));
     setZAct(clamp01(zAct + randNorm()));
     setZLayers(clamp01(zLayers + randNorm()));
@@ -216,7 +222,7 @@ export function EncodeDecodePlayground() {
               <span>Late Quantization Principle</span>
             </div>
             <p>
-              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} /> moves smoothly across discrete boundaries without gradient breakdown or combinatorial explosion.
+              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} /> moves smoothly across discrete boundaries; the optimizer itself never sees the staircase. Two caveats apply. Once <LatexRenderer math="\sigma" block={false} /> shrinks below a bin width, all offspring in that coordinate decode identically and selection goes blind, so integer coordinates need a step-size floor (or CMA-ES with margin). And slicing one axis into bins imposes an ordering on the categories that may not exist, which is why unordered choices are often one-hot encoded instead.
             </p>
           </div>
         </div>

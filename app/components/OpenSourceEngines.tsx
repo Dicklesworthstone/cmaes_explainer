@@ -518,7 +518,7 @@ fn main() {
             </div>
 
             <p className="text-sm text-slate-300 leading-relaxed mb-5">
-              A high-throughput Rust engine with a drop-in <code className="text-emerald-300 font-mono">scipy.optimize</code> compatible surface. 10–30× faster than pure Python implementations on high dimensions.
+              A high-throughput Rust engine with a drop-in <code className="text-emerald-300 font-mono">scipy.optimize</code> compatible surface. 10–30× faster than pure Python implementations when the objective itself is cheap and interpreter overhead dominates.
             </p>
 
             {/* Code Block with Syntax Highlighting */}

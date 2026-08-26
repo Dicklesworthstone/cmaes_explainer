@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wand2, Cpu, Sparkles, Compass, ArrowDownRight, Layers, BarChart3 } from "lucide-react";
+import { Wand2, Cpu, Sparkles, Compass, ArrowDownRight, Layers, BarChart3, Award, ExternalLink } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -99,9 +99,32 @@ export function Hero() {
               transition={{ duration: 0.75, delay: 0.25 }}
               className="text-balance max-w-xl text-sm sm:text-base text-slate-400"
             >
-              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong> and iteratively reshapes its mean and covariance matrix to mirror the objective&apos;s inverse Hessian, discovering landscape curvature without calculating derivatives.
+              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong>, shifting its mean toward better samples and bending its covariance matrix toward a multiple of the objective&apos;s inverse Hessian, discovering landscape curvature without calculating derivatives.
             </motion.p>
           </div>
+
+          {/* Attribution: the algorithm's inventor */}
+          <motion.a
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.28 }}
+            href="https://www.cmap.polytechnique.fr/~nikolaus.hansen/"
+            target="_blank"
+            rel="noreferrer"
+            className="group inline-flex items-center gap-3 rounded-2xl border border-amber-400/25 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent px-4 py-3 backdrop-blur-md transition-[border-color,box-shadow] hover:border-amber-400/50 hover:shadow-[0_0_25px_rgba(251,191,36,0.15)]"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300">
+              <Award className="h-5 w-5" />
+            </span>
+            <span className="text-sm leading-snug text-slate-300">
+              Invented by{" "}
+              <span className="font-semibold text-amber-200 underline decoration-amber-400/40 underline-offset-2 group-hover:decoration-amber-300">
+                Nikolaus Hansen
+              </span>{" "}
+              and Andreas Ostermeier, and refined over three decades by Hansen and collaborators
+              <ExternalLink className="ml-1.5 inline h-3 w-3 text-amber-400/70 group-hover:text-amber-300" />
+            </span>
+          </motion.a>
 
           {/* Interactive CTAs */}
           <motion.div
@@ -150,7 +173,7 @@ export function Hero() {
                 <span>Affine Invariant</span>
               </div>
               <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
-                Identical convergence under linear coordinate shifts <code className="font-mono text-emerald-300 text-[0.65rem]">Ax + b</code>.
+                Identical trajectories under affine maps <code className="font-mono text-emerald-300 text-[0.65rem]">Ax + b</code> once the initial distribution is transformed to match.
               </div>
             </div>
 
@@ -160,7 +183,7 @@ export function Hero() {
                 <span>Learns <code className="font-mono font-bold text-amber-300">H⁻¹</code></span>
               </div>
               <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
-                Covariance <code className="font-mono text-amber-300 text-[0.65rem]">C</code> mimics inverse Hessian without derivatives.
+                Covariance <code className="font-mono text-amber-300 text-[0.65rem]">C</code> approaches a multiple of the inverse Hessian without derivatives.
               </div>
             </div>
 

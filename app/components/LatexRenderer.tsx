@@ -47,7 +47,10 @@ export function LatexRenderer({
         displayMode,
         throwOnError: false,
         output: "html",
-        trust: true,
+        // Only \htmlClass and \htmlData are trusted (interactive equation
+        // tokens); trust: true would also enable \href, \url, and
+        // \includegraphics, which nothing on this site needs.
+        trust: trustInteractiveTokenMarkup,
         strict: false,
       });
       katexCache.set(cacheKey, rendered);

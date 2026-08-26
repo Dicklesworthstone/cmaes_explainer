@@ -68,9 +68,9 @@ interface OrganismPreset {
 const ORGANISM_PRESETS: OrganismPreset[] = [
   {
     id: "orbium",
-    name: "Orbium Glider",
+    name: "Orbium-Inspired Soliton",
     category: "Soliton",
-    description: "Self-stabilizing localized wave packet that glides smoothly through continuous toroidal space.",
+    description: "Self-stabilizing localized wave packet inspired by Lenia's Orbium. (True gliding needs Orbium's exact asymmetric seed pattern; this symmetric seed pulses in place.)",
     mu: 0.152,
     sigma: 0.038,
     dt: 0.22
@@ -151,6 +151,9 @@ function stepLeniaContinuous(
     }
   }
 
+  // "entropy" here is the fraction of cells in the partially-activated
+  // interface band (0.08, 0.92) — a living-perimeter density, not a Shannon
+  // entropy. The UI labels it "Interface".
   const entropy = totalActive / (GRID_SIZE * GRID_SIZE);
   const avgMass = totalMass / (GRID_SIZE * GRID_SIZE);
   return { entropy, mass: avgMass };
@@ -347,6 +350,12 @@ export function CAGalleryTrace() {
     setOptGen(0);
     setHistoryND([]);
 
+    // Freeze the current grid as the evaluation seed for the whole search.
+    // Scoring against the live, still-evolving display grid would make the
+    // objective non-stationary: every generation would grade a different
+    // initial condition and the convergence trace would be meaningless.
+    const seedGrid = new Float32Array(gridStateRef.current.current);
+
     // Optimize continuous parameters in normalized [0, 1]^3 space
     const optimizer = new CMAESOptimizerND(
       (zVec) => {
@@ -354,7 +363,7 @@ export function CAGalleryTrace() {
         const sVal = 0.015 + zVec[1] * 0.060;
         const dtVal = 0.10 + zVec[2] * 0.25;
 
-        const bufA = new Float32Array(gridStateRef.current.current);
+        const bufA = new Float32Array(seedGrid);
         const bufB = new Float32Array(GRID_SIZE * GRID_SIZE);
         let scoreSum = 0;
 
@@ -435,11 +444,11 @@ export function CAGalleryTrace() {
             <h3 className="text-xl font-bold text-white font-display flex items-center gap-2.5">
               <span>Continuous Morphodynamic Artificial Life (Lenia)</span>
               <span className="text-[0.65rem] font-mono px-2.5 py-0.5 rounded-full border bg-pink-500/15 border-pink-500/40 text-pink-300">
-                Zero-Gradient Physics
+                Black-Box Physics Search
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Evolving non-differentiable continuous convolution kernels & soliton morphogenesis with CMA-ES
+              Evolving growth-rule parameters (μ, σ, Δt) for soliton morphogenesis with CMA-ES; the convolution kernel itself stays fixed
             </p>
           </div>
         </div>
@@ -448,7 +457,7 @@ export function CAGalleryTrace() {
         <div className="flex items-center gap-2 font-mono text-xs">
           <span className="text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5" />
-            <span>Entropy: {(entropy * 100).toFixed(1)}%</span>
+            <span>Interface: {(entropy * 100).toFixed(1)}%</span>
           </span>
           <span className="text-pink-400 bg-pink-500/10 px-3 py-1.5 rounded-xl border border-pink-500/20">
             Mass: {(organismMass * 100).toFixed(1)}%
@@ -627,9 +636,9 @@ export function CAGalleryTrace() {
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-pink-300">
               <span className="flex items-center gap-1.5">
                 <Sliders className="h-3.5 w-3.5 text-pink-400" />
-                <span>Continuous Growth Kernel <LatexRenderer math="G(u; \mu, \sigma)" block={false} /></span>
+                <span>Growth Function <LatexRenderer math="G(u; \mu, \sigma)" block={false} /></span>
               </span>
-              <span className="font-mono text-slate-500 text-[0.68rem]">Concentric Donut</span>
+              <span className="font-mono text-slate-500 text-[0.68rem]">Kernel K(r): Concentric Donut</span>
             </div>
 
             {/* Growth Center (mu) */}
@@ -706,7 +715,7 @@ export function CAGalleryTrace() {
               <span>Why CMA-ES Excels on Morphodynamic Landscapes</span>
             </div>
             <p className="leading-relaxed text-slate-300">
-              Continuous artificial life exists strictly inside chaotic, narrow parameter corridors. Traditional gradient descent cannot compute gradients across spatio-temporal PDE state transitions, whereas CMA-ES discovers self-stabilizing solitons by adapting its covariance ellipsoid to follow the razor-thin boundary of living emergence.
+              Continuous artificial life exists strictly inside chaotic, narrow parameter corridors. The update rule itself is smooth, but the fitness (does a pattern survive?) is a discontinuous functional of a chaotic rollout (18 steps per evaluation here), so gradients through it explode or vanish into uselessness. CMA-ES needs only rank comparisons, adapting its covariance ellipsoid to follow the razor-thin boundary of living emergence.
             </p>
           </div>
 
@@ -734,7 +743,7 @@ export function CAGalleryTrace() {
         onToggleExpand3D={() => setIsExpanded3D((prev) => !prev)}
         isExpanded3D={isExpanded3D}
         accentColor="purple"
-        objectiveName="Living Entropy"
+        objectiveName="Mass penalty − interface score (minimized)"
       />
     </div>
   );

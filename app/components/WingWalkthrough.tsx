@@ -27,9 +27,9 @@ export function WingWalkthrough() {
     {
       step: 1,
       title: "Initial State & Normalization",
-      subtitle: "Center the Gaussian prior in the 8D unit hypercube $[0, 1]^8$",
-      math: "\\textcolor{#c084fc}{m^{(0)}} = (0.5, \\dots, 0.5)^\\top \\in \\mathbb{R}^8, \\quad \\textcolor{#fbbf24}{\\sigma^{(0)}} = 0.25, \\quad \\textcolor{#34d399}{C^{(0)}} = I_8",
-      desc: "All 8 physical parameters are encoded into the unit hypercube $[0, 1]^8$: aspect ratio, sweep angle, thickness ratio, camber, camber position, taper ratio, categorical airfoil family bins, and internal structural ribs. Initializing with $C = I_8$ establishes an isotropic, unbiased prior across all design dimensions.",
+      subtitle: "Warm-start the Gaussian prior at the current design in $[0, 1]^8$",
+      math: "\\textcolor{#c084fc}{m^{(0)}} = \\text{encode}(x_{\\text{design}}) \\in [0,1]^8, \\quad \\textcolor{#fbbf24}{\\sigma^{(0)}} = 0.25, \\quad \\textcolor{#34d399}{C^{(0)}} = I_8",
+      desc: "All 8 physical parameters are encoded into the unit hypercube $[0, 1]^8$: aspect ratio, sweep angle, thickness ratio, camber, camber position, taper ratio, categorical airfoil family bins, and internal structural ribs. The mean starts at the encoded current design (a standard warm start), and $C = I_8$ establishes an isotropic, unbiased prior across all design dimensions.",
       tag: "Setup"
     },
     {
@@ -37,7 +37,7 @@ export function WingWalkthrough() {
       title: "Generation 1: Exploration",
       subtitle: "Sample $\\lambda$ offspring & run CFD evaluations",
       math: "\\textcolor{#60a5fa}{x_i^{(1)}} \\sim \\mathcal{N}(\\textcolor{#c084fc}{m^{(0)}}, (\\textcolor{#fbbf24}{\\sigma^{(0)}})^2 \\textcolor{#34d399}{I_8}), \\quad i = 1, \\dots, \\lambda",
-      desc: "Sample $\\lambda = 12$ candidate wings. For each vector, decode to physical NACA parameters, construct the 3D surface mesh, execute multi-regime aerodynamic solver runs, and compute scalar performance $f(x_i)$. Sort samples by relative rank.",
+      desc: "Sample $\\lambda = 16$ candidate wings (the default rule $\\lambda = 4 + \\lfloor 3 \\ln 8 \\rfloor = 10$ is raised to 16 here so each generation's sample cloud is easier to see). For each vector, decode to physical NACA parameters, construct the 3D surface mesh, execute multi-regime aerodynamic solver runs, and compute scalar performance $f(x_i)$. Sort samples by relative rank.",
       tag: "Sampling"
     },
     {
@@ -45,7 +45,7 @@ export function WingWalkthrough() {
       title: "Recombination & Mean Shift",
       subtitle: "Move mean toward the weighted top $\\mu$ elites",
       math: "\\textcolor{#c084fc}{m^{(1)}} = \\sum_{i=1}^{\\mu} \\textcolor{#fb923c}{w_i} \\textcolor{#60a5fa}{x_{i:\\lambda}^{(1)}}, \\quad \\textcolor{#c084fc}{\\Delta m} = \\textcolor{#c084fc}{m^{(1)}} - \\textcolor{#c084fc}{m^{(0)}}",
-      desc: "Compute the new distribution center as a weighted average of the best $\\mu = 4$ wings. The shift $\\Delta m$ represents the empirical direction of positive aerodynamic performance.",
+      desc: "Compute the new distribution center as a weighted average of the best $\\mu = 8$ wings (half the population). The shift $\\Delta m$ represents the empirical direction of positive aerodynamic performance.",
       tag: "Recombination"
     },
     {
@@ -53,7 +53,7 @@ export function WingWalkthrough() {
       title: "Accumulating Evolution Paths",
       subtitle: "Track momentum for step size ($p_\\sigma$) and covariance ($p_c$)",
       math: "\\textcolor{#fb7185}{p_\\sigma} \\leftarrow (1-\\textcolor{#fbbf24}{c_\\sigma}) \\textcolor{#fb7185}{p_\\sigma} + \\sqrt{\\textcolor{#fbbf24}{c_\\sigma}(2-\\textcolor{#fbbf24}{c_\\sigma})\\textcolor{#fb923c}{\\mu_{\\text{eff}}}}\\, \\textcolor{#34d399}{C^{-1/2}} \\frac{\\textcolor{#c084fc}{\\Delta m}}{\\textcolor{#fbbf24}{\\sigma}}",
-      desc: "The path $p_\\sigma$ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, $p_\\sigma$ grows longer (triggering $\\sigma$ expansion). If steps oscillate, $p_\\sigma$ contracts.",
+      desc: "The path $p_\\sigma$ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, $p_\\sigma$ grows longer (triggering $\\sigma$ expansion via $\\sigma \\leftarrow \\sigma \\exp(\\frac{c_\\sigma}{d_\\sigma}(\\frac{\\|p_\\sigma\\|}{\\mathbb{E}\\|\\mathcal{N}(0,I)\\|} - 1))$). If steps oscillate, $p_\\sigma$ contracts. A sibling path $p_c$ accumulates the same mean shifts without whitening and feeds the rank-1 covariance update in the next phase.",
       tag: "Memory"
     },
     {
@@ -67,17 +67,17 @@ export function WingWalkthrough() {
     {
       step: 6,
       title: "Generations 5–15: Geometry Learning",
-      subtitle: "Approximating the transonic inverse Hessian $H^{-1}$",
-      math: "\\textcolor{#34d399}{C} \\approx \\textcolor{#34d399}{H^{-1}_{\\text{aero}}}, \\quad \\textcolor{#fbbf24}{\\sigma} \\text{ automatically contracts}",
-      desc: "Over successive batches, CMA-ES discovers that increasing aspect ratio while simultaneously increasing sweep angle is benign, whereas increasing aspect ratio with zero sweep causes severe shock stall. The ellipsoid aligns with the benign diagonal ridge.",
+      subtitle: "Approximating the transonic inverse Hessian $H^{-1}$ up to scale",
+      math: "\\textcolor{#34d399}{C} \\propto \\textcolor{#34d399}{H^{-1}_{\\text{aero}}}, \\quad \\textcolor{#fbbf24}{\\sigma} \\text{ automatically contracts}",
+      desc: "Over successive batches, CMA-ES discovers that thicker airfoil sections are tolerable when paired with more sweep, whereas a thick unswept wing triggers early drag divergence. The ellipsoid aligns with this benign thickness-sweep diagonal, and the scale of the learned shape is carried by $\\sigma$.",
       tag: "Curvature"
     },
     {
       step: 7,
       title: "Local Refinement & Restarts",
       subtitle: "Precision convergence and IPOP/BIPOP global sweeps",
-      math: "\\textcolor{#fbbf24}{\\sigma} \\to 10^{-4}, \\quad \\textcolor{#60a5fa}{x^*} = \\arg\\max \\textcolor{#38bdf8}{L/D}",
-      desc: "In late generations, $\\sigma$ shrinks to micro-scale, performing precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, IPOP/BIPOP restarts with increased population size.",
+      math: "\\textcolor{#fbbf24}{\\sigma} \\to 10^{-4}, \\quad \\textcolor{#60a5fa}{x^*} = \\arg\\min f, \\;\\; f = -\\textcolor{#38bdf8}{L/D} + \\text{mass penalty}",
+      desc: "In late generations, $\\sigma$ shrinks to micro-scale, performing precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, restart: IPOP doubles $\\lambda$ at each restart, while BIPOP alternates large-$\\lambda$ runs with small-$\\lambda$, small-$\\sigma$ runs under a shared budget.",
       tag: "Convergence"
     }
   ];
@@ -107,8 +107,9 @@ export function WingWalkthrough() {
         </p>
 
         <p>
-          Every single aerodynamic evaluation balances lift-to-drag (<LatexRenderer math="L/D" block={false} />) against
-          transonic wave drag divergence, skin friction, and wing root bending moment limits.
+          Each aerodynamic evaluation trades lift-to-drag (<LatexRenderer math="L/D" block={false} />) against
+          the structural mass driven by the wing root bending moment. The drag total inside{" "}
+          <LatexRenderer math="L/D" block={false} /> already folds in transonic wave drag and skin friction.
         </p>
       </div>
 

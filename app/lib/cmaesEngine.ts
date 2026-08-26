@@ -188,6 +188,8 @@ export interface BenchmarkFunction {
   formula: string;
   domain: [number, number];
   optimum: Vector;
+  /** All equal-valued global minima, for benchmarks that have several. */
+  optima?: Vector[];
   optimumValue: number;
   eval: (x: number, y: number) => number;
 }
@@ -249,6 +251,12 @@ export const BENCHMARKS: BenchmarkFunction[] = [
     formula: "f(x, y) = (\\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y} - 11)^2 + (\\textcolor{#60a5fa}{x} + \\textcolor{#60a5fa}{y}^2 - 7)^2",
     domain: [-4, 4],
     optimum: [3, 2],
+    optima: [
+      [3, 2],
+      [-2.805118, 3.131312],
+      [-3.77931, -3.283186],
+      [3.584428, -1.848126]
+    ],
     optimumValue: 0,
     eval: (x, y) => (x * x + y - 11) ** 2 + (x + y * y - 7) ** 2
   },
@@ -572,10 +580,12 @@ export function runGradientDescent(
   start: Vector,
   maxSteps = 60,
   lr = 0.01,
-  eps = 1e-4
+  eps = 1e-4,
+  maxStepNorm = 0.25
 ): BaselineStepState[] {
   validateBaselineInputs(start, maxSteps);
   if (!Number.isFinite(lr) || lr <= 0 || !Number.isFinite(eps) || eps <= 0) throw new RangeError("lr and eps must be finite positive numbers.");
+  if (!Number.isFinite(maxStepNorm) || maxStepNorm <= 0) throw new RangeError("maxStepNorm must be a finite positive number.");
 
   const x = [...start];
   let currentFitness = safeObjectiveValue(fn(x[0], x[1]));
@@ -590,8 +600,20 @@ export function runGradientDescent(
     evalCount += 2;
     const gradientX = (fx - currentFitness) / eps;
     const gradientY = (fy - currentFitness) / eps;
-    x[0] -= lr * gradientX;
-    x[1] -= lr * gradientY;
+    // Clip the step length: on steep benchmarks (Rosenbrock walls reach
+    // gradients of order 10^3) a raw fixed-lr step diverges immediately,
+    // which would demonstrate a bad learning rate rather than the zigzagging
+    // behavior this baseline exists to show.
+    let stepX = lr * gradientX;
+    let stepY = lr * gradientY;
+    const stepLen = Math.hypot(stepX, stepY);
+    if (stepLen > maxStepNorm) {
+      const shrink = maxStepNorm / stepLen;
+      stepX *= shrink;
+      stepY *= shrink;
+    }
+    x[0] -= stepX;
+    x[1] -= stepY;
     currentFitness = safeObjectiveValue(fn(x[0], x[1]));
     evalCount++;
     if (currentFitness < bestFitness) {

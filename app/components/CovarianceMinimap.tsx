@@ -9,20 +9,26 @@ const WIDTH = 760;
 const HEIGHT = 520;
 const DOMAIN = 2.4;
 
+// Each objective carries its optimum, and the Hessian is the one evaluated AT
+// that optimum, so the "Adapted (C ∝ H⁻¹)" endpoint shows the curvature at
+// the point the mean actually converges to.
 const objectives = {
   cigar: {
     label: "Ill-Conditioned Cigar",
     f: (x: number, y: number) => 100 * x * x + y * y,
+    optimum: [0, 0] as [number, number],
     hessian: () => [200, 0, 0, 2]
   },
   rosenbrock: {
     label: "Rosenbrock Valley",
     f: (x: number, y: number) => 100 * (y - x * x) ** 2 + (1 - x) ** 2,
+    optimum: [1, 1] as [number, number],
     hessian: () => [802, -400, -400, 200]
   },
   sphere: {
     label: "Isotropic Sphere",
     f: (x: number, y: number) => x * x + y * y,
+    optimum: [0, 0] as [number, number],
     hessian: () => [2, 0, 0, 2]
   }
 } as const;
@@ -103,7 +109,11 @@ export function CovarianceMinimap() {
     // 3. Compute Current Mean & Covariance (Interpolating toward inverse Hessian)
     const t = progress;
     const startMean: [number, number] = [1.5, 1.2];
-    const curMean: [number, number] = [startMean[0] * (1 - t), startMean[1] * (1 - t)];
+    const [optX, optY] = fn.optimum;
+    const curMean: [number, number] = [
+      startMean[0] + (optX - startMean[0]) * t,
+      startMean[1] + (optY - startMean[1]) * t
+    ];
 
     // Target covariance is proportional to inverse Hessian
     const Hmat = fn.hessian();
@@ -129,40 +139,56 @@ export function CovarianceMinimap() {
 
     const eigen = eigen2x2(curC[0], curC[1], curC[3]);
     const [l1, l2] = eigen.eigenvalues;
-    const s1 = Math.sqrt(l1) * 0.6 * (W / (2 * DOMAIN));
-    const s2 = Math.sqrt(l2) * 0.6 * (H / (2 * DOMAIN));
+    const a1 = Math.sqrt(l1) * 0.6;
+    const a2 = Math.sqrt(l2) * 0.6;
+    const kxScale = W / (2 * DOMAIN);
+    const kyScale = H / (2 * DOMAIN);
     const cx = toPxX(curMean[0]);
     const cy = toPxY(curMean[1]);
 
-    // 4. Draw Covariance Ellipse
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(-eigen.angle);
+    // 4. Draw covariance ellipse. The canvas pixels are not square relative
+    // to the domain, so build the path under the full data-to-pixel transform
+    // (rotate first, anisotropic scale after) and stroke it outside the
+    // transform; pre-scaling the radii before rotating would tilt the ellipse
+    // away from the covariance's true orientation.
     ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
     ctx.lineWidth = 3.5;
     ctx.fillStyle = "rgba(14, 165, 233, 0.2)";
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(kxScale, -kyScale);
+    ctx.rotate(eigen.angle);
     ctx.beginPath();
-    ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, a1, a2, 0, 0, Math.PI * 2);
+    ctx.restore();
     ctx.fill();
     ctx.stroke();
 
     // Draw Principal Axes
     ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
     ctx.lineWidth = 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(kxScale, -kyScale);
+    ctx.rotate(eigen.angle);
     ctx.beginPath();
-    ctx.moveTo(-s1, 0);
-    ctx.lineTo(s1, 0);
-    ctx.moveTo(0, -s2);
-    ctx.lineTo(0, s2);
-    ctx.stroke();
+    ctx.moveTo(-a1, 0);
+    ctx.lineTo(a1, 0);
+    ctx.moveTo(0, -a2);
+    ctx.lineTo(0, a2);
     ctx.restore();
+    ctx.stroke();
 
     // 5. Draw Euclidean vs Natural Gradient Vectors
     // Numerical gradient at curMean
     const eps = 1e-4;
     const gradX = (fn.f(curMean[0] + eps, curMean[1]) - fn.f(curMean[0] - eps, curMean[1])) / (2 * eps);
     const gradY = (fn.f(curMean[0], curMean[1] + eps) - fn.f(curMean[0], curMean[1] - eps)) / (2 * eps);
+    // At the optimum the central difference is pure floating-point residue;
+    // normalizing it would draw a full-length arrow in a meaningless
+    // direction, so suppress the arrows instead.
     const gradLen = Math.hypot(gradX, gradY) || 1;
+    const showArrows = Math.hypot(gradX, gradY) > 1e-3;
     const nGradX = gradX / gradLen;
     const nGradY = gradY / gradLen;
 
@@ -173,27 +199,29 @@ export function CovarianceMinimap() {
     const nNatX = natGradX / natLen;
     const nNatY = natGradY / natLen;
 
-    const arrowScale = 65;
+    // Arrows are the DESCENT directions (-grad f and -C grad f), drawn by
+    // stepping in data space and mapping both endpoints through the same
+    // data-to-pixel transform so anisotropic pixel scaling cannot skew them.
+    const stepData = 0.45;
 
-    // Draw Euclidean Gradient Vector (Rose)
-    const euclidEndX = cx - nGradX * arrowScale;
-    const euclidEndY = cy + nGradY * arrowScale;
+    // Euclidean descent direction (Rose): -grad f
     ctx.strokeStyle = "#f43f5e";
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.lineTo(euclidEndX, euclidEndY);
+    ctx.lineTo(toPxX(curMean[0] - nGradX * stepData), toPxY(curMean[1] - nGradY * stepData));
     ctx.stroke();
 
-    // Draw Natural Gradient Vector (Emerald)
+    // Natural-gradient descent direction (Emerald): -C grad f
     if (showNaturalGrad) {
-      const natEndX = cx - nNatX * arrowScale * 1.25;
-      const natEndY = cy + nNatY * arrowScale * 1.25;
       ctx.strokeStyle = "#34d399";
       ctx.lineWidth = 4.5;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(natEndX, natEndY);
+      ctx.lineTo(
+        toPxX(curMean[0] - nNatX * stepData * 1.25),
+        toPxY(curMean[1] - nNatY * stepData * 1.25)
+      );
       ctx.stroke();
     }
 
@@ -248,11 +276,11 @@ export function CovarianceMinimap() {
           <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] font-mono">
             <div className="flex items-center gap-1.5 text-rose-400">
               <span className="w-2.5 h-0.5 bg-rose-500" />
-              <span>Euclidean ∇f</span>
+              <span>Euclidean descent −∇f</span>
             </div>
             <div className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-2.5 h-0.5 bg-emerald-400" />
-              <span>Natural Gradient C ∇f</span>
+              <span>Natural-gradient descent −C∇f</span>
             </div>
           </div>
         </div>

@@ -27,7 +27,7 @@ export interface CmaesVizParams {
   active: boolean;
   seed: number;
   generations: number;
-  /** 0 sphere · 1 rosenbrock · 2 cigar · 3 rastrigin · 4 elli */
+  /** 0 sphere · 1 rosenbrock · 2 discus (kernel id "cigar") · 3 rastrigin · 4 elli */
   landscape: number;
   noise: number;
   boundsEnabled: boolean;
@@ -151,7 +151,9 @@ export function runCmaesViz(params: CmaesVizParams): CmaesVizRun | null {
       params.sigma0,
       params.lambda,
       params.active,
-      params.seed,
+      // The wasm-bindgen glue declares seed as u64 (bigint); passing a plain
+      // number throws a TypeError and would silently fall back to TS.
+      BigInt(Math.trunc(params.seed) >>> 0),
       params.generations,
       params.landscape,
       params.noise,
@@ -229,6 +231,22 @@ function projectPoint(point: number[], basis: number[], center: number[], n: num
 }
 
 /**
+ * Project an n-D DIRECTION vector (a displacement such as p_c or p_sigma)
+ * through the PCA basis. Directions must not have the center subtracted:
+ * that would add a constant −B·center offset, so a zero path would render
+ * as a nonzero arrow.
+ */
+function projectDirection(vec: number[], basis: number[], n: number): [number, number, number] {
+  const out: [number, number, number] = [0, 0, 0];
+  for (let r = 0; r < 3; r++) {
+    let acc = 0;
+    for (let i = 0; i < n; i++) acc += basis[r * n + i] * vec[i];
+    out[r] = acc;
+  }
+  return out;
+}
+
+/**
  * Map a kernel run onto the viewer's state list. The kernel emits ascending
  * eigenvalues; the viewer expects ellipsoidRadii/principalAxes ordered
  * largest-first, so the projection triples are reversed here.
@@ -249,16 +267,22 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 
   return run.generations.map((gen) => {
     const lambda = gen.se.length;
+    // The viewer pins the mean/ellipsoid at its origin, so samples must be
+    // projected relative to the CURRENT mean (like the TS engine's x − mean),
+    // not the run-level pooled PCA center; otherwise the cloud drifts off the
+    // ellipsoid as the search moves away from the pooled center.
+    const projMean = projectPoint(gen.mean, basis, center, n);
     const samples: CandidateSampleND[] = [];
     for (let s = 0; s < lambda; s++) {
       const x = gen.sx.slice(s * n, (s + 1) * n);
       const z = gen.sz.slice(s * n, (s + 1) * n);
+      const p = projectPoint(x, basis, center, n);
       samples.push({
         id: s,
         rawX: x,
         x,
         z,
-        projected3D: projectPoint(x, basis, center, n),
+        projected3D: [p[0] - projMean[0], p[1] - projMean[1], p[2] - projMean[2]],
         fitness: gen.sf[s],
         trueFitness: gen.sf[s],
         rank: s,
@@ -267,10 +291,13 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     }
 
     // 3×3 marginal: radii/axes largest-first from ascending proj_eigvals.
+    // proj_eigvals are eigenvalues of C's projected marginal (sigma excluded,
+    // like gen.eigvals), so the 1-sigma radii are sigma * sqrt(eigenvalue) —
+    // the same contract cmaesEngineND documents.
     const radii: [number, number, number] = [
-      Math.sqrt(Math.max(gen.proj_eigvals[2], 0)),
-      Math.sqrt(Math.max(gen.proj_eigvals[1], 0)),
-      Math.sqrt(Math.max(gen.proj_eigvals[0], 0)),
+      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[2], 0)),
+      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[1], 0)),
+      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[0], 0)),
     ];
     const col = (j: number): [number, number, number] => [
       gen.proj_eigvecs[j],
@@ -283,8 +310,8 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       col(0),
     ];
     const projCond = gen.proj_eigvals[0] > 1e-18 ? gen.proj_eigvals[2] / gen.proj_eigvals[0] : 0;
-    const evolutionPath3D = projectPoint(gen.p_c, basis, center, n);
-    const evolutionPathSigma3D = projectPoint(gen.p_sigma, basis, center, n);
+    const evolutionPath3D = projectDirection(gen.p_c, basis, n);
+    const evolutionPathSigma3D = projectDirection(gen.p_sigma, basis, n);
 
     // Full covariance for HUD/telemetry consumers (V·Λ·Vᵀ).
     const covariance: number[][] = Array.from({ length: n }, (_, i) =>
@@ -318,7 +345,9 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
         evolutionPath3D,
         evolutionPathSigma3D,
       },
-      variancePerDim: gen.eigvals.map((v) => gen.sigma * gen.sigma * Math.max(v, 0)),
+      // Per-coordinate sampling variance of N(m, sigma^2 C) is sigma^2 * C_ii
+      // (eigenvalues would be variance per principal axis, a different thing).
+      variancePerDim: covariance.map((row, i) => gen.sigma * gen.sigma * Math.max(row[i], 0)),
     };
   });
 }

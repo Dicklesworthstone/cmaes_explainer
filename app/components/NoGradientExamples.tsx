@@ -175,7 +175,7 @@ function FiniteDifferenceFailDemo() {
 
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono text-rose-300 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
-            Gradient Error: {error.toFixed(2)}×
+            Gradient Error: |FD − true| = {error.toFixed(2)}
           </span>
         </div>
       </div>
@@ -319,7 +319,7 @@ export function NoGradientExamples() {
       subtitle: "Mode crossings, wind vortex resonance, stress envelope constraints",
       metrics: [
         "Solves nonlinear elasticity systems under dead, live, wind, and seismic load combinations",
-        "Step changes occur when buckling modes cross or tensile stress exceeds 500 MPa safety limits",
+        "Step changes occur when buckling modes cross or tensile stress exceeds the material's yield limit (250–1200 MPa depending on grade)",
         "Non-smooth constraint penalties degrade second-order Taylor approximations",
         "Rank-based selection handles discontinuous penalty boundaries without numerical overflow"
       ],

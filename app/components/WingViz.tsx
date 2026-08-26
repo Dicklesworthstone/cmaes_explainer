@@ -26,7 +26,8 @@ import {
   WING_PARAM_SPECS,
   evaluateWingPhysics,
   decodeParameter,
-  encodeParameter
+  encodeParameter,
+  initFrankenSim
 } from "../lib/frankensimPhysics";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import { FrankenSimBadge } from "./FrankenSimBadge";
@@ -56,22 +57,27 @@ function getNacaShape(
     let dyc_dx = 0;
 
     if (p > 0 && m > 0) {
+      // NACA 4-digit camber line; yc carries the chord factor so the drawn
+      // camber matches the dimensionless m the sliders set.
       if (x <= p * chord) {
-        yc = (m / (p * p)) * (2 * p * (x / chord) - (x / chord) ** 2);
+        yc = chord * (m / (p * p)) * (2 * p * (x / chord) - (x / chord) ** 2);
         dyc_dx = ((2 * m) / (p * p)) * (p - x / chord);
       } else {
-        yc = (m / ((1 - p) ** 2)) * (1 - 2 * p + 2 * p * (x / chord) - (x / chord) ** 2);
+        yc = chord * (m / ((1 - p) ** 2)) * (1 - 2 * p + 2 * p * (x / chord) - (x / chord) ** 2);
         dyc_dx = ((2 * m) / ((1 - p) ** 2)) * (p - x / chord);
       }
     }
 
     if (isReflexed && x > 0.75 * chord) {
-      yc -= 0.03 * ((x - 0.75 * chord) / (0.25 * chord));
+      yc -= 0.03 * chord * ((x - 0.75 * chord) / (0.25 * chord));
     }
 
+    // NACA 4-digit thickness: y_t = 5 t c (...), so a t/c slider setting of
+    // 0.12 renders as a true 12% section at this chord.
     let yt =
       5 *
       t *
+      chord *
       (0.2969 * Math.sqrt(Math.max(0, x / chord)) -
         0.126 * (x / chord) -
         0.3516 * (x / chord) ** 2 +
@@ -134,11 +140,11 @@ function ParametricWingMesh({
       const currentX = pos.getX(i);
       const currentY = pos.getY(i);
 
-      // Sweep along X
-      pos.setX(i, currentX - spanNorm * sweepSkew);
-
-      // Taper scale along Y and X
+      // Taper is a chord ratio (tip/root), so it shrinks the local chord (X)
+      // toward the tip, with section thickness (Y) scaling proportionally;
+      // sweep then skews the tapered section along X.
       const scaleFactor = 1.0 - spanNorm * (1.0 - taperRatio) * 0.7;
+      pos.setX(i, currentX * scaleFactor - spanNorm * sweepSkew);
       pos.setY(i, currentY * scaleFactor);
     }
     pos.needsUpdate = true;
@@ -220,9 +226,10 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
       dummy.rotation.z = dist < 2.2 ? -liftStrength * 0.3 * (1 - dist / 2.2) : 0;
       dummy.updateMatrix();
 
-      // Color coding: Fast/Low-pressure (Top) = Cyan/Blue; Slow/High-pressure (Bottom) = Gold/Amber
-      const pressureNorm = Math.max(0, Math.min(1, 0.5 + p.y / 2.0));
-      tempColor.setHSL(0.55 - pressureNorm * 0.2, 0.9, 0.6);
+      // Decorative height-based tint (no pressure field is computed):
+      // upper streamlines shift toward green, lower ones toward cyan.
+      const heightNorm = Math.max(0, Math.min(1, 0.5 + p.y / 2.0));
+      tempColor.setHSL(0.55 - heightNorm * 0.2, 0.9, 0.6);
 
       meshRef.current!.setMatrixAt(i, dummy.matrix);
       meshRef.current!.setColorAt(i, tempColor);
@@ -326,10 +333,25 @@ export function WingViz() {
     return decodeWingVector(v);
   }, []);
 
+  // The FrankenSim WASM kernel loads asynchronously; without this readiness
+  // flag in the memo deps the displayed numbers would stay TS-computed until
+  // the next slider move, while the badge already claims the kernel is live.
+  const [fsPhysicsReady, setFsPhysicsReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    initFrankenSim().then((s) => {
+      if (live && s.hasDemoPhysics) setFsPhysicsReady(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   // Real aerodynamic physics analysis output
   const aero = useMemo(() => {
+    void fsPhysicsReady;
     return evaluateWingPhysics(params, 0.78);
-  }, [params]);
+  }, [params, fsPhysicsReady]);
 
   // Cleanup on unmount
   useEffect(() => {

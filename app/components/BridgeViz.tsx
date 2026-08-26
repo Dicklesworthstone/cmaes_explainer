@@ -28,20 +28,23 @@ import {
   BRIDGE_PARAM_SPECS,
   evaluateBridgePhysics,
   decodeParameter,
-  encodeParameter
+  encodeParameter,
+  initFrankenSim
 } from "../lib/frankensimPhysics";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import { FrankenSimBadge } from "./FrankenSimBadge";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 
-// Turbo colormap approximation for FEA stress representation
+// Turbo colormap approximation for the deck stress overlay. The color
+// coordinate is stress normalized by the selected material's yield, so the
+// anchors are yield fractions, not fixed MPa values.
 const TURBO_COLORS = [
-  new THREE.Color("#30123b"), // 0.0: Safe / Minimal Stress
-  new THREE.Color("#4683f6"), // 0.2: Low Stress (~100 MPa)
-  new THREE.Color("#1bf1e8"), // 0.4: Moderate Stress (~200 MPa)
-  new THREE.Color("#f1f927"), // 0.6: High Stress (~300 MPa)
-  new THREE.Color("#fa6e09"), // 0.8: Critical Stress (~400 MPa)
-  new THREE.Color("#7a0403")  // 1.0: Failure / Yield Exceeded (>500 MPa)
+  new THREE.Color("#30123b"), // 0.0: minimal stress
+  new THREE.Color("#4683f6"), // 0.2 of yield
+  new THREE.Color("#1bf1e8"), // 0.4 of yield
+  new THREE.Color("#f1f927"), // 0.6 of yield
+  new THREE.Color("#fa6e09"), // 0.8 of yield
+  new THREE.Color("#7a0403")  // 1.0: at or above yield
 ];
 
 const _tempColor = new THREE.Color();
@@ -263,13 +266,15 @@ function DeckAnimator({
   stiffness,
   loadPos,
   maxStress,
-  yieldLimit
+  yieldLimit,
+  maxDeflectionMm
 }: {
   span: number;
   stiffness: number;
   loadPos: number;
   maxStress: number;
   yieldLimit: number;
+  maxDeflectionMm: number;
 }) {
   const segments = 48;
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -277,9 +282,15 @@ function DeckAnimator({
   const tempColor = useMemo(() => new THREE.Color(), []);
 
   const getDeflection = (x: number, a: number) => {
+    // Scene-space deflection driven by the analytical beam result: a global
+    // sag shape scaled to the computed max deflection (exaggerated 60x so
+    // millimetres read at bridge scale) plus a dip that travels with the truck.
+    const metersPerSceneUnit = 50;
+    const sagScene = (maxDeflectionMm / 1000 / metersPerSceneUnit) * 60;
+    const shape = Math.cos((x / span) * Math.PI * 0.5); // 1 at midspan, 0 at the towers
     const dist = Math.abs(x - a);
-    const peak = 0.45 / (0.15 + stiffness * 1.5);
-    return -peak * Math.exp(-(dist * dist) / (0.35 + stiffness * 0.4));
+    const localBump = 0.35 * Math.exp(-(dist * dist) / (0.35 + stiffness * 0.4));
+    return -sagScene * shape * (0.65 + localBump);
   };
 
   useFrame(() => {
@@ -410,10 +421,27 @@ export function BridgeViz() {
     return decodeBridgeVector(v);
   }, []);
 
+  // The FrankenSim WASM kernel loads asynchronously; the readiness flag in
+  // the memo deps re-evaluates with the kernel once it arrives instead of
+  // waiting for the next parameter change.
+  const [fsPhysicsReady, setFsPhysicsReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    initFrankenSim().then((s) => {
+      if (live && s.hasDemoPhysics) setFsPhysicsReady(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   // Real physical analysis output
   const analysis = useMemo(() => {
-    return evaluateBridgePhysics(params, loadPos);
-  }, [params, loadPos]);
+    void fsPhysicsReady;
+    // loadPos lives in scene units; 2 * span3D units span the full deck, so
+    // one scene unit is 50 m regardless of span length.
+    return evaluateBridgePhysics(params, loadPos * 50);
+  }, [params, loadPos, fsPhysicsReady]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -559,13 +587,14 @@ export function BridgeViz() {
                       loadPos={loadPos}
                       maxStress={analysis.maxVonMisesStressMPa}
                       yieldLimit={analysis.yieldLimitMPa}
+                      maxDeflectionMm={analysis.maxDeflectionMm}
                     />
                   </group>
                 </Canvas>
 
                 {/* Top Badge */}
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-amber-300 backdrop-blur-md">
-                  3D Structural FEA
+                  Analytic Beam + Cable Model
                 </div>
               </div>
 
@@ -626,6 +655,7 @@ export function BridgeViz() {
                     loadPos={loadPos}
                     maxStress={analysis.maxVonMisesStressMPa}
                     yieldLimit={analysis.yieldLimitMPa}
+                    maxDeflectionMm={analysis.maxDeflectionMm}
                   />
                 </group>
               </Canvas>
@@ -639,7 +669,7 @@ export function BridgeViz() {
               {/* FEA Stress Colormap Legend */}
               <div className="absolute top-3 left-3 sm:top-auto sm:bottom-4 sm:right-4 p-2.5 sm:p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex flex-col gap-1.5 w-44 sm:w-56 shadow-2xl pointer-events-none">
                 <div className="flex items-center justify-between text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-200 uppercase tracking-wider">
-                  <span>FEA Stress</span>
+                  <span>Deck Stress</span>
                   <span
                     className={
                       analysis.maxVonMisesStressMPa > analysis.yieldLimitMPa
@@ -652,9 +682,9 @@ export function BridgeViz() {
                 </div>
                 <div className="h-1.5 sm:h-2 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
                 <div className="flex justify-between text-[0.58rem] sm:text-[0.62rem] text-slate-400 font-mono">
-                  <span>0 MPa</span>
-                  <span>Yield: {analysis.yieldLimitMPa}</span>
-                  <span>&gt;500</span>
+                  <span>0</span>
+                  <span>0.5&middot;&sigma;<sub>y</sub></span>
+                  <span>&sigma;<sub>y</sub> = {analysis.yieldLimitMPa} MPa</span>
                 </div>
               </div>
 
@@ -710,7 +740,7 @@ export function BridgeViz() {
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
               >
-                🌉 Golden Gate Long Span
+                🌉 Long-Span Suspension
               </button>
               <button
                 type="button"

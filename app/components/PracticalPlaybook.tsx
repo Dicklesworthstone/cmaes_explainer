@@ -64,8 +64,11 @@ function HyperparameterCalculator() {
       (2 * (muEff - 2 + 1 / muEff)) / ((n + 2) ** 2 + muEff)
     );
 
-    // Estimated evaluation budget
-    const unimodalGenerations = Math.round(100 + 50 * Math.sqrt(n));
+    // Estimated evaluation budget. Mean and step-size progress needs O(n)
+    // generations while full covariance learning takes up to O(n^2); the
+    // linear anchor 100 + 30n (n=10 -> ~400 generations) sits between those
+    // regimes as a coarse planning number, not a guarantee.
+    const unimodalGenerations = Math.round(100 + 30 * n);
     const totalGenerations = isMultimodal ? unimodalGenerations * 4 : unimodalGenerations;
     const totalEvals = totalGenerations * lambda;
     const totalTimeSec = (totalEvals * evalTimeMs) / 1000;
@@ -119,7 +122,7 @@ function HyperparameterCalculator() {
                 : "bg-slate-900 text-slate-400 border-white/5 hover:text-white"
             }`}
           >
-            {isMultimodal ? "Multimodal (IPOP Schedule)" : "Unimodal Search"}
+            {isMultimodal ? "Multimodal (restart budget ×4)" : "Unimodal Search"}
           </button>
         </div>
       </div>
@@ -201,7 +204,7 @@ function HyperparameterCalculator() {
         {/* Calculated Constants & Readouts */}
         <div className="space-y-4">
           <div className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center justify-between">
-            <span>Derived Optimal Hyperparameters</span>
+            <span>Derived Default Hyperparameters</span>
             <span className="text-[0.7rem] text-slate-500 font-mono">Formulaic Defaults</span>
           </div>
 
@@ -212,7 +215,14 @@ function HyperparameterCalculator() {
               </div>
               <div className="text-lg font-bold text-sky-200 font-mono">{stats.lambda} offspring</div>
               <div className="text-[0.65rem] text-slate-400 font-mono">
-                <LatexRenderer math="\lambda = 4 + \lfloor 3 \ln(n) \rfloor" block={false} />
+                <LatexRenderer
+                  math={
+                    noiseLevel === "none"
+                      ? "\\lambda = 4 + \\lfloor 3 \\ln(n) \\rfloor"
+                      : `\\lambda = (4 + \\lfloor 3 \\ln(n) \\rfloor) \\times ${noiseLevel === "heavy" ? 3 : 1.5}\\;\\text{(noise)}`
+                  }
+                  block={false}
+                />
               </div>
             </div>
 
@@ -246,10 +256,10 @@ function HyperparameterCalculator() {
           <div className="p-4 rounded-2xl bg-sky-500/5 border border-sky-500/20 text-xs text-slate-300 space-y-1.5 leading-relaxed">
             <div className="font-bold text-sky-200 flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
-              <span>Zero-Hyperparameter Principle</span>
+              <span>Fixed Internal Learning Rates</span>
             </div>
             <p>
-              Unlike stochastic gradient descent (which requires meticulously tuning learning rates, momentum, decay schedules, and weight decay for every model), CMA-ES computes all internal learning rates purely as deterministic functions of dimension <LatexRenderer math="n" block={false} />.
+              Unlike stochastic gradient descent (which requires tuning learning rates, momentum, decay schedules, and weight decay for every model), CMA-ES computes all internal learning rates as deterministic functions of dimension <LatexRenderer math="n" block={false} /> and selection mass <LatexRenderer math="\mu_{\text{eff}}" block={false} />, so they are never tuned per problem. The choices left to you are the initial point <LatexRenderer math="x_0" block={false} />, the initial step size <LatexRenderer math="\sigma_0" block={false} /> (about 0.3 times the parameter range), and optionally <LatexRenderer math="\lambda" block={false} />.
             </p>
           </div>
         </div>
@@ -274,8 +284,8 @@ export function PracticalPlaybook() {
           <div className="rounded-2xl border border-sky-500/10 bg-sky-500/5 p-5">
             <div className="mb-3 text-xs font-bold text-sky-200 uppercase tracking-wide">Constraints & Bounds</div>
             <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-sky-500">
-              <li>Work in an unconstrained space; logit/tanh to map back; or clip/reflect at bounds.</li>
-              <li>Categories: carve [0,1] into intervals, quantize late; keeps search smoother.</li>
+              <li>Work in an unconstrained space; logit/tanh to map back. If you clip/reflect at bounds instead, add a penalty on the repair distance so the boundary plateau cannot stall step-size adaptation.</li>
+              <li>Categories: carve [0,1] into intervals, quantize late; keeps search smoother. Unordered categories with many options often do better one-hot encoded.</li>
               <li>Hard constraints: add rank-based penalties; repair samples instead of rejecting.</li>
             </ul>
           </div>
@@ -283,8 +293,8 @@ export function PracticalPlaybook() {
           <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/5 p-5">
             <div className="mb-3 text-xs font-bold text-emerald-200 uppercase tracking-wide">Noise & Budgets</div>
              <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-emerald-500">
-              <li>For noisy f: enlarge λ, reevaluate elites, average top-k, or use active updates.</li>
-              <li>Budgeting: λ ≈ 4 + floor(3 log n); expect ~50–200 generations; restart if stalled.</li>
+              <li>For noisy f: enlarge λ, reevaluate elites and average their fitness, or lower the two covariance learning rates. Active (negative-weight) updates amplify misranked samples, so they are no noise remedy.</li>
+              <li>Budgeting: λ = 4 + ⌊3 ln n⌋; expect on the order of n to n² generations when C must adapt; restart if stalled.</li>
               <li>Keep seeds and ask/tell logs so you can replay and debug; determinism saves days.</li>
             </ul>
           </div>

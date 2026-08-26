@@ -1,7 +1,7 @@
 "use client";
 
 import * as THREE from "three";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useInView } from "../hooks/useInView";
@@ -49,52 +49,67 @@ function evaluate3D(x: number, y: number, z: number, landscape: "rosenbrock" | "
 function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin"): HeroGenerationState[] {
   const traj: HeroGenerationState[] = [];
   const maxGen = 45;
-  let mean: [number, number, number] = [-1.4, 1.2, -0.8];
-  let sigma = 0.65;
-  let radii: [number, number, number] = [1.2, 0.9, 1.1];
-  let rot: [number, number, number] = [0.1, 0.2, -0.1];
-  const target: [number, number, number] = landscape === "rastrigin" ? [0, 0, 0] : [0.8, 0.6, 0.5];
+  const mean0: [number, number, number] = [-1.4, 1.2, -0.8];
+  const sigma0 = 0.65;
+  const rot0: [number, number, number] = [0.1, 0.2, -0.1];
+  // Per-landscape optimum: 3D Rosenbrock at (1,1,1), cigar and Rastrigin at
+  // the origin.
+  const target: [number, number, number] = landscape === "rosenbrock" ? [1, 1, 1] : [0, 0, 0];
+  const isRastrigin = landscape === "rastrigin";
+
+  const gauss = () => {
+    const u = Math.max(Math.random(), 1e-12);
+    const v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  const offset = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const euler = new THREE.Euler();
 
   for (let g = 0; g <= maxGen; g++) {
     const t = g / maxGen;
-    // Morph mean towards optimum along curved path
+    // Morph mean towards the optimum along a curved path
     const curMean: [number, number, number] = [
-      mean[0] + (target[0] - mean[0]) * (1 - Math.exp(-3 * t)) + Math.sin(g * 0.4) * 0.04 * (1 - t),
-      mean[1] + (target[1] - mean[1]) * (1 - Math.exp(-2.5 * t)) + Math.cos(g * 0.3) * 0.05 * (1 - t),
-      mean[2] + (target[2] - mean[2]) * (1 - Math.exp(-2.8 * t))
+      mean0[0] + (target[0] - mean0[0]) * (1 - Math.exp(-3 * t)) + Math.sin(g * 0.4) * 0.04 * (1 - t),
+      mean0[1] + (target[1] - mean0[1]) * (1 - Math.exp(-2.5 * t)) + Math.cos(g * 0.3) * 0.05 * (1 - t),
+      mean0[2] + (target[2] - mean0[2]) * (1 - Math.exp(-2.8 * t))
     ];
 
-    // Morph covariance radii: stretch into cigar, shrink sigma
-    const rx = Math.max(0.2, radii[0] * (1 + 1.2 * t) * (1 - 0.5 * t));
-    const ry = Math.max(0.12, radii[1] * Math.exp(-1.8 * t));
-    const rz = Math.max(0.15, radii[2] * Math.exp(-1.4 * t));
-    const curSigma = Math.max(0.15, sigma * Math.exp(-1.2 * t));
+    // Shape schedule starts isotropic (C = I). Rosenbrock/cigar stretch along
+    // the leading axis and contract the others; Rastrigin has no single
+    // useful direction, so its C stays near-isotropic and only sigma shrinks.
+    const rxRaw = isRastrigin ? Math.max(0.6, 1 - 0.25 * t) : Math.max(0.35, (1 + 1.2 * t) * (1 - 0.35 * t));
+    const ryRaw = isRastrigin ? Math.max(0.55, 1 - 0.3 * t) : Math.max(0.16, Math.exp(-1.6 * t));
+    const rzRaw = isRastrigin ? Math.max(0.55, 1 - 0.28 * t) : Math.max(0.2, Math.exp(-1.3 * t));
+    const curSigma = Math.max(0.15, sigma0 * Math.exp(-1.2 * t));
 
-    // Rotate ellipsoid to align with valley trajectory
+    // Rotate ellipsoid to align with the valley trajectory
     const curRot: [number, number, number] = [
-      rot[0] + t * 0.8 + Math.sin(t * Math.PI) * 0.3,
-      rot[1] + t * 1.2,
-      rot[2] + t * 0.5
+      rot0[0] + t * 0.8 + Math.sin(t * Math.PI) * 0.3,
+      rot0[1] + t * 1.2,
+      rot0[2] + t * 0.5
     ];
 
-    // Generate samples
+    // Displayed 1-sigma radii fold in sigma (like sigma * sqrt(eigenvalue))
+    // plus a fixed visual gain, so the ellipsoid visibly collapses as sigma
+    // decays and the sample cloud below shares its exact geometry.
+    const visualGain = 2.0;
+    const ax = rxRaw * curSigma * visualGain;
+    const ay = ryRaw * curSigma * visualGain;
+    const az = rzRaw * curSigma * visualGain;
+
+    euler.set(curRot[0], curRot[1], curRot[2]);
+    quat.setFromEuler(euler);
+
+    // Gaussian samples drawn from the same rotated ellipsoid that is rendered
     const samples: Point3D[] = [];
     const lambda = 24;
     for (let i = 0; i < lambda; i++) {
-      // Gaussian in local coordinates
-      const u = (Math.random() - 0.5) * 2;
-      const v = (Math.random() - 0.5) * 2;
-      const w = (Math.random() - 0.5) * 2;
-      const r = Math.cbrt(Math.random()) * curSigma;
-
-      const lx = u * rx * r * 1.8;
-      const ly = v * ry * r * 1.8;
-      const lz = w * rz * r * 1.8;
-
-      const px = curMean[0] + lx;
-      const py = curMean[1] + ly;
-      const pz = curMean[2] + lz;
-
+      offset.set(ax * gauss(), ay * gauss(), az * gauss()).applyQuaternion(quat);
+      const px = curMean[0] + offset.x;
+      const py = curMean[1] + offset.y;
+      const pz = curMean[2] + offset.z;
       const fit = evaluate3D(px, py, pz, landscape);
       samples.push({ x: px, y: py, z: pz, fitness: fit, isElite: false });
     }
@@ -104,13 +119,15 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
       samples[i].isElite = true;
     }
 
-    const cond = rx / Math.min(ry, rz);
+    // Condition number of C is the squared ratio of the extreme radii
+    // (radii scale with standard deviations, i.e. sqrt(eigenvalues)).
+    const cond = (rxRaw / Math.min(ryRaw, rzRaw)) ** 2;
 
     traj.push({
       gen: g,
       mean: curMean,
       sigma: curSigma,
-      axes: [rx, ry, rz],
+      axes: [ax, ay, az],
       rotation: curRot,
       samples,
       bestF: samples[0].fitness,
@@ -136,17 +153,14 @@ function CovarianceEllipsoid({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  useFrame((_, delta) => {
-    if (!meshRef.current) return;
-    meshRef.current.rotation.y += delta * 0.15;
-  });
-
+  // No decorative spin here: the ellipsoid's orientation is state.rotation,
+  // the same frame the sample cloud is drawn in, so the two stay aligned.
   const [rx, ry, rz] = state.axes;
 
   return (
     <group position={state.mean} rotation={state.rotation}>
-      {/* Semi-transparent glowing volume */}
-      <mesh ref={meshRef} geometry={sphereGeo36} scale={[rx * 1.5, ry * 1.5, rz * 1.5]}>
+      {/* Semi-transparent glowing volume at the 1-sigma surface */}
+      <mesh ref={meshRef} geometry={sphereGeo36} scale={[rx, ry, rz]}>
         <meshPhysicalMaterial
           color="#38bdf8"
           emissive="#0284c7"
@@ -164,10 +178,10 @@ function CovarianceEllipsoid({
         </lineSegments>
       </mesh>
 
-      {/* Principal Eigenvector Axes */}
-      <Line points={[[-rx * 1.8, 0, 0], [rx * 1.8, 0, 0]]} color="#38bdf8" lineWidth={2} />
-      <Line points={[[0, -ry * 1.8, 0], [0, ry * 1.8, 0]]} color="#a855f7" lineWidth={2} />
-      <Line points={[[0, 0, -rz * 1.8], [0, 0, rz * 1.8]]} color="#34d399" lineWidth={2} />
+      {/* Principal Eigenvector Axes (slightly past the 1-sigma surface) */}
+      <Line points={[[-rx * 1.05, 0, 0], [rx * 1.05, 0, 0]]} color="#38bdf8" lineWidth={2} />
+      <Line points={[[0, -ry * 1.05, 0], [0, ry * 1.05, 0]]} color="#a855f7" lineWidth={2} />
+      <Line points={[[0, 0, -rz * 1.05], [0, 0, rz * 1.05]]} color="#34d399" lineWidth={2} />
 
       {/* Center Mean Marker */}
       <mesh geometry={centerMeanGeo}>

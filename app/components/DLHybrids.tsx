@@ -51,8 +51,9 @@ export function DLHybrids() {
             Searching non-differentiable generative spaces: continuous cellular automata convolution kernels, latent prompt embeddings, and discrete tool-calling agent policies.
           </p>
           <ul className="space-y-1.5 text-xs text-slate-400 list-disc pl-4 marker:text-purple-400">
-            <li>Optimize aesthetic scores, spatial entropy, or human feedback rewards.</li>
-            <li>Natural-gradient updates prevent premature collapse of diversity.</li>
+            <li>Optimize aesthetic scores, spatial structure metrics, or human feedback rewards.</li>
+            <li>Rank-based selection shrugs off warped reward scales; escaping local basins is the job of population sizing and IPOP/BIPOP restarts.</li>
+            <li>Full-covariance CMA-ES is practical up to a few thousand dimensions; larger latents call for sep-CMA-ES or low-rank variants.</li>
           </ul>
         </div>
       </div>

@@ -8,6 +8,16 @@ import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 const WIDTH = 920;
 const HEIGHT = 520;
 
+// Median observed fitness of a generation: a genuinely noisy per-generation
+// statistic. (The running best would be monotone by construction and could
+// never show the jitter the convergence chart is about.)
+const medianObservedFitness = (state: CMAESGenerationState) =>
+  state.samples[Math.floor(state.samples.length / 2)].fitness;
+
+// True underlying physical function (smooth 2D parabolic bowl with slight ripples)
+const trueFn = (x: number, y: number) =>
+  x * x + y * y + 0.3 * Math.cos(4 * x) + 0.3 * Math.sin(4 * y);
+
 export function NoiseExplorer() {
   const [lambda, setLambda] = useState(16);
   const [noiseLevel, setNoiseLevel] = useState(0.8);
@@ -16,12 +26,6 @@ export function NoiseExplorer() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const optimizerRef = useRef<CMAESOptimizer | null>(null);
-
-  // True underlying physical function (smooth 2D parabolic bowl with slight ripples)
-  const trueFn = (x: number, y: number) => {
-    return x * x + y * y + 0.3 * Math.cos(4 * x) + 0.3 * Math.sin(4 * y);
-  };
 
   // Noisy black-box simulation evaluator
   const sampleNoise = useCallback(() => {
@@ -36,78 +40,71 @@ export function NoiseExplorer() {
     }
   }, [noiseType, noiseLevel]);
 
+  // The optimizer's objective reads the noise sampler through a ref, so the
+  // amplitude and noise-type controls really do act on the running optimizer
+  // (the "Real-time" label) instead of a sampler frozen at construction time.
+  const sampleNoiseRef = useRef(sampleNoise);
+  useEffect(() => {
+    sampleNoiseRef.current = sampleNoise;
+  }, [sampleNoise]);
+
+  const noisyObjective = useCallback(
+    (x: number, y: number) => trueFn(x, y) + sampleNoiseRef.current(),
+    []
+  );
+
+  const optimizerRef = useRef<CMAESOptimizer | null>(null);
+
   const getOrInitOptimizer = useCallback(() => {
     if (!optimizerRef.current) {
-      optimizerRef.current = new CMAESOptimizer(
-        (x, y) => {
-          const trueVal = trueFn(x, y);
-          const noise = sampleNoise();
-          return trueVal + noise;
-        },
-        {
-          dim: 2,
-          initialMean: [1.8, 1.6],
-          initialSigma: 0.6,
-          lambda,
-          bounds: [-2.5, 2.5]
-        }
-      );
-    }
-    return optimizerRef.current;
-  }, [lambda, sampleNoise]);
-
-  const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
-    const opt = new CMAESOptimizer(
-      (x, y) => {
-        const trueVal = trueFn(x, y);
-        const noise = sampleNoise();
-        return trueVal + noise;
-      },
-      {
-        dim: 2,
-        initialMean: [1.8, 1.6],
-        initialSigma: 0.6,
-        lambda: 16,
-        bounds: [-2.5, 2.5]
-      }
-    );
-    return [opt.step()];
-  });
-
-  const latestState = history[history.length - 1];
-
-  const [trueLossHistory, setTrueLossHistory] = useState<number[]>(() => [
-    trueFn(history[0].mean[0], history[0].mean[1])
-  ]);
-  const [noisyLossHistory, setNoisyLossHistory] = useState<number[]>(() => [
-    history[0].bestFitness
-  ]);
-
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const resetOptimizer = useCallback(() => {
-    const opt = new CMAESOptimizer(
-      (x, y) => {
-        const trueVal = trueFn(x, y);
-        const noise = sampleNoise();
-        return trueVal + noise;
-      },
-      {
+      optimizerRef.current = new CMAESOptimizer(noisyObjective, {
         dim: 2,
         initialMean: [1.8, 1.6],
         initialSigma: 0.6,
         lambda,
         bounds: [-2.5, 2.5]
-      }
-    );
+      });
+    }
+    return optimizerRef.current;
+  }, [lambda, noisyObjective]);
+
+  const [history, setHistory] = useState<CMAESGenerationState[]>([]);
+
+  const latestState: CMAESGenerationState | undefined = history[history.length - 1];
+
+  const [trueLossHistory, setTrueLossHistory] = useState<number[]>([]);
+  const [noisyLossHistory, setNoisyLossHistory] = useState<number[]>([]);
+
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const resetOptimizer = useCallback(() => {
+    const opt = new CMAESOptimizer(noisyObjective, {
+      dim: 2,
+      initialMean: [1.8, 1.6],
+      initialSigma: 0.6,
+      lambda,
+      bounds: [-2.5, 2.5]
+    });
     optimizerRef.current = opt;
     const st0 = opt.step();
     setHistory([st0]);
     setTrueLossHistory([trueFn(st0.mean[0], st0.mean[1])]);
-    setNoisyLossHistory([st0.bestFitness]);
+    setNoisyLossHistory([medianObservedFitness(st0)]);
     setGeneration(0);
     setIsPlaying(false);
-  }, [lambda, sampleNoise]);
+  }, [lambda, noisyObjective]);
+
+  // Seed the first run on mount and rebuild whenever lambda changes
+  // (population size is fixed at construction). Deferred a tick so the
+  // seeding never sets state synchronously inside the effect; the optimizer
+  // that produced the displayed generation is the one kept for later steps
+  // (a replay scheme would desync because the noise is not seeded).
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      resetOptimizer();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [lambda, resetOptimizer]);
 
   const stepOptimizer = useCallback(() => {
     const opt = getOrInitOptimizer();
@@ -116,7 +113,7 @@ export function NoiseExplorer() {
 
     const trueBest = trueFn(nextState.mean[0], nextState.mean[1]);
     setTrueLossHistory((prev) => [...prev, trueBest]);
-    setNoisyLossHistory((prev) => [...prev, nextState.bestFitness]);
+    setNoisyLossHistory((prev) => [...prev, medianObservedFitness(nextState)]);
     setGeneration((g) => g + 1);
   }, [getOrInitOptimizer]);
 
@@ -202,24 +199,29 @@ export function NoiseExplorer() {
       ctx.stroke();
     }
 
-    // 3. Draw Covariance Ellipse
+    // 3. Draw covariance ellipse. The canvas pixels are not square relative
+    // to the domain, so build the path under the full data-to-pixel transform
+    // (rotate first, anisotropic scale after) and stroke it outside the
+    // transform; pre-scaling the radii before rotating would tilt the ellipse
+    // away from the covariance's true orientation.
     const [l1, l2] = latestState.eigenvalues;
-    const s1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma * (W / (2 * DOMAIN));
-    const s2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma * (H / (2 * DOMAIN));
+    const a1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma;
+    const a2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma;
     const cx = toPxX(latestState.mean[0]);
     const cy = toPxY(latestState.mean[1]);
 
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(-latestState.ellipseAngle);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.9)";
     ctx.lineWidth = 3.5;
     ctx.fillStyle = "rgba(14, 165, 233, 0.18)";
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(W / (2 * DOMAIN), -(H / (2 * DOMAIN)));
+    ctx.rotate(latestState.ellipseAngle);
     ctx.beginPath();
-    ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, a1, a2, 0, 0, Math.PI * 2);
+    ctx.restore();
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     // 4. Draw Noisy Samples
     latestState.samples.forEach((s) => {
@@ -357,8 +359,8 @@ export function NoiseExplorer() {
                 True Underlying Loss vs Noisy Observation
               </span>
               <div className="flex items-center gap-3 font-mono text-[0.68rem]">
-                <span className="text-sky-400">● True Loss</span>
-                <span className="text-purple-400">● Observed</span>
+                <span className="text-sky-400">● True Loss at Mean</span>
+                <span className="text-purple-400">● Median Observed</span>
               </div>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
@@ -417,8 +419,8 @@ export function NoiseExplorer() {
                 onChange={(e) => setLambda(parseInt(e.target.value, 10))}
                 className="w-full accent-sky-400"
               />
-              <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
-                <span>Increasing</span> <LatexRenderer math="\lambda" block={false} /> <span>averages out stochastic variance by</span> <LatexRenderer math="\sqrt{\lambda}" block={false} />.
+              <p className="text-[0.68rem] text-slate-500">
+                <span>Raising </span><LatexRenderer math="\lambda" block={false} /><span> makes the noisy rank ordering more reliable, and the weighted recombination averages independent noise so the error in the mean update shrinks roughly like </span><LatexRenderer math="1/\sqrt{\mu_{\text{eff}}}" block={false} />.
               </p>
             </div>
           </div>
@@ -452,7 +454,7 @@ export function NoiseExplorer() {
               <span>The Rank Invariance Secret</span>
             </div>
             <p>
-              Gradient-based algorithms rely on numerical difference ratios, which divide by near-zero step intervals and blow up in the presence of noise. CMA-ES only needs the <strong>relative rank ordering</strong> of samples, making it naturally immune to small perturbations and outliers.
+              Gradient-based algorithms rely on numerical difference ratios, which divide by near-zero step intervals and blow up in the presence of noise. CMA-ES only needs the <strong>relative rank ordering</strong> of samples, so the scale of the objective is irrelevant. Noise still corrupts the ordering itself, which is exactly why larger populations, elite reevaluation, and explicit uncertainty handling exist; try the Cauchy setting to watch heavy-tailed spikes scramble the ranks.
             </p>
           </div>
         </div>

@@ -38,9 +38,13 @@ export function ConstraintRepairDemo() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
 
+  // The engine must NOT apply its own bound repair here (its default is
+  // reflect): the whole point of this demo is that the strategy selected in
+  // the UI is the only repair in play. repairStrategy "none" leaves samples
+  // raw, and repairPoint inside the objective is the single repair step.
   const getOrInitOptimizer = useCallback((strat: "reflect" | "clamp" | "logit") => {
     if (!optimizerRef.current) {
-      optimizerRef.current = new CMAESOptimizer(
+      const opt = new CMAESOptimizer(
         (x, y) => {
           const [rx, ry] = repairPoint([x, y], strat);
           return objectiveFn(rx, ry);
@@ -50,9 +54,13 @@ export function ConstraintRepairDemo() {
           initialMean: [0.2, 0.2],
           initialSigma: 0.35,
           lambda: 14,
-          bounds: [-0.4, 1.6]
+          repairStrategy: "none"
         }
       );
+      // Replay the generation already shown in the seeded history so the
+      // first user step advances rather than duplicating generation 1.
+      opt.step();
+      optimizerRef.current = opt;
     }
     return optimizerRef.current;
   }, []);
@@ -68,7 +76,7 @@ export function ConstraintRepairDemo() {
         initialMean: [0.2, 0.2],
         initialSigma: 0.35,
         lambda: 14,
-        bounds: [-0.4, 1.6]
+        repairStrategy: "none"
       }
     );
     return [opt.step()];
@@ -87,7 +95,7 @@ export function ConstraintRepairDemo() {
         initialMean: [0.2, 0.2],
         initialSigma: 0.35,
         lambda: 14,
-        bounds: [-0.4, 1.6]
+        repairStrategy: "none"
       }
     );
     optimizerRef.current = opt;
@@ -243,10 +251,12 @@ export function ConstraintRepairDemo() {
       ctx.stroke();
     }
 
-    // 4. Draw Raw vs Repaired Offspring Samples
+    // 4. Draw raw vs repaired offspring samples. With repairStrategy "none"
+    // the engine leaves samples untouched, so rawX really is the pre-repair
+    // sample and the crimson ghosts can land outside the box.
     latestState.samples.forEach((s) => {
-      const rawX = s.x[0];
-      const rawY = s.x[1];
+      const rawX = s.rawX[0];
+      const rawY = s.rawX[1];
       const [fixX, fixY] = repairPoint([rawX, rawY], strategy);
 
       const rpx = toPxX(rawX);
@@ -331,7 +341,7 @@ export function ConstraintRepairDemo() {
             {latestState && (
               <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
                 <div className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>Best <LatexRenderer math="f(x^*)" block={false} />:</span>
+                  <span>Best <LatexRenderer math="f_{\text{best}}" block={false} />:</span>
                   <span>{latestState.bestFitness.toFixed(4)}</span>
                 </div>
                 <div className="text-sky-300 flex items-center gap-1">
@@ -386,10 +396,10 @@ export function ConstraintRepairDemo() {
             strategy === "reflect" ? "bg-sky-500/10 border-sky-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
           }`}>
             <div className="font-bold uppercase tracking-wider text-[0.7rem] text-sky-300 mb-1">
-              1. Boundary Reflection (Recommended)
+              1. Boundary Reflection
             </div>
             <p className="leading-relaxed">
-              When samples overshoot bounds (<span className="inline-block"><LatexRenderer math="x > 1" block={false} /></span>), reflect them back into the interior (<span className="inline-block"><LatexRenderer math="2 - x" block={false} /></span>). Preserves kinetic step variance without collapsing covariance eigenvalues.
+              When samples overshoot bounds (<span className="inline-block"><LatexRenderer math="x > 1" block={false} /></span>), reflect them back into the interior (<span className="inline-block"><LatexRenderer math="2 - x" block={false} /></span>). Preserves step variance without collapsing covariance eigenvalues. Production implementations pair any repair with a penalty on the repair distance and feed the unrepaired sample back to the update.
             </p>
           </div>
 
@@ -411,7 +421,7 @@ export function ConstraintRepairDemo() {
               3. Logit / Sigmoid Mapping
             </div>
             <p className="leading-relaxed">
-              Search operates in unbounded <span className="inline-block"><LatexRenderer math="\mathbb{R}^n" block={false} /></span>; a smooth sigmoid <span className="inline-block"><LatexRenderer math="\sigma(z) = 1/(1+e^{-z})" block={false} /></span> maps to <span className="inline-block"><LatexRenderer math="(0, 1)" block={false} /></span>. Derivatives vanish near edges, avoiding boundary overshoots naturally.
+              Search operates in unbounded <span className="inline-block"><LatexRenderer math="\mathbb{R}^n" block={false} /></span>; the smooth sigmoid <span className="inline-block"><LatexRenderer math="\sigma(z) = 1/(1+e^{-3(z - 0.5)})" block={false} /></span> maps onto the open box <span className="inline-block"><LatexRenderer math="(0, 1)" block={false} /></span>, so overshoot is impossible by construction. The trade-off: the map is asymptotic, so an optimum sitting exactly on the boundary (like the corner target here) is only approached as <span className="inline-block"><LatexRenderer math="z \to \infty" block={false} /></span> and progress flattens near the edges.
             </p>
           </div>
         </div>

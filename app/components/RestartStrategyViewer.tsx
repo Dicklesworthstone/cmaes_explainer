@@ -19,12 +19,41 @@ export function RestartStrategyViewer() {
 
   const [restartCount, setRestartCount] = useState(0);
   const [currentLambda, setCurrentLambda] = useState(8);
-  const [evalBudget, setEvalBudget] = useState(0);
-  const [globalBestFitness, setGlobalBestFitness] = useState<number>(40);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const optimizerRef = useRef<CMAESOptimizer | null>(null);
+
+  // First-run initialization inside a state initializer: the first run goes
+  // through the same accounting as every restart, so its lambda evaluations
+  // count against the budget and seed the global best. The start point is
+  // FIXED (the engine's RNG is seeded), so the server-rendered "Global Best"
+  // text matches the client's first render; only user-triggered restarts
+  // draw random start points.
+  const [initialRun] = useState(() => {
+    const opt = new CMAESOptimizer(multimodalFn, {
+      dim: 2,
+      initialMean: [1.9, -2.3],
+      initialSigma: 0.6,
+      lambda: 8,
+      bounds: [-3.5, 3.5]
+    });
+    return { opt, s0: opt.step() };
+  });
+
+  const optimizerRef = useRef<CMAESOptimizer | null>(initialRun.opt);
+  // Mirrors of the budget/best state so spawnRestart can account for the
+  // evaluations its first generation consumes without stale-closure reads.
+  const evalBudgetRef = useRef(8);
+  const globalBestRef = useRef(initialRun.s0.bestFitness);
+  // BIPOP keeps a doubling ladder for its large-population regime.
+  const largeLambdaRef = useRef(8);
+
+  const [evalBudget, setEvalBudget] = useState<number>(8);
+  const [globalBestFitness, setGlobalBestFitness] = useState<number>(initialRun.s0.bestFitness);
+  const [history, setHistory] = useState<CMAESGenerationState[]>(() => [initialRun.s0]);
+  const [fitnessTimeline, setFitnessTimeline] = useState<{ evals: number; fit: number; lambda: number }[]>(() => [
+    { evals: 8, fit: initialRun.s0.bestFitness, lambda: 8 }
+  ]);
 
   const getOrInitOptimizer = useCallback((popSize: number, sigmaInit: number) => {
     if (!optimizerRef.current) {
@@ -41,22 +70,10 @@ export function RestartStrategyViewer() {
     return optimizerRef.current;
   }, []);
 
-  const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
-    const startX = (Math.random() - 0.5) * 5.0;
-    const startY = (Math.random() - 0.5) * 5.0;
-    const opt = new CMAESOptimizer(multimodalFn, {
-      dim: 2,
-      initialMean: [startX, startY],
-      initialSigma: 0.6,
-      lambda: 8,
-      bounds: [-3.5, 3.5]
-    });
-    return [opt.step()];
-  });
-
-  const [fitnessTimeline, setFitnessTimeline] = useState<{ evals: number; fit: number; lambda: number }[]>([]);
-
-  // Initialize optimizer for a specific restart run
+  // Initialize optimizer for a specific run. Its first generation consumes
+  // popSize real evaluations, so those are counted against the budget and its
+  // best contributes to the global record; skipping them would hand every
+  // restart a free generation and bias the IPOP-vs-BIPOP comparison.
   const spawnRestart = useCallback((popSize: number, sigmaInit: number) => {
     const startX = (Math.random() - 0.5) * 5.0;
     const startY = (Math.random() - 0.5) * 5.0;
@@ -69,19 +86,29 @@ export function RestartStrategyViewer() {
     });
     optimizerRef.current = opt;
     setCurrentLambda(popSize);
-    setRestartCount((r) => r + 1);
     const s0 = opt.step();
     setHistory([s0]);
+    evalBudgetRef.current += popSize;
+    globalBestRef.current = Math.min(globalBestRef.current, s0.bestFitness);
+    setEvalBudget(evalBudgetRef.current);
+    setGlobalBestFitness(globalBestRef.current);
+    setFitnessTimeline((prev) => [
+      ...prev,
+      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: popSize }
+    ]);
   }, []);
 
   const latestState = history[history.length - 1];
 
   const resetAll = useCallback(() => {
     optimizerRef.current = null;
+    evalBudgetRef.current = 0;
+    globalBestRef.current = Infinity;
+    largeLambdaRef.current = 8;
     setRestartCount(0);
     setCurrentLambda(8);
     setEvalBudget(0);
-    setGlobalBestFitness(40);
+    setGlobalBestFitness(Infinity);
     setFitnessTimeline([]);
     setIsPlaying(false);
     spawnRestart(8, 0.6);
@@ -97,42 +124,47 @@ export function RestartStrategyViewer() {
     const nextState = opt.step();
     setHistory((prev) => [...prev, nextState]);
 
-    const newEvals = evalBudget + currentLambda;
-    setEvalBudget(newEvals);
+    evalBudgetRef.current += currentLambda;
+    globalBestRef.current = Math.min(globalBestRef.current, nextState.bestFitness);
+    setEvalBudget(evalBudgetRef.current);
+    setGlobalBestFitness(globalBestRef.current);
+    setFitnessTimeline((prev) => [
+      ...prev,
+      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: currentLambda }
+    ]);
 
-    let currentBest = globalBestFitness;
-    if (nextState.bestFitness < globalBestFitness) {
-      currentBest = nextState.bestFitness;
-      setGlobalBestFitness(currentBest);
-    }
-
-    setFitnessTimeline((prev) => [...prev, { evals: newEvals, fit: currentBest, lambda: currentLambda }]);
-
-    // Detect stagnation or convergence to trigger restart policy
-    const isStagnant = nextState.sigma < 1e-3 || (history.length > 18 && Math.abs(history[history.length - 1].bestFitness - history[history.length - 10]?.bestFitness || 0) < 1e-4);
+    // Detect stagnation or convergence to trigger the restart policy
+    const isStagnant =
+      nextState.sigma < 1e-3 ||
+      nextState.conditionNumber > 1e7 ||
+      (history.length > 18 && Math.abs(history[history.length - 1].bestFitness - history[history.length - 10]?.bestFitness || 0) < 1e-4);
 
     if (isStagnant) {
       let nextPop = currentLambda;
       let nextSigma = 0.6;
 
       if (strategy === "ipop") {
-        // IPOP doubles/triples population size systematically
+        // IPOP doubles the population size at every restart
         nextPop = Math.min(128, currentLambda * 2);
         nextSigma = 0.7;
       } else {
-        // BIPOP alternates large and small population exploration regimes
+        // BIPOP: the large regime keeps its own doubling ladder; the small
+        // regime probes with lambda_def and a log-uniform sigma in
+        // [0.006, 0.6] (sigma_def * 10^(-2U), U ~ U[0,1]).
         if (restartCount % 2 === 0) {
-          nextPop = Math.min(96, currentLambda * 3);
+          largeLambdaRef.current = Math.min(128, largeLambdaRef.current * 2);
+          nextPop = largeLambdaRef.current;
           nextSigma = 0.8;
         } else {
           nextPop = 8;
-          nextSigma = 0.2 * Math.pow(Math.random(), 2);
+          nextSigma = 0.6 * Math.pow(10, -2 * Math.random());
         }
       }
 
+      setRestartCount((r) => r + 1);
       spawnRestart(nextPop, nextSigma);
     }
-  }, [currentLambda, evalBudget, globalBestFitness, restartCount, strategy, spawnRestart, getOrInitOptimizer, history]);
+  }, [currentLambda, restartCount, strategy, spawnRestart, getOrInitOptimizer, history]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -233,24 +265,29 @@ export function RestartStrategyViewer() {
       ctx.stroke();
     }
 
-    // 4. Draw Covariance Ellipse
+    // 4. Draw covariance ellipse. The canvas pixels are not square relative
+    // to the domain, so build the path under the full data-to-pixel transform
+    // (rotate first, anisotropic scale after) and stroke it outside the
+    // transform; pre-scaling the radii before rotating would tilt the ellipse
+    // away from the covariance's true orientation.
     const [l1, l2] = latestState.eigenvalues;
-    const s1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma * (W / (2 * DOMAIN));
-    const s2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma * (H / (2 * DOMAIN));
+    const a1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma;
+    const a2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma;
     const cx = toPxX(latestState.mean[0]);
     const cy = toPxY(latestState.mean[1]);
 
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(-latestState.ellipseAngle);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
     ctx.lineWidth = 3.5;
     ctx.fillStyle = "rgba(14, 165, 233, 0.18)";
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(W / (2 * DOMAIN), -(H / (2 * DOMAIN)));
+    ctx.rotate(latestState.ellipseAngle);
     ctx.beginPath();
-    ctx.ellipse(0, 0, s1, s2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, a1, a2, 0, 0, Math.PI * 2);
+    ctx.restore();
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     // 5. Draw Offspring Population
     latestState.samples.forEach((s) => {
@@ -310,7 +347,10 @@ export function RestartStrategyViewer() {
     ctx.beginPath();
     fitnessTimeline.forEach((pt, i) => {
       const x = toPxX(pt.evals);
-      const y = toPxY(pt.fit);
+      // Early best-of-lambda values on Rastrigin can exceed the fixed 40-unit
+      // axis; clamp so the curve enters from the top edge instead of drawing
+      // outside the plot area.
+      const y = toPxY(Math.min(pt.fit, maxFit));
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -362,7 +402,9 @@ export function RestartStrategyViewer() {
             <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full h-auto block" />
 
             <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
-              <div className="text-emerald-400 font-bold">Global Best: {globalBestFitness.toFixed(3)}</div>
+              <div className="text-emerald-400 font-bold">
+                Global Best: {Number.isFinite(globalBestFitness) ? globalBestFitness.toFixed(3) : "—"}
+              </div>
               <div className="text-sky-300 flex items-center gap-1">
                 <span>Pop <LatexRenderer math="\lambda" block={false} />:</span>
                 <span>{currentLambda}</span>
@@ -412,12 +454,12 @@ export function RestartStrategyViewer() {
               <ul className="list-disc pl-4 space-y-1 marker:text-sky-400">
                 <li className="flex items-center gap-1">
                   <span>Step-size collapse:</span>
-                  <LatexRenderer math="\sigma < 10^{-12}" block={false} />
+                  <LatexRenderer math="\sigma < 10^{-3}" block={false} />
                 </li>
-                <li>Stagnant fitness variance over 15 generations</li>
+                <li>No best-fitness improvement across 10 generations</li>
                 <li className="flex items-center gap-1">
                   <span>Condition number explosion:</span>
-                  <LatexRenderer math="\kappa(C) > 10^{14}" block={false} />
+                  <LatexRenderer math="\kappa(C) > 10^{7}" block={false} />
                 </li>
               </ul>
             </div>

@@ -19,11 +19,14 @@ import {
 // ---------------------------------------------------------------------------
 
 const LANDSCAPES = [
-  { id: 0, name: "Sphere", formula: "f(x)=\\sum \\textcolor{#60a5fa}{x_i}^2", blurb: "Isotropic bowl — the easy case. Any covariance works." },
-  { id: 1, name: "Rosenbrock", formula: "\\sum\\!\\left[100(\\textcolor{#60a5fa}{x_{i+1}}-\\textcolor{#60a5fa}{x_i}^2)^2+(1-\\textcolor{#60a5fa}{x_i})^2\\right]", blurb: "Banana valley — CMA-ES must learn a curved, correlated ridge." },
-  { id: 2, name: "Cigar", formula: "f(x)=10^6 \\textcolor{#60a5fa}{x_0}^2+\\sum_{i>0} \\textcolor{#60a5fa}{x_i}^2", blurb: "One brutally sensitive axis — watch cond(C) explode, then adapt." },
-  { id: 3, name: "Rastrigin", formula: "10n+\\sum\\![\\textcolor{#60a5fa}{x_i}^2-10\\cos(2\\pi \\textcolor{#60a5fa}{x_i})]", blurb: "Heavily multimodal — population size is survival." },
-  { id: 4, name: "Ill-Cond.", formula: "\\sum 10^{6i/(n-1)} \\textcolor{#60a5fa}{x_i}^2", blurb: "Ellipsoid with a 10^6 condition number — covariance adaptation's home turf." },
+  { id: 0, name: "Sphere", formula: "f(x)=\\sum \\textcolor{#60a5fa}{x_i}^2", blurb: "Isotropic bowl, the easy case: C stays near the identity and sigma does the work." },
+  { id: 1, name: "Rosenbrock", formula: "\\sum\\!\\left[100(\\textcolor{#60a5fa}{x_{i+1}}-\\textcolor{#60a5fa}{x_i}^2)^2+(1-\\textcolor{#60a5fa}{x_i})^2\\right]", blurb: "Banana valley: CMA-ES must learn a curved, correlated ridge." },
+  // The kernel calls this landscape "cigar", but the implemented function
+  // (one brutally steep axis, the rest flat) is the Discus/Tablet benchmark;
+  // the true Cigar is x_0^2 + 10^6 * sum of the rest.
+  { id: 2, name: "Discus", formula: "f(x)=10^6 \\textcolor{#60a5fa}{x_0}^2+\\sum_{i>0} \\textcolor{#60a5fa}{x_i}^2", blurb: "One brutally sensitive axis: watch cond(C) explode, then adapt." },
+  { id: 3, name: "Rastrigin", formula: "10n+\\sum\\![\\textcolor{#60a5fa}{x_i}^2-10\\cos(2\\pi \\textcolor{#60a5fa}{x_i})]", blurb: "Heavily multimodal: population size is survival." },
+  { id: 4, name: "Ill-Cond.", formula: "\\sum 10^{6i/(n-1)} \\textcolor{#60a5fa}{x_i}^2", blurb: "Ellipsoid with a 10^6 condition number: covariance adaptation's home turf." },
 ] as const;
 
 function evalLandscape(id: number, x: number[]): number {
@@ -81,6 +84,9 @@ export function CmaesInternalsLab() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [computing, setComputing] = useState(false);
   const [speedMs, setSpeedMs] = useState(90);
+  // Which engine actually produced the CURRENT run: a loaded kernel can still
+  // refuse a call, in which case the badge must say the TS engine ran.
+  const [runSource, setRunSource] = useState<"wasm" | "ts">("ts");
   const reducedMotion = useRef(false);
 
   useEffect(() => {
@@ -98,7 +104,9 @@ export function CmaesInternalsLab() {
     const id = window.setTimeout(() => {
       if (cancelled) return;
       setComputing(true);
-      const x0 = startPoint.slice(0, dim);
+      // startPoint holds 6 coordinates; cycle them for higher dimensions so
+      // an 8D/12D run gets a full-length initial mean instead of NaNs.
+      const x0 = Array.from({ length: dim }, (_, i) => startPoint[i % startPoint.length]);
       const params: CmaesVizParams = {
         dim,
         x0,
@@ -115,13 +123,16 @@ export function CmaesInternalsLab() {
         fTarget: NaN,
       };
 
-      const run = kernel.source === "wasm" ? runCmaesViz(params) : null;
+      // The kernel accepts dim 2..=6; skip the boundary call (and its refusal
+      // round-trip) for the higher dims the TS engine handles.
+      const run = kernel.source === "wasm" && dim <= 6 ? runCmaesViz(params) : null;
       if (run && run.generations.length > 0) {
         const mapped = wasmRunToNdStates(run);
         if (!cancelled) {
           setStates(mapped);
           setCursor(0);
           setComputing(false);
+          setRunSource("wasm");
         }
         return;
       }
@@ -143,6 +154,7 @@ export function CmaesInternalsLab() {
         setStates(hist);
         setCursor(0);
         setComputing(false);
+        setRunSource("ts");
       }
     }, 30);
     return () => {
@@ -184,20 +196,21 @@ export function CmaesInternalsLab() {
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
             Every generation of a real CMA-ES run, projected into 3D principal-component
-            space. The ellipsoid <em className="text-slate-200 not-italic">is</em> the covariance
-            matrix Σ²C — watch it form, orient, and collapse as the population learns the landscape.
+            space. The ellipsoid is the 1σ surface of the sampling distribution N(m, σ²C):
+            watch it form and orient as the population learns the landscape. The view
+            renormalizes overall size for visibility, so read σ&apos;s collapse from the telemetry.
           </p>
         </div>
         <div
           className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-mono border shrink-0 ${
-            kernel.source === "wasm"
+            runSource === "wasm"
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
               : "border-amber-500/40 bg-amber-500/10 text-amber-300"
           }`}
           title={kernel.error ?? undefined}
         >
           <Cpu className="h-3.5 w-3.5" />
-          {kernel.source === "wasm"
+          {runSource === "wasm"
             ? `kernel: WASM step (${kernel.kernelVersion ?? "fs-cmaes-viz-wasm"})`
             : "kernel: TypeScript fallback"}
         </div>
@@ -266,7 +279,10 @@ export function CmaesInternalsLab() {
             }}
             className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
           >
-            {[8, 12, 16, 24, 32, 64].map((l) => (
+            {/* Kept within the kernel's accepted 4..48 range so every option
+                can run on the FrankenSim WASM engine (dim > 6 still falls
+                back to the TS engine; the badge reports which one ran). */}
+            {[8, 12, 16, 24, 32, 48].map((l) => (
               <option key={l} value={l} className="bg-slate-900 text-slate-200">
                 {l}
               </option>
@@ -467,12 +483,18 @@ export function CmaesInternalsLab() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 font-mono text-xs space-y-2">
             <div className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-sans font-semibold">Live internals</div>
-            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Best <LatexRenderer math="f(x^*)" block={false} /></span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Best <LatexRenderer math="f_{\text{best}}" block={false} /></span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Step size <LatexRenderer math="\sigma" block={false} /></span><span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Condition <LatexRenderer math="\kappa(C)" block={false} /></span><span className="text-purple-300">{latest ? (Number.isFinite(latest.conditionNumber) ? latest.conditionNumber.toFixed(1) : "∞") : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400">Evaluations</span><span className="text-slate-300">{latest ? latest.evalCount : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_c\|" block={false} /></span><span className="text-slate-300">{latest ? Math.hypot(...latest.pC).toFixed(3) : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_\sigma\| / \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /></span><span className="text-slate-300">{latest ? (Math.hypot(...latest.pSigma) / Math.sqrt(latest.mean.length)).toFixed(3) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_\sigma\| / \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /></span><span className="text-slate-300">{latest ? (() => {
+              // chi_n expectation, not sqrt(n): at n=5 the two differ by ~5%,
+              // which matters for a diagnostic read against 1.0.
+              const nd = latest.mean.length;
+              const chiN = Math.sqrt(nd) * (1 - 1 / (4 * nd) + 1 / (21 * nd * nd));
+              return (Math.hypot(...latest.pSigma) / chiN).toFixed(3);
+            })() : "—"}</span></div>
           </div>
 
           {/* Loss curve */}

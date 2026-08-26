@@ -368,22 +368,25 @@ export function WasmDemo() {
         ctx.stroke();
       }
 
-      // 3. Draw Global Optimum Star Marker
-      const [optX, optY] = currentBench.optimum;
+      // 3. Draw Global Optimum Star Markers (some benchmarks, e.g.
+      // Himmelblau, have several equal-valued global minima)
+      const optimaList = currentBench.optima ?? [currentBench.optimum];
       ctx.strokeStyle = "#fbbf24";
       ctx.fillStyle = "#fbbf24";
       ctx.lineWidth = 3.5;
-      const opx = toPxX(optX);
-      const opy = toPxY(optY);
-      ctx.beginPath();
-      ctx.arc(opx, opy, 10, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(opx - 14, opy);
-      ctx.lineTo(opx + 14, opy);
-      ctx.moveTo(opx, opy - 14);
-      ctx.lineTo(opx, opy + 14);
-      ctx.stroke();
+      optimaList.forEach(([optX, optY]) => {
+        const opx = toPxX(optX);
+        const opy = toPxY(optY);
+        ctx.beginPath();
+        ctx.arc(opx, opy, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(opx - 14, opy);
+        ctx.lineTo(opx + 14, opy);
+        ctx.moveTo(opx, opy - 14);
+        ctx.lineTo(opx, opy + 14);
+        ctx.stroke();
+      });
 
       // 4. Draw Comparison Baselines (Gradient Descent & Adam)
       if (compareMode) {
@@ -434,44 +437,57 @@ export function WasmDemo() {
         ctx.stroke();
       }
 
-      // 6. Draw Covariance 1-sigma & 2-sigma Confidence Ellipses
-      const s1 = Math.sqrt(Math.max(1e-10, a.l1)) * a.sigma * (W / (dMax - dMin));
-      const s2 = Math.sqrt(Math.max(1e-10, a.l2)) * a.sigma * (H / (dMax - dMin));
+      // 6. Draw covariance 1-sigma & 2-sigma confidence ellipses. The canvas
+      // pixels are not square relative to the domain, so build the path under
+      // the full data-to-pixel transform (rotate first, anisotropic scale
+      // after) and stroke it outside the transform; pre-scaling the radii and
+      // then rotating would tilt the ellipse away from the covariance's true
+      // orientation and disagree with the theta printed in the telemetry.
+      const a1 = Math.sqrt(Math.max(1e-10, a.l1)) * a.sigma;
+      const a2 = Math.sqrt(Math.max(1e-10, a.l2)) * a.sigma;
+      const kxScale = W / (dMax - dMin);
+      const kyScale = H / (dMax - dMin);
       const cx = toPxX(a.m0);
       const cy = toPxY(a.m1);
 
       [1, 2].forEach((k) => {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(-a.angle);
-
         ctx.strokeStyle = k === 1 ? "rgba(56, 189, 248, 0.95)" : "rgba(56, 189, 248, 0.4)";
         ctx.lineWidth = k === 1 ? 4 : 2;
         ctx.fillStyle = k === 1 ? "rgba(14, 165, 233, 0.15)" : "transparent";
 
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(kxScale, -kyScale);
+        ctx.rotate(a.angle);
         ctx.beginPath();
-        ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.ellipse(0, 0, a1 * k, a2 * k, 0, 0, Math.PI * 2);
+        ctx.restore();
+        if (k === 1) ctx.fill();
         ctx.stroke();
 
         // Draw principal axes on 1-sigma ellipse
         if (k === 1) {
           ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
           ctx.lineWidth = 2.5;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(kxScale, -kyScale);
+          ctx.rotate(a.angle);
           ctx.beginPath();
-          ctx.moveTo(-s1, 0);
-          ctx.lineTo(s1, 0);
-          ctx.moveTo(0, -s2);
-          ctx.lineTo(0, s2);
+          ctx.moveTo(-a1, 0);
+          ctx.lineTo(a1, 0);
+          ctx.moveTo(0, -a2);
+          ctx.lineTo(0, a2);
+          ctx.restore();
           ctx.stroke();
         }
-        ctx.restore();
       });
 
-      // 7. Draw Evolution Path Vector p_c (Purple Arrow)
-      const pcScale = 1.5 * (W / (dMax - dMin));
-      const pcX = cx + a.pc0 * pcScale;
-      const pcY = cy - a.pc1 * pcScale;
+      // 7. Draw Evolution Path Vector p_c (Purple Arrow). Both endpoints go
+      // through the same data-to-pixel mapping so the arrow's direction stays
+      // true under the non-square canvas.
+      const pcX = toPxX(a.m0 + a.pc0 * 1.5);
+      const pcY = toPxY(a.m1 + a.pc1 * 1.5);
 
       ctx.strokeStyle = "#c084fc";
       ctx.lineWidth = 4;
@@ -620,7 +636,8 @@ export function WasmDemo() {
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
           Test CMA-ES live against classical benchmark test functions. Watch the covariance matrix adapt its principal axes,
-          observe cumulative step-size expansion, and compare its convergence rate against finite-difference gradient descent.
+          observe cumulative step-size adaptation (σ grows on aligned steps and shrinks on oscillating ones), and compare its
+          convergence rate against finite-difference gradient descent.
         </p>
       </div>
 
@@ -697,9 +714,9 @@ export function WasmDemo() {
 
             <div className="flex flex-wrap items-center gap-1.5">
               {[
-                { id: "rosenbrock", label: "🍌 Ill-Conditioned Canyon", tip: "Condition > 1000" },
-                { id: "rastrigin", label: "🏔️ Deceptive Multimodal", tip: "Deep local traps" },
-                { id: "cigar", label: "⚡ Extreme Aspect Ratio (1000:1)", tip: "1000:1 Valley" },
+                { id: "rosenbrock", label: "🍌 Ill-Conditioned Canyon", tip: "Curved narrow valley" },
+                { id: "rastrigin", label: "🏔️ Regular Multimodal Grid", tip: "Many local minima around a global funnel" },
+                { id: "cigar", label: "⚡ Extreme Curvature Ratio (1000:1)", tip: "Level-set axis ratio √1000 ≈ 31.6:1" },
                 { id: "ackley", label: "🎯 Sharp Funnel", tip: "Flat outer plateau" }
               ].map((p) => (
                 <button
@@ -1099,7 +1116,9 @@ export function WasmDemo() {
                     ({latestState.mean[0].toFixed(2)}, {latestState.mean[1].toFixed(2)})
                   </div>
                   <div className="text-[0.68rem] text-slate-400 font-mono">
-                    Target: ({currentBench.optimum[0].toFixed(1)}, {currentBench.optimum[1].toFixed(1)})
+                    {currentBench.optima && currentBench.optima.length > 1
+                      ? `${currentBench.optima.length} equal global minima`
+                      : `Target: (${currentBench.optimum[0].toFixed(1)}, ${currentBench.optimum[1].toFixed(1)})`}
                   </div>
                 </div>
 
@@ -1113,7 +1132,7 @@ export function WasmDemo() {
                     {latestState.sigma.toFixed(3)}
                   </div>
                   <div className="text-[0.68rem] text-slate-400 font-mono">
-                    <LatexRenderer math="\|p_\sigma\|" block={false} /> = {Math.hypot(latestState.pSigma[0], latestState.pSigma[1]).toFixed(2)} (vs 1.13)
+                    <LatexRenderer math="\|p_\sigma\|" block={false} /> = {Math.hypot(latestState.pSigma[0], latestState.pSigma[1]).toFixed(2)} (vs <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
                   </div>
                 </div>
 
@@ -1141,7 +1160,7 @@ export function WasmDemo() {
                     <LatexRenderer math="\|p_c\|" block={false} /> = {Math.hypot(latestState.pC[0], latestState.pC[1]).toFixed(2)}
                   </div>
                   <div className="text-[0.68rem] text-slate-400">
-                    {activeCMA ? "Active rank-(1+μ) CMA" : "Standard CMA"}
+                    {activeCMA ? "Rank-1 + rank-μ, negative weights on the worst" : "Rank-1 + rank-μ CMA"}
                   </div>
                 </div>
 
@@ -1149,7 +1168,7 @@ export function WasmDemo() {
                 <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1 sm:col-span-2 lg:col-span-1">
                   <div className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-400 flex items-center justify-between">
                     <span>Current Best</span>
-                    <LatexRenderer math="f(x^*)" block={false} />
+                    <LatexRenderer math="f_{\text{best}}" block={false} />
                   </div>
                   <div className="font-mono text-sky-300 text-sm font-semibold">
                     {latestState.bestFitness < 1e-4 ? latestState.bestFitness.toExponential(3) : latestState.bestFitness.toFixed(4)}

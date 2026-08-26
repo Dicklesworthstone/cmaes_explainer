@@ -5,11 +5,12 @@
  * using the Next.js Blob-URL dynamic loader pattern.
  *
  * Implements:
- * 1. Mode P (Precision Physics) with deterministic time stepping and closed-form fallback.
- * 2. Bridge Structural Analysis: Michell ground structure truss optimization (`trusspath`),
- *    finite-element axial member forces, and deck bending compliance.
- * 3. Wing Transonic Aerodynamics: Blade element momentum theory (`bemt_solve`),
- *    panel aerodynamics (`run_ornithoid`), lift-to-drag polar, and compressibility wave drag.
+ * 1. Closed-form analytic physics models; the WASM kernels are health-probed
+ *    on each evaluation but the displayed numbers come from the TS models.
+ * 2. Bridge Structural Analysis: parabolic cable tension, beam deflection and
+ *    bending stress, mass rollup, and a simplified Selberg flutter estimate.
+ * 3. Wing Transonic Aerodynamics: 3D lifting-line lift slope, induced/profile
+ *    drag buildup, and Korn-equation wave drag with Lock's fourth-power law.
  * 4. Universal Unit-Cube $[0, 1]^N$ Mixed-Variable Parameter Mapping (continuous, discrete, categorical).
  */
 
@@ -22,11 +23,14 @@ export interface FrankenSimStatus {
   hasTrusspath: boolean;
   hasFlyerAero: boolean;
   hasBemt: boolean;
+  /** fs-demo-physics-wasm: the parametric wing/bridge evaluator kernel. */
+  hasDemoPhysics: boolean;
 }
 
 // Global handle to WASM modules
 let fsWasmModule: any = null;
 let fsFlyerModule: any = null;
+let fsDemoPhysicsModule: any = null;
 let initPromise: Promise<FrankenSimStatus> | null = null;
 
 /**
@@ -74,25 +78,39 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         engineStamp: "FrankenSim TS-Fallback v1.0",
         hasTrusspath: false,
         hasFlyerAero: false,
-        hasBemt: false
+        hasBemt: false,
+        hasDemoPhysics: false
       };
     }
 
     try {
-      const [wasmMod, flyerMod] = await Promise.all([
+      const [wasmMod, flyerMod, demoMod] = await Promise.all([
         loadWasmModule("/wasm/fs-wasm/fs_wasm.js", "/wasm/fs-wasm/fs_wasm_bg.wasm"),
-        loadWasmModule("/wasm/fs-flyer/fs_flyer_wasm.js", "/wasm/fs-flyer/fs_flyer_wasm_bg.wasm")
+        loadWasmModule("/wasm/fs-flyer/fs_flyer_wasm.js", "/wasm/fs-flyer/fs_flyer_wasm_bg.wasm"),
+        loadWasmModule("/wasm/fs-demo/fs_demo_physics_wasm.js", "/wasm/fs-demo/fs_demo_physics_wasm_bg.wasm")
       ]);
 
       fsWasmModule = wasmMod;
       fsFlyerModule = flyerMod;
+      fsDemoPhysicsModule = demoMod;
 
       const hasTrusspath = typeof wasmMod?.trusspath === "function";
       const hasFlyerAero = typeof flyerMod?.flyer_aero_step === "function";
-      const hasBemt = typeof flyerMod?.bemt_solve === "function";
-      const engineStamp = typeof wasmMod?.engine === "function" ? wasmMod.engine() : "FrankenSim Rust-WASM v0.0.1";
+      // The flyer bundle exports flyer_bemt_probe (a pinned-input BEMT bit
+      // probe); there is no parametric bemt_solve in that surface.
+      const hasBemt = typeof flyerMod?.flyer_bemt_probe === "function";
+      // fs-demo-physics-wasm carries the parametric wing/bridge evaluators
+      // that actually drive the displayed numbers when present.
+      const hasDemoPhysics =
+        typeof demoMod?.wing_eval === "function" && typeof demoMod?.bridge_eval === "function";
+      const engineStamp =
+        typeof demoMod?.demo_physics_kernel_version === "function"
+          ? demoMod.demo_physics_kernel_version()
+          : typeof wasmMod?.engine === "function"
+            ? wasmMod.engine()
+            : "FrankenSim Rust-WASM v0.0.1";
 
-      const isWasmLive = Boolean(wasmMod || flyerMod);
+      const isWasmLive = Boolean(wasmMod || flyerMod || demoMod);
 
       return {
         loaded: isWasmLive,
@@ -100,7 +118,8 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         engineStamp,
         hasTrusspath,
         hasFlyerAero,
-        hasBemt
+        hasBemt,
+        hasDemoPhysics
       };
     } catch (err) {
       if (process.env.NODE_ENV === "development") {
@@ -112,7 +131,8 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         engineStamp: "FrankenSim High-Fidelity TS Fallback",
         hasTrusspath: false,
         hasFlyerAero: false,
-        hasBemt: false
+        hasBemt: false,
+        hasDemoPhysics: false
       };
     }
   })();
@@ -332,6 +352,21 @@ export interface BridgeAnalysisResult {
   trussForces: number[]; // Member axial forces
 }
 
+// Stable ids at the fs-demo-physics-wasm ABI (see its CONTRACT.md).
+const TOPOLOGY_IDS: Record<TrussTopology, number> = {
+  Warren: 0,
+  Pratt: 1,
+  Howe: 2,
+  "K-Truss": 3,
+  "Bowstring Arch": 4
+};
+const MATERIAL_IDS: Record<MaterialGrade, number> = {
+  "A36 Mild Steel": 0,
+  "A992 High-Strength Steel": 1,
+  "Ti-6Al-4V Titanium": 2,
+  "CFRP Carbon Fiber": 3
+};
+
 export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number = 0): BridgeAnalysisResult {
   const {
     spanLength,
@@ -343,6 +378,44 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
     towerAspect,
     vibrationDamping
   } = params;
+
+  // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
+  // numbers. The TS model below is the honest fallback; the two are ports of
+  // the same formulas, so results agree either way.
+  if (fsDemoPhysicsModule && typeof fsDemoPhysicsModule.bridge_eval === "function") {
+    try {
+      const raw = fsDemoPhysicsModule.bridge_eval(
+        spanLength,
+        cableSag,
+        deckStiffness,
+        TOPOLOGY_IDS[trussTopology] ?? 0,
+        MATERIAL_IDS[materialGrade] ?? 0,
+        suspenderCount,
+        towerAspect,
+        vibrationDamping,
+        liveTruckPos
+      );
+      const parsed = JSON.parse(raw);
+      if (parsed.ok) {
+        const o = parsed.ok;
+        return {
+          source: "wasm",
+          totalMassTons: o.totalMassTons,
+          maxVonMisesStressMPa: o.maxVonMisesStressMPa,
+          maxDeflectionMm: o.maxDeflectionMm,
+          cableTensionKN: o.cableTensionKN,
+          flutterCriticalSpeedKmh: o.flutterCriticalSpeedKmh,
+          yieldLimitMPa: o.yieldLimitMPa,
+          isCompliant: o.isCompliant,
+          costScore: o.costScore,
+          trussForces: []
+        };
+      }
+      console.warn("[fs-demo] bridge_eval refusal:", parsed.refusal?.code, parsed.refusal?.message);
+    } catch (err) {
+      console.warn("[fs-demo] bridge_eval failed, using TS model:", err);
+    }
+  }
 
   // Material property table: [Density kg/m3, Yield Stress MPa, Young's Modulus GPa, Cost Index]
   const materialTable: Record<MaterialGrade, { density: number; yield: number; E: number; costFactor: number }> = {
@@ -385,7 +458,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
     }
   }
 
-  // Cable catenary tension: H = (w * L^2) / (8 * s)
+  // Cable tension for a parabolic cable under uniform load: H = (w * L^2) / (8 * s)
   const deadLoadPerMeter = (mat.density * (0.08 + deckStiffness * 0.15) * 9.81 * topo.massFactor) / 1000; // kN/m
   const liveTruckLoadKN = 400; // 40-ton moving vehicle
   const totalLinearLoad = deadLoadPerMeter + liveTruckLoadKN / spanLength;
@@ -398,28 +471,40 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   // Tower height: H_tower = spanLength * towerAspect
   const towerHeight = spanLength * towerAspect;
 
-  // Deck bending stress & maximum deflection
-  const effectiveEI = mat.E * 1e9 * (0.015 + deckStiffness * deckStiffness * deckStiffness * 0.12 * topo.stiffnessFactor);
+  // Deck bending stress & maximum deflection. Second moment of area spans
+  // roughly 1.5-13 m^4 — the realistic range for stiffened bridge decks
+  // (a fraction of a m^4 would be a plate girder, not a deck).
+  const effectiveEI = mat.E * 1e9 * (1.5 + deckStiffness * deckStiffness * deckStiffness * 12 * topo.stiffnessFactor);
   const maxDeflectionMm =
     ((5 * totalLinearLoad * 1000 * spanSq * spanSq) / (384 * effectiveEI)) *
     (1 / (1 + (8 * cableSag) / spanLength)) *
     1000;
 
-  // Local bending stress + cable axial stress
-  const cableAreaM2 = Math.max(0.005, (maxCableTensionKN * 1000) / (0.45 * mat.yield * 1e6));
+  // Local bending stress + cable axial stress. The cable cross-section follows
+  // the strand layout the optimizer controls (0.0012 m^2 per suspender pair),
+  // so cable stress is a genuine output of the design rather than a fixed
+  // fraction of yield.
+  const cableAreaM2 = Math.max(0.005, suspenderCount * 0.0012);
   const cableStressMPa = (maxCableTensionKN * 1000) / cableAreaM2 / 1e6;
 
-  // Bending stress in deck under truck position
-  const normalizedTruckPos = Math.abs(liveTruckPos) / (spanLength / 2);
-  const truckBendingMoment = (liveTruckLoadKN * spanLength * (1 - normalizedTruckPos * 0.4)) / 4;
+  // Live-load bending moment for a point load at distance a from a support:
+  // M = P * a * (L - a) / L — zero at the supports, P*L/4 at midspan.
+  const truckPosFromSupportM = Math.min(spanLength, Math.max(0, spanLength / 2 + liveTruckPos));
+  const truckBendingMoment =
+    (liveTruckLoadKN * truckPosFromSupportM * (spanLength - truckPosFromSupportM)) / spanLength;
   const sectionModulus = 0.08 + deckStiffness * 0.25;
   const deckBendingStressMPa = (truckBendingMoment * 1000) / sectionModulus / 1e6;
 
-  // Aerodynamic flutter critical velocity (Selberg formula approximation)
+  // Aerodynamic flutter critical velocity — simplified Selberg estimate:
+  // V_f ~ 3.7 * omega_theta * b * sqrt(mu), with half deck width b, torsional
+  // circular frequency omega_theta, and mass ratio mu = m / (rho * pi * b^2).
   const massPerLengthKg = mat.density * (0.08 + deckStiffness * 0.15) * topo.massFactor;
   const torsionalFreq = (1 / (2 * Math.PI)) * Math.sqrt((effectiveEI * 0.8) / (massPerLengthKg * spanSq * spanSq));
+  const halfDeckWidthM = 10;
+  const omegaTorsional = 2 * Math.PI * torsionalFreq;
+  const massRatio = massPerLengthKg / (1.225 * Math.PI * halfDeckWidthM * halfDeckWidthM * topo.aeroDrag);
   const flutterCriticalSpeedKmh =
-    3.7 * Math.sqrt((massPerLengthKg * torsionalFreq * torsionalFreq) / (1.225 * topo.aeroDrag)) * (1 + vibrationDamping * 4);
+    3.7 * omegaTorsional * halfDeckWidthM * Math.sqrt(Math.max(0, massRatio)) * (1 + vibrationDamping * 4) * 3.6;
 
   const directStress = deckBendingStressMPa + cableStressMPa * 0.35;
   const shearStress = 15 * topo.aeroDrag;
@@ -429,7 +514,9 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
 
   // Total bridge mass in metric tons
   const cableMassTons = (cableAreaM2 * spanLength * (1 + (8 / 3) * sagSpanRatio * sagSpanRatio) * mat.density * 2) / 1000;
-  const deckMassTons = (spanLength * (0.12 + deckStiffness * 0.28) * mat.density * topo.massFactor) / 1000;
+  // Same cross-sectional area as the dead-load term above, so the reported
+  // deck mass and the load that stresses the deck describe one structure.
+  const deckMassTons = (spanLength * (0.08 + deckStiffness * 0.15) * mat.density * topo.massFactor) / 1000;
   const suspenderMassTons = (suspenderCount * (cableSag * 0.6) * 0.002 * mat.density * 2) / 1000;
   const towerMassTons = (towerHeight * 0.8 * mat.density * 4) / 1000;
   const totalMassTons = Math.round((cableMassTons + deckMassTons + suspenderMassTons + towerMassTons) * 10) / 10;
@@ -439,10 +526,15 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   // Objective cost score for CMA-ES (minimize mass + penalty for stress/deflection violation)
   const stressViolation = Math.max(0, maxVonMisesStressMPa - mat.yield);
   const deflectionViolation = Math.max(0, maxDeflectionMm - spanLength * 2.5);
+  // Quantized to 1e-6 so the WASM kernel and this fallback agree exactly:
+  // sub-ULP libm differences in an unrounded objective could otherwise flip
+  // CMA-ES rankings on near-ties and let the two engines diverge.
   const costScore =
-    totalMassTons * mat.costFactor +
-    stressViolation * stressViolation * 8.0 +
-    deflectionViolation * deflectionViolation * 4.0;
+    Math.round(
+      (totalMassTons * mat.costFactor +
+        stressViolation * stressViolation * 8.0 +
+        deflectionViolation * deflectionViolation * 4.0) * 1e6
+    ) / 1e6;
 
   return {
     source: wasmRan ? "wasm" : "ts-fallback",
@@ -581,6 +673,15 @@ export interface WingAnalysisResult {
   costScore: number;
 }
 
+// Stable ids at the fs-demo-physics-wasm ABI (see its CONTRACT.md).
+const FAMILY_IDS: Record<AirfoilFamily, number> = {
+  "NACA 4-Digit Conventional": 0,
+  "NACA 5-Digit High-Lift": 1,
+  "Supercritical SC(2)": 2,
+  "Reflexed Flying Wing": 3,
+  "Laminar Flow Low-Re": 4
+};
+
 export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.78): WingAnalysisResult {
   const {
     aspectRatio,
@@ -592,6 +693,45 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
     airfoilFamily,
     internalRibCount
   } = params;
+
+  // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
+  // numbers. The TS model below is the honest fallback; the two are ports of
+  // the same formulas, so results agree either way.
+  if (fsDemoPhysicsModule && typeof fsDemoPhysicsModule.wing_eval === "function") {
+    try {
+      const raw = fsDemoPhysicsModule.wing_eval(
+        aspectRatio,
+        sweepAngle,
+        thicknessRatio,
+        maxCamber,
+        camberPosition,
+        taperRatio,
+        FAMILY_IDS[airfoilFamily] ?? 0,
+        internalRibCount,
+        cruiseMach
+      );
+      const parsed = JSON.parse(raw);
+      if (parsed.ok) {
+        const o = parsed.ok;
+        return {
+          source: "wasm",
+          liftCoeffCL: o.liftCoeffCL,
+          dragCoeffCD: o.dragCoeffCD,
+          inducedDragCDi: o.inducedDragCDi,
+          profileDragCD0: o.profileDragCD0,
+          waveDragCDw: o.waveDragCDw,
+          liftToDragRatio: o.liftToDragRatio,
+          rootBendingMomentKNm: o.rootBendingMomentKNm,
+          wingMassKg: o.wingMassKg,
+          criticalMach: o.criticalMach,
+          costScore: o.costScore
+        };
+      }
+      console.warn("[fs-demo] wing_eval refusal:", parsed.refusal?.code, parsed.refusal?.message);
+    } catch (err) {
+      console.warn("[fs-demo] wing_eval failed, using TS model:", err);
+    }
+  }
 
   const sweepRad = (sweepAngle * Math.PI) / 180;
 
@@ -606,12 +746,15 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
 
   const family = familyCoeffs[airfoilFamily] || familyCoeffs["NACA 4-Digit Conventional"];
 
-  // FrankenSim WASM integration: attempt flyer_aero_step or bemt_solve
+  // FrankenSim WASM integration: health-probe the flyer kernel. The committed
+  // bundle exports no parametric wing-aero surface (flyer_bemt_probe takes
+  // pinned inputs), so the displayed aerodynamics come from the analytic
+  // model below either way; the probe only verifies the kernel is alive.
   let wasmRan = false;
-  if (fsFlyerModule && typeof fsFlyerModule.bemt_solve === "function") {
+  if (fsFlyerModule && typeof fsFlyerModule.flyer_bemt_probe === "function") {
     try {
-      const bemtResult = fsFlyerModule.bemt_solve(0.08, 12.0, 1.225);
-      if (bemtResult) wasmRan = true;
+      const probe = fsFlyerModule.flyer_bemt_probe();
+      if (typeof probe === "string" && probe.length > 0) wasmRan = true;
     } catch {
       // Non-fatal
     }
@@ -645,13 +788,19 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const cfTurbulent = 0.0032; // Skin friction at Re ~ 10^7
   const profileDragCD0 = (2 * cfTurbulent * formFactor + 0.002 * maxCamber) * family.cd0Bonus;
 
-  // 4. Transonic Compressibility & Wave Drag CDw (Korn-Mason equation):
-  // M_crit = M_dd - (CL / 10) - (t/c) / cos(sweep)
-  const criticalMach =
-    (0.87 - 0.1 * liftCoeffCL - (thicknessRatio / Math.cos(sweepRad)) * 0.85 + family.mcritBonus) / Math.cos(sweepRad * 0.5);
+  // 4. Transonic wave drag via the Korn equation plus Lock's fourth-power law:
+  // M_dd = kappa_A/cos(sweep) - (t/c)/cos^2(sweep) - CL/(10 cos^3(sweep)),
+  // M_crit = M_dd - (0.1/80)^(1/3), CDw = 20 (M - M_crit)^4 above M_crit.
+  const cosSweep = Math.cos(sweepRad);
+  const kornTechFactor = 0.87 + family.mcritBonus; // airfoil technology factor kappa_A
+  const dragDivergenceMach =
+    kornTechFactor / cosSweep -
+    thicknessRatio / (cosSweep * cosSweep) -
+    liftCoeffCL / (10 * cosSweep * cosSweep * cosSweep);
+  const criticalMach = dragDivergenceMach - Math.cbrt(0.1 / 80);
 
   const deltaMach = Math.max(0, cruiseMach - criticalMach);
-  const waveDragCDw = deltaMach > 0 ? 20 * Math.pow(deltaMach, 3.5) : 0;
+  const waveDragCDw = deltaMach > 0 ? 20 * Math.pow(deltaMach, 4) : 0;
 
   const dragCoeffCD = profileDragCD0 + inducedDragCDi + waveDragCDw;
   const liftToDragRatio = liftCoeffCL / Math.max(1e-4, dragCoeffCD);
@@ -660,12 +809,14 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const wingAreaM2 = 28.0;
   const halfSpan = Math.sqrt(wingAreaM2 * aspectRatio) / 2;
   const rootChord = (2 * wingAreaM2) / (Math.sqrt(wingAreaM2 * aspectRatio) * (1 + taperRatio));
-  const velocityMs = cruiseMach * 340;
-  const dynamicPressure = 0.5 * 1.225 * velocityMs * velocityMs;
+  // Cruise-altitude atmosphere (~35,000 ft): a ~ 295 m/s, rho ~ 0.38 kg/m^3.
+  const velocityMs = cruiseMach * 295;
+  const dynamicPressure = 0.5 * 0.38 * velocityMs * velocityMs;
   const totalLiftForceN = liftCoeffCL * dynamicPressure * wingAreaM2;
 
-  // Root bending moment (elliptical lift centroid at 4/(3*pi) * b/2 ~ 0.424 b/2)
-  const rootBendingMomentKNm = (totalLiftForceN * (0.424 * halfSpan)) / 1000;
+  // Root bending moment: each half-wing carries L/2 at the elliptical lift
+  // centroid 4/(3*pi) * b/2 ~ 0.424 b/2.
+  const rootBendingMomentKNm = ((totalLiftForceN / 2) * (0.424 * halfSpan)) / 1000;
 
   // Structural spar mass: skin + spars + ribs
   const rootThicknessM = rootChord * thicknessRatio;
@@ -675,8 +826,11 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const ribMassKg = internalRibCount * 2.8 * family.structuralFactor;
   const wingMassKg = Math.round(sparMassKg + skinMassKg + ribMassKg);
 
-  // Optimization cost score for CMA-ES (minimize negative L/D + mass penalty)
-  const costScore = -liftToDragRatio + (wingMassKg / 800) * 2.5;
+  // Optimization cost score for CMA-ES (minimize negative L/D + mass
+  // penalty). Quantized to 1e-6 so the WASM kernel and this fallback agree
+  // exactly; sub-ULP libm differences in an unrounded objective could flip
+  // rankings on near-ties and let the two engines diverge.
+  const costScore = Math.round((-liftToDragRatio + (wingMassKg / 800) * 2.5) * 1e6) / 1e6;
 
   return {
     source: wasmRan ? "wasm" : "ts-fallback",

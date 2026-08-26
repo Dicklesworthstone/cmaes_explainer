@@ -24,7 +24,7 @@ export function ActiveCovarianceDemo() {
 
   const getOrInitOptimizer = useCallback((useActive: boolean) => {
     if (!optimizerRef.current) {
-      optimizerRef.current = new CMAESOptimizer(objectiveFn, {
+      const opt = new CMAESOptimizer(objectiveFn, {
         dim: 2,
         initialMean: [-1.4, -0.8],
         initialSigma: 0.5,
@@ -32,6 +32,11 @@ export function ActiveCovarianceDemo() {
         activeCMA: useActive,
         bounds: [-DOMAIN, DOMAIN]
       });
+      // Replay the generation already shown in the seeded history (same seed,
+      // deterministic engine), so the first user step advances instead of
+      // appending a duplicate of generation 1.
+      opt.step();
+      optimizerRef.current = opt;
     }
     return optimizerRef.current;
   }, []);
@@ -159,18 +164,20 @@ export function ActiveCovarianceDemo() {
       ctx.stroke();
     }
 
-    // 3. Draw 1-sigma and 2-sigma Covariance Ellipses
+    // 3. Draw 1-sigma and 2-sigma covariance ellipses. The canvas pixels are
+    // not square relative to the domain, so build the path under the full
+    // data-to-pixel transform (rotate first, anisotropic scale after) and
+    // stroke it outside the transform; pre-scaling the radii and then
+    // rotating would tilt the ellipse away from the covariance's true angle.
     const [l1, l2] = latestState.eigenvalues;
-    const s1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma * (W / (2 * DOMAIN));
-    const s2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma * (H / (2 * DOMAIN));
+    const a1 = Math.sqrt(Math.max(1e-10, l1)) * latestState.sigma;
+    const a2 = Math.sqrt(Math.max(1e-10, l2)) * latestState.sigma;
+    const kxScale = W / (2 * DOMAIN);
+    const kyScale = H / (2 * DOMAIN);
     const cx = toPxX(latestState.mean[0]);
     const cy = toPxY(latestState.mean[1]);
 
     [1, 2].forEach((k) => {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-latestState.ellipseAngle);
-
       ctx.strokeStyle = activeCMA
         ? k === 1
           ? "rgba(56, 189, 248, 0.95)"
@@ -181,34 +188,45 @@ export function ActiveCovarianceDemo() {
       ctx.lineWidth = k === 1 ? 4 : 2;
       ctx.fillStyle = activeCMA ? "rgba(14, 165, 233, 0.15)" : "rgba(244, 63, 94, 0.1)";
 
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(kxScale, -kyScale);
+      ctx.rotate(latestState.ellipseAngle);
       ctx.beginPath();
-      ctx.ellipse(0, 0, s1 * k, s2 * k, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, a1 * k, a2 * k, 0, 0, Math.PI * 2);
+      ctx.restore();
       ctx.fill();
       ctx.stroke();
 
       if (k === 1) {
         ctx.strokeStyle = activeCMA ? "rgba(56, 189, 248, 0.7)" : "rgba(244, 63, 94, 0.7)";
         ctx.lineWidth = 2.5;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(kxScale, -kyScale);
+        ctx.rotate(latestState.ellipseAngle);
         ctx.beginPath();
-        ctx.moveTo(-s1, 0);
-        ctx.lineTo(s1, 0);
-        ctx.moveTo(0, -s2);
-        ctx.lineTo(0, s2);
+        ctx.moveTo(-a1, 0);
+        ctx.lineTo(a1, 0);
+        ctx.moveTo(0, -a2);
+        ctx.lineTo(0, a2);
+        ctx.restore();
         ctx.stroke();
       }
-      ctx.restore();
     });
 
-    // 4. Draw Offspring Population (Top Elites in Emerald, Worst in Crimson if Active CMA)
+    // 4. Draw offspring population. The engine gives positive covariance
+    // weights to the top mu = lambda/2 = 8 samples and (with active CMA)
+    // negative weights to the remaining 8, so those are the two sets drawn.
     const sorted = [...latestState.samples].sort((a, b) => a.fitness - b.fitness);
-    const mu = Math.floor(sorted.length / 4);
+    const mu = Math.floor(sorted.length / 2);
 
     sorted.forEach((s, idx) => {
       const sx = toPxX(s.x[0]);
       const sy = toPxY(s.x[1]);
 
       if (idx < mu) {
-        // Top Elite
+        // Top elite (positive covariance weight)
         ctx.fillStyle = "#34d399";
         ctx.shadowColor = "#34d399";
         ctx.shadowBlur = 10;
@@ -219,22 +237,25 @@ export function ActiveCovarianceDemo() {
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2.5;
         ctx.stroke();
-      } else if (activeCMA && idx >= sorted.length - mu) {
-        // Worst Offspring (Negative Active Forces)
+      } else if (activeCMA) {
+        // Worst-ranked offspring (negative covariance weight). The dashed
+        // segment marks the direction along which variance is subtracted;
+        // nothing is physically pushed toward or away from the mean.
         ctx.fillStyle = "#f43f5e";
         ctx.beginPath();
         ctx.arc(sx, sy, 7, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw negative active repulsion vector toward mean
-        ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
-        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.6)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(cx, cy);
         ctx.stroke();
+        ctx.setLineDash([]);
       } else {
-        // Standard Offspring
+        // Non-elite offspring (no covariance contribution without active CMA)
         ctx.fillStyle = "rgba(148, 163, 184, 0.75)";
         ctx.beginPath();
         ctx.arc(sx, sy, 5, 0, Math.PI * 2);
@@ -294,7 +315,7 @@ export function ActiveCovarianceDemo() {
             {latestState && (
               <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
                 <div className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>Best <LatexRenderer math="f(x^*)" block={false} />:</span>
+                  <span>Best <LatexRenderer math="f_{\text{best}}" block={false} />:</span>
                   <span>{latestState.bestFitness.toFixed(4)}</span>
                 </div>
                 <div className="text-sky-300 flex items-center gap-1">
@@ -312,12 +333,12 @@ export function ActiveCovarianceDemo() {
             <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2 bg-slate-950/80 backdrop-blur-md p-2 rounded-xl border border-white/10 text-[0.68rem] font-mono">
               <div className="flex items-center gap-1.5 text-emerald-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span>Top Elites (Positive Weight)</span>
+                <span>Top 8 (Positive Weight)</span>
               </div>
               {activeCMA && (
                 <div className="flex items-center gap-1.5 text-rose-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <span>Worst Samples (Negative Weight)</span>
+                  <span>Worst 8 (Negative Weight, dashes = shrink direction)</span>
                 </div>
               )}
             </div>
@@ -357,7 +378,7 @@ export function ActiveCovarianceDemo() {
             </div>
 
             <span className="text-xs font-mono text-slate-400">
-              <LatexRenderer math="\lambda = 16 \mid \mu = 4" block={false} />
+              <LatexRenderer math="\lambda = 16 \mid \mu = 8" block={false} />
             </span>
           </div>
         </div>
@@ -370,16 +391,16 @@ export function ActiveCovarianceDemo() {
               <span>Why Active Covariance Accelerates Convergence</span>
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Standard CMA-ES expands covariance along directions that produce elite samples, but relies solely on passive exponential discounting <span className="inline-block"><LatexRenderer math="(1 - c_\mu) C" block={false} /></span> to shrink variance in bad directions.
+              Standard CMA-ES expands covariance along directions that produce elite samples, but relies solely on passive exponential discounting <span className="inline-block"><LatexRenderer math="(1 - c_1 - c_\mu) C" block={false} /></span> to shrink variance in bad directions.
             </p>
             <p className="text-slate-300 leading-relaxed">
-              <strong>Active CMA-ES</strong> assigns negative weights to the worst <span className="inline-block"><LatexRenderer math="\mu_{\text{neg}}" block={false} /></span> offspring:
+              <strong>Active CMA-ES</strong> assigns negative weights to the worst-ranked offspring, with each contribution rescaled by its Mahalanobis length so <LatexRenderer math="C" block={false} /> stays positive definite:
             </p>
             <div className="text-[0.8rem] bg-slate-900/80 p-2.5 rounded-xl border border-white/5 text-center text-rose-300">
-              <LatexRenderer math="\Delta C_{\text{active}} = - c_{\mu\text{neg}} \sum |w_j| y_j y_j^\top" block={false} />
+              <LatexRenderer math="\Delta C_{\text{active}} = - c_\mu \sum_j |w_j| \tfrac{n}{\|C^{-1/2} y_j\|^2} \, y_j y_j^\top" block={false} />
             </div>
             <p className="text-slate-400 leading-relaxed">
-              This actively flattens the search ellipsoid against canyon walls, preventing wasteful mutations into known high-loss regions and improving convergence speed by <strong>20–40%</strong> on narrow ridges.
+              This flattens the search ellipsoid against canyon walls, preventing wasteful mutations into known high-loss regions. Jastrebski &amp; Arnold (2006) measured speedups up to about 2&times; on ill-conditioned functions.
             </p>
           </div>
         </div>
