@@ -535,7 +535,7 @@ export function BridgeViz() {
       {/* Main Grid: Viewport/Phase-Space & Control Panel */}
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Viewport / Phase Space Container */}
-        <div className="lg:w-[62%] w-full space-y-4">
+        <div className="lg:w-[62%] w-full min-w-0 space-y-4">
           {/* Main 3D Canvas Stage (Single or Split 3D View) */}
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -666,8 +666,10 @@ export function BridgeViz() {
                 <span>Drag to orbit 3D model</span>
               </div>
 
-              {/* FEA Stress Colormap Legend */}
-              <div className="absolute top-3 left-3 sm:top-auto sm:bottom-4 sm:right-4 p-2.5 sm:p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex flex-col gap-1.5 w-44 sm:w-56 shadow-2xl pointer-events-none">
+              {/* FEA Stress Colormap Legend (desktop only: 176px of panel on
+                  a phone-width canvas hides the bridge; mobile shows the
+                  same numbers in the strip under the viewport) */}
+              <div className="hidden sm:flex absolute sm:bottom-4 sm:right-4 p-2.5 sm:p-3 rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 flex-col gap-1.5 w-44 sm:w-56 shadow-2xl pointer-events-none">
                 <div className="flex items-center justify-between text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-200 uppercase tracking-wider">
                   <span>Deck Stress</span>
                   <span
@@ -688,8 +690,8 @@ export function BridgeViz() {
                 </div>
               </div>
 
-              {/* Status Pill */}
-              <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex flex-col gap-1.5 pointer-events-none">
+              {/* Status Pill (desktop only; see mobile strip) */}
+              <div className="hidden sm:flex absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex-col gap-1.5 pointer-events-none">
                 <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
                   <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">Total Mass:</span>
                   <span className="font-mono font-bold text-xs sm:text-sm text-amber-200">{analysis.totalMassTons} Tons</span>
@@ -697,6 +699,28 @@ export function BridgeViz() {
               </div>
             </div>
           )}
+
+          {/* Mobile FEA telemetry strip (replaces the in-viewport overlays) */}
+          <div className="sm:hidden space-y-1 px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-[0.68rem] font-mono text-slate-300">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <span>
+                <span className="text-slate-500 uppercase text-[0.6rem]">Deck Stress</span>{" "}
+                <span
+                  className={`font-bold ${
+                    analysis.maxVonMisesStressMPa > analysis.yieldLimitMPa ? "text-rose-400" : "text-emerald-400"
+                  }`}
+                >
+                  {analysis.maxVonMisesStressMPa} MPa
+                </span>{" "}
+                <span className="text-slate-500">/ σ<sub>y</sub> {analysis.yieldLimitMPa}</span>
+              </span>
+              <span>
+                <span className="text-slate-500 uppercase text-[0.6rem]">Mass</span>{" "}
+                <span className="font-bold text-amber-200">{analysis.totalMassTons} t</span>
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
+          </div>
 
           {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
           <CMAESTelemetryHUD

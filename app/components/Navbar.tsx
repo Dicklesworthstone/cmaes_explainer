@@ -21,7 +21,21 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const progressBarRef = useRef<HTMLDivElement | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
   const activeId = useScrollSpy(sections.map((s) => s.id));
+
+  // The mobile dock scrolls horizontally with a hidden scrollbar, so keep
+  // the active section's pill centered — otherwise on a phone the current
+  // section can sit off-screen with no hint that the bar scrolls at all.
+  // Manual scrollTo (not scrollIntoView) so the page itself never moves.
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!dock || !activeId) return;
+    const pill = dock.querySelector<HTMLAnchorElement>(`a[href="#${activeId}"]`);
+    if (!pill) return;
+    const target = pill.offsetLeft - (dock.clientWidth - pill.clientWidth) / 2;
+    dock.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+  }, [activeId]);
 
   // Handle scroll background & GPU reading progress without React re-renders
   useEffect(() => {
@@ -222,7 +236,10 @@ export function Navbar() {
 
       {/* --- Mobile Floating Dock (Bottom with Smooth Horizontal Scroll) --- */}
       <div className="fixed bottom-5 inset-x-0 z-40 flex lg:hidden justify-center pointer-events-none px-4">
-        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1.5 shadow-[0_15px_35px_rgba(0,0,0,0.8)] max-w-full overflow-x-auto no-scrollbar">
+        <div
+          ref={dockRef}
+          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1.5 shadow-[0_15px_35px_rgba(0,0,0,0.8)] max-w-full overflow-x-auto no-scrollbar"
+        >
           {sections.map((s) => (
             <a
               key={s.id}

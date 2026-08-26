@@ -175,6 +175,12 @@ input[type="range"]:active::-moz-range-thumb {
 canvas {
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  /* Backing stores are large (512² Lenia field, DPR-scaled WebGL, 1120px
+     heatmaps). Chrome clamps a canvas's min-content contribution through
+     width:100%, but Safari propagates the intrinsic attribute width up
+     through grid/flex tracks, inflating sections past the iPhone viewport
+     (horizontal page scroll). Cap it at the layout width everywhere. */
+  max-width: 100%;
 }
 
 /* Mobile-friendly momentum scrolling for code blocks, LaTeX equations, and tables */

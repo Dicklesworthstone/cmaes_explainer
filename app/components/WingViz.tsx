@@ -429,7 +429,7 @@ export function WingViz() {
       {/* Main Grid: 3D Viewport / Phase Space & Control Panel */}
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Wind Tunnel Container */}
-        <div className="lg:w-[62%] w-full space-y-4">
+        <div className="lg:w-[62%] w-full min-w-0 space-y-4">
           {/* Main 3D Canvas Stage (Single or Split 3D View) */}
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -532,8 +532,10 @@ export function WingViz() {
                 <span>Drag to orbit 3D model</span>
               </div>
 
-              {/* Aerodynamic Telemetry Overlay */}
-              <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex flex-col gap-1 sm:gap-1.5 pointer-events-none">
+              {/* Aerodynamic Telemetry Overlay (desktop only: with the Mach
+                  box it blankets a phone-width canvas; mobile shows the same
+                  numbers in the strip under the viewport) */}
+              <div className="hidden sm:flex absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex-col gap-1 sm:gap-1.5 pointer-events-none">
                 <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-cyan-300 border border-cyan-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
                   <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">L/D Ratio:</span>
                   <span className="font-mono font-bold text-xs sm:text-sm text-cyan-200">{aero.liftToDragRatio.toFixed(2)}</span>
@@ -544,13 +546,29 @@ export function WingViz() {
                 </div>
               </div>
 
-              {/* Critical Mach Indicator */}
-              <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 border border-white/10 text-xs font-mono text-slate-300 backdrop-blur-md shadow-xl pointer-events-none">
+              {/* Critical Mach Indicator (desktop only; see mobile strip) */}
+              <div className="hidden sm:block absolute bottom-3 right-3 sm:bottom-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 border border-white/10 text-xs font-mono text-slate-300 backdrop-blur-md shadow-xl pointer-events-none">
                 <div className="text-[0.58rem] sm:text-[0.65rem] uppercase text-slate-400">Critical Mach</div>
                 <div className="font-bold text-sky-400 text-xs sm:text-sm">{aero.criticalMach.toFixed(2)} M</div>
               </div>
             </div>
           )}
+
+          {/* Mobile aero telemetry strip (replaces the in-viewport overlays) */}
+          <div className="sm:hidden flex flex-wrap items-center gap-x-4 gap-y-1 px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-[0.68rem] font-mono text-slate-300">
+            <span>
+              <span className="text-slate-500 uppercase text-[0.6rem]">L/D</span>{" "}
+              <span className="font-bold text-cyan-200">{aero.liftToDragRatio.toFixed(2)}</span>
+            </span>
+            <span>
+              <span className="text-slate-500 uppercase text-[0.6rem]">CD</span>{" "}
+              <span className="font-bold text-rose-300">{aero.dragCoeffCD.toFixed(4)}</span>
+            </span>
+            <span>
+              <span className="text-slate-500 uppercase text-[0.6rem]">Crit Mach</span>{" "}
+              <span className="font-bold text-sky-400">{aero.criticalMach.toFixed(2)} M</span>
+            </span>
+          </div>
 
           {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
           <CMAESTelemetryHUD

@@ -326,7 +326,7 @@ export function NoiseExplorer() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr] items-start">
         {/* Canvases Column */}
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
             <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full h-auto block" />
 

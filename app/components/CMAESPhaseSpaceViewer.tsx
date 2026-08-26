@@ -420,8 +420,22 @@ export function CMAESPhaseSpaceViewer({
           <span>Rotate phase-space</span>
         </div>
 
-        {/* Eigensystem Diagnostics Telemetry Overlay */}
-        <div className="absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-[0.68rem] font-mono text-slate-300 space-y-1.5 shadow-xl pointer-events-none w-60">
+        {/* Compact mobile diagnostics: the full panel below would cover most
+            of a phone-width canvas, so small screens get one slim pill. */}
+        <div className="sm:hidden absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-white/10 text-[0.6rem] font-mono text-slate-300 pointer-events-none flex items-center gap-2">
+          <span>
+            <span className="text-rose-400">PC1</span>{" "}
+            <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[0].toFixed(0)}%</span>
+          </span>
+          <span>
+            <span className="text-amber-300">σ</span>{" "}
+            <span className="font-bold">{sigma.toFixed(3)}</span>
+          </span>
+        </div>
+
+        {/* Eigensystem Diagnostics Telemetry Overlay (desktop only: it is
+            240px wide and would blanket a phone-width canvas) */}
+        <div className="hidden sm:block absolute bottom-3 left-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-[0.68rem] font-mono text-slate-300 space-y-1.5 shadow-xl pointer-events-none w-60">
           <div className="text-[0.62rem] uppercase font-bold text-sky-400 tracking-wider flex justify-between">
             <span>PCA Variance Explained</span>
             <span className="text-slate-400 font-normal">Top 3 Components</span>
@@ -765,9 +779,12 @@ export function CMAESTelemetryHUD({
 
           {/* Dynamic Step Size Bar */}
           <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-white/5">
+            {/* Widths are quantized with toFixed(2): raw engine floats differ
+                by ULPs between JavaScriptCore and V8 (Safari client vs Node
+                SSR), and full-precision strings hydration-mismatch on iOS. */}
             <div
               className="bg-gradient-to-r from-amber-500 to-yellow-400 h-full rounded-full transition-[width] duration-300"
-              style={{ width: `${Math.min(100, Math.max(5, (sigma / 0.5) * 100))}%` }}
+              style={{ width: `${Math.min(100, Math.max(5, (sigma / 0.5) * 100)).toFixed(2)}%` }}
             />
           </div>
 
@@ -791,7 +808,7 @@ export function CMAESTelemetryHUD({
             <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
               <div
                 className="bg-rose-500 h-full rounded-full transition-[width] duration-300"
-                style={{ width: `${phaseSpace3D.varianceExplainedPercent[0]}%` }}
+                style={{ width: `${phaseSpace3D.varianceExplainedPercent[0].toFixed(2)}%` }}
               />
             </div>
 
@@ -802,7 +819,7 @@ export function CMAESTelemetryHUD({
             <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
               <div
                 className="bg-emerald-500 h-full rounded-full transition-[width] duration-300"
-                style={{ width: `${phaseSpace3D.varianceExplainedPercent[1]}%` }}
+                style={{ width: `${phaseSpace3D.varianceExplainedPercent[1].toFixed(2)}%` }}
               />
             </div>
           </div>

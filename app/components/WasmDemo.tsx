@@ -790,8 +790,9 @@ export function WasmDemo() {
 
           {/* Main Simulation Stage Grid */}
           <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-start">
-            {/* 2D Landscape Canvas */}
-            <div className="space-y-3">
+            {/* 2D Landscape Canvas (min-w-0: Safari otherwise propagates the
+                1120px canvas backing width through the grid track) */}
+            <div className="space-y-3 min-w-0">
               <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
                 <canvas
                   ref={canvasRef}
@@ -857,8 +858,9 @@ export function WasmDemo() {
                 />
 
                 {/* Click hint overlay */}
-                <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none flex items-center gap-1.5">
-                  <span>Click to reposition starting point</span>
+                <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-white/10 text-[0.62rem] sm:text-[0.68rem] text-slate-300 font-mono pointer-events-none flex items-center gap-1.5">
+                  <span className="sm:hidden">Tap to move</span>
+                  <span className="hidden sm:inline">Click to reposition starting point</span>
                   <LatexRenderer math="m_0" block={false} />
                 </div>
 
@@ -937,7 +939,7 @@ export function WasmDemo() {
             </div>
 
             {/* Right Column: Convergence Chart & Interactive Sliders */}
-            <div className="space-y-5">
+            <div className="space-y-5 min-w-0">
               {/* Log Loss Convergence Canvas */}
               <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-200">

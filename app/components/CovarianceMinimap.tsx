@@ -280,7 +280,7 @@ export function CovarianceMinimap() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr] items-center">
-        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
+        <div className="relative min-w-0 rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
           <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="w-full h-auto block" />
 
           <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] font-mono">

@@ -311,7 +311,7 @@ export function ColorizedEquation({
                   type="button"
                   onClick={() => handleSelectVar(v.id, true)}
                   onMouseEnter={() => handleSelectVar(v.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-[background-color,border-color,box-shadow,transform] flex items-center gap-2 cursor-pointer ${
+                  className={`max-w-full px-3 py-1.5 rounded-xl text-xs font-medium border transition-[background-color,border-color,box-shadow,transform] flex flex-wrap items-center gap-2 cursor-pointer ${
                     isActive
                       ? `${cfg.badgeBg} border-${v.color}-500/80 shadow-glow-sm scale-105`
                       : "bg-slate-950/40 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-900"
@@ -338,7 +338,7 @@ export function ColorizedEquation({
               } ${COLOR_STYLES[activeVar.color].glowClass}`}
             >
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div
                     className="flex min-h-10 min-w-10 h-auto w-auto px-3 py-1.5 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white border shadow-inner whitespace-nowrap"
                     style={{
@@ -349,7 +349,7 @@ export function ColorizedEquation({
                     <LatexRenderer math={activeVar.symbol} block={false} />
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-white flex items-center gap-2 font-display">
+                    <h4 className="text-base font-bold text-white flex flex-wrap items-center gap-2 font-display">
                       <span>{activeVar.name}</span>
                       <span
                         className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${COLOR_STYLES[activeVar.color].badgeBg}`}

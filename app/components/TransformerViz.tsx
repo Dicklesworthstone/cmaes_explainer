@@ -586,7 +586,7 @@ function ParetoFrontierCanvas({
           <BarChart2 className="h-3.5 w-3.5" />
           Pareto Frontier: Accuracy vs Compute
         </span>
-        <div className="flex items-center gap-3 font-mono text-[0.68rem]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.68rem]">
           <span className="text-emerald-400 flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             Pareto Optimal ({paretoPoints.length})
@@ -794,7 +794,7 @@ export function TransformerViz() {
             <BrainCircuit className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white font-display flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-white font-display flex flex-wrap items-center gap-2.5">
               <span>Holographic Neural Architecture Search (NAS)</span>
               <span className="text-[0.65rem] font-mono px-2.5 py-0.5 rounded-full border bg-purple-500/15 border-purple-500/40 text-purple-300">
                 5D Mixed Discrete-Continuous
@@ -806,8 +806,8 @@ export function TransformerViz() {
           </div>
         </div>
 
-        {/* Quick Presets */}
-        <div className="flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-white/10 text-xs font-medium">
+        {/* Quick Presets (wrap on narrow screens instead of overflowing) */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-white/10 text-xs font-medium self-start sm:self-auto">
           <button
             onClick={() => applyPreset("edge")}
             className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-[background-color,color]"
@@ -830,9 +830,12 @@ export function TransformerViz() {
       </div>
 
       {/* Main Dual Stage */}
+      {/* min-w-0 on both columns: Safari propagates the WebGL canvas's
+          DPR-scaled intrinsic width through the grid track otherwise,
+          inflating the section past the iPhone viewport. */}
       <div className="grid gap-8 lg:grid-cols-[1.2fr_1fr] items-start">
         {/* Left Column: 3D Holographic Stage (Single or Split 3D View) */}
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* 3D Transformer Model */}
@@ -932,11 +935,14 @@ export function TransformerViz() {
               {/* Top-Right Orbit Badge */}
               <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/80 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
                 <Compass className="h-3.5 w-3.5 text-purple-400" />
-                <span>Drag to orbit 3D architecture</span>
+                <span className="sm:hidden">Drag to orbit</span>
+                <span className="hidden sm:inline">Drag to orbit 3D architecture</span>
               </div>
 
-              {/* Bottom-Left Live Architecture Telemetry HUD */}
-              <div className="absolute bottom-3 left-3 z-20 flex flex-col gap-1 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono text-slate-200 shadow-2xl pointer-events-none">
+              {/* Bottom-Left Live Architecture Telemetry HUD (desktop only:
+                  on a phone it blankets the 3D model; mobile shows the same
+                  numbers in the strip under the viewport) */}
+              <div className="hidden sm:flex absolute bottom-3 left-3 z-20 flex-col gap-1 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono text-slate-200 shadow-2xl pointer-events-none">
                 <div className="flex items-center gap-2 text-purple-300 font-bold text-sm font-display">
                   <BrainCircuit className="h-4 w-4 text-purple-400" />
                   <span>{currentArch.layers} Layers • {currentArch.dim} <LatexRenderer math="d_{\text{model}}" block={false} /> • {currentArch.heads} Heads</span>
@@ -950,14 +956,18 @@ export function TransformerViz() {
             </div>
           )}
 
-          <div className="flex items-center justify-between px-2 text-[0.72rem] text-slate-400 font-mono">
-            <span>Rotary Embeddings • RMSNorm • Residual Streams</span>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 text-[0.72rem] text-slate-400 font-mono">
+            <span className="sm:hidden text-slate-200">
+              {currentArch.layers}L · {currentArch.dim}d · {currentArch.heads}H · {currentArch.attnType}/{currentArch.actType} ·{" "}
+              <span className="text-emerald-300 font-bold">{currentArch.paramsM.toFixed(1)}M params</span>
+            </span>
+            <span className="hidden sm:inline">Rotary Embeddings • RMSNorm • Residual Streams</span>
             <span className="text-purple-300 font-bold">~{currentArch.latencyMs.toFixed(1)}ms / token (surrogate)</span>
           </div>
         </div>
 
         {/* Right Column: Interactive Sliders & Pareto Frontier */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Sliders Console */}
           <div className="bg-slate-950/50 rounded-2xl p-5 border border-white/10 space-y-4">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300">
@@ -996,8 +1006,9 @@ export function TransformerViz() {
             {/* Width */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-slate-300 flex items-center gap-1">
-                  <span>Hidden Dimension (</span><LatexRenderer math="d_{\text{model}}" block={false} /><span>)</span>
+                <span className="text-slate-300 flex flex-wrap items-center gap-1">
+                  <span>Hidden Dimension</span>
+                  <span className="whitespace-nowrap inline-flex items-center">(<LatexRenderer math="d_{\text{model}}" block={false} />)</span>
                 </span>
                 <span className="text-indigo-300 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
                   {currentArch.dim} Channels

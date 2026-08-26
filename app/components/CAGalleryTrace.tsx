@@ -618,7 +618,7 @@ export function CAGalleryTrace() {
             <Atom className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white font-display flex items-center gap-2.5">
+            <h3 className="text-xl font-bold text-white font-display flex flex-wrap items-center gap-2.5">
               <span>Continuous Morphodynamic Artificial Life (Lenia)</span>
               <span className="text-[0.65rem] font-mono px-2.5 py-0.5 rounded-full border bg-pink-500/15 border-pink-500/40 text-pink-300">
                 Black-Box Physics Search
@@ -631,7 +631,7 @@ export function CAGalleryTrace() {
         </div>
 
         {/* Live Telemetry Pills */}
-        <div className="flex items-center gap-2 font-mono text-xs">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
           <span className="text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
             <Activity className="h-3.5 w-3.5" />
             <span>Interface: {(entropy * 100).toFixed(1)}%</span>
@@ -656,9 +656,9 @@ export function CAGalleryTrace() {
                   : "bg-slate-950/60 border-white/10 hover:border-white/20 hover:bg-slate-900"
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                 <span className="text-xs font-bold text-white font-display">{p.name}</span>
-                <span className="text-[0.62rem] font-mono text-pink-400 bg-pink-500/10 px-1.5 py-0.5 rounded">
+                <span className="text-[0.62rem] font-mono text-pink-400 bg-pink-500/10 px-1.5 py-0.5 rounded shrink-0">
                   {p.category}
                 </span>
               </div>
@@ -669,9 +669,12 @@ export function CAGalleryTrace() {
       </div>
 
       {/* Main Simulation Stage */}
+      {/* min-w-0 on both columns: Safari propagates the 512² canvas's
+          intrinsic width through the grid track otherwise, inflating the
+          section past the iPhone viewport. */}
       <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] items-start">
         {/* Left Column: Interactive Simulation Viewport (Single or Split 3D View) */}
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Lenia 2D Field */}
@@ -751,14 +754,17 @@ export function CAGalleryTrace() {
               />
 
               {/* Top-Right Interactive Drawing Hint */}
-              <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-pink-300 pointer-events-none shadow-lg">
+              <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.62rem] sm:text-[0.68rem] font-mono text-pink-300 pointer-events-none shadow-lg">
                 <MousePointer2 className="h-3.5 w-3.5 text-pink-400" />
-                <span>Click or drag to seed life</span>
+                <span className="sm:hidden">Tap to seed life</span>
+                <span className="hidden sm:inline">Click or drag to seed life</span>
               </div>
 
-              {/* Top-Left: Engine Provenance + Search Status */}
+              {/* Top-Left: Engine Provenance + Search Status (the provenance
+                  pill is desktop-only — on a phone it collides with the seed
+                  hint; the mobile strip under the canvas carries it) */}
               <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5 pointer-events-none">
-                <div className="px-2.5 py-1 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.62rem] font-mono text-slate-300">
+                <div className="hidden sm:block px-2.5 py-1 rounded-full bg-slate-950/85 border border-white/10 backdrop-blur-md text-[0.62rem] font-mono text-slate-300">
                   {engine === "wasm"
                     ? `FrankenSim WASM FFT · ${gridSize}×${gridSize}`
                     : `TS engine · ${gridSize}×${gridSize}`}
@@ -773,8 +779,10 @@ export function CAGalleryTrace() {
                 )}
               </div>
 
-              {/* Bottom Spectrum Legend */}
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-[0.65rem] font-mono text-slate-300 pointer-events-none">
+              {/* Bottom Spectrum Legend (desktop only: on a phone it covers
+                  the lower band of the field; mobile shows it under the
+                  canvas instead) */}
+              <div className="hidden sm:flex absolute bottom-3 left-3 right-3 items-center justify-between bg-slate-950/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 text-[0.65rem] font-mono text-slate-300 pointer-events-none">
                 <span className="text-slate-500">Void (0.0)</span>
                 <div className="flex-1 mx-3 h-1.5 rounded-full bg-gradient-to-r from-[#06b6d4] via-[#a855f7] to-[#fbbf24]" />
                 <span className="text-amber-300 font-bold">Soliton Core (1.0)</span>
@@ -782,8 +790,18 @@ export function CAGalleryTrace() {
             </div>
           )}
 
+          {/* Mobile legend + engine provenance strip (replaces the overlays) */}
+          <div className="sm:hidden flex items-center justify-between gap-3 px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-[0.62rem] font-mono text-slate-400">
+            <span className="text-slate-500 whitespace-nowrap">Void 0.0</span>
+            <div className="flex-1 h-1.5 rounded-full bg-gradient-to-r from-[#06b6d4] via-[#a855f7] to-[#fbbf24]" />
+            <span className="text-amber-300 font-bold whitespace-nowrap">Core 1.0</span>
+            <span className="text-slate-500 whitespace-nowrap border-l border-white/10 pl-2.5">
+              {engine === "wasm" ? `WASM ${gridSize}²` : `TS ${gridSize}²`}
+            </span>
+          </div>
+
           {/* Controls Strip */}
-          <div className="flex items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/10">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/10">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPlaying(!isPlaying)}
@@ -824,7 +842,7 @@ export function CAGalleryTrace() {
         </div>
 
         {/* Right Column: Mathematical Kernel Knobs & CMA-ES Engine */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           <div className="bg-slate-950/60 rounded-2xl p-5 border border-white/10 space-y-4">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-pink-300">
               <span className="flex items-center gap-1.5">

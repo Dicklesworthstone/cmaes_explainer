@@ -695,7 +695,7 @@ function GaussianDistributionSandbox() {
 
       <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr] items-start">
         {/* Canvas Stage */}
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl">
             <canvas
               ref={canvasRef}
@@ -994,7 +994,7 @@ function GaussianDistributionSandbox() {
 
           {/* Card 3: Covariance Condition */}
           <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-400 flex items-center justify-between">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-400 flex flex-wrap items-center justify-between gap-x-1">
               <span>Covariance Shape</span>
               <LatexRenderer math="\kappa(C)" block={false} />
             </div>

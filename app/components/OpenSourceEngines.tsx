@@ -396,16 +396,17 @@ fn main() {
             {/* Code Block with Syntax Highlighting */}
             <div className="rounded-2xl bg-slate-950/90 border border-white/10 overflow-hidden mb-6 shadow-xl ring-1 ring-white/5">
               {/* Terminal Window Header */}
-              <div className="flex items-center justify-between border-b border-white/10 bg-slate-900/80 px-4 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-white/10 bg-slate-900/80 px-4 py-2.5">
                 <div className="flex items-center gap-3">
-                  {/* macOS traffic light window dots */}
-                  <div className="flex items-center gap-1.5">
+                  {/* macOS traffic light window dots (decorative; hidden on
+                      phones where the header would otherwise overflow) */}
+                  <div className="hidden sm:flex items-center gap-1.5">
                     <div className="h-2.5 w-2.5 rounded-full bg-rose-500/80 border border-rose-400/30" />
                     <div className="h-2.5 w-2.5 rounded-full bg-amber-500/80 border border-amber-400/30" />
                     <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/80 border border-emerald-400/30" />
                   </div>
 
-                  <div className="flex items-center gap-1.5 ml-2">
+                  <div className="flex items-center gap-1.5 sm:ml-2">
                     <button
                       onClick={() => setActiveTabWasm("ts")}
                       className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-[background-color,color,border-color] ${
@@ -524,16 +525,17 @@ fn main() {
             {/* Code Block with Syntax Highlighting */}
             <div className="rounded-2xl bg-slate-950/90 border border-white/10 overflow-hidden mb-6 shadow-xl ring-1 ring-white/5">
               {/* Terminal Window Header */}
-              <div className="flex items-center justify-between border-b border-white/10 bg-slate-900/80 px-4 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-y-2 border-b border-white/10 bg-slate-900/80 px-4 py-2.5">
                 <div className="flex items-center gap-3">
-                  {/* macOS traffic light window dots */}
-                  <div className="flex items-center gap-1.5">
+                  {/* macOS traffic light window dots (decorative; hidden on
+                      phones where the header would otherwise overflow) */}
+                  <div className="hidden sm:flex items-center gap-1.5">
                     <div className="h-2.5 w-2.5 rounded-full bg-rose-500/80 border border-rose-400/30" />
                     <div className="h-2.5 w-2.5 rounded-full bg-amber-500/80 border border-amber-400/30" />
                     <div className="h-2.5 w-2.5 rounded-full bg-emerald-500/80 border border-emerald-400/30" />
                   </div>
 
-                  <div className="flex items-center gap-1.5 ml-2">
+                  <div className="flex items-center gap-1.5 sm:ml-2">
                     <button
                       onClick={() => setActiveTabFast("python")}
                       className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-semibold rounded-lg transition-[background-color,color,border-color] ${

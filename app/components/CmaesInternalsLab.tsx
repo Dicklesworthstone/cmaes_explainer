@@ -202,17 +202,21 @@ export function CmaesInternalsLab() {
           </p>
         </div>
         <div
-          className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-mono border shrink-0 ${
+          className={`inline-flex max-w-full items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-mono border ${
             runSource === "wasm"
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
               : "border-amber-500/40 bg-amber-500/10 text-amber-300"
           }`}
-          title={kernel.error ?? undefined}
+          title={kernel.error ?? (runSource === "wasm" ? kernel.kernelVersion ?? undefined : undefined)}
         >
-          <Cpu className="h-3.5 w-3.5" />
-          {runSource === "wasm"
-            ? `kernel: WASM step (${kernel.kernelVersion ?? "fs-cmaes-viz-wasm"})`
-            : "kernel: TypeScript fallback"}
+          <Cpu className="h-3.5 w-3.5 shrink-0" />
+          {/* The full crate stamp is wider than a phone card; keep it for sm+ */}
+          <span className="sm:hidden truncate">{runSource === "wasm" ? "kernel: WASM step" : "kernel: TS fallback"}</span>
+          <span className="hidden sm:inline">
+            {runSource === "wasm"
+              ? `kernel: WASM step (${kernel.kernelVersion ?? "fs-cmaes-viz-wasm"})`
+              : "kernel: TypeScript fallback"}
+          </span>
         </div>
       </div>
 
@@ -399,7 +403,7 @@ export function CmaesInternalsLab() {
 
       {/* Main stage */}
       <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr] items-start">
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           {latest ? (
             <CMAESPhaseSpaceViewer
               latestState={latest}
@@ -512,7 +516,7 @@ export function CmaesInternalsLab() {
                   <div key={i} className="flex items-center gap-2 text-xs font-mono">
                     <span className="w-10 text-slate-500">PC{i + 1}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400" style={{ width: `${Math.min(100, v)}%` }} />
+                      <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400" style={{ width: `${Math.min(100, v).toFixed(2)}%` }} />
                     </div>
                     <span className="w-12 text-right text-slate-400">{v.toFixed(1)}%</span>
                   </div>
