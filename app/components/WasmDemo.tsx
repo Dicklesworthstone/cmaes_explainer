@@ -27,6 +27,7 @@ import {
   CMAESOptimizer,
   CMAESGenerationState,
   runGradientDescent,
+  runAdamOptimizer,
   runRandomSearch,
   BaselineStepState
 } from "../lib/cmaesEngine";
@@ -77,8 +78,9 @@ export function WasmDemo() {
     optimizerRef.current = opt;
     const initialStep = opt.step();
     const gd = compare ? runGradientDescent(bench.eval, start, 40, 0.005) : [];
+    const adam = compare ? runAdamOptimizer(bench.eval, start, 40, 0.05) : [];
     const rs = compare ? runRandomSearch(bench.eval, bench.domain, 40 * popSize) : [];
-    return { initialStep, gd, rs };
+    return { initialStep, gd, adam, rs };
   }, []);
 
   // Initial state setup without mutating refs during render
@@ -97,6 +99,7 @@ export function WasmDemo() {
   });
 
   const [gdHistory, setGdHistory] = useState<BaselineStepState[]>([]);
+  const [adamHistory, setAdamHistory] = useState<BaselineStepState[]>([]);
   const [rsHistory, setRsHistory] = useState<BaselineStepState[]>([]);
 
   const getOrInitOptimizer = useCallback(() => {
@@ -117,7 +120,7 @@ export function WasmDemo() {
   // Reset or re-initialize on parameter changes
   const resetOptimization = useCallback(() => {
     setIsPlaying(false);
-    const { initialStep, gd, rs } = createOptimizerState(
+    const { initialStep, gd, adam, rs } = createOptimizerState(
       currentBench,
       startPoint,
       initialSigma,
@@ -128,6 +131,7 @@ export function WasmDemo() {
     );
     setHistory([initialStep]);
     setGdHistory(gd);
+    setAdamHistory(adam);
     setRsHistory(rs);
   }, [createOptimizerState, currentBench, startPoint, initialSigma, lambda, activeCMA, noiseLevel, compareMode]);
 
@@ -253,12 +257,12 @@ export function WasmDemo() {
     ctx.lineTo(opx, opy + 9);
     ctx.stroke();
 
-    // 4. Draw Comparison Baselines (Gradient Descent & Random Search)
+    // 4. Draw Comparison Baselines (Gradient Descent & Adam)
     if (compareMode) {
       // Gradient Descent Trajectory (Rose Red)
       if (gdHistory.length > 1) {
         ctx.strokeStyle = "rgba(244, 63, 94, 0.75)";
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.8;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
         gdHistory.forEach((pt, i) => {
@@ -266,6 +270,22 @@ export function WasmDemo() {
           const gy = toPxY(pt.currentX[1]);
           if (i === 0) ctx.moveTo(gx, gy);
           else ctx.lineTo(gx, gy);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Adam Optimizer Trajectory (Amber Gold)
+      if (adamHistory.length > 1) {
+        ctx.strokeStyle = "rgba(251, 191, 36, 0.85)";
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([4, 2]);
+        ctx.beginPath();
+        adamHistory.forEach((pt, i) => {
+          const ax = toPxX(pt.currentX[0]);
+          const ay = toPxY(pt.currentX[1]);
+          if (i === 0) ctx.moveTo(ax, ay);
+          else ctx.lineTo(ax, ay);
         });
         ctx.stroke();
         ctx.setLineDash([]);
@@ -368,7 +388,7 @@ export function WasmDemo() {
     ctx.arc(cx, cy, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }, [currentBench, latestState, history, compareMode, gdHistory]);
+  }, [currentBench, latestState, history, compareMode, gdHistory, adamHistory]);
 
   // --- Render Log-Loss Convergence Chart ---
   useEffect(() => {
@@ -408,19 +428,6 @@ export function WasmDemo() {
       ctx.fillText(`10^${l}`, 4, y + 3);
     }
 
-    // Draw CMA-ES Convergence Curve (Cyan)
-    ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    history.forEach((s, i) => {
-      const x = toPxX(s.evalCount);
-      const logL = Math.log10(Math.max(1e-12, s.bestFitness - currentBench.optimumValue + 1e-12));
-      const y = toPxY(logL);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
     // Draw Comparison GD Curve (Rose)
     if (compareMode && gdHistory.length > 0) {
       ctx.strokeStyle = "#f43f5e";
@@ -436,11 +443,39 @@ export function WasmDemo() {
       ctx.stroke();
     }
 
+    // Draw Comparison Adam Curve (Amber)
+    if (compareMode && adamHistory.length > 0) {
+      ctx.strokeStyle = "#fbbf24";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      adamHistory.forEach((s, i) => {
+        const x = toPxX(s.evalCount);
+        const logL = Math.log10(Math.max(1e-12, s.bestFitness - currentBench.optimumValue + 1e-12));
+        const y = toPxY(logL);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    // Draw CMA-ES Convergence Curve (Cyan)
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    history.forEach((s, i) => {
+      const x = toPxX(s.evalCount);
+      const logL = Math.log10(Math.max(1e-12, s.bestFitness - currentBench.optimumValue + 1e-12));
+      const y = toPxY(logL);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
     // Axis Labels
     ctx.fillStyle = "#94a3b8";
     ctx.font = "10px Inter, sans-serif";
     ctx.fillText("Function Evaluations →", W - 130, H - 10);
-  }, [history, currentBench, compareMode, gdHistory]);
+  }, [history, currentBench, compareMode, gdHistory, adamHistory]);
 
   return (
     <div className="space-y-8">
@@ -540,14 +575,16 @@ export function WasmDemo() {
                     setCompareMode(e.target.checked);
                     if (e.target.checked && gdHistory.length === 0) {
                       const gd = runGradientDescent(currentBench.eval, startPoint, 40, 0.005);
+                      const adam = runAdamOptimizer(currentBench.eval, startPoint, 40, 0.05);
                       const rs = runRandomSearch(currentBench.eval, currentBench.domain, 40 * lambda);
                       setGdHistory(gd);
+                      setAdamHistory(adam);
                       setRsHistory(rs);
                     }
                   }}
                   className="rounded bg-slate-800 border-slate-700 text-sky-500 accent-sky-500"
                 />
-                <span>Compare vs Gradient Descent</span>
+                <span>Compare vs GD & Adam Baselines</span>
               </label>
             </div>
           </div>
@@ -583,7 +620,7 @@ export function WasmDemo() {
                     const newStart: [number, number] = [parseFloat(nx.toFixed(2)), parseFloat(ny.toFixed(2))];
                     setStartPoint(newStart);
                     setIsPlaying(false);
-                    const { initialStep, gd, rs } = createOptimizerState(
+                    const { initialStep, gd, adam, rs } = createOptimizerState(
                       currentBench,
                       newStart,
                       initialSigma,
@@ -594,6 +631,7 @@ export function WasmDemo() {
                     );
                     setHistory([initialStep]);
                     setGdHistory(gd);
+                    setAdamHistory(adam);
                     setRsHistory(rs);
                   }}
                 />
@@ -666,9 +704,10 @@ export function WasmDemo() {
                     <TrendingDown className="h-3.5 w-3.5 text-sky-400" />
                     Log-Loss Convergence
                   </span>
-                  <div className="flex items-center gap-3 font-mono text-[0.68rem]">
-                    <span className="text-sky-400">● CMA-ES</span>
-                    {compareMode && <span className="text-rose-400">● Gradient Descent</span>}
+                  <div className="flex flex-wrap items-center gap-2.5 font-mono text-[0.68rem]">
+                    <span className="text-sky-400 font-bold">● CMA-ES</span>
+                    {compareMode && <span className="text-amber-400 font-bold">● Adam</span>}
+                    {compareMode && <span className="text-rose-400 font-bold">● GD</span>}
                   </div>
                 </div>
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-inner bg-[#030712]">

@@ -660,3 +660,62 @@ export function runRandomSearch(
   }
   return history;
 }
+
+export function runAdamOptimizer(
+  fn: (x: number, y: number) => number,
+  start: Vector,
+  maxSteps = 60,
+  lr = 0.05,
+  beta1 = 0.9,
+  beta2 = 0.999,
+  eps = 1e-8,
+  fdEps = 1e-4
+): BaselineStepState[] {
+  let x = [...start];
+  let m = [0, 0];
+  let v = [0, 0];
+  let bestF = fn(x[0], x[1]);
+  let bestX = [...x];
+  let evals = 1;
+  const history: BaselineStepState[] = [
+    { step: 0, currentX: [...x], bestX: [...bestX], bestFitness: bestF, evalCount: evals }
+  ];
+
+  for (let s = 1; s <= maxSteps; s++) {
+    const f0 = fn(x[0], x[1]);
+    const fx = fn(x[0] + fdEps, x[1]);
+    const fy = fn(x[0], x[1] + fdEps);
+    evals += 3;
+
+    const g = [(fx - f0) / fdEps, (fy - f0) / fdEps];
+
+    m[0] = beta1 * m[0] + (1 - beta1) * g[0];
+    m[1] = beta1 * m[1] + (1 - beta1) * g[1];
+    v[0] = beta2 * v[0] + (1 - beta2) * (g[0] * g[0]);
+    v[1] = beta2 * v[1] + (1 - beta2) * (g[1] * g[1]);
+
+    const mHat0 = m[0] / (1 - Math.pow(beta1, s));
+    const mHat1 = m[1] / (1 - Math.pow(beta1, s));
+    const vHat0 = v[0] / (1 - Math.pow(beta2, s));
+    const vHat1 = v[1] / (1 - Math.pow(beta2, s));
+
+    x[0] -= (lr * mHat0) / (Math.sqrt(vHat0) + eps);
+    x[1] -= (lr * mHat1) / (Math.sqrt(vHat1) + eps);
+
+    const fNew = fn(x[0], x[1]);
+    evals++;
+    if (fNew < bestF) {
+      bestF = fNew;
+      bestX = [...x];
+    }
+    history.push({
+      step: s,
+      currentX: [...x],
+      bestX: [...bestX],
+      bestFitness: bestF,
+      evalCount: evals
+    });
+  }
+  return history;
+}
+

@@ -37,8 +37,20 @@ function GaussianDistributionSandbox() {
   const [angleDeg, setAngleDeg] = useState(35); // Degrees
   const [sampleCount, setSampleCount] = useState(16);
   const [eliteFraction, setEliteFraction] = useState(0.4);
+  const [isDragging, setIsDragging] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const handlePointerPos = (clientX: number, clientY: number, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const DOMAIN = 2.4;
+    const x = Math.max(-DOMAIN, Math.min(DOMAIN, (px / rect.width) * (2 * DOMAIN) - DOMAIN));
+    const y = Math.max(-DOMAIN, Math.min(DOMAIN, ((rect.height - py) / rect.height) * (2 * DOMAIN) - DOMAIN));
+    setMeanX(parseFloat(x.toFixed(2)));
+    setMeanY(parseFloat(y.toFixed(2)));
+  };
 
   // Curved valley objective function: f(x, y) = 10*(y - x^2)^2 + (1 - x)^2
   const objective = (x: number, y: number) => 10 * Math.pow(y - x * x, 2) + Math.pow(1 - x, 2);
@@ -321,22 +333,29 @@ function GaussianDistributionSandbox() {
               ref={canvasRef}
               width={540}
               height={380}
-              className="w-full h-auto block cursor-crosshair"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const px = e.clientX - rect.left;
-                const py = e.clientY - rect.top;
-                const DOMAIN = 2.4;
-                const x = (px / rect.width) * (2 * DOMAIN) - DOMAIN;
-                const y = ((rect.height - py) / rect.height) * (2 * DOMAIN) - DOMAIN;
-                setMeanX(parseFloat(x.toFixed(2)));
-                setMeanY(parseFloat(y.toFixed(2)));
+              className="w-full h-auto block cursor-crosshair touch-none select-none"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setIsDragging(true);
+                handlePointerPos(e.clientX, e.clientY, e.currentTarget);
               }}
+              onPointerMove={(e) => {
+                if (isDragging) {
+                  handlePointerPos(e.clientX, e.clientY, e.currentTarget);
+                }
+              }}
+              onPointerUp={(e) => {
+                setIsDragging(false);
+                try {
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                } catch {}
+              }}
+              onPointerCancel={() => setIsDragging(false)}
             />
 
-            {/* Click to re-center hint overlay */}
-            <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-[0.68rem] text-slate-400 font-mono pointer-events-none">
-              Click map to relocate Mean m
+            {/* Click/Drag hint overlay */}
+            <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 text-[0.68rem] text-slate-300 font-mono pointer-events-none">
+              Click or drag to relocate Mean m
             </div>
           </div>
 
