@@ -2,9 +2,10 @@
 
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Environment, Line, OrbitControls } from "@react-three/drei";
+import { PerspectiveCamera, Line, OrbitControls } from "@react-three/drei";
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import * as THREE from "three";
+import { useInView } from "../hooks/useScrollSpy";
 import {
   Play,
   Pause,
@@ -31,7 +32,7 @@ import {
 } from "../lib/frankensimPhysics";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import { FrankenSimBadge } from "./FrankenSimBadge";
-import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
+import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 
 // Turbo colormap approximation for FEA stress representation
 const TURBO_COLORS = [
@@ -337,6 +338,9 @@ function decodeBridgeVector(v: number[]): BridgeParams {
 }
 
 export function BridgeViz() {
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(canvasContainerRef, { rootMargin: "250px 0px 250px 0px" });
+
   // 8 Physical Input Parameters
   const [params, setParams] = useState<BridgeParams>({
     spanLength: 180,
@@ -349,7 +353,7 @@ export function BridgeViz() {
     vibrationDamping: 0.05
   });
 
-  const [activeTab, setActiveTab] = useState<"viewport" | "phase_space">("viewport");
+  const [isExpanded3D, setIsExpanded3D] = useState(false);
   const [autoRun, setAutoRun] = useState(true);
   const [loadPos, setLoadPos] = useState(0);
 
@@ -418,16 +422,17 @@ export function BridgeViz() {
     };
   }, []);
 
-  // Moving truck animation loop
+  // Moving truck animation loop — paused offscreen: a 33 Hz setState here
+  // re-renders the whole component tree for nobody.
   useEffect(() => {
-    if (!autoRun) return;
+    if (!autoRun || !isInView) return;
     let t = 0;
     const interval = setInterval(() => {
       t += 0.04;
       setLoadPos(Math.sin(t) * (params.spanLength * 0.01 - 0.3));
     }, 30);
     return () => clearInterval(interval);
-  }, [autoRun, params.spanLength]);
+  }, [autoRun, isInView, params.spanLength]);
 
   // Run live 8D CMA-ES Optimization with 3D Phase-Space PCA Projection
   const handleRunOptimizer = () => {
@@ -502,50 +507,85 @@ export function BridgeViz() {
       {/* Main Grid: Viewport/Phase-Space & Control Panel */}
       <div className="flex flex-col lg:flex-row gap-8 items-start">
         {/* 3D Viewport / Phase Space Container */}
-        <div className="lg:w-[62%] w-full space-y-3">
-          {/* Tab Switcher */}
-          <div className="flex items-center justify-between bg-slate-950/60 p-1.5 rounded-2xl border border-white/10 text-xs font-semibold">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setActiveTab("viewport")}
-                className={`px-3.5 py-1.5 rounded-xl transition-all ${
-                  activeTab === "viewport"
-                    ? "bg-sky-500 text-white shadow-glow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                3D Structural FEA View
-              </button>
-              <button
-                onClick={() => setActiveTab("phase_space")}
-                className={`px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 ${
-                  activeTab === "phase_space"
-                    ? "bg-purple-500 text-white shadow-glow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                <span>3D PCA Covariance Ellipsoid</span>
-              </button>
-            </div>
+        <div className="lg:w-[62%] w-full space-y-4">
+          {/* Main 3D Canvas Stage (Single or Split 3D View) */}
+          {isExpanded3D ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* 3D Physical Bridge Canvas */}
+              <div ref={canvasContainerRef} className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
+                <Canvas
+                  shadows
+                  dpr={[1, 2]}
+                  events={safePointerEvents}
+                  frameloop={isInView ? "always" : "never"}
+                >
+                  <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
+                  <color attach="background" args={["#0b1120"]} />
+                  <fog attach="fog" args={["#0b1120", 6, 28]} />
 
-            {isOptimizing && (
-              <div className="flex items-center gap-1.5 text-[0.68rem] font-mono text-emerald-400 px-2 py-0.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                <span>CMA-ES Gen {optGen}/25</span>
+                  <ambientLight intensity={0.5} />
+                  <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
+                  <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
+                  <directionalLight position={[0, 10, 0]} intensity={0.6} color="#bae6fd" />
+
+                  <OrbitControls
+                    makeDefault
+                    enableDamping
+                    dampingFactor={0.06}
+                    minDistance={3.5}
+                    maxDistance={14}
+                    maxPolarAngle={Math.PI / 2 + 0.05}
+                    target={[0, 0.3, 0]}
+                  />
+
+                  <group position={[0, -0.4, 0]}>
+                    <Water />
+                    <Towers height={params.towerAspect} span={span3D} material={params.materialGrade} />
+                    <MainCables span={span3D} sag={sag3D} towerHeight={params.towerAspect} />
+                    <Suspenders
+                      span={span3D}
+                      sag={sag3D}
+                      towerHeight={params.towerAspect}
+                      count={params.suspenderCount}
+                    />
+                    <TrussWebbing
+                      span={span3D}
+                      topology={params.trussTopology}
+                      stiffness={params.deckStiffness}
+                    />
+                    <DeckAnimator
+                      span={span3D}
+                      stiffness={params.deckStiffness}
+                      loadPos={loadPos}
+                      maxStress={analysis.maxVonMisesStressMPa}
+                      yieldLimit={analysis.yieldLimitMPa}
+                    />
+                  </group>
+                </Canvas>
+
+                {/* Top Badge */}
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-amber-300 backdrop-blur-md">
+                  3D Structural FEA
+                </div>
               </div>
-            )}
-          </div>
 
-          {activeTab === "phase_space" ? (
-            <CMAESPhaseSpaceViewer
-              latestState={latestStateND}
-              history={historyND}
-              title="8D Bridge Parameter Covariance Ellipsoid (Top 3 PCA Axes)"
-            />
+              {/* 3D PCA Covariance Phase Space Canvas */}
+              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
+                <CMAESPhaseSpaceViewer
+                  latestState={latestStateND}
+                  history={historyND}
+                  title="3D PCA Covariance Ellipsoid"
+                />
+              </div>
+            </div>
           ) : (
-            <div className="relative group aspect-[16/10] sm:aspect-auto lg:h-[490px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
-              <Canvas shadows dpr={[1, 2]} events={safePointerEvents}>
+            <div ref={canvasContainerRef} className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
+              <Canvas
+                shadows
+                dpr={[1, 2]}
+                events={safePointerEvents}
+                frameloop={isInView ? "always" : "never"}
+              >
                 <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
                 <color attach="background" args={["#0b1120"]} />
                 <fog attach="fog" args={["#0b1120", 6, 28]} />
@@ -553,7 +593,7 @@ export function BridgeViz() {
                 <ambientLight intensity={0.5} />
                 <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
                 <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
-                <Environment preset="sunset" />
+                <directionalLight position={[0, 10, 0]} intensity={0.6} color="#bae6fd" />
 
                 <OrbitControls
                   makeDefault
@@ -593,7 +633,7 @@ export function BridgeViz() {
               {/* Orbit hint */}
               <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.62rem] sm:text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">
                 <Compass className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400" />
-                <span>Drag to orbit</span>
+                <span>Drag to orbit 3D model</span>
               </div>
 
               {/* FEA Stress Colormap Legend */}
@@ -627,6 +667,18 @@ export function BridgeViz() {
               </div>
             </div>
           )}
+
+          {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
+          <CMAESTelemetryHUD
+            latestState={latestStateND}
+            history={historyND}
+            isOptimizing={isOptimizing}
+            maxGen={25}
+            onToggleExpand3D={() => setIsExpanded3D((prev) => !prev)}
+            isExpanded3D={isExpanded3D}
+            accentColor="amber"
+            objectiveName="Cost Score"
+          />
         </div>
 
         {/* 8-Parameter Control Panel */}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Scissors, Sparkles, Activity, Play, Pause, RotateCcw, ShieldAlert, ArrowDownRight, Layers } from "lucide-react";
+import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState, eigen2x2 } from "../lib/cmaesEngine";
 
 const WIDTH = 480;
@@ -280,9 +281,18 @@ export function ActiveCovarianceDemo() {
             {/* Diagnostic Overlay */}
             {latestState && (
               <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
-                <div className="text-emerald-400 font-bold">Best f(x): {latestState.bestFitness.toFixed(4)}</div>
-                <div className="text-sky-300">Step σ: {latestState.sigma.toFixed(4)}</div>
-                <div className="text-purple-300">Cond κ(C): {latestState.conditionNumber.toFixed(1)}</div>
+                <div className="text-emerald-400 font-bold flex items-center gap-1">
+                  <span>Best <LatexRenderer math="f(x^*)" block={false} />:</span>
+                  <span>{latestState.bestFitness.toFixed(4)}</span>
+                </div>
+                <div className="text-sky-300 flex items-center gap-1">
+                  <span>Step <LatexRenderer math="\sigma" block={false} />:</span>
+                  <span>{latestState.sigma.toFixed(4)}</span>
+                </div>
+                <div className="text-purple-300 flex items-center gap-1">
+                  <span>Cond <LatexRenderer math="\kappa(C)" block={false} />:</span>
+                  <span>{latestState.conditionNumber.toFixed(1)}</span>
+                </div>
                 <div className="text-slate-400">Gen: {generation}/45</div>
               </div>
             )}
@@ -334,7 +344,9 @@ export function ActiveCovarianceDemo() {
               </button>
             </div>
 
-            <span className="text-xs font-mono text-slate-400">λ = 16 | μ = 4</span>
+            <span className="text-xs font-mono text-slate-400">
+              <LatexRenderer math="\lambda = 16 \mid \mu = 4" block={false} />
+            </span>
           </div>
         </div>
 
@@ -346,13 +358,13 @@ export function ActiveCovarianceDemo() {
               <span>Why Active Covariance Accelerates Convergence</span>
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Standard CMA-ES expands covariance along directions that produce elite samples, but relies solely on passive exponential discounting <code className="bg-white/10 px-1 py-0.5 rounded text-sky-300 font-mono">(1 - c_μ) C</code> to shrink variance in bad directions.
+              Standard CMA-ES expands covariance along directions that produce elite samples, but relies solely on passive exponential discounting <span className="inline-block"><LatexRenderer math="(1 - c_\mu) C" block={false} /></span> to shrink variance in bad directions.
             </p>
             <p className="text-slate-300 leading-relaxed">
-              <strong>Active CMA-ES</strong> assigns negative weights to the worst <code className="bg-white/10 px-1 py-0.5 rounded text-rose-300 font-mono">μ_neg</code> offspring:
+              <strong>Active CMA-ES</strong> assigns negative weights to the worst <span className="inline-block"><LatexRenderer math="\mu_{\text{neg}}" block={false} /></span> offspring:
             </p>
-            <div className="font-mono text-[0.68rem] bg-slate-900/80 p-2.5 rounded-xl border border-white/5 text-sky-300 leading-relaxed">
-              ΔC_active = - c_μ_neg ∑ |w_j| y_j y_jᵀ
+            <div className="text-[0.8rem] bg-slate-900/80 p-2.5 rounded-xl border border-white/5 text-center text-rose-300">
+              <LatexRenderer math="\Delta C_{\text{active}} = - c_{\mu\text{neg}} \sum |w_j| y_j y_j^\top" block={false} />
             </div>
             <p className="text-slate-400 leading-relaxed">
               This actively flattens the search ellipsoid against canyon walls, preventing wasteful mutations into known high-loss regions and improving convergence speed by <strong>20–40%</strong> on narrow ridges.

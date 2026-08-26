@@ -180,14 +180,14 @@ export function Hero() {
             <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(2,6,23,0.8)]" />
           </div>
 
-          <div className="mt-3 flex items-center justify-between px-2 text-[0.75rem] text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-2 text-[0.75rem] text-slate-400">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-cyan-400 shrink-0" />
               <span>Interactive 3D Simulation • Drag to rotate camera • Scrub timeline</span>
             </div>
             <a
               href="#technical-addendum"
-              className="text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 font-medium transition-colors"
+              className="text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 font-medium transition-colors ml-auto"
             >
               <span>See the Math</span>
               <ArrowDownRight className="h-3 w-3" />

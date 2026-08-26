@@ -340,7 +340,7 @@ export function ColorizedEquation({
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white border shadow-inner overflow-hidden"
+                    className="flex min-h-10 min-w-10 h-auto w-auto px-3 py-1.5 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white border shadow-inner whitespace-nowrap"
                     style={{
                       backgroundColor: `${COLOR_STYLES[activeVar.color].hex}22`,
                       borderColor: COLOR_STYLES[activeVar.color].hex,

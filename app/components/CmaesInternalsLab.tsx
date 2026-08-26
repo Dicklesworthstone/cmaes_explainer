@@ -467,12 +467,12 @@ export function CmaesInternalsLab() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 font-mono text-xs space-y-2">
             <div className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-sans font-semibold">Live internals</div>
-            <div className="flex justify-between"><span className="text-slate-400">best f(x)</span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">step size σ</span><span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">cond κ(C)</span><span className="text-purple-300">{latest ? (Number.isFinite(latest.conditionNumber) ? latest.conditionNumber.toFixed(1) : "∞") : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">evaluations</span><span className="text-slate-300">{latest ? latest.evalCount : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">‖p<sub>c</sub>‖</span><span className="text-slate-300">{latest ? Math.hypot(...latest.pC).toFixed(3) : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">‖p<sub>σ</sub>‖ / χ<sub>n</sub></span><span className="text-slate-300">{latest ? (Math.hypot(...latest.pSigma) / Math.sqrt(latest.mean.length)).toFixed(3) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Best <LatexRenderer math="f(x^*)" block={false} /></span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Step size <LatexRenderer math="\sigma" block={false} /></span><span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Condition <LatexRenderer math="\kappa(C)" block={false} /></span><span className="text-purple-300">{latest ? (Number.isFinite(latest.conditionNumber) ? latest.conditionNumber.toFixed(1) : "∞") : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400">Evaluations</span><span className="text-slate-300">{latest ? latest.evalCount : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_c\|" block={false} /></span><span className="text-slate-300">{latest ? Math.hypot(...latest.pC).toFixed(3) : "—"}</span></div>
+            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_\sigma\| / \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /></span><span className="text-slate-300">{latest ? (Math.hypot(...latest.pSigma) / Math.sqrt(latest.mean.length)).toFixed(3) : "—"}</span></div>
           </div>
 
           {/* Loss curve */}

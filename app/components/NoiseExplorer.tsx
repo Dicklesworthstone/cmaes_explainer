@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Activity, Shuffle, Waves, Play, Pause, RotateCcw, Sparkles, Sliders, TrendingDown } from "lucide-react";
+import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
 const WIDTH = 460;
@@ -131,7 +132,45 @@ export function NoiseExplorer() {
     return () => clearInterval(interval);
   }, [isPlaying, generation, stepOptimizer]);
 
-  const latestState = history[history.length - 1];
+  // Pre-rendered static objective heatmap canvas (memoized)
+  const bgCanvas = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    const offscreen = document.createElement("canvas");
+    offscreen.width = WIDTH;
+    offscreen.height = HEIGHT;
+    const ctx = offscreen.getContext("2d");
+    if (!ctx) return null;
+
+    const DOMAIN = 2.5;
+    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
+    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
+
+    const imgData = ctx.createImageData(WIDTH, HEIGHT);
+    for (let py = 0; py < HEIGHT; py += 2) {
+      const y = toCoordY(py);
+      for (let px = 0; px < WIDTH; px += 2) {
+        const x = toCoordX(px);
+        const v = trueFn(x, y);
+        const norm = Math.max(0, Math.min(1, v / 8));
+
+        const r = Math.floor(10 + 15 * norm);
+        const g = Math.floor(20 + 75 * (1 - norm));
+        const b = Math.floor(40 + 120 * (1 - norm));
+
+        for (let dy = 0; dy < 2; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const idx = ((py + dy) * WIDTH + (px + dx)) * 4;
+            imgData.data[idx] = r;
+            imgData.data[idx + 1] = g;
+            imgData.data[idx + 2] = b;
+            imgData.data[idx + 3] = 255;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return offscreen;
+  }, []);
 
   // Render 2D Contour Canvas
   useEffect(() => {
@@ -146,36 +185,13 @@ export function NoiseExplorer() {
 
     const toPxX = (x: number) => ((x + DOMAIN) / (2 * DOMAIN)) * W;
     const toPxY = (y: number) => H - ((y + DOMAIN) / (2 * DOMAIN)) * H;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Draw True Objective Heatmap
-    const imgData = ctx.createImageData(W, H);
-    for (let py = 0; py < H; py += 2) {
-      const y = toCoordY(py);
-      for (let px = 0; px < W; px += 2) {
-        const x = toCoordX(px);
-        const v = trueFn(x, y);
-        const norm = Math.max(0, Math.min(1, v / 8));
-
-        const r = Math.floor(10 + 15 * norm);
-        const g = Math.floor(20 + 75 * (1 - norm));
-        const b = Math.floor(40 + 120 * (1 - norm));
-
-        for (let dy = 0; dy < 2; dy++) {
-          for (let dx = 0; dx < 2; dx++) {
-            const idx = ((py + dy) * W + (px + dx)) * 4;
-            imgData.data[idx] = r;
-            imgData.data[idx + 1] = g;
-            imgData.data[idx + 2] = b;
-            imgData.data[idx + 3] = 255;
-          }
-        }
-      }
+    // 1. Draw Cached True Objective Heatmap
+    if (bgCanvas) {
+      ctx.drawImage(bgCanvas, 0, 0, W, H);
     }
-    ctx.putImageData(imgData, 0, 0);
 
     // 2. Draw Historical Trajectory
     if (history.length > 1) {
@@ -364,7 +380,9 @@ export function NoiseExplorer() {
             {/* Noise Amplitude */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Noise Amplitude (σ_noise)</span>
+                <span className="text-slate-300 flex items-center gap-1">
+                  Noise Amplitude (<LatexRenderer math="\sigma_{\text{noise}}" block={false} />)
+                </span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {noiseLevel.toFixed(2)}
                 </span>
@@ -384,7 +402,9 @@ export function NoiseExplorer() {
             {/* Population Size */}
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Population Size (λ)</span>
+                <span className="text-slate-300 flex items-center gap-1">
+                  Population Size (<LatexRenderer math="\lambda" block={false} />)
+                </span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {lambda}
                 </span>
@@ -399,8 +419,8 @@ export function NoiseExplorer() {
                 onChange={(e) => setLambda(parseInt(e.target.value, 10))}
                 className="w-full accent-sky-400"
               />
-              <p className="text-[0.68rem] text-slate-500">
-                Increasing λ averages out stochastic variance by √λ.
+              <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
+                <span>Increasing</span> <LatexRenderer math="\lambda" block={false} /> <span>averages out stochastic variance by</span> <LatexRenderer math="\sqrt{\lambda}" block={false} />.
               </p>
             </div>
           </div>
@@ -409,7 +429,7 @@ export function NoiseExplorer() {
           <div className="flex flex-wrap gap-2.5">
             <button
               onClick={() => setIsPlaying(!isPlaying)}
-              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-all shadow-lg ${
+              className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-lg ${
                 isPlaying
                   ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
                   : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"

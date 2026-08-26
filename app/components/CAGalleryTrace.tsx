@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Sparkles, Play, Pause, RotateCcw, Sliders, Activity, Compass, Flame } from "lucide-react";
 import { CMAESOptimizer } from "../lib/cmaesEngine";
+import { useInView } from "../hooks/useScrollSpy";
+
+import { LatexRenderer } from "./LatexRenderer";
 
 const GRID_SIZE = 64;
 
@@ -56,6 +59,9 @@ function stepCA(
 }
 
 export function CAGalleryTrace() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
+
   const [mu, setMu] = useState(0.28); // Growth center
   const [sigma, setSigma] = useState(0.045); // Growth width
   const [isPlaying, setIsPlaying] = useState(true);
@@ -84,9 +90,9 @@ export function CAGalleryTrace() {
     resetGrid();
   }, [resetGrid]);
 
-  // Main Continuous CA animation loop with zero-allocation 32-bit pixel pipeline
+  // Main Continuous CA animation loop with zero-allocation 32-bit pixel pipeline (throttled when offscreen)
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !isInView) return;
     const interval = setInterval(() => {
       const { current, next } = gridStateRef.current;
       const ent = stepCA(current, next, mu, sigma);
@@ -119,7 +125,7 @@ export function CAGalleryTrace() {
     }, 40);
 
     return () => clearInterval(interval);
-  }, [isPlaying, mu, sigma]);
+  }, [isPlaying, mu, sigma, isInView]);
 
   // Run CMA-ES Evolutionary Search for Living Pattern Complexity
   const handleRunOptimizer = () => {
@@ -182,7 +188,7 @@ export function CAGalleryTrace() {
   }, []);
 
   return (
-    <div className="glass-card p-6 space-y-6">
+    <div ref={containerRef} className="glass-card p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
@@ -256,7 +262,9 @@ export function CAGalleryTrace() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Growth Center <span className="text-purple-300 font-bold font-mono">(μ)</span></span>
+                <span className="text-slate-300 flex items-center gap-1">
+                  <span>Growth Center (</span><LatexRenderer math="\mu" block={false} /><span>)</span>
+                </span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {mu.toFixed(3)}
                 </span>
@@ -275,7 +283,9 @@ export function CAGalleryTrace() {
 
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between text-xs font-medium">
-                <span className="text-slate-300">Growth Width <span className="text-pink-300 font-bold font-mono">(σ)</span></span>
+                <span className="text-slate-300 flex items-center gap-1">
+                  <span>Growth Width (</span><LatexRenderer math="\sigma" block={false} /><span>)</span>
+                </span>
                 <span className="text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
                   {sigma.toFixed(3)}
                 </span>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Github, Brain, Rocket, Menu, X, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useScrollSpy } from "../hooks/useScrollSpy";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -17,17 +17,28 @@ const sections = [
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
   const activeId = useScrollSpy(sections.map((s) => s.id));
 
-  // Handle scroll background & reading progress
+  // Handle scroll background & GPU reading progress without React re-renders
   useEffect(() => {
+    let ticking = false;
     const handler = () => {
-      setScrolled(window.scrollY > 20);
-      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (totalHeight > 0) {
-        setScrollProgress(Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100)));
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled((prev) => {
+            const next = window.scrollY > 20;
+            return prev === next ? prev : next;
+          });
+          const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
+          if (totalHeight > 0 && progressBarRef.current) {
+            const progress = Math.min(1, Math.max(0, window.scrollY / totalHeight));
+            progressBarRef.current.style.transform = `scaleX(${progress})`;
+          }
+          ticking = false;
+        });
+        ticking = true;
       }
     };
     handler();
@@ -46,11 +57,12 @@ export function Navbar() {
 
   return (
     <>
-      {/* Top Reading Progress Bar */}
+      {/* Top Reading Progress Bar (GPU Accelerated) */}
       <div className="fixed top-0 inset-x-0 h-1 z-[100] bg-slate-950/40 pointer-events-none">
         <div
-          className="h-full bg-gradient-to-r from-sky-400 via-cyan-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)] transition-[width] duration-75 ease-out"
-          style={{ width: `${scrollProgress}%` }}
+          ref={progressBarRef}
+          className="h-full w-full origin-left bg-gradient-to-r from-sky-400 via-cyan-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
+          style={{ transform: "scaleX(0)" }}
         />
       </div>
       {/* --- Desktop Header --- */}

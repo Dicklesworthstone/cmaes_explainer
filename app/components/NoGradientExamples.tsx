@@ -421,22 +421,7 @@ export function NoGradientExamples() {
       </div>
 
       {/* Transformer Architecture 3D Interactive Search */}
-      <div className="space-y-4 pt-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
-              <BrainCircuit className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white font-display">
-                Interactive Case Study: Neural Architecture Search & Pareto Frontier
-              </h3>
-              <p className="text-xs text-slate-400">
-                Mixed discrete-continuous hyperparameter tuning with 3D topology & accuracy vs FLOPs trade-off
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="pt-8">
         <TransformerViz />
       </div>
     </div>

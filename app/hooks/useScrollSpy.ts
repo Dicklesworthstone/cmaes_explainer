@@ -36,3 +36,38 @@ export function useScrollSpy(
 
   return activeId;
 }
+
+/**
+ * Zero-overhead IntersectionObserver viewport visibility hook.
+ * Used to dynamically pause offscreen Three.js WebGL rendering loops and 2D canvas animations.
+ */
+export function useInView(
+  ref: React.RefObject<HTMLElement | null>,
+  options: { rootMargin?: string; threshold?: number | number[]; once?: boolean } = {}
+): boolean {
+  const [isInView, setIsInView] = useState(() => typeof window === "undefined" || !("IntersectionObserver" in window));
+  const { rootMargin = "200px 0px 200px 0px", threshold = 0, once = false } = options;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const inView = entry?.isIntersecting ?? false;
+        setIsInView(inView);
+        if (inView && once) {
+          observer.disconnect();
+        }
+      },
+      { rootMargin, threshold }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, rootMargin, threshold, once]);
+
+  return isInView;
+}

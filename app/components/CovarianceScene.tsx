@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo, useState, useEffect } from "react";
+import { useInView } from "../hooks/useInView";
 import { PerspectiveCamera, Float, Line, OrbitControls } from "@react-three/drei";
 import { Play, Pause, RotateCcw, FastForward, Sparkles, Sliders } from "lucide-react";
 
@@ -266,27 +267,29 @@ export function CovarianceScene() {
   const [landscape, setLandscape] = useState<"rosenbrock" | "cigar" | "rastrigin">("rosenbrock");
   const [isPlaying, setIsPlaying] = useState(true);
   const [genIndex, setGenIndex] = useState(0);
+  const [sceneRef, inView] = useInView<HTMLDivElement>();
 
   const trajectory = useMemo(() => generateHeroTrajectory(landscape), [landscape]);
   const allVectorPoints = useMemo(() => trajectory.map((s) => new THREE.Vector3(...s.mean)), [trajectory]);
 
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !inView) return;
     const interval = setInterval(() => {
       setGenIndex((prev) => (prev + 1) % trajectory.length);
     }, 180);
     return () => clearInterval(interval);
-  }, [isPlaying, trajectory.length]);
+  }, [isPlaying, inView, trajectory.length]);
 
   const currentState = trajectory[genIndex] || trajectory[0];
 
   return (
-    <div className="relative h-full w-full flex flex-col justify-between">
+    <div ref={sceneRef} className="relative h-full w-full flex flex-col justify-between">
       {/* 3D Canvas */}
       <div className="absolute inset-0">
         <Canvas
           events={safePointerEvents}
           dpr={[1, 2]}
+          frameloop={inView ? "always" : "never"}
           camera={{ position: [2.8, 2.0, 3.6], fov: 38 }}
           className="h-full w-full"
         >

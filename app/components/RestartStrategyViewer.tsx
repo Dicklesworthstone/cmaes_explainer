@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { RefreshCw, Timer, Activity, Play, Pause, RotateCcw, Sparkles, Layers, TrendingDown } from "lucide-react";
+import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
 
 const WIDTH = 480;
@@ -341,7 +342,10 @@ export function RestartStrategyViewer() {
 
             <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
               <div className="text-emerald-400 font-bold">Global Best: {globalBestFitness.toFixed(3)}</div>
-              <div className="text-sky-300">Pop λ: {currentLambda}</div>
+              <div className="text-sky-300 flex items-center gap-1">
+                <span>Pop <LatexRenderer math="\lambda" block={false} />:</span>
+                <span>{currentLambda}</span>
+              </div>
               <div className="text-amber-300">Restarts: {restartCount}</div>
               <div className="text-slate-400">Evals: {evalBudget}</div>
             </div>
@@ -373,11 +377,11 @@ export function RestartStrategyViewer() {
             <p className="text-xs text-slate-300 leading-relaxed">
               {strategy === "ipop" ? (
                 <>
-                  <strong>IPOP-CMA-ES</strong> doubles the population size (<code className="text-sky-300 font-mono">λ ← 2λ</code>) after every restart. Larger populations increase global search power, smoothing over high-frequency local ripples.
+                  <strong>IPOP-CMA-ES</strong> doubles the population size (<span className="inline-block"><LatexRenderer math="\lambda \leftarrow 2\lambda" block={false} /></span>) after every restart. Larger populations increase global search power, smoothing over high-frequency local ripples.
                 </>
               ) : (
                 <>
-                  <strong>BIPOP-CMA-ES</strong> balances exploration and exploitation by alternating between large exploratory populations and small local populations with varied initial step sizes <code className="text-purple-300 font-mono">σ₀</code>.
+                  <strong>BIPOP-CMA-ES</strong> balances exploration and exploitation by alternating between large exploratory populations and small local populations with varied initial step sizes <span className="inline-block"><LatexRenderer math="\sigma_0" block={false} /></span>.
                 </>
               )}
             </p>
@@ -385,9 +389,15 @@ export function RestartStrategyViewer() {
             <div className="pt-2 border-t border-white/5 space-y-1.5 text-xs text-slate-400">
               <div className="font-bold text-slate-300">Automated Termination Triggers:</div>
               <ul className="list-disc pl-4 space-y-1 marker:text-sky-400">
-                <li>Step-size collapse: <code className="font-mono text-sky-300">σ &lt; 10⁻¹²</code></li>
+                <li className="flex items-center gap-1">
+                  <span>Step-size collapse:</span>
+                  <LatexRenderer math="\sigma < 10^{-12}" block={false} />
+                </li>
                 <li>Stagnant fitness variance over 15 generations</li>
-                <li>Condition number explosion: <code className="font-mono text-sky-300">κ(C) &gt; 10¹⁴</code></li>
+                <li className="flex items-center gap-1">
+                  <span>Condition number explosion:</span>
+                  <LatexRenderer math="\kappa(C) > 10^{14}" block={false} />
+                </li>
               </ul>
             </div>
           </div>

@@ -207,21 +207,33 @@ function HyperparameterCalculator() {
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Population Size (λ)</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
+                <span>Population Size</span> (<LatexRenderer math="\lambda" block={false} />)
+              </div>
               <div className="text-lg font-bold text-sky-200 font-mono">{stats.lambda} offspring</div>
-              <div className="text-[0.62rem] text-slate-500 font-mono">λ = 4 + ⌊3 ln(n)⌋</div>
+              <div className="text-[0.65rem] text-slate-400 font-mono">
+                <LatexRenderer math="\lambda = 4 + \lfloor 3 \ln(n) \rfloor" block={false} />
+              </div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Parent Elites (μ)</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
+                <span>Parent Elites</span> (<LatexRenderer math="\mu" block={false} />)
+              </div>
               <div className="text-lg font-bold text-emerald-200 font-mono">{stats.mu} elites</div>
-              <div className="text-[0.62rem] text-slate-500 font-mono">μ_eff ≈ {stats.muEff.toFixed(2)}</div>
+              <div className="text-[0.65rem] text-slate-400 font-mono">
+                <LatexRenderer math={`\\mu_{\\text{eff}} \\approx ${stats.muEff.toFixed(2)}`} block={false} />
+              </div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-purple-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Rank-1 Rate (c₁)</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
+                <span>Rank-1 Rate</span> (<LatexRenderer math="c_1" block={false} />)
+              </div>
               <div className="text-base font-bold text-purple-200 font-mono">{stats.c1.toFixed(4)}</div>
-              <div className="text-[0.62rem] text-slate-500 font-mono">c_μ ≈ {stats.cMu.toFixed(4)}</div>
+              <div className="text-[0.65rem] text-slate-400 font-mono">
+                <LatexRenderer math={`c_\\mu \\approx ${stats.cMu.toFixed(4)}`} block={false} />
+              </div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-amber-500/20 space-y-1">

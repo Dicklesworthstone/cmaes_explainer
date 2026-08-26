@@ -23,6 +23,7 @@ import {
   Target
 } from "lucide-react";
 import { eigen2x2, sampleGaussian, sampleGaussian2D } from "../lib/cmaesEngine";
+import { useInView } from "../hooks/useScrollSpy";
 
 interface InteractiveSample {
   x: number;
@@ -120,6 +121,9 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
  * rotation angle, and step-size, or step and auto-play full 2D CMA-ES generations!
  */
 function GaussianDistributionSandbox() {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
+
   const [activeLandscapeKey, setActiveLandscapeKey] = useState<LandscapeKey>("rosenbrock");
   const landscape = LANDSCAPES[activeLandscapeKey];
 
@@ -435,8 +439,9 @@ function GaussianDistributionSandbox() {
     bgCanvasRef.current = offscreen;
   }, [activeLandscapeKey, landscape]);
 
-  // Smooth 60fps Animation Loop with linear interpolation
+  // Smooth 60fps Animation Loop with linear interpolation (throttled when offscreen)
   useEffect(() => {
+    if (!isInView) return;
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -638,12 +643,12 @@ function GaussianDistributionSandbox() {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey]);
+  }, [meanX, meanY, sigma, eigenRatio, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey, isInView]);
 
   const currentFitness = landscape.fn(meanX, meanY);
 
   return (
-    <div className="glass-card p-6 md:p-8 my-8 space-y-6">
+    <div ref={containerRef} className="glass-card p-6 md:p-8 my-8 space-y-6">
       {/* Sandbox Header with Landscape Tabs */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
         <div className="flex items-center gap-3">

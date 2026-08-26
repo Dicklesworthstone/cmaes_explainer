@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useInView } from "../hooks/useScrollSpy";
 import { LatexRenderer } from "./LatexRenderer";
 import {
   Play,
@@ -51,6 +52,9 @@ export function WasmDemo() {
 
   // Initial starting point (far from optimum)
   const [startPoint, setStartPoint] = useState<[number, number]>([-1.5, 1.8]);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
 
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -232,8 +236,9 @@ export function WasmDemo() {
     bgCanvasRef.current = offscreen;
   }, [currentBench]);
 
-  // --- Render 2D Contour Map, Samples, Ellipses, Paths with smooth 60fps interpolation ---
+  // --- Render 2D Contour Map, Samples, Ellipses, Paths with smooth 60fps interpolation (throttled when offscreen) ---
   useEffect(() => {
+    if (!isInView) return;
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas || !latestState) return;
@@ -434,7 +439,7 @@ export function WasmDemo() {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [currentBench, latestState, history, compareMode, gdHistory, adamHistory]);
+  }, [currentBench, latestState, history, compareMode, gdHistory, adamHistory, isInView]);
 
   // --- Render Log-Loss Convergence Chart ---
   useEffect(() => {
@@ -445,39 +450,44 @@ export function WasmDemo() {
 
     const W = canvas.width;
     const H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
 
-    ctx.fillStyle = "#030712";
+    // Draw background
+    ctx.fillStyle = "rgba(15, 23, 42, 0.6)";
     ctx.fillRect(0, 0, W, H);
 
-    const PADDING = 32;
-    const maxEvals = Math.max(100, history[history.length - 1].evalCount);
-    const toPxX = (evals: number) => PADDING + (evals / maxEvals) * (W - 2 * PADDING);
+    // Compute bounds
+    const maxEvals = Math.max(
+      60 * lambda,
+      ...history.map((s) => s.evalCount),
+      ...(compareMode && gdHistory ? gdHistory.map((s) => s.evalCount) : [1])
+    );
+    const toPxX = (evals: number) => (evals / maxEvals) * (W - 40) + 30;
+    const toPxY = (logLoss: number) => {
+      const minLog = -8;
+      const maxLog = 4;
+      return H - 25 - ((logLoss - minLog) / (maxLog - minLog)) * (H - 45);
+    };
 
-    // Compute log loss range
-    const allLosses = history.map((s) => Math.log10(Math.max(1e-12, s.bestFitness - currentBench.optimumValue + 1e-12)));
-    const minLoss = Math.min(-6, ...allLosses);
-    const maxLoss = Math.max(2, ...allLosses);
-    const toPxY = (logL: number) => H - PADDING - ((logL - minLoss) / (maxLoss - minLoss)) * (H - 2 * PADDING);
-
-    // Draw Grid Lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+    // Draw Grid & Axes
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
     ctx.lineWidth = 1;
-    for (let l = Math.ceil(minLoss); l <= maxLoss; l += 2) {
-      const y = toPxY(l);
+    for (let logL = -8; logL <= 4; logL += 2) {
+      const y = toPxY(logL);
       ctx.beginPath();
-      ctx.moveTo(PADDING, y);
-      ctx.lineTo(W - PADDING, y);
+      ctx.moveTo(30, y);
+      ctx.lineTo(W - 10, y);
       ctx.stroke();
-      ctx.fillStyle = "#64748b";
-      ctx.font = "9px Inter, monospace";
-      ctx.fillText(`10^${l}`, 4, y + 3);
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`1e${logL}`, 26, y + 3);
     }
 
-    // Draw Comparison GD Curve (Rose)
-    if (compareMode && gdHistory.length > 0) {
-      ctx.strokeStyle = "#f43f5e";
-      ctx.lineWidth = 1.8;
+    // Draw GD Convergence Curve (Amber)
+    if (compareMode && gdHistory && gdHistory.length > 0) {
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 2;
       ctx.beginPath();
       gdHistory.forEach((s, i) => {
         const x = toPxX(s.evalCount);
@@ -521,10 +531,10 @@ export function WasmDemo() {
     ctx.fillStyle = "#94a3b8";
     ctx.font = "10px Inter, sans-serif";
     ctx.fillText("Function Evaluations →", W - 130, H - 10);
-  }, [history, currentBench, compareMode, gdHistory, adamHistory]);
+  }, [history, currentBench, compareMode, gdHistory, adamHistory, lambda]);
 
   return (
-    <div className="space-y-8">
+    <div ref={containerRef} className="space-y-8">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
           Test CMA-ES live against classical benchmark test functions. Watch the covariance matrix adapt its principal axes,
