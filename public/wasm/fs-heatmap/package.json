@@ -1,0 +1,16 @@
+{
+  "name": "fs-heatmap-wasm",
+  "type": "module",
+  "description": "Browser (WASM) surface for the CMA-ES explainer site's objective-landscape heatmaps — a registry of the site's 2D benchmark fields rasterized through shared normalization modes and linear color ramps into an in-memory RGBA buffer, replacing per-pixel JS loops that stall the main thread on mount and on every landscape switch.",
+  "version": "0.1.0",
+  "files": [
+    "fs_heatmap_wasm_bg.wasm",
+    "fs_heatmap_wasm.js",
+    "fs_heatmap_wasm.d.ts"
+  ],
+  "main": "fs_heatmap_wasm.js",
+  "types": "fs_heatmap_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { Cpu, ExternalLink, Sparkles, CheckCircle2, ShieldAlert } from "lucide-react";
 import { initFrankenSim, FrankenSimStatus } from "../lib/frankensimPhysics";
+import { initFrankenSimCmaes } from "../lib/frankensimCmaes";
+import { initFrankenSimLenia } from "../lib/frankensimLenia";
+import { initFrankenSimHeatmap } from "../lib/frankensimHeatmap";
 
 export function FrankenSimBadge({ className = "" }: { className?: string }) {
   const [status, setStatus] = useState<FrankenSimStatus>({
@@ -14,12 +17,26 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
     hasBemt: false,
     hasDemoPhysics: false
   });
+  // Per-kernel provenance rows (each loader is single-flight and shared with
+  // the components that actually use the kernel, so probing here is free).
+  const [cmaesLive, setCmaesLive] = useState(false);
+  const [leniaLive, setLeniaLive] = useState(false);
+  const [heatmapLive, setHeatmapLive] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     let active = true;
     initFrankenSim().then((res) => {
       if (active) setStatus(res);
+    });
+    initFrankenSimCmaes().then((res) => {
+      if (active) setCmaesLive(res.source === "wasm");
+    });
+    initFrankenSimLenia().then((res) => {
+      if (active) setLeniaLive(res.source === "wasm");
+    });
+    initFrankenSimHeatmap().then((res) => {
+      if (active) setHeatmapLive(res.source === "wasm");
     });
     return () => {
       active = false;
@@ -106,6 +123,24 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
               <span className="text-slate-400">Wing/Bridge Physics:</span>
               <span className={status.hasDemoPhysics ? "text-emerald-400" : "text-slate-500"}>
                 {status.hasDemoPhysics ? "fs-demo-physics-wasm" : "TS analytic model"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">CMA-ES Internals Lab:</span>
+              <span className={cmaesLive ? "text-emerald-400" : "text-slate-500"}>
+                {cmaesLive ? "fs-cmaes-viz-wasm" : "TS engine"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Lenia Field:</span>
+              <span className={leniaLive ? "text-emerald-400" : "text-slate-500"}>
+                {leniaLive ? "fs-lenia-wasm (FFT)" : "TS engine 96²"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Landscape Heatmaps:</span>
+              <span className={heatmapLive ? "text-emerald-400" : "text-slate-500"}>
+                {heatmapLive ? "fs-heatmap-wasm" : "TS raster"}
               </span>
             </div>
             {/* With the demo-physics kernel live, evaluations early-return

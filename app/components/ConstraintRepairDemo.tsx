@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Square, Wand2, MoveRight, Shuffle, Paintbrush, Play, Pause, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
+import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 
 const SIZE = 800;
 
@@ -128,39 +129,33 @@ export function ConstraintRepairDemo() {
     return () => clearInterval(interval);
   }, [isPlaying, generation, stepOptimizer]);
 
-  // Pre-rendered high-definition heatmap canvas (memoized per strategy)
-  const bgCanvas = useMemo(() => {
-    if (typeof document === "undefined") return null;
-    const offscreen = document.createElement("canvas");
-    offscreen.width = SIZE;
-    offscreen.height = SIZE;
-    const ctx = offscreen.getContext("2d");
-    if (!ctx) return null;
-
-    const DOMAIN_MIN = -0.3;
-    const DOMAIN_MAX = 1.6;
-
-    const imgData = ctx.createImageData(SIZE, SIZE);
-    const buf32 = new Uint32Array(imgData.data.buffer);
-
-    for (let py = 0; py < SIZE; py++) {
-      const y = DOMAIN_MAX - (py / SIZE) * (DOMAIN_MAX - DOMAIN_MIN);
-      const rowOffset = py * SIZE;
-      for (let px = 0; px < SIZE; px++) {
-        const x = DOMAIN_MIN + (px / SIZE) * (DOMAIN_MAX - DOMAIN_MIN);
+  // Heatmap of the objective AS SEEN THROUGH the selected repair, rasterized
+  // per strategy switch by the FrankenSim fs-heatmap-wasm kernel
+  // (pixel-identical JS fallback inside buildHeatmapCanvas), off the
+  // switch's paint path either way.
+  const [bgCanvas, setBgCanvas] = useState<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    let live = true;
+    buildHeatmapCanvas({
+      field: `box-quad-${strategy}`,
+      width: SIZE,
+      height: SIZE,
+      xmin: -0.3,
+      xmax: 1.6,
+      ymin: -0.3,
+      ymax: 1.6,
+      norm: { mode: "sqrt", k: 2 },
+      ramp: { r0: 12, rk: 15, g0: 18, gk: 70, b0: 35, bk: 110 },
+      fallbackField: (x, y) => {
         const [rx, ry] = repairPoint([x, y], strategy);
-        const v = objectiveFn(rx, ry);
-        const norm = Math.max(0, Math.min(1, Math.sqrt(v) / 2));
-
-        const r = (12 + 15 * norm) | 0;
-        const g = (18 + 70 * (1 - norm)) | 0;
-        const b = (35 + 110 * (1 - norm)) | 0;
-
-        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
+        return objectiveFn(rx, ry);
       }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    return offscreen;
+    }).then((canvas) => {
+      if (live && canvas) setBgCanvas(canvas);
+    });
+    return () => {
+      live = false;
+    };
   }, [strategy]);
 
   // Render Canvas with High-DPI Sharpness

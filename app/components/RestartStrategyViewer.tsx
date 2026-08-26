@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw, Timer, Activity, Play, Pause, RotateCcw, Sparkles, Layers, TrendingDown } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
+import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 
 const WIDTH = 960;
 const HEIGHT = 520;
@@ -186,40 +187,29 @@ export function RestartStrategyViewer() {
     return () => clearInterval(interval);
   }, [isPlaying, evalBudget, globalBestFitness, stepOptimizer]);
 
-  // Pre-rendered high-definition Rastrigin heatmap canvas (memoized)
-  const bgCanvas = useMemo(() => {
-    if (typeof document === "undefined") return null;
-    const offscreen = document.createElement("canvas");
-    offscreen.width = WIDTH;
-    offscreen.height = HEIGHT;
-    const ctx = offscreen.getContext("2d");
-    if (!ctx) return null;
-
-    const DOMAIN = 3.5;
-    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
-
-    const imgData = ctx.createImageData(WIDTH, HEIGHT);
-    const buf32 = new Uint32Array(imgData.data.buffer);
-
-    for (let py = 0; py < HEIGHT; py++) {
-      const y = toCoordY(py);
-      const rowOffset = py * WIDTH;
-
-      for (let px = 0; px < WIDTH; px++) {
-        const x = toCoordX(px);
-        const v = multimodalFn(x, y);
-        const norm = Math.max(0, Math.min(1, v / 50));
-
-        const r = (10 + 15 * norm) | 0;
-        const g = (20 + 75 * (1 - norm)) | 0;
-        const b = (40 + 120 * (1 - norm)) | 0;
-
-        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    return offscreen;
+  // Rastrigin heatmap, rasterized by the FrankenSim fs-heatmap-wasm kernel
+  // (pixel-identical JS fallback inside buildHeatmapCanvas), off the mount's
+  // paint path either way.
+  const [bgCanvas, setBgCanvas] = useState<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    let live = true;
+    buildHeatmapCanvas({
+      field: "rastrigin",
+      width: WIDTH,
+      height: HEIGHT,
+      xmin: -3.5,
+      xmax: 3.5,
+      ymin: -3.5,
+      ymax: 3.5,
+      norm: { mode: "linear", k: 50 },
+      ramp: { r0: 10, rk: 15, g0: 20, gk: 75, b0: 40, bk: 120 },
+      fallbackField: multimodalFn
+    }).then((canvas) => {
+      if (live && canvas) setBgCanvas(canvas);
+    });
+    return () => {
+      live = false;
+    };
   }, []);
 
   // Render 2D Multimodal Landscape with High-DPI Sharpness

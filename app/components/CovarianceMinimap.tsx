@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sliders, Activity, Compass, ArrowRight, Sparkles } from "lucide-react";
 import { eigen2x2 } from "../lib/cmaesEngine";
+import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 import { LatexRenderer } from "./LatexRenderer";
 
 const WIDTH = 760;
@@ -42,7 +43,6 @@ export function CovarianceMinimap() {
   const [showNaturalGrad, setShowNaturalGrad] = useState(true);
 
   const fn = objectives[objKey];
-  const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Mirrors the canvas pass's gradient check so the legend never advertises
   // arrows the drawing suppressed: at the optimum the finite difference is
@@ -57,38 +57,33 @@ export function CovarianceMinimap() {
     return Math.hypot(gx, gy) > 1e-3;
   }, [fn, progress]);
 
+  // Objective heatmap, rasterized per objective switch by the FrankenSim
+  // fs-heatmap-wasm kernel (pixel-identical JS fallback inside
+  // buildHeatmapCanvas). State, not a ref: the draw pass below only runs on
+  // dependency changes, so a late-arriving heatmap must trigger a redraw.
+  const [bgCanvas, setBgCanvas] = useState<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const offscreen = document.createElement("canvas");
-    offscreen.width = WIDTH;
-    offscreen.height = HEIGHT;
-    const ctx = offscreen.getContext("2d");
-    if (!ctx) return;
-
-    const toCoordX = (px: number) => (px / WIDTH) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((HEIGHT - py) / HEIGHT) * (2 * DOMAIN) - DOMAIN;
-
-    const imgData = ctx.createImageData(WIDTH, HEIGHT);
-    const buf32 = new Uint32Array(imgData.data.buffer);
-
-    for (let py = 0; py < HEIGHT; py++) {
-      const y = toCoordY(py);
-      const rowOffset = py * WIDTH;
-
-      for (let px = 0; px < WIDTH; px++) {
-        const x = toCoordX(px);
-        const v = fn.f(x, y);
-        const norm = Math.tanh(v / 30);
-
-        const r = (10 + 15 * norm) | 0;
-        const g = (25 + 75 * (1 - norm)) | 0;
-        const b = (45 + 120 * (1 - norm)) | 0;
-        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    bgCanvasRef.current = offscreen;
-  }, [fn]);
+    let live = true;
+    const fieldId =
+      objKey === "cigar" ? ("cigar-x100" as const) : objKey === "rosenbrock" ? ("rosenbrock100" as const) : ("sphere" as const);
+    buildHeatmapCanvas({
+      field: fieldId,
+      width: WIDTH,
+      height: HEIGHT,
+      xmin: -DOMAIN,
+      xmax: DOMAIN,
+      ymin: -DOMAIN,
+      ymax: DOMAIN,
+      norm: { mode: "tanh", k: 30 },
+      ramp: { r0: 10, rk: 15, g0: 25, gk: 75, b0: 45, bk: 120 },
+      fallbackField: fn.f
+    }).then((canvas) => {
+      if (live && canvas) setBgCanvas(canvas);
+    });
+    return () => {
+      live = false;
+    };
+  }, [objKey, fn]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -105,8 +100,8 @@ export function CovarianceMinimap() {
     ctx.clearRect(0, 0, W, H);
 
     // 1. Draw Cached Heatmap Contours
-    if (bgCanvasRef.current) {
-      ctx.drawImage(bgCanvasRef.current, 0, 0, W, H);
+    if (bgCanvas) {
+      ctx.drawImage(bgCanvas, 0, 0, W, H);
     }
 
     // 2. Draw Subtle Axes
@@ -248,7 +243,7 @@ export function CovarianceMinimap() {
     ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }, [fn, progress, showNaturalGrad]);
+  }, [fn, progress, showNaturalGrad, bgCanvas]);
 
   return (
     <div className="glass-card p-6 my-6 space-y-5">

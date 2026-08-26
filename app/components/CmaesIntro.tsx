@@ -23,6 +23,7 @@ import {
   Target
 } from "lucide-react";
 import { eigen2x2, sampleGaussian, sampleGaussian2D } from "../lib/cmaesEngine";
+import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 import { useInView } from "../hooks/useScrollSpy";
 
 interface InteractiveSample {
@@ -395,44 +396,39 @@ function GaussianDistributionSandbox() {
     return () => clearInterval(timer);
   }, [isPlaying, speedMs, stepGeneration]);
 
-  // Pre-render background heatmap offscreen once per landscape switch
+  // Background heatmap, rasterized per landscape switch by the FrankenSim
+  // fs-heatmap-wasm kernel (pixel-identical JS fallback inside
+  // buildHeatmapCanvas), off the switch's paint path either way. Kept in a
+  // ref: the rAF loop below reads it every frame, so late arrival needs no
+  // re-render.
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  // Pre-render Background Heatmap whenever landscape changes (Offscreen Canvas)
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const offscreen = document.createElement("canvas");
-    const W = 1080;
-    const H = 760;
-    offscreen.width = W;
-    offscreen.height = H;
-    const ctx = offscreen.getContext("2d");
-    if (!ctx) return;
-
-    const DOMAIN = 2.4;
-    const toCoordX = (px: number) => (px / W) * (2 * DOMAIN) - DOMAIN;
-    const toCoordY = (py: number) => ((H - py) / H) * (2 * DOMAIN) - DOMAIN;
-
-    const imgData = ctx.createImageData(W, H);
-    const buf32 = new Uint32Array(imgData.data.buffer);
-    const denom = activeLandscapeKey === "cigar" ? 25 : 8;
-
-    for (let py = 0; py < H; py++) {
-      const y = toCoordY(py);
-      const rowOffset = py * W;
-
-      for (let px = 0; px < W; px++) {
-        const x = toCoordX(px);
-        const f = landscape.fn(x, y);
-        const norm = Math.tanh(f / denom);
-
-        const r = (8 + 22 * norm) | 0;
-        const g = (20 + 70 * (1 - norm)) | 0;
-        const b = (40 + 130 * (1 - norm)) | 0;
-        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    bgCanvasRef.current = offscreen;
+    let live = true;
+    const fieldId =
+      activeLandscapeKey === "rosenbrock"
+        ? ("rosenbrock10" as const)
+        : activeLandscapeKey === "cigar"
+          ? ("rot-cigar80" as const)
+          : activeLandscapeKey === "rastrigin"
+            ? ("rastrigin" as const)
+            : ("ackley" as const);
+    buildHeatmapCanvas({
+      field: fieldId,
+      width: 1080,
+      height: 760,
+      xmin: -2.4,
+      xmax: 2.4,
+      ymin: -2.4,
+      ymax: 2.4,
+      norm: { mode: "tanh", k: activeLandscapeKey === "cigar" ? 25 : 8 },
+      ramp: { r0: 8, rk: 22, g0: 20, gk: 70, b0: 40, bk: 130 },
+      fallbackField: landscape.fn
+    }).then((canvas) => {
+      if (live && canvas) bgCanvasRef.current = canvas;
+    });
+    return () => {
+      live = false;
+    };
   }, [activeLandscapeKey, landscape]);
 
   // Smooth 60fps Animation Loop with linear interpolation (throttled when offscreen)

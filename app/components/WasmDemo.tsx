@@ -32,6 +32,7 @@ import {
   runRandomSearch,
   BaselineStepState
 } from "../lib/cmaesEngine";
+import { buildHeatmapCanvas, HeatmapFieldId } from "../lib/frankensimHeatmap";
 
 export function WasmDemo() {
   const [selectedBenchId, setSelectedBenchId] = useState<string>("rosenbrock");
@@ -280,42 +281,41 @@ export function WasmDemo() {
     pc1: 0,
   });
 
-  // Pre-render background heatmap offscreen once per benchmark switch
+  // Background heatmap, rasterized per benchmark switch by the FrankenSim
+  // fs-heatmap-wasm kernel (pixel-identical JS fallback inside
+  // buildHeatmapCanvas), off the switch's paint path either way. Kept in a
+  // ref: the rAF loop below reads it every frame, so late arrival needs no
+  // re-render.
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const offscreen = document.createElement("canvas");
-    const W = 1120;
-    const H = 840;
-    offscreen.width = W;
-    offscreen.height = H;
-    const ctx = offscreen.getContext("2d");
-    if (!ctx) return;
-
+    let live = true;
+    const fieldByBench: Record<string, HeatmapFieldId | undefined> = {
+      rosenbrock: "rosenbrock100",
+      rastrigin: "rastrigin",
+      ackley: "ackley",
+      cigar: "cigar-y1000",
+      himmelblau: "himmelblau",
+      step_ridge: "step-ridge"
+    };
+    const fieldId = fieldByBench[currentBench.id];
+    if (!fieldId) return;
     const [dMin, dMax] = currentBench.domain;
-    const toCoordX = (px: number) => (px / W) * (dMax - dMin) + dMin;
-    const toCoordY = (py: number) => ((H - py) / H) * (dMax - dMin) + dMin;
-
-    const imgData = ctx.createImageData(W, H);
-    const buf32 = new Uint32Array(imgData.data.buffer);
-
-    for (let py = 0; py < H; py++) {
-      const y = toCoordY(py);
-      const rowOffset = py * W;
-
-      for (let px = 0; px < W; px++) {
-        const x = toCoordX(px);
-        const f = currentBench.eval(x, y);
-        const logF = Math.log10(Math.max(1e-4, f + 1e-4));
-        const norm = Math.max(0, Math.min(1, logF / 4));
-
-        const r = (6 + 18 * norm) | 0;
-        const g = (16 + 85 * (1 - norm)) | 0;
-        const b = (32 + 130 * (1 - norm)) | 0;
-        buf32[rowOffset + px] = (255 << 24) | (b << 16) | (g << 8) | r;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    bgCanvasRef.current = offscreen;
+    buildHeatmapCanvas({
+      field: fieldId,
+      width: 1120,
+      height: 840,
+      xmin: dMin,
+      xmax: dMax,
+      ymin: dMin,
+      ymax: dMax,
+      norm: { mode: "log10eps", k: 4 },
+      ramp: { r0: 6, rk: 18, g0: 16, gk: 85, b0: 32, bk: 130 },
+      fallbackField: currentBench.eval
+    }).then((canvas) => {
+      if (live && canvas) bgCanvasRef.current = canvas;
+    });
+    return () => {
+      live = false;
+    };
   }, [currentBench]);
 
   // --- Render 2D Contour Map, Samples, Ellipses, Paths with smooth 60fps interpolation (throttled when offscreen) ---
