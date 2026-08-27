@@ -1,0 +1,32 @@
+{
+  "dim": 24,
+  "lambda": 13,
+  "warmupCallsPerVariant": 2000,
+  "trials": 60,
+  "kernelsPerTrial": 1000,
+  "summary": {
+    "nested": {
+      "p50MsPer1000": 4.544500000000028,
+      "p95MsPer1000": 5.028458999999998,
+      "checksum": 3680.64375821341
+    },
+    "typedOwned": {
+      "p50MsPer1000": 2.843917000000033,
+      "p95MsPer1000": 3.1452919999999267,
+      "checksum": 3680.64375821341
+    },
+    "flatNumberOwned": {
+      "p50MsPer1000": 3.3915420000000154,
+      "p95MsPer1000": 3.7043339999999887,
+      "checksum": 3680.64375821341
+    },
+    "typedVsNested": {
+      "p50Percent": -37.42068434371183,
+      "p95Percent": -37.450181059447274
+    },
+    "flatNumberVsNested": {
+      "p50Percent": -25.370403784794927,
+      "p95Percent": -26.332619993521078
+    }
+  }
+}
