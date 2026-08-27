@@ -86,12 +86,12 @@ let loadPromise: Promise<CmaesKernelStatus> | null = null;
 
 /**
  * Fail closed until a kernel version has passed the same reference audit as
- * the TypeScript engine. Version 0.2.0 breaks the h-sigma normalizer. Version
- * 0.2.1 fixes that recurrence, but still uses a noncanonical damping formula
- * and emits pre-update covariance factors alongside post-update mean, sigma,
- * and paths. Neither version is a coherent reference-compatible snapshot.
+ * the TypeScript engine. Versions 0.2.0 and 0.2.1 remain rejected for their
+ * broken h-sigma/damping and mixed pre/post-update snapshot semantics. Version
+ * 0.3.0 matches the audited Hansen couplings, RNG consumption, latent
+ * reflection adaptation, and coherent post-update snapshot contract.
  */
-const AUDITED_CMAES_KERNEL_VERSIONS = new Set<string>();
+const AUDITED_CMAES_KERNEL_VERSIONS = new Set(["fs-cmaes-viz-wasm 0.3.0"]);
 
 export function isCompatibleCmaesKernelVersion(version: string | null): boolean {
   return version !== null && AUDITED_CMAES_KERNEL_VERSIONS.has(version);
@@ -139,7 +139,7 @@ export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
         return {
           source: "ts-fallback",
           kernelVersion: version,
-          error: `unsupported CMA-ES kernel ${version ?? "unknown"}; no FrankenSim CMA-ES kernel version has passed the current reference audit`
+          error: `unsupported CMA-ES kernel ${version ?? "unknown"}; version is not in the audited compatibility set`
         };
       }
       fsCmaesModule = mod;
@@ -290,9 +290,9 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 
   return run.generations.map((gen, generationIndex) => {
     const lambda = gen.se.length;
-    // Kernel snapshots store samples in ask-order. `se` is a selection mask
-    // in the kernel's internal ordering and is not aligned with `sf`/`sx`, so
-    // derive ranks and elites from the actual sample fitnesses displayed.
+    // Audited kernels store population streams in rank order. Derive ranks
+    // defensively from displayed fitnesses anyway so this pure adapter also
+    // handles synthetic fixtures and rejects no otherwise-renderable stream.
     const sortedIndices = Array.from({ length: lambda }, (_, i) => i).sort((a, b) => {
       const fa = Number.isFinite(gen.sf[a]) ? gen.sf[a] : Infinity;
       const fb = Number.isFinite(gen.sf[b]) ? gen.sf[b] : Infinity;
@@ -311,9 +311,9 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       runningBestObservedFitness = generationBestFitness;
       runningBestX = gen.sx.slice(generationBestIndex * n, (generationBestIndex + 1) * n);
     }
-    // Defensive spectrum sanitizing: kernel v0.2.0 repairs C to positive
-    // definite before snapshotting, but a stale v0.1.0 bundle cached by a
-    // browser could still report an indefinite spectrum with an absurd cond.
+    // Defensive spectrum sanitizing at the adapter boundary. The loader
+    // admits only audited kernels, while this exported pure mapper is also
+    // exercised directly with synthetic snapshots.
     const eigenvalues = gen.eigvals.map((v) => Math.max(v, 0));
     const evMin = eigenvalues[0];
     const evMax = eigenvalues[eigenvalues.length - 1];

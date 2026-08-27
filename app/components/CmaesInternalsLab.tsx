@@ -147,6 +147,7 @@ export function CmaesInternalsLab() {
         seed,
         noiseLevel: noise,
         bounds: boundsEnabled ? ([-2, 2] as [number, number]) : ([-1e9, 1e9] as [number, number]),
+        repairStrategy: boundsEnabled ? "reflect" : "none",
       });
       const hist: CMAESGenerationStateND[] = [];
       for (let i = 0; i < generations; i++) hist.push(opt.step());

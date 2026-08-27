@@ -304,8 +304,76 @@ test("WASM snapshot spectra use the same largest-first contract as the TypeScrip
   expect(illConditionedState.phaseSpace3D.conditionNumber).toBe(4e20);
 });
 
-test("rejects every known FrankenSim kernel with reference-breaking updates", () => {
+test("rejects reference-breaking kernels and accepts the audited release", () => {
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.0")).toBe(false);
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(false);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.3.0")).toBe(true);
   expect(isCompatibleCmaesKernelVersion(null)).toBe(false);
+});
+
+test("audited WASM first-generation state matches the TypeScript reference", async () => {
+  const wasm = await import("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm.js");
+  const wasmBytes = await Bun.file(
+    new URL("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+  ).arrayBuffer();
+  await wasm.default({ module_or_path: wasmBytes });
+
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.3.0");
+
+  const initialMean = [1.5, -1, 2, 0.5, -0.5];
+  const rosenbrock = (x: number[]): number => {
+    let sum = 0;
+    for (let i = 0; i < x.length - 1; i++) {
+      sum += 100 * (x[i + 1] - x[i] * x[i]) ** 2 + (1 - x[i]) ** 2;
+    }
+    return sum;
+  };
+  const tsState = new CMAESOptimizerND(rosenbrock, {
+    dim: 5,
+    initialMean,
+    initialSigma: 0.3,
+    lambda: 16,
+    activeCMA: true,
+    seed: 1337,
+    bounds: [-1e9, 1e9],
+    repairStrategy: "none"
+  }).step();
+  const envelope = JSON.parse(
+    wasm.cmaes_viz_run(
+      5,
+      initialMean[0],
+      initialMean[1],
+      initialMean[2],
+      initialMean[3],
+      initialMean[4],
+      0,
+      0.3,
+      16,
+      true,
+      1337n,
+      1,
+      1,
+      0,
+      false,
+      -2,
+      2,
+      NaN
+    )
+  ) as { ok?: CmaesVizRun; refusal?: { code: string } };
+  expect(envelope.refusal).toBeUndefined();
+  const wasmState = envelope.ok?.generations[0];
+  expect(wasmState).toBeDefined();
+  if (!wasmState) throw new Error("WASM returned no first-generation snapshot");
+
+  const maxAbsDifference = (left: number[], right: number[]): number =>
+    Math.max(...left.map((value, index) => Math.abs(value - right[index])));
+  const tsEigenvaluesAscending = [...tsState.eigenvalues].reverse();
+
+  expect(maxAbsDifference(wasmState.sz, tsState.samples.flatMap((sample) => sample.z))).toBeLessThan(2e-15);
+  expect(maxAbsDifference(wasmState.sx, tsState.samples.flatMap((sample) => sample.x))).toBeLessThan(2e-15);
+  expect(maxAbsDifference(wasmState.mean, tsState.mean)).toBeLessThan(2e-15);
+  expect(maxAbsDifference(wasmState.eigvals, tsEigenvaluesAscending)).toBeLessThan(2e-15);
+  expect(Math.abs(wasmState.sigma - tsState.sigma)).toBeLessThan(2e-15);
+  expect(Math.abs(wasmState.best_f - tsState.bestFitness)).toBeLessThan(2e-12);
+  expect(wasmState.cond).toBeCloseTo(tsState.conditionNumber, 12);
 });
