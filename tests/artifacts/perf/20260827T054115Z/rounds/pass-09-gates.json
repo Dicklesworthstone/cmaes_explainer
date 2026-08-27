@@ -1,0 +1,45 @@
+{
+  "decision": "rejected",
+  "productionChangeRetained": false,
+  "candidateBenchmarkChecksumExact": true,
+  "candidateGoldenDimensions": [1, 2, 4, 8, 12, 24, 48],
+  "candidateGoldensByteExact": true,
+  "candidateTests": {
+    "passed": 16,
+    "failed": 0,
+    "assertions": 157
+  },
+  "candidateOwnershipChecks": {
+    "rawX_x_z_distinctWithinEachCandidate": true,
+    "everyFirstGenerationNumericArrayHasUniqueOwnership": true,
+    "everySecondGenerationNumericArrayHasUniqueOwnership": true,
+    "noCandidateNumericArraySharedAcrossGenerations": true,
+    "objectiveReceivedRetainedXReferences": true,
+    "objectiveInputsUniqueForFirstGeneration": true,
+    "firstSnapshotUnchangedAfterNextStep": true,
+    "laterRawXMutationDoesNotChangeFirstSnapshot": true,
+    "historyRetainsExactFirstStateObject": true,
+    "historyRetainsExactSecondStateObject": true
+  },
+  "retainedTests": {
+    "passed": 16,
+    "failed": 0,
+    "assertions": 157
+  },
+  "typecheck": "pass",
+  "lint": "pass_with_preexisting_baseline_browser_mapping_age_advisory",
+  "format": "not_applicable_no_format_script_and_no_production_diff",
+  "ubs": {
+    "exitCode": 0,
+    "criticalFindings": 0,
+    "note": "Broad heuristic notices were pre-existing and unrelated to the restored empty production diff."
+  },
+  "authoritativeGoldenChecksums": "all_seven_ok",
+  "restoredEngineSha256": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "engineDiffEmpty": true,
+  "gitDiffCheck": "pass",
+  "campaignLedgerTouched": false,
+  "commitCreated": false,
+  "filesDeleted": false,
+  "destructiveCommandUsed": false
+}

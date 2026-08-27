@@ -1,0 +1,15 @@
+{
+  "rawX_x_z_distinctWithinEachCandidate": true,
+  "everyFirstGenerationNumericArrayHasUniqueOwnership": true,
+  "everySecondGenerationNumericArrayHasUniqueOwnership": true,
+  "noCandidateNumericArraySharedAcrossGenerations": true,
+  "objectiveReceivedRetainedXReferences": true,
+  "objectiveInputsUniqueForFirstGeneration": true,
+  "firstSnapshotUnchangedAfterNextStep": true,
+  "laterRawXMutationDoesNotChangeFirstSnapshot": true,
+  "historyRetainsExactFirstStateObject": true,
+  "historyRetainsExactSecondStateObject": true,
+  "historyLength": 2,
+  "firstSampleCount": 10,
+  "secondSampleCount": 10
+}

@@ -1,0 +1,106 @@
+{
+  "engineSha256Before": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "candidateEngineSha256": "23bce7aa50d558b233b76eb11cc78172ef8a2471314c9f30520c84d0cd9e5e45",
+  "engineSha256AfterRestoration": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "opportunity": {
+    "lever": "reuse one private transform accumulator for all candidates and generations of an optimizer",
+    "impact": 2,
+    "confidence": 5,
+    "effort": 1,
+    "score": 10,
+    "threshold": 2,
+    "eligibleForScreening": true
+  },
+  "allocationAccountingForMeasuredRepresentativeRun": {
+    "dimensions": 24,
+    "populationSize": 13,
+    "generationsPerTrial": 250,
+    "measuredTrials": 300,
+    "baselineTransientTransformArrays": 975000,
+    "candidatePrivateWorkspaceArrays": 300,
+    "transientTransformArraysAvoided": 974700,
+    "transientTransformArrayReductionPercent": 99.96923076923076,
+    "requiredRetainedCandidateArraysUnchanged": 2925000,
+    "requiredRetainedArrayKinds": ["z", "rawX", "x"]
+  },
+  "representative": {
+    "before": {
+      "p50Ms": 57.06091699999979,
+      "p95Ms": 58.86904200000026,
+      "p99Ms": 64.53641600000083,
+      "evaluationsPerSecond": 56665.09920017965,
+      "checksum": 24940.517463897122
+    },
+    "candidate": {
+      "p50Ms": 56.66187499999978,
+      "p95Ms": 58.092124999999214,
+      "p99Ms": 65.18904199999997,
+      "evaluationsPerSecond": 57041.90980511846,
+      "checksum": 24940.517463897122
+    },
+    "changePercent": {
+      "p50": -0.699326300697218,
+      "p95": -1.319737800389287,
+      "p99": 1.011252313731114,
+      "evaluationsPerSecond": 0.6649782851480839
+    },
+    "sameSeedP95EnvelopePercent": 4.8,
+    "outsideEnvelope": false
+  },
+  "matchedCpuProfile": {
+    "intervalMicroseconds": 500,
+    "measuredTrials": 150,
+    "warmups": 10,
+    "before": {
+      "durationMs": 9266.22325,
+      "totalSamples": 12024,
+      "transformSelfSamples": 598,
+      "transformSelfSharePercent": 4.973386560212908,
+      "workloadEvaluationsPerSecond": 56416.66593222775
+    },
+    "candidate": {
+      "durationMs": 9442.43,
+      "totalSamples": 13290,
+      "transformSelfSamples": 687,
+      "transformSelfSharePercent": 5.169300225733634,
+      "workloadEvaluationsPerSecond": 55380.36326957522
+    },
+    "changePercent": {
+      "duration": 1.90160268370397,
+      "transformSelfShare": 3.9392406592328024,
+      "workloadEvaluationsPerSecond": -1.8368732811992505
+    },
+    "independentTargetedCpuWin": false
+  },
+  "matchedHeapInstrumentedRun": {
+    "measuredTrials": 40,
+    "warmups": 10,
+    "before": {
+      "p95Ms": 58.507499999999936,
+      "p99Ms": 60.61783400000013,
+      "evaluationsPerSecond": 56769.4514966514,
+      "snapshotNodeCount": 8450,
+      "snapshotTotalSelfSizeBytes": 1333689
+    },
+    "candidate": {
+      "p95Ms": 59.80799999999999,
+      "p99Ms": 63.74633300000005,
+      "evaluationsPerSecond": 56235.70825440062,
+      "snapshotNodeCount": 8477,
+      "snapshotTotalSelfSizeBytes": 1332930
+    },
+    "changePercent": {
+      "p95": 2.222791949750131,
+      "p99": 5.161020764945038,
+      "evaluationsPerSecond": -0.9401944675866172,
+      "snapshotNodeCount": 0.31952662721893493,
+      "snapshotTotalSelfSizeBytes": -0.0569098193057002
+    },
+    "traceFunctionCount": 0,
+    "traceTreeEntries": 0,
+    "sampledAllocationEntries": 0,
+    "note": "Bun emitted terminal heap snapshots, not transient allocation traces; exact source-level allocation accounting is therefore the relevant allocation proof."
+  },
+  "decision": "rejected",
+  "productionChangeRetained": false
+}
