@@ -1,0 +1,31 @@
+{
+  "decision": "accepted",
+  "productionChangeRetained": true,
+  "singleLever": true,
+  "opportunityScore": 10,
+  "focusedP95ImprovementPercent": 13.553438835125597,
+  "focusedThroughputImprovementPercent": 17.301976742034576,
+  "integratedP95ImprovementVersusClosestBeforePercent": 22.512146218023787,
+  "integratedThroughputImprovementVersusClosestBeforePercent": 14.363689778002996,
+  "profiledJacobiSelfTimeImprovementPercent": 26.42857142857143,
+  "profiledJacobiTotalTimeImprovementPercent": 25.62929061784897,
+  "goldensExact": true,
+  "dimensionsVerified": [1, 2, 4, 8, 12, 24, 48],
+  "tests": {
+    "passed": 16,
+    "failed": 0,
+    "assertions": 157
+  },
+  "properties": {
+    "passed": 99433888,
+    "failed": 0
+  },
+  "typecheck": "pass",
+  "lint": "pass_with_preexisting_browser_data_advisory",
+  "format": "no_script_exists",
+  "ubsCriticalFindings": 0,
+  "diffCheck": "pass",
+  "maximumResidentSetBytes": 83197952,
+  "rssGuardrailBytes": 90166067,
+  "rssWithinGuardrail": true
+}

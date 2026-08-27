@@ -1,0 +1,145 @@
+{
+  "decision": "accept_split_jacobi_upper_triangle_traversal",
+  "productionChangeRetained": true,
+  "acceptedEngineSha256": "a05cc55aa80e8c5831f51126fd4b6c5c0721c85b479c914b6ba7253f2ac0f93a",
+  "freshProfile": {
+    "dimension": 24,
+    "generationsPerTrial": 250,
+    "trials": 150,
+    "warmupTrials": 10,
+    "intervalMicroseconds": 500,
+    "durationSeconds": 10.27,
+    "samples": 13140,
+    "rankedRegions": [
+      {
+        "rank": 1,
+        "region": "jacobiEigenSymmetric",
+        "selfPercent": 40.9,
+        "totalPercent": 42.5,
+        "opportunity": "split the canonical upper-triangle rotation traversal into k<p, p<k<q, and q<k ranges",
+        "impact": 4,
+        "confidence": 5,
+        "effort": 2,
+        "score": 10,
+        "eligible": true
+      },
+      {
+        "rank": 2,
+        "region": "rank-mu covariance accumulation in step",
+        "selfPercent": 19.5,
+        "opportunity": "further layout or recomputation changes",
+        "impact": 3,
+        "confidence": 2,
+        "effort": 4,
+        "score": 1.5,
+        "eligible": false,
+        "reason": "Earlier integrated passes falsified typed flattening and on-demand recomputation; no new exact lever was isolated by this profile."
+      },
+      {
+        "rank": 3,
+        "region": "transformFromEigenCoordinates",
+        "selfPercent": 4.3,
+        "totalPercent": 4.4,
+        "impact": 1,
+        "confidence": 3,
+        "effort": 3,
+        "score": 1,
+        "eligible": false
+      },
+      {
+        "rank": 4,
+        "region": "mahalanobisSquaredWithEigensystem",
+        "selfPercent": 3,
+        "totalPercent": 3.1,
+        "impact": 1,
+        "confidence": 3,
+        "effort": 3,
+        "score": 1,
+        "eligible": false
+      },
+      {
+        "rank": 5,
+        "region": "reconstructSymmetric",
+        "selfPercent": 2.5,
+        "totalPercent": 2.9,
+        "impact": 1,
+        "confidence": 4,
+        "effort": 4,
+        "score": 1,
+        "eligible": false
+      }
+    ]
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "callsPerTrial": 1000,
+    "trials": 40,
+    "warmupCalls": 500,
+    "before": {
+      "p50Milliseconds": 74.18200000000002,
+      "p95Milliseconds": 76.67395799999986,
+      "p99Milliseconds": 86.48312500000009,
+      "callsPerSecond": 13349.333800328628,
+      "checksum": 140898.44266593037
+    },
+    "after": {
+      "p50Milliseconds": 63.515750000000025,
+      "p95Milliseconds": 66.28199999999998,
+      "p99Milliseconds": 67.09641599999998,
+      "callsPerSecond": 15659.032429678047,
+      "checksum": 140898.44266593037
+    },
+    "afterVersusBeforePercent": {
+      "p50": -14.378488042921445,
+      "p95": -13.553438835125597,
+      "p99": -22.41675355741376,
+      "callsPerSecond": 17.301976742034576
+    },
+    "checksumsExact": true
+  },
+  "integratedEvidence": {
+    "beforeP95Milliseconds": [71.92395899999974, 68.5141249999997],
+    "afterP95Milliseconds": 53.09012500000017,
+    "afterVersusClosestBeforePercent": -22.512146218023787,
+    "beforeEvaluationsPerSecond": [56250.08787778153, 55036.11398054887],
+    "afterEvaluationsPerSecond": 62941.33065858305,
+    "afterVersusClosestBeforeThroughputPercent": 14.363689778002996,
+    "checksumsExact": true
+  },
+  "matchedProfiles": {
+    "before": {
+      "durationSeconds": 10.27,
+      "samples": 13140,
+      "jacobiSelfMilliseconds": 4200,
+      "jacobiTotalMilliseconds": 4370,
+      "jacobiSelfPercent": 40.9,
+      "jacobiTotalPercent": 42.5
+    },
+    "after": {
+      "durationSeconds": 8.49,
+      "samples": 11046,
+      "jacobiSelfMilliseconds": 3090,
+      "jacobiTotalMilliseconds": 3250,
+      "jacobiSelfPercent": 36.4,
+      "jacobiTotalPercent": 38.3
+    },
+    "durationPercent": -17.33203505355404,
+    "jacobiSelfMillisecondsPercent": -26.42857142857143,
+    "jacobiTotalMillisecondsPercent": -25.62929061784897,
+    "checksumsExact": true
+  },
+  "behavior": {
+    "goldenDimensionsExact": [1, 2, 4, 8, 12, 24, 48],
+    "addressAndOrderingChecksPassed": 99433888,
+    "addressAndOrderingChecksFailed": 0,
+    "floatingPointOperationOrderExact": true,
+    "rngOrderUnchanged": true,
+    "candidateOrderingAndTieBreakingUnchanged": true,
+    "repairAndSnapshotSemanticsUnchanged": true
+  },
+  "memory": {
+    "maximumResidentSetBytes": 83197952,
+    "guardrailBytes": 90166067,
+    "withinGuardrail": true
+  }
+}

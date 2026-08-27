@@ -126,10 +126,12 @@ export function jacobiEigenSymmetric(
   for (let sweep = 0; sweep < maxSweeps; sweep++) {
     residual = 0;
     for (let p = 0; p < n - 1; p++) {
+      const pOffset = p * n;
       for (let q = p + 1; q < n; q++) {
-        const pp = p * n + p;
-        const qq = q * n + q;
-        const pq = p * n + q;
+        const qOffset = q * n;
+        const pp = pOffset + p;
+        const qq = qOffset + q;
+        const pq = pOffset + q;
         const apq = a[pq];
         residual = Math.max(residual, Math.abs(apq));
         if (Math.abs(apq) <= absoluteTolerance) continue;
@@ -147,10 +149,30 @@ export function jacobiEigenSymmetric(
         const cosine = 1 / Math.sqrt(1 + t * t);
         const sine = t * cosine;
 
-        for (let k = 0; k < n; k++) {
-          if (k === p || k === q) continue;
-          const kp = k < p ? k * n + p : p * n + k;
-          const kq = k < q ? k * n + q : q * n + k;
+        for (let k = 0; k < p; k++) {
+          const kOffset = k * n;
+          const kp = kOffset + p;
+          const kq = kOffset + q;
+          const akp = a[kp];
+          const akq = a[kq];
+          const rotatedP = cosine * akp - sine * akq;
+          const rotatedQ = sine * akp + cosine * akq;
+          a[kp] = rotatedP;
+          a[kq] = rotatedQ;
+        }
+        for (let k = p + 1; k < q; k++) {
+          const kp = pOffset + k;
+          const kq = k * n + q;
+          const akp = a[kp];
+          const akq = a[kq];
+          const rotatedP = cosine * akp - sine * akq;
+          const rotatedQ = sine * akp + cosine * akq;
+          a[kp] = rotatedP;
+          a[kq] = rotatedQ;
+        }
+        for (let k = q + 1; k < n; k++) {
+          const kp = pOffset + k;
+          const kq = qOffset + k;
           const akp = a[kp];
           const akq = a[kq];
           const rotatedP = cosine * akp - sine * akq;
