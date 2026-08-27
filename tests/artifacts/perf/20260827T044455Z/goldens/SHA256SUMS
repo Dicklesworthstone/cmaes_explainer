@@ -1,0 +1,5 @@
+fb8011ba3c75e45704e8bea1714384bb1630e34993c2d4eaa9f446fdd461ffb0  tests/artifacts/perf/20260827T044455Z/goldens/dim-12.json
+fc607b5c5c03254057ff93330105efd230bf24b64cec0ff690d4c5bd6844cfd3  tests/artifacts/perf/20260827T044455Z/goldens/dim-2.json
+0e49904638e68a3cf227610e03cef461cf07fe4c705d692defcbb22183610213  tests/artifacts/perf/20260827T044455Z/goldens/dim-24.json
+3007675b3ad1bedef4712fbfe6c9a547a51013e3df36be039d510ab5aa5dedbe  tests/artifacts/perf/20260827T044455Z/goldens/dim-4.json
+96f37fef4a5b7ee5323fd73177a2b466f3b5c7af8310a904e12e48c2bc582906  tests/artifacts/perf/20260827T044455Z/goldens/dim-8.json

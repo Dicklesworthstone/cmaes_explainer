@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "test": "bun test",
+    "bench:cmaes": "bun tests/perf/cmaesEngine.bench.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

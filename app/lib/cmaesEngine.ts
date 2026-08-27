@@ -373,7 +373,7 @@ export class CMAESOptimizer {
     this.sigma = options.initialSigma ?? 0.5;
     if (!Number.isFinite(this.sigma) || this.sigma <= 0) throw new RangeError("initialSigma must be a finite positive number.");
 
-    this.lambda = options.lambda ?? Math.max(8, 4 + Math.floor(3 * Math.log(this.dim)));
+    this.lambda = options.lambda ?? 4 + Math.floor(3 * Math.log(this.dim));
     if (!Number.isInteger(this.lambda) || this.lambda < 2) throw new RangeError("lambda must be an integer of at least 2.");
 
     this.activeCMA = options.activeCMA ?? true;
@@ -486,8 +486,8 @@ export class CMAESOptimizer {
     let newMean0 = 0;
     let newMean1 = 0;
     for (let i = 0; i < this.mu; i++) {
-      newMean0 += this.weights[i] * candidates[i].x[0];
-      newMean1 += this.weights[i] * candidates[i].x[1];
+      newMean0 += this.weights[i] * candidates[i].rawX[0];
+      newMean1 += this.weights[i] * candidates[i].rawX[1];
     }
     this.mean = [newMean0, newMean1];
 
@@ -515,8 +515,8 @@ export class CMAESOptimizer {
     let rankMu01 = 0;
     let rankMu11 = 0;
     for (let i = 0; i < this.lambda; i++) {
-      const y0 = (candidates[i].x[0] - oldMean0) / oldSigma;
-      const y1 = (candidates[i].x[1] - oldMean1) / oldSigma;
+      const y0 = (candidates[i].rawX[0] - oldMean0) / oldSigma;
+      const y1 = (candidates[i].rawX[1] - oldMean1) / oldSigma;
       let weight = this.covarianceWeights[i];
       if (weight < 0) {
         const white0 = inv00 * y0 + inv01 * y1;
@@ -543,7 +543,7 @@ export class CMAESOptimizer {
     const updatedEigen = eigen2x2(this.C[0][0], this.C[0][1], this.C[1][1]);
     const state: CMAESGenerationState = {
       generation: this.generation,
-      mean: [...this.mean],
+      mean: this.mean.map((value) => this.repair(value)),
       sigma: this.sigma,
       covariance: cloneMatrix(this.C),
       pSigma: [...this.pSigma],

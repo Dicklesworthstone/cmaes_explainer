@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { BENCHMARKS, CMAESOptimizer } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
-import { wasmRunToNdStates, type CmaesVizGeneration, type CmaesVizRun } from "./frankensimCmaes";
+import {
+  isCompatibleCmaesKernelVersion,
+  wasmRunToNdStates,
+  type CmaesVizGeneration,
+  type CmaesVizRun
+} from "./frankensimCmaes";
 import {
   evaluateBridgePhysics,
   evaluateWingPhysics,
@@ -18,6 +23,11 @@ const benchmarkCases = [
 ] as const;
 
 describe("shared CMA-ES engines", () => {
+  test("uses Hansen's canonical default population size", () => {
+    expect(new CMAESOptimizer((x, y) => x * x + y * y).lambda).toBe(6);
+    expect(new CMAESOptimizerND((x) => x.reduce((sum, value) => sum + value * value, 0), { dim: 2 }).lambda).toBe(6);
+  });
+
   for (const preset of benchmarkCases) {
     test(`converges on the curated ${preset.id} preset`, () => {
       const benchmark = BENCHMARKS.find((candidate) => candidate.id === preset.id)!;
@@ -73,6 +83,31 @@ describe("shared CMA-ES engines", () => {
     expect(state.bestFitness).toBeLessThan(1e-6);
     expect(state.eigenvalues.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
     expect(state.covariance.every((row, i) => row.every((value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12))).toBe(true);
+  });
+
+  test("ranks repaired phenotypes but adapts the unmodified genotypes at boundaries", () => {
+    const optimizer = new CMAESOptimizerND((x) => x[0] + x[1], {
+      dim: 2,
+      initialMean: [0.1, 0.1],
+      initialSigma: 1,
+      lambda: 10,
+      seed: 7,
+      bounds: [0, 1],
+      repairStrategy: "clip"
+    });
+
+    const state = optimizer.step();
+    const expectedGenotypeMean = [0, 1].map((dimension) =>
+      state.samples.slice(0, optimizer.mu).reduce(
+        (sum, sample, rank) => sum + optimizer.weights[rank] * sample.rawX[dimension],
+        0
+      )
+    );
+
+    expect(state.samples.some((sample) => sample.rawX.some((value, dimension) => value !== sample.x[dimension]))).toBe(true);
+    expect(optimizer.mean[0]).toBeCloseTo(expectedGenotypeMean[0], 14);
+    expect(optimizer.mean[1]).toBeCloseTo(expectedGenotypeMean[1], 14);
+    expect(state.mean).toEqual(expectedGenotypeMean.map((value) => Math.min(1, Math.max(0, value))));
   });
 });
 
@@ -178,4 +213,10 @@ test("WASM snapshots rank ask-order samples and retain only historical informati
   expect(states[0].bestX).toEqual([1, 0, 0]);
   expect(states[1].bestX).toEqual([1, 0, 0]);
   expect(states[0].bestX).not.toEqual(run.best_x);
+});
+
+test("rejects the bundled CMA-ES kernel with the broken h-sigma normalizer", () => {
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.0")).toBe(false);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(true);
+  expect(isCompatibleCmaesKernelVersion(null)).toBe(false);
 });

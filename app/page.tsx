@@ -48,7 +48,7 @@ export default function Page() {
               <Section id="live-demo" title="Live CMA-ES landscape explorer (TypeScript + WASM)">
                 <WasmDemo />
               </Section>
-              <Section id="internals" title="Inside the optimizer: covariance geometry in 3D (frankensim WASM)">
+              <Section id="internals" title="Inside the optimizer: covariance geometry in 3D">
                 <CmaesInternalsLab />
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">

@@ -84,6 +84,15 @@ let fsCmaesModule: WasmModule | null = null;
 let loadAttempted = false;
 let loadPromise: Promise<CmaesKernelStatus> | null = null;
 
+/**
+ * Version 0.2.0 computes the h_sigma normalizer as a product instead of a
+ * power. It becomes NaN after a few generations and disables rank-one
+ * covariance learning, so only the audited corrected kernel is accepted.
+ */
+export function isCompatibleCmaesKernelVersion(version: string | null): boolean {
+  return version === "fs-cmaes-viz-wasm 0.2.1";
+}
+
 async function loadWasmModule(jsPath: string, wasmPath: string): Promise<WasmModule> {
   if (typeof window === "undefined") throw new Error("SSR context");
   const jsText = await fetch(jsPath, { signal: AbortSignal.timeout(10_000) }).then((r) => {
@@ -121,8 +130,15 @@ export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
       if (typeof mod.cmaes_viz_run !== "function") {
         return { source: "ts-fallback", kernelVersion: null, error: "missing export cmaes_viz_run" };
       }
-      fsCmaesModule = mod;
       const version = typeof mod.cmaes_viz_kernel_version === "function" ? mod.cmaes_viz_kernel_version() : null;
+      if (!isCompatibleCmaesKernelVersion(version)) {
+        return {
+          source: "ts-fallback",
+          kernelVersion: version,
+          error: `unsupported CMA-ES kernel ${version ?? "unknown"}; expected audited fs-cmaes-viz-wasm 0.2.1`
+        };
+      }
+      fsCmaesModule = mod;
       return { source: "wasm", kernelVersion: version, error: null };
     } catch (err) {
       return { source: "ts-fallback", kernelVersion: null, error: err instanceof Error ? err.message : String(err) };

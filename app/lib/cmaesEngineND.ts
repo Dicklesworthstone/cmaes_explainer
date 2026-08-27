@@ -237,6 +237,42 @@ function reconstructSymmetric(eigenvalues: number[], eigenvectors: MatrixND): Ma
   return result;
 }
 
+/** Apply B D to a standard-normal vector already expressed in eigen coordinates. */
+function transformFromEigenCoordinates(
+  eigenvalues: number[],
+  eigenvectors: MatrixND,
+  vector: VectorND
+): VectorND {
+  const n = eigenvalues.length;
+  const result = createZeroVector(n);
+  for (let column = 0; column < n; column++) {
+    const scaled = Math.sqrt(eigenvalues[column]) * vector[column];
+    for (let row = 0; row < n; row++) result[row] += eigenvectors[row][column] * scaled;
+  }
+  return result;
+}
+
+/** Apply C^-1/2 = B D^-1 B^T without materializing the dense matrix. */
+function whitenWithEigensystem(
+  eigenvalues: number[],
+  eigenvectors: MatrixND,
+  vector: VectorND
+): VectorND {
+  const n = eigenvalues.length;
+  const eigenCoordinates = createZeroVector(n);
+  for (let column = 0; column < n; column++) {
+    let coordinate = 0;
+    for (let row = 0; row < n; row++) coordinate += eigenvectors[row][column] * vector[row];
+    eigenCoordinates[column] = coordinate / Math.sqrt(eigenvalues[column]);
+  }
+
+  const result = createZeroVector(n);
+  for (let column = 0; column < n; column++) {
+    for (let row = 0; row < n; row++) result[row] += eigenvectors[row][column] * eigenCoordinates[column];
+  }
+  return result;
+}
+
 function nextOpenUnit(rng: () => number): number {
   for (let attempts = 0; attempts < 1024; attempts++) {
     const value = rng();
@@ -377,6 +413,7 @@ export class CMAESOptimizerND {
 
   private readonly rng: () => number;
   private readonly covarianceWeightSum: number;
+  private currentEigen: SymmetricEigendecompositionND;
   private previousProjectionBasis: MatrixND | null = null;
 
   constructor(private readonly objective: (x: VectorND) => number, options: CMAESOptionsND) {
@@ -411,6 +448,10 @@ export class CMAESOptimizerND {
     };
 
     this.C = createIdentityMatrix(this.dim);
+    this.currentEigen = {
+      eigenvalues: new Array(this.dim).fill(1),
+      eigenvectors: createIdentityMatrix(this.dim)
+    };
     this.pSigma = createZeroVector(this.dim);
     this.pC = createZeroVector(this.dim);
     this.bestX = [...this.mean];
@@ -497,16 +538,14 @@ export class CMAESOptimizerND {
   }
 
   step(): CMAESGenerationStateND {
-    const currentEigen = jacobiEigenSymmetric(this.C);
-    this.C = reconstructSymmetric(currentEigen.eigenvalues, currentEigen.eigenvectors);
-    const { sqrtC, invSqrtC } = computeCovariancePowers(currentEigen.eigenvalues, currentEigen.eigenvectors);
+    const currentEigen = this.currentEigen;
     const oldMean = [...this.mean];
     const oldSigma = this.sigma;
 
     const candidates: CandidateSampleND[] = [];
     for (let id = 0; id < this.lambda; id++) {
       const z = sampleGaussianVectorND(this.dim, this.rng);
-      const transformed = matVecMult(sqrtC, z);
+      const transformed = transformFromEigenCoordinates(currentEigen.eigenvalues, currentEigen.eigenvectors, z);
       const rawX = oldMean.map((mean, index) => mean + oldSigma * transformed[index]);
       const x = rawX.map((value) => this.repair(value));
       const trueFitness = safeObjectiveValue(this.objective(x));
@@ -538,12 +577,12 @@ export class CMAESOptimizerND {
     this.mean = createZeroVector(this.dim);
     for (let rank = 0; rank < this.mu; rank++) {
       for (let dimension = 0; dimension < this.dim; dimension++) {
-        this.mean[dimension] += this.weights[rank] * candidates[rank].x[dimension];
+        this.mean[dimension] += this.weights[rank] * candidates[rank].rawX[dimension];
       }
     }
 
     const meanShift = this.mean.map((value, dimension) => (value - oldMean[dimension]) / oldSigma);
-    const whitenedMeanShift = matVecMult(invSqrtC, meanShift);
+    const whitenedMeanShift = whitenWithEigensystem(currentEigen.eigenvalues, currentEigen.eigenvectors, meanShift);
     const pSigmaScale = Math.sqrt(this.cs * (2 - this.cs) * this.mueff);
     this.pSigma = this.pSigma.map(
       (value, dimension) => (1 - this.cs) * value + pSigmaScale * whitenedMeanShift[dimension]
@@ -558,12 +597,16 @@ export class CMAESOptimizerND {
     );
 
     const normalizedSteps = candidates.map((candidate) =>
-      candidate.x.map((value, dimension) => (value - oldMean[dimension]) / oldSigma)
+      candidate.rawX.map((value, dimension) => (value - oldMean[dimension]) / oldSigma)
     );
     const adjustedCovarianceWeights = [...this.covarianceWeights];
     for (let rank = this.mu; rank < this.lambda; rank++) {
       if (adjustedCovarianceWeights[rank] >= 0) continue;
-      const whitenedStep = matVecMult(invSqrtC, normalizedSteps[rank]);
+      const whitenedStep = whitenWithEigensystem(
+        currentEigen.eigenvalues,
+        currentEigen.eigenvectors,
+        normalizedSteps[rank]
+      );
       const mahalanobisSquared = vecDot(whitenedStep, whitenedStep);
       adjustedCovarianceWeights[rank] = mahalanobisSquared > 0
         ? adjustedCovarianceWeights[rank] * this.dim / mahalanobisSquared
@@ -589,16 +632,18 @@ export class CMAESOptimizerND {
     }
     const repairedEigen = jacobiEigenSymmetric(provisional, Math.max(50, 5 * this.dim));
     this.C = reconstructSymmetric(repairedEigen.eigenvalues, repairedEigen.eigenvectors);
+    this.currentEigen = repairedEigen;
 
     this.sigma = oldSigma * Math.exp(this.cs / this.damps * (pSigmaNorm / this.chiN - 1));
     if (!Number.isFinite(this.sigma)) this.sigma = this.sigma > 0 ? 1e16 : 1e-16;
     this.sigma = Math.min(1e16, Math.max(1e-16, this.sigma));
     this.generation++;
 
-    const updatedEigen = jacobiEigenSymmetric(this.C);
+    const updatedEigen = this.currentEigen;
     const projectionBasis = this.alignProjectionBasis(updatedEigen.eigenvectors);
+    const phenotypeMean = this.mean.map((value) => this.repair(value));
     candidates.forEach((candidate) => {
-      const centered = candidate.x.map((value, dimension) => value - this.mean[dimension]);
+      const centered = candidate.x.map((value, dimension) => value - phenotypeMean[dimension]);
       candidate.projected3D = this.projectTo3D(centered, projectionBasis);
     });
 
@@ -623,7 +668,7 @@ export class CMAESOptimizerND {
     const variancePerDim = this.C.map((row, dimension) => this.sigma ** 2 * row[dimension]);
     const state: CMAESGenerationStateND = {
       generation: this.generation,
-      mean: [...this.mean],
+      mean: phenotypeMean,
       sigma: this.sigma,
       covariance: cloneMatrix(this.C),
       pSigma: [...this.pSigma],
