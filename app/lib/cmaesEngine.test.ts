@@ -15,6 +15,10 @@ import {
   type WingParams
 } from "./frankensimPhysics";
 import { evaluateArchFitness } from "./nasObjective";
+import {
+  buildWingGeometryForRender,
+  buildWingRibsForRender
+} from "../components/WingViz";
 
 const benchmarkCases = [
   { id: "rosenbrock", start: [-1.6, -1.0] as [number, number], sigma: 0.4, lambda: 16 },
@@ -197,6 +201,44 @@ describe("advertised optimization dimensions", () => {
     for (const variant of variants) {
       expect(evaluateWingPhysics(variant, 0.78).costScore).not.toBe(baselineCost);
     }
+  });
+
+  test("every advertised wing geometry coordinate changes the actual Three.js render data", () => {
+    const baseline: WingParams = {
+      aspectRatio: 10.6,
+      sweepAngle: 25,
+      thicknessRatio: 0.12,
+      maxCamber: 0.036,
+      camberPosition: 0.4,
+      taperRatio: 0.56,
+      airfoilFamily: "Supercritical SC(2)",
+      internalRibCount: 22
+    };
+    const variants: WingParams[] = [
+      { ...baseline, aspectRatio: 14 },
+      { ...baseline, sweepAngle: 38 },
+      { ...baseline, thicknessRatio: 0.18 },
+      { ...baseline, maxCamber: 0.06 },
+      { ...baseline, camberPosition: 0.56 },
+      { ...baseline, taperRatio: 0.82 },
+      { ...baseline, airfoilFamily: "Laminar Flow Low-Re" }
+    ];
+
+    const baselineGeometry = buildWingGeometryForRender(baseline);
+    const baselinePositions = Array.from(baselineGeometry.attributes.position.array);
+    baselineGeometry.dispose();
+
+    for (const variant of variants) {
+      const geometry = buildWingGeometryForRender(variant);
+      expect(Array.from(geometry.attributes.position.array)).not.toEqual(baselinePositions);
+      geometry.dispose();
+    }
+
+    const baselineRibs = buildWingRibsForRender(baseline);
+    expect(buildWingRibsForRender({ ...baseline, internalRibCount: 34 })).toHaveLength(34);
+    expect(buildWingRibsForRender({ ...baseline, aspectRatio: 14 })).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, sweepAngle: 38 })).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, taperRatio: 0.82 })).not.toEqual(baselineRibs);
   });
 
   test("bridge damping changes flutter compliance and objective", () => {

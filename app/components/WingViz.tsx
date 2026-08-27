@@ -109,6 +109,84 @@ function getNacaShape(
   return shape;
 }
 
+/** Build the exact Three.js geometry used by the live wing renderer. */
+export function buildWingGeometryForRender(
+  params: Pick<
+    WingParams,
+    | "aspectRatio"
+    | "sweepAngle"
+    | "thicknessRatio"
+    | "maxCamber"
+    | "camberPosition"
+    | "taperRatio"
+    | "airfoilFamily"
+  >
+): THREE.ExtrudeGeometry {
+  const span = 1.4 + (params.aspectRatio / 16) * 3.2;
+  const shape = getNacaShape(
+    params.maxCamber,
+    params.camberPosition,
+    params.thicknessRatio,
+    params.airfoilFamily,
+    1.4
+  );
+  const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+    depth: span,
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.03,
+    bevelSegments: 4,
+    steps: 8
+  };
+  const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geom.center();
+
+  // Apply taper and sweep across span (z axis)
+  const pos = geom.attributes.position;
+  const sweepSkew = (params.sweepAngle / 45) * 1.35;
+  for (let i = 0; i < pos.count; i++) {
+    const zVal = pos.getZ(i);
+    const spanNorm = Math.abs(zVal) / (span / 2);
+    const currentX = pos.getX(i);
+    const currentY = pos.getY(i);
+
+    // Taper is a chord ratio (tip/root), so it shrinks the local chord (X)
+    // toward the tip, with section thickness (Y) scaling proportionally;
+    // sweep then skews the tapered section AFT (+X = downstream, the
+    // direction the CFD streamlines travel), like a real swept wing.
+    const scaleFactor = 1.0 - spanNorm * (1.0 - params.taperRatio) * 0.7;
+    pos.setX(i, currentX * scaleFactor + spanNorm * sweepSkew);
+    pos.setY(i, currentY * scaleFactor);
+  }
+  pos.needsUpdate = true;
+  geom.computeVertexNormals();
+  return geom;
+}
+
+export interface WingRibRenderStation {
+  x: number;
+  z: number;
+  chord: number;
+}
+
+/** Build the visible structural-rib stations used by the live renderer. */
+export function buildWingRibsForRender(
+  params: Pick<WingParams, "aspectRatio" | "sweepAngle" | "taperRatio" | "internalRibCount">
+): WingRibRenderStation[] {
+  const span = 1.4 + (params.aspectRatio / 16) * 3.2;
+  const sweepSkew = (params.sweepAngle / 45) * 1.35;
+  return Array.from({ length: params.internalRibCount }, (_, index) => {
+    const spanFraction = (index + 1) / (params.internalRibCount + 1) - 0.5;
+    const spanNorm = Math.abs(spanFraction) * 2;
+    const scaleFactor = 1.0 - spanNorm * (1.0 - params.taperRatio) * 0.7;
+    return {
+      x: spanNorm * sweepSkew,
+      z: spanFraction * span,
+      chord: 1.4 * scaleFactor
+    };
+  });
+}
+
 function ParametricWingMesh({
   aspectRatio,
   sweepAngle,
@@ -121,59 +199,38 @@ function ParametricWingMesh({
 }: WingParams) {
   const meshRef = useRef<THREE.Group>(null);
 
-  const m = maxCamber;
-  const p = camberPosition;
-  const t = thicknessRatio;
-  const span = 1.4 + (aspectRatio / 16) * 3.2;
+  const geometry = useMemo(
+    () =>
+      buildWingGeometryForRender({
+        aspectRatio,
+        sweepAngle,
+        thicknessRatio,
+        maxCamber,
+        camberPosition,
+        taperRatio,
+        airfoilFamily
+      }),
+    [
+      airfoilFamily,
+      aspectRatio,
+      camberPosition,
+      maxCamber,
+      sweepAngle,
+      taperRatio,
+      thicknessRatio
+    ]
+  );
 
-  const geometry = useMemo(() => {
-    const shape = getNacaShape(m, p, t, airfoilFamily, 1.4);
-    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-      depth: span,
-      bevelEnabled: true,
-      bevelThickness: 0.03,
-      bevelSize: 0.03,
-      bevelSegments: 4,
-      steps: 8
-    };
-    const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    geom.center();
-
-    // Apply taper and sweep across span (z axis)
-    const pos = geom.attributes.position;
-    const sweepSkew = (sweepAngle / 45) * 1.35;
-    for (let i = 0; i < pos.count; i++) {
-      const zVal = pos.getZ(i);
-      const spanNorm = Math.abs(zVal) / (span / 2);
-      const currentX = pos.getX(i);
-      const currentY = pos.getY(i);
-
-      // Taper is a chord ratio (tip/root), so it shrinks the local chord (X)
-      // toward the tip, with section thickness (Y) scaling proportionally;
-      // sweep then skews the tapered section AFT (+X = downstream, the
-      // direction the CFD streamlines travel), like a real swept wing.
-      const scaleFactor = 1.0 - spanNorm * (1.0 - taperRatio) * 0.7;
-      pos.setX(i, currentX * scaleFactor + spanNorm * sweepSkew);
-      pos.setY(i, currentY * scaleFactor);
-    }
-    pos.needsUpdate = true;
-    geom.computeVertexNormals();
-    return geom;
-  }, [m, p, t, span, sweepAngle, taperRatio, airfoilFamily]);
-
-  const ribs = useMemo(() => {
-    const sweepSkew = (sweepAngle / 45) * 1.35;
-    return Array.from({ length: internalRibCount }, (_, index) => {
-      const spanFraction = (index + 1) / (internalRibCount + 1) - 0.5;
-      const spanNorm = Math.abs(spanFraction) * 2;
-      const scaleFactor = 1.0 - spanNorm * (1.0 - taperRatio) * 0.7;
-      return {
-        x: spanNorm * sweepSkew,
-        z: spanFraction * span,
-        chord: 1.4 * scaleFactor
-      };
-    });
-  }, [internalRibCount, span, sweepAngle, taperRatio]);
+  const ribs = useMemo(
+    () =>
+      buildWingRibsForRender({
+        aspectRatio,
+        sweepAngle,
+        taperRatio,
+        internalRibCount
+      }),
+    [aspectRatio, internalRibCount, sweepAngle, taperRatio]
+  );
 
   useFrame((state) => {
     if (!meshRef.current) return;
