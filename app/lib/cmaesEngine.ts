@@ -264,7 +264,7 @@ export const BENCHMARKS: BenchmarkFunction[] = [
     id: "step_ridge",
     name: "Sharp Discontinuous Ridge",
     category: "discontinuous",
-    description: "A piecewise-flat radial staircase plus a nonsmooth diagonal ridge makes local finite-difference information brittle while rank comparisons remain usable.",
+    description: "A piecewise-flat radial staircase plus a nonsmooth diagonal ridge makes local finite-difference information brittle while rank comparisons remain usable. Its zero-valued global set is the segment x = y inside the unit disk; the origin marker is one representative optimum.",
     formula: "f(x, y) = \\lfloor \\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2 \\rfloor + 0.5|\\textcolor{#60a5fa}{x} - \\textcolor{#60a5fa}{y}|",
     domain: [-2.5, 2.5],
     optimum: [0, 0],

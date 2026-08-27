@@ -50,6 +50,8 @@ function getNacaShape(
   // Supercritical and reflex modifications
   const isSupercritical = family === "Supercritical SC(2)";
   const isReflexed = family === "Reflexed Flying Wing";
+  const isHighLift = family === "NACA 5-Digit High-Lift";
+  const isLaminar = family === "Laminar Flow Low-Re";
 
   for (let i = 0; i <= points; i++) {
     const x = (i / points) * chord;
@@ -71,6 +73,7 @@ function getNacaShape(
     if (isReflexed && x > 0.75 * chord) {
       yc -= 0.03 * chord * ((x - 0.75 * chord) / (0.25 * chord));
     }
+    if (isHighLift) yc *= 1.15;
 
     // NACA 4-digit thickness: y_t = 5 t c (...), so a t/c slider setting of
     // 0.12 renders as a true 12% section at this chord.
@@ -87,6 +90,10 @@ function getNacaShape(
     if (isSupercritical) {
       // Flattened upper surface for delayed shockwave
       yt = yt * (1 - 0.15 * Math.sin((x / chord) * Math.PI));
+    } else if (isLaminar) {
+      // Schematic aft-loaded thickness, without claiming a specific NACA
+      // 6-series coordinate table.
+      yt *= 0.88 + 0.22 * Math.sin(Math.PI * (x / chord)) ** 2;
     }
 
     const theta = Math.atan(dyc_dx);
@@ -109,9 +116,10 @@ function ParametricWingMesh({
   maxCamber,
   camberPosition,
   taperRatio,
-  airfoilFamily
+  airfoilFamily,
+  internalRibCount
 }: WingParams) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<THREE.Group>(null);
 
   const m = maxCamber;
   const p = camberPosition;
@@ -142,15 +150,30 @@ function ParametricWingMesh({
 
       // Taper is a chord ratio (tip/root), so it shrinks the local chord (X)
       // toward the tip, with section thickness (Y) scaling proportionally;
-      // sweep then skews the tapered section along X.
+      // sweep then skews the tapered section AFT (+X = downstream, the
+      // direction the CFD streamlines travel), like a real swept wing.
       const scaleFactor = 1.0 - spanNorm * (1.0 - taperRatio) * 0.7;
-      pos.setX(i, currentX * scaleFactor - spanNorm * sweepSkew);
+      pos.setX(i, currentX * scaleFactor + spanNorm * sweepSkew);
       pos.setY(i, currentY * scaleFactor);
     }
     pos.needsUpdate = true;
     geom.computeVertexNormals();
     return geom;
   }, [m, p, t, span, sweepAngle, taperRatio, airfoilFamily]);
+
+  const ribs = useMemo(() => {
+    const sweepSkew = (sweepAngle / 45) * 1.35;
+    return Array.from({ length: internalRibCount }, (_, index) => {
+      const spanFraction = (index + 1) / (internalRibCount + 1) - 0.5;
+      const spanNorm = Math.abs(spanFraction) * 2;
+      const scaleFactor = 1.0 - spanNorm * (1.0 - taperRatio) * 0.7;
+      return {
+        x: spanNorm * sweepSkew,
+        z: spanFraction * span,
+        chord: 1.4 * scaleFactor
+      };
+    });
+  }, [internalRibCount, span, sweepAngle, taperRatio]);
 
   useFrame((state) => {
     if (!meshRef.current) return;
@@ -160,17 +183,35 @@ function ParametricWingMesh({
 
   return (
     <Float speed={1.5} rotationIntensity={0.08} floatIntensity={0.15}>
-      <mesh ref={meshRef} geometry={geometry} castShadow receiveShadow rotation={[Math.PI / 2, 0, 0]}>
-        <meshPhysicalMaterial
-          color="#f8fafc"
-          metalness={0.85}
-          roughness={0.15}
-          clearcoat={1}
-          clearcoatRoughness={0.08}
-          reflectivity={1}
-          envMapIntensity={1.6}
-        />
-      </mesh>
+      {/* No rotation: the airfoil section lives in the XY plane (chord along
+          X, the streamline axis; thickness along Y) and the span extrudes
+          along Z — a wing lying in the flow. The old [π/2,0,0] rotation
+          stood the span up vertically like a sail. Moderate metalness: at
+          0.85 with no environment map the PBR material reflected nothing
+          and the wing rendered as a black silhouette, which made slider and
+          optimizer geometry changes invisible. */}
+      <group ref={meshRef}>
+        <mesh geometry={geometry} castShadow receiveShadow>
+          <meshPhysicalMaterial
+            color="#e2e8f0"
+            metalness={0.35}
+            roughness={0.3}
+            clearcoat={1}
+            clearcoatRoughness={0.12}
+            reflectivity={1}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+        {/* Surface-visible schematic rib stations make the optimized
+            structural-mass coordinate perceptible in the model. */}
+        {ribs.map((rib, index) => (
+          <mesh key={index} position={[rib.x, 0.035, rib.z]}>
+            <boxGeometry args={[rib.chord, 0.012, 0.014]} />
+            <meshStandardMaterial color="#f59e0b" emissive="#92400e" emissiveIntensity={0.35} />
+          </mesh>
+        ))}
+      </group>
     </Float>
   );
 }
@@ -268,12 +309,12 @@ export function WingViz() {
 
   // 8 Physical Input Parameters
   const [params, setParams] = useState<WingParams>({
-    aspectRatio: 10.5,
+    aspectRatio: 10.6,
     sweepAngle: 25.0,
     thicknessRatio: 0.12,
-    maxCamber: 0.035,
+    maxCamber: 0.036,
     camberPosition: 0.4,
-    taperRatio: 0.55,
+    taperRatio: 0.56,
     airfoilFamily: "Supercritical SC(2)",
     internalRibCount: 22
   });
@@ -283,36 +324,18 @@ export function WingViz() {
   // CMA-ES State with lazy initialization
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
-  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(() => {
-    const optimizer = new CMAESOptimizerND(
-      (zVec) => {
-        const decoded = decodeWingVector(zVec);
-        const result = evaluateWingPhysics(decoded, 0.78);
-        return result.costScore;
-      },
-      {
-        dim: 8,
-        initialMean: [
-          encodeParameter(10.5, WING_PARAM_SPECS[0]),
-          encodeParameter(25.0, WING_PARAM_SPECS[1]),
-          encodeParameter(0.12, WING_PARAM_SPECS[2]),
-          encodeParameter(0.035, WING_PARAM_SPECS[3]),
-          encodeParameter(0.4, WING_PARAM_SPECS[4]),
-          encodeParameter(0.55, WING_PARAM_SPECS[5]),
-          encodeParameter("Supercritical SC(2)", WING_PARAM_SPECS[6]),
-          encodeParameter(22, WING_PARAM_SPECS[7])
-        ],
-        initialSigma: 0.25,
-        lambda: 16,
-        bounds: [0.0, 1.0]
-      }
-    );
-    return optimizer.step();
-  });
-  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>(() =>
-    latestStateND ? [latestStateND] : []
-  );
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const applyManualParams = useCallback((next: WingParams) => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    setIsOptimizing(false);
+    setOptGen(0);
+    setLatestStateND(null);
+    setHistoryND([]);
+    setParams(next);
+  }, []);
 
   // Convert 8 parameters to/from [0, 1]^8 unit cube
   const paramVector = useMemo(() => {
@@ -370,6 +393,7 @@ export function WingViz() {
 
     setIsOptimizing(true);
     setOptGen(0);
+    setLatestStateND(null);
     setHistoryND([]);
 
     const optimizer = new CMAESOptimizerND(
@@ -393,8 +417,10 @@ export function WingViz() {
     optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
-      const bestP = decodeVectorToParams(state.bestX);
-      setParams(bestP);
+      // Animate the distribution center so every generation visibly advances;
+      // land on the best-ever design when the run completes.
+      const displayedVector = g >= maxG ? state.bestX : state.mean;
+      setParams(decodeVectorToParams(displayedVector));
       setOptGen(g);
       setLatestStateND(state);
       setHistoryND((prev) => [...prev, state]);
@@ -599,8 +625,8 @@ export function WingViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
-                    aspectRatio: 11.5,
+                  applyManualParams({
+                    aspectRatio: 11.6,
                     sweepAngle: 28.0,
                     thicknessRatio: 0.11,
                     maxCamber: 0.032,
@@ -617,7 +643,7 @@ export function WingViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
+                  applyManualParams({
                     aspectRatio: 7.2,
                     sweepAngle: 38.0,
                     thicknessRatio: 0.08,
@@ -635,7 +661,7 @@ export function WingViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
+                  applyManualParams({
                     aspectRatio: 15.5,
                     sweepAngle: 8.0,
                     thicknessRatio: 0.16,
@@ -667,7 +693,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[0].max}
                 step={WING_PARAM_SPECS[0].step}
                 value={params.aspectRatio}
-                onChange={(e) => setParams({ ...params, aspectRatio: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, aspectRatio: parseFloat(e.target.value) })}
                 className="w-full accent-cyan-400"
               />
             </div>
@@ -685,7 +711,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[1].max}
                 step={WING_PARAM_SPECS[1].step}
                 value={params.sweepAngle}
-                onChange={(e) => setParams({ ...params, sweepAngle: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, sweepAngle: parseFloat(e.target.value) })}
                 className="w-full accent-blue-400"
               />
             </div>
@@ -703,7 +729,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[2].max}
                 step={WING_PARAM_SPECS[2].step}
                 value={params.thicknessRatio}
-                onChange={(e) => setParams({ ...params, thicknessRatio: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, thicknessRatio: parseFloat(e.target.value) })}
                 className="w-full accent-indigo-400"
               />
             </div>
@@ -721,7 +747,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[3].max}
                 step={WING_PARAM_SPECS[3].step}
                 value={params.maxCamber}
-                onChange={(e) => setParams({ ...params, maxCamber: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, maxCamber: parseFloat(e.target.value) })}
                 className="w-full accent-purple-400"
               />
             </div>
@@ -739,7 +765,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[4].max}
                 step={WING_PARAM_SPECS[4].step}
                 value={params.camberPosition}
-                onChange={(e) => setParams({ ...params, camberPosition: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, camberPosition: parseFloat(e.target.value) })}
                 className="w-full accent-teal-400"
               />
             </div>
@@ -757,7 +783,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[5].max}
                 step={WING_PARAM_SPECS[5].step}
                 value={params.taperRatio}
-                onChange={(e) => setParams({ ...params, taperRatio: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, taperRatio: parseFloat(e.target.value) })}
                 className="w-full accent-rose-400"
               />
             </div>
@@ -771,7 +797,7 @@ export function WingViz() {
               <select
                 aria-label="Airfoil Family"
                 value={params.airfoilFamily}
-                onChange={(e) => setParams({ ...params, airfoilFamily: e.target.value as AirfoilFamily })}
+                onChange={(e) => applyManualParams({ ...params, airfoilFamily: e.target.value as AirfoilFamily })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400"
               >
                 {WING_PARAM_SPECS[6].categories?.map((cat) => (
@@ -795,7 +821,7 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[7].max}
                 step={WING_PARAM_SPECS[7].step}
                 value={params.internalRibCount}
-                onChange={(e) => setParams({ ...params, internalRibCount: parseInt(e.target.value, 10) })}
+                onChange={(e) => applyManualParams({ ...params, internalRibCount: parseInt(e.target.value, 10) })}
                 className="w-full accent-amber-400"
               />
             </div>

@@ -133,6 +133,7 @@ function GaussianDistributionSandbox() {
   const [sigma, setSigma] = useState(landscape.initialSigma);
   const [eigenRatio, setEigenRatio] = useState(landscape.initialEigenRatio);
   const [angleDeg, setAngleDeg] = useState(landscape.initialAngle);
+  const [covarianceScale, setCovarianceScale] = useState(0.5);
   const [sampleCount, setSampleCount] = useState(16);
   // Fixed at the canonical mu = lambda/2 selection ratio the equation cards
   // describe.
@@ -152,17 +153,13 @@ function GaussianDistributionSandbox() {
 
   const pSigmaRef = useRef<[number, number]>([0, 0]);
   const pCRef = useRef<[number, number]>([0, 0]);
-  const covRef = useRef<[[number, number], [number, number]]>([
-    [1, 0],
-    [0, 1]
-  ]);
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animPosRef = useRef({
     x: landscape.initialMean[0],
     y: landscape.initialMean[1],
     sigma: landscape.initialSigma,
     eigenRatio: landscape.initialEigenRatio,
+    covarianceScale: 0.5,
     angleDeg: landscape.initialAngle,
     emX: landscape.initialMean[0],
     emY: landscape.initialMean[1],
@@ -178,21 +175,19 @@ function GaussianDistributionSandbox() {
     setSigma(spec.initialSigma);
     setEigenRatio(spec.initialEigenRatio);
     setAngleDeg(spec.initialAngle);
+    setCovarianceScale(0.5);
     setGeneration(0);
     setPSigmaNorm(0);
     setPCNorm(0);
     setDeltaMNorm(0);
     pSigmaRef.current = [0, 0];
     pCRef.current = [0, 0];
-    covRef.current = [
-      [1, 0],
-      [0, 1]
-    ];
     animPosRef.current = {
       x: spec.initialMean[0],
       y: spec.initialMean[1],
       sigma: spec.initialSigma,
       eigenRatio: spec.initialEigenRatio,
+      covarianceScale: 0.5,
       angleDeg: spec.initialAngle,
       emX: spec.initialMean[0],
       emY: spec.initialMean[1],
@@ -214,8 +209,8 @@ function GaussianDistributionSandbox() {
   // Generate samples from N(m, sigma^2 C)
   const { samples, eliteMean, samplePoints } = useMemo(() => {
     const angleRad = (angleDeg * Math.PI) / 180;
-    const l1 = eigenRatio * 0.5;
-    const l2 = 0.5;
+    const l1 = eigenRatio * covarianceScale;
+    const l2 = covarianceScale;
     const s1 = Math.sqrt(l1) * sigma;
     const s2 = Math.sqrt(l2) * sigma;
 
@@ -263,7 +258,7 @@ function GaussianDistributionSandbox() {
       eliteMean: newMean,
       samplePoints: pts
     };
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, sampleCount, eliteFraction, landscape]);
+  }, [meanX, meanY, sigma, eigenRatio, angleDeg, covarianceScale, sampleCount, eliteFraction, landscape]);
 
   // Execute one step of 2D CMA-ES
   const stepGeneration = useCallback(() => {
@@ -298,8 +293,8 @@ function GaussianDistributionSandbox() {
     const angleRad = (angleDeg * Math.PI) / 180;
     const cosA = Math.cos(angleRad);
     const sinA = Math.sin(angleRad);
-    const l1 = eigenRatio * 0.5;
-    const l2 = 0.5;
+    const l1 = eigenRatio * covarianceScale;
+    const l2 = covarianceScale;
 
     // C^(-1/2) * (dm / sigma)
     const invSqrt1 = 1 / Math.sqrt(Math.max(1e-4, l1));
@@ -325,17 +320,25 @@ function GaussianDistributionSandbox() {
     // E||N(0, I_n)|| ~ sqrt(n)(1 - 1/(4n) + 1/(21n^2)) ~ 1.254 for n = 2
     const chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
     const newSigma = Math.max(0.02, Math.min(1.5, sigma * Math.exp((cSigma / dSigma) * (pSigNorm / chiN - 1))));
+    const pathNormalizer = Math.sqrt(1 - (1 - cSigma) ** (2 * (generation + 1)));
+    const hSigma = pSigNorm / Math.max(Number.EPSILON, pathNormalizer) / chiN < 1.4 + 2 / (n + 1) ? 1 : 0;
 
     // Update pc
     const constC = Math.sqrt(cc * (2 - cc) * muEff);
     const newPC: [number, number] = [
-      (1 - cc) * pCRef.current[0] + constC * (dm[0] / Math.max(1e-4, sigma)),
-      (1 - cc) * pCRef.current[1] + constC * (dm[1] / Math.max(1e-4, sigma))
+      (1 - cc) * pCRef.current[0] + hSigma * constC * (dm[0] / Math.max(1e-4, sigma)),
+      (1 - cc) * pCRef.current[1] + hSigma * constC * (dm[1] / Math.max(1e-4, sigma))
     ];
     pCRef.current = newPC;
 
     // Adapt covariance matrix
-    const currentC = covRef.current;
+    // Reconstruct C from the same eigensystem used to draw and sample the
+    // current generation. Previously adaptation read a separate stale ref,
+    // so the displayed sliders and the optimizer updated different matrices.
+    const currentC: [[number, number], [number, number]] = [
+      [l1 * cosA * cosA + l2 * sinA * sinA, (l1 - l2) * sinA * cosA],
+      [(l1 - l2) * sinA * cosA, l1 * sinA * sinA + l2 * cosA * cosA]
+    ];
     const rank1_00 = newPC[0] * newPC[0];
     const rank1_01 = newPC[0] * newPC[1];
     const rank1_11 = newPC[1] * newPC[1];
@@ -353,14 +356,10 @@ function GaussianDistributionSandbox() {
       rankMu_11 += w * y1 * y1;
     }
 
-    const newC00 = (1 - c1 - cMu) * currentC[0][0] + c1 * rank1_00 + cMu * rankMu_00;
-    const newC01 = (1 - c1 - cMu) * currentC[0][1] + c1 * rank1_01 + cMu * rankMu_01;
-    const newC11 = (1 - c1 - cMu) * currentC[1][1] + c1 * rank1_11 + cMu * rankMu_11;
-
-    covRef.current = [
-      [newC00, newC01],
-      [newC01, newC11]
-    ];
+    const covarianceDecay = 1 + c1 * (1 - hSigma) * cc * (2 - cc) - c1 - cMu;
+    const newC00 = covarianceDecay * currentC[0][0] + c1 * rank1_00 + cMu * rankMu_00;
+    const newC01 = covarianceDecay * currentC[0][1] + c1 * rank1_01 + cMu * rankMu_01;
+    const newC11 = covarianceDecay * currentC[1][1] + c1 * rank1_11 + cMu * rankMu_11;
 
     // Compute updated eigensystem for visual sliders
     const { eigenvalues, angle } = eigen2x2(newC00, newC01, newC11);
@@ -381,11 +380,12 @@ function GaussianDistributionSandbox() {
     setSigma(parseFloat(newSigma.toFixed(3)));
     setEigenRatio(parseFloat(nextEigenRatio.toFixed(2)));
     setAngleDeg(Math.round(nextAngleDeg));
+    setCovarianceScale(Math.max(1e-4, eval2));
     setGeneration((g) => g + 1);
 
     const fNew = landscape.fn(newM[0], newM[1]);
     setHistory((prev) => [...prev.slice(-30), { x: newM[0], y: newM[1], fitness: fNew, gen: generation + 1 }]);
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, sampleCount, eliteFraction, samplePoints, eliteMean, landscape, generation]);
+  }, [meanX, meanY, sigma, eigenRatio, angleDeg, covarianceScale, sampleCount, eliteFraction, samplePoints, eliteMean, landscape, generation]);
 
   // Autoplay ticker
   useEffect(() => {
@@ -454,6 +454,7 @@ function GaussianDistributionSandbox() {
       a.y += (meanY - a.y) * lerp;
       a.sigma += (sigma - a.sigma) * lerp;
       a.eigenRatio += (eigenRatio - a.eigenRatio) * lerp;
+      a.covarianceScale += (covarianceScale - a.covarianceScale) * lerp;
       a.angleDeg += (angleDeg - a.angleDeg) * lerp;
       a.emX += (eliteMean[0] - a.emX) * lerp;
       a.emY += (eliteMean[1] - a.emY) * lerp;
@@ -526,8 +527,8 @@ function GaussianDistributionSandbox() {
       // rotating would tilt the ellipse away from the covariance's true
       // orientation and break its alignment with the heat map underneath.
       const angleRad = (a.angleDeg * Math.PI) / 180;
-      const l1 = a.eigenRatio * 0.5;
-      const l2 = 0.5;
+      const l1 = a.eigenRatio * a.covarianceScale;
+      const l2 = a.covarianceScale;
       const a1 = Math.sqrt(Math.max(1e-4, l1)) * a.sigma;
       const a2 = Math.sqrt(Math.max(1e-4, l2)) * a.sigma;
       const kxScale = W / (2 * DOMAIN);
@@ -648,7 +649,7 @@ function GaussianDistributionSandbox() {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey, isInView]);
+  }, [meanX, meanY, sigma, eigenRatio, covarianceScale, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey, isInView]);
 
   const currentFitness = landscape.fn(meanX, meanY);
 

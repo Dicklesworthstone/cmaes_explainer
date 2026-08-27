@@ -412,7 +412,7 @@ export function NoGradientExamples() {
                 Interactive Case Study: Suspension Bridge Under Dynamic Load
               </h3>
               <p className="text-xs text-slate-400">
-                Live 3D FEA stress calculation with moving traffic & structural optimization
+                Live analytic beam-and-cable stress surrogate with moving traffic & structural optimization
               </p>
             </div>
           </div>

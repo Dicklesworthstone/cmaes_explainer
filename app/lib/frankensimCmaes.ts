@@ -265,8 +265,32 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     (100 * Math.max(top3[2], 0)) / poolSum,
   ];
 
+  let runningBestFitness = Infinity;
+  let runningBestX = run.generations[0]?.mean.slice() ?? run.best_x.slice();
+
   return run.generations.map((gen) => {
     const lambda = gen.se.length;
+    // Kernel snapshots store samples in ask-order. `se` is a selection mask
+    // in the kernel's internal ordering and is not aligned with `sf`/`sx`, so
+    // derive ranks and elites from the actual sample fitnesses displayed.
+    const sortedIndices = Array.from({ length: lambda }, (_, i) => i).sort((a, b) => {
+      const fa = Number.isFinite(gen.sf[a]) ? gen.sf[a] : Infinity;
+      const fb = Number.isFinite(gen.sf[b]) ? gen.sf[b] : Infinity;
+      return fa - fb || a - b;
+    });
+    const ranks = new Array<number>(lambda);
+    sortedIndices.forEach((sampleIndex, rank) => {
+      ranks[sampleIndex] = rank;
+    });
+    const selectedCount = gen.se.filter((value) => value === 1).length;
+    const eliteCount = selectedCount > 0 && selectedCount < lambda ? selectedCount : Math.floor(lambda / 2);
+
+    const generationBestIndex = sortedIndices[0];
+    const generationBestFitness = gen.sf[generationBestIndex];
+    if (Number.isFinite(generationBestFitness) && generationBestFitness < runningBestFitness) {
+      runningBestFitness = generationBestFitness;
+      runningBestX = gen.sx.slice(generationBestIndex * n, (generationBestIndex + 1) * n);
+    }
     // Defensive spectrum sanitizing: kernel v0.2.0 repairs C to positive
     // definite before snapshotting, but a stale v0.1.0 bundle cached by a
     // browser could still report an indefinite spectrum with an absurd cond.
@@ -292,8 +316,8 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
         projected3D: [p[0] - projMean[0], p[1] - projMean[1], p[2] - projMean[2]],
         fitness: gen.sf[s],
         trueFitness: gen.sf[s],
-        rank: s,
-        isElite: gen.se[s] === 1,
+        rank: ranks[s],
+        isElite: ranks[s] < eliteCount,
       });
     }
 
@@ -337,8 +361,8 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       pSigma: gen.p_sigma,
       pC: gen.p_c,
       samples,
-      bestFitness: gen.best_f,
-      bestX: run.best_x,
+      bestFitness: runningBestFitness,
+      bestX: runningBestX.slice(),
       eigenvalues,
       conditionNumber,
       evalCount: gen.evals,

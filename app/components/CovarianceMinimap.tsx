@@ -257,7 +257,7 @@ export function CovarianceMinimap() {
               Covariance Metric Adaptation & Natural Gradient Alignment
             </h4>
             <p className="text-xs text-slate-400">
-              Comparing Euclidean steepest descent against the covariance-transformed Natural Gradient
+              Illustrative interpolation from an isotropic covariance to the local inverse-Hessian shape
             </p>
           </div>
         </div>
@@ -304,7 +304,7 @@ export function CovarianceMinimap() {
         <div className="space-y-4">
           <div className="bg-slate-950/40 rounded-2xl p-4 border border-white/5 space-y-3">
             <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">Adaptation Progress</span>
+              <span className="text-slate-300">Illustrative interpolation</span>
               <span className="text-sky-300 font-mono">{(progress * 100).toFixed(0)}%</span>
             </div>
             <input

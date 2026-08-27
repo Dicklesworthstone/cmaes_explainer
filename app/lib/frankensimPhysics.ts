@@ -367,6 +367,13 @@ const MATERIAL_IDS: Record<MaterialGrade, number> = {
   "CFRP Carbon Fiber": 3
 };
 
+const MIN_BRIDGE_FLUTTER_SPEED_KMH = 180;
+
+function bridgeFlutterPenalty(flutterCriticalSpeedKmh: number): number {
+  const shortfall = Math.max(0, MIN_BRIDGE_FLUTTER_SPEED_KMH - flutterCriticalSpeedKmh);
+  return shortfall * shortfall;
+}
+
 export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number = 0): BridgeAnalysisResult {
   const {
     spanLength,
@@ -398,6 +405,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
       const parsed = JSON.parse(raw);
       if (parsed.ok) {
         const o = parsed.ok;
+        const flutterPenalty = bridgeFlutterPenalty(o.flutterCriticalSpeedKmh);
         return {
           source: "wasm",
           totalMassTons: o.totalMassTons,
@@ -406,8 +414,8 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
           cableTensionKN: o.cableTensionKN,
           flutterCriticalSpeedKmh: o.flutterCriticalSpeedKmh,
           yieldLimitMPa: o.yieldLimitMPa,
-          isCompliant: o.isCompliant,
-          costScore: o.costScore,
+          isCompliant: o.isCompliant && o.flutterCriticalSpeedKmh >= MIN_BRIDGE_FLUTTER_SPEED_KMH,
+          costScore: Math.round((o.costScore + flutterPenalty) * 1e6) / 1e6,
           trussForces: []
         };
       }
@@ -521,11 +529,15 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   const towerMassTons = (towerHeight * 0.8 * mat.density * 4) / 1000;
   const totalMassTons = Math.round((cableMassTons + deckMassTons + suspenderMassTons + towerMassTons) * 10) / 10;
 
-  const isCompliant = maxVonMisesStressMPa <= mat.yield && maxDeflectionMm <= spanLength * 2.5;
+  const isCompliant =
+    maxVonMisesStressMPa <= mat.yield &&
+    maxDeflectionMm <= spanLength * 2.5 &&
+    flutterCriticalSpeedKmh >= MIN_BRIDGE_FLUTTER_SPEED_KMH;
 
   // Objective cost score for CMA-ES (minimize mass + penalty for stress/deflection violation)
   const stressViolation = Math.max(0, maxVonMisesStressMPa - mat.yield);
   const deflectionViolation = Math.max(0, maxDeflectionMm - spanLength * 2.5);
+  const flutterPenalty = bridgeFlutterPenalty(flutterCriticalSpeedKmh);
   // Quantized to 1e-6 so the WASM kernel and this fallback agree exactly:
   // sub-ULP libm differences in an unrounded objective could otherwise flip
   // CMA-ES rankings on near-ties and let the two engines diverge.
@@ -533,7 +545,8 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
     Math.round(
       (totalMassTons * mat.costFactor +
         stressViolation * stressViolation * 8.0 +
-        deflectionViolation * deflectionViolation * 4.0) * 1e6
+        deflectionViolation * deflectionViolation * 4.0 +
+        flutterPenalty) * 1e6
     ) / 1e6;
 
   return {

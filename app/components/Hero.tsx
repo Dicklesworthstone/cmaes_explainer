@@ -216,7 +216,7 @@ export function Hero() {
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-2 text-[0.75rem] text-slate-400">
             <div className="flex items-center gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-cyan-400 shrink-0" />
-              <span>Interactive 3D Simulation • Drag to rotate camera • Scrub timeline</span>
+              <span>Scripted 3D concept animation • Drag to rotate camera • Scrub timeline</span>
             </div>
             <a
               href="#technical-addendum"

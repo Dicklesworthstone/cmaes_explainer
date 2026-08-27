@@ -19,95 +19,20 @@ import {
   TrendingDown
 } from "lucide-react";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import {
+  ArchPoint,
+  AttentionType,
+  ActivationType,
+  decodeVectorToArch,
+  evaluateArchFitness
+} from "../lib/nasObjective";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 import { LatexRenderer } from "./LatexRenderer";
 
 // ============================================================================
-// 1. Types & Architectural Models
+// 1. Types & Architectural Models — the surrogate objective itself lives in
+// app/lib/nasObjective.ts (view components export only components).
 // ============================================================================
-
-export type AttentionType = "MHA" | "GQA" | "MQA";
-export type ActivationType = "SwiGLU" | "GELU" | "Mish";
-
-export interface ArchPoint {
-  id: number;
-  layers: number;
-  dim: number;
-  heads: number;
-  attnType: AttentionType;
-  actType: ActivationType;
-  paramsM: number;
-  flopsGiga: number;
-  valLoss: number;
-  latencyMs: number;
-  isPareto: boolean;
-  generation?: number;
-}
-
-// Decode continuous latent vector z in [0, 1]^5 to physical model architecture
-function decodeVectorToArch(z: number[]): ArchPoint {
-  const zL = Math.max(0, Math.min(1, z[0] ?? 0.45));
-  const zD = Math.max(0, Math.min(1, z[1] ?? 0.48));
-  const zH = Math.max(0, Math.min(1, z[2] ?? 0.4));
-  const zAttn = Math.max(0, Math.min(1, z[3] ?? 0.5));
-  const zAct = Math.max(0, Math.min(1, z[4] ?? 0.2));
-
-  const layers = Math.max(2, Math.min(16, Math.round(2 + zL * 14)));
-  const dim = Math.max(128, Math.min(1024, Math.round(128 + zD * 896)));
-  const heads = Math.max(2, Math.min(16, Math.round(2 + zH * 14)));
-  const attnType: AttentionType = zAttn < 0.33 ? "MHA" : zAttn < 0.67 ? "GQA" : "MQA";
-  const actType: ActivationType = zAct < 0.33 ? "SwiGLU" : zAct < 0.67 ? "GELU" : "Mish";
-
-  // Transformer parameter count: tied embeddings plus per-layer attention and
-  // MLP blocks (this is a plain count, not a Chinchilla scaling-law fit).
-  const vocab = 32000;
-  const dFF = actType === "SwiGLU" ? Math.round((8 / 3) * dim) : 4 * dim;
-  const attnFactor = attnType === "MHA" ? 4 : attnType === "GQA" ? 2.5 : 2;
-  const attnParamsPerLayer = attnFactor * dim * dim;
-  const mlpParamsPerLayer = (actType === "SwiGLU" ? 3 : 2) * dim * dFF;
-  const totalParams = vocab * dim + layers * (attnParamsPerLayer + mlpParamsPerLayer + 4 * dim);
-  const paramsM = totalParams / 1e6;
-
-  // GFLOPs per forward pass ~ 2*N*T (batch 1, 2048 sequence). The generous
-  // clamp exists only to guard degenerate inputs; it never binds for real
-  // decodes, so the compute penalty keeps its gradient everywhere.
-  const flopsGiga = Math.max(1, Math.min(2000, (2 * totalParams * 2048) / 1e9));
-  // Hand-written surrogates: valLoss and latencyMs are toy closed forms for
-  // the demo, not measurements from training runs.
-  const valLoss = Math.max(
-    1.08,
-    1.12 + 3.2 / Math.sqrt(layers * 0.7 + (dim / 128) * 2.2) +
-      (attnType === "MQA" ? 0.06 : attnType === "GQA" ? 0.02 : 0) +
-      (actType === "GELU" ? 0.06 : actType === "Mish" ? 0.03 : 0)
-  );
-  // The mild per-head latency term stands in for scheduling and kernel-launch
-  // overhead in this surrogate; mainly it keeps z[2] from being a null
-  // direction the optimizer merely diffuses along.
-  const latencyMs = layers * 0.75 + (dim / 256) * 1.1 + heads * 0.12 + (attnType === "MHA" ? 0.4 : 0);
-
-  return {
-    id: 0,
-    layers,
-    dim,
-    heads,
-    attnType,
-    actType,
-    paramsM,
-    flopsGiga,
-    valLoss,
-    latencyMs,
-    isPareto: false
-  };
-}
-
-// Weighted-sum scalarization of accuracy vs compute. One fixed weight means
-// the search converges to ONE point on the trade-off curve; the empirical
-// Pareto set shown in the chart comes from all evaluated architectures.
-function evaluateArchFitness(z: number[]): number {
-  const arch = decodeVectorToArch(z);
-  // 0.00032 per true GFLOP (equivalent to the old 0.032 per 100 GFLOPs).
-  return arch.valLoss + 0.00032 * arch.flopsGiga;
-}
 
 // ============================================================================
 // 2. 3D Neural Architecture Sub-Components (Three.js / R3F)
@@ -726,6 +651,7 @@ export function TransformerViz() {
 
     setIsSearching(true);
     setGeneration(0);
+    setLatestStateND(null);
     setHistoryND([]);
 
     const optimizer = new CMAESOptimizerND(
@@ -746,17 +672,20 @@ export function TransformerViz() {
     searchIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
-      setParamVector([...state.bestX]);
+      setParamVector([...(g >= maxG ? state.bestX : state.mean)]);
       setGeneration(g);
       setLatestStateND(state);
       setHistoryND((prev) => [...prev, state]);
 
-      const candidateArch = decodeVectorToArch(state.bestX);
-      candidateArch.id = Date.now();
-      candidateArch.generation = g;
+      const candidateArchitectures = state.samples.map((sample) => {
+        const architecture = decodeVectorToArch(sample.x);
+        architecture.id = g * 1000 + sample.id;
+        architecture.generation = g;
+        return architecture;
+      });
 
       setArchHistory((prev) => {
-        const next = [...prev, candidateArch];
+        const next = [...prev, ...candidateArchitectures];
         next.forEach((p1) => {
           p1.isPareto = !next.some(
             (p2) => p2.flopsGiga <= p1.flopsGiga && p2.valLoss <= p1.valLoss && (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
@@ -776,6 +705,9 @@ export function TransformerViz() {
   const applyPreset = (preset: "edge" | "balanced" | "scale") => {
     setIsSearching(false);
     if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+    setGeneration(0);
+    setLatestStateND(null);
+    setHistoryND([]);
     if (preset === "edge") {
       setParamVector([0.18, 0.25, 0.2, 0.8, 0.1]); // 5 Layers, 352 Dim, 5 Heads, MQA, SwiGLU
     } else if (preset === "balanced") {
@@ -801,7 +733,7 @@ export function TransformerViz() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              CMA-ES minimizes a weighted loss-plus-compute objective in a continuous latent space; the chart tracks the empirical Pareto set of every architecture evaluated. Loss and latency come from hand-written surrogates, not training runs.
+              CMA-ES minimizes a weighted loss, compute, and latency objective in a continuous latent space; the chart tracks the empirical Pareto set of every architecture evaluated. Loss and latency come from hand-written surrogates, not training runs.
             </p>
           </div>
         </div>
@@ -1140,6 +1072,9 @@ export function TransformerViz() {
               onClick={() => {
                 setIsSearching(false);
                 if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+                setGeneration(0);
+                setLatestStateND(null);
+                setHistoryND([]);
                 setParamVector([0.45, 0.48, 0.4, 0.5, 0.2]);
               }}
               className="p-3.5 rounded-2xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white hover:bg-slate-800 transition-[background-color,color]"
@@ -1160,7 +1095,7 @@ export function TransformerViz() {
         onToggleExpand3D={() => setIsExpanded3D((prev) => !prev)}
         isExpanded3D={isExpanded3D}
         accentColor="purple"
-        objectiveName="Loss + Compute"
+        objectiveName="Loss + Compute + Latency"
       />
     </div>
   );

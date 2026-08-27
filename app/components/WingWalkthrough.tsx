@@ -35,9 +35,9 @@ export function WingWalkthrough() {
     {
       step: 2,
       title: "Generation 1: Exploration",
-      subtitle: "Sample $\\lambda$ offspring & run CFD evaluations",
+      subtitle: "Sample $\\lambda$ offspring & evaluate the analytic aero-structural model",
       math: "\\textcolor{#60a5fa}{x_i^{(1)}} \\sim \\mathcal{N}(\\textcolor{#c084fc}{m^{(0)}}, (\\textcolor{#fbbf24}{\\sigma^{(0)}})^2 \\textcolor{#34d399}{I_8}), \\quad i = 1, \\dots, \\lambda",
-      desc: "Sample $\\lambda = 16$ candidate wings (the default rule $\\lambda = 4 + \\lfloor 3 \\ln 8 \\rfloor = 10$ is raised to 16 here so each generation's sample cloud is easier to see). For each vector, decode to physical NACA parameters, construct the 3D surface mesh, execute multi-regime aerodynamic solver runs, and compute scalar performance $f(x_i)$. Sort samples by relative rank.",
+      desc: "Sample $\\lambda = 16$ candidate wings (the default rule $\\lambda = 4 + \\lfloor 3 \\ln 8 \\rfloor = 10$ is raised to 16 here so each generation's sample cloud is easier to see). For each vector, decode the physical parameters and evaluate a closed-form lifting-line, profile-drag, wave-drag, bending-moment, and mass surrogate. The 3D mesh visualizes the currently displayed design; it is not a CFD mesh. Sort samples by relative rank.",
       tag: "Sampling"
     },
     {

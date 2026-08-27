@@ -57,7 +57,24 @@ export function WasmDemo() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
 
-  const optimizerRef = useRef<CMAESOptimizer | null>(null);
+  // Keep the optimizer that produced the initial displayed generation. The
+  // old code discarded it, so the first click recreated the same seeded run
+  // and displayed generation 1 a second time.
+  const [initialRun] = useState(() => {
+    const bench = BENCHMARKS[0];
+    const optimizer = new CMAESOptimizer(bench.eval, {
+      dim: 2,
+      initialMean: [-1.5, 1.8],
+      initialSigma: 0.55,
+      lambda: 16,
+      activeCMA: true,
+      noiseLevel: 0.0,
+      bounds: bench.domain
+    });
+    return { optimizer, state: optimizer.step() };
+  });
+
+  const optimizerRef = useRef<CMAESOptimizer | null>(initialRun.optimizer);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const lossCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -88,20 +105,7 @@ export function WasmDemo() {
     return { initialStep, gd, adam, rs };
   }, []);
 
-  // Initial state setup without mutating refs during render
-  const [history, setHistory] = useState<CMAESGenerationState[]>(() => {
-    const bench = BENCHMARKS[0];
-    const opt = new CMAESOptimizer(bench.eval, {
-      dim: 2,
-      initialMean: [-1.5, 1.8],
-      initialSigma: 0.55,
-      lambda: 16,
-      activeCMA: true,
-      noiseLevel: 0.0,
-      bounds: bench.domain
-    });
-    return [opt.step()];
-  });
+  const [history, setHistory] = useState<CMAESGenerationState[]>([initialRun.state]);
 
   const [gdHistory, setGdHistory] = useState<BaselineStepState[]>([]);
   const [adamHistory, setAdamHistory] = useState<BaselineStepState[]>([]);
@@ -667,7 +671,7 @@ export function WasmDemo() {
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            Multi-Threaded WASM Gallery (SIMD)
+            WASM Gallery (sequential / threaded)
           </button>
         </div>
 

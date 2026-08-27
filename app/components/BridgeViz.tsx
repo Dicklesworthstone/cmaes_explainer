@@ -368,39 +368,23 @@ export function BridgeViz() {
   const [autoRun, setAutoRun] = useState(true);
   const [loadPos, setLoadPos] = useState(0);
 
-  // CMA-ES State with lazy initialization
+  // CMA-ES state exists only for an actual optimizer run. Seeding this HUD
+  // with a discarded optimizer made its numbers stale as soon as a user
+  // changed a physical control.
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
-  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(() => {
-    const optimizer = new CMAESOptimizerND(
-      (zVec) => {
-        const decoded = decodeBridgeVector(zVec);
-        const result = evaluateBridgePhysics(decoded, 0);
-        return result.costScore;
-      },
-      {
-        dim: 8,
-        initialMean: [
-          encodeParameter(180, BRIDGE_PARAM_SPECS[0]),
-          encodeParameter(18, BRIDGE_PARAM_SPECS[1]),
-          encodeParameter(0.45, BRIDGE_PARAM_SPECS[2]),
-          encodeParameter("Warren", BRIDGE_PARAM_SPECS[3]),
-          encodeParameter("A36 Mild Steel", BRIDGE_PARAM_SPECS[4]),
-          encodeParameter(24, BRIDGE_PARAM_SPECS[5]),
-          encodeParameter(0.35, BRIDGE_PARAM_SPECS[6]),
-          encodeParameter(0.05, BRIDGE_PARAM_SPECS[7])
-        ],
-        initialSigma: 0.25,
-        lambda: 16,
-        bounds: [0.0, 1.0]
-      }
-    );
-    return optimizer.step();
-  });
-  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>(() =>
-    latestStateND ? [latestStateND] : []
-  );
+  const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
+  const [historyND, setHistoryND] = useState<CMAESGenerationStateND[]>([]);
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const applyManualParams = useCallback((next: BridgeParams) => {
+    if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+    setIsOptimizing(false);
+    setOptGen(0);
+    setLatestStateND(null);
+    setHistoryND([]);
+    setParams(next);
+  }, []);
 
   // Convert 8 parameters to/from [0, 1]^8 vector
   const paramVector = useMemo(() => {
@@ -472,6 +456,7 @@ export function BridgeViz() {
 
     setIsOptimizing(true);
     setOptGen(0);
+    setLatestStateND(null);
     setHistoryND([]);
 
     const optimizer = new CMAESOptimizerND(
@@ -495,8 +480,8 @@ export function BridgeViz() {
     optIntervalRef.current = setInterval(() => {
       g++;
       const state = optimizer.step();
-      const bestP = decodeVectorToParams(state.bestX);
-      setParams(bestP);
+      const displayedVector = g >= maxG ? state.bestX : state.mean;
+      setParams(decodeVectorToParams(displayedVector));
       setOptGen(g);
       setLatestStateND(state);
       setHistoryND((prev) => [...prev, state]);
@@ -722,6 +707,32 @@ export function BridgeViz() {
             <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
           </div>
 
+          {/* Current physical objective components stay visible when manual
+              controls invalidate the optimizer HUD. In particular, damping
+              now has an observable path through the 180 km/h flutter limit. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[0.68rem] font-mono">
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
+              <div className="text-slate-500 uppercase">Deflection</div>
+              <div className="text-sky-300 font-bold">{analysis.maxDeflectionMm.toFixed(1)} mm</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
+              <div className="text-slate-500 uppercase">Flutter limit</div>
+              <div className={analysis.flutterCriticalSpeedKmh >= 180 ? "text-emerald-300 font-bold" : "text-rose-300 font-bold"}>
+                {analysis.flutterCriticalSpeedKmh} / 180 km/h
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
+              <div className="text-slate-500 uppercase">Current score</div>
+              <div className="text-amber-300 font-bold">{analysis.costScore.toFixed(1)}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
+              <div className="text-slate-500 uppercase">Constraints</div>
+              <div className={analysis.isCompliant ? "text-emerald-300 font-bold" : "text-rose-300 font-bold"}>
+                {analysis.isCompliant ? "PASS" : "VIOLATION"}
+              </div>
+            </div>
+          </div>
+
           {/* Unified Live CMA-ES Internal State Telemetry HUD (Directly at the bottom) */}
           <CMAESTelemetryHUD
             latestState={latestStateND}
@@ -751,7 +762,7 @@ export function BridgeViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
+                  applyManualParams({
                     spanLength: 280,
                     cableSag: 28,
                     deckStiffness: 0.35,
@@ -769,7 +780,7 @@ export function BridgeViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
+                  applyManualParams({
                     spanLength: 140,
                     cableSag: 12,
                     deckStiffness: 0.85,
@@ -787,7 +798,7 @@ export function BridgeViz() {
               <button
                 type="button"
                 onClick={() =>
-                  setParams({
+                  applyManualParams({
                     spanLength: 200,
                     cableSag: 22,
                     deckStiffness: 0.5,
@@ -819,7 +830,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[0].max}
                 step={BRIDGE_PARAM_SPECS[0].step}
                 value={params.spanLength}
-                onChange={(e) => setParams({ ...params, spanLength: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, spanLength: parseFloat(e.target.value) })}
                 className="w-full accent-amber-400"
               />
             </div>
@@ -837,7 +848,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[1].max}
                 step={BRIDGE_PARAM_SPECS[1].step}
                 value={params.cableSag}
-                onChange={(e) => setParams({ ...params, cableSag: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, cableSag: parseFloat(e.target.value) })}
                 className="w-full accent-sky-400"
               />
             </div>
@@ -855,7 +866,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[2].max}
                 step={BRIDGE_PARAM_SPECS[2].step}
                 value={params.deckStiffness}
-                onChange={(e) => setParams({ ...params, deckStiffness: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, deckStiffness: parseFloat(e.target.value) })}
                 className="w-full accent-emerald-400"
               />
             </div>
@@ -869,7 +880,7 @@ export function BridgeViz() {
               <select
                 aria-label="Truss Web Topology"
                 value={params.trussTopology}
-                onChange={(e) => setParams({ ...params, trussTopology: e.target.value as TrussTopology })}
+                onChange={(e) => applyManualParams({ ...params, trussTopology: e.target.value as TrussTopology })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-400"
               >
                 {BRIDGE_PARAM_SPECS[3].categories?.map((cat) => (
@@ -889,7 +900,7 @@ export function BridgeViz() {
               <select
                 aria-label="Material Grade"
                 value={params.materialGrade}
-                onChange={(e) => setParams({ ...params, materialGrade: e.target.value as MaterialGrade })}
+                onChange={(e) => applyManualParams({ ...params, materialGrade: e.target.value as MaterialGrade })}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-400"
               >
                 {BRIDGE_PARAM_SPECS[4].categories?.map((cat) => (
@@ -913,7 +924,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[5].max}
                 step={BRIDGE_PARAM_SPECS[5].step}
                 value={params.suspenderCount}
-                onChange={(e) => setParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })}
+                onChange={(e) => applyManualParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })}
                 className="w-full accent-cyan-400"
               />
             </div>
@@ -931,7 +942,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[6].max}
                 step={BRIDGE_PARAM_SPECS[6].step}
                 value={params.towerAspect}
-                onChange={(e) => setParams({ ...params, towerAspect: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, towerAspect: parseFloat(e.target.value) })}
                 className="w-full accent-rose-400"
               />
             </div>
@@ -949,7 +960,7 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[7].max}
                 step={BRIDGE_PARAM_SPECS[7].step}
                 value={params.vibrationDamping}
-                onChange={(e) => setParams({ ...params, vibrationDamping: parseFloat(e.target.value) })}
+                onChange={(e) => applyManualParams({ ...params, vibrationDamping: parseFloat(e.target.value) })}
                 className="w-full accent-teal-400"
               />
             </div>

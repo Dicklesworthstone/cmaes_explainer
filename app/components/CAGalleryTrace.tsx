@@ -213,6 +213,7 @@ export function CAGalleryTrace() {
 
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optGen, setOptGen] = useState(0);
+  const [optimizerError, setOptimizerError] = useState<string | null>(null);
   const optIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [latestStateND, setLatestStateND] = useState<CMAESGenerationStateND | null>(null);
@@ -505,8 +506,26 @@ export function CAGalleryTrace() {
       setIsOptimizing(false);
       return;
     }
+
+    setOptimizerError(null);
+    if (engine !== "wasm") {
+      setOptimizerError(
+        engine === "pending"
+          ? "CMA-ES search is waiting for the FrankenSim WASM evaluation kernel."
+          : "CMA-ES search is unavailable because the WASM evaluation kernel did not load; the TypeScript field remains interactive."
+      );
+      return;
+    }
+
+    leniaSnapshotEval();
+    if (leniaEval(mu, sigma, dt, 1) === null) {
+      setOptimizerError("The WASM evaluator refused its preflight score, so optimization was not started.");
+      return;
+    }
+
     setIsOptimizing(true);
     setOptGen(0);
+    setLatestStateND(null);
     setHistoryND([]);
 
     // Freeze the current field as the evaluation seed for the whole search.
@@ -514,14 +533,9 @@ export function CAGalleryTrace() {
     // objective non-stationary: every generation would grade a different
     // initial condition and the convergence trace would be meaningless.
     // The wasm kernel snapshots internally (box-averaged to 128²) and rolls
-    // each candidate out there; the fallback snapshots the 96² CPU grid.
-    const useWasmEval = engine === "wasm";
-    let seedGrid: Float32Array | null = null;
-    if (useWasmEval) {
-      leniaSnapshotEval();
-    } else {
-      seedGrid = new Float32Array(gridStateRef.current.current);
-    }
+    // each candidate out there. A 12-candidate direct-convolution fallback
+    // would monopolize the browser main thread, so kernel failure aborts the
+    // search visibly instead of silently assigning every candidate zero.
 
     // Optimize continuous parameters in normalized [0, 1]^3 space
     const optimizer = new CMAESOptimizerND(
@@ -530,29 +544,11 @@ export function CAGalleryTrace() {
         const sVal = 0.015 + zVec[1] * 0.060;
         const dtVal = 0.10 + zVec[2] * 0.25;
 
-        if (useWasmEval) {
-          // Kernel-side rollout of the same objective:
-          // mean over 18 steps of (interface - 2|mass - 0.25|).
-          const score = leniaEval(mVal, sVal, dtVal, 18);
-          if (score !== null) return -score;
-          console.warn("[fs-lenia] eval call failed; scoring candidate as neutral");
-          return 0;
-        }
-
-        const bufA = new Float32Array(seedGrid!);
-        const bufB = new Float32Array(GRID_SIZE * GRID_SIZE);
-        let scoreSum = 0;
-
-        for (let s = 0; s < 18; s++) {
-          const src = s % 2 === 0 ? bufA : bufB;
-          const dst = s % 2 === 0 ? bufB : bufA;
-          const res = stepLeniaContinuous(src, dst, kernel, mVal, sVal, dtVal);
-          // Ideal mass is around 0.15 - 0.35; high entropy indicates living perimeter complexity
-          const massPenalty = Math.abs(res.mass - 0.25) * 2.0;
-          const fitness = res.entropy - massPenalty;
-          scoreSum += fitness;
-        }
-        return -scoreSum / 18; // Minimize negative fitness
+        // Kernel-side rollout of the same objective: mean over 18 steps of
+        // (interface - 2|mass - 0.25|).
+        const score = leniaEval(mVal, sVal, dtVal, 18);
+        if (score === null) throw new Error("FrankenSim Lenia evaluation failed during CMA-ES");
+        return -score;
       },
       {
         dim: 3,
@@ -573,10 +569,19 @@ export function CAGalleryTrace() {
 
     optIntervalRef.current = setInterval(() => {
       g++;
-      const state = optimizer.step();
-      const newMu = 0.10 + state.bestX[0] * 0.32;
-      const newSigma = 0.015 + state.bestX[1] * 0.060;
-      const newDt = 0.10 + state.bestX[2] * 0.25;
+      let state: CMAESGenerationStateND;
+      try {
+        state = optimizer.step();
+      } catch (error) {
+        if (optIntervalRef.current) clearInterval(optIntervalRef.current);
+        setIsOptimizing(false);
+        setOptimizerError(error instanceof Error ? error.message : "Lenia optimization failed.");
+        return;
+      }
+      const displayedVector = g >= maxG ? state.bestX : state.mean;
+      const newMu = 0.10 + displayedVector[0] * 0.32;
+      const newSigma = 0.015 + displayedVector[1] * 0.060;
+      const newDt = 0.10 + displayedVector[2] * 0.25;
 
       setMu(newMu);
       setSigma(newSigma);
@@ -933,15 +938,23 @@ export function CAGalleryTrace() {
           {/* Evolve with CMA-ES Action Button */}
           <button
             onClick={handleRunOptimizer}
+            disabled={engine !== "wasm" && !isOptimizing}
             className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-xs font-bold text-white transition-[background-color,box-shadow,transform] shadow-xl ${
               isOptimizing
                 ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/30 animate-pulse"
-                : "bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:scale-[1.01] shadow-pink-500/30"
+                : engine === "wasm"
+                  ? "bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:scale-[1.01] shadow-pink-500/30"
+                  : "bg-slate-700 text-slate-400 cursor-not-allowed shadow-none"
             }`}
           >
             <Sparkles className="h-4 w-4" />
             <span>{isOptimizing ? "Halt Morphodynamic Evolution" : "Evolve Self-Stabilizing Solitons with CMA-ES"}</span>
           </button>
+          {(optimizerError || engine !== "wasm") && (
+            <p className="text-xs text-amber-300" role="status">
+              {optimizerError ?? "CMA-ES search will unlock when the FrankenSim WASM evaluator is ready."}
+            </p>
+          )}
         </div>
       </div>
 
@@ -959,4 +972,3 @@ export function CAGalleryTrace() {
     </div>
   );
 }
-

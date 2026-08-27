@@ -6,7 +6,6 @@ import { PracticalPlaybook } from "./PracticalPlaybook";
 import { DLHybrids } from "./DLHybrids";
 import { CommunitySplit } from "./CommunitySplit";
 import { ColorizedEquation } from "./ColorizedEquation";
-import { CmaesInternalsLab } from "./CmaesInternalsLab";
 import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
 import {
   Compass,
@@ -177,17 +176,6 @@ export function TechnicalAddendum() {
 
         {/* Colorized Equation 10: Affine Coordinate Invariance */}
         <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-affine-invariance"]} />
-      </div>
-
-      {/* Interactive 3D CMA-ES Mechanics & Parameter Lab */}
-      <div className="space-y-6">
-        <div className="prose-cmaes">
-          <h2>6. Multi-Dimensional Phase Space & Internals Lab</h2>
-          <p>
-            Explore high-dimensional covariance adaptation and trajectory momentum in real time. Switch between canonical test landscapes, vary search dimensionality from 2D to 12D, and observe the live 3D PCA projection as CMA-ES whitens ill-conditioned ravines and settles into multimodal basins (escaping them is the job of restart strategies).
-          </p>
-        </div>
-        <CmaesInternalsLab />
       </div>
 
       {/* Practical Playbook Integration */}

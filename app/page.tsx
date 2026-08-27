@@ -45,7 +45,7 @@ export default function Page() {
               <Section id="engines" title="Two high-performance CMA-ES engines in Rust">
                 <OpenSourceEngines />
               </Section>
-              <Section id="live-demo" title="Live CMA-ES landscape explorer (WASM)">
+              <Section id="live-demo" title="Live CMA-ES landscape explorer (TypeScript + WASM)">
                 <WasmDemo />
               </Section>
               <Section id="internals" title="Inside the optimizer: covariance geometry in 3D (frankensim WASM)">

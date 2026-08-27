@@ -344,12 +344,18 @@ export function NoiseExplorer() {
 
           {/* Convergence Chart */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-200">
+            <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs font-bold uppercase tracking-wider text-slate-200">
               <span className="flex items-center gap-1 text-sky-400">
                 <TrendingDown className="h-3.5 w-3.5" />
                 True Underlying Loss vs Noisy Observation
               </span>
-              <div className="flex items-center gap-3 font-mono text-[0.68rem]">
+              <div className="flex flex-wrap items-center gap-3 font-mono text-[0.68rem]">
+                {/* Live textual progress: without this, the run's only
+                    feedback is canvas pixels and the demo reads as dead. */}
+                <span className="text-emerald-300 normal-case">
+                  Gen {generation}/40 · true loss{" "}
+                  {trueLossHistory.length > 0 ? trueLossHistory[trueLossHistory.length - 1].toFixed(3) : "—"}
+                </span>
                 <span className="text-sky-400">● True Loss at Mean</span>
                 <span className="text-purple-400">● Median Observed</span>
               </div>

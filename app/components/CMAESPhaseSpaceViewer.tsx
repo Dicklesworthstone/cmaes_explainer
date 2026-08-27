@@ -675,14 +675,17 @@ export function CMAESTelemetryHUD({
   if (!latestState) {
     return (
       <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/10 text-xs font-mono text-slate-400 flex items-center justify-between">
-        <span>CMA-ES State: Initializing distribution N(m, σ² C)...</span>
+        <span>CMA-ES State: no run yet — adjust the design or start optimization.</span>
       </div>
     );
   }
 
   const { generation, sigma, conditionNumber, phaseSpace3D, evalCount, bestFitness } = latestState;
   const initialFitness = history[0]?.bestFitness ?? bestFitness;
-  const fitnessDelta = initialFitness > 0 ? ((bestFitness - initialFitness) / initialFitness) * 100 : 0;
+  const fitnessDelta =
+    Math.abs(initialFitness) > Number.EPSILON
+      ? ((bestFitness - initialFitness) / Math.abs(initialFitness)) * 100
+      : 0;
 
   return (
     <div className="relative rounded-2xl border border-white/10 bg-slate-950/85 backdrop-blur-xl shadow-2xl overflow-hidden transition-[border-color,box-shadow] duration-300">
