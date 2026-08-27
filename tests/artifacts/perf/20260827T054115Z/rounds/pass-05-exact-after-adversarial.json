@@ -1,0 +1,116 @@
+{
+  "equalDiagonalPositive": {
+    "eigenvalues": [
+      2.999999999999999,
+      0.9999999999999998
+    ],
+    "maxResidual": 4.440892098500626e-16,
+    "normalizedResidual": 2.220446049250313e-16,
+    "maxOrthogonalityError": 2.220446049250313e-16,
+    "descending": true,
+    "finitePositive": true
+  },
+  "equalDiagonalNegative": {
+    "eigenvalues": [
+      2.999999999999999,
+      0.9999999999999998
+    ],
+    "maxResidual": 4.440892098500626e-16,
+    "normalizedResidual": 2.220446049250313e-16,
+    "maxOrthogonalityError": 2.220446049250313e-16,
+    "descending": true,
+    "finitePositive": true
+  },
+  "subnormal": {
+    "eigenvalues": [
+      1e-300,
+      1e-300
+    ],
+    "maxResidual": 9.238795325112867e-301,
+    "normalizedResidual": 1.8699529916478917e+22,
+    "maxOrthogonalityError": 0,
+    "descending": true,
+    "finitePositive": true
+  },
+  "clusteredDct": {
+    "eigenvalues": [
+      1.000000000002306,
+      1.0000000000022768,
+      1.0000000000021665,
+      1.0000000000001,
+      0.9999999999997384,
+      0.9999999999984103,
+      0.9999999999975959,
+      0.9999999999974053
+    ],
+    "maxResidual": 1.0126506558046605e-12,
+    "normalizedResidual": 1.0126506558042198e-12,
+    "maxOrthogonalityError": 2.220446049250313e-16,
+    "descending": true,
+    "finitePositive": true
+  },
+  "illConditionedDct": {
+    "eigenvalues": [
+      1000000.0000000015,
+      19306.977288832542,
+      372.75937203152074,
+      7.19685673005933,
+      0.13894954945701607,
+      0.0026826958247471127,
+      0.000051794751866074966,
+      9.999877848628827e-7
+    ],
+    "maxResidual": 1.27673501992831e-7,
+    "normalizedResidual": 5.292009289783724e-13,
+    "maxOrthogonalityError": 1.5543122344752192e-15,
+    "descending": true,
+    "finitePositive": true
+  },
+  "hugeDct": {
+    "eigenvalues": [
+      4e+280,
+      3.0000000000000017e+280,
+      2.0000000000000025e+280,
+      1.0000000000000002e+280
+    ],
+    "maxResidual": 1.612226962694291e+265,
+    "normalizedResidual": 5.649892404357983e-16,
+    "maxOrthogonalityError": 6.661338147750939e-16,
+    "descending": true,
+    "finitePositive": true
+  },
+  "smallDct": {
+    "eigenvalues": [
+      4e-280,
+      2.9999999999999994e-280,
+      2.0000000000000016e-280,
+      1.0000000000000002e-280
+    ],
+    "maxResidual": 1.9571956640712625e-295,
+    "normalizedResidual": 6.858801627904174e-16,
+    "maxOrthogonalityError": 8.881784197001252e-16,
+    "descending": true,
+    "finitePositive": true
+  },
+  "denseSpd": {
+    "eigenvalues": [
+      3.7104415725288247,
+      3.402452471762431,
+      3.0899227576491293,
+      2.788101414642168,
+      2.5212596407803742,
+      2.2492206790383458,
+      2.0302506994013747,
+      1.7580014717895145,
+      1.5567694549594697,
+      1.3466988325365217,
+      1.1643444172662083,
+      0.981881026636035
+    ],
+    "maxResidual": 1.2894130207996568e-12,
+    "normalizedResidual": 3.4968537961960844e-13,
+    "maxOrthogonalityError": 3.3306690738754696e-15,
+    "descending": true,
+    "finitePositive": true
+  }
+}

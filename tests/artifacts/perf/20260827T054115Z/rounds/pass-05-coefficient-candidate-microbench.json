@@ -1,0 +1,22 @@
+{
+  "coefficientsPerTrial": 1024000,
+  "current": {
+    "p50Ms": 5.581375000000008,
+    "p95Ms": 10.568958000000002,
+    "checksum": 24604.770769541807
+  },
+  "guardedSqrt": {
+    "p50Ms": 1.2461659999999881,
+    "p95Ms": 1.336999999999989,
+    "checksum": 24604.770769541807
+  },
+  "scaledSqrt": {
+    "p50Ms": 3.2867919999999913,
+    "p95Ms": 4.900459000000012,
+    "checksum": 24604.770769541807
+  },
+  "guardedMismatches": 4,
+  "maxGuardedDelta": 3.3306690738754696e-16,
+  "scaledMismatches": 140,
+  "maxScaledDelta": 3.3306690738754696e-16
+}

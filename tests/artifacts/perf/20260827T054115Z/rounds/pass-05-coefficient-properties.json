@@ -1,0 +1,247 @@
+{
+  "bounds": {
+    "small": 7.450580596923828e-9,
+    "large": 134217728
+  },
+  "explicitCases": [
+    {
+      "name": "positiveZero",
+      "tau": "0",
+      "referenceT": "1",
+      "candidateT": "1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "negativeZero",
+      "tau": "-0",
+      "referenceT": "1",
+      "candidateT": "1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "positiveMinSubnormal",
+      "tau": "5e-324",
+      "referenceT": "1",
+      "candidateT": "1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "negativeMinSubnormal",
+      "tau": "-5e-324",
+      "referenceT": "-1",
+      "candidateT": "-1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "-0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "positiveMinNormal",
+      "tau": "2.2250738585072014e-308",
+      "referenceT": "1",
+      "candidateT": "1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "negativeMinNormal",
+      "tau": "-2.2250738585072014e-308",
+      "referenceT": "-1",
+      "candidateT": "-1",
+      "same": true,
+      "cosine": "0.7071067811865475",
+      "sine": "-0.7071067811865475",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "positiveSmallBoundary",
+      "tau": "7.450580596923828e-9",
+      "referenceT": "0.9999999925494194",
+      "candidateT": "0.9999999925494194",
+      "same": true,
+      "cosine": "0.7071067838207256",
+      "sine": "0.7071067785523695",
+      "normalizationError": 0,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "negativeSmallBoundary",
+      "tau": "-7.450580596923828e-9",
+      "referenceT": "-0.9999999925494194",
+      "candidateT": "-0.9999999925494194",
+      "same": true,
+      "cosine": "0.7071067838207256",
+      "sine": "-0.7071067785523695",
+      "normalizationError": 0,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "positiveOrdinary",
+      "tau": "0.5",
+      "referenceT": "0.6180339887498948",
+      "candidateT": "0.6180339887498948",
+      "same": true,
+      "cosine": "0.8506508083520399",
+      "sine": "0.5257311121191335",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "negativeOrdinary",
+      "tau": "-0.5",
+      "referenceT": "-0.6180339887498948",
+      "candidateT": "-0.6180339887498948",
+      "same": true,
+      "cosine": "0.8506508083520399",
+      "sine": "-0.5257311121191335",
+      "normalizationError": 2.220446049250313e-16,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "positiveLargeBoundary",
+      "tau": "134217728",
+      "referenceT": "3.725290298461914e-9",
+      "candidateT": "3.725290298461914e-9",
+      "same": true,
+      "cosine": "1",
+      "sine": "3.725290298461914e-9",
+      "normalizationError": 0,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "negativeLargeBoundary",
+      "tau": "-134217728",
+      "referenceT": "-3.725290298461914e-9",
+      "candidateT": "-3.725290298461914e-9",
+      "same": true,
+      "cosine": "1",
+      "sine": "-3.725290298461914e-9",
+      "normalizationError": 0,
+      "rootEquationResidual": 0
+    },
+    {
+      "name": "positiveHugeFinite",
+      "tau": "8.988465674311579e+307",
+      "referenceT": "5.562684646268003e-309",
+      "candidateT": "5.562684646268003e-309",
+      "same": true,
+      "cosine": "1",
+      "sine": "5.562684646268003e-309",
+      "normalizationError": 0,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "negativeHugeFinite",
+      "tau": "-8.988465674311579e+307",
+      "referenceT": "-5.562684646268003e-309",
+      "candidateT": "-5.562684646268003e-309",
+      "same": true,
+      "cosine": "1",
+      "sine": "-5.562684646268003e-309",
+      "normalizationError": 0,
+      "rootEquationResidual": 1.1102230246251565e-16
+    },
+    {
+      "name": "positiveMaxFinite",
+      "tau": "1.7976931348623157e+308",
+      "referenceT": "0",
+      "candidateT": "0",
+      "same": true,
+      "cosine": "1",
+      "sine": "0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "negativeMaxFinite",
+      "tau": "-1.7976931348623157e+308",
+      "referenceT": "-0",
+      "candidateT": "-0",
+      "same": true,
+      "cosine": "1",
+      "sine": "-0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "positiveInfinityFromDivision",
+      "tau": "+Infinity",
+      "referenceT": "0",
+      "candidateT": "0",
+      "same": true,
+      "cosine": "1",
+      "sine": "0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "negativeInfinityFromDivision",
+      "tau": "-Infinity",
+      "referenceT": "-0",
+      "candidateT": "-0",
+      "same": true,
+      "cosine": "1",
+      "sine": "-0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "positiveInfinity",
+      "tau": "+Infinity",
+      "referenceT": "0",
+      "candidateT": "0",
+      "same": true,
+      "cosine": "1",
+      "sine": "0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "negativeInfinity",
+      "tau": "-Infinity",
+      "referenceT": "-0",
+      "candidateT": "-0",
+      "same": true,
+      "cosine": "1",
+      "sine": "-0",
+      "normalizationError": 0,
+      "rootEquationResidual": null
+    },
+    {
+      "name": "nanFromDivision",
+      "tau": "NaN",
+      "referenceT": "NaN",
+      "candidateT": "NaN",
+      "same": true,
+      "cosine": "NaN",
+      "sine": "NaN",
+      "normalizationError": null,
+      "rootEquationResidual": null
+    }
+  ],
+  "deterministicLogSweep": {
+    "samples": 200000,
+    "mismatches": 0,
+    "smallPath": 99633,
+    "ordinaryPath": 5230,
+    "largePath": 95137,
+    "maxNormalizationError": 4.440892098500626e-16
+  }
+}

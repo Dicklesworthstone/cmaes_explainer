@@ -14,6 +14,8 @@ export type MatrixND = number[][];
 
 const TWO_POW_32 = 0x100000000;
 const RELATIVE_EIGENVALUE_FLOOR = 1e-14;
+const JACOBI_TAU_SMALL_EXACT = 2 ** -27;
+const JACOBI_TAU_LARGE_EXACT = 2 ** 27;
 
 export function createZeroVector(dim: number): VectorND {
   if (!Number.isInteger(dim) || dim < 0) throw new RangeError("Vector dimension must be a non-negative integer.");
@@ -135,9 +137,13 @@ export function jacobiEigenSymmetric(
         const app = a[pp];
         const aqq = a[qq];
         const tau = (aqq - app) / (2 * apq);
-        const t = tau >= 0
-          ? 1 / (tau + Math.hypot(1, tau))
-          : -1 / (-tau + Math.hypot(1, tau));
+        const tauMagnitude = Math.abs(tau);
+        const tauNorm = tauMagnitude <= JACOBI_TAU_SMALL_EXACT
+          ? 1
+          : tauMagnitude >= JACOBI_TAU_LARGE_EXACT
+            ? tauMagnitude
+            : Math.hypot(1, tauMagnitude);
+        const t = (tau < 0 ? -1 : 1) / (tauMagnitude + tauNorm);
         const cosine = 1 / Math.sqrt(1 + t * t);
         const sine = t * cosine;
 
