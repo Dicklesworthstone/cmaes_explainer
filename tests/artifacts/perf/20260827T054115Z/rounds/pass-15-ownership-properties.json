@@ -1,0 +1,23 @@
+{
+  "dimensions": [
+    1,
+    2,
+    4,
+    8,
+    24
+  ],
+  "seeds": [
+    1,
+    99,
+    1729
+  ],
+  "repairStrategies": [
+    "none",
+    "clip",
+    "reflect"
+  ],
+  "generationsPerBasisAudit": 4,
+  "checksPassed": 4176,
+  "checksFailed": 0,
+  "failures": []
+}

@@ -1,0 +1,127 @@
+{
+  "decision": "accept_private_projection_basis_ownership_transfer",
+  "productionChangeRetained": true,
+  "acceptedEngineSha256": "c0a263476eb7b022d8327bf9afa7eae0498daefde604f43a0d490226b6015465",
+  "opportunities": {
+    "projectionBasisClone": {
+      "region": "second private clone in alignProjectionBasis",
+      "impact": 1,
+      "confidence": 5,
+      "effort": 1,
+      "score": 5,
+      "threshold": 2,
+      "eligible": true,
+      "rationale": "The fresh profile attributed 101.9 ms / 1.1% total to cloneMatrix and 37.6 ms / 0.4% total directly to the second alignProjectionBasis clone. The aligned matrix is private, is only read after assignment, and is not part of any returned snapshot."
+    },
+    "covarianceReconstruction": {
+      "region": "reconstructSymmetric after repaired eigendecomposition",
+      "impact": 1,
+      "confidence": 5,
+      "effort": 4,
+      "score": 1.25,
+      "threshold": 2,
+      "eligible": false,
+      "rationale": "The fresh profile attributed 309.9 ms / 3.4% total to reconstruction, but its exact repaired matrix is read by the next covariance recurrence and cloned into the public generation snapshot. Omitting it would retain the unrepaired provisional matrix, bypass floored eigenvalues, and change exact floating-point outputs. No exact lower-effort replacement was found."
+    }
+  },
+  "representativePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "before": {
+      "p50Milliseconds": 55.627958000000945,
+      "p95Milliseconds": 57.899750000000495,
+      "p99Milliseconds": 63.19212499999958,
+      "evaluationsPerSecond": 58014.55810644985,
+      "checksum": 24940.517463897122
+    },
+    "after": {
+      "p50Milliseconds": 54.613249999998516,
+      "p95Milliseconds": 56.76350000000002,
+      "p99Milliseconds": 66.10566700000163,
+      "evaluationsPerSecond": 59170.02867128343,
+      "checksum": 24940.517463897122
+    },
+    "afterVersusBeforePercent": {
+      "p50": -1.8240971563299402,
+      "p95": -1.9624437065798417,
+      "p99": 4.610609312476943,
+      "evaluationsPerSecond": 1.9916907109995163
+    },
+    "sameSeedP95EnvelopePercent": 4.8,
+    "p95MovementInsideEnvelope": true,
+    "checksumsExact": true
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "callsPerTrial": 4000,
+    "measuredTrials": 40,
+    "warmupTrials": 5,
+    "before": {
+      "p50Milliseconds": 5.464792000000017,
+      "p95Milliseconds": 6.623749999999973,
+      "p99Milliseconds": 9.381708000000003,
+      "callsPerSecond": 704775.8279439935,
+      "checksum": -31.295743148112457
+    },
+    "after": {
+      "p50Milliseconds": 4.253708000000017,
+      "p95Milliseconds": 5.249167000000007,
+      "p99Milliseconds": 5.877415999999997,
+      "callsPerSecond": 907909.177600489,
+      "checksum": -31.295743148112457
+    },
+    "afterVersusBeforePercent": {
+      "p50": -22.16157540854247,
+      "p95": -20.752338177014096,
+      "p99": -37.352388285800465,
+      "callsPerSecond": 28.82240587749527
+    },
+    "checksumsExact": true
+  },
+  "matchedProfiles": {
+    "intervalMicroseconds": 500,
+    "before": {
+      "durationSeconds": 9.07,
+      "samples": 11728,
+      "cloneMatrixTotalMilliseconds": 101.9,
+      "cloneMatrixTotalSharePercent": 1.1,
+      "targetSecondCloneMilliseconds": 37.6,
+      "targetSecondCloneSharePercent": 0.4,
+      "reconstructSymmetricTotalMilliseconds": 309.9,
+      "reconstructSymmetricTotalSharePercent": 3.4,
+      "checksum": 12274.303979858667
+    },
+    "after": {
+      "durationSeconds": 9.15,
+      "samples": 11858,
+      "cloneMatrixTotalMilliseconds": 61.1,
+      "cloneMatrixTotalSharePercent": 0.6,
+      "targetSecondCloneMilliseconds": 0,
+      "targetSecondCloneSharePercent": 0,
+      "reconstructSymmetricTotalMilliseconds": 401.1,
+      "reconstructSymmetricTotalSharePercent": 4.3,
+      "checksum": 12274.303979858667
+    },
+    "cloneMatrixTotalMillisecondsChangePercent": -40.03925399411188,
+    "targetSecondCloneEliminated": true
+  },
+  "behavior": {
+    "goldenDimensionsExact": [1, 2, 4, 8, 12, 24, 48],
+    "ownershipAndProjectionChecksPassed": 4176,
+    "ownershipAndProjectionChecksFailed": 0,
+    "alignedMatrixValuesExact": true,
+    "eigensystemIsolationPreserved": true,
+    "publicSnapshotIsolationPreserved": true,
+    "previousBasisReadOnlyAfterTransfer": true,
+    "floatingPointArithmeticUnchanged": true,
+    "rngAndCandidateOrderingUnchanged": true
+  },
+  "memory": {
+    "matchedBeforeMaximumResidentSetBytes": 83378176,
+    "matchedAfterMaximumResidentSetBytes": 79986688,
+    "matchedChangePercent": -4.067596777362937,
+    "guardrailBytes": 90166067,
+    "matchedAfterWithinGuardrail": true,
+    "unmatchedAfterSamplesBytes": [95780864, 90423296],
+    "note": "Fresh-process RSS showed allocator/OS variance. The immediately adjacent before/after pair was used for attribution; the retained change removes one matrix allocation and cannot add retained objects."
+  }
+}

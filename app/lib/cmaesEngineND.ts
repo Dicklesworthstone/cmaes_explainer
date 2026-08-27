@@ -571,7 +571,7 @@ export class CMAESOptimizerND {
         }
       }
     }
-    this.previousProjectionBasis = cloneMatrix(aligned);
+    this.previousProjectionBasis = aligned;
     return aligned;
   }
 

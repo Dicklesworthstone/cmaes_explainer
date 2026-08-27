@@ -1,0 +1,34 @@
+{
+  "region": "reconstructSymmetric after jacobiEigenSymmetric",
+  "freshProfileTotalMilliseconds": 309.9,
+  "freshProfileTotalSharePercent": 3.4,
+  "impact": 1,
+  "confidence": 5,
+  "effort": 4,
+  "score": 1.25,
+  "threshold": 2,
+  "decision": "retain_exact_reconstruction",
+  "checks": [
+    {
+      "check": "next-generation dataflow",
+      "result": "required",
+      "evidence": "The reconstructed private covariance is multiplied by oldCoefficient in the next generation's upper-triangle recurrence."
+    },
+    {
+      "check": "repair semantics",
+      "result": "required",
+      "evidence": "Reconstruction uses the sorted, positive eigenvalues after the relative floor; retaining provisional would bypass that repair and desynchronize covariance from currentEigen."
+    },
+    {
+      "check": "public snapshot contract",
+      "result": "required",
+      "evidence": "Every generation returns a separately owned clone of the reconstructed covariance and per-dimension variances derived from its diagonal."
+    },
+    {
+      "check": "exact arithmetic",
+      "result": "no eligible replacement",
+      "evidence": "Lazy or fused reconstruction still requires the same ordered sum for every upper-triangle element; using provisional or an algebraic shortcut changes binary64 outputs."
+    }
+  ],
+  "productionSourceChangedForThisOpportunity": false
+}

@@ -1,0 +1,23 @@
+{
+  "decision": "accept",
+  "engineSha256": "c0a263476eb7b022d8327bf9afa7eae0498daefde604f43a0d490226b6015465",
+  "goldenDimensions": [1, 2, 4, 8, 12, 24, 48],
+  "goldensByteExact": true,
+  "ownershipAndProjectionChecksPassed": 4176,
+  "ownershipAndProjectionChecksFailed": 0,
+  "focusedTests": {
+    "passed": 16,
+    "failed": 0,
+    "assertions": 157
+  },
+  "typecheck": "pass",
+  "lint": "pass_with_pre_existing_baseline_browser_mapping_age_advisory",
+  "format": "not_configured_in_package_json",
+  "ubs": {
+    "exitCode": 0,
+    "criticalFindings": 0,
+    "note": "Broad cross-language heuristic notices are unrelated to the one-line ownership transfer."
+  },
+  "gitDiffCheck": "pass",
+  "matchedRssWithinGuardrail": true
+}
