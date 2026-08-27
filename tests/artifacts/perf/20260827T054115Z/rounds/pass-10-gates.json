@@ -1,0 +1,45 @@
+{
+  "decision": "no_change",
+  "productionChangeRetained": false,
+  "engineSha256BeforeAndAfter": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "freshOpportunityScore": 1.5,
+  "opportunityThreshold": 2,
+  "eligibleExactLeverFound": false,
+  "representativeSameSourcePairChecksumsExact": true,
+  "focusedSameSourcePairChecksumsExact": true,
+  "gaussianPropertyChecks": {
+    "passed": 18,
+    "failed": 0,
+    "referenceStreamDimensions": [1, 2, 3, 4, 8, 12, 23, 24, 25, 48],
+    "distributionSamples": 1000000
+  },
+  "candidateZOwnershipChecks": {
+    "allFirstZDistinct": true,
+    "allSecondZDistinct": true,
+    "noZSharedAcrossGenerations": true,
+    "firstZUnchangedAfterNextStep": true,
+    "zDistinctFromRawXAndX": true
+  },
+  "goldenDimensions": [1, 2, 4, 8, 12, 24, 48],
+  "freshGoldensByteExact": true,
+  "authoritativeGoldenChecksums": "all_seven_ok",
+  "tests": {
+    "passed": 16,
+    "failed": 0,
+    "assertions": 157
+  },
+  "typecheck": "pass",
+  "lint": "pass_with_preexisting_baseline_browser_mapping_age_advisory",
+  "format": "not_applicable_no_format_script_and_no_production_change",
+  "ubs": {
+    "exitCode": 0,
+    "criticalFindings": 0,
+    "note": "Broad cross-language heuristic notices are pre-existing and unrelated to the unchanged engine."
+  },
+  "engineProductionDiffEmpty": true,
+  "gitDiffCheck": "pass",
+  "campaignLedgerTouched": false,
+  "commitCreated": false,
+  "filesDeleted": false,
+  "destructiveCommandUsed": false
+}

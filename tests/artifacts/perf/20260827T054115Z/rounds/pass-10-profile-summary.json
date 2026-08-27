@@ -1,0 +1,152 @@
+{
+  "engineSha256": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "decision": "no_change_below_threshold_and_no_eligible_exact_lever",
+  "productionChangeRetained": false,
+  "opportunity": {
+    "region": "sampleGaussianVectorND",
+    "freshIntegratedTotalSharePercent": 2.0,
+    "freshIntegratedDirectSharePercent": 1.3,
+    "campaignBaselineTotalSharePercent": 1.9,
+    "changePercentagePoints": 0.1,
+    "impact": 1,
+    "confidence": 3,
+    "effort": 2,
+    "score": 1.5,
+    "threshold": 2,
+    "eligible": false,
+    "rationale": "The fresh profile confirms a small region but does not isolate removable work. The dim-24 path already consumes both Box-Muller outputs, guard helpers are negligible, and the sole returned array is retained candidate state."
+  },
+  "integratedProfile": {
+    "intervalMicroseconds": 500,
+    "durationMilliseconds": 9273.1495,
+    "samples": 12012,
+    "measuredTrials": 150,
+    "warmups": 10,
+    "workloadP50Milliseconds": 57.02320899999995,
+    "workloadP95Milliseconds": 61.62433300000066,
+    "workloadP99Milliseconds": 66.21687500000007,
+    "workloadEvaluationsPerSecond": 56368.276383609955,
+    "workloadChecksum": 12274.303979858667,
+    "gaussianSelfMilliseconds": 122.8,
+    "gaussianTotalMilliseconds": 187.2,
+    "gaussianDirectSharePercent": 1.3,
+    "gaussianTotalSharePercent": 2.0,
+    "outsideTopFiveNamedRegions": true
+  },
+  "representativeSameSourcePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "a": {
+      "p50Milliseconds": 57.46479200000067,
+      "p95Milliseconds": 59.54729099999895,
+      "p99Milliseconds": 63.88683300000048,
+      "evaluationsPerSecond": 56323.01577014855,
+      "checksum": 24940.517463897122
+    },
+    "b": {
+      "p50Milliseconds": 57.274374999999964,
+      "p95Milliseconds": 59.10224999999991,
+      "p99Milliseconds": 62.89862500000163,
+      "evaluationsPerSecond": 56512.27879805597,
+      "checksum": 24940.517463897122
+    },
+    "bVersusAPercent": {
+      "p50": -0.33136289782568923,
+      "p95": -0.7473740493065333,
+      "p99": -1.5468101228289743,
+      "evaluationsPerSecond": 0.3360314168541596
+    },
+    "allLatencyAndThroughputMovementInsideSameSeedEnvelope": true,
+    "sameSeedP95EnvelopePercent": 4.8,
+    "checksumsExact": true
+  },
+  "focusedGaussianPair": {
+    "dimension": 24,
+    "callsPerTrial": 100000,
+    "measuredTrials": 40,
+    "warmups": 5,
+    "a": {
+      "p50Milliseconds": 40.10583399999996,
+      "p95Milliseconds": 40.84462500000018,
+      "p99Milliseconds": 48.659666000000016,
+      "vectorsPerSecond": 2475295.0700241164,
+      "normalsPerSecond": 59407081.6805788,
+      "checksum": -445.9785741161044
+    },
+    "b": {
+      "p50Milliseconds": 40.16879099999994,
+      "p95Milliseconds": 40.72337500000003,
+      "p99Milliseconds": 50.40545900000001,
+      "vectorsPerSecond": 2471195.2584618093,
+      "normalsPerSecond": 59308686.203083426,
+      "checksum": -445.9785741161044
+    },
+    "bVersusAPercent": {
+      "p50": 0.15697716197594375,
+      "p95": -0.29685668554955513,
+      "p99": 3.5877619875154743,
+      "vectorsPerSecond": -0.16562920566343775,
+      "normalsPerSecond": -0.16562920566343772
+    },
+    "checksumsExact": true,
+    "profile": {
+      "intervalMicroseconds": 250,
+      "durationSeconds": 1.89,
+      "samples": 4818,
+      "gaussianSelfSharePercent": 98.4,
+      "nextOpenUnitLargestSelfSharePercent": 0.1,
+      "nextHalfOpenUnitLargestSelfSharePercent": 0.0,
+      "interpretation": "The JIT attributes almost the entire focused kernel to the vector function entry; validation helpers are negligible and no separately removable subcomponent is exposed."
+    }
+  },
+  "exactWorkAccounting": {
+    "boxMullerPairsPerDim24Vector": 12,
+    "uniformDrawsPerDim24Vector": 24,
+    "normalOutputsPerDim24Vector": 24,
+    "representativeCandidateVectors": 975000,
+    "representativeUniformDraws": 23400000,
+    "unusedBoxMullerOutputsAtDim24": 0,
+    "returnedArraysAreRequiredRetainedCandidateZ": true
+  },
+  "eligibilityChecks": [
+    {
+      "lever": "reuse both Box-Muller outputs",
+      "result": "already_implemented",
+      "eligible": false
+    },
+    {
+      "lever": "cache the spare output across odd-dimensional vector calls",
+      "result": "would_change_cross_call_draw_sequence_and_spare_semantics_and_has_zero_dim24_benefit",
+      "eligible": false
+    },
+    {
+      "lever": "skip or weaken open-unit and half-open-unit validation",
+      "result": "would_change_public_invalid_rng_behavior_and_seeded_zero-state_rejection; helper cost is negligible",
+      "eligible": false
+    },
+    {
+      "lever": "batch scalar PRNG draws",
+      "result": "the callback has no bulk interface; buffering adds storage and cannot remove draws or transcendental operations while preserving retry pairing",
+      "eligible": false
+    },
+    {
+      "lever": "reuse the returned Gaussian vector",
+      "result": "would alias retained candidate z arrays and history snapshots",
+      "eligible": false
+    },
+    {
+      "lever": "replace Box-Muller with polar, ziggurat, or another generator",
+      "result": "would change exact values, distribution implementation, and RNG consumption",
+      "eligible": false
+    }
+  ],
+  "distributionAndPropertyChecks": {
+    "allChecksPassed": true,
+    "count": 1000000,
+    "mean": -0.00211456567579236,
+    "variance": 1.0002580707181972,
+    "positiveFraction": 0.498734,
+    "beyondThreeSigmaFraction": 0.002765,
+    "minimum": -4.513785428114472,
+    "maximum": 5.594654687701052
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "checks": {
+    "referenceStreamExact": true,
+    "boxMullerPairReuse": true,
+    "oddDimensionDiscardsSecondPairValueWithoutCaching": true,
+    "openUnitRejectSequenceExact": true,
+    "halfOpenUnitRejectSequenceExact": true,
+    "openUnitAttemptLimitExact": true,
+    "halfOpenUnitAttemptLimitExact": true,
+    "scalarDrawSequenceExact": true,
+    "deterministicVectorReplay": true,
+    "distinctReturnedOwnership": true,
+    "candidateZOwnership": true,
+    "optimizerSeedReplay": true,
+    "invalidDimensionsRejectBeforeDraw": true,
+    "distributionMeanWithin005": true,
+    "distributionVarianceWithin01": true,
+    "distributionSignBalanceWithin005": true,
+    "distributionThreeSigmaTailPlausible": true,
+    "distributionFinite": true
+  },
+  "allChecksPassed": true,
+  "streamCases": [
+    {
+      "dim": 1,
+      "exact": true,
+      "actualDraws": 2,
+      "expectedDraws": 2,
+      "referenceDraws": 2
+    },
+    {
+      "dim": 2,
+      "exact": true,
+      "actualDraws": 2,
+      "expectedDraws": 2,
+      "referenceDraws": 2
+    },
+    {
+      "dim": 3,
+      "exact": true,
+      "actualDraws": 4,
+      "expectedDraws": 4,
+      "referenceDraws": 4
+    },
+    {
+      "dim": 4,
+      "exact": true,
+      "actualDraws": 4,
+      "expectedDraws": 4,
+      "referenceDraws": 4
+    },
+    {
+      "dim": 8,
+      "exact": true,
+      "actualDraws": 8,
+      "expectedDraws": 8,
+      "referenceDraws": 8
+    },
+    {
+      "dim": 12,
+      "exact": true,
+      "actualDraws": 12,
+      "expectedDraws": 12,
+      "referenceDraws": 12
+    },
+    {
+      "dim": 23,
+      "exact": true,
+      "actualDraws": 24,
+      "expectedDraws": 24,
+      "referenceDraws": 24
+    },
+    {
+      "dim": 24,
+      "exact": true,
+      "actualDraws": 24,
+      "expectedDraws": 24,
+      "referenceDraws": 24
+    },
+    {
+      "dim": 25,
+      "exact": true,
+      "actualDraws": 26,
+      "expectedDraws": 26,
+      "referenceDraws": 26
+    },
+    {
+      "dim": 48,
+      "exact": true,
+      "actualDraws": 48,
+      "expectedDraws": 48,
+      "referenceDraws": 48
+    }
+  ],
+  "guards": {
+    "openRejectCalls": 7,
+    "halfOpenRejectCalls": 6,
+    "openLimitCalls": 1024,
+    "halfLimitCalls": 1025
+  },
+  "candidateZOwnership": {
+    "allFirstZDistinct": true,
+    "allSecondZDistinct": true,
+    "noZSharedAcrossGenerations": true,
+    "firstZUnchangedAfterNextStep": true,
+    "zDistinctFromRawXAndX": true
+  },
+  "invalidDims": [
+    {
+      "dim": "0",
+      "threw": true,
+      "calls": 0
+    },
+    {
+      "dim": "-1",
+      "threw": true,
+      "calls": 0
+    },
+    {
+      "dim": "1.5",
+      "threw": true,
+      "calls": 0
+    },
+    {
+      "dim": "NaN",
+      "threw": true,
+      "calls": 0
+    },
+    {
+      "dim": "Infinity",
+      "threw": true,
+      "calls": 0
+    }
+  ],
+  "distribution": {
+    "count": 1000000,
+    "mean": -0.00211456567579236,
+    "variance": 1.0002580707181972,
+    "positiveFraction": 0.498734,
+    "beyondThreeSigmaFraction": 0.002765,
+    "min": -4.513785428114472,
+    "max": 5.594654687701052,
+    "rngDraws": 1000000
+  }
+}
