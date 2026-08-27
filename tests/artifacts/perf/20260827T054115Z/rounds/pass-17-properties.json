@@ -1,0 +1,17 @@
+{
+  "checks": 30255,
+  "failures": 0,
+  "failureDetails": [],
+  "coverage": {
+    "lambdas": 8,
+    "activeModes": 2,
+    "repairStrategies": 3,
+    "seeds": 5,
+    "noiseLevel": 0.01,
+    "parameterParityWithND": true,
+    "firstGenerationRngRankingPathParityWithND": true,
+    "analyticalVsJacobiCovarianceTolerance": 2e-13,
+    "tieSeeds": 4,
+    "snapshotMutationStrategies": 3
+  }
+}

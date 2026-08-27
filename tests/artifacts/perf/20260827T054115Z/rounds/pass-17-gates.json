@@ -1,0 +1,15 @@
+{
+  "pass": 17,
+  "decision": "accepted",
+  "checks": {
+    "goldenByteComparison": "pass",
+    "propertyAudit": "30255 pass, 0 fail",
+    "focusedCmaesTests": "16 pass, 0 fail, 157 assertions",
+    "convergenceAndMetamorphicTests": "pass",
+    "typecheck": "pass",
+    "lint": "pass with pre-existing baseline-browser-mapping age advisory",
+    "format": "not run: package.json has no format script",
+    "ubs": "exit 0; no critical finding in the changed TypeScript file; broad multi-language heuristic notices were unrelated",
+    "diffCheck": "pass"
+  }
+}

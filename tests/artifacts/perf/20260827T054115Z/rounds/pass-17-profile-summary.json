@@ -1,0 +1,96 @@
+{
+  "pass": 17,
+  "decision": "accepted",
+  "lever": "Reuse the Box-Muller tuple as CandidateSample.z instead of allocating an identical second tuple",
+  "acceptedEngineSha256": "490ae0499d9f01a6dd9e0bdf931d7a7f3dea18d53da57c651d6715017ba1e963",
+  "freshProfile": {
+    "scenario": "mixed-interactive-workloads",
+    "trials": 4000,
+    "generationsPerTrial": 60,
+    "intervalMicroseconds": 500,
+    "before": {
+      "durationSeconds": 1.95,
+      "samples": 2452,
+      "candidateGenerationTotalMilliseconds": 366.2,
+      "candidateGenerationTotalPercent": 18.7,
+      "gaussianPairSamplerTotalMilliseconds": 196.5,
+      "gaussianPairSamplerTotalPercent": 10.0
+    },
+    "after": {
+      "durationSeconds": 1.43,
+      "samples": 1804,
+      "candidateGenerationTotalMilliseconds": 215.2,
+      "candidateGenerationTotalPercent": 15.0,
+      "gaussianPairSamplerTotalMilliseconds": 163.6,
+      "gaussianPairSamplerTotalPercent": 11.4
+    }
+  },
+  "opportunityMatrix": [
+    {
+      "lever": "Reuse the existing Gaussian tuple as the public candidate z vector",
+      "impact": 2,
+      "confidence": 5,
+      "effort": 1,
+      "score": 10,
+      "eligible": true
+    },
+    {
+      "lever": "Cache an eigensystem across 2-D generations",
+      "impact": 2,
+      "confidence": 3,
+      "effort": 4,
+      "score": 1.5,
+      "eligible": false,
+      "reason": "The publicly mutable C matrix can change between calls, and the public post-reconstruction eigensystem must retain its present binary64 rounding."
+    },
+    {
+      "lever": "Replace the small-population stable full sort",
+      "impact": 2,
+      "confidence": 2,
+      "effort": 4,
+      "score": 1,
+      "eligible": false,
+      "reason": "The interactive populations are small and an alternative must preserve total ordering, stable tie behavior, every public rank, and sample order."
+    }
+  ],
+  "integratedSourceSwitchedPairs": [
+    {
+      "beforeP95Milliseconds": 9.099542,
+      "afterP95Milliseconds": 7.095124999999996,
+      "p95ChangePercent": -22.027669084883648,
+      "beforeEvaluationsPerSecond": 3105724.757048901,
+      "afterEvaluationsPerSecond": 3516392.264172177,
+      "throughputChangePercent": 13.222920227917978,
+      "checksumExact": true
+    },
+    {
+      "beforeP95Milliseconds": 7.500667000000021,
+      "afterP95Milliseconds": 6.824583000000018,
+      "p95ChangePercent": -9.013651719240446,
+      "beforeEvaluationsPerSecond": 3160330.5044013425,
+      "afterEvaluationsPerSecond": 3500298.7696422487,
+      "throughputChangePercent": 10.757364293621752,
+      "checksumExact": true
+    }
+  ],
+  "focused": {
+    "callsPerTrial": 100000,
+    "trials": 40,
+    "beforeP95Milliseconds": 5.180791999999997,
+    "afterP95Milliseconds": 4.742417000000003,
+    "p95ChangePercent": -8.461544103681328,
+    "beforeThroughputPerSecond": 20679208.820501473,
+    "afterThroughputPerSecond": 22510851.102526907,
+    "throughputChangePercent": 8.85740986477943,
+    "checksumExact": true
+  },
+  "proof": {
+    "goldenBeforeSha256": "c85f373e73222902c931e9d5b5f5a6388c27a0ca5b6dd12f308cee67fff04d9a",
+    "goldenAfterSha256": "c85f373e73222902c931e9d5b5f5a6388c27a0ca5b6dd12f308cee67fff04d9a",
+    "goldensByteIdentical": true,
+    "propertyChecks": 30255,
+    "propertyFailures": 0,
+    "peakRssBytes": 61685760,
+    "peakRssBudgetBytes": 90166067
+  }
+}

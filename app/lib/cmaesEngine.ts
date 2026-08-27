@@ -465,7 +465,9 @@ export class CMAESOptimizer {
 
     const candidates: CandidateSample[] = [];
     for (let i = 0; i < this.lambda; i++) {
-      const [z0, z1] = sampleGaussian2D(this.rng);
+      const z = sampleGaussian2D(this.rng);
+      const z0 = z[0];
+      const z1 = z[1];
       const rawX0 = oldMean0 + oldSigma * (sqrt00 * z0 + sqrt01 * z1);
       const rawX1 = oldMean1 + oldSigma * (sqrt10 * z0 + sqrt11 * z1);
       const x0 = this.repair(rawX0);
@@ -476,7 +478,7 @@ export class CMAESOptimizer {
         id: i,
         rawX: [rawX0, rawX1],
         x: [x0, x1],
-        z: [z0, z1],
+        z,
         fitness: trueFitness + noise,
         trueFitness,
         rank: 0,
