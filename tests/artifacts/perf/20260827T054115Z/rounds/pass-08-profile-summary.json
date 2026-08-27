@@ -1,0 +1,43 @@
+{
+  "profile": "pass-08-before.cpuprofile",
+  "workload": "pass-08-before-profile-workload.json",
+  "durationMs": 9302.982,
+  "totalSamples": 14383,
+  "hotspots": [
+    {
+      "function": "jacobiEigenSymmetric",
+      "selfSamples": 5922,
+      "selfSharePercent": 41.17360773134951
+    },
+    {
+      "function": "step",
+      "selfSamples": 4431,
+      "selfSharePercent": 30.807202947924633
+    },
+    {
+      "function": "whitenWithEigensystem",
+      "selfSamples": 795,
+      "selfSharePercent": 5.52735868733922
+    },
+    {
+      "function": "transformFromEigenCoordinates",
+      "selfSamples": 707,
+      "selfSharePercent": 4.915525272891609,
+      "dominantSourceLine": 250,
+      "dominantSourceLineTicks": 692
+    },
+    {
+      "function": "reconstructSymmetric",
+      "selfSamples": 418,
+      "selfSharePercent": 2.906208718626156
+    }
+  ],
+  "opportunity": {
+    "impact": 2,
+    "confidence": 5,
+    "effort": 1,
+    "score": 10,
+    "threshold": 2,
+    "eligible": true
+  }
+}
