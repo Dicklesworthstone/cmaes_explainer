@@ -627,12 +627,20 @@ export class CMAESOptimizerND {
     const deltaHSigma = (1 - hSigma) * this.cc * (2 - this.cc);
     const oldCoefficient = 1 + this.c1 * deltaHSigma - this.c1 - this.cmu * this.covarianceWeightSum;
     const provisional = createZeroMatrix(this.dim);
+    for (let rank = 0; rank < this.lambda; rank++) {
+      const normalizedStep = normalizedSteps[rank];
+      const covarianceWeight = adjustedCovarianceWeights[rank];
+      for (let row = 0; row < this.dim; row++) {
+        const weightedRow = covarianceWeight * normalizedStep[row];
+        const provisionalRow = provisional[row];
+        for (let column = row; column < this.dim; column++) {
+          provisionalRow[column] += weightedRow * normalizedStep[column];
+        }
+      }
+    }
     for (let row = 0; row < this.dim; row++) {
       for (let column = row; column < this.dim; column++) {
-        let rankMu = 0;
-        for (let rank = 0; rank < this.lambda; rank++) {
-          rankMu += adjustedCovarianceWeights[rank] * normalizedSteps[rank][row] * normalizedSteps[rank][column];
-        }
+        const rankMu = provisional[row][column];
         const value =
           oldCoefficient * this.covariance[row][column] +
           this.c1 * this.pC[row] * this.pC[column] +
