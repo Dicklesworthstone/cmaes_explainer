@@ -1,0 +1,21 @@
+{
+  "engine": "CMAESOptimizerND",
+  "scenario": "anisotropic-ellipsoid-unbounded",
+  "dim": 24,
+  "generationsPerTrial": 250,
+  "trials": 150,
+  "warmupTrials": 10,
+  "seed": 1729,
+  "cpuProfileIntervalMicroseconds": 500,
+  "p50Ms": 60.050874999999905,
+  "p95Ms": 64.65291700000034,
+  "p99Ms": 72.75683299999992,
+  "totalEvaluations": 487500,
+  "evaluationsPerSecond": 53472.444794570605,
+  "checksum": 12274.303979858667,
+  "profileSamples": 15119,
+  "profileDurationMicroseconds": 9762335,
+  "jacobiSelfTicks": 6479,
+  "dominantJacobiMappedLine": 145,
+  "dominantJacobiMappedLineTicks": 6302
+}

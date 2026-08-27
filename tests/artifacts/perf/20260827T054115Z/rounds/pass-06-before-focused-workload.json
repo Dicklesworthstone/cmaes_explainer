@@ -1,0 +1,10 @@
+{
+  "kernel": "jacobiEigenSymmetric",
+  "matrix": "24-D dense symmetric strictly diagonally dominant deterministic matrix",
+  "dim": 24,
+  "warmupCalls": 1000,
+  "calls": 50000,
+  "durationMs": 4444.014459,
+  "callsPerSecond": 11251.088505965638,
+  "checksum": 131104.47135849128
+}

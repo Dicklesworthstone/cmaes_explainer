@@ -1,0 +1,10 @@
+{
+  "dimensionsInclusive": [2, 64],
+  "rotationPairsChecked": 43680,
+  "canonicalAddressesPerRotation": "2 * (n - 2)",
+  "allCanonicalAddressesStrictUpper": true,
+  "allAddressesDistinctWithinRotation": true,
+  "exactUnorderedPairCoverage": true,
+  "readAfterWriteAliasFound": false,
+  "removedMirrorStoresPerRotation": "2 * (n - 2) + 1"
+}

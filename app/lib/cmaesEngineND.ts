@@ -149,22 +149,19 @@ export function jacobiEigenSymmetric(
 
         for (let k = 0; k < n; k++) {
           if (k === p || k === q) continue;
-          const kp = k * n + p;
-          const kq = k * n + q;
+          const kp = k < p ? k * n + p : p * n + k;
+          const kq = k < q ? k * n + q : q * n + k;
           const akp = a[kp];
           const akq = a[kq];
           const rotatedP = cosine * akp - sine * akq;
           const rotatedQ = sine * akp + cosine * akq;
           a[kp] = rotatedP;
-          a[p * n + k] = rotatedP;
           a[kq] = rotatedQ;
-          a[q * n + k] = rotatedQ;
         }
 
         a[pp] = cosine * cosine * app - 2 * sine * cosine * apq + sine * sine * aqq;
         a[qq] = sine * sine * app + 2 * sine * cosine * apq + cosine * cosine * aqq;
         a[pq] = 0;
-        a[q * n + p] = 0;
 
         for (let k = 0; k < n; k++) {
           const kp = k * n + p;
