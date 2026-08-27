@@ -1,0 +1,54 @@
+{
+  "decision": "accepted",
+  "engineSha256": "d040a5664ed94080af743cdab85f8b71617ab9e351015e48bfea7646c96c7799",
+  "checks": {
+    "authoritativeGoldenChecksums": {
+      "passed": true,
+      "dimensions": [1, 2, 4, 8, 12, 24, 48]
+    },
+    "negativeWeightAndPathProperties": {
+      "passed": true,
+      "assertions": 702,
+      "failures": 0
+    },
+    "unitTests": {
+      "command": "bun test app/lib/cmaesEngine.test.ts",
+      "passed": true,
+      "tests": 16,
+      "failures": 0,
+      "assertions": 157
+    },
+    "typecheck": {
+      "command": "bun typecheck",
+      "passed": true
+    },
+    "lint": {
+      "command": "bun lint",
+      "passed": true,
+      "note": "Only the pre-existing baseline-browser-mapping age advisory was emitted."
+    },
+    "format": {
+      "passed": true,
+      "note": "No format script exists in package.json; the edited block follows the existing style and full lint passed."
+    },
+    "ubs": {
+      "command": "ubs app/lib/cmaesEngineND.ts",
+      "passed": true,
+      "criticalFindings": 0,
+      "note": "Broad cross-language heuristic notices are unrelated to the TypeScript change."
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "passed": true
+    },
+    "rss": {
+      "maximumResidentSetBytes": 81690624,
+      "guardrailBytes": 90166067,
+      "passed": true
+    }
+  },
+  "ledgerModified": false,
+  "committed": false,
+  "filesDeleted": false,
+  "destructiveCommandsUsed": false
+}

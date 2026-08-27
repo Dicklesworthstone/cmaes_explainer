@@ -1,0 +1,2825 @@
+{
+  "passed": 702,
+  "failed": 0,
+  "repairStrategies": [
+    "none",
+    "clip",
+    "reflect"
+  ],
+  "dimensions": [
+    1,
+    2,
+    24
+  ],
+  "stepsPerScenario": 3,
+  "checks": [
+    {
+      "name": "none-d1-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d1-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d2-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "none-d24-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d1-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d2-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "clip-d24-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank2-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank2-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank2-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank2-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d1-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank3-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank3-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank3-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank3-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank4-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank4-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank4-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank4-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank5-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank5-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank5-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-rank5-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d2-step2-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step0-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step1-path-snapshot-distinct",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-eigenvalues-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-eigenvectors-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-pSigma-input-and-path-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-pC-and-hSigma-barrier-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-sigma-path-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-zero-norm-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-zero-positive-guard-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank6-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank6-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank6-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank6-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank7-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank7-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank7-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank7-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank8-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank8-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank8-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank8-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank9-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank9-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank9-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank9-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank10-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank10-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank10-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank10-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank11-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank11-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank11-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank11-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank12-mahalanobis-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank12-mahalanobis-positive-finite",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank12-negative-weight-adjustment-exact",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-rank12-adjusted-weight-finite-nonpositive",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-prior-state-0-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-prior-state-1-stable",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-state-history-identity",
+      "pass": true
+    },
+    {
+      "name": "reflect-d24-step2-path-snapshot-distinct",
+      "pass": true
+    }
+  ]
+}

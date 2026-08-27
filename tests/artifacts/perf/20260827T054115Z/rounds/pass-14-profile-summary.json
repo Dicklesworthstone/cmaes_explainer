@@ -1,0 +1,121 @@
+{
+  "decision": "accept_direct_negative_rank_mahalanobis_norm",
+  "productionChangeRetained": true,
+  "acceptedEngineSha256": "d040a5664ed94080af743cdab85f8b71617ab9e351015e48bfea7646c96c7799",
+  "opportunity": {
+    "region": "negative-rank whitening result materialization and Mahalanobis norm traversal",
+    "impact": 1,
+    "confidence": 5,
+    "effort": 1,
+    "score": 5,
+    "threshold": 2,
+    "eligible": true,
+    "rationale": "The fresh integrated profile attributed 453.5 ms / 4.6% total time to the negative-rank whitening call site. Mean-shift whitening was a separate 79.6 ms / 0.8% call site and still requires a vector for pSigma, so it was excluded from the lever."
+  },
+  "representativePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "before": {
+      "p50Milliseconds": 56.49199999999928,
+      "p95Milliseconds": 57.947416999999405,
+      "p99Milliseconds": 62.09354200000007,
+      "evaluationsPerSecond": 57292.885011802544,
+      "checksum": 24940.517463897122
+    },
+    "after": {
+      "p50Milliseconds": 55.70945799999981,
+      "p95Milliseconds": 57.88987499999996,
+      "p99Milliseconds": 64.24908400000095,
+      "evaluationsPerSecond": 58045.52241039047,
+      "checksum": 24940.517463897122
+    },
+    "afterVersusBeforePercent": {
+      "p50": -1.3852262267214366,
+      "p95": -0.09930037088529131,
+      "p99": 3.4714431333308093,
+      "evaluationsPerSecond": 1.3136664324599368
+    },
+    "sameSeedP95EnvelopePercent": 4.8,
+    "p95MovementInsideEnvelope": true,
+    "checksumsExact": true
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "vectors": 13,
+    "callsPerTrial": 10000,
+    "measuredTrials": 40,
+    "warmups": 5,
+    "before": {
+      "p50Milliseconds": 11.860374999999976,
+      "p95Milliseconds": 12.04600000000002,
+      "p99Milliseconds": 12.952916000000016,
+      "callsPerSecond": 840287.2159684006,
+      "checksum": 8278122.619869774
+    },
+    "after": {
+      "p50Milliseconds": 7.972999999999956,
+      "p95Milliseconds": 8.622292000000016,
+      "p99Milliseconds": 8.864417000000032,
+      "callsPerSecond": 1243425.5428702664,
+      "checksum": 8278122.619869774
+    },
+    "afterVersusBeforePercent": {
+      "p50": -32.77615589726318,
+      "p95": -28.421949194753438,
+      "p99": -31.564313394759758,
+      "callsPerSecond": 47.976253742866184
+    },
+    "checksumsExact": true
+  },
+  "matchedProfiles": {
+    "integrated": {
+      "intervalMicroseconds": 500,
+      "before": {
+        "durationSeconds": 9.73,
+        "samples": 12475,
+        "negativeWhiteningCallTotalMilliseconds": 453.5,
+        "negativeWhiteningCallTotalSharePercent": 4.6,
+        "meanShiftWhiteningCallTotalMilliseconds": 79.6,
+        "meanShiftWhiteningCallTotalSharePercent": 0.8,
+        "checksum": 12274.303979858667
+      },
+      "after": {
+        "durationSeconds": 9.08,
+        "samples": 11773,
+        "negativeMahalanobisCallTotalMilliseconds": 305.6,
+        "negativeMahalanobisCallTotalSharePercent": 3.3,
+        "meanShiftWhiteningCallTotalMilliseconds": 46,
+        "meanShiftWhiteningCallTotalSharePercent": 0.5,
+        "checksum": 12274.303979858667
+      },
+      "targetCallMillisecondsChangePercent": -32.61300992282249
+    },
+    "focused": {
+      "intervalMicroseconds": 250,
+      "calls": 2000000,
+      "beforeDurationMilliseconds": 2538.6822909999996,
+      "afterDurationMilliseconds": 1723.377792,
+      "durationChangePercent": -32.11526317768762,
+      "beforeChecksum": 41385745.90040039,
+      "afterChecksum": 41385745.90040039
+    }
+  },
+  "behavior": {
+    "goldenDimensionsExact": [1, 2, 4, 8, 12, 24, 48],
+    "propertyChecksPassed": 702,
+    "propertyChecksFailed": 0,
+    "meanShiftWhiteningVectorPathUnchanged": true,
+    "eigenCoordinateArithmeticOrderPreserved": true,
+    "perResultCoordinateArithmeticOrderPreserved": true,
+    "squaredNormRowOrderPreserved": true,
+    "negativeWeightAdjustmentOrderPreserved": true,
+    "positiveAndFiniteGuardsPreserved": true,
+    "pSigmaAndPCRecurrencesExact": true,
+    "normalizedStepsStillMaterializedOnce": true,
+    "snapshotOwnershipPreserved": true
+  },
+  "memory": {
+    "maximumResidentSetBytes": 81690624,
+    "guardrailBytes": 90166067,
+    "withinGuardrail": true
+  }
+}

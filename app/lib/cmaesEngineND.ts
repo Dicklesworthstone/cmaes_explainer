@@ -276,6 +276,31 @@ function whitenWithEigensystem(
   return result;
 }
 
+/** Compute ||C^-1/2 vector||^2 without retaining the whitened vector. */
+function mahalanobisSquaredWithEigensystem(
+  eigenvalues: number[],
+  eigenvectors: MatrixND,
+  vector: VectorND
+): number {
+  const n = eigenvalues.length;
+  const eigenCoordinates = createZeroVector(n);
+  for (let column = 0; column < n; column++) {
+    let coordinate = 0;
+    for (let row = 0; row < n; row++) coordinate += eigenvectors[row][column] * vector[row];
+    eigenCoordinates[column] = coordinate / Math.sqrt(eigenvalues[column]);
+  }
+
+  let squaredNorm = 0;
+  for (let row = 0; row < n; row++) {
+    let coordinate = 0;
+    for (let column = 0; column < n; column++) {
+      coordinate += eigenvectors[row][column] * eigenCoordinates[column];
+    }
+    squaredNorm += coordinate * coordinate;
+  }
+  return squaredNorm;
+}
+
 function nextOpenUnit(rng: () => number): number {
   for (let attempts = 0; attempts < 1024; attempts++) {
     const value = rng();
@@ -626,12 +651,11 @@ export class CMAESOptimizerND {
     const adjustedCovarianceWeights = [...this.covarianceWeights];
     for (let rank = this.mu; rank < this.lambda; rank++) {
       if (adjustedCovarianceWeights[rank] >= 0) continue;
-      const whitenedStep = whitenWithEigensystem(
+      const mahalanobisSquared = mahalanobisSquaredWithEigensystem(
         currentEigen.eigenvalues,
         currentEigen.eigenvectors,
         normalizedSteps[rank]
       );
-      const mahalanobisSquared = vecDot(whitenedStep, whitenedStep);
       adjustedCovarianceWeights[rank] = mahalanobisSquared > 0
         ? adjustedCovarianceWeights[rank] * this.dim / mahalanobisSquared
         : 0;
