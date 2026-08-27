@@ -1,0 +1,45 @@
+{
+  "scenario": "dense-strictly-diagonally-dominant-spd",
+  "dim": 24,
+  "warmups": 1000,
+  "calls": 50000,
+  "before": {
+    "durationMs": 3454.526208,
+    "callsPerSecond": 14473.76484920273,
+    "checksum": 162513.40559963728
+  },
+  "candidate": {
+    "durationMs": 3442.526333,
+    "callsPerSecond": 14524.217148522826,
+    "checksum": 162513.40559963728
+  },
+  "changePercent": {
+    "duration": -0.34736673793966566,
+    "callsPerSecond": 0.34857758051027243
+  },
+  "profiled": {
+    "intervalMicroseconds": 250,
+    "before": {
+      "workloadDurationMs": 3605.421833,
+      "callsPerSecond": 13868.002779135553,
+      "profileDurationSeconds": 3.71386125,
+      "samples": 9427,
+      "jacobiSelfSamples": 8805,
+      "jacobiSelfPercent": 93.4019306248011
+    },
+    "candidate": {
+      "workloadDurationMs": 3623.982292,
+      "callsPerSecond": 13796.976908627787,
+      "profileDurationSeconds": 3.73569025,
+      "samples": 11302,
+      "jacobiSelfSamples": 10500,
+      "jacobiSelfPercent": 92.90391081224563
+    },
+    "changePercent": {
+      "workloadDuration": 0.5147929939880703,
+      "callsPerSecond": -0.512156448473066,
+      "profileDuration": 0.5877710159473599,
+      "approximateJacobiSelfTime": 0.05143624715154124
+    }
+  }
+}

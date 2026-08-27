@@ -1,0 +1,23 @@
+{
+  "engine": "CMAESOptimizerND",
+  "scenario": "anisotropic-ellipsoid-unbounded",
+  "candidate": "guarded-prefix-verification",
+  "dim": 24,
+  "generationsPerTrial": 250,
+  "trials": 300,
+  "warmupTrials": 10,
+  "populationSize": 13,
+  "seed": 1729,
+  "p50Ms": 56.86491599999863,
+  "p95Ms": 58.996791999999914,
+  "p99Ms": 62.1176660000001,
+  "totalEvaluations": 975000,
+  "evaluationsPerSecond": 56851.023965623426,
+  "checksum": 24940.517463897122,
+  "changePercent": {
+    "p50": -1.3896783930571726,
+    "p95": -1.7951098895878954,
+    "p99": -4.495457928814657,
+    "evaluationsPerSecond": 1.3425838345006775
+  }
+}

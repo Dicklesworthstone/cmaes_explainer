@@ -1,0 +1,82 @@
+{
+  "scenario": "16-seed anisotropic-ellipsoid optimizer covariance inputs",
+  "dim": 24,
+  "generationsPerSeed": 250,
+  "calls": 4000,
+  "pairCountPerSweep": 276,
+  "sweepHistogram": {
+    "6": 75,
+    "7": 3189,
+    "8": 736
+  },
+  "meanSweeps": 7.16525,
+  "emptyFinalSweeps": 4000,
+  "maxSweepExhaustions": 0,
+  "guardedPrefixStrategy": {
+    "earlyTerminations": 4000,
+    "currentSweeps": 28661,
+    "candidateSweeps": 24661,
+    "sweepReductionPercent": 13.956247165137295,
+    "currentPairInspections": 7910436,
+    "candidatePairInspections": 7300026,
+    "pairInspectionChangePercent": -7.716515246441536
+  },
+  "perSweep": {
+    "0": {
+      "count": 4000,
+      "residualOverTolerance": { "min": 16186203390.927853, "p50": 254544095664.2322, "p95": 627741751658.4419, "max": 924852508634.8391 },
+      "rotations": { "min": 276, "p50": 276, "p95": 276, "max": 276 },
+      "lastRotationOrdinal": { "p50": 275, "p95": 275 },
+      "prefixChecks": { "total": 4000, "p50": 1, "p95": 1 },
+      "prefixConverged": 0
+    },
+    "1": {
+      "count": 4000,
+      "residualOverTolerance": { "min": 8075015245.387923, "p50": 103153204958.11804, "p95": 259448601976.80695, "max": 657821261248.6498 },
+      "rotations": { "min": 276, "p50": 276, "p95": 276, "max": 276 },
+      "lastRotationOrdinal": { "p50": 275, "p95": 275 },
+      "prefixChecks": { "total": 4000, "p50": 1, "p95": 1 },
+      "prefixConverged": 0
+    },
+    "2": {
+      "count": 4000,
+      "residualOverTolerance": { "min": 1968313523.4579186, "p50": 28719964525.467514, "p95": 66764716839.15479, "max": 152356827733.6129 },
+      "rotations": { "min": 269, "p50": 276, "p95": 276, "max": 276 },
+      "lastRotationOrdinal": { "p50": 275, "p95": 275 },
+      "prefixChecks": { "total": 4000, "p50": 1, "p95": 1 },
+      "prefixConverged": 0
+    },
+    "3": {
+      "count": 4000,
+      "residualOverTolerance": { "min": 57360293.57139115, "p50": 5880660164.512579, "p95": 18207539466.868393, "max": 60625718148.922966 },
+      "rotations": { "min": 218, "p50": 276, "p95": 276, "max": 276 },
+      "lastRotationOrdinal": { "p50": 275, "p95": 275 },
+      "prefixChecks": { "total": 4000, "p50": 1, "p95": 1 },
+      "prefixConverged": 0
+    },
+    "4": {
+      "count": 4000,
+      "residualOverTolerance": { "min": 6001.32805715132, "p50": 199295439.11098507, "p95": 1906329323.7398787, "max": 10632779625.402653 },
+      "rotations": { "min": 30, "p50": 202, "p95": 276, "max": 276 },
+      "lastRotationOrdinal": { "p50": 248, "p95": 275 },
+      "prefixChecks": { "total": 25217, "p50": 1, "p95": 24 },
+      "prefixConverged": 75
+    },
+    "5": {
+      "count": 3925,
+      "residualOverTolerance": { "min": 1.1193797438228774, "p50": 72513.89711499904, "p95": 9505397.25125302, "max": 994356941.8109343 },
+      "rotations": { "min": 1, "p50": 37, "p95": 164, "max": 266 },
+      "lastRotationOrdinal": { "p50": 141, "p95": 248 },
+      "prefixChecks": { "total": 412830, "p50": 108, "p95": 221 },
+      "prefixConverged": 3189
+    },
+    "6": {
+      "count": 736,
+      "residualOverTolerance": { "min": 1.0052406592287044, "p50": 14.819994374344256, "p95": 2778.411548328694, "max": 2251765.509918488 },
+      "rotations": { "min": 1, "p50": 3, "p95": 20, "max": 77 },
+      "lastRotationOrdinal": { "p50": 45, "p95": 171 },
+      "prefixChecks": { "total": 39543, "p50": 45, "p95": 171 },
+      "prefixConverged": 736
+    }
+  }
+}

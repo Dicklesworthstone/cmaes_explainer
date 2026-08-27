@@ -1,0 +1,16 @@
+{
+  "candidateGoldenDimensions": [1, 2, 4, 8, 12, 24, 48],
+  "candidateGoldensExact": true,
+  "candidateBenchmarkChecksumExact": true,
+  "focusedChecksumExact": true,
+  "boundaryCorpusCases": 7,
+  "boundaryCorpusBeforeSha256": "112d7bec7e6b53bae85e98336a511d38a61f4db6c533848c0f4817117e523fb3",
+  "boundaryCorpusCandidateSha256": "112d7bec7e6b53bae85e98336a511d38a61f4db6c533848c0f4817117e523fb3",
+  "tests": { "passed": 16, "failed": 0, "assertions": 157 },
+  "typecheck": "pass",
+  "lint": "pass",
+  "ubsExitCode": 0,
+  "authoritativeGoldenChecksums": "all seven OK",
+  "gitDiffCheck": "pass",
+  "restoredEngineSha256": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174"
+}
