@@ -549,7 +549,7 @@ AST-GREP RULE PACK FINDINGS
 ℹ Above JSON/SARIF lines are ast-grep matches (id, message, severity, file/pos).
 
 ═══════════════════════════════════════════════════════════════════════════
-                    🎯 SCAN COMPLETE 🎯                                  
+                    🎯 SCAN COMPLETE 🎯
 ═══════════════════════════════════════════════════════════════════════════
 
 Summary Statistics:
