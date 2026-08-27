@@ -1,0 +1,29 @@
+{
+  "dimension": 24,
+  "populationSize": 13,
+  "positiveRanks": 6,
+  "callsPerTrial": 1000,
+  "trials": 40,
+  "warmups": 5,
+  "before": {
+    "p50Ms": 16.129832999999962,
+    "p95Ms": 16.39187499999997,
+    "p99Ms": 19.094957999999906,
+    "callsPerSecond": 61689.6723211322,
+    "checksum": -1416184.126502359
+  },
+  "after": {
+    "p50Ms": 18.136792000000014,
+    "p95Ms": 18.32137499999999,
+    "p99Ms": 20.161207999999988,
+    "callsPerSecond": 54958.7635329017,
+    "checksum": -1416184.126502359
+  },
+  "afterVersusBeforePercent": {
+    "p50": 12.442528078251376,
+    "p95": 11.771075609105255,
+    "p99": 5.58393477482426,
+    "callsPerSecond": -10.91091674663473
+  },
+  "checksumsExact": true
+}

@@ -1,0 +1,68 @@
+{
+  "decision": "rejected_and_restored",
+  "restoredEngineSha256": "d6f169b0d6b8b053df1d827a8e38d5d4fe9baeba7d25e2fd5afe71e7dd95a44d",
+  "gates": {
+    "candidateGoldensExact": {
+      "passed": true,
+      "dimensions": [1, 2, 4, 8, 12, 24, 48]
+    },
+    "authoritativeGoldenChecksumsAfterRestore": {
+      "passed": true,
+      "filesOk": 7
+    },
+    "adaptationOwnershipProperties": {
+      "passed": true,
+      "checksPassed": 243,
+      "checksFailed": 0
+    },
+    "engineTests": {
+      "passed": true,
+      "command": "bun test app/lib/cmaesEngine.test.ts",
+      "testsPassed": 16,
+      "testsFailed": 0,
+      "assertions": 157
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun typecheck"
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun lint app/lib/cmaesEngineND.ts",
+      "advisory": "Only the pre-existing baseline-browser-mapping age advisory was emitted."
+    },
+    "format": {
+      "passed": true,
+      "command": null,
+      "reason": "No format script exists in package.json, and no production change was retained."
+    },
+    "ubs": {
+      "passed": true,
+      "command": "ubs app/lib/cmaesEngineND.ts",
+      "exitCode": 0,
+      "criticalIssues": 0,
+      "note": "Broad cross-language heuristic notices were pre-existing and unrelated."
+    },
+    "diffCheck": {
+      "passed": true,
+      "command": "git diff --check"
+    },
+    "sourceRestored": {
+      "passed": true,
+      "expectedSha256": "d6f169b0d6b8b053df1d827a8e38d5d4fe9baeba7d25e2fd5afe71e7dd95a44d",
+      "actualSha256": "d6f169b0d6b8b053df1d827a8e38d5d4fe9baeba7d25e2fd5afe71e7dd95a44d"
+    }
+  },
+  "scope": {
+    "productionFilesChanged": [],
+    "productionChangeRetained": false,
+    "pathChanged": false,
+    "meanChanged": false,
+    "jacobiChanged": false,
+    "samplingChanged": false,
+    "apiChanged": false,
+    "snapshotChanged": false,
+    "ledgerChanged": false,
+    "commitCreated": false
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "decision": "reject_on_demand_normalized_step_recomputation",
+  "productionChangeRetained": false,
+  "restoredEngineSha256": "d6f169b0d6b8b053df1d827a8e38d5d4fe9baeba7d25e2fd5afe71e7dd95a44d",
+  "opportunity": {
+    "region": "normalized-step materialization, negative-weight whitening, and rank-mu covariance accumulation",
+    "impact": 3,
+    "confidence": 5,
+    "effort": 2,
+    "score": 7.5,
+    "threshold": 2,
+    "eligible": true,
+    "rationale": "The untouched profile placed rank-mu accumulation at 18.5% direct self-time, the negative-weight whitening call at 4.5% total, and the normalized-step callback at 0.7% total. The candidate was exact but had to recompute normalized coordinates throughout dense whitening and the covariance triangle."
+  },
+  "representativePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "before": {
+      "p50Milliseconds": 57.81025000000227,
+      "p95Milliseconds": 60.920250000000124,
+      "p99Milliseconds": 67.37270800000078,
+      "evaluationsPerSecond": 55790.058186877504,
+      "checksum": 24940.517463897122
+    },
+    "candidate": {
+      "p50Milliseconds": 64.9661670000005,
+      "p95Milliseconds": 69.41220799999792,
+      "p99Milliseconds": 77.66504200000054,
+      "evaluationsPerSecond": 49437.45446596847,
+      "checksum": 24940.517463897122
+    },
+    "candidateVersusBeforePercent": {
+      "p50": 12.378284127811149,
+      "p95": 13.939466761869456,
+      "p99": 15.276711157282909,
+      "evaluationsPerSecond": -11.386623221703763
+    },
+    "sameSeedP95EnvelopePercent": 4.8,
+    "p95RegressionOutsideEnvelope": true,
+    "checksumsExact": true
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "populationSize": 13,
+    "positiveRanks": 6,
+    "callsPerTrial": 1000,
+    "measuredTrials": 40,
+    "warmups": 5,
+    "before": {
+      "p50Milliseconds": 16.129832999999962,
+      "p95Milliseconds": 16.39187499999997,
+      "p99Milliseconds": 19.094957999999906,
+      "callsPerSecond": 61689.6723211322,
+      "checksum": -1416184.126502359
+    },
+    "candidate": {
+      "p50Milliseconds": 18.136792000000014,
+      "p95Milliseconds": 18.32137499999999,
+      "p99Milliseconds": 20.161207999999988,
+      "callsPerSecond": 54958.7635329017,
+      "checksum": -1416184.126502359
+    },
+    "candidateVersusBeforePercent": {
+      "p50": 12.442528078251376,
+      "p95": 11.771075609105255,
+      "p99": 5.58393477482426,
+      "callsPerSecond": -10.91091674663473
+    },
+    "checksumsExact": true
+  },
+  "matchedProfiles": {
+    "intervalMicroseconds": 500,
+    "measuredTrials": 150,
+    "warmups": 10,
+    "before": {
+      "durationSeconds": 12.87,
+      "samples": 15836,
+      "rankMuInnerSelfMilliseconds": 2380,
+      "rankMuInnerSelfSharePercent": 18.5,
+      "negativeWhiteningCallTotalMilliseconds": 586.7,
+      "negativeWhiteningCallTotalSharePercent": 4.5,
+      "normalizedStepCallbackTotalMilliseconds": 91.2,
+      "normalizedStepCallbackTotalSharePercent": 0.7,
+      "checksum": 12274.303979858667
+    },
+    "candidate": {
+      "durationSeconds": 10.34,
+      "samples": 13447,
+      "onDemandRankMuSelfMilliseconds": 3222.8,
+      "onDemandRankMuSelfSharePercent": 31.1,
+      "onDemandWhiteningSelfMilliseconds": 380.5,
+      "onDemandWhiteningSelfSharePercent": 3.6,
+      "checksum": 12274.303979858667
+    },
+    "rankMuSelfMillisecondsChangePercent": 35.411764705882355,
+    "note": "Profiled wall percentiles were perturbed by profiler/process scheduling and are not acceptance evidence. Direct target-region samples independently agree with the representative and focused regressions."
+  },
+  "behavior": {
+    "candidateGoldenDimensionsExact": [1, 2, 4, 8, 12, 24, 48],
+    "propertyChecksPassed": 243,
+    "propertyChecksFailed": 0,
+    "adaptationPointChoicePreserved": true,
+    "subtractionDivisionOrderPreserved": true,
+    "negativeWhiteningAndNormOrderPreserved": true,
+    "rankMuAccumulationOrderPreserved": true,
+    "snapshotOwnershipPreserved": true
+  },
+  "restoredVerification": {
+    "p50Milliseconds": 57.00070799999958,
+    "p95Milliseconds": 60.0014170000004,
+    "p99Milliseconds": 63.80170799999996,
+    "evaluationsPerSecond": 56489.47350897822,
+    "checksum": 12274.303979858667
+  }
+}

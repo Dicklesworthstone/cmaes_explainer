@@ -1,0 +1,1001 @@
+{
+  "allPassed": true,
+  "checksPassed": 243,
+  "checksFailed": 0,
+  "repairStrategies": [
+    "none",
+    "clip",
+    "reflect"
+  ],
+  "dimensions": [
+    1,
+    2,
+    24
+  ],
+  "stepsPerConfiguration": 3,
+  "covered": [
+    "adaptation-point choice and positive-rank order",
+    "normalized-step subtraction/division exactness",
+    "negative-weight whitening order",
+    "Mahalanobis norm and adjusted weight exactness",
+    "rank-mu rank/row/column accumulation order",
+    "snapshot path and covariance ownership",
+    "history identity",
+    "prior snapshot stability",
+    "candidate and cross-generation array ownership"
+  ],
+  "checks": [
+    {
+      "name": "none-d1-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-adaptation-point-and-rank-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-subtraction-division-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-negative-whitening-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-negative-norm-and-weight-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-rank-mu-order-and-arithmetic-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-snapshot-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-prior-snapshot-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-candidate-and-cross-generation-array-ownership",
+      "passed": true
+    }
+  ]
+}
