@@ -1,0 +1,577 @@
+ℹ Ignoring paths from /Users/jemanuel/projects/cmaes_explainer/.ubsignore → node_modules .next .vercel dist build out public vendor/wasm_cmaes/target vendor/wasm_cmaes/pkg vendor/wasm_cmaes/pkg-par **/*.min.js **/*.map bun.lock package-lock.json
+ℹ Created filtered scan workspace at /var/folders/vt/n2xyn_s51b97_j3yh2qbqcnc0000gn/T/tmp.cCpqBKuwZS/scan
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ██╗   ██╗██╗  ████████╗██╗███╗   ███╗ █████╗ ████████╗███████╗              ║
+║  ██║   ██║██║  ╚══██╔══╝██║████╗ ████║██╔══██╗╚══██╔══╝██╔════╝              ║
+║  ██║   ██║██║     ██║   ██║██╔████╔██║███████║   ██║   █████╗                ║
+║  ██║   ██║██║     ██║   ██║██║╚██╔╝██║██╔══██║   ██║   ██╔══╝                ║
+║  ╚██████╔╝███████╗██║   ██║██║ ╚═╝ ██║██║  ██║   ██║   ███████╗              ║
+║   ╚═════╝ ╚══════╝╚═╝   ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝              ║
+║                                                                              ║
+║  ██████╗ ██╗   ██╗ ██████╗         __       __                               ║
+║  ██╔══██╗██║   ██║██╔════╝         \ `-'"-'` /                               ║
+║  ██████╔╝██║   ██║██║  ███╗        / \_   _/ \                               ║
+║  ██╔══██╗██║   ██║██║   ██║        |  d\_/b  |                               ║
+║  ██████╔╝╚██████╔╝╚██████╔╝       .'\   V   /'.                              ║
+║  ╚═════╝  ╚═════╝  ╚═════╝        /   '-...-'   \                            ║
+║                                  | /         \ |                             ║
+║                                  \/\         /\/                             ║
+║                                  ==(||)---(||)==                             ║
+║                                                                              ║
+║  ███████╗  ██████╗   █████╗ ███╗   ██╗███╗   ██╗███████╗██████╗              ║
+║  ██╔════╝  ██╔═══╝  ██╔══██╗████╗  ██║████╗  ██║██╔════╝██╔══██╗             ║
+║  ███████╗  ██║      ███████║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝             ║
+║  ╚════██║  ██║      ██╔══██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗             ║
+║  ███████║  ██████╗  ██║  ██║██║ ╚████║██║ ╚████║███████╗██║  ██║             ║
+║  ╚══════╝  ╚═════╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝                  ║
+║                                                                              ║
+║     JS / TS • PYTHON • C / C++ • RUST • GO • JAVA • RUBY • SWIFT             ║
+║                    UBS: ULTIMATE BUG SCANNER • SARIF FUSION ☄️               ║
+║                                                                              ║
+║                                                                              ║
+║                     Night Owl QA                                             ║
+║                     “We see bugs before you do.”                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+UBS Meta-Runner v5.0.3  2026-08-27 05:51:24
+Project: /Users/jemanuel/projects/cmaes_explainer
+Format:  text
+Detected: js
+ℹ ast-grep (path): /opt/homebrew/bin/ast-grep
+Scanning js...
+Finished js (3s)
+
+──────── js ────────
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  ██╗   ██╗██╗  ████████╗██╗███╗   ███╗ █████╗ ████████╗███████╗   ║
+║  ██║   ██║██║  ╚══██╔══╝██║████╗ ████║██╔══██╗╚══██╔══╝██╔════╝   ║
+║  ██║   ██║██║     ██║   ██║██╔████╔██║███████║   ██║   █████╗     ║
+║  ██║   ██║██║     ██║   ██║██║╚██╔╝██║██╔══██║   ██║   ██╔══╝     ║
+║  ╚██████╔╝███████╗██║   ██║██║ ╚═╝ ██║██║  ██║   ██║   ███████╗   ║
+║   ╚═════╝ ╚══════╝╚═╝   ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝   ║
+║                                                                   ║
+║  ██████╗ ██╗   ██╗ ██████╗          ████████████████████████      ║
+║  ██╔══██╗██║   ██║██╔════╝          ████████████████████████      ║
+║  ██████╔╝██║   ██║██║  ███╗         ████████████████████████      ║
+║  ██╔══██╗██║   ██║██║   ██║         ██████████  ████    ████      ║
+║  ██████╔╝╚██████╔╝╚██████╔╝         ██████████  ██  ████████      ║
+║  ╚═════╝  ╚═════╝  ╚═════╝          ██████████  ████    ████      ║
+║                                     ██████████  ████████  ██      ║
+║                                     ██████████  ██  ████  ██      ║
+║                                     ██████    ██████    ████      ║
+║                                     ████████████████████████      ║
+║                                                                   ║
+║  ███████╗  ██████╗   █████╗ ███╗   ██╗███╗   ██╗███████╗██████╗   ║
+║  ██╔════╝  ██╔═══╝  ██╔══██╗████╗  ██║████╗  ██║██╔════╝██╔══██╗  ║
+║  ███████╗  ██║      ███████║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝  ║
+║  ╚════██║  ██║      ██╔══██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗  ║
+║  ███████║  ██████╗  ██║  ██║██║ ╚████║██║ ╚████║███████╗██║  ██║  ║
+║  ╚══════╝  ╚═════╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝       ║
+║                                                                   ║
+║  JavaScript/TypeScript sentinel • DOM, async, security heuristics ║
+║  UBS module: js • AST-grep signal • multi-agent guardrail ready   ║
+║  ASCII homage: aemkei hexagon JS logo                             ║
+║  Run standalone: modules/ubs-js.sh --help                         ║
+║                                                                   ║
+║  Night Owl QA                                                     ║
+║  “We see bugs before you do.”                                     ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Project:  /Users/jemanuel/projects/cmaes_explainer
+Started:  2026-08-27 05:51:24
+Files:    72 source files (js,jsx,ts,tsx,mjs,cjs)
+Focus areas include NULL SAFETY, SECURITY VULNERABILITIES, Lightweight taint analysis, async pitfalls, and resource lifecycle.
+
+✓ ast-grep available (/opt/homebrew/bin/ast-grep) - full AST analysis enabled
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. NULL SAFETY & DEFENSIVE PROGRAMMING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Null pointer dereferences, missing guards, unsafe property access
+These bugs cause 'Cannot read property of null/undefined' runtime crashes
+
+• Unguarded property access after getElementById/querySelector
+  ℹ Info (7 found)
+    Some DOM queries may need null checks
+    Review each to ensure the element is guaranteed to exist
+
+• Optional chaining opportunities (?.)
+  ✓ OK Minimal optional chaining opportunities
+
+• Nullish coalescing opportunities (??)
+
+• Accessing nested properties without guards
+  ⚠ Warning (24 found)
+    Deep property access - high crash risk
+    Consider obj?.prop1?.prop2?.prop3 or explicit guards
+      /Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs:15 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/perf_loops.mjs#L15)
+      window.__loops.intervals.push({ delay, stack });
+      /Users/jemanuel/projects/cmaes_explainer/app/components/CMAESPhaseSpaceViewer.tsx:48 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/components/CMAESPhaseSpaceViewer.tsx#L48)
+      meshRef.current.scale.lerp(targetScale1Sigma, lerpRate);
+      /Users/jemanuel/projects/cmaes_explainer/app/components/CMAESPhaseSpaceViewer.tsx:51 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/components/CMAESPhaseSpaceViewer.tsx#L51)
+      wireRef.current.scale.copy(meshRef.current.scale);
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. MATH & ARITHMETIC PITFALLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Division by zero, NaN propagation, floating-point equality
+Mathematical bugs that produce silent errors or Infinity/NaN values
+
+• Division operations (potential ÷0)
+  ⚠ Warning (422 found)
+    Division by variable - verify non-zero
+    Add guards: if (divisor === 0) throw; or use fallback
+      /Users/jemanuel/projects/cmaes_explainer/eslint.config.mjs:6 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/eslint.config.mjs#L6)
+          ignores: ["node_modules", "dist", "public/wasm-demo", "public/wasm", "vendor", ".vercel", ".next"]
+      /Users/jemanuel/projects/cmaes_explainer/eslint.config.mjs:12 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/eslint.config.mjs#L12)
+            "react-hooks/purity": "off"
+      /Users/jemanuel/projects/cmaes_explainer/tmp/og_probe.ts:2 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/og_probe.ts#L2)
+      // Standalone diagnostic: render the share card outside Next to surface the
+      /Users/jemanuel/projects/cmaes_explainer/tmp/og_probe.ts:3 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/og_probe.ts#L3)
+      // real exception behind the silent 0-byte responses.
+      /Users/jemanuel/projects/cmaes_explainer/tmp/og_probe.ts:4 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/og_probe.ts#L4)
+      import { renderShareCard } from "../app/_og/shared";
+
+• Incorrect NaN checks (== NaN instead of Number.isNaN)
+  ✓ OK No direct NaN comparisons
+
+• isNaN() instead of Number.isNaN()
+  ✓ OK All NaN checks use Number.isNaN()
+
+• Floating-point equality (===)
+
+• Modulo by variable (verify non-zero)
+  ℹ Info (28 found)
+    Modulo operations - verify divisor is non-zero
+
+• Bitwise operations on non-integers
+  ℹ Info (176 found)
+    Bitwise operations detected - ensure integer inputs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. ARRAY & COLLECTION SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Index out of bounds, mutation bugs, unsafe iteration
+Array bugs cause undefined access, incorrect results, or crashes
+
+• Array access with arithmetic offsets (bounds risk)
+  ℹ Info (10 found)
+    Array offset access - review bounds checking
+
+• Array.length used in arithmetic without validation
+  ℹ Info (39 found)
+    Array.length in calculations
+    Ensure non-empty before indexing
+
+• Mutation of array during iteration
+
+• Array holes (sparse arrays)
+  ⚠ Warning (1 found)
+    Sparse array creation detected
+    Use Array.from({length:n},()=>val)
+      /Users/jemanuel/projects/cmaes_explainer/app/lib/cmaesEngine.test.ts:72 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/cmaesEngine.test.ts#L72)
+              initialMean: new Array(8).fill(0.75),
+
+• Missing array existence checks before .length
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. TYPE COERCION & COMPARISON TRAPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Loose equality, type confusion, implicit conversions
+JavaScript's type coercion causes subtle bugs that are hard to debug
+
+• Loose equality (== instead of ===)
+  ✓ OK All comparisons use strict equality
+
+• Comparing different types
+  ℹ Info (128 found)
+    Type comparisons - verify both sides match
+
+• typeof checks with wrong string literals
+
+• Truthy/falsy confusion in conditions
+
+• Implicit string concatenation with +
+  ℹ Info (11 found)
+    String concatenation with +
+    Use Number() for math; template literals for strings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. ASYNC/AWAIT & PROMISE PITFALLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Missing await, unhandled rejections, race conditions
+Async bugs cause unpredictable behavior, crashes, and data corruption
+  ℹ Info (22 found)
+    Async functions found
+    Verifying proper await/error handling...
+
+• Race conditions with Promise.race/any
+
+• Async error path coverage
+  ℹ Info (28 found)
+    await outside try/catch
+    Wrap awaited calls in try/catch to surface rejections
+    /Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs:8 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/perf_gpu.mjs#L8)
+    /Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs:12 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/perf_gpu.mjs#L12)
+    /Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs:13 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/tmp/perf_gpu.mjs#L13)
+
+• React hooks dependency analysis
+  ✓ OK Hooks dependency arrays look accurate
+
+• Type narrowing validation
+  ⚠ Warning (18 found)
+    Potentially unsafe type narrowing
+    Examples: /Users/jemanuel/projects/cmaes_explainer/app/components/ActiveCovarianceDemo.tsx:137:1 → Value 'ctx' checked earlier but used without return (text heuristic) /Users/jemanuel/projects/cmaes_explainer/app/components/CAGalleryTrace.tsx:610:1 → Value 'canvas' checked earlier but used without return (text heuristic) /Users/jemanuel/projects/cmaes_explainer/app/components/CMAESPhaseSpaceViewer.tsx:500:1 → Value 'ctx' checked earlier but used without return (text heuristic) (and 15 more)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. ERROR HANDLING ANTI-PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Swallowed errors, missing cleanup, poor error messages
+Bad error handling makes debugging impossible and causes production failures
+
+• Error handling best practices
+  ✓ OK Error handling patterns look healthy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. SECURITY VULNERABILITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Code injection, XSS, prototype pollution, timing attacks
+Security bugs expose users to attacks and data breaches
+
+• eval() usage (CRITICAL SECURITY RISK)
+  ✓ OK No eval() detected
+
+• new Function() (eval equivalent)
+
+• innerHTML with potential XSS risk
+
+• document.write (deprecated & dangerous)
+
+• Prototype pollution vulnerability
+
+• Hardcoded secrets/credentials
+
+• RegExp denial of service (ReDoS) risk
+
+• Lightweight taint analysis
+  ✓ OK No tainted sources reach dangerous sinks
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. FUNCTION & SCOPE ISSUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Missing return, callback hell, closure leaks
+Function bugs cause incorrect results and memory leaks
+
+• Functions with high parameter count (>5)
+
+• Arrow functions with implicit return confusion
+  ℹ Info (392 found)
+    Arrow functions with { } - verify return intent
+    () => {x:1} returns undefined; wrap object: () => ({x:1})
+
+• Nested callbacks (callback hell)
+  ℹ Info (232 found)
+    Many callback-style functions detected
+    Review for unnecessary nesting; prefer async/await or Promises
+
+• Function declarations inside blocks
+  ⚠ Warning (6 found)
+    Function declarations in blocks - use function expressions
+    Hoisting is inconsistent
+
+• Missing return in functions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. PARSING & TYPE CONVERSION BUGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: parseInt errors, JSON parsing, date issues
+Parsing bugs cause data corruption and incorrect calculations
+
+• parseInt without radix parameter
+  ✓ OK All parseInt calls specify radix
+
+• JSON.parse without try/catch
+  ⚠ Warning (3 found)
+    JSON.parse without error handling
+    Wrap in try/catch or validate input first
+    app/lib/frankensimPhysics.ts:405  const parsed = JSON.parse(raw); (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/frankensimPhysics.ts#L405)
+    app/lib/frankensimPhysics.ts:726  const parsed = JSON.parse(raw); (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/frankensimPhysics.ts#L726)
+    app/lib/frankensimCmaes.ts:185  const parsed = JSON.parse(raw) as { ok?: CmaesVizRun; refusal?: { code: string; message: string } }; (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/frankensimCmaes.ts#L185)
+
+• parseFloat precision issues
+  ℹ Info (42 found)
+    parseFloat usage - verify precision requirements
+    Consider decimal libraries for currency
+
+• new Date() without validation
+
+• Implicit numeric conversion via unary +
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. CONTROL FLOW GOTCHAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Missing breaks, unreachable code, confusing conditions
+Control flow bugs cause logic errors and unexpected behavior
+
+• Switch cases without break/return
+  ⚠ Warning (23 found)
+    Switch cases may be missing break
+    Add break or /* falls through */
+
+• Switch without default case
+
+• Nested ternaries (readability nightmare)
+  ⚠ Warning (21 found)
+    Nested ternary operators - unreadable
+    Refactor to if/else
+      /Users/jemanuel/projects/cmaes_explainer/app/global-error.tsx:7 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/global-error.tsx#L7)
+        error?: Error & { digest?: string };
+      /Users/jemanuel/projects/cmaes_explainer/app/lib/frankensimHeatmap.ts:100 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/frankensimHeatmap.ts#L100)
+            default?: (opts: { module_or_path: string }) => Promise<{ memory?: WebAssembly.Memory }>;
+      /Users/jemanuel/projects/cmaes_explainer/app/lib/frankensimLenia.ts:53 (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/lib/frankensimLenia.ts#L53)
+            default?: (opts: { module_or_path: string }) => Promise<{ memory?: WebAssembly.Memory }>;
+
+• Unreachable code after return
+
+• Empty if/else blocks
+
+• Yoda conditions (confusing style)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. DEBUGGING & PRODUCTION CODE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: console.log, debugger, dead code
+Debug code left in production affects performance and leaks info
+  ℹ Info (42 found)
+    console.* statements found
+
+• debugger statements (MUST REMOVE)
+  ✓ OK No debugger statements
+
+• alert/confirm/prompt (blocking UI)
+
+• console.log with sensitive data
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+12. MEMORY LEAKS & PERFORMANCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Event listener leaks, closures, heavy operations
+Performance bugs cause slowdowns, crashes, and poor user experience
+  ℹ Info (10 found)
+    Event listeners attached
+  ℹ Info (4 found)
+    Event listeners removed
+
+• setInterval without clearInterval
+
+• setTimeout without clearTimeout
+
+• Large inline arrays/objects (memory waste)
+
+• Synchronous operations in loops
+
+• String concatenation in loops
+  ℹ Info (32 found)
+    String concatenation in loops
+    Prefer array.join for large strings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+13. VARIABLE & SCOPE ISSUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: var usage, global pollution, shadowing
+Scope bugs cause hard-to-debug variable conflicts
+
+• var declarations (use let/const)
+  ✓ OK No var declarations (using let/const)
+
+• Global variable pollution
+  ⚠ Warning (3 found)
+    Possible global variable pollution
+    app/components/CAGalleryTrace.tsx:426  b = Math.floor(18 + t * 210); (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/components/CAGalleryTrace.tsx#L426)
+    app/components/CAGalleryTrace.tsx:431  b = Math.floor(228 + t * 15); (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/components/CAGalleryTrace.tsx#L431)
+    app/components/CAGalleryTrace.tsx:436  b = Math.floor(243 + t * 12); (https://github.com/Dicklesworthstone/cmaes_explainer/blob/37425a90185075306d0a41e4a421eeda6fc8432f/app/components/CAGalleryTrace.tsx#L436)
+
+• Variable shadowing
+
+• const reassignment attempts
+  ✓ OK Using const appropriately
+
+• Unused variables (heuristic)
+  ℹ Info (1942 found)
+    Many variable declarations - check for unused vars
+    Use ESLint no-unused-vars for precision
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+14. CODE QUALITY MARKERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: TODO, FIXME, HACK, XXX comments
+Technical debt markers indicate incomplete or problematic code
+  ℹ Info (2 found)
+    Minimal technical debt
+
+  Breakdown:
+    TODO:  1
+    XXX:   1
+    NOTE:  17
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+15. REGEX & STRING SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: ReDoS, regex injection, string escaping issues
+Regex bugs cause performance issues and security vulnerabilities
+
+• ReDoS vulnerable patterns
+
+• RegExp with user input (injection risk)
+
+• Missing string escaping in regex
+
+• Case-insensitive regex without /i flag
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+16. DOM MANIPULATION SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Missing null checks, inefficient queries, event leaks
+DOM bugs cause crashes and performance issues
+
+• querySelector/getElementById calls
+  ℹ Info (12 found)
+    DOM queries found
+    Ensure all queries have null checks before property access
+
+• Uncached DOM queries in loops
+
+• Direct style manipulation
+
+• Missing event delegation opportunities
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+17. TYPESCRIPT STRICTNESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: any usage, non-null assertions, implicit any
+Looser types reduce safety and increase runtime failures
+
+• Explicit any annotations
+  ℹ Info (7 found)
+    Explicit any types present
+    Prefer unknown or generics
+
+• Non-null assertion operator (!)
+  ℹ Info (16 found)
+    Non-null assertions used
+    Audit for potential NPE at runtime
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+18. NODE.JS I/O & MODULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: sync filesystem calls, dynamic require(), JSON.parse(file) without try
+Sync I/O blocks event loop; dynamic requires hinder bundling and caching
+
+• Synchronous fs operations
+  ⚠ Warning (12 found)
+    Synchronous fs.*Sync calls
+    Prefer async APIs
+
+• Dynamic require()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+19. RESOURCE LIFECYCLE CORRELATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▓▓▓ Detects: Acquire/release imbalances for listeners, timers, observers
+Unreleased resources leak memory, CPU, and event handlers across renders
+
+• Resource lifecycle correlation
+  ✓ OK All tracked resource acquisitions have matching cleanups
+  ✓ OK All tracked resource acquisitions have matching cleanups
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AST-GREP RULE PACK FINDINGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{"text":"await chromium.launch({\n    headless: true,\n    args: [\"--use-angle=metal\", \"--enable-gpu\", \"--ignore-gpu-blocklist\"],\n  })","range":{"byteOffset":{"start":262,"end":385},"start":{"line":7,"column":18},"end":{"line":10,"column":4}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  const browser = await chromium.launch({\n    headless: true,\n    args: [\"--use-angle=metal\", \"--enable-gpu\", \"--ignore-gpu-blocklist\"],\n  });","charCount":{"leading":18,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"chromium.launch({\n    headless: true,\n    args: [\"--use-angle=metal\", \"--enable-gpu\", \"--ignore-gpu-blocklist\"],\n  })","range":{"byteOffset":{"start":268,"end":385},"start":{"line":7,"column":24},"end":{"line":10,"column":4}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await chromium.launch({\n    headless: true,\n    args: [\"--use-angle=metal\", \"--enable-gpu\", \"--ignore-gpu-blocklist\"],\n  })","range":{"byteOffset":{"start":262,"end":385},"start":{"line":7,"column":18},"end":{"line":10,"column":4}},"style":"primary"}]}
+{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":401,"end":469},"start":{"line":11,"column":14},"end":{"line":11,"column":82}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });","charCount":{"leading":14,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":407,"end":469},"start":{"line":11,"column":20},"end":{"line":11,"column":82}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":401,"end":469},"start":{"line":11,"column":14},"end":{"line":11,"column":82}},"style":"primary"}]}
+{"text":"await ctx.newPage()","range":{"byteOffset":{"start":486,"end":505},"start":{"line":12,"column":15},"end":{"line":12,"column":34}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  const page = await ctx.newPage();","charCount":{"leading":15,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"ctx.newPage()","range":{"byteOffset":{"start":492,"end":505},"start":{"line":12,"column":21},"end":{"line":12,"column":34}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await ctx.newPage()","range":{"byteOffset":{"start":486,"end":505},"start":{"line":12,"column":15},"end":{"line":12,"column":34}},"style":"primary"}]}
+{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":509,"end":576},"start":{"line":13,"column":2},"end":{"line":13,"column":69}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 });","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":515,"end":576},"start":{"line":13,"column":8},"end":{"line":13,"column":69}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":509,"end":576},"start":{"line":13,"column":2},"end":{"line":13,"column":69}},"style":"primary"}]}
+{"text":"await page.waitForTimeout(3000)","range":{"byteOffset":{"start":580,"end":611},"start":{"line":14,"column":2},"end":{"line":14,"column":33}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  await page.waitForTimeout(3000);","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.waitForTimeout(3000)","range":{"byteOffset":{"start":586,"end":611},"start":{"line":14,"column":8},"end":{"line":14,"column":33}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.waitForTimeout(3000)","range":{"byteOffset":{"start":580,"end":611},"start":{"line":14,"column":2},"end":{"line":14,"column":33}},"style":"primary"}]}
+{"text":"await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      const tasks = [];\n      const obs = new PerformanceObserver((list) => {\n        for (const e of list.getEntries()) {\n          tasks.push({ dur: Math.round(e.duration), name: (e.attribution?.[0]?.containerName || e.attribution?.[0]?.containerSrc || \"?\").slice(0, 60) });\n        }\n      });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      const deltas = [];\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      return {\n        fps: Math.round((1000 / (deltas.reduce((a, b) => a + b, 0) / n)) * 10) / 10,\n        worst: Math.round(deltas[n - 1]),\n        longTasks: tasks.sort((a, b) => b.dur - a.dur).slice(0, 3),\n      };\n    }, sec)","range":{"byteOffset":{"start":823,"end":2049},"start":{"line":19,"column":14},"end":{"line":50,"column":11}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"    const r = await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      const tasks = [];\n      const obs = new PerformanceObserver((list) => {\n        for (const e of list.getEntries()) {\n          tasks.push({ dur: Math.round(e.duration), name: (e.attribution?.[0]?.containerName || e.attribution?.[0]?.containerSrc || \"?\").slice(0, 60) });\n        }\n      });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      const deltas = [];\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      return {\n        fps: Math.round((1000 / (deltas.reduce((a, b) => a + b, 0) / n)) * 10) / 10,\n        worst: Math.round(deltas[n - 1]),\n        longTasks: tasks.sort((a, b) => b.dur - a.dur).slice(0, 3),\n      };\n    }, sec);","charCount":{"leading":14,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      const tasks = [];\n      const obs = new PerformanceObserver((list) => {\n        for (const e of list.getEntries()) {\n          tasks.push({ dur: Math.round(e.duration), name: (e.attribution?.[0]?.containerName || e.attribution?.[0]?.containerSrc || \"?\").slice(0, 60) });\n        }\n      });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      const deltas = [];\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      return {\n        fps: Math.round((1000 / (deltas.reduce((a, b) => a + b, 0) / n)) * 10) / 10,\n        worst: Math.round(deltas[n - 1]),\n        longTasks: tasks.sort((a, b) => b.dur - a.dur).slice(0, 3),\n      };\n    }, sec)","range":{"byteOffset":{"start":829,"end":2049},"start":{"line":19,"column":20},"end":{"line":50,"column":11}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      const tasks = [];\n      const obs = new PerformanceObserver((list) => {\n        for (const e of list.getEntries()) {\n          tasks.push({ dur: Math.round(e.duration), name: (e.attribution?.[0]?.containerName || e.attribution?.[0]?.containerSrc || \"?\").slice(0, 60) });\n        }\n      });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      const deltas = [];\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      return {\n        fps: Math.round((1000 / (deltas.reduce((a, b) => a + b, 0) / n)) * 10) / 10,\n        worst: Math.round(deltas[n - 1]),\n        longTasks: tasks.sort((a, b) => b.dur - a.dur).slice(0, 3),\n      };\n    }, sec)","range":{"byteOffset":{"start":823,"end":2049},"start":{"line":19,"column":14},"end":{"line":50,"column":11}},"style":"primary"}]}
+{"text":"await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1402,"end":1726},"start":{"line":31,"column":6},"end":{"line":41,"column":8}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });","charCount":{"leading":6,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1408,"end":1726},"start":{"line":31,"column":12},"end":{"line":41,"column":8}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1402,"end":1726},"start":{"line":31,"column":6},"end":{"line":41,"column":8}},"style":"primary"}]}
+{"text":"await page.waitForTimeout(400)","range":{"byteOffset":{"start":2077,"end":2107},"start":{"line":52,"column":4},"end":{"line":52,"column":34}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"    await page.waitForTimeout(400);","charCount":{"leading":4,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.waitForTimeout(400)","range":{"byteOffset":{"start":2083,"end":2107},"start":{"line":52,"column":10},"end":{"line":52,"column":34}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.waitForTimeout(400)","range":{"byteOffset":{"start":2077,"end":2107},"start":{"line":52,"column":4},"end":{"line":52,"column":34}},"style":"primary"}]}
+{"text":"await browser.close()","range":{"byteOffset":{"start":2288,"end":2309},"start":{"line":57,"column":2},"end":{"line":57,"column":23}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_gpu.mjs","lines":"  await browser.close();","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.close()","range":{"byteOffset":{"start":2294,"end":2309},"start":{"line":57,"column":8},"end":{"line":57,"column":23}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.close()","range":{"byteOffset":{"start":2288,"end":2309},"start":{"line":57,"column":2},"end":{"line":57,"column":23}},"style":"primary"}]}
+{"text":"await chromium.launch({ headless: true })","range":{"byteOffset":{"start":311,"end":352},"start":{"line":9,"column":18},"end":{"line":9,"column":59}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  const browser = await chromium.launch({ headless: true });","charCount":{"leading":18,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"chromium.launch({ headless: true })","range":{"byteOffset":{"start":317,"end":352},"start":{"line":9,"column":24},"end":{"line":9,"column":59}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await chromium.launch({ headless: true })","range":{"byteOffset":{"start":311,"end":352},"start":{"line":9,"column":18},"end":{"line":9,"column":59}},"style":"primary"}]}
+{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":368,"end":436},"start":{"line":10,"column":14},"end":{"line":10,"column":82}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });","charCount":{"leading":14,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":374,"end":436},"start":{"line":10,"column":20},"end":{"line":10,"column":82}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":368,"end":436},"start":{"line":10,"column":14},"end":{"line":10,"column":82}},"style":"primary"}]}
+{"text":"await ctx.newPage()","range":{"byteOffset":{"start":453,"end":472},"start":{"line":11,"column":15},"end":{"line":11,"column":34}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  const page = await ctx.newPage();","charCount":{"leading":15,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"ctx.newPage()","range":{"byteOffset":{"start":459,"end":472},"start":{"line":11,"column":21},"end":{"line":11,"column":34}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await ctx.newPage()","range":{"byteOffset":{"start":453,"end":472},"start":{"line":11,"column":15},"end":{"line":11,"column":34}},"style":"primary"}]}
+{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":696,"end":763},"start":{"line":17,"column":2},"end":{"line":17,"column":69}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 });","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":702,"end":763},"start":{"line":17,"column":8},"end":{"line":17,"column":69}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":696,"end":763},"start":{"line":17,"column":2},"end":{"line":17,"column":69}},"style":"primary"}]}
+{"text":"await page.waitForTimeout(2500)","range":{"byteOffset":{"start":767,"end":798},"start":{"line":18,"column":2},"end":{"line":18,"column":33}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  await page.waitForTimeout(2500);","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.waitForTimeout(2500)","range":{"byteOffset":{"start":773,"end":798},"start":{"line":18,"column":8},"end":{"line":18,"column":33}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.waitForTimeout(2500)","range":{"byteOffset":{"start":767,"end":798},"start":{"line":18,"column":2},"end":{"line":18,"column":33}},"style":"primary"}]}
+{"text":"await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      await new Promise((r) => setTimeout(r, 400));\n      // Sample rAF deltas for ~3s.\n      const deltas = [];\n      let longTasks = 0;\n      const obs = new PerformanceObserver((list) => { longTasks += list.getEntries().length; });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / n);\n      return {\n        missing: false,\n        fps: Math.round(fps * 10) / 10,\n        p95: Math.round(deltas[Math.floor(n * 0.95)] * 10) / 10,\n        worst: Math.round(deltas[n - 1] * 10) / 10,\n        longTasks,\n        canvases: document.querySelectorAll(\"canvas\").length,\n      };\n    }, sec)","range":{"byteOffset":{"start":1015,"end":2287},"start":{"line":24,"column":18},"end":{"line":57,"column":11}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"    const probe = await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      await new Promise((r) => setTimeout(r, 400));\n      // Sample rAF deltas for ~3s.\n      const deltas = [];\n      let longTasks = 0;\n      const obs = new PerformanceObserver((list) => { longTasks += list.getEntries().length; });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / n);\n      return {\n        missing: false,\n        fps: Math.round(fps * 10) / 10,\n        p95: Math.round(deltas[Math.floor(n * 0.95)] * 10) / 10,\n        worst: Math.round(deltas[n - 1] * 10) / 10,\n        longTasks,\n        canvases: document.querySelectorAll(\"canvas\").length,\n      };\n    }, sec);","charCount":{"leading":18,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      await new Promise((r) => setTimeout(r, 400));\n      // Sample rAF deltas for ~3s.\n      const deltas = [];\n      let longTasks = 0;\n      const obs = new PerformanceObserver((list) => { longTasks += list.getEntries().length; });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / n);\n      return {\n        missing: false,\n        fps: Math.round(fps * 10) / 10,\n        p95: Math.round(deltas[Math.floor(n * 0.95)] * 10) / 10,\n        worst: Math.round(deltas[n - 1] * 10) / 10,\n        longTasks,\n        canvases: document.querySelectorAll(\"canvas\").length,\n      };\n    }, sec)","range":{"byteOffset":{"start":1021,"end":2287},"start":{"line":24,"column":24},"end":{"line":57,"column":11}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.evaluate(async (secId) => {\n      const el = document.getElementById(secId);\n      if (secId !== \"main\" && !el) return { missing: true };\n      if (el) el.scrollIntoView({ block: \"start\" });\n      await new Promise((r) => setTimeout(r, 400));\n      // Sample rAF deltas for ~3s.\n      const deltas = [];\n      let longTasks = 0;\n      const obs = new PerformanceObserver((list) => { longTasks += list.getEntries().length; });\n      obs.observe({ entryTypes: [\"longtask\"] });\n      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });\n      obs.disconnect();\n      deltas.sort((a, b) => a - b);\n      const n = deltas.length;\n      const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / n);\n      return {\n        missing: false,\n        fps: Math.round(fps * 10) / 10,\n        p95: Math.round(deltas[Math.floor(n * 0.95)] * 10) / 10,\n        worst: Math.round(deltas[n - 1] * 10) / 10,\n        longTasks,\n        canvases: document.querySelectorAll(\"canvas\").length,\n      };\n    }, sec)","range":{"byteOffset":{"start":1015,"end":2287},"start":{"line":24,"column":18},"end":{"line":57,"column":11}},"style":"primary"}]}
+{"text":"await new Promise((r) => setTimeout(r, 400))","range":{"byteOffset":{"start":1223,"end":1267},"start":{"line":28,"column":6},"end":{"line":28,"column":50}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"      await new Promise((r) => setTimeout(r, 400));","charCount":{"leading":6,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"new Promise((r) => setTimeout(r, 400))","range":{"byteOffset":{"start":1229,"end":1267},"start":{"line":28,"column":12},"end":{"line":28,"column":50}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await new Promise((r) => setTimeout(r, 400))","range":{"byteOffset":{"start":1223,"end":1267},"start":{"line":28,"column":6},"end":{"line":28,"column":50}},"style":"primary"}]}
+{"text":"await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1507,"end":1831},"start":{"line":34,"column":6},"end":{"line":44,"column":8}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"      await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      });","charCount":{"leading":6,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1513,"end":1831},"start":{"line":34,"column":12},"end":{"line":44,"column":8}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await new Promise((resolve) => {\n        let last = performance.now();\n        const start = last;\n        function frame(t) {\n          deltas.push(t - last);\n          last = t;\n          if (t - start < 3000) requestAnimationFrame(frame);\n          else resolve();\n        }\n        requestAnimationFrame(frame);\n      })","range":{"byteOffset":{"start":1507,"end":1831},"start":{"line":34,"column":6},"end":{"line":44,"column":8}},"style":"primary"}]}
+{"text":"await page.evaluate(async () => {\n    const deltas = [];\n    let last = performance.now();\n    let y = 0;\n    const step = () => {\n      y += 600;\n      window.scrollTo(0, y);\n      const now = performance.now();\n      deltas.push(now - last);\n      last = now;\n      if (y < document.body.scrollHeight - window.innerHeight) setTimeout(step, 50);\n    };\n    step();\n    await new Promise((r) => setTimeout(r, 8000));\n    deltas.sort((a, b) => a - b);\n    const n = deltas.length;\n    return { samples: n, p50: deltas[Math.floor(n * 0.5)], p95: deltas[Math.floor(n * 0.95)], worst: Math.round(deltas[n - 1]) };\n  })","range":{"byteOffset":{"start":2410,"end":3024},"start":{"line":62,"column":17},"end":{"line":79,"column":4}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  const scroll = await page.evaluate(async () => {\n    const deltas = [];\n    let last = performance.now();\n    let y = 0;\n    const step = () => {\n      y += 600;\n      window.scrollTo(0, y);\n      const now = performance.now();\n      deltas.push(now - last);\n      last = now;\n      if (y < document.body.scrollHeight - window.innerHeight) setTimeout(step, 50);\n    };\n    step();\n    await new Promise((r) => setTimeout(r, 8000));\n    deltas.sort((a, b) => a - b);\n    const n = deltas.length;\n    return { samples: n, p50: deltas[Math.floor(n * 0.5)], p95: deltas[Math.floor(n * 0.95)], worst: Math.round(deltas[n - 1]) };\n  });","charCount":{"leading":17,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.evaluate(async () => {\n    const deltas = [];\n    let last = performance.now();\n    let y = 0;\n    const step = () => {\n      y += 600;\n      window.scrollTo(0, y);\n      const now = performance.now();\n      deltas.push(now - last);\n      last = now;\n      if (y < document.body.scrollHeight - window.innerHeight) setTimeout(step, 50);\n    };\n    step();\n    await new Promise((r) => setTimeout(r, 8000));\n    deltas.sort((a, b) => a - b);\n    const n = deltas.length;\n    return { samples: n, p50: deltas[Math.floor(n * 0.5)], p95: deltas[Math.floor(n * 0.95)], worst: Math.round(deltas[n - 1]) };\n  })","range":{"byteOffset":{"start":2416,"end":3024},"start":{"line":62,"column":23},"end":{"line":79,"column":4}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.evaluate(async () => {\n    const deltas = [];\n    let last = performance.now();\n    let y = 0;\n    const step = () => {\n      y += 600;\n      window.scrollTo(0, y);\n      const now = performance.now();\n      deltas.push(now - last);\n      last = now;\n      if (y < document.body.scrollHeight - window.innerHeight) setTimeout(step, 50);\n    };\n    step();\n    await new Promise((r) => setTimeout(r, 8000));\n    deltas.sort((a, b) => a - b);\n    const n = deltas.length;\n    return { samples: n, p50: deltas[Math.floor(n * 0.5)], p95: deltas[Math.floor(n * 0.95)], worst: Math.round(deltas[n - 1]) };\n  })","range":{"byteOffset":{"start":2410,"end":3024},"start":{"line":62,"column":17},"end":{"line":79,"column":4}},"style":"primary"}]}
+{"text":"await new Promise((r) => setTimeout(r, 8000))","range":{"byteOffset":{"start":2780,"end":2825},"start":{"line":75,"column":4},"end":{"line":75,"column":49}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"    await new Promise((r) => setTimeout(r, 8000));","charCount":{"leading":4,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"new Promise((r) => setTimeout(r, 8000))","range":{"byteOffset":{"start":2786,"end":2825},"start":{"line":75,"column":10},"end":{"line":75,"column":49}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await new Promise((r) => setTimeout(r, 8000))","range":{"byteOffset":{"start":2780,"end":2825},"start":{"line":75,"column":4},"end":{"line":75,"column":49}},"style":"primary"}]}
+{"text":"await browser.close()","range":{"byteOffset":{"start":3241,"end":3262},"start":{"line":85,"column":2},"end":{"line":85,"column":23}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_baseline.mjs","lines":"  await browser.close();","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.close()","range":{"byteOffset":{"start":3247,"end":3262},"start":{"line":85,"column":8},"end":{"line":85,"column":23}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.close()","range":{"byteOffset":{"start":3241,"end":3262},"start":{"line":85,"column":2},"end":{"line":85,"column":23}},"style":"primary"}]}
+{"text":"await chromium.launch({ headless: true })","range":{"byteOffset":{"start":246,"end":287},"start":{"line":7,"column":18},"end":{"line":7,"column":59}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  const browser = await chromium.launch({ headless: true });","charCount":{"leading":18,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"chromium.launch({ headless: true })","range":{"byteOffset":{"start":252,"end":287},"start":{"line":7,"column":24},"end":{"line":7,"column":59}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await chromium.launch({ headless: true })","range":{"byteOffset":{"start":246,"end":287},"start":{"line":7,"column":18},"end":{"line":7,"column":59}},"style":"primary"}]}
+{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":303,"end":371},"start":{"line":8,"column":14},"end":{"line":8,"column":82}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });","charCount":{"leading":14,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":309,"end":371},"start":{"line":8,"column":20},"end":{"line":8,"column":82}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.newContext({ viewport: { width: 1440, height: 900 } })","range":{"byteOffset":{"start":303,"end":371},"start":{"line":8,"column":14},"end":{"line":8,"column":82}},"style":"primary"}]}
+{"text":"await ctx.addInitScript(() => {\n    window.__loops = { intervals: [], timeouts: [], rafPerSec: 0, rafCount: 0 };\n    const oSetInterval = window.setInterval.bind(window);\n    window.setInterval = function (fn, delay, ...rest) {\n      const stack = (new Error().stack || \"\").split(\"\\n\").slice(2, 5).join(\" | \").slice(0, 300);\n      window.__loops.intervals.push({ delay, stack });\n      return oSetInterval(fn, delay, ...rest);\n    };\n    const oRAF = window.requestAnimationFrame.bind(window);\n    window.requestAnimationFrame = function (cb) {\n      window.__loops.rafCount++;\n      return oRAF((t) => { window.__loops.rafCount++; return cb(t); });\n    };\n    setInterval(() => { window.__loops.rafPerSec = window.__loops.rafCount; window.__loops.rafCount = 0; }, 1000);\n  })","range":{"byteOffset":{"start":375,"end":1151},"start":{"line":9,"column":2},"end":{"line":23,"column":4}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  await ctx.addInitScript(() => {\n    window.__loops = { intervals: [], timeouts: [], rafPerSec: 0, rafCount: 0 };\n    const oSetInterval = window.setInterval.bind(window);\n    window.setInterval = function (fn, delay, ...rest) {\n      const stack = (new Error().stack || \"\").split(\"\\n\").slice(2, 5).join(\" | \").slice(0, 300);\n      window.__loops.intervals.push({ delay, stack });\n      return oSetInterval(fn, delay, ...rest);\n    };\n    const oRAF = window.requestAnimationFrame.bind(window);\n    window.requestAnimationFrame = function (cb) {\n      window.__loops.rafCount++;\n      return oRAF((t) => { window.__loops.rafCount++; return cb(t); });\n    };\n    setInterval(() => { window.__loops.rafPerSec = window.__loops.rafCount; window.__loops.rafCount = 0; }, 1000);\n  });","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"ctx.addInitScript(() => {\n    window.__loops = { intervals: [], timeouts: [], rafPerSec: 0, rafCount: 0 };\n    const oSetInterval = window.setInterval.bind(window);\n    window.setInterval = function (fn, delay, ...rest) {\n      const stack = (new Error().stack || \"\").split(\"\\n\").slice(2, 5).join(\" | \").slice(0, 300);\n      window.__loops.intervals.push({ delay, stack });\n      return oSetInterval(fn, delay, ...rest);\n    };\n    const oRAF = window.requestAnimationFrame.bind(window);\n    window.requestAnimationFrame = function (cb) {\n      window.__loops.rafCount++;\n      return oRAF((t) => { window.__loops.rafCount++; return cb(t); });\n    };\n    setInterval(() => { window.__loops.rafPerSec = window.__loops.rafCount; window.__loops.rafCount = 0; }, 1000);\n  })","range":{"byteOffset":{"start":381,"end":1151},"start":{"line":9,"column":8},"end":{"line":23,"column":4}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await ctx.addInitScript(() => {\n    window.__loops = { intervals: [], timeouts: [], rafPerSec: 0, rafCount: 0 };\n    const oSetInterval = window.setInterval.bind(window);\n    window.setInterval = function (fn, delay, ...rest) {\n      const stack = (new Error().stack || \"\").split(\"\\n\").slice(2, 5).join(\" | \").slice(0, 300);\n      window.__loops.intervals.push({ delay, stack });\n      return oSetInterval(fn, delay, ...rest);\n    };\n    const oRAF = window.requestAnimationFrame.bind(window);\n    window.requestAnimationFrame = function (cb) {\n      window.__loops.rafCount++;\n      return oRAF((t) => { window.__loops.rafCount++; return cb(t); });\n    };\n    setInterval(() => { window.__loops.rafPerSec = window.__loops.rafCount; window.__loops.rafCount = 0; }, 1000);\n  })","range":{"byteOffset":{"start":375,"end":1151},"start":{"line":9,"column":2},"end":{"line":23,"column":4}},"style":"primary"}]}
+{"text":"await ctx.newPage()","range":{"byteOffset":{"start":1169,"end":1188},"start":{"line":25,"column":15},"end":{"line":25,"column":34}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  const page = await ctx.newPage();","charCount":{"leading":15,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"ctx.newPage()","range":{"byteOffset":{"start":1175,"end":1188},"start":{"line":25,"column":21},"end":{"line":25,"column":34}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await ctx.newPage()","range":{"byteOffset":{"start":1169,"end":1188},"start":{"line":25,"column":15},"end":{"line":25,"column":34}},"style":"primary"}]}
+{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":1323,"end":1390},"start":{"line":28,"column":2},"end":{"line":28,"column":69}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 });","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":1329,"end":1390},"start":{"line":28,"column":8},"end":{"line":28,"column":69}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.goto(BASE, { waitUntil: \"networkidle\", timeout: 60000 })","range":{"byteOffset":{"start":1323,"end":1390},"start":{"line":28,"column":2},"end":{"line":28,"column":69}},"style":"primary"}]}
+{"text":"await page.waitForTimeout(4000)","range":{"byteOffset":{"start":1394,"end":1425},"start":{"line":29,"column":2},"end":{"line":29,"column":33}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  await page.waitForTimeout(4000);","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.waitForTimeout(4000)","range":{"byteOffset":{"start":1400,"end":1425},"start":{"line":29,"column":8},"end":{"line":29,"column":33}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.waitForTimeout(4000)","range":{"byteOffset":{"start":1394,"end":1425},"start":{"line":29,"column":2},"end":{"line":29,"column":33}},"style":"primary"}]}
+{"text":"await page.evaluate(() => {\n    const canvases = [...document.querySelectorAll(\"canvas\")].map((c) => {\n      const r = c.getBoundingClientRect();\n      const inView = r.top < window.innerHeight && r.bottom > 0;\n      const webgl = !!c.getContext && (() => { try { return !!c.getContext(\"webgl2\") || !!c.getContext(\"webgl\"); } catch { return \"?\"; } })();\n      return {\n        w: c.width, h: c.height, inView, webglProbe: webgl,\n        cls: (c.className || \"\").toString().slice(0, 60),\n      };\n    });\n    return {\n      intervals: window.__loops.intervals,\n      rafPerSec: window.__loops.rafPerSec,\n      canvasCount: canvases.length,\n      canvases: canvases,\n    };\n  })","range":{"byteOffset":{"start":1442,"end":2118},"start":{"line":31,"column":14},"end":{"line":47,"column":4}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  const inv = await page.evaluate(() => {\n    const canvases = [...document.querySelectorAll(\"canvas\")].map((c) => {\n      const r = c.getBoundingClientRect();\n      const inView = r.top < window.innerHeight && r.bottom > 0;\n      const webgl = !!c.getContext && (() => { try { return !!c.getContext(\"webgl2\") || !!c.getContext(\"webgl\"); } catch { return \"?\"; } })();\n      return {\n        w: c.width, h: c.height, inView, webglProbe: webgl,\n        cls: (c.className || \"\").toString().slice(0, 60),\n      };\n    });\n    return {\n      intervals: window.__loops.intervals,\n      rafPerSec: window.__loops.rafPerSec,\n      canvasCount: canvases.length,\n      canvases: canvases,\n    };\n  });","charCount":{"leading":14,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"page.evaluate(() => {\n    const canvases = [...document.querySelectorAll(\"canvas\")].map((c) => {\n      const r = c.getBoundingClientRect();\n      const inView = r.top < window.innerHeight && r.bottom > 0;\n      const webgl = !!c.getContext && (() => { try { return !!c.getContext(\"webgl2\") || !!c.getContext(\"webgl\"); } catch { return \"?\"; } })();\n      return {\n        w: c.width, h: c.height, inView, webglProbe: webgl,\n        cls: (c.className || \"\").toString().slice(0, 60),\n      };\n    });\n    return {\n      intervals: window.__loops.intervals,\n      rafPerSec: window.__loops.rafPerSec,\n      canvasCount: canvases.length,\n      canvases: canvases,\n    };\n  })","range":{"byteOffset":{"start":1448,"end":2118},"start":{"line":31,"column":20},"end":{"line":47,"column":4}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await page.evaluate(() => {\n    const canvases = [...document.querySelectorAll(\"canvas\")].map((c) => {\n      const r = c.getBoundingClientRect();\n      const inView = r.top < window.innerHeight && r.bottom > 0;\n      const webgl = !!c.getContext && (() => { try { return !!c.getContext(\"webgl2\") || !!c.getContext(\"webgl\"); } catch { return \"?\"; } })();\n      return {\n        w: c.width, h: c.height, inView, webglProbe: webgl,\n        cls: (c.className || \"\").toString().slice(0, 60),\n      };\n    });\n    return {\n      intervals: window.__loops.intervals,\n      rafPerSec: window.__loops.rafPerSec,\n      canvasCount: canvases.length,\n      canvases: canvases,\n    };\n  })","range":{"byteOffset":{"start":1442,"end":2118},"start":{"line":31,"column":14},"end":{"line":47,"column":4}},"style":"primary"}]}
+{"text":"await browser.close()","range":{"byteOffset":{"start":2449,"end":2470},"start":{"line":54,"column":2},"end":{"line":54,"column":23}},"file":"/Users/jemanuel/projects/cmaes_explainer/tmp/perf_loops.mjs","lines":"  await browser.close();","charCount":{"leading":2,"trailing":1},"language":"JavaScript","metaVariables":{"single":{"E":{"text":"browser.close()","range":{"byteOffset":{"start":2455,"end":2470},"start":{"line":54,"column":8},"end":{"line":54,"column":23}}}},"multi":{},"transformed":{}},"ruleId":"js.async.await-no-try","severity":"warning","note":null,"message":"await without try/catch; wrap to handle rejections","labels":[{"text":"await browser.close()","range":{"byteOffset":{"start":2449,"end":2470},"start":{"line":54,"column":2},"end":{"line":54,"column":23}},"style":"primary"}]}
+{"text":"process.env.PORT","range":{"byteOffset":{"start":136,"end":152},"start":{"line":4,"column":15},"end":{"line":4,"column":31}},"file":"/Users/jemanuel/projects/cmaes_explainer/scripts/diagnose.ts","lines":"  const PORT = process.env.PORT || '3001';","charCount":{"leading":15,"trailing":11},"language":"TypeScript","metaVariables":{"single":{"NAME":{"text":"PORT","range":{"byteOffset":{"start":148,"end":152},"start":{"line":4,"column":27},"end":{"line":4,"column":31}}}},"multi":{},"transformed":{}},"ruleId":"security.env-in-client","severity":"info","note":null,"message":"process.env used; ensure not bundled to client or prefixed (NEXT_PUBLIC_ etc.)","labels":[{"text":"process.env.PORT","range":{"byteOffset":{"start":136,"end":152},"start":{"line":4,"column":15},"end":{"line":4,"column":31}},"style":"primary"}]}
+{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":591,"end":611},"start":{"line":12,"column":10},"end":{"line":12,"column":30}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/components/safeR3FEvents.ts","lines":"      if (process.env.NODE_ENV === \"development\") {","charCount":{"leading":10,"trailing":21},"language":"TypeScript","metaVariables":{"single":{"NAME":{"text":"NODE_ENV","range":{"byteOffset":{"start":603,"end":611},"start":{"line":12,"column":22},"end":{"line":12,"column":30}}}},"multi":{},"transformed":{}},"ruleId":"security.env-in-client","severity":"info","note":null,"message":"process.env used; ensure not bundled to client or prefixed (NEXT_PUBLIC_ etc.)","labels":[{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":591,"end":611},"start":{"line":12,"column":10},"end":{"line":12,"column":30}},"style":"primary"}]}
+{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":1044,"end":1064},"start":{"line":26,"column":6},"end":{"line":26,"column":26}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/three-patch.ts","lines":"  if (process.env.NODE_ENV === \"development\" && typeof console !== \"undefined\") {","charCount":{"leading":6,"trailing":55},"language":"TypeScript","metaVariables":{"single":{"NAME":{"text":"NODE_ENV","range":{"byteOffset":{"start":1056,"end":1064},"start":{"line":26,"column":18},"end":{"line":26,"column":26}}}},"multi":{},"transformed":{}},"ruleId":"security.env-in-client","severity":"info","note":null,"message":"process.env used; ensure not bundled to client or prefixed (NEXT_PUBLIC_ etc.)","labels":[{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":1044,"end":1064},"start":{"line":26,"column":6},"end":{"line":26,"column":26}},"style":"primary"}]}
+{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":2203,"end":2223},"start":{"line":59,"column":8},"end":{"line":59,"column":28}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/lib/frankensimPhysics.ts","lines":"    if (process.env.NODE_ENV === \"development\") {","charCount":{"leading":8,"trailing":21},"language":"TypeScript","metaVariables":{"single":{"NAME":{"text":"NODE_ENV","range":{"byteOffset":{"start":2215,"end":2223},"start":{"line":59,"column":20},"end":{"line":59,"column":28}}}},"multi":{},"transformed":{}},"ruleId":"security.env-in-client","severity":"info","note":null,"message":"process.env used; ensure not bundled to client or prefixed (NEXT_PUBLIC_ etc.)","labels":[{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":2203,"end":2223},"start":{"line":59,"column":8},"end":{"line":59,"column":28}},"style":"primary"}]}
+{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":4551,"end":4571},"start":{"line":124,"column":10},"end":{"line":124,"column":30}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/lib/frankensimPhysics.ts","lines":"      if (process.env.NODE_ENV === \"development\") {","charCount":{"leading":10,"trailing":21},"language":"TypeScript","metaVariables":{"single":{"NAME":{"text":"NODE_ENV","range":{"byteOffset":{"start":4563,"end":4571},"start":{"line":124,"column":22},"end":{"line":124,"column":30}}}},"multi":{},"transformed":{}},"ruleId":"security.env-in-client","severity":"info","note":null,"message":"process.env used; ensure not bundled to client or prefixed (NEXT_PUBLIC_ etc.)","labels":[{"text":"process.env.NODE_ENV","range":{"byteOffset":{"start":4551,"end":4571},"start":{"line":124,"column":10},"end":{"line":124,"column":30}},"style":"primary"}]}
+{"text":"Math.random()","range":{"byteOffset":{"start":25263,"end":25276},"start":{"line":656,"column":35},"end":{"line":656,"column":48}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/lib/cmaesEngine.ts","lines":"    const x: Vector = [domain[0] + Math.random() * span, domain[0] + Math.random() * span];","charCount":{"leading":35,"trailing":43},"language":"TypeScript","ruleId":"security.insecure-random","severity":"info","note":null,"message":"Math.random used for security-sensitive randomness? Prefer crypto.randomUUID/randomBytes","labels":[{"text":"Math.random()","range":{"byteOffset":{"start":25263,"end":25276},"start":{"line":656,"column":35},"end":{"line":656,"column":48}},"style":"primary"}]}
+{"text":"Math.random()","range":{"byteOffset":{"start":25297,"end":25310},"start":{"line":656,"column":69},"end":{"line":656,"column":82}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/lib/cmaesEngine.ts","lines":"    const x: Vector = [domain[0] + Math.random() * span, domain[0] + Math.random() * span];","charCount":{"leading":69,"trailing":9},"language":"TypeScript","ruleId":"security.insecure-random","severity":"info","note":null,"message":"Math.random used for security-sensitive randomness? Prefer crypto.randomUUID/randomBytes","labels":[{"text":"Math.random()","range":{"byteOffset":{"start":25297,"end":25310},"start":{"line":656,"column":69},"end":{"line":656,"column":82}},"style":"primary"}]}
+{"text":"useEffect(() => {\n    if (typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) return;\n    const observer = new IntersectionObserver((entries) => {\n      entries.forEach((entry) => {\n        if (entry.isIntersecting && entry.target.id) {\n          setActiveId(entry.target.id);\n        }\n      });\n    }, { rootMargin, threshold });\n\n    sectionKey.split(\"|\").forEach((id) => {\n      const el = document.getElementById(id);\n      if (el) observer.observe(el);\n    });\n\n    return () => observer.disconnect();\n  }, [sectionKey, rootMargin, threshold])","range":{"byteOffset":{"start":663,"end":1230},"start":{"line":18,"column":2},"end":{"line":34,"column":41}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/hooks/useScrollSpy.ts","lines":"  useEffect(() => {\n    if (typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) return;\n    const observer = new IntersectionObserver((entries) => {\n      entries.forEach((entry) => {\n        if (entry.isIntersecting && entry.target.id) {\n          setActiveId(entry.target.id);\n        }\n      });\n    }, { rootMargin, threshold });\n\n    sectionKey.split(\"|\").forEach((id) => {\n      const el = document.getElementById(id);\n      if (el) observer.observe(el);\n    });\n\n    return () => observer.disconnect();\n  }, [sectionKey, rootMargin, threshold]);","charCount":{"leading":2,"trailing":1},"language":"TypeScript","metaVariables":{"single":{"DEPS":{"text":"[sectionKey, rootMargin, threshold]","range":{"byteOffset":{"start":1194,"end":1229},"start":{"line":34,"column":5},"end":{"line":34,"column":40}}}},"multi":{},"transformed":{}},"ruleId":"react.useeffect-missing-cleanup","severity":"info","note":null,"message":"useEffect without cleanup may leak subscriptions or timers","labels":[{"text":"useEffect(() => {\n    if (typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) return;\n    const observer = new IntersectionObserver((entries) => {\n      entries.forEach((entry) => {\n        if (entry.isIntersecting && entry.target.id) {\n          setActiveId(entry.target.id);\n        }\n      });\n    }, { rootMargin, threshold });\n\n    sectionKey.split(\"|\").forEach((id) => {\n      const el = document.getElementById(id);\n      if (el) observer.observe(el);\n    });\n\n    return () => observer.disconnect();\n  }, [sectionKey, rootMargin, threshold])","range":{"byteOffset":{"start":663,"end":1230},"start":{"line":18,"column":2},"end":{"line":34,"column":41}},"style":"primary"}]}
+{"text":"useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) {\n      return;\n    }\n\n    const observer = new IntersectionObserver(\n      ([entry]) => {\n        const inView = entry?.isIntersecting ?? false;\n        setIsInView(inView);\n        if (inView && once) {\n          observer.disconnect();\n        }\n      },\n      { rootMargin, threshold }\n    );\n\n    observer.observe(el);\n    return () => observer.disconnect();\n  }, [ref, rootMargin, threshold, once])","range":{"byteOffset":{"start":1804,"end":2338},"start":{"line":50,"column":2},"end":{"line":69,"column":40}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/hooks/useScrollSpy.ts","lines":"  useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) {\n      return;\n    }\n\n    const observer = new IntersectionObserver(\n      ([entry]) => {\n        const inView = entry?.isIntersecting ?? false;\n        setIsInView(inView);\n        if (inView && once) {\n          observer.disconnect();\n        }\n      },\n      { rootMargin, threshold }\n    );\n\n    observer.observe(el);\n    return () => observer.disconnect();\n  }, [ref, rootMargin, threshold, once]);","charCount":{"leading":2,"trailing":1},"language":"TypeScript","metaVariables":{"single":{"DEPS":{"text":"[ref, rootMargin, threshold, once]","range":{"byteOffset":{"start":2303,"end":2337},"start":{"line":69,"column":5},"end":{"line":69,"column":39}}}},"multi":{},"transformed":{}},"ruleId":"react.useeffect-missing-cleanup","severity":"info","note":null,"message":"useEffect without cleanup may leak subscriptions or timers","labels":[{"text":"useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof window === \"undefined\" || !(\"IntersectionObserver\" in window)) {\n      return;\n    }\n\n    const observer = new IntersectionObserver(\n      ([entry]) => {\n        const inView = entry?.isIntersecting ?? false;\n        setIsInView(inView);\n        if (inView && once) {\n          observer.disconnect();\n        }\n      },\n      { rootMargin, threshold }\n    );\n\n    observer.observe(el);\n    return () => observer.disconnect();\n  }, [ref, rootMargin, threshold, once])","range":{"byteOffset":{"start":1804,"end":2338},"start":{"line":50,"column":2},"end":{"line":69,"column":40}},"style":"primary"}]}
+{"text":"useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof IntersectionObserver === \"undefined\") return;\n    const obs = new IntersectionObserver(\n      (entries) => setInView(entries.some((e) => e.isIntersecting)),\n      { rootMargin }\n    );\n    obs.observe(el);\n    return () => obs.disconnect();\n  }, [rootMargin])","range":{"byteOffset":{"start":837,"end":1164},"start":{"line":21,"column":2},"end":{"line":30,"column":18}},"file":"/Users/jemanuel/projects/cmaes_explainer/app/hooks/useInView.ts","lines":"  useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof IntersectionObserver === \"undefined\") return;\n    const obs = new IntersectionObserver(\n      (entries) => setInView(entries.some((e) => e.isIntersecting)),\n      { rootMargin }\n    );\n    obs.observe(el);\n    return () => obs.disconnect();\n  }, [rootMargin]);","charCount":{"leading":2,"trailing":1},"language":"TypeScript","metaVariables":{"single":{"DEPS":{"text":"[rootMargin]","range":{"byteOffset":{"start":1151,"end":1163},"start":{"line":30,"column":5},"end":{"line":30,"column":17}}}},"multi":{},"transformed":{}},"ruleId":"react.useeffect-missing-cleanup","severity":"info","note":null,"message":"useEffect without cleanup may leak subscriptions or timers","labels":[{"text":"useEffect(() => {\n    const el = ref.current;\n    if (!el || typeof IntersectionObserver === \"undefined\") return;\n    const obs = new IntersectionObserver(\n      (entries) => setInView(entries.some((e) => e.isIntersecting)),\n      { rootMargin }\n    );\n    obs.observe(el);\n    return () => obs.disconnect();\n  }, [rootMargin])","range":{"byteOffset":{"start":837,"end":1164},"start":{"line":21,"column":2},"end":{"line":30,"column":18}},"style":"primary"}]}
+ℹ Above JSON/SARIF lines are ast-grep matches (id, message, severity, file/pos).
+
+═══════════════════════════════════════════════════════════════════════════
+                    🎯 SCAN COMPLETE 🎯                                  
+═══════════════════════════════════════════════════════════════════════════
+
+Summary Statistics:
+  Files scanned:    72
+  Critical issues:  0
+  Warning issues:   533
+  Info items:       3182
+
+Priority Actions:
+  ⚠ Review and fix WARNING items
+  These cause bugs, performance issues, or maintenance problems
+  ℹ Consider INFO suggestions
+  Code quality improvements and best practices
+
+Scan completed at: 2026-08-27 05:51:27
+
+Tip: Run with -v/--verbose for more code samples per finding.
+Add to pre-commit: ./ubs --ci --fail-on-warning . > bug-scan-report.txt
+
+
+──────── Combined Summary ────────
+Files: 72
+Critical: 0
+Warning: 533
+Info: 3182

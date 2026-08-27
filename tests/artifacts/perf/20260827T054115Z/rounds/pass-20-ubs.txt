@@ -1,0 +1,40 @@
+Usage: ubs [options] [PROJECT_DIR]
+       ubs doctor [options]
+       ubs sessions [--entries N] [--raw]
+
+Options:
+  --format=FMT            text|json|jsonl|sarif (default: text)
+  --version               Print version and exit
+  --ci                    CI mode (stable timestamps)
+  --fail-on-warning       Exit non-zero if warnings or critical exist
+  -v, --verbose           Pass -v to child scanners (if supported)
+  -q, --quiet             Reduce console output (also passes -q to scanners)
+  --only=CSV              Restrict to languages: js,python,cpp,rust,golang,java,ruby,swift
+  --exclude=CSV           Exclude languages
+  --module-dir=DIR        Where to store/lookup modules (default: /Users/jemanuel/.local/share/ubs/modules)
+  --category=CSV          Focus on category packs (e.g., resource-lifecycle for AST lifecycle analyzers)
+  --comparison=FILE       Baseline JSON to diff combined results against
+  --report-json=FILE      Write combined summary JSON to FILE
+  --html-report=FILE      Emit shareable HTML report to FILE
+  --beads-jsonl=FILE      Also write combined findings to JSONL for Beads/strung
+  --jsonl-summary-only    JSONL output: emit only summary counts, no individual findings
+  --suggest-ignore        Print large-directory ignore suggestions (without modifying files)
+  --update                Update the installed ubs binary and exit
+  --non-interactive       No-op (accepted for installer/cron compatibility)
+  --update-modules        Force re-download of modules before run
+  --jobs=N                Parallelism hint (passed to children if supported)
+  --ignore-file=PATH      Read additional ignore globs (default: PROJECT/.ubsignore if present)
+  --skip-type-narrowing   Skip JS/Rust/Kotlin/Swift type narrowing checks (falls back to basic heuristics)
+  --no-auto-update        Disable auto-update (even if UBS_ENABLE_AUTO_UPDATE=1)
+  --staged                Scan only files staged for commit (git index)
+  --diff, --git-diff      Scan only modified files (working tree vs HEAD)
+  -h, --help              Show this help
+
+Examples:
+  ubs .                       # auto-detect languages and scan
+  ubs --staged                # scan only staged files (pre-commit style)
+  ubs --diff                  # scan only modified files (quick check)
+  ubs --format=json --ci .    # machine-readable combined JSON
+  ubs --only=js,python .      # restrict language set
+  ubs doctor --fix            # validate cached modules & redownload corrupted copies
+  ubs sessions --entries 1    # view the most recent installer summary

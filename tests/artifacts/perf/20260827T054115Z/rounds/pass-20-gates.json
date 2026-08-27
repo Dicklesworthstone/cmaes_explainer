@@ -1,0 +1,36 @@
+{
+  "engineSourceRestored": true,
+  "engineSha256": "a05cc55aa80e8c5831f51126fd4b6c5c0721c85b479c914b6ba7253f2ac0f93a",
+  "goldens": {
+    "dimensions": [1, 2, 4, 8, 12, 24, 48],
+    "byteIdentical": true
+  },
+  "contracts": {
+    "deterministicOrderAndTieBreaking": "exact seven-dimensional goldens and focused engine tests",
+    "rngDrawOrder": "exact seven-dimensional goldens and deterministic seeded benchmark checksum",
+    "repairSemantics": "reflected-phenotype and literal-clip tests pass",
+    "snapshotIsolation": "public covariance and WASM snapshot ownership tests pass"
+  },
+  "quality": {
+    "focusedTests": "16 pass, 0 fail, 157 assertions",
+    "fullTests": "16 pass, 0 fail, 157 assertions",
+    "typecheck": "pass",
+    "lint": "pass with baseline-browser-mapping age advisory only",
+    "build": "pass",
+    "ubs": "exit 0; zero critical findings; repository-wide heuristic warnings retained for audit",
+    "diffCheck": "pass",
+    "format": "not run because package.json has no format script and no source change was retained"
+  },
+  "memory": {
+    "maximumRssBytes": 76169216,
+    "guardrailBytes": 90166067,
+    "pass": true
+  },
+  "performanceBudget": {
+    "p95BudgetMs": 35.8,
+    "finalP95Ms": 52.710916,
+    "throughputBudget": 93942,
+    "finalThroughput": 63489.01922744204,
+    "pass": false
+  }
+}

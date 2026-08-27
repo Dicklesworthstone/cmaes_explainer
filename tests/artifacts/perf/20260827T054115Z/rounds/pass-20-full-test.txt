@@ -1,0 +1,24 @@
+bun test v1.4.0 (34cbb9a40)
+
+app/lib/cmaesEngine.test.ts:
+(pass) shared CMA-ES engines > uses Hansen's canonical default population size [0.54ms]
+(pass) shared CMA-ES engines > converges on the curated rosenbrock preset [1.39ms]
+(pass) shared CMA-ES engines > converges on the curated rastrigin preset [0.71ms]
+(pass) shared CMA-ES engines > converges on the curated cigar preset [0.49ms]
+(pass) shared CMA-ES engines > converges on the curated ackley preset [0.65ms]
+(pass) shared CMA-ES engines > is invariant to a strictly increasing objective transform [0.38ms]
+(pass) shared CMA-ES engines > converges in eight dimensions while keeping covariance positive definite [13.00ms]
+(pass) shared CMA-ES engines > ranks reflected phenotypes but adapts their latent genotypes [0.36ms]
+(pass) shared CMA-ES engines > literal clipping keeps adaptation inside the box and reaches an interior optimum [2.80ms]
+(pass) shared CMA-ES engines > the public covariance snapshot cannot desynchronize the cached eigensystem [0.21ms]
+(pass) advertised optimization dimensions > every wing coordinate changes its analytic objective [0.19ms]
+(pass) advertised optimization dimensions > bridge damping changes flutter compliance and objective [0.15ms]
+(pass) advertised optimization dimensions > transformer head count participates in the scalar objective [0.11ms]
+(pass) WASM snapshots rank ask-order samples without leaking final coordinates into earlier frames [0.28ms]
+(pass) WASM snapshot spectra use the same largest-first contract as the TypeScript engine [0.07ms]
+(pass) rejects every known FrankenSim kernel with reference-breaking updates [0.01ms]
+
+ 16 pass
+ 0 fail
+ 157 expect() calls
+Ran 16 tests across 1 file. [26.00ms]
