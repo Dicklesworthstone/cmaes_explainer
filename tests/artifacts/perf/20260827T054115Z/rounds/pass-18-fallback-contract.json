@@ -1,0 +1,9 @@
+{
+  "status": {
+    "source": "ts-fallback",
+    "kernelVersion": null,
+    "error": "SSR context"
+  },
+  "kernelSourceNow": "ts-fallback",
+  "runResult": null
+}

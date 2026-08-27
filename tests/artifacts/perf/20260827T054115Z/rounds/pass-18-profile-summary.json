@@ -1,0 +1,54 @@
+{
+  "pass": 18,
+  "decision": "rejected-no-source-change",
+  "acceptedSourceSha256": "d317b977e333d10b8c4ab83fed8be7a465f0da453eb9c810c985e0d86f7d263e",
+  "bundleVersion": "fs-cmaes-viz-wasm 0.2.0",
+  "productionReachability": {
+    "compatible": false,
+    "liveSource": "ts-fallback",
+    "reason": "The audited-version set is empty because bundled 0.2.x snapshots are not reference-compatible."
+  },
+  "realWorkload": {
+    "dimension": 5,
+    "population": 16,
+    "generations": 120,
+    "rawJsonBytes": 573714,
+    "adapterBeforeP50Milliseconds": 0.40774999999999295,
+    "adapterBeforeP95Milliseconds": 1.3327910000000145,
+    "jsonParseP50Milliseconds": 0.6284580000000233,
+    "jsonParseP95Milliseconds": 0.6967919999999594
+  },
+  "profile": {
+    "iterations": 5000,
+    "durationMilliseconds": 2064.68175,
+    "intervalMicroseconds": 500,
+    "projectPointSelfPercent": 12.4,
+    "nativeSliceSelfPercent": 10.9,
+    "nativeSortSelfPercent": 7.5,
+    "covarianceArrayFromTotalPercent": 17.1
+  },
+  "attemptedLever": {
+    "description": "Write sample projections directly into the final public tuple, eliminating one intermediate tuple per sample.",
+    "impact": 2,
+    "confidence": 5,
+    "effort": 1,
+    "adapterScore": 10,
+    "endToEndCurrentSiteScore": 0,
+    "exactGolden": true,
+    "baselineP95Milliseconds": 4.769874999999985,
+    "candidateP95Milliseconds": 8.17508399999997,
+    "p95ChangePercent": 71.38990015461613,
+    "baselineThroughputGenerationsPerSecond": 303400.1274824124,
+    "candidateThroughputGenerationsPerSecond": 211887.42484684102,
+    "throughputChangePercent": -30.162381075754887,
+    "profileDurationChangePercent": 42.17670999416736,
+    "decision": "rejected"
+  },
+  "proof": {
+    "goldenBeforeSha256": "08e768422934315892ad96d930f724717c84e111ccb4912fbae5dab31d40c7bc",
+    "goldenCandidateSha256": "08e768422934315892ad96d930f724717c84e111ccb4912fbae5dab31d40c7bc",
+    "propertyChecks": 24104,
+    "propertyFailures": 0,
+    "peakRssBytes": 56983552
+  }
+}
