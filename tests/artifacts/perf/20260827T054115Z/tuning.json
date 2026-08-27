@@ -1,0 +1,7 @@
+{
+  "runId": "20260827T054115Z",
+  "applied": false,
+  "reason": "No host-level tuning was applied; OS tuning requires separate approval and the measured baseline was stable.",
+  "sameSeedP95MaxDriftPercent": 4.8,
+  "hyperfineCoefficientOfVariationPercent": 1.0
+}

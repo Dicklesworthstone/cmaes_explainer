@@ -1,0 +1,49 @@
+{
+  "run_id": "20260827T054115Z",
+  "captured_at_utc": "2026-08-27T05:41:54Z",
+  "git_sha": "2ddcb3ad435c794e6706676893da6ddc60833bf9",
+  "git_dirty": false,
+  "git_dirty_note": "Fingerprint command observed only this run's newly generated profiling artifact directory; source tree was clean at run start.",
+  "hardware": {
+    "cpu_model": "Apple M4",
+    "cpu_cores_per_socket": 10,
+    "cpu_sockets": 1,
+    "cpu_threads_total": 10,
+    "cpu_mhz_reported": "dynamic Apple Silicon DVFS",
+    "ram_total": "32 GiB unified memory",
+    "swap_total": "managed by macOS"
+  },
+  "storage": {
+    "device": "/dev/disk3s5",
+    "model": "Apple internal SSD",
+    "mount_point": "/Users/jemanuel/projects/cmaes_explainer",
+    "filesystem": "apfs",
+    "mount_options": "local,journaled; data volume 87% used"
+  },
+  "os": {
+    "distribution": "macOS 26.5 (25F71)",
+    "kernel": "25.5.0"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.100.0-nightly (fb6531d55 2026-08-23)",
+    "go": "go version go1.26.2 darwin/arm64",
+    "node": "v25.9.0",
+    "bun": "1.4.0",
+    "python": "Python 3.14.6",
+    "clang": "Homebrew clang version 22.1.4",
+    "gcc": "Apple clang version 17.0.0 (clang-1700.4.4.1)"
+  },
+  "build_profile": {
+    "name": "bun-jit",
+    "mode": "warm in-process benchmark after explicit warmup trials"
+  },
+  "tuning_applied": {
+    "governor": "unknown",
+    "no_turbo": "n/a",
+    "smt_active": "n/a",
+    "perf_event_paranoid": "",
+    "kptr_restrict": "",
+    "nmi_watchdog": "",
+    "thp": "unknown"
+  }
+}

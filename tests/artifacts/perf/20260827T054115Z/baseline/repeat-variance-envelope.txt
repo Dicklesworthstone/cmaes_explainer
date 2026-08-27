@@ -1,0 +1,10 @@
+file                                      p95_ms
+tests/artifacts/perf/20260827T054115Z/baseline/repeat-1-summary.json     73.57
+tests/artifacts/perf/20260827T054115Z/baseline/repeat-2-summary.json     72.32
+tests/artifacts/perf/20260827T054115Z/baseline/repeat-3-summary.json     72.18
+tests/artifacts/perf/20260827T054115Z/baseline/repeat-4-summary.json     76.66
+tests/artifacts/perf/20260827T054115Z/baseline/repeat-5-summary.json     73.17
+
+Median p95: 73.17 ms
+Max drift:  4.8%
+Verdict: STABLE

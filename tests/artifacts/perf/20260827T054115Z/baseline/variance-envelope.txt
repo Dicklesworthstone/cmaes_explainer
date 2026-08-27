@@ -1,0 +1,10 @@
+file                                      p95_ms
+tests/artifacts/perf/20260827T054115Z/baseline/variance-1-summary.json     59.35
+tests/artifacts/perf/20260827T054115Z/baseline/variance-2-summary.json     70.25
+tests/artifacts/perf/20260827T054115Z/baseline/variance-3-summary.json     59.40
+tests/artifacts/perf/20260827T054115Z/baseline/variance-4-summary.json     70.53
+tests/artifacts/perf/20260827T054115Z/baseline/variance-5-summary.json     72.96
+
+Median p95: 70.25 ms
+Max drift:  15.5%
+Verdict: INVESTIGATE — p95 drift > 10%
