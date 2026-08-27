@@ -18,7 +18,7 @@ export function cmaes_viz_kernel_version() {
 }
 
 /**
- * Run the visualization kernel: scalar params in, JSON envelope out.
+ * Run the visualization kernel: scalar params in, packed f64 packet out.
  * `x0_0..x0_5` are the initial mean coordinates; only the first `dim`
  * are read. `f_target` = NaN disables the early-stop target.
  * @param {number} dim
@@ -39,19 +39,13 @@ export function cmaes_viz_kernel_version() {
  * @param {number} bound_min
  * @param {number} bound_max
  * @param {number} f_target
- * @returns {string}
+ * @returns {Float64Array}
  */
 export function cmaes_viz_run(dim, x0_0, x0_1, x0_2, x0_3, x0_4, x0_5, sigma0, lambda, active, seed, generations, landscape, noise, bounds_enabled, bound_min, bound_max, f_target) {
-    let deferred1_0;
-    let deferred1_1;
-    try {
-        const ret = wasm.cmaes_viz_run(dim, x0_0, x0_1, x0_2, x0_3, x0_4, x0_5, sigma0, lambda, active, seed, generations, landscape, noise, bounds_enabled, bound_min, bound_max, f_target);
-        deferred1_0 = ret[0];
-        deferred1_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-    }
+    const ret = wasm.cmaes_viz_run(dim, x0_0, x0_1, x0_2, x0_3, x0_4, x0_5, sigma0, lambda, active, seed, generations, landscape, noise, bounds_enabled, bound_min, bound_max, f_target);
+    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+    return v1;
 }
 function __wbg_get_imports() {
     const import0 = {
@@ -73,6 +67,19 @@ function __wbg_get_imports() {
         __proto__: null,
         "./fs_cmaes_viz_wasm_bg.js": import0,
     };
+}
+
+function getArrayF64FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
+}
+
+let cachedFloat64ArrayMemory0 = null;
+function getFloat64ArrayMemory0() {
+    if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
+        cachedFloat64ArrayMemory0 = new Float64Array(wasm.memory.buffer);
+    }
+    return cachedFloat64ArrayMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {
@@ -106,6 +113,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedFloat64ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;

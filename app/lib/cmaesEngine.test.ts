@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { BENCHMARKS, CMAESOptimizer } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
 import {
+  decodeCmaesPacket,
   isCompatibleCmaesKernelVersion,
   wasmRunToNdStates,
   type CmaesVizGeneration,
@@ -269,7 +270,7 @@ test("WASM snapshots rank ask-order samples without leaking final coordinates in
   expect(states[0].samples.map((sample) => sample.rank)).toEqual([3, 0, 2, 1]);
   expect(states[0].samples.map((sample) => sample.isElite)).toEqual([false, true, false, true]);
   expect(states[0].bestX).toEqual([1, 0, 0]);
-  expect(states[1].bestX).toEqual(run.best_x);
+  expect(states[1].bestX).toEqual(Array.from(run.best_x));
   expect(states[1].bestFitness).toBe(0.5);
   expect(states[0].bestX).not.toEqual(run.best_x);
 });
@@ -307,18 +308,26 @@ test("WASM snapshot spectra use the same largest-first contract as the TypeScrip
 test("rejects reference-breaking kernels and accepts the audited release", () => {
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.0")).toBe(false);
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(false);
-  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.3.0")).toBe(true);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.3.0")).toBe(false);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.4.0")).toBe(true);
   expect(isCompatibleCmaesKernelVersion(null)).toBe(false);
 });
 
-test("audited WASM first-generation state matches the TypeScript reference", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm.js");
+test("audited packed WASM state matches the TypeScript reference", async () => {
+  const generatedPackage = process.env.FS_CMAES_TEST_PACKAGE;
+  const wasm = await import(
+    generatedPackage
+      ? `${generatedPackage}/fs_cmaes_viz_wasm.js`
+      : "../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm.js"
+  );
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    generatedPackage
+      ? `${generatedPackage}/fs_cmaes_viz_wasm_bg.wasm`
+      : new URL("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.3.0");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.4.0");
 
   const initialMean = [1.5, -1, 2, 0.5, -0.5];
   const rosenbrock = (x: number[]): number => {
@@ -338,35 +347,39 @@ test("audited WASM first-generation state matches the TypeScript reference", asy
     bounds: [-1e9, 1e9],
     repairStrategy: "none"
   }).step();
-  const envelope = JSON.parse(
-    wasm.cmaes_viz_run(
-      5,
-      initialMean[0],
-      initialMean[1],
-      initialMean[2],
-      initialMean[3],
-      initialMean[4],
-      0,
-      0.3,
-      16,
-      true,
-      1337n,
-      1,
-      1,
-      0,
-      false,
-      -2,
-      2,
-      NaN
-    )
-  ) as { ok?: CmaesVizRun; refusal?: { code: string } };
-  expect(envelope.refusal).toBeUndefined();
-  const wasmState = envelope.ok?.generations[0];
+  const packet = wasm.cmaes_viz_run(
+    5,
+    initialMean[0],
+    initialMean[1],
+    initialMean[2],
+    initialMean[3],
+    initialMean[4],
+    0,
+    0.3,
+    16,
+    true,
+    1337n,
+    1,
+    1,
+    0,
+    false,
+    -2,
+    2,
+    NaN
+  );
+  expect(packet).toBeInstanceOf(Float64Array);
+  const decoded = decodeCmaesPacket(packet);
+  expect("refusal" in decoded).toBe(false);
+  if (!("ok" in decoded)) throw new Error(`WASM refusal: ${decoded.refusal.code}`);
+  const wasmState = decoded.ok.generations[0];
   expect(wasmState).toBeDefined();
   if (!wasmState) throw new Error("WASM returned no first-generation snapshot");
 
-  const maxAbsDifference = (left: number[], right: number[]): number =>
-    Math.max(...left.map((value, index) => Math.abs(value - right[index])));
+  const maxAbsDifference = (left: ArrayLike<number>, right: ArrayLike<number>): number => {
+    let maximum = 0;
+    for (let index = 0; index < left.length; index++) maximum = Math.max(maximum, Math.abs(left[index] - right[index]));
+    return maximum;
+  };
   const tsEigenvaluesAscending = [...tsState.eigenvalues].reverse();
 
   expect(maxAbsDifference(wasmState.sz, tsState.samples.flatMap((sample) => sample.z))).toBeLessThan(2e-15);
@@ -376,4 +389,19 @@ test("audited WASM first-generation state matches the TypeScript reference", asy
   expect(Math.abs(wasmState.sigma - tsState.sigma)).toBeLessThan(2e-15);
   expect(Math.abs(wasmState.best_f - tsState.bestFitness)).toBeLessThan(2e-12);
   expect(wasmState.cond).toBeCloseTo(tsState.conditionNumber, 12);
+
+  const refusalPacket = wasm.cmaes_viz_run(
+    1, 0, 0, 0, 0, 0, 0, 0.3, 16, true, 1337n, 1, 1, 0, false, -2, 2, NaN
+  );
+  const refusal = decodeCmaesPacket(refusalPacket);
+  expect("refusal" in refusal && refusal.refusal.code).toBe("dim-out-of-range");
+  expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual(["set dim within 2..=6"]);
+
+  const wrongMagic = packet.slice();
+  wrongMagic[0] = 0;
+  expect(() => decodeCmaesPacket(wrongMagic)).toThrow("magic");
+  const wrongStride = packet.slice();
+  wrongStride[11] += 1;
+  expect(() => decodeCmaesPacket(wrongStride)).toThrow("generation_stride");
+  expect(() => decodeCmaesPacket(packet.slice(0, packet.length - 1))).toThrow("total_words");
 });

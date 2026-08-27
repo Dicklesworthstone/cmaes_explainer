@@ -7,11 +7,11 @@
 export function cmaes_viz_kernel_version(): string;
 
 /**
- * Run the visualization kernel: scalar params in, JSON envelope out.
+ * Run the visualization kernel: scalar params in, packed f64 packet out.
  * `x0_0..x0_5` are the initial mean coordinates; only the first `dim`
  * are read. `f_target` = NaN disables the early-stop target.
  */
-export function cmaes_viz_run(dim: number, x0_0: number, x0_1: number, x0_2: number, x0_3: number, x0_4: number, x0_5: number, sigma0: number, lambda: number, active: boolean, seed: bigint, generations: number, landscape: number, noise: number, bounds_enabled: boolean, bound_min: number, bound_max: number, f_target: number): string;
+export function cmaes_viz_run(dim: number, x0_0: number, x0_1: number, x0_2: number, x0_3: number, x0_4: number, x0_5: number, sigma0: number, lambda: number, active: boolean, seed: bigint, generations: number, landscape: number, noise: number, bounds_enabled: boolean, bound_min: number, bound_max: number, f_target: number): Float64Array;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
