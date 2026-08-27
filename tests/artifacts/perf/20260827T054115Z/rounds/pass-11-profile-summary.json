@@ -1,0 +1,162 @@
+{
+  "beforeEngineSha256": "11a9b80071cd2ec8e5211f93097ecc21ad5ea3c486b14026f21ef0d457090174",
+  "afterEngineSha256": "3f7087307f038ddb4f139c9269e88e38b6d2e291321f7f3390fd378a34d3efde",
+  "decision": "accept_final_rank_mean_shift_fusion",
+  "productionChangeRetained": true,
+  "opportunity": {
+    "region": "mean recombination and normalized mean-shift construction",
+    "freshIntegratedRecombinationSelfMilliseconds": 34.6,
+    "freshIntegratedRecombinationSelfSharePercent": 0.3,
+    "meanShiftUsedNativeMap": true,
+    "impact": 1,
+    "confidence": 5,
+    "effort": 1,
+    "score": 5,
+    "threshold": 2,
+    "eligible": true,
+    "rationale": "The fresh profile directly sampled the rank-major recombination loop and the immediately following shift used a native map/callback. Peeling only the final rank fuses shift construction into work already required while preserving every weighted addition and division."
+  },
+  "representativePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "before": {
+      "p50Milliseconds": 57.769625000000815,
+      "p95Milliseconds": 60.58375000000069,
+      "p99Milliseconds": 63.595250000000306,
+      "evaluationsPerSecond": 55935.05470134075,
+      "checksum": 24940.517463897122
+    },
+    "after": {
+      "p50Milliseconds": 56.634540999999444,
+      "p95Milliseconds": 58.236291999999594,
+      "p99Milliseconds": 62.52204199999869,
+      "evaluationsPerSecond": 57129.27530177098,
+      "checksum": 24940.517463897122
+    },
+    "afterVersusBeforePercent": {
+      "p50": -1.9648457126065,
+      "p95": -3.8747320857508316,
+      "p99": -1.687559998587329,
+      "evaluationsPerSecond": 2.135012840885997
+    },
+    "p95MovementOutsideSameSeedEnvelope": false,
+    "sameSeedP95EnvelopePercent": 4.8,
+    "checksumsExact": true
+  },
+  "matchedIntegratedProfiles": {
+    "intervalMicroseconds": 500,
+    "measuredTrials": 150,
+    "warmups": 10,
+    "before": {
+      "durationSeconds": 9.51,
+      "samples": 12319,
+      "p50Milliseconds": 58.40054100000009,
+      "p95Milliseconds": 62.96808300000066,
+      "p99Milliseconds": 74.90749999999935,
+      "evaluationsPerSecond": 54934.95108100136,
+      "checksum": 12274.303979858667
+    },
+    "after": {
+      "durationSeconds": 9.37,
+      "samples": 12172,
+      "p50Milliseconds": 57.71337499999936,
+      "p95Milliseconds": 62.04108299999996,
+      "p99Milliseconds": 64.75499999999988,
+      "evaluationsPerSecond": 55757.33622759452,
+      "checksum": 12274.303979858667
+    },
+    "afterVersusBeforePercent": {
+      "p50": -1.176643209522199,
+      "p95": -1.4721744030236628,
+      "p99": -13.553382505089019,
+      "evaluationsPerSecond": 1.4970162536061205
+    },
+    "checksumsExact": true
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "lambda": 13,
+    "mu": 6,
+    "callsPerTrial": 1000000,
+    "measuredTrials": 40,
+    "warmups": 5,
+    "before": {
+      "p50Milliseconds": 139.70899999999983,
+      "p95Milliseconds": 143.1234169999998,
+      "p99Milliseconds": 151.7026249999999,
+      "callsPerSecond": 7134187.03414849,
+      "checksum": -56998128.03421667
+    },
+    "after": {
+      "p50Milliseconds": 114.65162499999997,
+      "p95Milliseconds": 117.43479100000059,
+      "p99Milliseconds": 123.52204099999972,
+      "callsPerSecond": 8694517.004542146,
+      "checksum": -56998128.03421667
+    },
+    "afterVersusBeforePercent": {
+      "p50": -17.935405020435258,
+      "p95": -17.948583494201543,
+      "p99": -18.576200642540098,
+      "callsPerSecond": 21.871167141048907
+    },
+    "checksumsExact": true
+  },
+  "focusedProfiles": {
+    "intervalMicroseconds": 250,
+    "calls": 20000000,
+    "before": {
+      "elapsedMilliseconds": 2910.982916,
+      "profileDurationSeconds": 3.07,
+      "samples": 7792,
+      "kernelSelfMilliseconds": 2810,
+      "nativeMapSelfMilliseconds": 69.1,
+      "checksum": -28499109.462854084
+    },
+    "after": {
+      "elapsedMilliseconds": 2383.097625,
+      "profileDurationSeconds": 2.51,
+      "samples": 6363,
+      "kernelSelfMilliseconds": 2320,
+      "nativeMapSelfMilliseconds": 0,
+      "checksum": -28499109.462854084
+    },
+    "afterVersusBeforePercent": {
+      "elapsedMilliseconds": -18.134262763911046,
+      "callsPerSecond": 22.15122391387554
+    },
+    "nativeShiftMapRemoved": true,
+    "checksumsExact": true
+  },
+  "matchedRss": {
+    "command": "/usr/bin/time -l bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=100 --warmup=5 --seed=1729",
+    "maximumResidentSetBytes": 82198528,
+    "campaignBudgetBytes": 90166067,
+    "withinBudget": true
+  },
+  "exactWork": {
+    "representativeGenerations": 75000,
+    "standaloneShiftTraversalsRemoved": 75000,
+    "standaloneShiftCoordinateVisitsRemoved": 1800000,
+    "weightedMultiplicationsPreserved": true,
+    "weightedAdditionOrderPreserved": true,
+    "shiftDivisionsPreserved": true,
+    "numericArrayCountPreserved": true
+  },
+  "behaviorProperties": {
+    "allPassed": true,
+    "checksPassed": 243,
+    "repairStrategies": ["none", "clip", "reflect"],
+    "dimensions": [1, 2, 24],
+    "stepsPerConfiguration": 3,
+    "covered": [
+      "weighted recombination order",
+      "old and new mean ownership",
+      "whitened mean-shift pSigma input",
+      "hSigma-dependent pC input",
+      "adaptation point selection",
+      "path snapshot ownership",
+      "history identity",
+      "prior snapshot stability"
+    ]
+  }
+}

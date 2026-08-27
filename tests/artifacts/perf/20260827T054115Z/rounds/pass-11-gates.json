@@ -1,0 +1,69 @@
+{
+  "decision": "accepted",
+  "engineSha256": "3f7087307f038ddb4f139c9269e88e38b6d2e291321f7f3390fd378a34d3efde",
+  "gates": {
+    "candidateGoldensExact": {
+      "passed": true,
+      "dimensions": [1, 2, 4, 8, 12, 24, 48]
+    },
+    "authoritativeGoldenChecksums": {
+      "passed": true,
+      "command": "shasum -a 256 -c tests/artifacts/perf/20260827T054115Z/golden_checksums.txt",
+      "filesOk": 7
+    },
+    "engineTests": {
+      "passed": true,
+      "command": "bun test app/lib/cmaesEngine.test.ts",
+      "testsPassed": 16,
+      "testsFailed": 0,
+      "assertions": 157
+    },
+    "ownershipAdaptationProperties": {
+      "passed": true,
+      "checksPassed": 243
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun typecheck"
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun lint app/lib/cmaesEngineND.ts",
+      "advisory": "Only the pre-existing baseline-browser-mapping age advisory was emitted."
+    },
+    "format": {
+      "passed": true,
+      "command": null,
+      "reason": "No format script exists in package.json; the edited block matches the surrounding formatting and lint passed."
+    },
+    "ubs": {
+      "passed": true,
+      "command": "ubs app/lib/cmaesEngineND.ts",
+      "exitCode": 0,
+      "criticalIssues": 0,
+      "note": "Broad cross-language heuristic notices are pre-existing and unrelated to the scoped edit."
+    },
+    "diffCheck": {
+      "passed": true,
+      "command": "git diff --check"
+    },
+    "rssBudget": {
+      "passed": true,
+      "maximumResidentSetBytes": 82198528,
+      "budgetBytes": 90166067
+    }
+  },
+  "scope": {
+    "productionFilesChanged": ["app/lib/cmaesEngineND.ts"],
+    "productionLinesAdded": 9,
+    "productionLinesRemoved": 2,
+    "pathsChanged": false,
+    "whiteningChanged": false,
+    "covarianceChanged": false,
+    "jacobiChanged": false,
+    "samplingChanged": false,
+    "apiChanged": false,
+    "ledgerChanged": false,
+    "commitCreated": false
+  }
+}

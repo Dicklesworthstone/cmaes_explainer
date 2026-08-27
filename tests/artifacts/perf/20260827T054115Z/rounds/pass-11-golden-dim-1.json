@@ -1,0 +1,26 @@
+{
+  "engine": "CMAESOptimizerND",
+  "scenario": "anisotropic-ellipsoid-unbounded",
+  "dim": 1,
+  "generations": 250,
+  "seed": 1729,
+  "generation": 250,
+  "evalCount": 1000,
+  "bestFitness": 0,
+  "bestX": [
+    0.37
+  ],
+  "mean": [
+    0.37
+  ],
+  "sigma": 1e-16,
+  "covariance": [
+    [
+      3.008913675319116e-32
+    ]
+  ],
+  "eigenvalues": [
+    3.008913675319116e-32
+  ],
+  "conditionNumber": 1
+}

@@ -588,14 +588,21 @@ export class CMAESOptimizerND {
     });
 
     this.mean = createZeroVector(this.dim);
-    for (let rank = 0; rank < this.mu; rank++) {
+    for (let rank = 0; rank < this.mu - 1; rank++) {
       const adaptationX = this.adaptationPoint(candidates[rank]);
       for (let dimension = 0; dimension < this.dim; dimension++) {
         this.mean[dimension] += this.weights[rank] * adaptationX[dimension];
       }
     }
 
-    const meanShift = this.mean.map((value, dimension) => (value - oldMean[dimension]) / oldSigma);
+    const meanShift = new Array<number>(this.dim);
+    const finalRank = this.mu - 1;
+    const finalAdaptationX = this.adaptationPoint(candidates[finalRank]);
+    const finalWeight = this.weights[finalRank];
+    for (let dimension = 0; dimension < this.dim; dimension++) {
+      this.mean[dimension] += finalWeight * finalAdaptationX[dimension];
+      meanShift[dimension] = (this.mean[dimension] - oldMean[dimension]) / oldSigma;
+    }
     const whitenedMeanShift = whitenWithEigensystem(currentEigen.eigenvalues, currentEigen.eigenvectors, meanShift);
     const pSigmaScale = Math.sqrt(this.cs * (2 - this.cs) * this.mueff);
     this.pSigma = this.pSigma.map(

@@ -1,0 +1,9 @@
+{
+  "kernel": "rank-major-recombination-then-map-shift",
+  "dim": 24,
+  "lambda": 13,
+  "mu": 6,
+  "calls": 20000000,
+  "elapsedMs": 2910.982916,
+  "checksum": -28499109.462854084
+}
