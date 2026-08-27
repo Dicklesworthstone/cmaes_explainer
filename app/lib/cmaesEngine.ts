@@ -443,6 +443,18 @@ export class CMAESOptimizer {
     return phase <= span ? min + phase : max - (phase - span);
   }
 
+  /**
+   * The reflected transform retains a meaningful latent preimage, so its raw
+   * sample is the genotype used by adaptation. Literal clipping is
+   * many-to-one: arbitrarily distant raw values collapse to the same boundary
+   * phenotype. Recombining those raw values can strand the mean outside the
+   * box and make an interior optimum unreachable, so clip adapts the point
+   * that was actually ranked.
+   */
+  private adaptationPoint(candidate: CandidateSample): Vector {
+    return this.repairStrategy === "clip" ? candidate.x : candidate.rawX;
+  }
+
   step(): CMAESGenerationState {
     const eigen = eigen2x2(this.C[0][0], this.C[0][1], this.C[1][1]);
     const [[sqrt00, sqrt01], [sqrt10, sqrt11]] = eigen.sqrtMatrix;
@@ -486,8 +498,9 @@ export class CMAESOptimizer {
     let newMean0 = 0;
     let newMean1 = 0;
     for (let i = 0; i < this.mu; i++) {
-      newMean0 += this.weights[i] * candidates[i].rawX[0];
-      newMean1 += this.weights[i] * candidates[i].rawX[1];
+      const adaptationX = this.adaptationPoint(candidates[i]);
+      newMean0 += this.weights[i] * adaptationX[0];
+      newMean1 += this.weights[i] * adaptationX[1];
     }
     this.mean = [newMean0, newMean1];
 
@@ -515,8 +528,9 @@ export class CMAESOptimizer {
     let rankMu01 = 0;
     let rankMu11 = 0;
     for (let i = 0; i < this.lambda; i++) {
-      const y0 = (candidates[i].rawX[0] - oldMean0) / oldSigma;
-      const y1 = (candidates[i].rawX[1] - oldMean1) / oldSigma;
+      const adaptationX = this.adaptationPoint(candidates[i]);
+      const y0 = (adaptationX[0] - oldMean0) / oldSigma;
+      const y1 = (adaptationX[1] - oldMean1) / oldSigma;
       let weight = this.covarianceWeights[i];
       if (weight < 0) {
         const white0 = inv00 * y0 + inv01 * y1;

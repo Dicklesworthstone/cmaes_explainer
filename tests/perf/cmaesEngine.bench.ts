@@ -81,16 +81,17 @@ if (options.golden) {
 
   const durationsMs: number[] = [];
   let checksum = 0;
+  let totalEvaluations = 0;
   for (let trial = 0; trial < options.trials; trial++) {
     const started = performance.now();
     const state = runTrial(options.seed + 10_000 + trial);
     durationsMs.push(performance.now() - started);
+    totalEvaluations += state.evalCount;
     checksum += state.bestFitness + state.sigma + state.conditionNumber;
   }
 
   const sorted = [...durationsMs].sort((left, right) => left - right);
   const percentile = (fraction: number): number => sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
-  const totalEvaluations = options.trials * runTrial(options.seed + 20_000).evalCount;
   const totalDurationSeconds = durationsMs.reduce((sum, duration) => sum + duration, 0) / 1_000;
 
   process.stdout.write(`${JSON.stringify({
@@ -105,6 +106,7 @@ if (options.golden) {
     p50Ms: percentile(0.5),
     p95Ms: percentile(0.95),
     p99Ms: percentile(0.99),
+    totalEvaluations,
     evaluationsPerSecond: totalEvaluations / totalDurationSeconds,
     checksum
   }, null, 2)}\n`);

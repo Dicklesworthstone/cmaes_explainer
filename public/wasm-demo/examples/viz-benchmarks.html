@@ -104,6 +104,10 @@
       #three-canvas { height: 320px !important; }
       #line { height: 260px; }
     }
+    #race-results:empty { display: none; }
+    @media (max-width: 640px) {
+      #hud, #race-results { display: none; }
+    }
     .glow {
       box-shadow: 0 18px 40px rgba(56,189,248,0.35), 0 0 0 1px rgba(14,165,233,0.35);
     }
@@ -227,6 +231,9 @@
             <span class="absolute inset-[2px] rounded-xl bg-slate-900" style="box-shadow: 0 0 20px rgba(56,189,248,0.35);"></span>
             <span class="relative z-10 flex items-center gap-2 text-cyan-100 run-label">🚀 Run the Live Demo (WASM)</span>
           </button>
+          <button id="run-race" class="font-semibold px-4 py-3 rounded-xl border border-sky-400/40 bg-sky-400/10 text-sky-100 hover:bg-sky-400/20 disabled:opacity-50 disabled:cursor-not-allowed">
+            Run WASM vs JS speed race
+          </button>
           <div class="text-sm text-slate-300">Runs CMA‑ES (WASM) and renders the full per-generation timeline. Use the scrub bar to navigate.</div>
         </div>
           <div class="text-xs text-slate-400 space-y-1">
@@ -277,9 +284,7 @@
     <div class="flex justify-between"><span>Iter/sec (viz)</span><span id="hud-iter">–</span></div>
   </div>
 
-  <div id="race-results" class="fixed bottom-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[260px]"></div>
-
-  </div>
+  <div id="race-results" class="fixed bottom-4 right-4 panel rounded-xl p-3 text-xs text-slate-200 space-y-1 min-w-[260px]" style="z-index: 20"></div>
 
   <script type="module">
     const bundle = (localStorage.getItem('cmaes-bundle') === 'pkg-par') ? 'pkg-par' : 'pkg';
@@ -451,6 +456,13 @@ function f(x) {
       return el;
     };
 
+    const numericInputValue = (id, fallback) => {
+      const raw = mustGet(id).value.trim();
+      if (raw === '') return fallback;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : fallback;
+    };
+
     const benchSelect = mustGet('bench');
     const dimInput = mustGet('dim');
     const dimLabel = mustGet('dim-label');
@@ -510,6 +522,7 @@ function f(x) {
     let wasmInitialized = false;
     let runActive = false;
     let lastRunFinished = false;
+    let runSettingsDirty = false;
 
     if (bundleLabelEl) {
       const bundleName = bundle === 'pkg-par' ? 'Parallel (pkg-par)' : 'Sequential (pkg)';
@@ -533,15 +546,16 @@ function f(x) {
     function buildOptions(lambda, maxIter, seed, dim) {
       const opts = { popsize: lambda, seed, maxEvals: lambda * maxIter };
       if (boundsToggle.checked) {
-        const lo = Number(boundLo.value) || -5;
-        const hi = Number(boundHi.value) || 5;
+        const lo = numericInputValue('bound-lo', -5);
+        const hi = numericInputValue('bound-hi', 5);
+        if (lo >= hi) throw new RangeError('Bounds require a lower value strictly below the upper value.');
         opts.bounds = {
           lower: new Float64Array(Array(dim).fill(lo)),
           upper: new Float64Array(Array(dim).fill(hi)),
         };
       }
-      const samples = Number(noiseSamples.value) || 1;
-      const maxS = Number(noiseMax.value) || 8;
+      const samples = Math.trunc(numericInputValue('noise-samples', 1));
+      const maxS = Math.trunc(numericInputValue('noise-max', 8));
       opts.noise = {
         samplesPerPoint: samples,
         maxSamplesPerPoint: maxS,
@@ -785,129 +799,182 @@ function f(x) {
       statusEl.textContent = 'Initializing wasm...';
       runActive = true;
       lastRunFinished = false;
+      runSettingsDirty = false;
       playbackState.playing = false;
       updateRunButton();
-      if (!wasmInitialized) {
-        await init();
-        wasmInitialized = true;
-      }
-
-      const benchKey = benchSelect.value;
-      const bench = benchFns[benchKey];
-      const lambda = Number(document.getElementById('lambda').value) || 32;
-      const sigma = Number(document.getElementById('sigma').value) || 1.2;
-      const maxIter = Number(document.getElementById('iters').value) || 250;
-      const seed = Number(document.getElementById('seed').value) || 42;
-      const dim = currentDim(benchKey);
-      currentMaxIter = maxIter;
-      dimLabel.textContent = '2D surface view';
-
-      const opts = buildOptions(lambda, maxIter, seed, dim);
-
-      const x0 = new Float64Array(dim);
-      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
-      const es = new WasmCmaes(x0, sigma, opts);
-
-      buildSurface(bench.f);
-
-      const history = [];
-      let iter = 0;
-      let bestF = Infinity;
-      let lastTs = performance.now();
-      let iterCounter = 0;
-      playbackState.frames = [];
-      playbackState.idx = 0;
-      scrub.max = 0;
-      currentHist = history;
-
-      const stepOnce = () => {
-        const lambda = es.lambda;
-        // The strategy exposes its current mean through the FminResult
-        // snapshot, not directly on WasmCmaes.
-        const before = es.result();
-        const meanBefore = Array.from(before.xmean());
-        before.free();
-        const covBeforeFlat = Array.from(es.cov_matrix());
-        const candFlat = es.ask_flat();
-        const fits = new Float64Array(lambda);
-        const candidates = [];
-        let genBestF = Infinity;
-        let genBestVec = null;
-        for (let k = 0; k < lambda; k++) {
-          const offset = k * dim;
-          const v = candFlat.slice(offset, offset + dim);
-          candidates.push(Array.from(v));
-          fits[k] = bench.f(v);
-          if (fits[k] < genBestF) { genBestF = fits[k]; genBestVec = candidates[candidates.length - 1]; }
+      let releaseStrategy = null;
+      try {
+        if (!wasmInitialized) {
+          await init();
+          wasmInitialized = true;
         }
-        es.tell_flat(fits);
-        const res = es.result();
-        const result = {
-          bestF: res.best_f,
-          bestX: Array.from(res.best_x()),
-          evals: res.evals,
+
+        const benchKey = benchSelect.value;
+        const bench = benchFns[benchKey];
+        const lambda = Math.trunc(numericInputValue('lambda', 32));
+        const sigma = numericInputValue('sigma', 1.2);
+        const maxIter = Math.trunc(numericInputValue('iters', 250));
+        const seed = Math.trunc(numericInputValue('seed', 42));
+        const dim = currentDim(benchKey);
+        currentMaxIter = maxIter;
+        dimLabel.textContent = '2D surface view';
+
+        const opts = buildOptions(lambda, maxIter, seed, dim);
+        const x0 = new Float64Array(dim);
+        for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+        const es = new WasmCmaes(x0, sigma, opts);
+        let strategyFreed = false;
+        const freeStrategy = () => {
+          if (strategyFreed) return;
+          strategyFreed = true;
+          es.free();
         };
-        res.free();
-        const cov = cov2x2FromFlat(covBeforeFlat, dim);
-        bestF = Math.min(bestF, result.bestF);
-        history.push({ iter, best: bestF });
-        iterCounter++;
-
-        const bestVec = genBestVec || result.bestX;
-        const meanVec = meanBefore;
-        const proj = projectCandidates(candidates, bestVec, dim);
-        const meanPt = { x: meanVec[0], y: meanVec[1] };
-        const bestPt = { x: proj.b.x, y: proj.b.y };
-        render(history, proj.pts, { best_f: result.bestF }, meanPt, cov, bestPt);
-        // Store frame for scrub
-        if (playbackState.frames.length > 1000) playbackState.frames.shift();
-        playbackState.frames.push({
-          pts: proj.pts,
-          mean: meanPt,
-          best: bestPt,
-          cov,
-          bestF: bestF,
-          iter,
-        });
-        scrub.max = playbackState.frames.length - 1;
-
-        const delta = history.length > 1 ? history[history.length - 2].best - result.bestF : 0;
-        const boost = Math.max(1.0, Math.min(1.25, 1.0 + Math.abs(delta) * 2));
-        gsap.fromTo(bestEl, { scale: 1 }, { scale: boost, duration: 0.35, ease: 'sine.out' });
-
-        iter++;
-        const now = performance.now();
-        if (now - lastTs > 1000) {
-          document.getElementById('hud-iter').textContent = `${iterCounter} iter/s`;
-          iterCounter = 0;
-          lastTs = now;
-        }
-
-        const stop = es.stop_status();
-        const stopped = stop.stopped;
-        stop.free();
-        if (!stopped && iter < maxIter) {
-          requestAnimationFrame(stepOnce);
-        } else {
-          statusEl.textContent = `Done in ${iter} iterations / ${result.evals} evals`;
-          document.getElementById('hud-wasm').textContent = `${result.evals} evals`;
+        releaseStrategy = freeStrategy;
+        const failRun = (error) => {
+          let failure = error;
+          try {
+            freeStrategy();
+          } catch (cleanupError) {
+            failure = cleanupError;
+          }
+          const message = failure instanceof Error ? failure.message : String(failure);
+          statusEl.textContent = `Run failed: ${message}`;
           runActive = false;
-          lastRunFinished = true;
+          lastRunFinished = false;
           playbackState.playing = false;
           updateRunButton();
-        }
-      };
+        };
 
-      statusEl.textContent = `Running ${bench.title}...`;
-      requestAnimationFrame(stepOnce);
+        buildSurface(bench.f);
+
+        const history = [];
+        let iter = 0;
+        let bestF = Infinity;
+        let lastTs = performance.now();
+        let iterCounter = 0;
+        playbackState.frames = [];
+        playbackState.idx = 0;
+        scrub.max = 0;
+        currentHist = history;
+
+        const stepOnce = () => {
+          try {
+            const populationSize = es.lambda;
+            // The strategy exposes its current mean through the FminResult
+            // snapshot, not directly on WasmCmaes.
+            const before = es.result();
+            let meanBefore;
+            try {
+              meanBefore = Array.from(before.xmean());
+            } finally {
+              before.free();
+            }
+            const covBeforeFlat = Array.from(es.cov_matrix());
+            const candFlat = es.ask_flat();
+            const fits = new Float64Array(populationSize);
+            const candidates = [];
+            let genBestF = Infinity;
+            let genBestVec = null;
+            for (let k = 0; k < populationSize; k++) {
+              const offset = k * dim;
+              const v = candFlat.slice(offset, offset + dim);
+              candidates.push(Array.from(v));
+              fits[k] = bench.f(v);
+              if (fits[k] < genBestF) { genBestF = fits[k]; genBestVec = candidates[candidates.length - 1]; }
+            }
+            es.tell_flat(fits);
+            const res = es.result();
+            let result;
+            try {
+              result = {
+                bestF: res.best_f,
+                bestX: Array.from(res.best_x()),
+                evals: res.evals,
+              };
+            } finally {
+              res.free();
+            }
+            const cov = cov2x2FromFlat(covBeforeFlat, dim);
+            bestF = Math.min(bestF, result.bestF);
+            history.push({ iter, best: bestF });
+            iterCounter++;
+
+            const bestVec = genBestVec || result.bestX;
+            const meanPt = { x: meanBefore[0], y: meanBefore[1] };
+            const proj = projectCandidates(candidates, bestVec, dim);
+            const bestPt = { x: proj.b.x, y: proj.b.y };
+            render(history, proj.pts, { best_f: result.bestF }, meanPt, cov, bestPt);
+            // Store at most 1,000 frames for scrub/replay.
+            if (playbackState.frames.length >= 1000) playbackState.frames.shift();
+            playbackState.frames.push({
+              pts: proj.pts,
+              mean: meanPt,
+              best: bestPt,
+              cov,
+              bestF,
+              iter,
+            });
+            scrub.max = playbackState.frames.length - 1;
+
+            const delta = history.length > 1 ? history[history.length - 2].best - result.bestF : 0;
+            const boost = Math.max(1.0, Math.min(1.25, 1.0 + Math.abs(delta) * 2));
+            gsap.fromTo(bestEl, { scale: 1 }, { scale: boost, duration: 0.35, ease: 'sine.out' });
+
+            iter++;
+            const now = performance.now();
+            if (now - lastTs > 1000) {
+              document.getElementById('hud-iter').textContent = `${iterCounter} iter/s`;
+              iterCounter = 0;
+              lastTs = now;
+            }
+
+            const stop = es.stop_status();
+            let stopped;
+            try {
+              stopped = stop.stopped;
+            } finally {
+              stop.free();
+            }
+            if (!stopped && iter < maxIter) {
+              requestAnimationFrame(stepOnce);
+            } else {
+              freeStrategy();
+              statusEl.textContent = `Done in ${iter} iterations / ${result.evals} evals`;
+              document.getElementById('hud-wasm').textContent = `${result.evals} evals`;
+              runActive = false;
+              lastRunFinished = !runSettingsDirty;
+              playbackState.playing = false;
+              updateRunButton();
+            }
+          } catch (error) {
+            failRun(error);
+          }
+        };
+
+        statusEl.textContent = `Running ${bench.title}...`;
+        requestAnimationFrame(stepOnce);
+      } catch (error) {
+        let failure = error;
+        try {
+          if (releaseStrategy) releaseStrategy();
+        } catch (cleanupError) {
+          failure = cleanupError;
+        }
+        const message = failure instanceof Error ? failure.message : String(failure);
+        statusEl.textContent = `Run failed: ${message}`;
+        runActive = false;
+        lastRunFinished = false;
+        playbackState.playing = false;
+        updateRunButton();
+      }
     }
 
     function runJsBaseline(dimOverride) {
       const bench = benchFns[benchSelect.value];
-      const lambda = Number(document.getElementById('lambda').value) || 32;
-      const sigma0 = Number(document.getElementById('sigma').value) || 1.2;
-      const maxIter = Number(document.getElementById('iters').value) || 250;
-      const seed = Number(document.getElementById('seed').value) || 42;
+      const lambda = Math.trunc(numericInputValue('lambda', 32));
+      const sigma0 = numericInputValue('sigma', 1.2);
+      const maxIter = Math.trunc(numericInputValue('iters', 250));
+      const seed = Math.trunc(numericInputValue('seed', 42));
       const dim = dimOverride || 2;
 
       const rng = (() => {
@@ -941,8 +1008,8 @@ function f(x) {
           const x = sample();
           let f = bench.f(x);
           if (boundsToggle.checked) {
-            const lo = Number(boundLo.value) || -5;
-            const hi = Number(boundHi.value) || 5;
+            const lo = numericInputValue('bound-lo', -5);
+            const hi = numericInputValue('bound-hi', 5);
             let penalty = 0;
             for (let i=0;i<dim;i++) {
               let xi = x[i];
@@ -967,7 +1034,7 @@ function f(x) {
       const t1 = performance.now();
       const msg = `Baseline JS: best f=${bestF.toExponential(3)} in ${(t1-t0).toFixed(1)} ms`;
       timingEl.textContent = msg;
-      hudJs.textContent = msg;
+      hudJs.textContent = `f=${bestF.toExponential(2)}, ${(t1-t0).toFixed(1)} ms`;
       return { bestF, ms: (t1-t0), bestX };
     }
 
@@ -1029,6 +1096,18 @@ function f(x) {
       }
     };
 
+    const invalidateCompletedRun = () => {
+      if (runActive) {
+        runSettingsDirty = true;
+        return;
+      }
+      lastRunFinished = false;
+      playbackState.playing = false;
+      updateRunButton();
+    };
+    ['bench', 'lambda', 'sigma', 'iters', 'seed', 'bounds-toggle', 'bound-lo', 'bound-hi', 'noise-samples', 'noise-max', 'noise-adaptive']
+      .forEach((id) => mustGet(id).addEventListener('input', invalidateCompletedRun));
+
     const onRunClick = () => {
       if (runActive) return;
       // If we have frames from a completed run, toggle replay
@@ -1043,41 +1122,76 @@ function f(x) {
     };
 
     if (runButton) runButton.addEventListener('click', onRunClick);
-    bind('run-race', 'click', async () => {
-      statusEl.textContent = 'Race: running WASM...';
-      const benchKey = benchSelect.value;
-      const bench = benchFns[benchKey];
-      const lambda = Number(document.getElementById('lambda').value) || 32;
-      const sigma = Number(document.getElementById('sigma').value) || 1.2;
-      const maxIter = Number(document.getElementById('iters').value) || 250;
-      const seed = Number(document.getElementById('seed').value) || 42;
-      const dim = currentDim(benchKey);
-      const opts = buildOptions(lambda, maxIter, seed, dim);
-      if (!wasmInitialized) { await init(); wasmInitialized = true; }
-      const x0 = new Float64Array(dim);
-      for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
-      const es = new WasmCmaes(x0, sigma, opts);
-      const t0 = performance.now();
-      while (!es.stop_status().stopped) {
-        const candFlat = es.ask_flat();
-        const fits = new Float64Array(es.lambda);
-        for (let k = 0; k < es.lambda; k++) {
-          const offset = k * dim;
-          fits[k] = bench.f(candFlat.slice(offset, offset + dim));
+    bind('run-race', 'click', async (event) => {
+      if (runActive) return;
+      const raceButton = event.currentTarget;
+      runActive = true;
+      raceButton.disabled = true;
+      updateRunButton();
+      let es = null;
+      try {
+        statusEl.textContent = 'Race: running WASM...';
+        const benchKey = benchSelect.value;
+        const bench = benchFns[benchKey];
+        const lambda = Math.trunc(numericInputValue('lambda', 32));
+        const sigma = numericInputValue('sigma', 1.2);
+        const maxIter = Math.trunc(numericInputValue('iters', 250));
+        const seed = Math.trunc(numericInputValue('seed', 42));
+        const dim = currentDim(benchKey);
+        const opts = buildOptions(lambda, maxIter, seed, dim);
+        if (!wasmInitialized) { await init(); wasmInitialized = true; }
+        const x0 = new Float64Array(dim);
+        for (let i = 0; i < dim; i++) x0[i] = bench.x0[i % bench.x0.length] || 0;
+        es = new WasmCmaes(x0, sigma, opts);
+        const t0 = performance.now();
+        while (true) {
+          const stop = es.stop_status();
+          let stopped;
+          try {
+            stopped = stop.stopped;
+          } finally {
+            stop.free();
+          }
+          if (stopped) break;
+          const candFlat = es.ask_flat();
+          const fits = new Float64Array(es.lambda);
+          for (let k = 0; k < es.lambda; k++) {
+            const offset = k * dim;
+            fits[k] = bench.f(candFlat.slice(offset, offset + dim));
+          }
+          es.tell_flat(fits);
         }
-        es.tell_flat(fits);
-        if (es.evals >= opts.maxEvals) break;
-      }
-      const wasmMs = performance.now() - t0;
-      const wasmRes = es.result();
-      hudWasm.textContent = `${wasmRes.evals} evals, ${wasmMs.toFixed(1)} ms`;
+        const wasmMs = performance.now() - t0;
+        const wasmRes = es.result();
+        let wasmResult;
+        try {
+          wasmResult = { evals: wasmRes.evals, bestF: wasmRes.best_f };
+        } finally {
+          wasmRes.free();
+        }
+        hudWasm.textContent = `${wasmResult.evals} evals, ${wasmMs.toFixed(1)} ms`;
 
-      statusEl.textContent = 'Race: running JS baseline...';
-      const jsRes = runJsBaseline(dim);
-      raceResults.innerHTML = `<div class="font-semibold">Race results</div>
-        <div>WASM: f=${wasmRes.best_f.toExponential(3)}, ${wasmMs.toFixed(1)} ms</div>
-        <div>JS: f=${jsRes.bestF.toExponential(3)}, ${jsRes.ms.toFixed(1)} ms</div>`;
-      statusEl.textContent = 'Race complete';
+        statusEl.textContent = 'Race: running JS baseline...';
+        const jsRes = runJsBaseline(dim);
+        raceResults.innerHTML = `<div class="font-semibold">Race results</div>
+          <div>WASM: f=${wasmResult.bestF.toExponential(3)}, ${wasmMs.toFixed(1)} ms</div>
+          <div>JS: f=${jsRes.bestF.toExponential(3)}, ${jsRes.ms.toFixed(1)} ms</div>`;
+        statusEl.textContent = 'Race complete';
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        statusEl.textContent = `Race failed: ${message}`;
+      } finally {
+        try {
+          if (es) es.free();
+        } catch (cleanupError) {
+          const message = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+          statusEl.textContent = `Race cleanup failed: ${message}`;
+        } finally {
+          runActive = false;
+          raceButton.disabled = false;
+          updateRunButton();
+        }
+      }
     });
 
     dimInput.addEventListener('input', () => {
@@ -1125,6 +1239,7 @@ function f(x) {
         if (typeof fn !== 'function') throw new Error('f is not a function');
         customFn = fn;
         benchSelect.value = 'custom';
+        invalidateCompletedRun();
         statusEl.textContent = 'Custom objective applied';
       } catch (e) {
         alert('Invalid function: ' + e.message);

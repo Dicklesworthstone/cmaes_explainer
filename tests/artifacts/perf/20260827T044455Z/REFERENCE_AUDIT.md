@@ -12,9 +12,9 @@ Primary references:
 
 | Engine | Where used | Reference comparison | Action |
 |---|---|---|---|
-| `CMAESOptimizer` | Two-dimensional native demos | Active weights, learning rates, CSA, and h-sigma matched Hansen/pycma. Its default population was 8 instead of the canonical 6 in two dimensions, and bounded updates adapted repaired phenotypes. | Default population corrected; ranking remains on repaired phenotypes while mean, paths, and covariance now adapt raw genotypes. |
-| `CMAESOptimizerND` | Wing, bridge, transformer, cellular automata, and internal-lab fallback | Core active CMA equations matched. It adapted repaired phenotypes and repeatedly materialized/decomposed covariance instead of using the reference `B D` factorization. | Genotype/phenotype separation corrected; post-update eigensystem cached; sampling now applies `B D z` directly. |
-| `fs-cmaes-viz-wasm 0.2.0` | Internal-lab preferred kernel | The bundled kernel computes the h-sigma normalizer with `sqrt(1 - (1-cs)^2 * (g+1))` instead of `sqrt(1 - (1-cs)^(2(g+1)))`. The radicand becomes negative, h-sigma becomes false, and rank-one covariance learning is disabled. | The loader now rejects 0.2.0 and honestly uses the corrected TypeScript fallback. Only the audited 0.2.1 kernel is accepted. The committed binary was not overwritten. |
+| `CMAESOptimizer` | Two-dimensional native demos | Active weights, learning rates, CSA, and h-sigma matched Hansen/pycma. Its default population was 8 instead of the canonical 6 in two dimensions, and bounded updates always adapted repaired phenotypes. | Default population corrected. Reflected samples retain their latent genotypes for adaptation. Literal clipping adapts clipped points because its many-to-one transform otherwise strands the latent mean outside the box. |
+| `CMAESOptimizerND` | Wing, bridge, transformer, cellular automata, and internal-lab fallback | Core active CMA equations matched. It adapted repaired phenotypes and repeatedly materialized/decomposed covariance instead of using the reference `B D` factorization. | Boundary handling corrected as above; post-update eigensystem cached behind an immutable snapshot boundary; sampling now applies `B D z` directly. |
+| `fs-cmaes-viz-wasm 0.2.0` and `0.2.1` | Internal-lab optional kernel | Version 0.2.0 breaks the finite-generation h-sigma normalizer. Version 0.2.1 repairs that recurrence, but its damping formula omits Hansen's `-1` term and its snapshots combine the pre-update covariance eigensystem with post-update mean, sigma, and paths. | The loader rejects both known versions and honestly uses the coherent TypeScript fallback. The committed binary was not overwritten. A future kernel must pass this audit before being added to the explicit compatibility allowlist. |
 | `wasm_cmaes 0.2.0` | Optional embedded upstream WASM gallery | This is largely an older `purecma`-style implementation. It has valid classic defaults and lazy decomposition, but its negative weights are zero, its automatic covariance modes differ from full CMA-ES, and its noise option repeats an ask-order subset rather than Hansen's rank-change noise measurement. The gallery also called a nonexistent `WasmCmaes.xmean()` method. | Kept as the explicitly upstream/legacy gallery; it is not used by the site's default native optimizer or engineering demos. Its wrapper integration now reads the mean through `FminResult`, frees per-step snapshots, and keeps interactive panels stationary enough for reliable pointer input. |
 
 ## Reference-aligned behavior now present
@@ -25,7 +25,7 @@ Primary references:
 - Rank-one and active rank-mu covariance updates.
 - Mahalanobis-length normalization of negative covariance weights.
 - Sampling in eigen coordinates using `B D z`.
-- Objective ranking on bounded phenotypes while distribution adaptation uses unmodified genotypes.
+- Objective ranking on bounded phenotypes, with latent-genotype adaptation for reflection and stable phenotype adaptation for literal clipping.
 - Positive-definite spectral repair after each covariance update.
 
 ## Intentional scope differences from production pycma

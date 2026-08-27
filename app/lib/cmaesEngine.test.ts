@@ -85,7 +85,7 @@ describe("shared CMA-ES engines", () => {
     expect(state.covariance.every((row, i) => row.every((value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12))).toBe(true);
   });
 
-  test("ranks repaired phenotypes but adapts the unmodified genotypes at boundaries", () => {
+  test("ranks reflected phenotypes but adapts their latent genotypes", () => {
     const optimizer = new CMAESOptimizerND((x) => x[0] + x[1], {
       dim: 2,
       initialMean: [0.1, 0.1],
@@ -93,7 +93,7 @@ describe("shared CMA-ES engines", () => {
       lambda: 10,
       seed: 7,
       bounds: [0, 1],
-      repairStrategy: "clip"
+      repairStrategy: "reflect"
     });
 
     const state = optimizer.step();
@@ -107,7 +107,65 @@ describe("shared CMA-ES engines", () => {
     expect(state.samples.some((sample) => sample.rawX.some((value, dimension) => value !== sample.x[dimension]))).toBe(true);
     expect(optimizer.mean[0]).toBeCloseTo(expectedGenotypeMean[0], 14);
     expect(optimizer.mean[1]).toBeCloseTo(expectedGenotypeMean[1], 14);
-    expect(state.mean).toEqual(expectedGenotypeMean.map((value) => Math.min(1, Math.max(0, value))));
+    const reflect = (value: number): number => {
+      const phase = ((value % 2) + 2) % 2;
+      return phase <= 1 ? phase : 2 - phase;
+    };
+    expect(state.mean[0]).toBeCloseTo(reflect(expectedGenotypeMean[0]), 14);
+    expect(state.mean[1]).toBeCloseTo(reflect(expectedGenotypeMean[1]), 14);
+  });
+
+  test("literal clipping keeps adaptation inside the box and reaches an interior optimum", () => {
+    const target = 0.2;
+    const objective2D = (x: number, y: number) => (x - target) ** 2 + (y - target) ** 2;
+    const optimizer2D = new CMAESOptimizer(objective2D, {
+      initialMean: [0.5, 0.5],
+      initialSigma: 0.8,
+      lambda: 10,
+      seed: 7,
+      bounds: [0, 1],
+      repairStrategy: "clip"
+    });
+    const optimizerND = new CMAESOptimizerND((x) => objective2D(x[0], x[1]), {
+      dim: 2,
+      initialMean: [0.5, 0.5],
+      initialSigma: 0.8,
+      lambda: 10,
+      seed: 7,
+      bounds: [0, 1],
+      repairStrategy: "clip"
+    });
+
+    let state2D = optimizer2D.step();
+    let stateND = optimizerND.step();
+    for (let generation = 1; generation < 120; generation++) {
+      state2D = optimizer2D.step();
+      stateND = optimizerND.step();
+    }
+
+    expect(state2D.bestFitness).toBeLessThan(1e-12);
+    expect(stateND.bestFitness).toBeLessThan(1e-12);
+    expect(optimizer2D.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
+    expect(optimizerND.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
+  });
+
+  test("the public covariance snapshot cannot desynchronize the cached eigensystem", () => {
+    const objective = (x: number[]) => x.reduce((sum, value) => sum + value * value, 0);
+    const options = { dim: 4, initialMean: [0.8, 0.6, 0.4, 0.2], initialSigma: 0.3, seed: 99 };
+    const control = new CMAESOptimizerND(objective, options);
+    const probed = new CMAESOptimizerND(objective, options);
+
+    control.step();
+    probed.step();
+    const covarianceSnapshot = probed.C;
+    covarianceSnapshot[0][0] = 1e12;
+    covarianceSnapshot[0][1] = -1e12;
+
+    const controlState = control.step();
+    const probedState = probed.step();
+    expect(probedState.mean).toEqual(controlState.mean);
+    expect(probedState.covariance).toEqual(controlState.covariance);
+    expect(probedState.sigma).toBe(controlState.sigma);
   });
 });
 
@@ -167,7 +225,7 @@ describe("advertised optimization dimensions", () => {
   });
 });
 
-function generation(g: number, sf: number[], sx: number[]): CmaesVizGeneration {
+function generation(g: number, sf: number[], sx: number[], bestF = Math.min(...sf)): CmaesVizGeneration {
   return {
     g,
     mean: [0, 0, 0],
@@ -175,7 +233,7 @@ function generation(g: number, sf: number[], sx: number[]): CmaesVizGeneration {
     eigvals: [1, 1, 1],
     eigvecs: [1, 0, 0, 0, 1, 0, 0, 0, 1],
     cond: 1,
-    best_f: Math.min(...sf),
+    best_f: bestF,
     evals: g * sf.length,
     proj_mean: [0, 0, 0],
     proj_eigvals: [1, 1, 1],
@@ -189,18 +247,18 @@ function generation(g: number, sf: number[], sx: number[]): CmaesVizGeneration {
   };
 }
 
-test("WASM snapshots rank ask-order samples and retain only historical information", () => {
+test("WASM snapshots rank ask-order samples without leaking final coordinates into earlier frames", () => {
   const run: CmaesVizRun = {
     kernel: "test",
     dim: 3,
     landscape: 0,
     stop_reason: "budget",
-    best_f: 1,
+    best_f: 0.5,
     best_x: [99, 99, 99],
     total_evals: 8,
     generations: [
       generation(1, [9, 1, 5, 3], [9, 0, 0, 1, 0, 0, 5, 0, 0, 3, 0, 0]),
-      generation(2, [4, 6, 7, 8], [4, 0, 0, 6, 0, 0, 7, 0, 0, 8, 0, 0])
+      generation(2, [4, 6, 7, 8], [4, 0, 0, 6, 0, 0, 7, 0, 0, 8, 0, 0], 0.5)
     ],
     pca_basis: [1, 0, 0, 0, 1, 0, 0, 0, 1],
     pca_center: [0, 0, 0],
@@ -211,12 +269,43 @@ test("WASM snapshots rank ask-order samples and retain only historical informati
   expect(states[0].samples.map((sample) => sample.rank)).toEqual([3, 0, 2, 1]);
   expect(states[0].samples.map((sample) => sample.isElite)).toEqual([false, true, false, true]);
   expect(states[0].bestX).toEqual([1, 0, 0]);
-  expect(states[1].bestX).toEqual([1, 0, 0]);
+  expect(states[1].bestX).toEqual(run.best_x);
+  expect(states[1].bestFitness).toBe(0.5);
   expect(states[0].bestX).not.toEqual(run.best_x);
 });
 
-test("rejects the bundled CMA-ES kernel with the broken h-sigma normalizer", () => {
+test("WASM snapshot spectra use the same largest-first contract as the TypeScript engine", () => {
+  const snapshot = generation(1, [1, 2], [1, 0, 0, 2, 0, 0]);
+  snapshot.eigvals = [1, 2, 4];
+  snapshot.proj_eigvals = [0, 2, 4];
+  const run: CmaesVizRun = {
+    kernel: "test",
+    dim: 3,
+    landscape: 0,
+    stop_reason: "budget",
+    best_f: 1,
+    best_x: [1, 0, 0],
+    total_evals: 2,
+    generations: [snapshot],
+    pca_basis: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+    pca_center: [0, 0, 0],
+    pca_pool_eigvals: [1, 2, 4]
+  };
+
+  const [state] = wasmRunToNdStates(run);
+  expect(state.eigenvalues).toEqual([4, 2, 1]);
+  expect(state.covariance).toEqual([[1, 0, 0], [0, 2, 0], [0, 0, 4]]);
+  expect(state.conditionNumber).toBe(4);
+  expect(state.phaseSpace3D.eigenvalues).toEqual([4, 2, 0]);
+  expect(state.phaseSpace3D.conditionNumber).toBe(Infinity);
+
+  snapshot.proj_eigvals = [1e-20, 2, 4];
+  const [illConditionedState] = wasmRunToNdStates(run);
+  expect(illConditionedState.phaseSpace3D.conditionNumber).toBe(4e20);
+});
+
+test("rejects every known FrankenSim kernel with reference-breaking updates", () => {
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.0")).toBe(false);
-  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(true);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(false);
   expect(isCompatibleCmaesKernelVersion(null)).toBe(false);
 });

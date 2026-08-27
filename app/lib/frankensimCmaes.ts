@@ -85,12 +85,16 @@ let loadAttempted = false;
 let loadPromise: Promise<CmaesKernelStatus> | null = null;
 
 /**
- * Version 0.2.0 computes the h_sigma normalizer as a product instead of a
- * power. It becomes NaN after a few generations and disables rank-one
- * covariance learning, so only the audited corrected kernel is accepted.
+ * Fail closed until a kernel version has passed the same reference audit as
+ * the TypeScript engine. Version 0.2.0 breaks the h-sigma normalizer. Version
+ * 0.2.1 fixes that recurrence, but still uses a noncanonical damping formula
+ * and emits pre-update covariance factors alongside post-update mean, sigma,
+ * and paths. Neither version is a coherent reference-compatible snapshot.
  */
+const AUDITED_CMAES_KERNEL_VERSIONS = new Set<string>();
+
 export function isCompatibleCmaesKernelVersion(version: string | null): boolean {
-  return version === "fs-cmaes-viz-wasm 0.2.1";
+  return version !== null && AUDITED_CMAES_KERNEL_VERSIONS.has(version);
 }
 
 async function loadWasmModule(jsPath: string, wasmPath: string): Promise<WasmModule> {
@@ -135,7 +139,7 @@ export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
         return {
           source: "ts-fallback",
           kernelVersion: version,
-          error: `unsupported CMA-ES kernel ${version ?? "unknown"}; expected audited fs-cmaes-viz-wasm 0.2.1`
+          error: `unsupported CMA-ES kernel ${version ?? "unknown"}; no FrankenSim CMA-ES kernel version has passed the current reference audit`
         };
       }
       fsCmaesModule = mod;
@@ -281,10 +285,10 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     (100 * Math.max(top3[2], 0)) / poolSum,
   ];
 
-  let runningBestFitness = Infinity;
+  let runningBestObservedFitness = Infinity;
   let runningBestX = run.generations[0]?.mean.slice() ?? run.best_x.slice();
 
-  return run.generations.map((gen) => {
+  return run.generations.map((gen, generationIndex) => {
     const lambda = gen.se.length;
     // Kernel snapshots store samples in ask-order. `se` is a selection mask
     // in the kernel's internal ordering and is not aligned with `sf`/`sx`, so
@@ -303,8 +307,8 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 
     const generationBestIndex = sortedIndices[0];
     const generationBestFitness = gen.sf[generationBestIndex];
-    if (Number.isFinite(generationBestFitness) && generationBestFitness < runningBestFitness) {
-      runningBestFitness = generationBestFitness;
+    if (Number.isFinite(generationBestFitness) && generationBestFitness < runningBestObservedFitness) {
+      runningBestObservedFitness = generationBestFitness;
       runningBestX = gen.sx.slice(generationBestIndex * n, (generationBestIndex + 1) * n);
     }
     // Defensive spectrum sanitizing: kernel v0.2.0 repairs C to positive
@@ -341,10 +345,11 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     // proj_eigvals are eigenvalues of C's projected marginal (sigma excluded,
     // like gen.eigvals), so the 1-sigma radii are sigma * sqrt(eigenvalue) —
     // the same contract cmaesEngineND documents.
+    const projectedEigenvalues = gen.proj_eigvals.map((value) => Math.max(value, 0));
     const radii: [number, number, number] = [
-      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[2], 0)),
-      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[1], 0)),
-      gen.sigma * Math.sqrt(Math.max(gen.proj_eigvals[0], 0)),
+      gen.sigma * Math.sqrt(projectedEigenvalues[2]),
+      gen.sigma * Math.sqrt(projectedEigenvalues[1]),
+      gen.sigma * Math.sqrt(projectedEigenvalues[0]),
     ];
     const col = (j: number): [number, number, number] => [
       gen.proj_eigvecs[j],
@@ -356,7 +361,9 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       col(1),
       col(0),
     ];
-    const projCond = gen.proj_eigvals[0] > 1e-18 ? gen.proj_eigvals[2] / gen.proj_eigvals[0] : 0;
+    const projCond = projectedEigenvalues[0] > 0
+      ? projectedEigenvalues[2] / projectedEigenvalues[0]
+      : Infinity;
     const evolutionPath3D = projectDirection(gen.p_c, basis, n);
     const evolutionPathSigma3D = projectDirection(gen.p_sigma, basis, n);
 
@@ -377,16 +384,21 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       pSigma: gen.p_sigma,
       pC: gen.p_c,
       samples,
-      bestFitness: runningBestFitness,
-      bestX: runningBestX.slice(),
-      eigenvalues,
+      bestFitness: gen.best_f,
+      // The stream does not include the coordinate associated with its
+      // historical true-best fitness, so intermediate frames use the best
+      // observed sample available by that point. The run envelope does carry
+      // the exact true-best coordinate, and it is valid once the final frame
+      // has been reached.
+      bestX: generationIndex === run.generations.length - 1 ? run.best_x.slice() : runningBestX.slice(),
+      eigenvalues: [...eigenvalues].reverse(),
       conditionNumber,
       evalCount: gen.evals,
       phaseSpace3D: {
         projectedMean: gen.proj_mean,
         ellipsoidRadii: radii,
         principalAxes3D,
-        eigenvalues: [gen.proj_eigvals[2], gen.proj_eigvals[1], gen.proj_eigvals[0]],
+        eigenvalues: [projectedEigenvalues[2], projectedEigenvalues[1], projectedEigenvalues[0]],
         conditionNumber: projCond,
         varianceExplainedPercent: varianceExplained,
         evolutionPath3D,

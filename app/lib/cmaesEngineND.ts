@@ -382,7 +382,6 @@ export class CMAESOptimizerND {
   readonly dim: number;
   mean: VectorND;
   sigma: number;
-  C: MatrixND;
   pSigma: VectorND;
   pC: VectorND;
 
@@ -413,6 +412,7 @@ export class CMAESOptimizerND {
 
   private readonly rng: () => number;
   private readonly covarianceWeightSum: number;
+  private covariance: MatrixND;
   private currentEigen: SymmetricEigendecompositionND;
   private previousProjectionBasis: MatrixND | null = null;
 
@@ -447,7 +447,7 @@ export class CMAESOptimizerND {
       return state / TWO_POW_32;
     };
 
-    this.C = createIdentityMatrix(this.dim);
+    this.covariance = createIdentityMatrix(this.dim);
     this.currentEigen = {
       eigenvalues: new Array(this.dim).fill(1),
       eigenvectors: createIdentityMatrix(this.dim)
@@ -504,6 +504,16 @@ export class CMAESOptimizerND {
     const period = 2 * span;
     const phase = ((value - min) % period + period) % period;
     return phase <= span ? min + phase : max - (phase - span);
+  }
+
+  /** Return a snapshot instead of exposing state that must match currentEigen. */
+  get C(): MatrixND {
+    return cloneMatrix(this.covariance);
+  }
+
+  /** See the 2-D engine for why direct clipping adapts phenotypes. */
+  private adaptationPoint(candidate: CandidateSampleND): VectorND {
+    return this.repairStrategy === "clip" ? candidate.x : candidate.rawX;
   }
 
   projectTo3D(vector: VectorND, basis: MatrixND): [number, number, number] {
@@ -576,8 +586,9 @@ export class CMAESOptimizerND {
 
     this.mean = createZeroVector(this.dim);
     for (let rank = 0; rank < this.mu; rank++) {
+      const adaptationX = this.adaptationPoint(candidates[rank]);
       for (let dimension = 0; dimension < this.dim; dimension++) {
-        this.mean[dimension] += this.weights[rank] * candidates[rank].rawX[dimension];
+        this.mean[dimension] += this.weights[rank] * adaptationX[dimension];
       }
     }
 
@@ -597,7 +608,7 @@ export class CMAESOptimizerND {
     );
 
     const normalizedSteps = candidates.map((candidate) =>
-      candidate.rawX.map((value, dimension) => (value - oldMean[dimension]) / oldSigma)
+      this.adaptationPoint(candidate).map((value, dimension) => (value - oldMean[dimension]) / oldSigma)
     );
     const adjustedCovarianceWeights = [...this.covarianceWeights];
     for (let rank = this.mu; rank < this.lambda; rank++) {
@@ -623,7 +634,7 @@ export class CMAESOptimizerND {
           rankMu += adjustedCovarianceWeights[rank] * normalizedSteps[rank][row] * normalizedSteps[rank][column];
         }
         const value =
-          oldCoefficient * this.C[row][column] +
+          oldCoefficient * this.covariance[row][column] +
           this.c1 * this.pC[row] * this.pC[column] +
           this.cmu * rankMu;
         provisional[row][column] = value;
@@ -631,7 +642,7 @@ export class CMAESOptimizerND {
       }
     }
     const repairedEigen = jacobiEigenSymmetric(provisional, Math.max(50, 5 * this.dim));
-    this.C = reconstructSymmetric(repairedEigen.eigenvalues, repairedEigen.eigenvectors);
+    this.covariance = reconstructSymmetric(repairedEigen.eigenvalues, repairedEigen.eigenvectors);
     this.currentEigen = repairedEigen;
 
     this.sigma = oldSigma * Math.exp(this.cs / this.damps * (pSigmaNorm / this.chiN - 1));
@@ -665,12 +676,12 @@ export class CMAESOptimizerND {
       evolutionPathSigma3D: this.projectTo3D(this.pSigma, projectionBasis)
     };
 
-    const variancePerDim = this.C.map((row, dimension) => this.sigma ** 2 * row[dimension]);
+    const variancePerDim = this.covariance.map((row, dimension) => this.sigma ** 2 * row[dimension]);
     const state: CMAESGenerationStateND = {
       generation: this.generation,
       mean: phenotypeMean,
       sigma: this.sigma,
-      covariance: cloneMatrix(this.C),
+      covariance: cloneMatrix(this.covariance),
       pSigma: [...this.pSigma],
       pC: [...this.pC],
       samples: candidates,

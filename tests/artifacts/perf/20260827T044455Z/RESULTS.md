@@ -12,6 +12,8 @@ Each trial performs 250 generations of the deterministic anisotropic-ellipsoid w
 | Objective evaluations/second | 121,308 | 180,506 | 48.8% higher |
 | Peak RSS | 73.9 MB | 79.2 MB | 5.3 MB higher; no retained-heap leak observed |
 
+A fresh-eyes review found that the original harness ran one additional untimed trial after the measured trials solely to recover the deterministic evaluation count. That trial did not enter the latency samples, and its count was only multiplied by the measured trial count, so the latency and evaluations/second figures above are unchanged. The harness now sums evaluation counts from the measured trials themselves. The recorded process-level elapsed time and peak RSS conservatively include the former extra trial.
+
 ## Scaling
 
 Median latency improvement at 250 generations, 100 measured trials per point:
