@@ -10,15 +10,8 @@ import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
 import {
   Compass,
   Layers,
-  Sparkles,
   ShieldCheck,
-  TrendingDown,
-  Activity,
   Cpu,
-  RefreshCw,
-  Sigma,
-  BookOpen,
-  ArrowRight
 } from "lucide-react";
 
 export function TechnicalAddendum() {
@@ -176,6 +169,200 @@ export function TechnicalAddendum() {
 
         {/* Colorized Equation 10: Affine Coordinate Invariance */}
         <ColorizedEquation equation={CMAES_EQUATIONS["cmaes-affine-invariance"]} />
+      </div>
+
+      {/* Chapter 6: Scalable covariance representations */}
+      <div className="space-y-8">
+        <div className="prose-cmaes">
+          <h2>6. One update idea, four ways to remember shape</h2>
+
+          <p>
+            “CMA-ES” names a family. Every member samples a population, ranks it,
+            moves the mean, and adapts a Gaussian search distribution. The important
+            engineering choice is <strong>how much of that distribution&apos;s shape to remember</strong>.
+            Remembering every pairwise coordinate interaction is powerful at modest dimension;
+            at thousands of dimensions, the representation itself becomes the bottleneck.
+          </p>
+
+          <p>
+            At <LatexRenderer math="n=5{,}040" block={false} />, one dense covariance matrix
+            contains <LatexRenderer math="n^2=25{,}401{,}600" block={false} /> binary64 entries:
+            about <strong>194 MiB for the matrix alone</strong>. A production full-covariance
+            implementation also needs eigenvectors, transforms, and work buffers. The scalable
+            variants spend less memory by making an explicit approximation about which
+            correlations matter.
+          </p>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <article className="rounded-2xl border border-sky-400/25 bg-sky-500/[0.06] p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-xl border border-sky-400/25 bg-sky-400/10 p-2 text-sky-300">
+                <Compass className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="font-display font-bold text-white">Full CMA-ES</h3>
+                <p className="text-[0.68rem] font-mono uppercase tracking-wider text-sky-300">
+                  dense covariance · O(n²) state
+                </p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Stores every variance and every pairwise correlation. It can rotate and stretch
+              the search ellipsoid in any direction, retaining the family&apos;s strongest affine
+              invariance. This is the reference-quality choice while dense linear algebra is
+              affordable—not the honest default for a 5,040-D browser problem.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.06] p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-2 text-emerald-300">
+                <Layers className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="font-display font-bold text-white">sep-CMA-ES</h3>
+                <p className="text-[0.68rem] font-mono uppercase tracking-wider text-emerald-300">
+                  diagonal covariance · O(n) state
+                </p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Keeps one learned scale per coordinate and deliberately drops off-diagonal
+              correlations. Sampling and adaptation become linear in dimension. It is excellent
+              when the chosen coordinates already expose useful axes, but a rotated valley can
+              remain difficult because diagonal memory is not rotationally invariant.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-violet-400/25 bg-violet-500/[0.06] p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-xl border border-violet-400/25 bg-violet-400/10 p-2 text-violet-300">
+                <Cpu className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="font-display font-bold text-white">LM-CMA</h3>
+                <p className="text-[0.68rem] font-mono uppercase tracking-wider text-violet-300">
+                  m direction pairs · O(mn) state
+                </p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Replaces the dense transform with a limited history of informative search
+              directions. Applying that implicit transform costs
+              <LatexRenderer math="O(mn)" block={false} />, where
+              <LatexRenderer math="m \ll n" block={false} /> is the memory budget. It can retain
+              selected cross-coordinate structure that sep-CMA discards without ever allocating
+              a dense covariance matrix.
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-amber-400/25 bg-amber-500/[0.06] p-5 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-2 text-amber-300">
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="font-display font-bold text-white">LM-MA-ES</h3>
+                <p className="text-[0.68rem] font-mono uppercase tracking-wider text-amber-300">
+                  limited matrix adaptation · O(mn) state
+                </p>
+              </div>
+            </div>
+            <p className="text-sm leading-relaxed text-slate-300">
+              Maintains a short cascade of evolution directions that acts directly as a
+              limited-memory sampling transform. It targets the same large-scale regime as
+              LM-CMA with a compact matrix-adaptation rule. Its approximation is different,
+              so the site reports the selected variant instead of presenting both as one
+              interchangeable “low-rank CMA.”
+            </p>
+          </article>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-950/45">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <caption className="sr-only">
+              Comparison of covariance representations used by four CMA-ES variants
+            </caption>
+            <thead className="border-b border-white/10 bg-white/[0.035] text-xs uppercase tracking-wider text-slate-400">
+              <tr>
+                <th scope="col" className="px-5 py-4">Variant</th>
+                <th scope="col" className="px-5 py-4">What it learns</th>
+                <th scope="col" className="px-5 py-4">State</th>
+                <th scope="col" className="px-5 py-4">Per-sample transform</th>
+                <th scope="col" className="px-5 py-4">Important tradeoff</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.07] text-slate-300">
+              <tr>
+                <th scope="row" className="px-5 py-4 font-semibold text-sky-300">Full</th>
+                <td className="px-5 py-4">All pairwise correlations</td>
+                <td className="px-5 py-4 font-mono">O(n²)</td>
+                <td className="px-5 py-4 font-mono">O(n²)</td>
+                <td className="px-5 py-4">Best geometric fidelity; dense factorization dominates at scale</td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-5 py-4 font-semibold text-emerald-300">sep</th>
+                <td className="px-5 py-4">One scale per coordinate</td>
+                <td className="px-5 py-4 font-mono">O(n)</td>
+                <td className="px-5 py-4 font-mono">O(n)</td>
+                <td className="px-5 py-4">Fastest representation; coordinate rotation can hide structure</td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-5 py-4 font-semibold text-violet-300">LM-CMA</th>
+                <td className="px-5 py-4">A limited history of useful directions</td>
+                <td className="px-5 py-4 font-mono">O(mn)</td>
+                <td className="px-5 py-4 font-mono">O(mn)</td>
+                <td className="px-5 py-4">Recovers selected correlations; quality depends on memory budget</td>
+              </tr>
+              <tr>
+                <th scope="row" className="px-5 py-4 font-semibold text-amber-300">LM-MA</th>
+                <td className="px-5 py-4">A cascade of matrix-adaptation directions</td>
+                <td className="px-5 py-4 font-mono">O(mn)</td>
+                <td className="px-5 py-4 font-mono">O(mn)</td>
+                <td className="px-5 py-4">Large-scale implicit geometry with a distinct update rule</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p className="text-sm leading-relaxed text-slate-400">
+          The right comparison is empirical: equal objective-evaluation budgets, identical seeds
+          where the sampling contracts permit it, and explicit memory/time receipts. The explorer
+          therefore treats <strong className="text-slate-200">variant</strong> as visible optimizer
+          state—not a hidden automatic “performance” switch.
+        </p>
+
+        <p className="text-xs leading-relaxed text-slate-500">
+          Primary references: Hansen&apos;s{" "}
+          <a
+            className="text-sky-300 underline decoration-sky-400/40 underline-offset-4 hover:text-sky-200"
+            href="https://cma-es.github.io/cmaes_sourcecode_page.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            reference implementations and bibliography
+          </a>
+          , Loshchilov&apos;s{" "}
+          <a
+            className="text-violet-300 underline decoration-violet-400/40 underline-offset-4 hover:text-violet-200"
+            href="https://arxiv.org/abs/1404.5520"
+            target="_blank"
+            rel="noreferrer"
+          >
+            LM-CMA
+          </a>
+          , and Loshchilov, Glasmachers, and Beyer&apos;s{" "}
+          <a
+            className="text-amber-300 underline decoration-amber-400/40 underline-offset-4 hover:text-amber-200"
+            href="https://arxiv.org/abs/1705.06693"
+            target="_blank"
+            rel="noreferrer"
+          >
+            LM-MA-ES
+          </a>
+          .
+        </p>
       </div>
 
       {/* Practical Playbook Integration */}
