@@ -1,0 +1,55 @@
+{
+  "dim": 24,
+  "callsPerTrial": 100000,
+  "warmups": 8,
+  "trials": 60,
+  "exactChecks": [
+    {
+      "dim": 1,
+      "exact": true
+    },
+    {
+      "dim": 2,
+      "exact": true
+    },
+    {
+      "dim": 3,
+      "exact": true
+    },
+    {
+      "dim": 4,
+      "exact": true
+    },
+    {
+      "dim": 8,
+      "exact": true
+    },
+    {
+      "dim": 24,
+      "exact": true
+    },
+    {
+      "dim": 48,
+      "exact": true
+    }
+  ],
+  "before": {
+    "p50Ms": 18.83595800000012,
+    "p95Ms": 19.156165999999985,
+    "p99Ms": 20.663999999999987,
+    "callsPerSecond": 5299962.044586815
+  },
+  "after": {
+    "p50Ms": 6.42733300000009,
+    "p95Ms": 6.717458000000022,
+    "p99Ms": 8.191749999999956,
+    "callsPerSecond": 15388753.617754899
+  },
+  "changePercent": {
+    "p95": -64.93318130569537,
+    "throughput": 190.35592119895279
+  },
+  "checksumExact": true,
+  "beforeChecksum": 3415146.667498315,
+  "afterChecksum": 3415146.667498315
+}

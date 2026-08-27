@@ -1,0 +1,38 @@
+{
+  "checks": 6011,
+  "failures": 0,
+  "failureExamples": [],
+  "dimensions": [
+    1,
+    2,
+    3,
+    4,
+    8,
+    24,
+    48
+  ],
+  "directRandomTrialsPerDimension": 200,
+  "stepAudit": {
+    "dimensions": [
+      1,
+      2,
+      4,
+      8,
+      24
+    ],
+    "seeds": [
+      1,
+      1729,
+      4294967295
+    ],
+    "repairStrategies": [
+      "none",
+      "clip",
+      "reflect"
+    ],
+    "generations": 5
+  },
+  "validationMessagesChecked": true,
+  "signedZeroAndSubnormalChecked": true,
+  "ownershipChecked": "Every projection call returned a fresh tuple identity."
+}

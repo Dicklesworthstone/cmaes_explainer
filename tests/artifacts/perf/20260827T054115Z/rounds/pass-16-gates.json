@@ -1,0 +1,19 @@
+{
+  "pass": 16,
+  "decision": "rejected",
+  "sourceRestored": true,
+  "restoredEngineSha256": "c0a263476eb7b022d8327bf9afa7eae0498daefde604f43a0d490226b6015465",
+  "checks": {
+    "authoritativeGoldenChecksums": "pass",
+    "freshCandidateGoldenOutputs": "byte-identical in dimensions 1, 2, 4, 8, 12, 24, and 48",
+    "projectionProperties": "6011 pass, 0 fail",
+    "bunTestFocused": "16 pass, 0 fail, 157 assertions",
+    "bunTestFull": "16 pass, 0 fail, 157 assertions",
+    "bunTypecheck": "pass",
+    "bunLint": "pass with only the pre-existing baseline-browser-mapping age advisory",
+    "bunFormat": "not run because package.json has no format script",
+    "ubs": "exit 0; no critical findings; broad cross-language heuristic notices were not findings in the changed TypeScript projection",
+    "gitDiffCheck": "pass",
+    "productionSourceDiffAfterRestore": "empty"
+  }
+}

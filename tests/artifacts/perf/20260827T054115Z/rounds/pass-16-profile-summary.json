@@ -1,0 +1,82 @@
+{
+  "pass": 16,
+  "decision": "rejected",
+  "sourceChanged": false,
+  "restoredEngineSha256": "c0a263476eb7b022d8327bf9afa7eae0498daefde604f43a0d490226b6015465",
+  "freshProfile": {
+    "dimension": 24,
+    "generationsPerTrial": 250,
+    "trials": 150,
+    "warmups": 10,
+    "intervalMicroseconds": 500,
+    "durationSeconds": 9.14,
+    "samples": 11870,
+    "projection": {
+      "projectTo3DTotalMilliseconds": 75.6,
+      "projectTo3DTotalPercent": 0.8,
+      "projectTo3DLargestSelfMilliseconds": 27.3,
+      "projectTo3DLargestSelfPercent": 0.2,
+      "alignProjectionBasisLargestSelfMilliseconds": 42.4,
+      "alignProjectionBasisLargestSelfPercent": 0.4,
+      "topFiveHotspot": false
+    }
+  },
+  "opportunityMatrix": [
+    {
+      "lever": "Fuse the three independent projection-coordinate row traversals",
+      "impact": 1,
+      "confidence": 5,
+      "effort": 1,
+      "score": 5,
+      "eligible": false,
+      "reason": "The arithmetic kernel was only about 0.8% total and was not a top-five integrated hotspot; the skill checklist therefore fails even though the low-effort score is numerically above 2.0."
+    },
+    {
+      "lever": "Further projection-basis sign-alignment changes",
+      "impact": 1,
+      "confidence": 5,
+      "effort": 3,
+      "score": 1.6666666666666667,
+      "eligible": false,
+      "reason": "The remaining alignment work is about 0.4% self time, already limited to three columns, and exact sign continuity plus eigensystem ownership makes further changes non-trivial."
+    }
+  ],
+  "candidateExperiment": {
+    "description": "Fused X/Y/Z accumulation into one row traversal while preserving each coordinate's row order.",
+    "representative": {
+      "beforeP95Milliseconds": 58.114166999999725,
+      "afterP95Milliseconds": 57.98700000000008,
+      "p95ChangePercent": -0.21882271839093193,
+      "beforeEvaluationsPerSecond": 57963.75570907348,
+      "afterEvaluationsPerSecond": 58634.06989082091,
+      "throughputChangePercent": 1.1564367656088592,
+      "checksumExact": true,
+      "withinNoiseEnvelope": true
+    },
+    "focused": {
+      "beforeP95Milliseconds": 19.156165999999985,
+      "afterP95Milliseconds": 6.717458000000022,
+      "p95ChangePercent": -64.93318130569537,
+      "beforeCallsPerSecond": 5299962.044586815,
+      "afterCallsPerSecond": 15388753.617754899,
+      "throughputChangePercent": 190.35592119895279,
+      "checksumExact": true
+    },
+    "afterProfile": {
+      "durationSeconds": 8.99,
+      "samples": 11664,
+      "largestProjectTo3DSelfMilliseconds": 79.5,
+      "largestProjectTo3DSelfPercent": 0.8,
+      "attributionImproved": false
+    },
+    "reasonRejected": "The whole-workload movement was inside the 4.8% noise envelope, projection failed the top-five hotspot precondition, and the fresh after-profile did not independently confirm lower projection attribution."
+  },
+  "proof": {
+    "authoritativeGoldenDimensions": [1, 2, 4, 8, 12, 24, 48],
+    "authoritativeGoldensExact": true,
+    "projectionPropertyChecks": 6011,
+    "projectionPropertyFailures": 0,
+    "candidatePeakRssBytes": 74203136,
+    "peakRssBudgetBytes": 90166067
+  }
+}
