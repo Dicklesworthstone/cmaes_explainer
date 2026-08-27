@@ -605,17 +605,20 @@ export class CMAESOptimizerND {
     }
     const whitenedMeanShift = whitenWithEigensystem(currentEigen.eigenvalues, currentEigen.eigenvectors, meanShift);
     const pSigmaScale = Math.sqrt(this.cs * (2 - this.cs) * this.mueff);
-    this.pSigma = this.pSigma.map(
-      (value, dimension) => (1 - this.cs) * value + pSigmaScale * whitenedMeanShift[dimension]
-    );
-    const pSigmaNorm = vecNorm(this.pSigma);
+    let pSigmaSquaredNorm = 0;
+    for (let dimension = 0; dimension < this.dim; dimension++) {
+      const value = (1 - this.cs) * this.pSigma[dimension] + pSigmaScale * whitenedMeanShift[dimension];
+      this.pSigma[dimension] = value;
+      pSigmaSquaredNorm += value * value;
+    }
+    const pSigmaNorm = Math.sqrt(Math.max(0, pSigmaSquaredNorm));
     const pathNormalizer = Math.sqrt(1 - (1 - this.cs) ** (2 * (this.generation + 1)));
     const hSigma = pSigmaNorm / Math.max(Number.EPSILON, pathNormalizer) / this.chiN < 1.4 + 2 / (this.dim + 1) ? 1 : 0;
 
     const pCScale = Math.sqrt(this.cc * (2 - this.cc) * this.mueff);
-    this.pC = this.pC.map(
-      (value, dimension) => (1 - this.cc) * value + hSigma * pCScale * meanShift[dimension]
-    );
+    for (let dimension = 0; dimension < this.dim; dimension++) {
+      this.pC[dimension] = (1 - this.cc) * this.pC[dimension] + hSigma * pCScale * meanShift[dimension];
+    }
 
     const normalizedSteps = candidates.map((candidate) =>
       this.adaptationPoint(candidate).map((value, dimension) => (value - oldMean[dimension]) / oldSigma)

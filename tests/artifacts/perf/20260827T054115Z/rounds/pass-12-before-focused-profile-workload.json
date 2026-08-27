@@ -1,0 +1,7 @@
+{
+  "kernel": "higher-order-path-recurrences",
+  "dim": 24,
+  "calls": 30000000,
+  "elapsedMs": 2412.199791,
+  "checksum": 271135284.3679765
+}

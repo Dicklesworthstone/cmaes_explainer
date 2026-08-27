@@ -1,0 +1,1190 @@
+{
+  "allPassed": true,
+  "checksPassed": 270,
+  "checksFailed": 0,
+  "repairStrategies": [
+    "none",
+    "clip",
+    "reflect"
+  ],
+  "dimensions": [
+    1,
+    2,
+    24
+  ],
+  "stepsPerConfiguration": 3,
+  "covered": [
+    "adaptation-point selection and rank order",
+    "pSigma recurrence order",
+    "pSigma norm input",
+    "hSigma-dependent pC recurrence",
+    "sigma norm input",
+    "state path exactness",
+    "snapshot path ownership",
+    "history identity",
+    "prior snapshot stability"
+  ],
+  "checks": [
+    {
+      "name": "none-d1-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d1-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d1-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d1-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d1-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d2-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d2-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d2-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d2-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d24-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d24-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "none-d24-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "none-d24-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d1-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d1-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d1-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d1-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d2-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d2-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d2-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d2-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d24-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d24-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "clip-d24-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "clip-d24-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d1-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d1-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d1-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d1-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d2-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d2-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d2-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d2-step2-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d24-step0-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step0-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d24-step1-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step1-prior-snapshots-stable",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-adaptation-order",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-pSigma-recurrence",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-pSigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-pC-hSigma-recurrence",
+      "passed": true,
+      "details": {
+        "hSigma": 1
+      }
+    },
+    {
+      "name": "reflect-d24-step2-sigma-norm-input",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-state-pSigma-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-state-pC-exact",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-snapshot-paths-owned",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-history-identity",
+      "passed": true
+    },
+    {
+      "name": "reflect-d24-step2-prior-snapshots-stable",
+      "passed": true
+    }
+  ]
+}

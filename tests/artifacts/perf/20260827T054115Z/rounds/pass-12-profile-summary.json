@@ -1,0 +1,167 @@
+{
+  "beforeEngineSha256": "3f7087307f038ddb4f139c9269e88e38b6d2e291321f7f3390fd378a34d3efde",
+  "afterEngineSha256": "d6f169b0d6b8b053df1d827a8e38d5d4fe9baeba7d25e2fd5afe71e7dd95a44d",
+  "decision": "accept_indexed_in_place_evolution_paths",
+  "productionChangeRetained": true,
+  "opportunity": {
+    "region": "pSigma recurrence, pSigma norm, and hSigma-dependent pC recurrence",
+    "freshIntegratedNativeMapSelfMilliseconds": 193.1,
+    "freshIntegratedNativeMapSelfSharePercent": 2.0,
+    "freshIntegratedNativeMapTotalMilliseconds": 432.9,
+    "freshIntegratedNativeMapTotalSharePercent": 4.5,
+    "impact": 1,
+    "confidence": 5,
+    "effort": 1,
+    "score": 5,
+    "threshold": 2,
+    "eligible": true,
+    "rationale": "The fresh integrated profile samples native map, both path callback sites, vecDot, and vecNorm. The two path maps allocate replacement arrays even though every retained generation snapshot already clones both paths. Indexed in-place updates remove those two transient arrays and callbacks; accumulating the squared norm beside pSigma removes its otherwise separate indexed traversal."
+  },
+  "representativePair": {
+    "command": "bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=300 --warmup=10 --seed=1729",
+    "before": {
+      "p50Milliseconds": 56.63712499999929,
+      "p95Milliseconds": 58.669083,
+      "p99Milliseconds": 65.54845899999987,
+      "evaluationsPerSecond": 56992.1126458377,
+      "checksum": 24940.517463897122
+    },
+    "after": {
+      "p50Milliseconds": 58.281999999999925,
+      "p95Milliseconds": 60.965416999999434,
+      "p99Milliseconds": 64.46087500000067,
+      "evaluationsPerSecond": 55429.7125852494,
+      "checksum": 24940.517463897122
+    },
+    "afterVersusBeforePercent": {
+      "p50": 2.904234634086139,
+      "p95": 3.9140444721105205,
+      "p99": -1.6592060539504048,
+      "evaluationsPerSecond": -2.741432082536432
+    },
+    "p95MovementOutsideSameSeedEnvelope": false,
+    "sameSeedP95EnvelopePercent": 4.8,
+    "checksumsExact": true,
+    "interpretation": "The representative movement is unfavorable but remains inside the established noise envelope and is not used as acceptance evidence."
+  },
+  "matchedIntegratedProfiles": {
+    "intervalMicroseconds": 500,
+    "measuredTrials": 150,
+    "warmups": 10,
+    "before": {
+      "profileDurationSeconds": 9.47,
+      "samples": 14637,
+      "p50Milliseconds": 58.28020900000001,
+      "p95Milliseconds": 62.80458300000009,
+      "p99Milliseconds": 68.45558399999982,
+      "evaluationsPerSecond": 55132.71874101762,
+      "checksum": 12274.303979858667
+    },
+    "after": {
+      "profileDurationSeconds": 9.61,
+      "samples": 14836,
+      "p50Milliseconds": 59.009665999999925,
+      "p95Milliseconds": 65.49462500000027,
+      "p99Milliseconds": 67.87112499999967,
+      "evaluationsPerSecond": 54330.81313479939,
+      "checksum": 12274.303979858667
+    },
+    "afterVersusBeforePercent": {
+      "p50": 1.2516375842096088,
+      "p95": 4.283193791765439,
+      "p99": -0.8537784149210579,
+      "evaluationsPerSecond": -1.4545003847626812
+    },
+    "checksumsExact": true,
+    "interpretation": "The integrated profile movement is also inside the 4.8% envelope. Remaining native map samples belong to other unchanged map sites, so the matched focused profile supplies the independent regional evidence."
+  },
+  "focusedPair": {
+    "dimension": 24,
+    "callsPerTrial": 1000000,
+    "measuredTrials": 40,
+    "warmups": 5,
+    "before": {
+      "p50Milliseconds": 77.81083400000034,
+      "p95Milliseconds": 81.77562500000022,
+      "p99Milliseconds": 87.27370900000005,
+      "callsPerSecond": 12767753.932267277,
+      "checksum": 361511841.782259
+    },
+    "after": {
+      "p50Milliseconds": 27.870083000000022,
+      "p95Milliseconds": 28.169708000000014,
+      "p99Milliseconds": 28.232167000000004,
+      "callsPerSecond": 35838535.163811125,
+      "checksum": 361511841.782259
+    },
+    "afterVersusBeforePercent": {
+      "p50": -64.18225898979581,
+      "p95": -65.55243937297949,
+      "p99": -67.65100587165375,
+      "callsPerSecond": 180.6956913011792
+    },
+    "checksumsExact": true
+  },
+  "focusedProfiles": {
+    "intervalMicroseconds": 250,
+    "calls": 30000000,
+    "before": {
+      "elapsedMilliseconds": 2412.199791,
+      "profileDurationSeconds": 2.5,
+      "samples": 7493,
+      "nativeMapSelfMilliseconds": 2160,
+      "nativeMapSelfSharePercent": 86.3,
+      "checksum": 271135284.3679765
+    },
+    "after": {
+      "elapsedMilliseconds": 901.3884169999999,
+      "profileDurationSeconds": 0.9471,
+      "samples": 2853,
+      "nativeMapSelfMilliseconds": 0,
+      "nativeMapSelfSharePercent": 0,
+      "checksum": 271135284.3679765
+    },
+    "afterVersusBeforePercent": {
+      "elapsedMilliseconds": -62.63209953159307,
+      "callsPerSecond": 167.60936190286102
+    },
+    "nativePathMapsRemoved": true,
+    "checksumsExact": true
+  },
+  "matchedRss": {
+    "command": "/usr/bin/time -l bun tests/perf/cmaesEngine.bench.ts --dim=24 --generations=250 --trials=100 --warmup=5 --seed=1729",
+    "maximumResidentSetBytes": 86163456,
+    "campaignBudgetBytes": 90166067,
+    "withinBudget": true
+  },
+  "exactWork": {
+    "representativeGenerations": 75000,
+    "pathArraysRemoved": 150000,
+    "pathCallbacksRemoved": 150000,
+    "pathCallbackCoordinateVisitsRemoved": 3600000,
+    "standaloneNormCoordinateVisitsRemoved": 1800000,
+    "pSigmaArithmeticPreserved": true,
+    "pCArithmeticPreserved": true,
+    "normAccumulationOrderPreserved": true,
+    "hSigmaSemanticsPreserved": true,
+    "sigmaNormInputPreserved": true
+  },
+  "behaviorProperties": {
+    "allPassed": true,
+    "checksPassed": 270,
+    "repairStrategies": ["none", "clip", "reflect"],
+    "dimensions": [1, 2, 24],
+    "stepsPerConfiguration": 3,
+    "covered": [
+      "adaptation-point selection and rank order",
+      "pSigma recurrence order",
+      "pSigma norm input",
+      "hSigma-dependent pC recurrence",
+      "sigma norm input",
+      "state path exactness",
+      "snapshot path ownership",
+      "history identity",
+      "prior snapshot stability"
+    ]
+  }
+}
