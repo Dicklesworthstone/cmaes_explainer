@@ -23,6 +23,7 @@ export function Navbar() {
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const progressBarRef = useRef<HTMLDivElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const activeId = useScrollSpy(sections.map((s) => s.id));
 
   // The mobile dock scrolls horizontally with a hidden scrollbar, so keep
@@ -126,6 +127,17 @@ export function Navbar() {
     }
   }, [mobileMenuOpen, shortcutsModalOpen]);
 
+  // Dialog semantics (WCAG 2.4.3): move focus into the dialog on open and
+  // restore it to the trigger on close. Escape and ? keep working through
+  // the global keydown handler above; the close button gets initial focus.
+  useEffect(() => {
+    if (!shortcutsModalOpen) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeBtnRef.current?.focus();
+    return () => previouslyFocused?.focus();
+  }, [shortcutsModalOpen]);
+
   return (
     <>
       {/* Top Reading Progress Bar (GPU Accelerated) */}
@@ -221,14 +233,14 @@ export function Navbar() {
           <button
             aria-label="Keyboard Shortcuts"
             onClick={() => setShortcutsModalOpen(true)}
-            className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300"
           >
             <Keyboard className="h-4 w-4" />
           </button>
           <button
             aria-label="Open navigation menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -245,7 +257,7 @@ export function Navbar() {
             <a
               key={s.id}
               href={`#${s.id}`}
-              className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
+              className={`flex min-h-[44px] items-center px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
                 activeId === s.id
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-slate-200"
@@ -258,7 +270,7 @@ export function Navbar() {
           <button
             aria-label="Open full menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
           >
             <Menu className="h-4 w-4" />
           </button>
@@ -268,17 +280,19 @@ export function Navbar() {
       {/* --- Keyboard Shortcuts Modal Overlay --- */}
       <AnimatePresence>
         {shortcutsModalOpen && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Keyboard shortcuts"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          >
+            {/* Backdrop click dismisses; Escape/? are handled by the global
+                keydown handler (focus is moved into the dialog on open, so
+                the old backdrop onKeyDown could never fire anyway). */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              role="button"
-              tabIndex={0}
-              aria-label="Close modal"
-              onKeyDown={(e) => {
-                if (e.key === "Escape" || e.key === "Enter") setShortcutsModalOpen(false);
-              }}
               onClick={() => setShortcutsModalOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
@@ -298,13 +312,14 @@ export function Navbar() {
                     <p className="text-xs text-slate-400">Navigate the interactive explainer with speed</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setShortcutsModalOpen(false)}
-                  aria-label="Close keyboard shortcuts"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 hover:bg-white/10"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                  <button
+                    ref={closeBtnRef}
+                    onClick={() => setShortcutsModalOpen(false)}
+                    aria-label="Close keyboard shortcuts"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 hover:bg-white/10"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
               </div>
 
               <div className="space-y-2.5 text-xs">

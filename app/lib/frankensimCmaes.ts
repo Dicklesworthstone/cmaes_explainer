@@ -693,7 +693,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 }
 
 // ---------------------------------------------------------------------------
-// Owner CMA-family + G1 walking boundary (schema 2 / G1 schema 1).
+// Owner CMA-family + G1 walking boundary (schema 2 / G1 schema 2).
 //
 // This deliberately coexists with the audited 0.4.1 batch visualizer above.
 // That older surface provides exact low-dimensional TS/WASM trajectory parity;
@@ -710,8 +710,8 @@ const OWNER_CMA_KIND_TELL = 3;
 const OWNER_CMA_KIND_SNAPSHOT = 4;
 const OWNER_CMA_SNAPSHOT_WORDS = 31;
 
-const G1_MAGIC = 0x47315731;
-const G1_SCHEMA = 1;
+const G1_MAGIC = 0x47315732;
+const G1_SCHEMA = 2;
 const G1_KIND_CONFIG = 0;
 const G1_KIND_ADMISSION = 1;
 const G1_KIND_EVALUATION = 2;
@@ -722,7 +722,7 @@ const G1_LINK_COUNT = 16;
 const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 115;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.4";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.5";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -884,14 +884,14 @@ type OwnerWasmModule = WasmModule & {
 let ownerModule: OwnerWasmModule | null = null;
 let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
 
-/** Load and capability-probe the schema-2/G1 package exactly once per realm. */
+/** Load and capability-probe the schema-2 CMA/G1 package exactly once per realm. */
 export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   if (ownerLoadPromise) return ownerLoadPromise;
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm_bg.wasm"
+        "/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm_bg.wasm"
       )) as OwnerWasmModule;
       const version = typeof loaded.cmaes_viz_kernel_version === "function"
         ? loaded.cmaes_viz_kernel_version()
@@ -1281,11 +1281,11 @@ export interface G1WalkingConfig {
 }
 
 export const DEFAULT_G1_WALKING_CONFIG: G1WalkingConfig = {
-  stepSeconds: 1 / 120,
+  stepSeconds: 1 / 480,
   durationSeconds: 1.5,
   targetSpeed: 0.65,
   gaitFrequency: 1.55,
-  traceStride: 3,
+  traceStride: 12,
 };
 
 export interface G1Admission {
@@ -1306,8 +1306,27 @@ export interface G1ObjectiveReceipt {
   jointLimitIntegral: number;
   impactIntegral: number;
   completedSteps: number;
-  fell: boolean;
+  terminationReason: G1TerminationReason;
 }
+
+export type G1TerminationReason =
+  | "horizon"
+  | "base height"
+  | "base tilt"
+  | "contact indentation"
+  | "contact speed"
+  | "contact model"
+  | "joint position limit";
+
+const G1_TERMINATION_REASONS: readonly G1TerminationReason[] = [
+  "horizon",
+  "base height",
+  "base tilt",
+  "contact indentation",
+  "contact speed",
+  "contact model",
+  "joint position limit",
+];
 
 export interface G1LinkPose {
   position: [number, number, number];
@@ -1400,7 +1419,15 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
 
 function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
   if (packet.length < 15) throw new Error("malformed G1 packet: objective receipt");
-  const fellWord = exactPacketInteger(packet, 14, "fell", 0, 1);
+  const terminationId = exactPacketInteger(
+    packet,
+    14,
+    "termination reason",
+    0,
+    G1_TERMINATION_REASONS.length - 1
+  );
+  const terminationReason = G1_TERMINATION_REASONS[terminationId];
+  if (!terminationReason) throw new Error("malformed G1 packet: termination reason");
   const receipt = {
     objective: finitePacketNumber(packet, 5, "objective"),
     distanceMeters: finitePacketNumber(packet, 6, "distance"),
@@ -1411,7 +1438,7 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     jointLimitIntegral: finitePacketNumber(packet, 11, "joint limit"),
     impactIntegral: finitePacketNumber(packet, 12, "impact"),
     completedSteps: exactPacketInteger(packet, 13, "completed steps", 0, 10_000),
-    fell: fellWord === 1,
+    terminationReason,
   };
   if (
     receipt.speedErrorIntegral < 0 ||

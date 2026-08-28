@@ -404,6 +404,7 @@ function GaussianDistributionSandbox() {
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     let live = true;
+    let idleId: number;
     const fieldId =
       activeLandscapeKey === "rosenbrock"
         ? ("rosenbrock10" as const)
@@ -412,7 +413,7 @@ function GaussianDistributionSandbox() {
           : activeLandscapeKey === "rastrigin"
             ? ("rastrigin" as const)
             : ("ackley" as const);
-    buildHeatmapCanvas({
+    const spec = {
       field: fieldId,
       width: 1080,
       height: 760,
@@ -420,14 +421,38 @@ function GaussianDistributionSandbox() {
       xmax: 2.4,
       ymin: -2.4,
       ymax: 2.4,
-      norm: { mode: "tanh", k: activeLandscapeKey === "cigar" ? 25 : 8 },
+      norm: { mode: "tanh" as const, k: activeLandscapeKey === "cigar" ? 25 : 8 },
       ramp: { r0: 8, rk: 22, g0: 20, gk: 70, b0: 40, bk: 130 },
       fallbackField: landscape.fn
-    }).then((canvas) => {
-      if (live && canvas) bgCanvasRef.current = canvas;
-    });
+    };
+    // Drop the previous landscape's backdrop immediately: the render loop
+    // reads this ref every frame, so without this a switch would keep
+    // blitting the OLD heatmap beneath the new grid/markers until the
+    // deferred raster lands (up to the idle timeout).
+    bgCanvasRef.current = null;
+    // Kernel init + the first 1080x760 raster previously ran synchronously on
+    // the load path (~250-740ms of long tasks during first paint). Defer to
+    // browser idle time; the timeout bounds lateness, and landscape switches
+    // reschedule through the deps below.
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    const build = () => {
+      if (!live) return;
+      buildHeatmapCanvas(spec).then((canvas) => {
+        if (live && canvas) bgCanvasRef.current = canvas;
+      });
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(build, { timeout: 3000 });
+    } else {
+      idleId = window.setTimeout(build, 800);
+    }
     return () => {
       live = false;
+      if (typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
     };
   }, [activeLandscapeKey, landscape]);
 

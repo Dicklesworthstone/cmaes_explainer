@@ -5,6 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useInView } from "../hooks/useInView";
+import { useInView as useElementInView } from "../hooks/useScrollSpy";
 import { PerspectiveCamera, Float, Line, OrbitControls } from "@react-three/drei";
 import { Play, Pause, RotateCcw, FastForward, Sparkles, Sliders } from "lucide-react";
 
@@ -282,6 +283,10 @@ export function CovarianceScene() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [genIndex, setGenIndex] = useState(0);
   const [sceneRef, inView] = useInView<HTMLDivElement>();
+  // GL mount gate: free the hero scene's WebGL context when far offscreen
+  // (600px margin keeps it alive while approaching; see WingViz rationale).
+  const mountGateRef = useRef<HTMLDivElement | null>(null);
+  const shouldMount = useElementInView(mountGateRef, { rootMargin: "600px 0px 600px 0px" });
 
   const trajectory = useMemo(() => generateHeroTrajectory(landscape), [landscape]);
   const allVectorPoints = useMemo(() => trajectory.map((s) => new THREE.Vector3(...s.mean)), [trajectory]);
@@ -299,7 +304,8 @@ export function CovarianceScene() {
   return (
     <div ref={sceneRef} className="relative h-full w-full flex flex-col justify-between">
       {/* 3D Canvas */}
-      <div className="absolute inset-0">
+      <div ref={mountGateRef} className="absolute inset-0">
+        {shouldMount && (
         <Canvas
           events={safePointerEvents}
           dpr={[1, 2]}
@@ -336,6 +342,7 @@ export function CovarianceScene() {
             </group>
           </Float>
         </Canvas>
+        )}
       </div>
 
       {/* Top HUD: Diagnostics & Metric Gauges */}

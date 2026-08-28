@@ -594,6 +594,10 @@ function ParetoFrontierCanvas({
 export function TransformerViz() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
+  // GL mount gate: release the WebGL context entirely when far offscreen
+  // (600px margin supersedes the 250px frameloop margin; keeps only
+  // near-viewport scenes alive — see WingViz for the full rationale).
+  const shouldMountGL = useInView(containerRef, { rootMargin: "600px 0px 600px 0px" });
 
   // 5D Hyperparameter Vector z in [0, 1]^5: [Layers, Dim, Heads, Attn, Act]
   const [paramVector, setParamVector] = useState<number[]>([0.45, 0.48, 0.4, 0.5, 0.2]);
@@ -775,6 +779,7 @@ export function TransformerViz() {
                 ref={containerRef}
                 className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl"
               >
+                {shouldMountGL && (
                 <Canvas
                   dpr={[1, 2]}
                   events={safePointerEvents}
@@ -809,6 +814,7 @@ export function TransformerViz() {
                     />
                   </Float>
                 </Canvas>
+                )}
 
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-purple-300 backdrop-blur-md">
                   3D Transformer Stack
@@ -829,6 +835,7 @@ export function TransformerViz() {
               ref={containerRef}
               className="relative aspect-square sm:aspect-[16/11] lg:h-[460px] w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_60px_rgba(0,0,0,0.8)] group"
             >
+              {shouldMountGL && (
               <Canvas
                 dpr={[1, 2]}
                 events={safePointerEvents}
@@ -863,6 +870,7 @@ export function TransformerViz() {
                   />
                 </Float>
               </Canvas>
+              )}
 
               {/* Top-Right Orbit Badge */}
               <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-950/80 border border-white/10 backdrop-blur-md text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">

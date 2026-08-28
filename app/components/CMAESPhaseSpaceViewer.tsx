@@ -349,6 +349,9 @@ export function CMAESPhaseSpaceViewer({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(containerRef, { rootMargin: "250px 0px 250px 0px" });
+  // GL mount gate: free the WebGL context when far offscreen (see the 600px
+  // margin rationale in WingViz; keeps only near-viewport scenes alive).
+  const isMountGL = useInView(containerRef, { rootMargin: "600px 0px 600px 0px" });
 
   if (!latestState) {
     return (
@@ -383,6 +386,7 @@ export function CMAESPhaseSpaceViewer({
 
       {/* 3D Canvas */}
       <div className="relative aspect-[16/11] w-full">
+        {isMountGL && (
         <Canvas
           events={safePointerEvents}
           shadows
@@ -413,6 +417,7 @@ export function CMAESPhaseSpaceViewer({
             pSigma={phaseSpace3D.evolutionPathSigma3D}
           />
         </Canvas>
+        )}
 
         {/* Orbit hint badge */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.65rem] font-mono text-slate-300 pointer-events-none">

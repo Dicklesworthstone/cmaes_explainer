@@ -363,6 +363,12 @@ function decodeWingVector(v: number[]): WingParams {
 export function WingViz() {
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(canvasContainerRef, { rootMargin: "250px 0px 250px 0px" });
+  // GL mount gate: release the WebGL context entirely when far offscreen
+  // (600px margin supersedes the 250px frameloop margin). Nine simultaneous
+  // contexts triggered "WebGL: context lost" in WebKit; mount-gating keeps
+  // only near-viewport scenes alive. Layout is stable: the aspect-ratio
+  // container stays mounted, only the renderer swaps out.
+  const shouldMountGL = useInView(canvasContainerRef, { rootMargin: "600px 0px 600px 0px" });
 
   // 8 Physical Input Parameters
   const [params, setParams] = useState<WingParams>({
@@ -518,6 +524,7 @@ export function WingViz() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* 3D Physical Wing CFD Canvas */}
               <div ref={canvasContainerRef} className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]">
+                {shouldMountGL && (
                 <Canvas
                   events={safePointerEvents}
                   shadows
@@ -550,6 +557,7 @@ export function WingViz() {
                     <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
                   </group>
                 </Canvas>
+                )}
 
                 {/* Top Badge */}
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-cyan-300 backdrop-blur-md">
@@ -576,6 +584,7 @@ export function WingViz() {
             </div>
           ) : (
             <div ref={canvasContainerRef} className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]">
+              {shouldMountGL && (
               <Canvas
                 events={safePointerEvents}
                 shadows
@@ -608,6 +617,7 @@ export function WingViz() {
                   <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
                 </group>
               </Canvas>
+              )}
 
               {/* Orbit hint */}
               <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-slate-950/70 border border-white/10 backdrop-blur-md text-[0.62rem] sm:text-[0.68rem] font-mono text-slate-300 pointer-events-none shadow-lg">

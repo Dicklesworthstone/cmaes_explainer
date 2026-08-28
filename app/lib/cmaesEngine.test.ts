@@ -619,9 +619,9 @@ describe("schema-2 owner CMA packet adapter", () => {
 
 describe("G1 walking packet adapter", () => {
   const admission = new Float64Array([
-    0x47315731, 1, 0, 1, 14, 5_040, 16, 7, 115, 1 / 120, 1.5, 0.65, 1.55, 3,
+    0x47315732, 2, 0, 1, 14, 5_040, 16, 7, 115, 1 / 480, 1.5, 0.65, 1.55, 12,
   ]);
-  const objectiveWords = [12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 120, 0];
+  const objectiveWords = [12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 720, 0];
 
   test("admits only the exact owner policy and pose layout", () => {
     const decoded = decodeG1Admission(admission);
@@ -640,17 +640,17 @@ describe("G1 walking packet adapter", () => {
   });
 
   test("decodes decomposed objectives, population rows, and owner poses", () => {
-    const evaluation = new Float64Array([0x47315731, 1, 0, 2, 15, ...objectiveWords]);
+    const evaluation = new Float64Array([0x47315732, 2, 0, 2, 15, ...objectiveWords]);
     const decodedEvaluation = decodeG1Evaluation(evaluation);
     if (!("ok" in decodedEvaluation)) throw new Error("unexpected evaluation refusal");
     expect(decodedEvaluation.ok.distanceMeters).toBe(0.4);
-    expect(decodedEvaluation.ok.fell).toBe(false);
+    expect(decodedEvaluation.ok.terminationReason).toBe("horizon");
 
     const negativeIntegral = evaluation.slice();
     negativeIntegral[11] = -1;
     expect(() => decodeG1Evaluation(negativeIntegral)).toThrow("negative integral");
 
-    const population = decodeG1Population(new Float64Array([0x47315731, 1, 0, 4, 9, 3, 4, 3, 2]));
+    const population = decodeG1Population(new Float64Array([0x47315732, 2, 0, 4, 9, 3, 4, 3, 2]));
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
 
@@ -665,7 +665,7 @@ describe("G1 walking packet adapter", () => {
       sample[poseStart + 3] = 1;
     }
     const trace = decodeG1Trace(new Float64Array([
-      0x47315731, 1, 0, 3, 131, ...objectiveWords, 1, ...sample,
+      0x47315732, 2, 0, 3, 131, ...objectiveWords, 1, ...sample,
     ]));
     if (!("ok" in trace)) throw new Error("unexpected trace refusal");
     expect(trace.ok.samples).toHaveLength(1);
@@ -673,27 +673,40 @@ describe("G1 walking packet adapter", () => {
     expect(trace.ok.samples[0].linkPoses[15].position).toEqual([0.15, 0, 0.75]);
 
     const nonUnitQuaternion = new Float64Array([
-      0x47315731, 1, 0, 3, 131, ...objectiveWords, 1, ...sample,
+      0x47315732, 2, 0, 3, 131, ...objectiveWords, 1, ...sample,
     ]);
     nonUnitQuaternion[22] = 0.5;
     expect(() => decodeG1Trace(nonUnitQuaternion)).toThrow("link quaternion");
   });
 
+  test("decodes exact termination reasons and rejects unknown reason IDs", () => {
+    const baseTilt = new Float64Array([
+      0x47315732, 2, 0, 2, 15, ...objectiveWords.slice(0, -1), 2,
+    ]);
+    const decoded = decodeG1Evaluation(baseTilt);
+    if (!("ok" in decoded)) throw new Error("unexpected evaluation refusal");
+    expect(decoded.ok.terminationReason).toBe("base tilt");
+
+    const unknownReason = baseTilt.slice();
+    unknownReason[14] = 7;
+    expect(() => decodeG1Evaluation(unknownReason)).toThrow("termination reason");
+  });
+
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
     expect(() => decodeG1Trace(new Float64Array([
-      0x47315731, 1, 0, 3, 16, ...objectiveWords, 1,
+      0x47315732, 2, 0, 3, 16, ...objectiveWords, 1,
     ]))).toThrow("trace shape");
   });
 });
 
-test("the shipped schema-2 package executes every CMA family and the 5,040-D G1 owner", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm.js");
+test("the shipped schema-2 package executes every CMA family and improves the full G1 horizon", async () => {
+  const wasm = await import("../../public/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL("../../public/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.4");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.5");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
     const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
@@ -749,7 +762,7 @@ test("the shipped schema-2 package executes every CMA family and the 5,040-D G1 
   }
 
   const evaluator = new wasm.G1WalkingVizEvaluator(new Float64Array([
-    0x47315731, 1, 0, 9, 1 / 120, 1.5, 0.65, 1.55, 3,
+    0x47315732, 2, 0, 9, 1 / 480, 1.5, 0.65, 1.55, 12,
   ]));
   const admission = decodeG1Admission(evaluator.receipt());
   if (!("ok" in admission)) throw new Error(`G1 admission refusal ${admission.refusal.name}`);
@@ -766,11 +779,54 @@ test("the shipped schema-2 package executes every CMA family and the 5,040-D G1 
     throw new Error(`aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`);
   }
   if (!("ok" in trace)) throw new Error(`G1 trace refusal ${trace.refusal.name}`);
-  expect(evaluation.ok.completedSteps).toBeGreaterThanOrEqual(12);
+  expect(evaluation.ok.completedSteps).toBeGreaterThanOrEqual(360);
   expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(evaluation.ok.completedSteps);
   expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(evaluation.ok.objective);
   expect(trace.ok.samples.length).toBeGreaterThanOrEqual(5);
   const { samples: _samples, ...traceReceipt } = trace.ok;
   expect(traceReceipt).toEqual(evaluation.ok);
+
+  const population = 16;
+  const generations = 20;
+  const separableSession = new wasm.CmaesVizSession(buildCmaFamilyConfig({
+    family: "separable",
+    mean: zeroPolicy,
+    sigma: 0.01,
+    maxEvaluations: population * generations,
+    population,
+    seed: 0x4731_5040n,
+  }));
+  let bestPoint = zeroPolicy;
+  try {
+    for (let generation = 0; generation < generations; generation++) {
+      const ask = decodeCmaFamilyAsk(separableSession.ask());
+      if (!("ok" in ask)) throw new Error(`G1 convergence ask refusal ${ask.refusal.name}`);
+      const objectives = decodeG1Population(evaluator.evaluate_population(ask.ok.candidates));
+      if (!("ok" in objectives)) {
+        throw new Error(`G1 convergence population refusal ${objectives.refusal.name}`);
+      }
+      const tell = Float64Array.from([
+        OWNER_CMA_MAGIC,
+        2,
+        3,
+        6 + population,
+        ask.ok.generation,
+        population,
+        ...objectives.ok,
+      ]);
+      const snapshot = decodeCmaFamilySnapshot(separableSession.tell(tell), 4);
+      if (!("ok" in snapshot)) {
+        throw new Error(`G1 convergence tell refusal ${snapshot.refusal.name}`);
+      }
+      if (snapshot.ok.best) bestPoint = snapshot.ok.best.point.slice();
+    }
+  } finally {
+    separableSession.free();
+  }
+  const optimized = decodeG1Evaluation(evaluator.evaluate(bestPoint));
+  if (!("ok" in optimized)) throw new Error(`optimized G1 refusal ${optimized.refusal.name}`);
+  expect(optimized.ok.objective).toBeLessThan(evaluation.ok.objective);
+  expect(optimized.ok.completedSteps).toBe(720);
+  expect(optimized.ok.terminationReason).toBe("horizon");
   evaluator.free();
-});
+}, 30_000);

@@ -45,7 +45,12 @@ export function useInView(
   ref: React.RefObject<HTMLElement | null>,
   options: { rootMargin?: string; threshold?: number | number[]; once?: boolean } = {}
 ): boolean {
-  const [isInView, setIsInView] = useState(() => typeof window === "undefined" || !("IntersectionObserver" in window));
+  // Initial false on BOTH server and client: callers that conditionally
+  // mount/unmount subtrees on this flag must match the prerendered HTML —
+  // a server-true/client-false split causes React #418 hydration mismatches.
+  // The observer flips it right after mount, so in-view frameloop gates are
+  // unaffected in practice.
+  const [isInView, setIsInView] = useState(false);
   const { rootMargin = "200px 0px 200px 0px", threshold = 0, once = false } = options;
 
   useEffect(() => {

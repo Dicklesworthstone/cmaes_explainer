@@ -69,33 +69,31 @@ async function optimize(
   family: Exclude<CmaFamily, "full">,
   requestedGenerations: number
 ): Promise<void> {
-  const generations = Math.max(1, Math.min(12, Math.trunc(requestedGenerations)));
-  const population = 8;
+  const generations = Math.max(8, Math.min(40, Math.trunc(requestedGenerations)));
+  const population = 16;
   const policyDimension = 5_040;
   post({
     type: "status",
     phase: "optimizing",
-    detail: `${family} is evaluating ${population} real articulated-body rollouts per generation…`,
+    detail: `${family} is evaluating ${population} full 1.5 s articulated-body rollouts per generation…`,
   });
 
-  // A short, fixed-step rollout keeps the interactive search responsive. The
-  // winning policy is then replayed against the full 1.5 s owner experiment.
-  const searchEvaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator({
-      ...DEFAULT_G1_WALKING_CONFIG,
-      durationSeconds: 0.25,
-      traceStride: 12,
-    }),
-    "G1 search admission"
+  // Training and replay deliberately share one admitted evaluator. Optimizing
+  // a short proxy and replaying a longer experiment rewards a different
+  // behavior than the one the user sees.
+  const evaluator = requireOk(
+    await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
+    "G1 admission"
   );
   let bestPolicy = new Float64Array(policyDimension);
+  let bestObjective = requireOk(evaluator.evaluate(bestPolicy), "G1 baseline evaluation").objective;
   let completedGeneration = 0;
   try {
     const session = requireOk(
       await createFrankenSimCmaFamilySession({
         family,
         mean: new Float64Array(policyDimension),
-        sigma: 0.03,
+        sigma: 0.01,
         population,
         memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
         maxEvaluations: population * generations,
@@ -107,38 +105,36 @@ async function optimize(
       for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
         const ask = requireOk(session.ask(), "CMA ask");
         const objectives = requireOk(
-          searchEvaluator.evaluatePopulation(ask.candidates),
+          evaluator.evaluatePopulation(ask.candidates),
           "G1 population evaluation"
         );
         const snapshot = requireOk(session.tell(ask.generation, objectives), "CMA tell");
         completedGeneration = snapshot.generation;
-        if (snapshot.best) bestPolicy = snapshot.best.point.slice();
+        if (snapshot.best && snapshot.best.objective < bestObjective) {
+          bestObjective = snapshot.best.objective;
+          bestPolicy = snapshot.best.point.slice();
+        }
         post({
           type: "progress",
           family,
           generation: snapshot.generation,
           maxGenerations: snapshot.maxGenerations,
-          bestObjective: snapshot.best?.objective ?? Infinity,
+          bestObjective,
           sigma: snapshot.sigma,
         });
       }
     } finally {
       session.free();
     }
-  } finally {
-    searchEvaluator.free();
-  }
-
-  post({ type: "status", phase: "replaying", detail: "Replaying the best policy for the full 1.5 s experiment…" });
-  const replayEvaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
-    "G1 replay admission"
-  );
-  try {
-    const trace = requireOk(replayEvaluator.trace(bestPolicy), "optimized trace");
+    post({
+      type: "status",
+      phase: "replaying",
+      detail: "Rendering the best policy on the identical full-horizon experiment…",
+    });
+    const trace = requireOk(evaluator.trace(bestPolicy), "optimized trace");
     post({ type: "trace", trace, generation: completedGeneration, family });
   } finally {
-    replayEvaluator.free();
+    evaluator.free();
   }
 }
 

@@ -136,7 +136,12 @@
 /* --- Controls & Inputs --- */
 
 input[type="range"] {
-  @apply appearance-none bg-transparent cursor-pointer w-full h-11 touch-none min-h-[44px];
+  @apply appearance-none bg-transparent cursor-pointer w-full h-11 min-h-[44px];
+  /* pan-y keeps vertical page scrolling native when a swipe starts on a
+     slider; horizontal drags still adjust the thumb (matches the canvas
+     touch-action decision below). touch-action:none created 44px-tall
+     full-width bands where mobile page scroll died. */
+  touch-action: pan-y;
 }
 input[type="range"]:focus {
   @apply outline-none;
@@ -324,3 +329,15 @@ mjx-container[display="true"] {
   box-shadow: 0 0 12px rgba(20, 184, 166, 0.35);
 }
 
+
+/* Reduced motion: decorative CSS loops (status-dot pulse/ping, sparkles)
+   must respect prefers-reduced-motion. These are indicators, not feedback —
+   the static dot/sparkle remains fully readable with the animation off. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping,
+  .animate-spin,
+  .animate-bounce {
+    animation: none;
+  }
+}

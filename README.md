@@ -28,8 +28,9 @@ Open <http://localhost:3000>.
   ask/tell packet contract.
 - A live equal-budget family comparison with representation-honest storage and
   workspace receipts.
-- A 5,040-D walking search using separable CMA-ES, LM-CMA, or LM-MA, followed by
-  a full-horizon owner replay in Three.js.
+- A 5,040-D walking search using separable CMA-ES, LM-CMA, or LM-MA. Every
+  candidate and the rendered winner use the identical 1.5-second, 720-step
+  owner experiment.
 - The low-dimensional visual lab, whose Rust kernel is admitted only after
   complete-trajectory parity with the TypeScript reference across the tested
   landscape and option matrix.
@@ -49,7 +50,7 @@ Two audited surfaces coexist intentionally:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
   the existing low-dimensional visualizations.
-- `public/wasm/fs-cmaes/v054/` is the owner-family ask/tell and G1 walking
+- `public/wasm/fs-cmaes/v055/` is the owner-family ask/tell and G1 walking
   package used by the flagship and its worker.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed

@@ -19,3 +19,6 @@ tsconfig.tsbuildinfo
 # Local browser-smoke evidence is retained between runs but not committed.
 tmp/ui-smoke/
 .env*
+
+# bv (beads viewer) local config and caches
+.bv/

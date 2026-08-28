@@ -3,10 +3,16 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
+import { useInView } from "../hooks/useScrollSpy";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import type { CmaFamily, G1TraceReceipt, G1TraceSample } from "../lib/frankensimCmaes";
+import {
+  DEFAULT_G1_WALKING_CONFIG,
+  type CmaFamily,
+  type G1TraceReceipt,
+  type G1TraceSample,
+} from "../lib/frankensimCmaes";
 
 type ScalableFamily = Exclude<CmaFamily, "full">;
 
@@ -54,6 +60,10 @@ const LINK_NAMES = [
 ] as const;
 
 const LINK_PARENTS = [-1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14] as const;
+const G1_HORIZON_STEPS = Math.round(
+  DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds
+);
+const G1_POPULATION = 16;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
   full: {
@@ -354,11 +364,17 @@ function number(value: number, digits = 3): string {
 
 export function G1WalkingFlagship() {
   const reduceMotion = useReducedMotion() ?? false;
+  // GL mount gate: the flagship stage allocates the heaviest context on the
+  // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
+  // keeps it warm while approaching (see WingViz rationale).
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
   const workerRef = useRef<Worker | null>(null);
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
+  const [baselineTrace, setBaselineTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [family, setFamily] = useState<ScalableFamily>("lm-ma");
-  const [generations, setGenerations] = useState(5);
+  const [generations, setGenerations] = useState(20);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [status, setStatus] = useState("Loading the owner-composed G1 experiment…");
   const [error, setError] = useState<string | null>(null);
@@ -401,6 +417,7 @@ export function G1WalkingFlagship() {
         );
       } else if (message.type === "trace") {
         setTrace(message.trace);
+        if (message.family === "baseline") setBaselineTrace(message.trace);
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
@@ -445,13 +462,20 @@ export function G1WalkingFlagship() {
   const receiptCards = trace
     ? [
         ["objective ↓", number(trace.objective, 2)],
+        [
+          "vs baseline",
+          activeTrace === "baseline" || !baselineTrace
+            ? "reference"
+            : `${number(Math.abs(baselineTrace.objective - trace.objective), 0)} ${
+                baselineTrace.objective >= trace.objective ? "lower" : "higher"
+              }`,
+        ],
         ["distance", `${number(trace.distanceMeters, 2)} m`],
         ["work", `${number(trace.actuatorWorkJoules, 2)} J`],
         ["speed error ∫", number(trace.speedErrorIntegral)],
         ["slip ∫", number(trace.slipIntegral)],
-        ["joint-limit ∫", number(trace.jointLimitIntegral)],
-        ["steps integrated", trace.completedSteps.toLocaleString()],
-        ["fell", trace.fell ? "yes" : "no"],
+        ["steps integrated", `${trace.completedSteps.toLocaleString()} / ${G1_HORIZON_STEPS}`],
+        ["termination", trace.terminationReason],
       ]
     : [];
 
@@ -461,7 +485,7 @@ export function G1WalkingFlagship() {
         <div className="glass-card min-h-[540px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
           <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-none">
             <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
-              owner poses · 120 Hz physics
+              owner poses · 480 Hz physics
             </span>
             <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
               {activeTrace === "baseline" ? "zero-policy baseline" : FAMILY_COPY[activeTrace].title}
@@ -475,8 +499,8 @@ export function G1WalkingFlagship() {
               Translucent upper-body shell: display-only, omitted from dynamics
             </span>
           </div>
-          <div className="h-[540px] w-full">
-            <RobotStage trace={trace} reduceMotion={reduceMotion} />
+          <div ref={stageRef} className="h-[540px] w-full">
+            {shouldMountStage && <RobotStage trace={trace} reduceMotion={reduceMotion} />}
           </div>
         </div>
 
@@ -494,6 +518,12 @@ export function G1WalkingFlagship() {
           <p className="mt-5 text-sm leading-6 text-slate-400">
             Fifteen actuators each read 42 physical signals through eight gait-phase basis terms:
             <span className="mt-2 block font-mono text-cyan-200">15 × 42 × 8 = 5,040 learned weights</span>
+          </p>
+
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            Every candidate is now scored on the same 1.5-second, 720-step experiment you watch.
+            The optimizer first learns to finish the horizon; only then can the bounded motion score
+            decide among policies that stay upright equally long.
           </p>
 
           <label className="mt-6 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-family">
@@ -515,20 +545,26 @@ export function G1WalkingFlagship() {
           </p>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="g1-generations">Interactive generations</label>
-            <span className="font-mono text-cyan-200">{generations} × 8 = {generations * 8} rollouts</span>
+            <label htmlFor="g1-generations">Full-horizon search budget</label>
+            <span className="font-mono text-cyan-200">
+              {generations} × {G1_POPULATION} = {generations * G1_POPULATION} candidates
+            </span>
           </div>
           <input
             id="g1-generations"
             type="range"
-            min={2}
-            max={8}
-            step={1}
+            min={8}
+            max={40}
+            step={4}
             value={generations}
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
-            aria-valuetext={`${generations} generations, ${generations * 8} rollouts`}
+            aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
           />
+          <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
+            The seeded 320-candidate default reached all 720 steps in measured separable and LM-MA
+            runs. Smaller budgets are useful for watching partial progress; outcomes remain family-specific.
+          </p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
@@ -652,9 +688,11 @@ export function G1WalkingFlagship() {
             <h3 className="font-bold text-white">What is physically real here?</h3>
           </div>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
-            <li><strong className="text-slate-200">Owner-composed:</strong> free-floating multibody dynamics, SE(3) poses, fixed integration time, normal contact, friction, policy map, and objective.</li>
+            <li><strong className="text-slate-200">Owner-composed:</strong> free-floating multibody dynamics, SE(3) poses, fixed 1/480 s integration, normal contact, friction, policy map, and objective.</li>
             <li><strong className="text-slate-200">Rendered verbatim:</strong> every opaque limb segment connects world-frame link positions emitted by Frankensim; contact rings use its booleans.</li>
-            <li><strong className="text-slate-200">Survival first:</strong> each skipped 120 Hz step—and the fall itself—costs 1,000 while all secondary shaping is bounded to ±400. One more survived step therefore beats every possible shaping difference.</li>
+            <li><strong className="text-slate-200">Real support polygon:</strong> four declared compliant patches under each source foot accumulate both forces and moments. Static Hertz preload supports the model from step one instead of beginning with a fictitious drop.</li>
+            <li><strong className="text-slate-200">Survival first:</strong> each skipped 480 Hz step—and a terminal guard—costs 1,000 while all secondary shaping is bounded to ±400. One more survived step therefore beats every possible shaping difference.</li>
+            <li><strong className="text-slate-200">Exact endings:</strong> the receipt distinguishes horizon completion, height, tilt, contact, and joint-limit guards; “fell” is not inferred in the browser.</li>
             <li><strong className="text-slate-200">Deliberately reduced:</strong> 15 actuated lower-body/waist DoFs. Arms, hands, and the translucent upper shell are not simulated.</li>
             <li><strong className="text-slate-200">No hardware claim:</strong> this is a deterministic explainer experiment, not a validated Unitree controller or sim-to-real result.</li>
           </ul>
