@@ -722,7 +722,23 @@ const G1_LINK_COUNT = 16;
 const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 115;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.4";
+const ARM_MAGIC = 0x41524d31;
+const ARM_SCHEMA = 1;
+const ARM_KIND_CONFIG = 0;
+const ARM_KIND_ADMISSION = 1;
+const ARM_KIND_EVALUATION = 2;
+const ARM_KIND_TRACE = 3;
+const ARM_KIND_POPULATION = 4;
+const ARM_POLICY_DIMENSION = 128;
+const ARM_JOINT_COUNT = 7;
+const ARM_POLICY_KNOTS = 16;
+const ARM_LINK_COUNT = 8;
+const ARM_POSE_WORDS = 7;
+const ARM_TRACE_SAMPLE_WORDS = 67;
+const ARM_ADMISSION_WORDS = 37;
+const ARM_RECEIPT_WORDS = 19;
+
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.5";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -775,6 +791,23 @@ const G1_REFUSAL_NAMES = [
   "friction-owner",
   "time-owner",
   "geometry-owner",
+  "unexpected-contact-receipt",
+  "non-finite-objective",
+  "population-invalid",
+  "shape-overflow",
+] as const;
+
+const ARM_REFUSAL_NAMES = [
+  "unknown",
+  "malformed-packet",
+  "schema-mismatch",
+  "invalid-config",
+  "parameter-count",
+  "non-finite-parameter",
+  "robot-owner",
+  "geometry-owner",
+  "contact-owner",
+  "friction-owner",
   "unexpected-contact-receipt",
   "non-finite-objective",
   "population-invalid",
@@ -878,22 +911,34 @@ type RawG1Evaluator = {
   free?: () => void;
 };
 
+type RawManipulationEvaluator = {
+  receipt: () => Float64Array;
+  curriculum_policy_mean: () => Float64Array;
+  evaluate: (policy: Float64Array) => Float64Array;
+  evaluate_population: (policies: Float64Array) => Float64Array;
+  trace: (policy: Float64Array) => Float64Array;
+  free?: () => void;
+};
+
 type OwnerWasmModule = WasmModule & {
   CmaesVizSession?: new (config: Float64Array) => RawCmaSession;
   G1WalkingVizEvaluator?: new (config: Float64Array) => RawG1Evaluator;
+  HouseholdManipulationVizEvaluator?: new (
+    config: Float64Array
+  ) => RawManipulationEvaluator;
 };
 
 let ownerModule: OwnerWasmModule | null = null;
 let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
 
-/** Load and capability-probe the CMA-schema-2 / G1-schema-5 package once per realm. */
+/** Load and probe the CMA-2 / G1-5 / household-arm-1 owner package once per realm. */
 export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   if (ownerLoadPromise) return ownerLoadPromise;
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm_bg.wasm"
+        "/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm_bg.wasm"
       )) as OwnerWasmModule;
       const version = typeof loaded.cmaes_viz_kernel_version === "function"
         ? loaded.cmaes_viz_kernel_version()
@@ -907,12 +952,13 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
       }
       if (
         typeof loaded.CmaesVizSession !== "function" ||
-        typeof loaded.G1WalkingVizEvaluator !== "function"
+        typeof loaded.G1WalkingVizEvaluator !== "function" ||
+        typeof loaded.HouseholdManipulationVizEvaluator !== "function"
       ) {
         return {
           source: "unavailable",
           kernelVersion: version,
-          error: "owner package is missing the CMA session or G1 evaluator export",
+          error: "owner package is missing a CMA, G1, or household-arm export",
         };
       }
       ownerModule = loaded;
@@ -1623,4 +1669,401 @@ export async function createFrankenSimG1WalkingEvaluator(
     return decoded;
   }
   return { ok: new FrankenSimG1WalkingEvaluator(raw, decoded.ok) };
+}
+
+export type HouseholdManipulationTask =
+  | "kitchen-mug"
+  | "living-room-remote"
+  | "backyard-trowel";
+
+export interface HouseholdManipulationConfig {
+  task: HouseholdManipulationTask;
+  stepSeconds: number;
+  durationSeconds: number;
+  traceStride: number;
+}
+
+const ARM_TASK_IDS: Record<HouseholdManipulationTask, number> = {
+  "kitchen-mug": 0,
+  "living-room-remote": 1,
+  "backyard-trowel": 2,
+};
+
+const ARM_TASK_NAMES = [
+  "kitchen-mug",
+  "living-room-remote",
+  "backyard-trowel",
+] as const satisfies readonly HouseholdManipulationTask[];
+
+export const DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG: HouseholdManipulationConfig = {
+  task: "kitchen-mug",
+  stepSeconds: 1 / 90,
+  durationSeconds: 4,
+  traceStride: 3,
+};
+
+export interface HouseholdManipulationScene {
+  objectMassKilograms: number;
+  objectDimensionsMeters: [number, number, number];
+  graspHalfWidthMeters: number;
+  initialObjectPositionMeters: [number, number, number];
+  goalObjectPositionMeters: [number, number, number];
+  supportHeightMeters: number;
+  obstacleCenterMeters: [number, number, number];
+  obstacleHalfExtentsMeters: [number, number, number];
+}
+
+export interface HouseholdManipulationAdmission {
+  policyDimension: 128;
+  jointCount: 7;
+  policyKnots: 16;
+  linkCount: 8;
+  poseWords: 7;
+  traceSampleWords: 67;
+  minimumGripperWidthMeters: number;
+  openGripperWidthMeters: number;
+  placementToleranceMeters: number;
+  liftTargetMeters: number;
+  config: HouseholdManipulationConfig;
+  scene: HouseholdManipulationScene;
+}
+
+export interface HouseholdManipulationObjectiveReceipt {
+  objective: number;
+  finalObjectErrorMeters: number;
+  minimumReachErrorMeters: number;
+  maximumLiftMeters: number;
+  actuatorWorkJoules: number;
+  obstacleIntegral: number;
+  controlLimitIntegral: number;
+  firstGraspTimeSeconds: number;
+  graspDurationSeconds: number;
+  peakGripForceNewtons: number;
+  everGrasped: boolean;
+  releasedAfterTransport: boolean;
+  placed: boolean;
+  completedSteps: number;
+}
+
+export interface HouseholdRobotPose {
+  position: [number, number, number];
+  /** World-from-body quaternion in owner order w,x,y,z. */
+  quaternionWxyz: [number, number, number, number];
+}
+
+export interface HouseholdManipulationTraceSample {
+  timeSeconds: number;
+  gripperWidthMeters: number;
+  gripNormalForceNewtons: number;
+  grasped: boolean;
+  objectPose: HouseholdRobotPose;
+  /** Source catalog order: iiwa_link_0 through iiwa_link_7. */
+  linkPoses: HouseholdRobotPose[];
+}
+
+export interface HouseholdManipulationTraceReceipt
+  extends HouseholdManipulationObjectiveReceipt {
+  samples: HouseholdManipulationTraceSample[];
+}
+
+export function buildHouseholdManipulationConfig(
+  config: HouseholdManipulationConfig
+): Float64Array {
+  return new Float64Array([
+    ARM_MAGIC,
+    ARM_SCHEMA,
+    ARM_KIND_CONFIG,
+    8,
+    config.stepSeconds,
+    config.durationSeconds,
+    config.traceStride,
+    ARM_TASK_IDS[config.task],
+  ]);
+}
+
+function decodeArmHeader(
+  packet: Float64Array,
+  expectedKind: number
+): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
+  return decodeCommonOutput(packet, ARM_MAGIC, ARM_SCHEMA, expectedKind, ARM_REFUSAL_NAMES);
+}
+
+function packetVector3(
+  packet: Float64Array,
+  start: number,
+  label: string
+): [number, number, number] {
+  const values = finitePacketView(packet, start, 3, label);
+  return [values[0], values[1], values[2]];
+}
+
+function decodeHouseholdPose(
+  packet: Float64Array,
+  start: number,
+  label: string
+): HouseholdRobotPose {
+  const pose = finitePacketView(packet, start, ARM_POSE_WORDS, label);
+  const quaternionNorm = Math.hypot(pose[3], pose[4], pose[5], pose[6]);
+  if (Math.abs(quaternionNorm - 1) > 1e-6) {
+    throw new Error(`malformed household-arm packet: ${label} quaternion`);
+  }
+  return {
+    position: [pose[0], pose[1], pose[2]],
+    quaternionWxyz: [pose[3], pose[4], pose[5], pose[6]],
+  };
+}
+
+export function decodeHouseholdManipulationAdmission(
+  packet: Float64Array
+): PackedResult<HouseholdManipulationAdmission> {
+  const header = decodeArmHeader(packet, ARM_KIND_ADMISSION);
+  if ("refusal" in header) return header;
+  if (packet.length !== ARM_ADMISSION_WORDS) {
+    throw new Error("malformed household-arm packet: admission length");
+  }
+  const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
+  const jointCount = exactPacketInteger(packet, 6, "joint count");
+  const policyKnots = exactPacketInteger(packet, 7, "policy knots");
+  const linkCount = exactPacketInteger(packet, 8, "link count");
+  const poseWords = exactPacketInteger(packet, 9, "pose words");
+  const traceSampleWords = exactPacketInteger(packet, 10, "trace sample words");
+  if (
+    policyDimension !== ARM_POLICY_DIMENSION ||
+    jointCount !== ARM_JOINT_COUNT ||
+    policyKnots !== ARM_POLICY_KNOTS ||
+    linkCount !== ARM_LINK_COUNT ||
+    poseWords !== ARM_POSE_WORDS ||
+    traceSampleWords !== ARM_TRACE_SAMPLE_WORDS
+  ) {
+    throw new Error("malformed household-arm packet: owner layout mismatch");
+  }
+  const stepSeconds = finitePacketNumber(packet, 11, "step seconds");
+  const durationSeconds = finitePacketNumber(packet, 12, "duration seconds");
+  const traceStride = exactPacketInteger(packet, 13, "trace stride", 1, 1_000);
+  const taskId = exactPacketInteger(packet, 14, "task", 0, ARM_TASK_NAMES.length - 1);
+  const task = ARM_TASK_NAMES[taskId];
+  if (!task) throw new Error("malformed household-arm packet: task");
+  const minimumGripperWidthMeters = finitePacketNumber(packet, 15, "minimum gripper width");
+  const openGripperWidthMeters = finitePacketNumber(packet, 16, "open gripper width");
+  const placementToleranceMeters = finitePacketNumber(packet, 17, "placement tolerance");
+  const liftTargetMeters = finitePacketNumber(packet, 18, "lift target");
+  const objectMassKilograms = finitePacketNumber(packet, 19, "object mass");
+  const objectDimensionsMeters = packetVector3(packet, 20, "object dimensions");
+  const graspHalfWidthMeters = finitePacketNumber(packet, 23, "grasp half width");
+  const initialObjectPositionMeters = packetVector3(packet, 24, "initial object position");
+  const goalObjectPositionMeters = packetVector3(packet, 27, "goal object position");
+  const supportHeightMeters = finitePacketNumber(packet, 30, "support height");
+  const obstacleCenterMeters = packetVector3(packet, 31, "obstacle center");
+  const obstacleHalfExtentsMeters = packetVector3(packet, 34, "obstacle half extents");
+  if (
+    stepSeconds < 1 / 240 ||
+    stepSeconds > 1 / 45 ||
+    durationSeconds < 3 ||
+    durationSeconds > 6 ||
+    Math.round(durationSeconds / stepSeconds) > 1_440 ||
+    minimumGripperWidthMeters <= 0 ||
+    openGripperWidthMeters <= minimumGripperWidthMeters ||
+    placementToleranceMeters <= 0 ||
+    liftTargetMeters <= 0 ||
+    objectMassKilograms <= 0 ||
+    objectDimensionsMeters.some((value) => value <= 0) ||
+    graspHalfWidthMeters <= 0 ||
+    supportHeightMeters <= 0 ||
+    obstacleHalfExtentsMeters.some((value) => value <= 0)
+  ) {
+    throw new Error("malformed household-arm packet: admitted controls or scene");
+  }
+  return {
+    ok: {
+      policyDimension: ARM_POLICY_DIMENSION,
+      jointCount: ARM_JOINT_COUNT,
+      policyKnots: ARM_POLICY_KNOTS,
+      linkCount: ARM_LINK_COUNT,
+      poseWords: ARM_POSE_WORDS,
+      traceSampleWords: ARM_TRACE_SAMPLE_WORDS,
+      minimumGripperWidthMeters,
+      openGripperWidthMeters,
+      placementToleranceMeters,
+      liftTargetMeters,
+      config: { task, stepSeconds, durationSeconds, traceStride },
+      scene: {
+        objectMassKilograms,
+        objectDimensionsMeters,
+        graspHalfWidthMeters,
+        initialObjectPositionMeters,
+        goalObjectPositionMeters,
+        supportHeightMeters,
+        obstacleCenterMeters,
+        obstacleHalfExtentsMeters,
+      },
+    },
+  };
+}
+
+function decodeHouseholdReceiptPayload(
+  packet: Float64Array
+): HouseholdManipulationObjectiveReceipt {
+  if (packet.length < ARM_RECEIPT_WORDS) {
+    throw new Error("malformed household-arm packet: objective receipt");
+  }
+  const receipt: HouseholdManipulationObjectiveReceipt = {
+    objective: finitePacketNumber(packet, 5, "objective"),
+    finalObjectErrorMeters: finitePacketNumber(packet, 6, "final object error"),
+    minimumReachErrorMeters: finitePacketNumber(packet, 7, "minimum reach error"),
+    maximumLiftMeters: finitePacketNumber(packet, 8, "maximum lift"),
+    actuatorWorkJoules: finitePacketNumber(packet, 9, "actuator work"),
+    obstacleIntegral: finitePacketNumber(packet, 10, "obstacle integral"),
+    controlLimitIntegral: finitePacketNumber(packet, 11, "control limit integral"),
+    firstGraspTimeSeconds: finitePacketNumber(packet, 12, "first grasp time"),
+    graspDurationSeconds: finitePacketNumber(packet, 13, "grasp duration"),
+    peakGripForceNewtons: finitePacketNumber(packet, 14, "peak grip force"),
+    everGrasped: exactPacketInteger(packet, 15, "ever grasped", 0, 1) === 1,
+    releasedAfterTransport: exactPacketInteger(packet, 16, "released", 0, 1) === 1,
+    placed: exactPacketInteger(packet, 17, "placed", 0, 1) === 1,
+    completedSteps: exactPacketInteger(packet, 18, "completed steps", 1, 1_440),
+  };
+  if (
+    receipt.finalObjectErrorMeters < 0 ||
+    receipt.minimumReachErrorMeters < 0 ||
+    receipt.maximumLiftMeters < 0 ||
+    receipt.actuatorWorkJoules < 0 ||
+    receipt.obstacleIntegral < 0 ||
+    receipt.controlLimitIntegral < 0 ||
+    receipt.firstGraspTimeSeconds < 0 ||
+    receipt.graspDurationSeconds < 0 ||
+    receipt.peakGripForceNewtons < 0 ||
+    (receipt.placed && (!receipt.everGrasped || !receipt.releasedAfterTransport))
+  ) {
+    throw new Error("malformed household-arm packet: objective invariants");
+  }
+  return receipt;
+}
+
+export function decodeHouseholdManipulationEvaluation(
+  packet: Float64Array
+): PackedResult<HouseholdManipulationObjectiveReceipt> {
+  const header = decodeArmHeader(packet, ARM_KIND_EVALUATION);
+  if ("refusal" in header) return header;
+  if (packet.length !== ARM_RECEIPT_WORDS) {
+    throw new Error("malformed household-arm packet: evaluation length");
+  }
+  return { ok: decodeHouseholdReceiptPayload(packet) };
+}
+
+export function decodeHouseholdManipulationPopulation(
+  packet: Float64Array
+): PackedResult<Float64Array> {
+  const header = decodeArmHeader(packet, ARM_KIND_POPULATION);
+  if ("refusal" in header) return header;
+  if (packet.length < 7) throw new Error("malformed household-arm packet: population length");
+  const population = exactPacketInteger(packet, 5, "population", 1, 64);
+  if (packet.length !== 6 + population) {
+    throw new Error("malformed household-arm packet: population shape");
+  }
+  return { ok: finitePacketView(packet, 6, population, "population objectives") };
+}
+
+export function decodeHouseholdManipulationTrace(
+  packet: Float64Array
+): PackedResult<HouseholdManipulationTraceReceipt> {
+  const header = decodeArmHeader(packet, ARM_KIND_TRACE);
+  if ("refusal" in header) return header;
+  const receipt = decodeHouseholdReceiptPayload(packet);
+  const sampleCount = exactPacketInteger(packet, ARM_RECEIPT_WORDS, "trace sample count", 1);
+  if (packet.length !== ARM_RECEIPT_WORDS + 1 + sampleCount * ARM_TRACE_SAMPLE_WORDS) {
+    throw new Error("malformed household-arm packet: trace shape");
+  }
+  const samples: HouseholdManipulationTraceSample[] = [];
+  let cursor = ARM_RECEIPT_WORDS + 1;
+  let previousTime = -Infinity;
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+    const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
+    if (timeSeconds < previousTime) {
+      throw new Error("malformed household-arm packet: trace time order");
+    }
+    previousTime = timeSeconds;
+    const gripperWidthMeters = finitePacketNumber(packet, cursor + 1, "gripper width");
+    const gripNormalForceNewtons = finitePacketNumber(packet, cursor + 2, "grip force");
+    const grasped = exactPacketInteger(packet, cursor + 3, "grasped", 0, 1) === 1;
+    if (gripperWidthMeters <= 0 || gripNormalForceNewtons < 0) {
+      throw new Error("malformed household-arm packet: gripper state");
+    }
+    cursor += 4;
+    const objectPose = decodeHouseholdPose(packet, cursor, "object pose");
+    cursor += ARM_POSE_WORDS;
+    const linkPoses: HouseholdRobotPose[] = [];
+    for (let link = 0; link < ARM_LINK_COUNT; link++) {
+      linkPoses.push(decodeHouseholdPose(packet, cursor, "link pose"));
+      cursor += ARM_POSE_WORDS;
+    }
+    samples.push({
+      timeSeconds,
+      gripperWidthMeters,
+      gripNormalForceNewtons,
+      grasped,
+      objectPose,
+      linkPoses,
+    });
+  }
+  return { ok: { ...receipt, samples } };
+}
+
+export class FrankenSimHouseholdManipulationEvaluator {
+  private readonly raw: RawManipulationEvaluator;
+  readonly admission: HouseholdManipulationAdmission;
+
+  constructor(raw: RawManipulationEvaluator, admission: HouseholdManipulationAdmission) {
+    this.raw = raw;
+    this.admission = admission;
+  }
+
+  curriculumPolicyMean(): Float64Array {
+    const mean = this.raw.curriculum_policy_mean();
+    if (
+      mean.length !== this.admission.policyDimension ||
+      mean.some((value) => !Number.isFinite(value))
+    ) {
+      throw new Error("malformed household-arm curriculum policy mean");
+    }
+    return mean;
+  }
+
+  evaluate(policy: Float64Array): PackedResult<HouseholdManipulationObjectiveReceipt> {
+    return decodeHouseholdManipulationEvaluation(this.raw.evaluate(policy));
+  }
+
+  evaluatePopulation(policies: Float64Array): PackedResult<Float64Array> {
+    return decodeHouseholdManipulationPopulation(this.raw.evaluate_population(policies));
+  }
+
+  trace(policy: Float64Array): PackedResult<HouseholdManipulationTraceReceipt> {
+    return decodeHouseholdManipulationTrace(this.raw.trace(policy));
+  }
+
+  free(): void {
+    this.raw.free?.();
+  }
+}
+
+export async function createFrankenSimHouseholdManipulationEvaluator(
+  config: HouseholdManipulationConfig = DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG
+): Promise<PackedResult<FrankenSimHouseholdManipulationEvaluator>> {
+  const status = await initFrankenSimOwnerKernel();
+  const Evaluator = ownerModule?.HouseholdManipulationVizEvaluator;
+  if (status.source !== "wasm" || !Evaluator) {
+    throw new Error(status.error ?? "Frankensim household-arm owner kernel is unavailable");
+  }
+  const raw = new Evaluator(buildHouseholdManipulationConfig(config));
+  let decoded: PackedResult<HouseholdManipulationAdmission>;
+  try {
+    decoded = decodeHouseholdManipulationAdmission(raw.receipt());
+  } catch (error) {
+    raw.free?.();
+    throw error;
+  }
+  if ("refusal" in decoded) {
+    raw.free?.();
+    return decoded;
+  }
+  return { ok: new FrankenSimHouseholdManipulationEvaluator(raw, decoded.ok) };
 }

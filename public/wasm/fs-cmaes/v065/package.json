@@ -1,0 +1,16 @@
+{
+  "name": "fs-cmaes-viz-wasm",
+  "type": "module",
+  "description": "Versioned packed WASM ask/tell boundary over fs-dfo's full, separable, LM-CMA, and LM-MA optimizers.",
+  "version": "0.6.5",
+  "files": [
+    "fs_cmaes_viz_wasm_bg.wasm",
+    "fs_cmaes_viz_wasm.js",
+    "fs_cmaes_viz_wasm.d.ts"
+  ],
+  "main": "fs_cmaes_viz_wasm.js",
+  "types": "fs_cmaes_viz_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

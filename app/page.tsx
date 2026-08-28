@@ -14,6 +14,7 @@ import { ThreePatch } from "./components/ThreePatch";
 import { MathProvider } from "./components/MathProvider";
 import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 import { G1WalkingFlagship } from "./components/G1WalkingFlagship";
+import { HouseholdArmFlagship } from "./components/HouseholdArmFlagship";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -54,6 +55,9 @@ export default function Page() {
               </Section>
               <Section id="g1-walking" title="5,040 dimensions: teach a humanoid robot to walk">
                 <G1WalkingFlagship />
+              </Section>
+              <Section id="household-arm" title="128 dimensions: teach a robot arm to pick, carry, and place">
+                <HouseholdArmFlagship />
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">
                 <TechnicalAddendum />

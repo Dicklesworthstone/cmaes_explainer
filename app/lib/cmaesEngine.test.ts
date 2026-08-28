@@ -11,6 +11,9 @@ import {
   decodeG1Evaluation,
   decodeG1Population,
   decodeG1Trace,
+  decodeHouseholdManipulationAdmission,
+  decodeHouseholdManipulationEvaluation,
+  decodeHouseholdManipulationTrace,
   evaluateCmaesVisualizationLandscape,
   isCompatibleCmaesKernelVersion,
   wasmRunToNdStates,
@@ -703,14 +706,14 @@ describe("G1 walking packet adapter", () => {
   });
 });
 
-test("the shipped owner package executes every CMA family and improves the 5,040-D walking curriculum", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm.js");
+test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
+  const wasm = await import("../../public/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL("../../public/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.4");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.5");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
     const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
@@ -841,4 +844,38 @@ test("the shipped owner package executes every CMA family and improves the 5,040
   expect(optimized.ok.completedSteps).toBe(720);
   expect(optimized.ok.terminationReason).toBe("horizon");
   evaluator.free();
+
+  for (const task of [0, 1, 2]) {
+    const arm = new wasm.HouseholdManipulationVizEvaluator(new Float64Array([
+      0x41524d31, 1, 0, 8, 1 / 90, 4, 3, task,
+    ]));
+    const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
+    if (!("ok" in armAdmission)) {
+      throw new Error(`arm task ${task} admission refusal ${armAdmission.refusal.name}`);
+    }
+    expect(armAdmission.ok.policyDimension).toBe(128);
+    expect(armAdmission.ok.linkCount).toBe(8);
+    const armMean = arm.curriculum_policy_mean();
+    expect(armMean).toHaveLength(128);
+    const armEvaluation = decodeHouseholdManipulationEvaluation(arm.evaluate(armMean));
+    const armTrace = decodeHouseholdManipulationTrace(arm.trace(armMean));
+    if (!("ok" in armEvaluation)) {
+      throw new Error(`arm task ${task} evaluation refusal ${armEvaluation.refusal.name}`);
+    }
+    if (!("ok" in armTrace)) {
+      throw new Error(`arm task ${task} trace refusal ${armTrace.refusal.name}`);
+    }
+    expect(armEvaluation.ok.everGrasped).toBe(true);
+    expect(armEvaluation.ok.releasedAfterTransport).toBe(true);
+    expect(armEvaluation.ok.placed).toBe(true);
+    expect(armEvaluation.ok.maximumLiftMeters).toBeGreaterThanOrEqual(
+      armAdmission.ok.liftTargetMeters
+    );
+    expect(armEvaluation.ok.finalObjectErrorMeters).toBeLessThanOrEqual(
+      armAdmission.ok.placementToleranceMeters
+    );
+    expect(armTrace.ok.samples.length).toBeGreaterThanOrEqual(100);
+    expect(armTrace.ok.samples.some((sample) => sample.grasped)).toBe(true);
+    arm.free();
+  }
 }, 30_000);
