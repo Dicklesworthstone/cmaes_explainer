@@ -50,7 +50,7 @@ Two audited surfaces coexist intentionally:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
   the existing low-dimensional visualizations.
-- `public/wasm/fs-cmaes/v055/` is the owner-family ask/tell and G1 walking
+- `public/wasm/fs-cmaes/v056/` is the owner-family ask/tell and G1 walking
   package used by the flagship and its worker.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed

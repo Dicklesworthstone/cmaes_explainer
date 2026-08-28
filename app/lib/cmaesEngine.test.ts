@@ -700,13 +700,13 @@ describe("G1 walking packet adapter", () => {
 });
 
 test("the shipped schema-2 package executes every CMA family and improves the full G1 horizon", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm.js");
+  const wasm = await import("../../public/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v055/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL("../../public/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.5");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.6");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
     const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
