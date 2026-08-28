@@ -1,0 +1,33 @@
+{
+  "runId": "20260828T034700Z-schema2-v053",
+  "purpose": "Production-browser profile of the schema-2 owner CMA family and G1 walking boundary",
+  "host": {
+    "cpu": "Apple M4",
+    "logicalCpus": 10,
+    "memoryBytes": 34359738368,
+    "os": "macOS 26.5 (Darwin 25.5.0, arm64)"
+  },
+  "toolchain": {
+    "bun": "1.4.0",
+    "rustc": "1.100.0-nightly (fb6531d55 2026-08-23)",
+    "wasmPack": "0.13.1",
+    "browser": "HeadlessChrome/143.0.7499.4"
+  },
+  "kernel": {
+    "version": "fs-cmaes-viz-wasm 0.5.3",
+    "wasmBytes": 263178,
+    "wasmSha256": "10dc1e88996e1cca3bd4b3ce9a39ead82971056538a47b552fbc181ad6f14557"
+  },
+  "siteSourceCommitBeforeChanges": "6c6eead7a151c01cf1fd78b615973f36d41c5871",
+  "browserIsolation": "crossOriginIsolated",
+  "measurement": {
+    "clock": "browser performance.now",
+    "cache": "warm after explicit scenario warmups",
+    "cpuProfile": "Chrome DevTools sampling profile over the same measured workload",
+    "artifacts": [
+      "baseline.json",
+      "schema2-v053.cpuprofile",
+      "hotspots.md"
+    ]
+  }
+}

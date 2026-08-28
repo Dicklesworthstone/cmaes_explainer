@@ -147,9 +147,27 @@ export function isCompatibleCmaesKernelVersion(version: string | null): boolean 
 }
 
 async function loadWasmModule(jsPath: string, wasmPath: string): Promise<WasmModule> {
-  if (typeof window === "undefined") throw new Error("SSR context");
-  const jsText = await fetch(jsPath, { signal: AbortSignal.timeout(10_000) }).then((r) => {
-    if (!r.ok) throw new Error(`fetch ${jsPath}: ${r.status}`);
+  if (
+    typeof fetch !== "function" ||
+    typeof Blob !== "function" ||
+    typeof URL.createObjectURL !== "function" ||
+    typeof globalThis.location?.href !== "string"
+  ) {
+    throw new Error("WASM loader requires a browser or Web Worker context");
+  }
+  // Window fetch accepts root-relative paths, but WorkerGlobalScope fetch does
+  // not consistently resolve them. Resolve both assets against the realm's
+  // actual origin before crossing either boundary.
+  // Next.js may bootstrap a module worker from a blob: URL. A root-relative
+  // URL cannot be resolved against that href, but blob origins retain the
+  // page's HTTP(S) origin.
+  const runtimeOrigin = new URL(globalThis.location.href).origin;
+  if (runtimeOrigin === "null") throw new Error("WASM loader cannot resolve the runtime origin");
+  const runtimeBase = `${runtimeOrigin}/`;
+  const jsUrl = new URL(jsPath, runtimeBase).href;
+  const wasmUrl = new URL(wasmPath, runtimeBase).href;
+  const jsText = await fetch(jsUrl, { signal: AbortSignal.timeout(10_000) }).then((r) => {
+    if (!r.ok) throw new Error(`fetch ${jsUrl}: ${r.status}`);
     return r.text();
   });
   const blobUrl = URL.createObjectURL(new Blob([jsText], { type: "text/javascript" }));
@@ -162,7 +180,7 @@ async function loadWasmModule(jsPath: string, wasmPath: string): Promise<WasmMod
       default?: (opts: { module_or_path: string }) => Promise<unknown>;
     } & WasmModule;
     if (typeof mod.default === "function") {
-      await mod.default({ module_or_path: wasmPath });
+      await mod.default({ module_or_path: wasmUrl });
     }
     return mod;
   } finally {
@@ -672,4 +690,839 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       variancePerDim: covariance.map((row, i) => gen.sigma * gen.sigma * Math.max(row[i], 0)),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Owner CMA-family + G1 walking boundary (schema 2 / G1 schema 1).
+//
+// This deliberately coexists with the audited 0.4.1 batch visualizer above.
+// That older surface provides exact low-dimensional TS/WASM trajectory parity;
+// this surface exposes fs-dfo's stateful production families and the composed
+// 5,040-D fs-mbd walking objective. Neither one impersonates the other.
+// ---------------------------------------------------------------------------
+
+const OWNER_CMA_MAGIC = 0x434d4132;
+const OWNER_CMA_SCHEMA = 2;
+const OWNER_CMA_KIND_CONFIG = 0;
+const OWNER_CMA_KIND_ADMISSION = 1;
+const OWNER_CMA_KIND_ASK = 2;
+const OWNER_CMA_KIND_TELL = 3;
+const OWNER_CMA_KIND_SNAPSHOT = 4;
+const OWNER_CMA_SNAPSHOT_WORDS = 31;
+
+const G1_MAGIC = 0x47315731;
+const G1_SCHEMA = 1;
+const G1_KIND_CONFIG = 0;
+const G1_KIND_ADMISSION = 1;
+const G1_KIND_EVALUATION = 2;
+const G1_KIND_TRACE = 3;
+const G1_KIND_POPULATION = 4;
+const G1_POLICY_DIMENSION = 5_040;
+const G1_LINK_COUNT = 16;
+const G1_POSE_WORDS = 7;
+const G1_TRACE_SAMPLE_WORDS = 115;
+
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.4";
+
+export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
+
+const CMA_FAMILY_IDS: Record<CmaFamily, number> = {
+  full: 0,
+  separable: 1,
+  "lm-cma": 2,
+  "lm-ma": 3,
+};
+
+const CMA_FAMILY_NAMES = ["full", "separable", "lm-cma", "lm-ma"] as const;
+
+const CMA_REFUSAL_NAMES = [
+  "unknown",
+  "malformed-packet",
+  "schema-mismatch",
+  "unknown-family",
+  "invalid-dimension",
+  "full-dimension-limit",
+  "invalid-population",
+  "invalid-memory",
+  "invalid-budget",
+  "invalid-seed",
+  "invalid-sigma",
+  "non-finite-mean",
+  "shape-overflow",
+  "random-counter-overflow",
+  "dense-work-refused",
+  "browser-memory-refused",
+  "ask-already-pending",
+  "budget-exhausted",
+  "tell-without-ask",
+  "generation-mismatch",
+  "objective-count-mismatch",
+  "non-finite-objective",
+  "owner-batch-mismatch",
+  "owner-numerical-failure",
+] as const;
+
+const G1_REFUSAL_NAMES = [
+  "unknown",
+  "malformed-packet",
+  "schema-mismatch",
+  "invalid-config",
+  "parameter-count",
+  "non-finite-parameter",
+  "robot-owner",
+  "policy-owner",
+  "contact-owner",
+  "friction-owner",
+  "time-owner",
+  "geometry-owner",
+  "unexpected-contact-receipt",
+  "non-finite-objective",
+  "population-invalid",
+  "shape-overflow",
+] as const;
+
+export interface OwnerKernelStatus {
+  source: "wasm" | "unavailable";
+  kernelVersion: string | null;
+  error: string | null;
+}
+
+export interface PackedOwnerRefusal {
+  code: number;
+  name: string;
+  detail: number | null;
+}
+
+export interface CmaFamilyConfig {
+  family: CmaFamily;
+  mean: ArrayLike<number>;
+  sigma: number;
+  maxEvaluations: number;
+  seed?: number | bigint;
+  /** Zero/undefined selects Hansen's dimension-aware default. */
+  population?: number;
+  /** Zero/undefined selects the owner's LM default; invalid for dense/diagonal. */
+  memory?: number;
+}
+
+export type CmaShapeReceipt =
+  | {
+      kind: "full";
+      negativeWeightCount: number;
+      minimumEigenvalue: number;
+      maximumEigenvalue: number;
+      covarianceDiagonal: Float64Array;
+    }
+  | {
+      kind: "diagonal";
+      negativeWeightCount: number;
+      variances: Float64Array;
+    }
+  | {
+      kind: "limited-memory";
+      storedVectors: number;
+      capacity: number;
+      directionNorms: Float64Array;
+    };
+
+export interface CmaFamilySnapshot {
+  family: CmaFamily;
+  dimension: number;
+  generation: number;
+  evaluations: number;
+  sigma: number;
+  population: number;
+  parents: number;
+  maxGenerations: number;
+  admittedEvaluations: number;
+  streamSemantics: number;
+  streamKernel: number;
+  normalStreamBlocks: bigint;
+  samplingOrder: "linear" | "memory-linear" | "quadratic" | "cubic";
+  updateOrder: "linear" | "memory-linear" | "quadratic" | "cubic";
+  persistentScalars: number;
+  pendingGenerationScalars: number;
+  updateWorkspaceScalars: number;
+  denseMatrixEntries: number;
+  memoryCapacity: number;
+  best: null | { objective: number; generation: number; candidate: number; point: Float64Array };
+  mean: Float64Array;
+  shape: CmaShapeReceipt;
+}
+
+export interface CmaFamilyAsk {
+  generation: number;
+  evaluationsBefore: number;
+  dimension: number;
+  population: number;
+  /** Row-major, candidate-major population view. */
+  candidates: Float64Array;
+}
+
+export type PackedResult<T> = { ok: T } | { refusal: PackedOwnerRefusal };
+
+type RawCmaSession = {
+  receipt: () => Float64Array;
+  ask: () => Float64Array;
+  tell: (packet: Float64Array) => Float64Array;
+  free?: () => void;
+};
+
+type RawG1Evaluator = {
+  receipt: () => Float64Array;
+  evaluate: (policy: Float64Array) => Float64Array;
+  evaluate_population: (policies: Float64Array) => Float64Array;
+  trace: (policy: Float64Array) => Float64Array;
+  free?: () => void;
+};
+
+type OwnerWasmModule = WasmModule & {
+  CmaesVizSession?: new (config: Float64Array) => RawCmaSession;
+  G1WalkingVizEvaluator?: new (config: Float64Array) => RawG1Evaluator;
+};
+
+let ownerModule: OwnerWasmModule | null = null;
+let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
+
+/** Load and capability-probe the schema-2/G1 package exactly once per realm. */
+export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
+  if (ownerLoadPromise) return ownerLoadPromise;
+  ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
+    try {
+      const loaded = (await loadWasmModule(
+        "/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v054/fs_cmaes_viz_wasm_bg.wasm"
+      )) as OwnerWasmModule;
+      const version = typeof loaded.cmaes_viz_kernel_version === "function"
+        ? loaded.cmaes_viz_kernel_version()
+        : null;
+      if (version !== FRANKENSIM_OWNER_KERNEL_VERSION) {
+        return {
+          source: "unavailable",
+          kernelVersion: version,
+          error: `expected ${FRANKENSIM_OWNER_KERNEL_VERSION}, received ${version ?? "no version"}`,
+        };
+      }
+      if (
+        typeof loaded.CmaesVizSession !== "function" ||
+        typeof loaded.G1WalkingVizEvaluator !== "function"
+      ) {
+        return {
+          source: "unavailable",
+          kernelVersion: version,
+          error: "owner package is missing the CMA session or G1 evaluator export",
+        };
+      }
+      ownerModule = loaded;
+      return { source: "wasm", kernelVersion: version, error: null };
+    } catch (error) {
+      return {
+        source: "unavailable",
+        kernelVersion: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  })();
+  return ownerLoadPromise;
+}
+
+function exactPacketInteger(
+  packet: Float64Array,
+  index: number,
+  label: string,
+  minimum = 0,
+  maximum = Number.MAX_SAFE_INTEGER
+): number {
+  if (index >= packet.length) throw new Error(`malformed packed packet: missing ${label}`);
+  const value = packet[index];
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`malformed packed packet: ${label}`);
+  }
+  return value;
+}
+
+function finitePacketNumber(packet: Float64Array, index: number, label: string): number {
+  if (index >= packet.length || !Number.isFinite(packet[index])) {
+    throw new Error(`malformed packed packet: ${label}`);
+  }
+  return packet[index];
+}
+
+function finitePacketView(packet: Float64Array, start: number, count: number, label: string): Float64Array {
+  const end = start + count;
+  if (!Number.isSafeInteger(end) || end > packet.length) {
+    throw new Error(`malformed packed packet: truncated ${label}`);
+  }
+  const values = packet.subarray(start, end);
+  for (let index = 0; index < values.length; index++) {
+    if (!Number.isFinite(values[index])) throw new Error(`malformed packed packet: ${label}`);
+  }
+  return values;
+}
+
+function decodeCommonOutput(
+  packet: Float64Array,
+  magic: number,
+  schema: number,
+  expectedKind: number,
+  refusalNames: readonly string[]
+): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
+  if (!(packet instanceof Float64Array) || packet.length < 5) {
+    throw new Error("malformed packed packet: expected Float64Array header");
+  }
+  if (packet[0] !== magic) throw new Error("malformed packed packet: magic");
+  if (packet[1] !== schema) throw new Error("malformed packed packet: schema");
+  const status = exactPacketInteger(packet, 2, "status", 0, 1);
+  const kind = exactPacketInteger(packet, 3, "kind", 0, 4);
+  if (kind !== expectedKind) throw new Error("malformed packed packet: unexpected kind");
+  const totalWords = exactPacketInteger(packet, 4, "total words", 5);
+  if (totalWords !== packet.length) throw new Error("malformed packed packet: total words");
+  if (status === 0) return { payloadStart: 5 };
+  if (packet.length !== 7) throw new Error("malformed packed packet: refusal length");
+  const code = exactPacketInteger(packet, 5, "refusal code", 1, refusalNames.length - 1);
+  const rawDetail = packet[6];
+  const detail = Number.isNaN(rawDetail)
+    ? null
+    : exactPacketInteger(packet, 6, "refusal detail");
+  return { refusal: { code, name: refusalNames[code] ?? "unknown", detail } };
+}
+
+function decodeCmaOutputHeader(
+  packet: Float64Array,
+  expectedKind: number
+): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
+  return decodeCommonOutput(packet, OWNER_CMA_MAGIC, OWNER_CMA_SCHEMA, expectedKind, CMA_REFUSAL_NAMES);
+}
+
+const COMPLEXITY_NAMES = ["linear", "memory-linear", "quadratic", "cubic"] as const;
+
+/** Strictly decode an admission or post-tell snapshot without inventing diagnostics. */
+export function decodeCmaFamilySnapshot(
+  packet: Float64Array,
+  expectedKind: typeof OWNER_CMA_KIND_ADMISSION | typeof OWNER_CMA_KIND_SNAPSHOT
+): PackedResult<CmaFamilySnapshot> {
+  const header = decodeCmaOutputHeader(packet, expectedKind);
+  if ("refusal" in header) return header;
+  if (packet.length < OWNER_CMA_SNAPSHOT_WORDS) {
+    throw new Error("malformed packed packet: snapshot header");
+  }
+  const familyId = exactPacketInteger(packet, 5, "family", 0, 3);
+  const family = CMA_FAMILY_NAMES[familyId];
+  const dimension = exactPacketInteger(packet, 6, "dimension", 1, 100_000);
+  const generation = exactPacketInteger(packet, 7, "generation");
+  const evaluations = exactPacketInteger(packet, 8, "evaluations");
+  const sigma = finitePacketNumber(packet, 9, "sigma");
+  if (sigma <= 0) throw new Error("malformed packed packet: non-positive sigma");
+  const population = exactPacketInteger(packet, 10, "population", 4);
+  const parents = exactPacketInteger(packet, 11, "parents", 1, population - 1);
+  const maxGenerations = exactPacketInteger(packet, 12, "max generations", 1);
+  const admittedEvaluations = exactPacketInteger(packet, 13, "admitted evaluations", population);
+  if (
+    admittedEvaluations !== maxGenerations * population ||
+    evaluations !== generation * population ||
+    generation > maxGenerations
+  ) {
+    throw new Error("malformed packed packet: budget receipt");
+  }
+  const streamSemantics = exactPacketInteger(packet, 14, "stream semantics", 1, 0xffff_ffff);
+  const streamKernel = exactPacketInteger(packet, 15, "stream kernel", 1, 0xffff_ffff);
+  const normalLow = exactPacketInteger(packet, 16, "normal blocks low", 0, 0xffff_ffff);
+  const normalHigh = exactPacketInteger(packet, 17, "normal blocks high", 0, 0xffff_ffff);
+  const samplingOrderId = exactPacketInteger(packet, 18, "sampling order", 0, 3);
+  const updateOrderId = exactPacketInteger(packet, 19, "update order", 0, 3);
+  const persistentScalars = exactPacketInteger(packet, 20, "persistent scalars");
+  const pendingGenerationScalars = exactPacketInteger(packet, 21, "pending scalars");
+  const updateWorkspaceScalars = exactPacketInteger(packet, 22, "workspace scalars");
+  const denseMatrixEntries = exactPacketInteger(packet, 23, "dense entries");
+  const memoryCapacity = exactPacketInteger(packet, 24, "memory capacity");
+  const hasBest = exactPacketInteger(packet, 25, "has best", 0, 1) === 1;
+  const shapeKind = exactPacketInteger(packet, 29, "shape kind", 0, 2);
+  const shapeWords = exactPacketInteger(packet, 30, "shape words");
+  const expectedWords = OWNER_CMA_SNAPSHOT_WORDS + 2 * dimension + shapeWords;
+  if (packet.length !== expectedWords) throw new Error("malformed packed packet: snapshot shape");
+  const expectedSamplingOrder = family === "full" ? 2 : family === "separable" ? 0 : 1;
+  const expectedUpdateOrder = family === "full" ? 3 : family === "separable" ? 0 : 1;
+  if (samplingOrderId !== expectedSamplingOrder || updateOrderId !== expectedUpdateOrder) {
+    throw new Error("malformed packed packet: family complexity");
+  }
+  if (
+    // The full owner retains both C and its cached eigensystem/root, hence two
+    // dense n-by-n stores. Other families truthfully report no dense matrix.
+    (family === "full" && (denseMatrixEntries !== 2 * dimension * dimension || memoryCapacity !== 0)) ||
+    (family === "separable" && (denseMatrixEntries !== 0 || memoryCapacity !== 0)) ||
+    ((family === "lm-cma" || family === "lm-ma") && (denseMatrixEntries !== 0 || memoryCapacity === 0))
+  ) {
+    throw new Error("malformed packed packet: family storage");
+  }
+
+  const mean = finitePacketView(packet, OWNER_CMA_SNAPSHOT_WORDS, dimension, "mean");
+  const bestPointStart = OWNER_CMA_SNAPSHOT_WORDS + dimension;
+  let best: CmaFamilySnapshot["best"] = null;
+  if (hasBest) {
+    best = {
+      objective: finitePacketNumber(packet, 26, "best objective"),
+      generation: exactPacketInteger(packet, 27, "best generation", 0, generation),
+      candidate: exactPacketInteger(packet, 28, "best candidate", 0, population - 1),
+      point: finitePacketView(packet, bestPointStart, dimension, "best point"),
+    };
+  } else {
+    if (!Number.isNaN(packet[26]) || !Number.isNaN(packet[27]) || !Number.isNaN(packet[28])) {
+      throw new Error("malformed packed packet: absent best metadata");
+    }
+    for (let index = 0; index < dimension; index++) {
+      if (!Number.isNaN(packet[bestPointStart + index])) {
+        throw new Error("malformed packed packet: absent best point");
+      }
+    }
+  }
+
+  const shapeStart = bestPointStart + dimension;
+  let shape: CmaShapeReceipt;
+  if (shapeKind === 0) {
+    if (family !== "full" || shapeWords !== dimension + 3) {
+      throw new Error("malformed packed packet: full shape");
+    }
+    const negativeWeightCount = exactPacketInteger(packet, shapeStart, "negative weights");
+    const minimumEigenvalue = finitePacketNumber(packet, shapeStart + 1, "minimum eigenvalue");
+    const maximumEigenvalue = finitePacketNumber(packet, shapeStart + 2, "maximum eigenvalue");
+    if (minimumEigenvalue <= 0 || maximumEigenvalue < minimumEigenvalue) {
+      throw new Error("malformed packed packet: full spectrum");
+    }
+    const covarianceDiagonal = finitePacketView(
+      packet,
+      shapeStart + 3,
+      dimension,
+      "covariance diagonal"
+    );
+    if (covarianceDiagonal.some((value) => value <= 0)) {
+      throw new Error("malformed packed packet: covariance diagonal");
+    }
+    shape = {
+      kind: "full",
+      negativeWeightCount,
+      minimumEigenvalue,
+      maximumEigenvalue,
+      covarianceDiagonal,
+    };
+  } else if (shapeKind === 1) {
+    if (family !== "separable" || shapeWords !== dimension + 1) {
+      throw new Error("malformed packed packet: diagonal shape");
+    }
+    const variances = finitePacketView(packet, shapeStart + 1, dimension, "variances");
+    if (variances.some((value) => value <= 0)) {
+      throw new Error("malformed packed packet: diagonal variances");
+    }
+    shape = {
+      kind: "diagonal",
+      negativeWeightCount: exactPacketInteger(packet, shapeStart, "negative weights"),
+      variances,
+    };
+  } else {
+    if ((family !== "lm-cma" && family !== "lm-ma") || shapeWords < 2) {
+      throw new Error("malformed packed packet: limited-memory shape");
+    }
+    const storedVectors = exactPacketInteger(packet, shapeStart, "stored vectors", 0, memoryCapacity);
+    const capacity = exactPacketInteger(packet, shapeStart + 1, "shape capacity", 1);
+    if (capacity !== memoryCapacity || shapeWords !== storedVectors + 2) {
+      throw new Error("malformed packed packet: limited-memory payload");
+    }
+    const directionNorms = finitePacketView(
+      packet,
+      shapeStart + 2,
+      storedVectors,
+      "direction norms"
+    );
+    if (directionNorms.some((value) => value < 0)) {
+      throw new Error("malformed packed packet: direction norms");
+    }
+    shape = {
+      kind: "limited-memory",
+      storedVectors,
+      capacity,
+      directionNorms,
+    };
+  }
+
+  return {
+    ok: {
+      family,
+      dimension,
+      generation,
+      evaluations,
+      sigma,
+      population,
+      parents,
+      maxGenerations,
+      admittedEvaluations,
+      streamSemantics,
+      streamKernel,
+      normalStreamBlocks: BigInt(normalLow) | (BigInt(normalHigh) << 32n),
+      samplingOrder: COMPLEXITY_NAMES[samplingOrderId],
+      updateOrder: COMPLEXITY_NAMES[updateOrderId],
+      persistentScalars,
+      pendingGenerationScalars,
+      updateWorkspaceScalars,
+      denseMatrixEntries,
+      memoryCapacity,
+      best,
+      mean,
+      shape,
+    },
+  };
+}
+
+/** Strictly decode one complete row-major owner population. */
+export function decodeCmaFamilyAsk(packet: Float64Array): PackedResult<CmaFamilyAsk> {
+  const header = decodeCmaOutputHeader(packet, OWNER_CMA_KIND_ASK);
+  if ("refusal" in header) return header;
+  if (packet.length < 9) throw new Error("malformed packed packet: ask header");
+  const generation = exactPacketInteger(packet, 5, "generation");
+  const evaluationsBefore = exactPacketInteger(packet, 6, "evaluations before");
+  const dimension = exactPacketInteger(packet, 7, "dimension", 1, 100_000);
+  const population = exactPacketInteger(packet, 8, "population", 4, 64_000);
+  const candidateWords = dimension * population;
+  if (!Number.isSafeInteger(candidateWords) || packet.length !== 9 + candidateWords) {
+    throw new Error("malformed packed packet: ask shape");
+  }
+  const candidates = finitePacketView(packet, 9, candidateWords, "candidates");
+  return { ok: { generation, evaluationsBefore, dimension, population, candidates } };
+}
+
+export function buildCmaFamilyConfig(config: CmaFamilyConfig): Float64Array {
+  const dimension = config.mean.length;
+  const seed = BigInt.asUintN(64, BigInt(config.seed ?? 0x5eed));
+  const packet = new Float64Array(12 + dimension);
+  packet.set([
+    OWNER_CMA_MAGIC,
+    OWNER_CMA_SCHEMA,
+    OWNER_CMA_KIND_CONFIG,
+    packet.length,
+    CMA_FAMILY_IDS[config.family],
+    dimension,
+    config.population ?? 0,
+    config.memory ?? 0,
+    config.maxEvaluations,
+    Number(seed & 0xffff_ffffn),
+    Number(seed >> 32n),
+    config.sigma,
+  ]);
+  for (let index = 0; index < dimension; index++) packet[12 + index] = config.mean[index];
+  return packet;
+}
+
+function buildTellPacket(generation: number, objectives: ArrayLike<number>): Float64Array {
+  const packet = new Float64Array(6 + objectives.length);
+  packet.set([
+    OWNER_CMA_MAGIC,
+    OWNER_CMA_SCHEMA,
+    OWNER_CMA_KIND_TELL,
+    packet.length,
+    generation,
+    objectives.length,
+  ]);
+  for (let index = 0; index < objectives.length; index++) packet[6 + index] = objectives[index];
+  return packet;
+}
+
+export class FrankenSimCmaFamilySession {
+  private readonly raw: RawCmaSession;
+  readonly admission: CmaFamilySnapshot;
+
+  constructor(raw: RawCmaSession, admission: CmaFamilySnapshot) {
+    this.raw = raw;
+    this.admission = admission;
+  }
+
+  ask(): PackedResult<CmaFamilyAsk> {
+    return decodeCmaFamilyAsk(this.raw.ask());
+  }
+
+  tell(generation: number, objectives: ArrayLike<number>): PackedResult<CmaFamilySnapshot> {
+    return decodeCmaFamilySnapshot(
+      this.raw.tell(buildTellPacket(generation, objectives)),
+      OWNER_CMA_KIND_SNAPSHOT
+    );
+  }
+
+  free(): void {
+    this.raw.free?.();
+  }
+}
+
+export async function createFrankenSimCmaFamilySession(
+  config: CmaFamilyConfig
+): Promise<PackedResult<FrankenSimCmaFamilySession>> {
+  const status = await initFrankenSimOwnerKernel();
+  const Session = ownerModule?.CmaesVizSession;
+  if (status.source !== "wasm" || !Session) {
+    throw new Error(status.error ?? "Frankensim owner CMA kernel is unavailable");
+  }
+  const raw = new Session(buildCmaFamilyConfig(config));
+  let decoded: PackedResult<CmaFamilySnapshot>;
+  try {
+    decoded = decodeCmaFamilySnapshot(raw.receipt(), OWNER_CMA_KIND_ADMISSION);
+  } catch (error) {
+    raw.free?.();
+    throw error;
+  }
+  if ("refusal" in decoded) {
+    raw.free?.();
+    return decoded;
+  }
+  return { ok: new FrankenSimCmaFamilySession(raw, decoded.ok) };
+}
+
+export interface G1WalkingConfig {
+  stepSeconds: number;
+  durationSeconds: number;
+  targetSpeed: number;
+  gaitFrequency: number;
+  traceStride: number;
+}
+
+export const DEFAULT_G1_WALKING_CONFIG: G1WalkingConfig = {
+  stepSeconds: 1 / 120,
+  durationSeconds: 1.5,
+  targetSpeed: 0.65,
+  gaitFrequency: 1.55,
+  traceStride: 3,
+};
+
+export interface G1Admission {
+  policyDimension: 5_040;
+  linkCount: 16;
+  poseWords: 7;
+  traceSampleWords: 115;
+  config: G1WalkingConfig;
+}
+
+export interface G1ObjectiveReceipt {
+  objective: number;
+  distanceMeters: number;
+  speedErrorIntegral: number;
+  actuatorWorkJoules: number;
+  slipIntegral: number;
+  postureIntegral: number;
+  jointLimitIntegral: number;
+  impactIntegral: number;
+  completedSteps: number;
+  fell: boolean;
+}
+
+export interface G1LinkPose {
+  position: [number, number, number];
+  /** World-from-link quaternion in owner order w,x,y,z. */
+  quaternionWxyz: [number, number, number, number];
+}
+
+export interface G1TraceSample {
+  timeSeconds: number;
+  leftContact: boolean;
+  rightContact: boolean;
+  linkPoses: G1LinkPose[];
+}
+
+export interface G1TraceReceipt extends G1ObjectiveReceipt {
+  samples: G1TraceSample[];
+}
+
+function buildG1Config(config: G1WalkingConfig): Float64Array {
+  return new Float64Array([
+    G1_MAGIC,
+    G1_SCHEMA,
+    G1_KIND_CONFIG,
+    9,
+    config.stepSeconds,
+    config.durationSeconds,
+    config.targetSpeed,
+    config.gaitFrequency,
+    config.traceStride,
+  ]);
+}
+
+function decodeG1Header(
+  packet: Float64Array,
+  expectedKind: number
+): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
+  return decodeCommonOutput(packet, G1_MAGIC, G1_SCHEMA, expectedKind, G1_REFUSAL_NAMES);
+}
+
+export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admission> {
+  const header = decodeG1Header(packet, G1_KIND_ADMISSION);
+  if ("refusal" in header) return header;
+  if (packet.length !== 14) throw new Error("malformed G1 packet: admission length");
+  const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
+  const linkCount = exactPacketInteger(packet, 6, "link count");
+  const poseWords = exactPacketInteger(packet, 7, "pose words");
+  const traceSampleWords = exactPacketInteger(packet, 8, "trace sample words");
+  if (
+    policyDimension !== G1_POLICY_DIMENSION ||
+    linkCount !== G1_LINK_COUNT ||
+    poseWords !== G1_POSE_WORDS ||
+    traceSampleWords !== G1_TRACE_SAMPLE_WORDS
+  ) {
+    throw new Error("malformed G1 packet: owner layout mismatch");
+  }
+  const stepSeconds = finitePacketNumber(packet, 9, "step seconds");
+  const durationSeconds = finitePacketNumber(packet, 10, "duration seconds");
+  const targetSpeed = finitePacketNumber(packet, 11, "target speed");
+  const gaitFrequency = finitePacketNumber(packet, 12, "gait frequency");
+  const traceStride = exactPacketInteger(packet, 13, "trace stride", 1, 1_000);
+  if (
+    stepSeconds < 1 / 480 ||
+    stepSeconds > 1 / 30 ||
+    durationSeconds < stepSeconds ||
+    durationSeconds > 4 ||
+    targetSpeed < 0 ||
+    targetSpeed > 2 ||
+    gaitFrequency < 0.25 ||
+    gaitFrequency > 4 ||
+    Math.round(durationSeconds / stepSeconds) > 10_000
+  ) {
+    throw new Error("malformed G1 packet: admitted controls");
+  }
+  return {
+    ok: {
+      policyDimension: G1_POLICY_DIMENSION,
+      linkCount: G1_LINK_COUNT,
+      poseWords: G1_POSE_WORDS,
+      traceSampleWords: G1_TRACE_SAMPLE_WORDS,
+      config: {
+        stepSeconds,
+        durationSeconds,
+        targetSpeed,
+        gaitFrequency,
+        traceStride,
+      },
+    },
+  };
+}
+
+function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
+  if (packet.length < 15) throw new Error("malformed G1 packet: objective receipt");
+  const fellWord = exactPacketInteger(packet, 14, "fell", 0, 1);
+  const receipt = {
+    objective: finitePacketNumber(packet, 5, "objective"),
+    distanceMeters: finitePacketNumber(packet, 6, "distance"),
+    speedErrorIntegral: finitePacketNumber(packet, 7, "speed error"),
+    actuatorWorkJoules: finitePacketNumber(packet, 8, "actuator work"),
+    slipIntegral: finitePacketNumber(packet, 9, "slip"),
+    postureIntegral: finitePacketNumber(packet, 10, "posture"),
+    jointLimitIntegral: finitePacketNumber(packet, 11, "joint limit"),
+    impactIntegral: finitePacketNumber(packet, 12, "impact"),
+    completedSteps: exactPacketInteger(packet, 13, "completed steps", 0, 10_000),
+    fell: fellWord === 1,
+  };
+  if (
+    receipt.speedErrorIntegral < 0 ||
+    receipt.actuatorWorkJoules < 0 ||
+    receipt.slipIntegral < 0 ||
+    receipt.postureIntegral < 0 ||
+    receipt.jointLimitIntegral < 0 ||
+    receipt.impactIntegral < 0
+  ) {
+    throw new Error("malformed G1 packet: negative integral");
+  }
+  return receipt;
+}
+
+export function decodeG1Evaluation(packet: Float64Array): PackedResult<G1ObjectiveReceipt> {
+  const header = decodeG1Header(packet, G1_KIND_EVALUATION);
+  if ("refusal" in header) return header;
+  if (packet.length !== 15) throw new Error("malformed G1 packet: evaluation length");
+  return { ok: decodeG1ReceiptPayload(packet) };
+}
+
+export function decodeG1Population(packet: Float64Array): PackedResult<Float64Array> {
+  const header = decodeG1Header(packet, G1_KIND_POPULATION);
+  if ("refusal" in header) return header;
+  if (packet.length < 7) throw new Error("malformed G1 packet: population length");
+  const population = exactPacketInteger(packet, 5, "population", 1, 64);
+  if (packet.length !== 6 + population) throw new Error("malformed G1 packet: population shape");
+  return { ok: finitePacketView(packet, 6, population, "population objectives") };
+}
+
+export function decodeG1Trace(packet: Float64Array): PackedResult<G1TraceReceipt> {
+  const header = decodeG1Header(packet, G1_KIND_TRACE);
+  if ("refusal" in header) return header;
+  const receipt = decodeG1ReceiptPayload(packet);
+  const sampleCount = exactPacketInteger(packet, 15, "trace sample count");
+  if (packet.length !== 16 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
+    throw new Error("malformed G1 packet: trace shape");
+  }
+  const samples: G1TraceSample[] = [];
+  let cursor = 16;
+  let previousTime = -Infinity;
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+    const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
+    if (timeSeconds < previousTime) throw new Error("malformed G1 packet: trace time order");
+    previousTime = timeSeconds;
+    const leftContact = exactPacketInteger(packet, cursor + 1, "left contact", 0, 1) === 1;
+    const rightContact = exactPacketInteger(packet, cursor + 2, "right contact", 0, 1) === 1;
+    cursor += 3;
+    const linkPoses: G1LinkPose[] = [];
+    for (let link = 0; link < G1_LINK_COUNT; link++) {
+      const pose = finitePacketView(packet, cursor, G1_POSE_WORDS, "link pose");
+      const quaternionNorm = Math.hypot(pose[3], pose[4], pose[5], pose[6]);
+      if (Math.abs(quaternionNorm - 1) > 1e-6) {
+        throw new Error("malformed G1 packet: link quaternion");
+      }
+      linkPoses.push({
+        position: [pose[0], pose[1], pose[2]],
+        quaternionWxyz: [pose[3], pose[4], pose[5], pose[6]],
+      });
+      cursor += G1_POSE_WORDS;
+    }
+    samples.push({ timeSeconds, leftContact, rightContact, linkPoses });
+  }
+  return { ok: { ...receipt, samples } };
+}
+
+export class FrankenSimG1WalkingEvaluator {
+  private readonly raw: RawG1Evaluator;
+  readonly admission: G1Admission;
+
+  constructor(raw: RawG1Evaluator, admission: G1Admission) {
+    this.raw = raw;
+    this.admission = admission;
+  }
+
+  evaluate(policy: Float64Array): PackedResult<G1ObjectiveReceipt> {
+    return decodeG1Evaluation(this.raw.evaluate(policy));
+  }
+
+  evaluatePopulation(policies: Float64Array): PackedResult<Float64Array> {
+    return decodeG1Population(this.raw.evaluate_population(policies));
+  }
+
+  trace(policy: Float64Array): PackedResult<G1TraceReceipt> {
+    return decodeG1Trace(this.raw.trace(policy));
+  }
+
+  free(): void {
+    this.raw.free?.();
+  }
+}
+
+export async function createFrankenSimG1WalkingEvaluator(
+  config: G1WalkingConfig = DEFAULT_G1_WALKING_CONFIG
+): Promise<PackedResult<FrankenSimG1WalkingEvaluator>> {
+  const status = await initFrankenSimOwnerKernel();
+  const Evaluator = ownerModule?.G1WalkingVizEvaluator;
+  if (status.source !== "wasm" || !Evaluator) {
+    throw new Error(status.error ?? "Frankensim G1 owner kernel is unavailable");
+  }
+  const raw = new Evaluator(buildG1Config(config));
+  let decoded: PackedResult<G1Admission>;
+  try {
+    decoded = decodeG1Admission(raw.receipt());
+  } catch (error) {
+    raw.free?.();
+    throw error;
+  }
+  if ("refusal" in decoded) {
+    raw.free?.();
+    return decoded;
+  }
+  return { ok: new FrankenSimG1WalkingEvaluator(raw, decoded.ok) };
 }
