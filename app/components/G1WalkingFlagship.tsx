@@ -136,9 +136,9 @@ function useG1Meshes(active: boolean): G1MeshState {
           return;
         }
         material = new THREE.MeshStandardMaterial({
-          color: "#2c3138",
-          metalness: 0.42,
-          roughness: 0.5,
+          color: "#3a424d",
+          metalness: 0.35,
+          roughness: 0.46,
         });
         published = true;
         setState({
@@ -563,18 +563,29 @@ function RobotStage({
     >
       <color attach="background" args={["#050b18"]} />
       <fog attach="fog" args={["#050b18", 3.5, 9.5]} />
-      <PerspectiveCamera makeDefault position={[1.55, 1.1, 1.8]} fov={38} near={0.05} far={40} />
-      <ambientLight intensity={0.42} />
-      <hemisphereLight args={["#bfe9ff", "#090d18", 1.15]} />
+      <PerspectiveCamera makeDefault position={[1.7, 0.95, 2.05]} fov={38} near={0.05} far={40} />
+      {/* Five-light rig (studio harness): key w/ tight 2048 shadow frustum,
+          cool fill, warm ground bounce, and a cool rim spot from behind —
+          the rim is what separates the dark G1 shell from the dark set. */}
+      <hemisphereLight args={["#7dd3fc", "#fde68a", 1.5]} />
       <directionalLight
         castShadow
         position={[2.4, 4.5, 2.2]}
-        intensity={3.1}
-        color="#d9f4ff"
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        intensity={3.4}
+        color="#fff3df"
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0002}
+        shadow-camera-left={-1.6}
+        shadow-camera-right={1.6}
+        shadow-camera-top={2.2}
+        shadow-camera-bottom={-0.4}
+        shadow-camera-near={0.5}
+        shadow-camera-far={12}
       />
-      <spotLight position={[-2.5, 2.8, -1]} intensity={12} angle={0.38} penumbra={0.8} color="#7c3aed" />
+      <directionalLight position={[-2.6, 1.6, -1.4]} intensity={1.05} color="#bfdbfe" />
+      <directionalLight position={[0, -1.2, 1.6]} intensity={0.55} color="#fef3c7" />
+      <spotLight position={[0.6, 2.3, -2.9]} intensity={26} angle={0.5} penumbra={0.85} color="#bae6fd" />
 
       <TerrainSurface admission={admission} />
       <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
