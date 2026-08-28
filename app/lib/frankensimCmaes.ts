@@ -693,7 +693,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 }
 
 // ---------------------------------------------------------------------------
-// Owner CMA-family + G1 walking boundary (CMA schema 2 / G1 schema 5).
+// Owner CMA-family + robotics boundary (CMA schema 2 / G1 schema 6 / arm schema 2).
 //
 // This deliberately coexists with the audited 0.4.1 batch visualizer above.
 // That older surface provides exact low-dimensional TS/WASM trajectory parity;
@@ -710,8 +710,8 @@ const OWNER_CMA_KIND_TELL = 3;
 const OWNER_CMA_KIND_SNAPSHOT = 4;
 const OWNER_CMA_SNAPSHOT_WORDS = 31;
 
-const G1_MAGIC = 0x47315735;
-const G1_SCHEMA = 5;
+const G1_MAGIC = 0x47315736;
+const G1_SCHEMA = 6;
 const G1_KIND_CONFIG = 0;
 const G1_KIND_ADMISSION = 1;
 const G1_KIND_EVALUATION = 2;
@@ -723,7 +723,7 @@ const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 115;
 
 const ARM_MAGIC = 0x41524d31;
-const ARM_SCHEMA = 1;
+const ARM_SCHEMA = 2;
 const ARM_KIND_CONFIG = 0;
 const ARM_KIND_ADMISSION = 1;
 const ARM_KIND_EVALUATION = 2;
@@ -736,9 +736,9 @@ const ARM_LINK_COUNT = 8;
 const ARM_POSE_WORDS = 7;
 const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 37;
-const ARM_RECEIPT_WORDS = 19;
+const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.5";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.6";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -795,6 +795,7 @@ const G1_REFUSAL_NAMES = [
   "non-finite-objective",
   "population-invalid",
   "shape-overflow",
+  "query-owner",
 ] as const;
 
 const ARM_REFUSAL_NAMES = [
@@ -931,14 +932,14 @@ type OwnerWasmModule = WasmModule & {
 let ownerModule: OwnerWasmModule | null = null;
 let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
 
-/** Load and probe the CMA-2 / G1-5 / household-arm-1 owner package once per realm. */
+/** Load and probe the CMA-2 / G1-6 / household-arm-2 owner package once per realm. */
 export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   if (ownerLoadPromise) return ownerLoadPromise;
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm_bg.wasm"
+        "/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm_bg.wasm"
       )) as OwnerWasmModule;
       const version = typeof loaded.cmaes_viz_kernel_version === "function"
         ? loaded.cmaes_viz_kernel_version()
@@ -1334,6 +1335,7 @@ export async function createFrankenSimCmaFamilySession(
 
 export interface G1WalkingConfig {
   task: G1Task;
+  challenge: G1Challenge;
   stepSeconds: number;
   durationSeconds: number;
   targetSpeed: number;
@@ -1342,6 +1344,7 @@ export interface G1WalkingConfig {
 }
 
 export type G1Task = "balance" | "stepping" | "walking";
+export type G1Challenge = "flat" | "terrain-and-push";
 
 const G1_TASK_IDS: Record<G1Task, number> = {
   balance: 0,
@@ -1350,9 +1353,15 @@ const G1_TASK_IDS: Record<G1Task, number> = {
 };
 
 const G1_TASK_NAMES = ["balance", "stepping", "walking"] as const;
+const G1_CHALLENGE_IDS: Record<G1Challenge, number> = {
+  flat: 0,
+  "terrain-and-push": 1,
+};
+const G1_CHALLENGE_NAMES = ["flat", "terrain-and-push"] as const;
 
 export const DEFAULT_G1_WALKING_CONFIG: G1WalkingConfig = {
   task: "walking",
+  challenge: "terrain-and-push",
   stepSeconds: 1 / 480,
   durationSeconds: 1.5,
   targetSpeed: 0.65,
@@ -1366,6 +1375,11 @@ export interface G1Admission {
   poseWords: 7;
   traceSampleWords: 115;
   config: G1WalkingConfig;
+  terrainAmplitudeMeters: number;
+  terrainWavenumberRadiansPerMeter: number;
+  pushStartSeconds: number;
+  pushEndSeconds: number;
+  pushPeakForceNewtons: number;
 }
 
 export interface G1ObjectiveReceipt {
@@ -1385,6 +1399,11 @@ export interface G1ObjectiveReceipt {
   singleSupportSeconds: number;
   doubleSupportSeconds: number;
   flightSeconds: number;
+  pushImpulseNewtonSeconds: number;
+  recoveryTimeSeconds: number;
+  minimumBaseHeightMeters: number;
+  maximumTiltSine: number;
+  maximumAbsoluteTerrainHeightMeters: number;
   completedSteps: number;
   terminationReason: G1TerminationReason;
 }
@@ -1430,13 +1449,14 @@ function buildG1Config(config: G1WalkingConfig): Float64Array {
     G1_MAGIC,
     G1_SCHEMA,
     G1_KIND_CONFIG,
-    10,
+    11,
     config.stepSeconds,
     config.durationSeconds,
     config.targetSpeed,
     config.gaitFrequency,
     config.traceStride,
     G1_TASK_IDS[config.task],
+    G1_CHALLENGE_IDS[config.challenge],
   ]);
 }
 
@@ -1450,7 +1470,7 @@ function decodeG1Header(
 export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admission> {
   const header = decodeG1Header(packet, G1_KIND_ADMISSION);
   if ("refusal" in header) return header;
-  if (packet.length !== 15) throw new Error("malformed G1 packet: admission length");
+  if (packet.length !== 21) throw new Error("malformed G1 packet: admission length");
   const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
   const linkCount = exactPacketInteger(packet, 6, "link count");
   const poseWords = exactPacketInteger(packet, 7, "pose words");
@@ -1471,6 +1491,24 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
   const taskId = exactPacketInteger(packet, 14, "task", 0, G1_TASK_NAMES.length - 1);
   const task = G1_TASK_NAMES[taskId];
   if (!task) throw new Error("malformed G1 packet: task");
+  const challengeId = exactPacketInteger(
+    packet,
+    15,
+    "challenge",
+    0,
+    G1_CHALLENGE_NAMES.length - 1
+  );
+  const challenge = G1_CHALLENGE_NAMES[challengeId];
+  if (!challenge) throw new Error("malformed G1 packet: challenge");
+  const terrainAmplitudeMeters = finitePacketNumber(packet, 16, "terrain amplitude");
+  const terrainWavenumberRadiansPerMeter = finitePacketNumber(
+    packet,
+    17,
+    "terrain wavenumber"
+  );
+  const pushStartSeconds = finitePacketNumber(packet, 18, "push start");
+  const pushEndSeconds = finitePacketNumber(packet, 19, "push end");
+  const pushPeakForceNewtons = finitePacketNumber(packet, 20, "push peak force");
   if (
     stepSeconds < 1 / 480 ||
     stepSeconds > 1 / 30 ||
@@ -1480,7 +1518,13 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
     targetSpeed > 2 ||
     gaitFrequency < 0.25 ||
     gaitFrequency > 4 ||
-    Math.round(durationSeconds / stepSeconds) > 10_000
+    Math.round(durationSeconds / stepSeconds) > 10_000 ||
+    terrainAmplitudeMeters < 0 ||
+    terrainWavenumberRadiansPerMeter <= 0 ||
+    pushStartSeconds < 0 ||
+    pushEndSeconds <= pushStartSeconds ||
+    pushEndSeconds > durationSeconds ||
+    pushPeakForceNewtons < 0
   ) {
     throw new Error("malformed G1 packet: admitted controls");
   }
@@ -1492,21 +1536,27 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
       traceSampleWords: G1_TRACE_SAMPLE_WORDS,
       config: {
         task,
+        challenge,
         stepSeconds,
         durationSeconds,
         targetSpeed,
         gaitFrequency,
         traceStride,
       },
+      terrainAmplitudeMeters,
+      terrainWavenumberRadiansPerMeter,
+      pushStartSeconds,
+      pushEndSeconds,
+      pushPeakForceNewtons,
     },
   };
 }
 
 function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
-  if (packet.length < 23) throw new Error("malformed G1 packet: objective receipt");
+  if (packet.length < 28) throw new Error("malformed G1 packet: objective receipt");
   const terminationId = exactPacketInteger(
     packet,
-    22,
+    27,
     "termination reason",
     0,
     G1_TERMINATION_REASONS.length - 1
@@ -1530,7 +1580,12 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     singleSupportSeconds: finitePacketNumber(packet, 18, "single support"),
     doubleSupportSeconds: finitePacketNumber(packet, 19, "double support"),
     flightSeconds: finitePacketNumber(packet, 20, "flight"),
-    completedSteps: exactPacketInteger(packet, 21, "completed steps", 0, 10_000),
+    pushImpulseNewtonSeconds: finitePacketNumber(packet, 21, "push impulse"),
+    recoveryTimeSeconds: finitePacketNumber(packet, 22, "recovery time"),
+    minimumBaseHeightMeters: finitePacketNumber(packet, 23, "minimum base height"),
+    maximumTiltSine: finitePacketNumber(packet, 24, "maximum tilt sine"),
+    maximumAbsoluteTerrainHeightMeters: finitePacketNumber(packet, 25, "maximum terrain height"),
+    completedSteps: exactPacketInteger(packet, 26, "completed steps", 0, 10_000),
     terminationReason,
   };
   if (
@@ -1547,7 +1602,13 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     receipt.swingClearanceErrorIntegral < 0 ||
     receipt.singleSupportSeconds < 0 ||
     receipt.doubleSupportSeconds < 0 ||
-    receipt.flightSeconds < 0
+    receipt.flightSeconds < 0 ||
+    receipt.pushImpulseNewtonSeconds < 0 ||
+    receipt.recoveryTimeSeconds < 0 ||
+    receipt.minimumBaseHeightMeters < 0 ||
+    receipt.maximumTiltSine < 0 ||
+    receipt.maximumTiltSine > 1 ||
+    receipt.maximumAbsoluteTerrainHeightMeters < 0
   ) {
     throw new Error("malformed G1 packet: negative integral");
   }
@@ -1557,7 +1618,7 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
 export function decodeG1Evaluation(packet: Float64Array): PackedResult<G1ObjectiveReceipt> {
   const header = decodeG1Header(packet, G1_KIND_EVALUATION);
   if ("refusal" in header) return header;
-  if (packet.length !== 23) throw new Error("malformed G1 packet: evaluation length");
+  if (packet.length !== 28) throw new Error("malformed G1 packet: evaluation length");
   return { ok: decodeG1ReceiptPayload(packet) };
 }
 
@@ -1574,12 +1635,12 @@ export function decodeG1Trace(packet: Float64Array): PackedResult<G1TraceReceipt
   const header = decodeG1Header(packet, G1_KIND_TRACE);
   if ("refusal" in header) return header;
   const receipt = decodeG1ReceiptPayload(packet);
-  const sampleCount = exactPacketInteger(packet, 23, "trace sample count");
-  if (packet.length !== 24 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
+  const sampleCount = exactPacketInteger(packet, 28, "trace sample count");
+  if (packet.length !== 29 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
     throw new Error("malformed G1 packet: trace shape");
   }
   const samples: G1TraceSample[] = [];
-  let cursor = 24;
+  let cursor = 29;
   let previousTime = -Infinity;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
     const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
@@ -1698,7 +1759,7 @@ const ARM_TASK_NAMES = [
 export const DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG: HouseholdManipulationConfig = {
   task: "kitchen-mug",
   stepSeconds: 1 / 90,
-  durationSeconds: 4,
+  durationSeconds: 6,
   traceStride: 3,
 };
 
@@ -1734,7 +1795,10 @@ export interface HouseholdManipulationObjectiveReceipt {
   minimumReachErrorMeters: number;
   maximumLiftMeters: number;
   actuatorWorkJoules: number;
-  obstacleIntegral: number;
+  collisionRiskIntegral: number;
+  minimumCertifiedClearanceMeters: number;
+  possibleCollisionTimeSeconds: number;
+  collisionQueryIterations: number;
   controlLimitIntegral: number;
   firstGraspTimeSeconds: number;
   graspDurationSeconds: number;
@@ -1912,22 +1976,31 @@ function decodeHouseholdReceiptPayload(
     minimumReachErrorMeters: finitePacketNumber(packet, 7, "minimum reach error"),
     maximumLiftMeters: finitePacketNumber(packet, 8, "maximum lift"),
     actuatorWorkJoules: finitePacketNumber(packet, 9, "actuator work"),
-    obstacleIntegral: finitePacketNumber(packet, 10, "obstacle integral"),
-    controlLimitIntegral: finitePacketNumber(packet, 11, "control limit integral"),
-    firstGraspTimeSeconds: finitePacketNumber(packet, 12, "first grasp time"),
-    graspDurationSeconds: finitePacketNumber(packet, 13, "grasp duration"),
-    peakGripForceNewtons: finitePacketNumber(packet, 14, "peak grip force"),
-    everGrasped: exactPacketInteger(packet, 15, "ever grasped", 0, 1) === 1,
-    releasedAfterTransport: exactPacketInteger(packet, 16, "released", 0, 1) === 1,
-    placed: exactPacketInteger(packet, 17, "placed", 0, 1) === 1,
-    completedSteps: exactPacketInteger(packet, 18, "completed steps", 1, 1_440),
+    collisionRiskIntegral: finitePacketNumber(packet, 10, "collision risk integral"),
+    minimumCertifiedClearanceMeters: finitePacketNumber(
+      packet,
+      11,
+      "minimum certified clearance"
+    ),
+    possibleCollisionTimeSeconds: finitePacketNumber(packet, 12, "possible collision time"),
+    collisionQueryIterations: exactPacketInteger(packet, 13, "collision query iterations"),
+    controlLimitIntegral: finitePacketNumber(packet, 14, "control limit integral"),
+    firstGraspTimeSeconds: finitePacketNumber(packet, 15, "first grasp time"),
+    graspDurationSeconds: finitePacketNumber(packet, 16, "grasp duration"),
+    peakGripForceNewtons: finitePacketNumber(packet, 17, "peak grip force"),
+    everGrasped: exactPacketInteger(packet, 18, "ever grasped", 0, 1) === 1,
+    releasedAfterTransport: exactPacketInteger(packet, 19, "released", 0, 1) === 1,
+    placed: exactPacketInteger(packet, 20, "placed", 0, 1) === 1,
+    completedSteps: exactPacketInteger(packet, 21, "completed steps", 1, 1_440),
   };
   if (
     receipt.finalObjectErrorMeters < 0 ||
     receipt.minimumReachErrorMeters < 0 ||
     receipt.maximumLiftMeters < 0 ||
     receipt.actuatorWorkJoules < 0 ||
-    receipt.obstacleIntegral < 0 ||
+    receipt.collisionRiskIntegral < 0 ||
+    receipt.minimumCertifiedClearanceMeters < 0 ||
+    receipt.possibleCollisionTimeSeconds < 0 ||
     receipt.controlLimitIntegral < 0 ||
     receipt.firstGraspTimeSeconds < 0 ||
     receipt.graspDurationSeconds < 0 ||

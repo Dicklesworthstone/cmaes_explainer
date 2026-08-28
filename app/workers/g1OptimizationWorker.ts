@@ -5,8 +5,10 @@ import {
   createFrankenSimCmaFamilySession,
   createFrankenSimG1WalkingEvaluator,
   type CmaFamily,
+  type G1Admission,
   type G1TraceReceipt,
 } from "../lib/frankensimCmaes";
+import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
 type WorkerRequest =
   | { type: "preview" }
@@ -22,7 +24,13 @@ type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
 type WorkerResponse =
   | { type: "status"; phase: string; detail: string }
-  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: G1TraceOrigin }
+  | {
+      type: "trace";
+      trace: G1TraceReceipt;
+      admission: G1Admission;
+      generation: number;
+      family: G1TraceOrigin;
+    }
   | {
       type: "progress";
       family: CmaFamily;
@@ -57,6 +65,27 @@ function requireOk<T>(result: { ok: T } | { refusal: { name: string; detail: num
   throw new Error(`${label}: ${result.refusal.name}${suffix}`);
 }
 
+function reportParallelEvaluation(
+  receipt: { lanes: number; firstBatchVerified: boolean; fallbackReason: string | null },
+  announced: boolean
+): boolean {
+  if (announced) return true;
+  if (receipt.fallbackReason) {
+    post({
+      type: "status",
+      phase: "parallel-fallback",
+      detail: `Parallel evaluation fell back to the sequential owner path: ${receipt.fallbackReason}.`,
+    });
+  } else if (receipt.firstBatchVerified) {
+    post({
+      type: "status",
+      phase: "parallel-verified",
+      detail: `${receipt.lanes} persistent WASM lanes matched the sequential physical objectives exactly.`,
+    });
+  }
+  return true;
+}
+
 async function preview(): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
   const evaluator = requireOk(
@@ -68,12 +97,24 @@ async function preview(): Promise<void> {
       evaluator.trace(evaluator.stabilizingPolicyMean()),
       "stabilizing trace"
     );
-    post({ type: "trace", trace: stabilizerTrace, generation: 0, family: "stabilizer" });
+    post({
+      type: "trace",
+      trace: stabilizerTrace,
+      admission: evaluator.admission,
+      generation: 0,
+      family: "stabilizer",
+    });
     const curriculumTrace = requireOk(
       evaluator.trace(evaluator.walkingCurriculumMean()),
       "walking curriculum trace"
     );
-    post({ type: "trace", trace: curriculumTrace, generation: 0, family: "curriculum" });
+    post({
+      type: "trace",
+      trace: curriculumTrace,
+      admission: evaluator.admission,
+      generation: 0,
+      family: "curriculum",
+    });
   } finally {
     evaluator.free();
   }
@@ -100,13 +141,19 @@ async function optimize(
     await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
     "G1 admission"
   );
-  let bestPolicy = evaluator.walkingCurriculumMean();
-  let bestObjective = requireOk(
-    evaluator.evaluate(bestPolicy),
-    "G1 curriculum evaluation"
-  ).objective;
-  let completedGeneration = 0;
+  const evaluationPool = new RoboticsEvaluationPool({
+    model: "g1",
+    config: DEFAULT_G1_WALKING_CONFIG,
+    dimension: 5_040,
+  });
   try {
+    let bestPolicy = evaluator.walkingCurriculumMean();
+    let bestObjective = requireOk(
+      evaluator.evaluate(bestPolicy),
+      "G1 curriculum evaluation"
+    ).objective;
+    let completedGeneration = 0;
+    let parallelAnnounced = false;
     const session = requireOk(
       await createFrankenSimCmaFamilySession({
         family,
@@ -122,11 +169,18 @@ async function optimize(
     try {
       for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
         const ask = requireOk(session.ask(), "CMA ask");
-        const objectives = requireOk(
-          evaluator.evaluatePopulation(ask.candidates),
-          "G1 population evaluation"
+        const evaluation = await evaluationPool.evaluate(
+          ask.candidates,
+          () => requireOk(
+            evaluator.evaluatePopulation(ask.candidates),
+            "sequential G1 population evaluation"
+          )
         );
-        const snapshot = requireOk(session.tell(ask.generation, objectives), "CMA tell");
+        parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
+        const snapshot = requireOk(
+          session.tell(ask.generation, evaluation.objectives),
+          "CMA tell"
+        );
         completedGeneration = snapshot.generation;
         if (snapshot.best && snapshot.best.objective < bestObjective) {
           bestObjective = snapshot.best.objective;
@@ -150,79 +204,96 @@ async function optimize(
       detail: "Rendering the best policy on the identical full-horizon experiment…",
     });
     const trace = requireOk(evaluator.trace(bestPolicy), "optimized trace");
-    post({ type: "trace", trace, generation: completedGeneration, family });
+    post({
+      type: "trace",
+      trace,
+      admission: evaluator.admission,
+      generation: completedGeneration,
+      family,
+    });
   } finally {
+    evaluationPool.free();
     evaluator.free();
   }
 }
 
-function ellipsoidObjective(candidates: Float64Array, dimension: number): Float64Array {
-  const population = candidates.length / dimension;
-  const objectives = new Float64Array(population);
-  for (let candidate = 0; candidate < population; candidate++) {
-    let objective = 0;
-    const offset = candidate * dimension;
-    for (let coordinate = 0; coordinate < dimension; coordinate++) {
-      const value = candidates[offset + coordinate];
-      const weight = 10 ** ((4 * coordinate) / Math.max(1, dimension - 1));
-      objective += weight * value * value;
-    }
-    objectives[candidate] = objective;
-  }
-  return objectives;
-}
-
 async function compareFamilies(requestedGenerations: number): Promise<void> {
-  const generations = Math.max(2, Math.min(20, Math.trunc(requestedGenerations)));
-  const dimension = 96;
+  const generations = Math.max(2, Math.min(8, Math.trunc(requestedGenerations)));
   const population = 16;
-  const families: CmaFamily[] = ["full", "separable", "lm-cma", "lm-ma"];
+  const families: Exclude<CmaFamily, "full">[] = ["separable", "lm-cma", "lm-ma"];
   const rows: Extract<WorkerResponse, { type: "comparison" }>["rows"] = [];
   post({
     type: "status",
     phase: "comparing",
-    detail: "Running all four owner implementations at the same 96-D evaluation budget…",
+    detail: "Running all three scalable owners on the identical 5,040-D terrain-and-push objective…",
   });
 
-  for (const family of families) {
-    const session = requireOk(
-      await createFrankenSimCmaFamilySession({
-        family,
-        mean: new Float64Array(dimension).fill(1.5),
-        sigma: 0.35,
-        population,
-        memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
-        maxEvaluations: population * generations,
-        seed: 0xc0ffee_5040n,
-      }),
-      `${family} admission`
-    );
-    const started = performance.now();
-    let initialBest = Infinity;
-    let finalBest = Infinity;
-    let evaluations = 0;
-    try {
-      for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
-        const ask = requireOk(session.ask(), `${family} ask`);
-        const objectives = ellipsoidObjective(ask.candidates, ask.dimension);
-        const generationBest = objectives.reduce((best, value) => Math.min(best, value), Infinity);
-        if (generationIndex === 0) initialBest = generationBest;
-        const snapshot = requireOk(session.tell(ask.generation, objectives), `${family} tell`);
-        finalBest = snapshot.best?.objective ?? generationBest;
-        evaluations = snapshot.evaluations;
+  const evaluator = requireOk(
+    await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
+    "G1 comparison admission"
+  );
+  const evaluationPool = new RoboticsEvaluationPool({
+    model: "g1",
+    config: DEFAULT_G1_WALKING_CONFIG,
+    dimension: 5_040,
+  });
+  let parallelAnnounced = false;
+  try {
+    const mean = evaluator.walkingCurriculumMean();
+    const initialBest = requireOk(
+      evaluator.evaluate(mean),
+      "G1 comparison curriculum evaluation"
+    ).objective;
+    for (const family of families) {
+      const session = requireOk(
+        await createFrankenSimCmaFamilySession({
+          family,
+          mean,
+          sigma: 0.0005,
+          population,
+          memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
+          maxEvaluations: population * generations,
+          seed: 0xc0ffee_5040n,
+        }),
+        `${family} admission`
+      );
+      const started = performance.now();
+      let finalBest = initialBest;
+      let evaluations = 0;
+      try {
+        for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
+          const ask = requireOk(session.ask(), `${family} ask`);
+          const evaluation = await evaluationPool.evaluate(
+            ask.candidates,
+            () => requireOk(
+              evaluator.evaluatePopulation(ask.candidates),
+              `${family} sequential G1 population`
+            )
+          );
+          parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
+          const snapshot = requireOk(
+            session.tell(ask.generation, evaluation.objectives),
+            `${family} tell`
+          );
+          finalBest = Math.min(finalBest, snapshot.best?.objective ?? finalBest);
+          evaluations = snapshot.evaluations;
+        }
+        rows.push({
+          family,
+          initialBest,
+          finalBest,
+          evaluations,
+          persistentScalars: session.admission.persistentScalars,
+          workspaceScalars: session.admission.updateWorkspaceScalars,
+          elapsedMilliseconds: performance.now() - started,
+        });
+      } finally {
+        session.free();
       }
-      rows.push({
-        family,
-        initialBest,
-        finalBest,
-        evaluations,
-        persistentScalars: session.admission.persistentScalars,
-        workspaceScalars: session.admission.updateWorkspaceScalars,
-        elapsedMilliseconds: performance.now() - started,
-      });
-    } finally {
-      session.free();
     }
+  } finally {
+    evaluationPool.free();
+    evaluator.free();
   }
   post({ type: "comparison", rows });
 }

@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-08-28T17:51:54.928Z",
+  "host": "mac-mini-old",
+  "os": "Darwin 25.5.0 arm64",
+  "cpu": "Apple M4",
+  "logical_cpus": 10,
+  "bun": "1.4.0",
+  "rustc": "1.100.0-nightly (e457a7b0d 2026-08-27)",
+  "site_commit": "a12fa4a0c51beee55ef6e5c249abf7c8eaeaf36d",
+  "frankensim_commit": "46bc30b914c2332686d4390416382348aa64b156",
+  "kernel": "fs-cmaes-viz-wasm 0.6.5",
+  "wasm_sha256": "pending-final-artifact-ledger"
+}

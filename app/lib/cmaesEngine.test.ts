@@ -3,6 +3,7 @@ import { BENCHMARKS, CMAESOptimizer } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
 import {
   CMAES_VISUALIZATION_F_TARGET,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
   buildCmaFamilyConfig,
   decodeCmaFamilyAsk,
   decodeCmaFamilySnapshot,
@@ -20,6 +21,7 @@ import {
   type CmaesVizGeneration,
   type CmaesVizRun
 } from "./frankensimCmaes";
+import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
 import {
   evaluateBridgePhysics,
   evaluateWingPhysics,
@@ -622,11 +624,12 @@ describe("schema-2 owner CMA packet adapter", () => {
 
 describe("G1 walking packet adapter", () => {
   const admission = new Float64Array([
-    0x47315735, 5, 0, 1, 15, 5_040, 16, 7, 115, 1 / 480, 1.5, 0.65, 1.55, 12, 2,
+    0x47315736, 6, 0, 1, 21, 5_040, 16, 7, 115, 1 / 480, 1.5, 0.65, 1.55, 12, 2,
+    1, 0.024, 2.4, 0.55, 0.7, 72,
   ]);
   const objectiveWords = [
     12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6,
-    0.88, 0.02, 720, 0,
+    0.88, 0.02, 8.4, 0.31, 0.54, 0.18, 0.024, 720, 0,
   ];
 
   test("admits only the exact owner policy and pose layout", () => {
@@ -636,10 +639,16 @@ describe("G1 walking packet adapter", () => {
     expect(decoded.ok.linkCount).toBe(16);
     expect(decoded.ok.traceSampleWords).toBe(115);
     expect(decoded.ok.config.task).toBe("walking");
+    expect(decoded.ok.config.challenge).toBe("terrain-and-push");
+    expect(decoded.ok.pushPeakForceNewtons).toBe(72);
 
     const wrongLayout = admission.slice();
     wrongLayout[5] = 5_039;
     expect(() => decodeG1Admission(wrongLayout)).toThrow("layout mismatch");
+
+    const pushAfterHorizon = admission.slice();
+    pushAfterHorizon[19] = 1.6;
+    expect(() => decodeG1Admission(pushAfterHorizon)).toThrow("admitted controls");
 
     const wrongControls = admission.slice();
     wrongControls[11] = -0.1;
@@ -647,17 +656,18 @@ describe("G1 walking packet adapter", () => {
   });
 
   test("decodes decomposed objectives, population rows, and owner poses", () => {
-    const evaluation = new Float64Array([0x47315735, 5, 0, 2, 23, ...objectiveWords]);
+    const evaluation = new Float64Array([0x47315736, 6, 0, 2, 28, ...objectiveWords]);
     const decodedEvaluation = decodeG1Evaluation(evaluation);
     if (!("ok" in decodedEvaluation)) throw new Error("unexpected evaluation refusal");
     expect(decodedEvaluation.ok.distanceMeters).toBe(0.4);
+    expect(decodedEvaluation.ok.pushImpulseNewtonSeconds).toBe(8.4);
     expect(decodedEvaluation.ok.terminationReason).toBe("horizon");
 
     const negativeIntegral = evaluation.slice();
     negativeIntegral[11] = -1;
     expect(() => decodeG1Evaluation(negativeIntegral)).toThrow("negative integral");
 
-    const population = decodeG1Population(new Float64Array([0x47315735, 5, 0, 4, 9, 3, 4, 3, 2]));
+    const population = decodeG1Population(new Float64Array([0x47315736, 6, 0, 4, 9, 3, 4, 3, 2]));
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
 
@@ -672,7 +682,7 @@ describe("G1 walking packet adapter", () => {
       sample[poseStart + 3] = 1;
     }
     const trace = decodeG1Trace(new Float64Array([
-      0x47315735, 5, 0, 3, 139, ...objectiveWords, 1, ...sample,
+      0x47315736, 6, 0, 3, 144, ...objectiveWords, 1, ...sample,
     ]));
     if (!("ok" in trace)) throw new Error("unexpected trace refusal");
     expect(trace.ok.samples).toHaveLength(1);
@@ -680,40 +690,72 @@ describe("G1 walking packet adapter", () => {
     expect(trace.ok.samples[0].linkPoses[15].position).toEqual([0.15, 0, 0.75]);
 
     const nonUnitQuaternion = new Float64Array([
-      0x47315735, 5, 0, 3, 139, ...objectiveWords, 1, ...sample,
+      0x47315736, 6, 0, 3, 144, ...objectiveWords, 1, ...sample,
     ]);
-    nonUnitQuaternion[30] = 0.5;
+    nonUnitQuaternion[35] = 0.5;
     expect(() => decodeG1Trace(nonUnitQuaternion)).toThrow("link quaternion");
   });
 
   test("decodes exact termination reasons and rejects unknown reason IDs", () => {
     const baseTilt = new Float64Array([
-      0x47315735, 5, 0, 2, 23, ...objectiveWords.slice(0, -1), 2,
+      0x47315736, 6, 0, 2, 28, ...objectiveWords.slice(0, -1), 2,
     ]);
     const decoded = decodeG1Evaluation(baseTilt);
     if (!("ok" in decoded)) throw new Error("unexpected evaluation refusal");
     expect(decoded.ok.terminationReason).toBe("base tilt");
 
     const unknownReason = baseTilt.slice();
-    unknownReason[22] = 7;
+    unknownReason[27] = 7;
     expect(() => decodeG1Evaluation(unknownReason)).toThrow("termination reason");
   });
 
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
     expect(() => decodeG1Trace(new Float64Array([
-      0x47315735, 5, 0, 3, 24, ...objectiveWords, 1,
+      0x47315736, 6, 0, 3, 29, ...objectiveWords, 1,
     ]))).toThrow("trace shape");
   });
 });
 
+test("the robotics pool degrades to the sequential owner when workers are unavailable", async () => {
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+  Object.defineProperty(globalThis, "Worker", {
+    configurable: true,
+    value: class UnavailableWorker {
+      constructor() {
+        throw new Error("worker construction blocked by test");
+      }
+    },
+  });
+  try {
+    const pool = new RoboticsEvaluationPool({
+      model: "arm",
+      config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+      dimension: 128,
+    });
+    const sequentialObjectives = Float64Array.of(17);
+    const receipt = await pool.evaluate(
+      new Float64Array(128),
+      () => sequentialObjectives
+    );
+    expect(receipt.objectives).toBe(sequentialObjectives);
+    expect(receipt.lanes).toBe(1);
+    expect(receipt.firstBatchVerified).toBe(false);
+    expect(receipt.fallbackReason).toContain("worker construction failed");
+    pool.free();
+  } finally {
+    if (workerDescriptor) Object.defineProperty(globalThis, "Worker", workerDescriptor);
+    else Reflect.deleteProperty(globalThis, "Worker");
+  }
+});
+
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm.js");
+  const wasm = await import("../../public/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v065/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL("../../public/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.5");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.6");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
     const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
@@ -769,7 +811,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   }
 
   const evaluator = new wasm.G1WalkingVizEvaluator(new Float64Array([
-    0x47315735, 5, 0, 10, 1 / 480, 1.5, 0.65, 1.55, 12, 2,
+    0x47315736, 6, 0, 11, 1 / 480, 1.5, 0.65, 1.55, 12, 2, 1,
   ]));
   const admission = decodeG1Admission(evaluator.receipt());
   if (!("ok" in admission)) throw new Error(`G1 admission refusal ${admission.refusal.name}`);
@@ -791,7 +833,10 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     throw new Error(`aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`);
   }
   if (!("ok" in trace)) throw new Error(`G1 trace refusal ${trace.refusal.name}`);
-  expect(evaluation.ok.completedSteps).toBeGreaterThan(600);
+  // The standing-only prior now receives the disclosed terrain and push. It
+  // survives the entire pulse (which ends at step 336) but is not expected to
+  // finish the walking horizon; the 105-coordinate curriculum below must.
+  expect(evaluation.ok.completedSteps).toBeGreaterThan(336);
   expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(evaluation.ok.completedSteps);
   expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(evaluation.ok.objective);
   expect(curriculum.ok.completedSteps).toBe(720);
@@ -847,7 +892,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
 
   for (const task of [0, 1, 2]) {
     const arm = new wasm.HouseholdManipulationVizEvaluator(new Float64Array([
-      0x41524d31, 1, 0, 8, 1 / 90, 4, 3, task,
+      0x41524d31, 2, 0, 8, 1 / 90, 6, 3, task,
     ]));
     const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
     if (!("ok" in armAdmission)) {

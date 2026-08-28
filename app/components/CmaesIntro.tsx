@@ -22,7 +22,12 @@ import {
   Zap,
   Target
 } from "lucide-react";
-import { eigen2x2, sampleGaussian, sampleGaussian2D } from "../lib/cmaesEngine";
+import {
+  createMulberry32,
+  eigen2x2,
+  sampleGaussian,
+  sampleGaussian2D,
+} from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 import { useInView } from "../hooks/useScrollSpy";
 
@@ -208,6 +213,9 @@ function GaussianDistributionSandbox() {
 
   // Generate samples from N(m, sigma^2 C)
   const { samples, eliteMean, samplePoints } = useMemo(() => {
+    // Fixed presentation seed: the sandbox figure is identical on every load
+    // (user actions still reshape it live; this only pins the initial draw).
+    const introRng = createMulberry32(1337);
     const angleRad = (angleDeg * Math.PI) / 180;
     const l1 = eigenRatio * covarianceScale;
     const l2 = covarianceScale;
@@ -219,7 +227,7 @@ function GaussianDistributionSandbox() {
 
     const pts: InteractiveSample[] = [];
     for (let i = 0; i < sampleCount; i++) {
-      const [z0, z1] = sampleGaussian2D();
+      const [z0, z1] = sampleGaussian2D(introRng);
 
       // Transform by sqrt(C) * sigma
       const lx = z0 * s1;

@@ -10,6 +10,7 @@ import {
   type HouseholdManipulationTask,
   type HouseholdManipulationTraceReceipt,
 } from "../lib/frankensimCmaes";
+import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
 type WorkerRequest =
   | { type: "preview"; task: HouseholdManipulationTask }
@@ -78,6 +79,27 @@ function memoryFor(family: CmaFamily): number | undefined {
   return family === "lm-cma" || family === "lm-ma" ? 12 : undefined;
 }
 
+function reportParallelEvaluation(
+  receipt: { lanes: number; firstBatchVerified: boolean; fallbackReason: string | null },
+  announced: boolean
+): boolean {
+  if (announced) return true;
+  if (receipt.fallbackReason) {
+    post({
+      type: "status",
+      phase: "parallel-fallback",
+      detail: `Parallel evaluation fell back to the sequential owner path: ${receipt.fallbackReason}.`,
+    });
+  } else if (receipt.firstBatchVerified) {
+    post({
+      type: "status",
+      phase: "parallel-verified",
+      detail: `${receipt.lanes} persistent WASM lanes matched the sequential physical objectives exactly.`,
+    });
+  }
+  return true;
+}
+
 async function preview(task: HouseholdManipulationTask): Promise<void> {
   post({
     type: "status",
@@ -116,20 +138,23 @@ async function optimize(
   post({
     type: "status",
     phase: "optimizing",
-    detail: `${family} is evaluating ${POPULATION} complete 4 s articulated pick-and-place rollouts per generation…`,
+    detail: `${family} is evaluating ${POPULATION} complete 6 s articulated pick-and-place rollouts per generation…`,
   });
 
+  const config = taskConfig(task);
   const evaluator = requireOk(
-    await createFrankenSimHouseholdManipulationEvaluator(taskConfig(task)),
+    await createFrankenSimHouseholdManipulationEvaluator(config),
     "household-arm admission"
   );
-  let bestPolicy = evaluator.curriculumPolicyMean();
-  let bestObjective = requireOk(
-    evaluator.evaluate(bestPolicy),
-    "household-arm curriculum evaluation"
-  ).objective;
-  let completedGeneration = 0;
+  const evaluationPool = new RoboticsEvaluationPool({ model: "arm", config, dimension: 128 });
   try {
+    let bestPolicy = evaluator.curriculumPolicyMean();
+    let bestObjective = requireOk(
+      evaluator.evaluate(bestPolicy),
+      "household-arm curriculum evaluation"
+    ).objective;
+    let completedGeneration = 0;
+    let parallelAnnounced = false;
     const session = requireOk(
       await createFrankenSimCmaFamilySession({
         family,
@@ -145,11 +170,18 @@ async function optimize(
     try {
       for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
         const ask = requireOk(session.ask(), "CMA ask");
-        const objectives = requireOk(
-          evaluator.evaluatePopulation(ask.candidates),
-          "household-arm population evaluation"
+        const evaluation = await evaluationPool.evaluate(
+          ask.candidates,
+          () => requireOk(
+            evaluator.evaluatePopulation(ask.candidates),
+            "sequential household-arm population evaluation"
+          )
         );
-        const snapshot = requireOk(session.tell(ask.generation, objectives), "CMA tell");
+        parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
+        const snapshot = requireOk(
+          session.tell(ask.generation, evaluation.objectives),
+          "CMA tell"
+        );
         completedGeneration = snapshot.generation;
         if (snapshot.best && snapshot.best.objective < bestObjective) {
           bestObjective = snapshot.best.objective;
@@ -181,6 +213,7 @@ async function optimize(
       family,
     });
   } finally {
+    evaluationPool.free();
     evaluator.free();
   }
 }
@@ -198,10 +231,13 @@ async function compareFamilies(
     detail: "Running all four CMA representations on the same 128-D physical objective and seed…",
   });
 
+  const config = taskConfig(task);
   const evaluator = requireOk(
-    await createFrankenSimHouseholdManipulationEvaluator(taskConfig(task)),
+    await createFrankenSimHouseholdManipulationEvaluator(config),
     "household-arm admission"
   );
+  const evaluationPool = new RoboticsEvaluationPool({ model: "arm", config, dimension: 128 });
+  let parallelAnnounced = false;
   try {
     const mean = evaluator.curriculumPolicyMean();
     const initialObjective = requireOk(
@@ -227,12 +263,16 @@ async function compareFamilies(
       try {
         for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
           const ask = requireOk(session.ask(), `${family} ask`);
-          const objectives = requireOk(
-            evaluator.evaluatePopulation(ask.candidates),
-            `${family} physical population`
+          const evaluation = await evaluationPool.evaluate(
+            ask.candidates,
+            () => requireOk(
+              evaluator.evaluatePopulation(ask.candidates),
+              `${family} sequential physical population`
+            )
           );
+          parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
           const snapshot = requireOk(
-            session.tell(ask.generation, objectives),
+            session.tell(ask.generation, evaluation.objectives),
             `${family} tell`
           );
           finalObjective = Math.min(finalObjective, snapshot.best?.objective ?? finalObjective);
@@ -252,6 +292,7 @@ async function compareFamilies(
       }
     }
   } finally {
+    evaluationPool.free();
     evaluator.free();
   }
   post({ type: "comparison", rows });

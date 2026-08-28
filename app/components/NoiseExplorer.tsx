@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Activity, Shuffle, Waves, Play, Pause, RotateCcw, Sparkles, Sliders, TrendingDown } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
+import { CMAESOptimizer, CMAESGenerationState, createMulberry32 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 
 const WIDTH = 920;
@@ -28,16 +28,19 @@ export function NoiseExplorer() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // Noisy black-box simulation evaluator
+  // Noisy black-box simulation evaluator. Seeded stream: identical seed =>
+  // identical noise sequence => identical run (the reproducibility contract);
+  // the live amp/type controls still act through the ref below.
+  const noiseRng = useRef(createMulberry32(0xa11ce));
   const sampleNoise = useCallback(() => {
     if (noiseType === "gaussian") {
       // Box-Muller normal
-      const u1 = Math.random() || 1e-6;
-      const u2 = Math.random();
+      const u1 = noiseRng.current() || 1e-6;
+      const u2 = noiseRng.current();
       return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * noiseLevel;
     } else {
       // Standard Cauchy with heavy tails (occasional massive spikes)
-      return Math.tan(Math.PI * (Math.random() - 0.5)) * (noiseLevel * 0.4);
+      return Math.tan(Math.PI * (noiseRng.current() - 0.5)) * (noiseLevel * 0.4);
     }
   }, [noiseType, noiseLevel]);
 
@@ -79,6 +82,7 @@ export function NoiseExplorer() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const resetOptimizer = useCallback(() => {
+    noiseRng.current = createMulberry32(0xa11ce);
     const opt = new CMAESOptimizer(noisyObjective, {
       dim: 2,
       initialMean: [1.8, 1.6],

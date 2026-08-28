@@ -339,13 +339,13 @@ function nextHalfOpenUnit(rng: () => number): number {
   throw new RangeError("Gaussian sampling requires an RNG that produces values in [0, 1).");
 }
 
-export function sampleGaussian(rng: () => number = Math.random): number {
+export function sampleGaussian(rng: () => number): number {
   const u = nextOpenUnit(rng);
   const v = nextHalfOpenUnit(rng);
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-export function sampleGaussianVectorND(dim: number, rng: () => number = Math.random): VectorND {
+export function sampleGaussianVectorND(dim: number, rng: () => number): VectorND {
   if (!Number.isInteger(dim) || dim < 1) throw new RangeError("sampleGaussianVectorND requires a positive integer dimension.");
   const result = new Array<number>(dim);
   for (let i = 0; i < dim; i += 2) {

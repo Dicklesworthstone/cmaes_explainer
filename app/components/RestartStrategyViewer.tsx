@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw, Timer, Activity, Play, Pause, RotateCcw, Sparkles, Layers, TrendingDown } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
+import { CMAESOptimizer, CMAESGenerationState, createMulberry32 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 
 const WIDTH = 960;
@@ -56,17 +56,20 @@ export function RestartStrategyViewer() {
     { evals: 8, fit: initialRun.s0.bestFitness, lambda: 8 }
   ]);
 
+  // Seeded presentation: the same starting basin and restart sequence on
+  // every load, so the IPOP/BIPOP comparison is reproducible (law 3).
+  const setupRng = useRef(createMulberry32(0x1337));
   const getOrInitOptimizer = useCallback((popSize: number, sigmaInit: number) => {
     if (!optimizerRef.current) {
-      const startX = (Math.random() - 0.5) * 5.0;
-      const startY = (Math.random() - 0.5) * 5.0;
+      const startX = (setupRng.current() - 0.5) * 5.0;
+      const startY = (setupRng.current() - 0.5) * 5.0;
       optimizerRef.current = new CMAESOptimizer(multimodalFn, {
         dim: 2,
         initialMean: [startX, startY],
         initialSigma: sigmaInit,
         lambda: popSize,
         bounds: [-3.5, 3.5],
-        seed: (Math.random() * 0xffffffff) >>> 0
+        seed: (setupRng.current() * 0xffffffff) >>> 0
       });
     }
     return optimizerRef.current;
@@ -108,6 +111,7 @@ export function RestartStrategyViewer() {
 
   const resetAll = useCallback(() => {
     optimizerRef.current = null;
+    setupRng.current = createMulberry32(0x1337);
     evalBudgetRef.current = 0;
     globalBestRef.current = Infinity;
     largeLambdaRef.current = 8;

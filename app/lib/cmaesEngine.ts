@@ -155,13 +155,25 @@ function nextHalfOpenUnit(rng: () => number): number {
   throw new RangeError("Gaussian sampling requires an RNG that produces values in [0, 1).");
 }
 
-export function sampleGaussian(rng: () => number = Math.random): number {
+/** Deterministic Mulberry32 generator for repeatable explanatory graphics. */
+export function createMulberry32(seed: number): () => number {
+  let state = Math.trunc(seed) >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / TWO_POW_32;
+  };
+}
+
+export function sampleGaussian(rng: () => number): number {
   const u = nextOpenUnit(rng);
   const v = nextHalfOpenUnit(rng);
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-export function sampleGaussian2D(rng: () => number = Math.random): [number, number] {
+export function sampleGaussian2D(rng: () => number): [number, number] {
   const u = nextOpenUnit(rng);
   const v = nextHalfOpenUnit(rng);
   const magnitude = Math.sqrt(-2 * Math.log(u));
@@ -169,7 +181,7 @@ export function sampleGaussian2D(rng: () => number = Math.random): [number, numb
   return [magnitude * Math.cos(angle), magnitude * Math.sin(angle)];
 }
 
-export function sampleGaussianVector(dim: number, rng: () => number = Math.random): Vector {
+export function sampleGaussianVector(dim: number, rng: () => number): Vector {
   if (!Number.isInteger(dim) || dim < 1) throw new RangeError("sampleGaussianVector requires a positive integer dimension.");
   const vector = new Array<number>(dim);
   for (let i = 0; i < dim; i += 2) {

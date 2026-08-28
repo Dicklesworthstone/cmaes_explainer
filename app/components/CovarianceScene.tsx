@@ -1,6 +1,7 @@
 "use client";
 
 import * as THREE from "three";
+import { createMulberry32 } from "../lib/cmaesEngine";
 import { Canvas } from "@react-three/fiber";
 import { safePointerEvents } from "./safeR3FEvents";
 import { useRef, useMemo, useState, useEffect } from "react";
@@ -58,9 +59,11 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
   const target: [number, number, number] = landscape === "rosenbrock" ? [1, 1, 1] : [0, 0, 0];
   const isRastrigin = landscape === "rastrigin";
 
+  // Seeded: the hero trajectory is identical on every load (same pixels).
+  const rng = createMulberry32(20260828);
   const gauss = () => {
-    const u = Math.max(Math.random(), 1e-12);
-    const v = Math.random();
+    const u = Math.max(rng(), 1e-12);
+    const v = rng();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   };
 

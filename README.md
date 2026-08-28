@@ -5,7 +5,10 @@ combines Next.js, React Three Fiber, MathJax, a reference-audited TypeScript
 CMA-ES, and versioned Frankensim WebAssembly kernels.
 
 The flagship experiment optimizes a real 5,040-parameter residual policy for a
-source-bound Unitree G1 lower-body model. The optimization runs in a Web Worker;
+source-bound Unitree G1 lower-body model over disclosed terrain and a timed
+lateral push. Optimization coordination runs in a Web Worker and expensive
+candidate rollouts fan out across persistent WASM evaluation workers after an
+exact sequential-parity check.
 Frankensim owns the policy map, free-floating articulated dynamics, SE(3)
 integration, contact, friction, objective, and rendered link poses.
 
@@ -26,24 +29,29 @@ Open <http://localhost:3000>.
 
 - Full, separable, LM-CMA, and LM-MA owner implementations behind one strict
   ask/tell packet contract.
-- A live equal-budget family comparison with representation-honest storage and
-  workspace receipts.
+- Live equal-budget physical family comparisons with representation-honest
+  storage and workspace receipts: all four variants on the 128-D household arm,
+  and the three scalable variants on the 5,040-D walking challenge.
 - A 5,040-D walking search using separable CMA-ES, LM-CMA, or LM-MA. Every
   candidate and the rendered winner use the identical 1.5-second, 720-step
-  owner experiment. The search starts from a disclosed 105-coordinate walking
+  owner experiment, including the same terrain and push. The search starts from a disclosed 105-coordinate walking
   curriculum (15 standing biases, 30 phase terms, and 60 inertial-feedback
   terms), then leaves all 5,040 coordinates free to adapt.
 - The low-dimensional visual lab, whose Rust kernel is admitted only after
   complete-trajectory parity with the TypeScript reference across the tested
   landscape and option matrix.
+- A 128-D KUKA-style household arm that learns finite-pad pick/lift/transport/
+  place policies for a mug, remote, and trowel. Frankensim integrates the free
+  object and reciprocal contact wrench and routes obstacle, object, and
+  non-adjacent self checks through certified convex-query owners.
 - Deterministic tests for every advertised wing coordinate, optimizer
-  convergence, binary packet refusals, all four owner families, and G1 rollout
-  invariants.
+  convergence, binary packet refusals, all four owner families, G1 challenge
+  invariants, and all three manipulation tasks.
 
 The G1 demo is deliberately a reduced explainer model: 15 lower-body and waist
 DoFs are simulated; its translucent head, shoulders, arms, and hands are
 display-only. It is not a hardware controller or a sim-to-real claim. Full
-CMA-ES is useful in the 96-D comparison but intentionally refused at 5,040
+CMA-ES is exercised on the 128-D arm but intentionally refused at 5,040
 dimensions because its dense covariance would require 25,401,600 entries.
 
 ## Versioned WebAssembly
@@ -52,8 +60,8 @@ Two audited surfaces coexist intentionally:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
   the existing low-dimensional visualizations.
-- `public/wasm/fs-cmaes/v064/` is the owner-family ask/tell and schema-5 G1 walking
-  package used by the flagship and its worker.
+- `public/wasm/fs-cmaes/v066/` is the owner-family ask/tell, schema-6 G1, and
+  schema-2 household-arm package used by the flagships and their workers.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.

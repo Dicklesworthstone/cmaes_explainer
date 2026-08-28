@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { createMulberry32 } from "../lib/cmaesEngine";
+
+import { useMemo, useRef, useState } from "react";
 import { Layers, Shuffle, Sparkles, Cpu, Binary, Gauge, ArrowRight, CheckCircle2 } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
 
@@ -12,7 +14,8 @@ export function EncodeDecodePlayground() {
   const [zAct, setZAct] = useState(0.35); // Categorical discrete [0, 1] -> 4 bins
   const [zLayers, setZLayers] = useState(0.42); // Integer discrete [6, 48]
   const [zWeightDecay, setZWeightDecay] = useState(0.68); // Continuous linear [0.0, 0.2]
-
+  // Persisted stream: each press advances one seeded walk (no Math.random).
+  const sampleRngRef = useRef(createMulberry32(0x5eed));
   // Decoded physical configurations
   const decoded = useMemo(() => {
     // 1. Log-scale learning rate
@@ -39,10 +42,12 @@ export function EncodeDecodePlayground() {
   const handleRandomSample = () => {
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
     // Box-Muller standard normal scaled to sigma = 0.15, so the step really is
-    // Gaussian (tails included) as the button label promises.
+    // Gaussian (tails included) as the button label promises. Seeded stream:
+    // the same button sequence always produces the same walk (law 3).
+    const rng = sampleRngRef.current;
     const randNorm = () => {
-      const u = Math.max(Math.random(), 1e-12);
-      const v = Math.random();
+      const u = Math.max(rng(), 1e-12);
+      const v = rng();
       return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * 0.15;
     };
     setZLr(clamp01(zLr + randNorm()));
