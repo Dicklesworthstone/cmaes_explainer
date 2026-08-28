@@ -722,7 +722,7 @@ const G1_LINK_COUNT = 16;
 const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 115;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.6";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.7";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -838,8 +838,8 @@ export interface CmaFamilySnapshot {
   streamSemantics: number;
   streamKernel: number;
   normalStreamBlocks: bigint;
-  samplingOrder: "linear" | "memory-linear" | "quadratic" | "cubic";
-  updateOrder: "linear" | "memory-linear" | "quadratic" | "cubic";
+  samplingOrder: "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
+  updateOrder: "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
   persistentScalars: number;
   pendingGenerationScalars: number;
   updateWorkspaceScalars: number;
@@ -890,8 +890,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm_bg.wasm"
+        "/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm_bg.wasm"
       )) as OwnerWasmModule;
       const version = typeof loaded.cmaes_viz_kernel_version === "function"
         ? loaded.cmaes_viz_kernel_version()
@@ -994,7 +994,13 @@ function decodeCmaOutputHeader(
   return decodeCommonOutput(packet, OWNER_CMA_MAGIC, OWNER_CMA_SCHEMA, expectedKind, CMA_REFUSAL_NAMES);
 }
 
-const COMPLEXITY_NAMES = ["linear", "memory-linear", "quadratic", "cubic"] as const;
+const COMPLEXITY_NAMES = [
+  "linear",
+  "memory-linear",
+  "quadratic",
+  "cubic",
+  "memory-quadratic",
+] as const;
 
 /** Strictly decode an admission or post-tell snapshot without inventing diagnostics. */
 export function decodeCmaFamilySnapshot(
@@ -1028,8 +1034,8 @@ export function decodeCmaFamilySnapshot(
   const streamKernel = exactPacketInteger(packet, 15, "stream kernel", 1, 0xffff_ffff);
   const normalLow = exactPacketInteger(packet, 16, "normal blocks low", 0, 0xffff_ffff);
   const normalHigh = exactPacketInteger(packet, 17, "normal blocks high", 0, 0xffff_ffff);
-  const samplingOrderId = exactPacketInteger(packet, 18, "sampling order", 0, 3);
-  const updateOrderId = exactPacketInteger(packet, 19, "update order", 0, 3);
+  const samplingOrderId = exactPacketInteger(packet, 18, "sampling order", 0, 4);
+  const updateOrderId = exactPacketInteger(packet, 19, "update order", 0, 4);
   const persistentScalars = exactPacketInteger(packet, 20, "persistent scalars");
   const pendingGenerationScalars = exactPacketInteger(packet, 21, "pending scalars");
   const updateWorkspaceScalars = exactPacketInteger(packet, 22, "workspace scalars");
@@ -1041,7 +1047,13 @@ export function decodeCmaFamilySnapshot(
   const expectedWords = OWNER_CMA_SNAPSHOT_WORDS + 2 * dimension + shapeWords;
   if (packet.length !== expectedWords) throw new Error("malformed packed packet: snapshot shape");
   const expectedSamplingOrder = family === "full" ? 2 : family === "separable" ? 0 : 1;
-  const expectedUpdateOrder = family === "full" ? 3 : family === "separable" ? 0 : 1;
+  const expectedUpdateOrder = family === "full"
+    ? 3
+    : family === "separable"
+      ? 0
+      : family === "lm-cma"
+        ? 4
+        : 1;
   if (samplingOrderId !== expectedSamplingOrder || updateOrderId !== expectedUpdateOrder) {
     throw new Error("malformed packed packet: family complexity");
   }

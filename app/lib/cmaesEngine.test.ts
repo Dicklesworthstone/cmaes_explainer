@@ -548,7 +548,7 @@ function ownerSnapshotPacket(family: number): Float64Array {
     OWNER_CMA_MAGIC, 2, 0, 1, packet.length,
     family, dimension, 0, 0, 0.4, 7, 3, 2, 14, 1, 1, 21, 0,
     family === 0 ? 2 : family === 1 ? 0 : 1,
-    family === 0 ? 3 : family === 1 ? 0 : 1,
+    family === 0 ? 3 : family === 1 ? 0 : family === 2 ? 4 : 1,
     64, 42, 31, family === 0 ? 18 : 0, family >= 2 ? 5 : 0,
     0, NaN, NaN, NaN, family === 0 ? 0 : family === 1 ? 1 : 2, shapePayload.length,
   ]);
@@ -700,13 +700,13 @@ describe("G1 walking packet adapter", () => {
 });
 
 test("the shipped schema-2 package executes every CMA family and improves the full G1 horizon", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm.js");
+  const wasm = await import("../../public/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v056/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL("../../public/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.6");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.5.7");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
     const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
