@@ -693,7 +693,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
 }
 
 // ---------------------------------------------------------------------------
-// Owner CMA-family + G1 walking boundary (schema 2 / G1 schema 2).
+// Owner CMA-family + G1 walking boundary (CMA schema 2 / G1 schema 5).
 //
 // This deliberately coexists with the audited 0.4.1 batch visualizer above.
 // That older surface provides exact low-dimensional TS/WASM trajectory parity;
@@ -710,8 +710,8 @@ const OWNER_CMA_KIND_TELL = 3;
 const OWNER_CMA_KIND_SNAPSHOT = 4;
 const OWNER_CMA_SNAPSHOT_WORDS = 31;
 
-const G1_MAGIC = 0x47315732;
-const G1_SCHEMA = 2;
+const G1_MAGIC = 0x47315735;
+const G1_SCHEMA = 5;
 const G1_KIND_CONFIG = 0;
 const G1_KIND_ADMISSION = 1;
 const G1_KIND_EVALUATION = 2;
@@ -722,7 +722,7 @@ const G1_LINK_COUNT = 16;
 const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 115;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.5.7";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.4";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -870,6 +870,8 @@ type RawCmaSession = {
 
 type RawG1Evaluator = {
   receipt: () => Float64Array;
+  stabilizing_policy_mean: () => Float64Array;
+  walking_curriculum_mean: () => Float64Array;
   evaluate: (policy: Float64Array) => Float64Array;
   evaluate_population: (policies: Float64Array) => Float64Array;
   trace: (policy: Float64Array) => Float64Array;
@@ -884,14 +886,14 @@ type OwnerWasmModule = WasmModule & {
 let ownerModule: OwnerWasmModule | null = null;
 let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
 
-/** Load and capability-probe the schema-2 CMA/G1 package exactly once per realm. */
+/** Load and capability-probe the CMA-schema-2 / G1-schema-5 package once per realm. */
 export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   if (ownerLoadPromise) return ownerLoadPromise;
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v057/fs_cmaes_viz_wasm_bg.wasm"
+        "/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v064/fs_cmaes_viz_wasm_bg.wasm"
       )) as OwnerWasmModule;
       const version = typeof loaded.cmaes_viz_kernel_version === "function"
         ? loaded.cmaes_viz_kernel_version()
@@ -1285,6 +1287,7 @@ export async function createFrankenSimCmaFamilySession(
 }
 
 export interface G1WalkingConfig {
+  task: G1Task;
   stepSeconds: number;
   durationSeconds: number;
   targetSpeed: number;
@@ -1292,7 +1295,18 @@ export interface G1WalkingConfig {
   traceStride: number;
 }
 
+export type G1Task = "balance" | "stepping" | "walking";
+
+const G1_TASK_IDS: Record<G1Task, number> = {
+  balance: 0,
+  stepping: 1,
+  walking: 2,
+};
+
+const G1_TASK_NAMES = ["balance", "stepping", "walking"] as const;
+
 export const DEFAULT_G1_WALKING_CONFIG: G1WalkingConfig = {
+  task: "walking",
   stepSeconds: 1 / 480,
   durationSeconds: 1.5,
   targetSpeed: 0.65,
@@ -1317,6 +1331,14 @@ export interface G1ObjectiveReceipt {
   postureIntegral: number;
   jointLimitIntegral: number;
   impactIntegral: number;
+  backwardDistanceMeters: number;
+  lateralErrorIntegral: number;
+  headingErrorIntegral: number;
+  contactScheduleMismatchIntegral: number;
+  swingClearanceErrorIntegral: number;
+  singleSupportSeconds: number;
+  doubleSupportSeconds: number;
+  flightSeconds: number;
   completedSteps: number;
   terminationReason: G1TerminationReason;
 }
@@ -1362,12 +1384,13 @@ function buildG1Config(config: G1WalkingConfig): Float64Array {
     G1_MAGIC,
     G1_SCHEMA,
     G1_KIND_CONFIG,
-    9,
+    10,
     config.stepSeconds,
     config.durationSeconds,
     config.targetSpeed,
     config.gaitFrequency,
     config.traceStride,
+    G1_TASK_IDS[config.task],
   ]);
 }
 
@@ -1381,7 +1404,7 @@ function decodeG1Header(
 export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admission> {
   const header = decodeG1Header(packet, G1_KIND_ADMISSION);
   if ("refusal" in header) return header;
-  if (packet.length !== 14) throw new Error("malformed G1 packet: admission length");
+  if (packet.length !== 15) throw new Error("malformed G1 packet: admission length");
   const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
   const linkCount = exactPacketInteger(packet, 6, "link count");
   const poseWords = exactPacketInteger(packet, 7, "pose words");
@@ -1399,6 +1422,9 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
   const targetSpeed = finitePacketNumber(packet, 11, "target speed");
   const gaitFrequency = finitePacketNumber(packet, 12, "gait frequency");
   const traceStride = exactPacketInteger(packet, 13, "trace stride", 1, 1_000);
+  const taskId = exactPacketInteger(packet, 14, "task", 0, G1_TASK_NAMES.length - 1);
+  const task = G1_TASK_NAMES[taskId];
+  if (!task) throw new Error("malformed G1 packet: task");
   if (
     stepSeconds < 1 / 480 ||
     stepSeconds > 1 / 30 ||
@@ -1419,6 +1445,7 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
       poseWords: G1_POSE_WORDS,
       traceSampleWords: G1_TRACE_SAMPLE_WORDS,
       config: {
+        task,
         stepSeconds,
         durationSeconds,
         targetSpeed,
@@ -1430,10 +1457,10 @@ export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admissio
 }
 
 function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
-  if (packet.length < 15) throw new Error("malformed G1 packet: objective receipt");
+  if (packet.length < 23) throw new Error("malformed G1 packet: objective receipt");
   const terminationId = exactPacketInteger(
     packet,
-    14,
+    22,
     "termination reason",
     0,
     G1_TERMINATION_REASONS.length - 1
@@ -1449,7 +1476,15 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     postureIntegral: finitePacketNumber(packet, 10, "posture"),
     jointLimitIntegral: finitePacketNumber(packet, 11, "joint limit"),
     impactIntegral: finitePacketNumber(packet, 12, "impact"),
-    completedSteps: exactPacketInteger(packet, 13, "completed steps", 0, 10_000),
+    backwardDistanceMeters: finitePacketNumber(packet, 13, "backward distance"),
+    lateralErrorIntegral: finitePacketNumber(packet, 14, "lateral error"),
+    headingErrorIntegral: finitePacketNumber(packet, 15, "heading error"),
+    contactScheduleMismatchIntegral: finitePacketNumber(packet, 16, "contact schedule mismatch"),
+    swingClearanceErrorIntegral: finitePacketNumber(packet, 17, "swing clearance error"),
+    singleSupportSeconds: finitePacketNumber(packet, 18, "single support"),
+    doubleSupportSeconds: finitePacketNumber(packet, 19, "double support"),
+    flightSeconds: finitePacketNumber(packet, 20, "flight"),
+    completedSteps: exactPacketInteger(packet, 21, "completed steps", 0, 10_000),
     terminationReason,
   };
   if (
@@ -1458,7 +1493,15 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     receipt.slipIntegral < 0 ||
     receipt.postureIntegral < 0 ||
     receipt.jointLimitIntegral < 0 ||
-    receipt.impactIntegral < 0
+    receipt.impactIntegral < 0 ||
+    receipt.backwardDistanceMeters < 0 ||
+    receipt.lateralErrorIntegral < 0 ||
+    receipt.headingErrorIntegral < 0 ||
+    receipt.contactScheduleMismatchIntegral < 0 ||
+    receipt.swingClearanceErrorIntegral < 0 ||
+    receipt.singleSupportSeconds < 0 ||
+    receipt.doubleSupportSeconds < 0 ||
+    receipt.flightSeconds < 0
   ) {
     throw new Error("malformed G1 packet: negative integral");
   }
@@ -1468,7 +1511,7 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
 export function decodeG1Evaluation(packet: Float64Array): PackedResult<G1ObjectiveReceipt> {
   const header = decodeG1Header(packet, G1_KIND_EVALUATION);
   if ("refusal" in header) return header;
-  if (packet.length !== 15) throw new Error("malformed G1 packet: evaluation length");
+  if (packet.length !== 23) throw new Error("malformed G1 packet: evaluation length");
   return { ok: decodeG1ReceiptPayload(packet) };
 }
 
@@ -1485,12 +1528,12 @@ export function decodeG1Trace(packet: Float64Array): PackedResult<G1TraceReceipt
   const header = decodeG1Header(packet, G1_KIND_TRACE);
   if ("refusal" in header) return header;
   const receipt = decodeG1ReceiptPayload(packet);
-  const sampleCount = exactPacketInteger(packet, 15, "trace sample count");
-  if (packet.length !== 16 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
+  const sampleCount = exactPacketInteger(packet, 23, "trace sample count");
+  if (packet.length !== 24 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
     throw new Error("malformed G1 packet: trace shape");
   }
   const samples: G1TraceSample[] = [];
-  let cursor = 16;
+  let cursor = 24;
   let previousTime = -Infinity;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
     const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
@@ -1524,6 +1567,22 @@ export class FrankenSimG1WalkingEvaluator {
   constructor(raw: RawG1Evaluator, admission: G1Admission) {
     this.raw = raw;
     this.admission = admission;
+  }
+
+  stabilizingPolicyMean(): Float64Array {
+    const mean = this.raw.stabilizing_policy_mean();
+    if (mean.length !== this.admission.policyDimension || mean.some((value) => !Number.isFinite(value))) {
+      throw new Error("malformed G1 stabilizing policy mean");
+    }
+    return mean;
+  }
+
+  walkingCurriculumMean(): Float64Array {
+    const mean = this.raw.walking_curriculum_mean();
+    if (mean.length !== this.admission.policyDimension || mean.some((value) => !Number.isFinite(value))) {
+      throw new Error("malformed G1 walking curriculum mean");
+    }
+    return mean;
   }
 
   evaluate(policy: Float64Array): PackedResult<G1ObjectiveReceipt> {

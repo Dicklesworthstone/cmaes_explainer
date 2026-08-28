@@ -10,12 +10,19 @@ import {
 
 type WorkerRequest =
   | { type: "preview" }
-  | { type: "optimize"; family: Exclude<CmaFamily, "full">; generations: number }
+  | {
+      type: "optimize";
+      family: Exclude<CmaFamily, "full">;
+      generations: number;
+      seedIndex: number;
+    }
   | { type: "compare"; generations: number };
+
+type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
 type WorkerResponse =
   | { type: "status"; phase: string; detail: string }
-  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: CmaFamily | "baseline" }
+  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: G1TraceOrigin }
   | {
       type: "progress";
       family: CmaFamily;
@@ -57,9 +64,16 @@ async function preview(): Promise<void> {
     "G1 admission"
   );
   try {
-    const policy = new Float64Array(evaluator.admission.policyDimension);
-    const trace = requireOk(evaluator.trace(policy), "baseline trace");
-    post({ type: "trace", trace, generation: 0, family: "baseline" });
+    const stabilizerTrace = requireOk(
+      evaluator.trace(evaluator.stabilizingPolicyMean()),
+      "stabilizing trace"
+    );
+    post({ type: "trace", trace: stabilizerTrace, generation: 0, family: "stabilizer" });
+    const curriculumTrace = requireOk(
+      evaluator.trace(evaluator.walkingCurriculumMean()),
+      "walking curriculum trace"
+    );
+    post({ type: "trace", trace: curriculumTrace, generation: 0, family: "curriculum" });
   } finally {
     evaluator.free();
   }
@@ -67,15 +81,16 @@ async function preview(): Promise<void> {
 
 async function optimize(
   family: Exclude<CmaFamily, "full">,
-  requestedGenerations: number
+  requestedGenerations: number,
+  requestedSeedIndex: number
 ): Promise<void> {
   const generations = Math.max(8, Math.min(40, Math.trunc(requestedGenerations)));
+  const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const population = 16;
-  const policyDimension = 5_040;
   post({
     type: "status",
     phase: "optimizing",
-    detail: `${family} is evaluating ${population} full 1.5 s articulated-body rollouts per generation…`,
+    detail: `${family}, seed ${seedIndex + 1}, is evaluating ${population} full 1.5 s articulated-body rollouts per generation…`,
   });
 
   // Training and replay deliberately share one admitted evaluator. Optimizing
@@ -85,19 +100,22 @@ async function optimize(
     await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
     "G1 admission"
   );
-  let bestPolicy = new Float64Array(policyDimension);
-  let bestObjective = requireOk(evaluator.evaluate(bestPolicy), "G1 baseline evaluation").objective;
+  let bestPolicy = evaluator.walkingCurriculumMean();
+  let bestObjective = requireOk(
+    evaluator.evaluate(bestPolicy),
+    "G1 curriculum evaluation"
+  ).objective;
   let completedGeneration = 0;
   try {
     const session = requireOk(
       await createFrankenSimCmaFamilySession({
         family,
-        mean: new Float64Array(policyDimension),
-        sigma: 0.01,
+        mean: bestPolicy,
+        sigma: 0.0005,
         population,
         memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
         maxEvaluations: population * generations,
-        seed: 0x4731_5040n,
+        seed: 0x4731_5050n + BigInt(seedIndex),
       }),
       "CMA admission"
     );
@@ -215,7 +233,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     ? preview()
     : request.type === "compare"
       ? compareFamilies(request.generations)
-      : optimize(request.family, request.generations);
+      : optimize(request.family, request.generations, request.seedIndex);
   void task.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
   });

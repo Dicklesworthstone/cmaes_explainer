@@ -15,6 +15,7 @@ import {
 } from "../lib/frankensimCmaes";
 
 type ScalableFamily = Exclude<CmaFamily, "full">;
+type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
 type ComparisonRow = {
   family: CmaFamily;
@@ -28,7 +29,7 @@ type ComparisonRow = {
 
 type WorkerResponse =
   | { type: "status"; phase: string; detail: string }
-  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: CmaFamily | "baseline" }
+  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: G1TraceOrigin }
   | {
       type: "progress";
       family: CmaFamily;
@@ -87,6 +88,21 @@ const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; or
     order: "O(mn) storage · O(mn) update",
   },
 };
+
+const TRACE_TITLES: Record<G1TraceOrigin, string> = {
+  stabilizer: "standing prior",
+  curriculum: "walking curriculum mean",
+  full: "Full CMA-ES",
+  separable: "Separable CMA-ES",
+  "lm-cma": "LM-CMA",
+  "lm-ma": "LM-MA",
+};
+
+const G1_SEED_AUDIT = [
+  { family: "Separable", changes: ["−0.83", "flat", "−0.31"] },
+  { family: "LM-CMA", changes: ["−3.57", "−1.61", "−2.42"] },
+  { family: "LM-MA", changes: ["flat", "flat", "flat"] },
+] as const;
 
 function ownerToThree(position: readonly number[]): [number, number, number] {
   return [position[0], position[2], -position[1]];
@@ -371,16 +387,18 @@ export function G1WalkingFlagship() {
   const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
   const workerRef = useRef<Worker | null>(null);
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
-  const [baselineTrace, setBaselineTrace] = useState<G1TraceReceipt | null>(null);
+  const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
+  const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
-  const [family, setFamily] = useState<ScalableFamily>("lm-ma");
-  const [generations, setGenerations] = useState(20);
+  const [family, setFamily] = useState<ScalableFamily>("lm-cma");
+  const [generations, setGenerations] = useState(16);
+  const [seedIndex, setSeedIndex] = useState(0);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [status, setStatus] = useState("Loading the owner-composed G1 experiment…");
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
-  const [activeTrace, setActiveTrace] = useState<CmaFamily | "baseline">("baseline");
+  const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
 
   useEffect(() => {
@@ -416,15 +434,20 @@ export function G1WalkingFlagship() {
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
       } else if (message.type === "trace") {
+        if (message.family === "stabilizer") {
+          setStabilizerTrace(message.trace);
+          setStatus("Standing prior received; loading the walking curriculum mean…");
+          return;
+        }
         setTrace(message.trace);
-        if (message.family === "baseline") setBaselineTrace(message.trace);
+        if (message.family === "curriculum") setCurriculumTrace(message.trace);
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
         setBusy(null);
         setStatus(
-          message.family === "baseline"
-            ? "Baseline trace loaded from Frankensim WASM."
+          message.family === "curriculum"
+            ? "Walking curriculum mean replayed from Frankensim WASM."
             : `Best ${FAMILY_COPY[message.family].title} policy replayed through the full experiment.`
         );
       } else if (message.type === "comparison") {
@@ -459,21 +482,26 @@ export function G1WalkingFlagship() {
     workerRef.current.postMessage(message);
   }, [busy]);
 
+  const curriculumObjectiveDelta = trace && curriculumTrace
+    ? curriculumTrace.objective - trace.objective
+    : null;
   const receiptCards = trace
     ? [
         ["objective ↓", number(trace.objective, 2)],
         [
-          "vs baseline",
-          activeTrace === "baseline" || !baselineTrace
+          "vs curriculum",
+          activeTrace === "curriculum" || !curriculumTrace
             ? "reference"
-            : `${number(Math.abs(baselineTrace.objective - trace.objective), 0)} ${
-                baselineTrace.objective >= trace.objective ? "lower" : "higher"
-              }`,
+            : curriculumObjectiveDelta !== null && Math.abs(curriculumObjectiveDelta) < 0.005
+              ? "flat"
+              : `${number(Math.abs(curriculumObjectiveDelta ?? 0), 2)} ${
+                  (curriculumObjectiveDelta ?? 0) > 0 ? "lower" : "higher"
+                }`,
         ],
         ["distance", `${number(trace.distanceMeters, 2)} m`],
-        ["work", `${number(trace.actuatorWorkJoules, 2)} J`],
-        ["speed error ∫", number(trace.speedErrorIntegral)],
-        ["slip ∫", number(trace.slipIntegral)],
+        ["single support", `${number(trace.singleSupportSeconds, 2)} s`],
+        ["schedule mismatch ∫", `${number(trace.contactScheduleMismatchIntegral, 2)} s`],
+        ["flight", `${number(trace.flightSeconds, 3)} s`],
         ["steps integrated", `${trace.completedSteps.toLocaleString()} / ${G1_HORIZON_STEPS}`],
         ["termination", trace.terminationReason],
       ]
@@ -488,7 +516,7 @@ export function G1WalkingFlagship() {
               owner poses · 480 Hz physics
             </span>
             <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
-              {activeTrace === "baseline" ? "zero-policy baseline" : FAMILY_COPY[activeTrace].title}
+              {TRACE_TITLES[activeTrace]}
             </span>
           </div>
           <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
@@ -521,10 +549,25 @@ export function G1WalkingFlagship() {
           </p>
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            Every candidate is now scored on the same 1.5-second, 720-step experiment you watch.
-            The optimizer first learns to finish the horizon; only then can the bounded motion score
-            decide among policies that stay upright equally long.
+            A disclosed full-CMA curriculum learned 105 meaningful owner coordinates: standing bias,
+            periodic foot unloading, then pelvis feedback. The live run starts there and mutates all
+            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step experiment you watch.
           </p>
+
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[0.65rem] leading-4 text-slate-400">
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] px-2 py-3">
+              <span className="block font-mono text-cyan-200">15-D</span>
+              stand
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] px-2 py-3">
+              <span className="block font-mono text-violet-200">+90-D</span>
+              transfer weight
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] px-2 py-3">
+              <span className="block font-mono text-emerald-200">5,040-D</span>
+              refine live
+            </div>
+          </div>
 
           <label className="mt-6 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-family">
             Scalable covariance representation
@@ -544,6 +587,57 @@ export function G1WalkingFlagship() {
             Full CMA is implemented and tested below at 96-D, but its O(n²) covariance would contain 25,401,600 entries here; the browser boundary honestly refuses it above 256-D.
           </p>
 
+          <label className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-seed">
+            Declared Philox seed
+          </label>
+          <select
+            id="g1-seed"
+            value={seedIndex}
+            disabled={busy !== null || !workerAvailable}
+            onChange={(event) => setSeedIndex(Number(event.target.value))}
+            className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-cyan-400/60"
+          >
+            <option value={0}>Seed 1 · 0x47315050</option>
+            <option value={1}>Seed 2 · 0x47315051</option>
+            <option value={2}>Seed 3 · 0x47315052</option>
+          </select>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/20">
+            <div className="border-b border-white/10 px-3 py-2 text-[0.65rem] leading-4 text-slate-400">
+              Measured v0.6.4 audit · objective change after 12 generations × 16 candidates.
+              The walking mean remains the incumbent when no sample beats it.
+            </div>
+            <table className="w-full text-center text-[0.68rem] text-slate-400">
+              <thead className="bg-white/[0.025] text-[0.6rem] uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th scope="col" className="px-3 py-2 text-left font-semibold">family</th>
+                  <th scope="col" className="px-2 py-2 font-semibold">seed 1</th>
+                  <th scope="col" className="px-2 py-2 font-semibold">seed 2</th>
+                  <th scope="col" className="px-2 py-2 font-semibold">seed 3</th>
+                </tr>
+              </thead>
+              <tbody>
+                {G1_SEED_AUDIT.map((row) => (
+                  <tr key={row.family} className="border-t border-white/[0.06] first:border-t-0">
+                    <th scope="row" className="px-3 py-2 text-left font-semibold text-slate-300">{row.family}</th>
+                    {row.changes.map((change, index) => (
+                      <td
+                        key={`${row.family}-${index}`}
+                        className={change === "flat" ? "px-2 py-2" : "px-2 py-2 font-mono text-emerald-300"}
+                      >
+                        {change}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="border-t border-white/10 px-3 py-2 text-[0.62rem] leading-4 text-slate-500">
+              Negative is better. All nine retained policies reached the 720-step horizon; “flat” is a
+              measured non-improvement, not a hidden failure or a relabeled win.
+            </p>
+          </div>
+
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
             <label htmlFor="g1-generations">Full-horizon search budget</label>
             <span className="font-mono text-cyan-200">
@@ -562,15 +656,16 @@ export function G1WalkingFlagship() {
             aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
           />
           <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
-            The seeded 320-candidate default reached all 720 steps in measured separable and LM-MA
-            runs. Smaller budgets are useful for watching partial progress; outcomes remain family-specific.
+            The curriculum mean already completes the horizon and travels about 0.60 m. The live budget
+            tests whether this family and seed can improve the exact scalar objective; a flat result is
+            reported as flat rather than relabeled as success.
           </p>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4 grid grid-cols-3 gap-3">
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "optimize", family, generations }, "optimize")}
+              onClick={() => post({ type: "optimize", family, generations, seedIndex }, "optimize")}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Sparkles className="h-4 w-4" />
@@ -579,11 +674,37 @@ export function G1WalkingFlagship() {
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "preview" }, "preview")}
+              onClick={() => {
+                if (!curriculumTrace) {
+                  post({ type: "preview" }, "preview");
+                  return;
+                }
+                setTrace(curriculumTrace);
+                setActiveTrace("curriculum");
+                setGeneration(0);
+                setBestObjective(curriculumTrace.objective);
+                setStatus("Walking curriculum mean replayed from Frankensim WASM.");
+              }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
-              Baseline
+              Walking mean
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null || !workerAvailable || !stabilizerTrace}
+              onClick={() => {
+                if (!stabilizerTrace) return;
+                setTrace(stabilizerTrace);
+                setActiveTrace("stabilizer");
+                setGeneration(0);
+                setBestObjective(stabilizerTrace.objective);
+                setStatus("Standing-only prior replayed; compare its contacts with the walking mean.");
+              }}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Standing prior
             </button>
           </div>
 

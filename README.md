@@ -30,7 +30,9 @@ Open <http://localhost:3000>.
   workspace receipts.
 - A 5,040-D walking search using separable CMA-ES, LM-CMA, or LM-MA. Every
   candidate and the rendered winner use the identical 1.5-second, 720-step
-  owner experiment.
+  owner experiment. The search starts from a disclosed 105-coordinate walking
+  curriculum (15 standing biases, 30 phase terms, and 60 inertial-feedback
+  terms), then leaves all 5,040 coordinates free to adapt.
 - The low-dimensional visual lab, whose Rust kernel is admitted only after
   complete-trajectory parity with the TypeScript reference across the tested
   landscape and option matrix.
@@ -50,7 +52,7 @@ Two audited surfaces coexist intentionally:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
   the existing low-dimensional visualizations.
-- `public/wasm/fs-cmaes/v057/` is the owner-family ask/tell and G1 walking
+- `public/wasm/fs-cmaes/v064/` is the owner-family ask/tell and schema-5 G1 walking
   package used by the flagship and its worker.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
