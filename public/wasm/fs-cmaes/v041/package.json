@@ -1,0 +1,16 @@
+{
+  "name": "fs-cmaes-viz-wasm",
+  "type": "module",
+  "description": "Browser (WASM) surface for CMA-ES optimization internals visualization — per-generation mean/sigma/covariance-eigendecomposition/population stream, typed refusals at the JS boundary, deterministic seeded runs.",
+  "version": "0.4.1",
+  "files": [
+    "fs_cmaes_viz_wasm_bg.wasm",
+    "fs_cmaes_viz_wasm.js",
+    "fs_cmaes_viz_wasm.d.ts"
+  ],
+  "main": "fs_cmaes_viz_wasm.js",
+  "types": "fs_cmaes_viz_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

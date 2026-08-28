@@ -1,7 +1,8 @@
 /**
  * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
  *
- * Loads the committed wasm-pack bundle under /wasm/fs-cmaes/ via the Blob-URL
+ * Loads the committed, versioned wasm-pack bundle under /wasm/fs-cmaes/v041/
+ * via the Blob-URL
  * trick (dodging Turbopack's mangling of wasm-bindgen `--target web` glue —
  * the same sanctioned pattern as frankensimPhysics.ts), capability-probes the
  * exports, and degrades honestly: `source: "wasm" | "ts-fallback" | "unloaded"`.
@@ -35,6 +36,45 @@ export interface CmaesVizParams {
   boundMax: number;
   /** NaN disables the early-stop target. */
   fTarget: number;
+}
+
+/**
+ * The complete-trajectory compatibility audit compares both engines through
+ * this useful optimization horizon. Continuing far below it makes eigensolver
+ * roundoff choose different but numerically equivalent sample directions.
+ */
+export const CMAES_VISUALIZATION_F_TARGET = 1e-8;
+
+/** Exact TypeScript mirror of the visualization kernel's landscape registry. */
+export function evaluateCmaesVisualizationLandscape(landscape: number, x: number[]): number {
+  switch (landscape) {
+    case 0:
+      return x.reduce((sum, value) => sum + value * value, 0);
+    case 1: {
+      let sum = 0;
+      for (let index = 0; index < x.length - 1; index++) {
+        sum += 100 * (x[index + 1] - x[index] * x[index]) ** 2 + (1 - x[index]) ** 2;
+      }
+      return sum;
+    }
+    case 2: {
+      let sum = 1e6 * x[0] * x[0];
+      for (let index = 1; index < x.length; index++) sum += x[index] * x[index];
+      return sum;
+    }
+    case 3:
+      return 10 * x.length + x.reduce(
+        (sum, value) => sum + value * value - 10 * Math.cos(2 * Math.PI * value),
+        0
+      );
+    case 4:
+      return x.reduce(
+        (sum, value, index) => sum + 10 ** ((6 * index) / Math.max(1, x.length - 1)) * value * value,
+        0
+      );
+    default:
+      return NaN;
+  }
 }
 
 type NumericVector = number[] | Float64Array;
@@ -92,11 +132,15 @@ let loadPromise: Promise<CmaesKernelStatus> | null = null;
  * Fail closed until a kernel version has passed the same reference audit as
  * the TypeScript engine. Versions 0.2.0 and 0.2.1 remain rejected for their
  * broken h-sigma/damping and mixed pre/post-update snapshot semantics. Version
- * 0.4.0 retains the audited 0.3.0 optimizer behavior and replaces only its
- * multi-megabyte JSON boundary with the schema-1 packed numeric ABI.
+ * 0.4.0 fixes those update defects and replaces its JSON boundary with a
+ * packed numeric ABI, but its symmetric covariance-root sampling diverges
+ * from the TypeScript reference after generation one. Version 0.4.1 restores
+ * the canonical B·D·z sample transform and consistent eigenpair order. It is
+ * admitted only after complete-trajectory parity across the full visualization
+ * landscape/option matrix through CMAES_VISUALIZATION_F_TARGET.
  */
-const AUDITED_CMAES_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.4.0";
-const AUDITED_CMAES_KERNEL_VERSIONS = new Set([AUDITED_CMAES_KERNEL_VERSION]);
+const AUDITED_CMAES_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.4.1";
+const AUDITED_CMAES_KERNEL_VERSIONS = new Set<string>([AUDITED_CMAES_KERNEL_VERSION]);
 
 export function isCompatibleCmaesKernelVersion(version: string | null): boolean {
   return version !== null && AUDITED_CMAES_KERNEL_VERSIONS.has(version);
@@ -135,7 +179,10 @@ export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
   loadAttempted = true;
   loadPromise = (async (): Promise<CmaesKernelStatus> => {
     try {
-      const mod = await loadWasmModule("/wasm/fs-cmaes/fs_cmaes_viz_wasm.js", "/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm");
+      const mod = await loadWasmModule(
+        "/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm"
+      );
       if (typeof mod.cmaes_viz_run !== "function") {
         return { source: "ts-fallback", kernelVersion: null, error: "missing export cmaes_viz_run" };
       }

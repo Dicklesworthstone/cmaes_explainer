@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { BENCHMARKS, CMAESOptimizer } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
 import {
+  CMAES_VISUALIZATION_F_TARGET,
   decodeCmaesPacket,
+  evaluateCmaesVisualizationLandscape,
   isCompatibleCmaesKernelVersion,
   wasmRunToNdStates,
   type CmaesVizGeneration,
@@ -347,90 +349,167 @@ test("WASM snapshot spectra use the same largest-first contract as the TypeScrip
   expect(illConditionedState.phaseSpace3D.conditionNumber).toBe(4e20);
 });
 
-test("rejects reference-breaking kernels and accepts the audited release", () => {
+test("rejects every kernel that has not passed complete-trajectory parity", () => {
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.0")).toBe(false);
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.2.1")).toBe(false);
   expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.3.0")).toBe(false);
-  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.4.0")).toBe(true);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.4.0")).toBe(false);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.4.1")).toBe(true);
+  expect(isCompatibleCmaesKernelVersion("fs-cmaes-viz-wasm 0.5.0")).toBe(false);
   expect(isCompatibleCmaesKernelVersion(null)).toBe(false);
 });
 
-test("audited packed WASM state matches the TypeScript reference", async () => {
+type TrajectoryCase = {
+  name: string;
+  landscape: number;
+  dim: number;
+  initialMean: number[];
+  sigma: number;
+  lambda: number;
+  active: boolean;
+  seed: number;
+  generations: number;
+  noise: number;
+  bounded: boolean;
+};
+
+const trajectoryCases: TrajectoryCase[] = [
+  { name: "passive sphere 2D", landscape: 0, dim: 2, initialMean: [1.5, -1], sigma: 0.3, lambda: 6, active: false, seed: 41, generations: 100, noise: 0, bounded: false },
+  { name: "active sphere 3D", landscape: 0, dim: 3, initialMean: [1.5, -1, 2], sigma: 0.4, lambda: 10, active: true, seed: 77, generations: 100, noise: 0, bounded: false },
+  { name: "Rosenbrock default", landscape: 1, dim: 5, initialMean: [1.5, -1, 2, 0.5, -0.5], sigma: 0.3, lambda: 16, active: true, seed: 1337, generations: 120, noise: 0, bounded: false },
+  { name: "bounded Rosenbrock", landscape: 1, dim: 4, initialMean: [1.8, -1.8, 1.6, -1.6], sigma: 0.65, lambda: 20, active: true, seed: 2027, generations: 100, noise: 0, bounded: true },
+  { name: "Discus 6D", landscape: 2, dim: 6, initialMean: [1.5, -1, 2, 0.5, -0.5, 1], sigma: 0.4, lambda: 24, active: true, seed: 4242, generations: 120, noise: 0, bounded: false },
+  { name: "noisy Rastrigin", landscape: 3, dim: 4, initialMean: [3, -2.5, 2, -3], sigma: 0.8, lambda: 32, active: true, seed: 919, generations: 100, noise: 0.05, bounded: false },
+  { name: "bounded passive noisy Rastrigin", landscape: 3, dim: 6, initialMean: [1.8, -1.7, 1.6, -1.5, 1.4, -1.3], sigma: 0.7, lambda: 48, active: false, seed: 98765, generations: 80, noise: 0.1, bounded: true },
+  { name: "ill-conditioned ellipsoid 2D", landscape: 4, dim: 2, initialMean: [1.5, -1], sigma: 0.3, lambda: 12, active: true, seed: 808, generations: 100, noise: 0, bounded: false },
+  { name: "ill-conditioned ellipsoid 6D maximum population", landscape: 4, dim: 6, initialMean: [1.5, -1, 2, 0.5, -0.5, 1], sigma: 0.4, lambda: 48, active: true, seed: 65537, generations: 120, noise: 0, bounded: false }
+];
+
+function maximumDifference(left: ArrayLike<number>, right: ArrayLike<number>, scaled: boolean): number {
+  if (left.length !== right.length) return Infinity;
+  let maximum = 0;
+  for (let index = 0; index < left.length; index++) {
+    const absolute = Math.abs(left[index] - right[index]);
+    const difference = scaled
+      ? absolute / (1 + Math.max(Math.abs(left[index]), Math.abs(right[index])))
+      : absolute;
+    maximum = Math.max(maximum, difference);
+  }
+  return maximum;
+}
+
+function requireDifferenceWithin(
+  label: string,
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  tolerance: number,
+  scaled = true
+): void {
+  const difference = maximumDifference(left, right, scaled);
+  if (!(difference <= tolerance)) {
+    throw new Error(`${label}: maximum ${scaled ? "scale-normalized" : "absolute"} difference ${difference} exceeds ${tolerance}`);
+  }
+}
+
+test("packed WASM matches complete TypeScript trajectories across the visualization matrix", async () => {
   const generatedPackage = process.env.FS_CMAES_TEST_PACKAGE;
   const wasm = await import(
     generatedPackage
       ? `${generatedPackage}/fs_cmaes_viz_wasm.js`
-      : "../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm.js"
+      : "../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm.js"
   );
   const wasmBytes = await Bun.file(
     generatedPackage
       ? `${generatedPackage}/fs_cmaes_viz_wasm_bg.wasm`
-      : new URL("../../public/wasm/fs-cmaes/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+      : new URL("../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.4.0");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.4.1");
 
-  const initialMean = [1.5, -1, 2, 0.5, -0.5];
-  const rosenbrock = (x: number[]): number => {
-    let sum = 0;
-    for (let i = 0; i < x.length - 1; i++) {
-      sum += 100 * (x[i + 1] - x[i] * x[i]) ** 2 + (1 - x[i]) ** 2;
+  let comparedGenerations = 0;
+  const stopReasons = new Set<string>();
+  let representativePacket: Float64Array | null = null;
+
+  for (const scenario of trajectoryCases) {
+    const optimizer = new CMAESOptimizerND(
+      (x) => evaluateCmaesVisualizationLandscape(scenario.landscape, x),
+      {
+        dim: scenario.dim,
+        initialMean: scenario.initialMean,
+        initialSigma: scenario.sigma,
+        lambda: scenario.lambda,
+        activeCMA: scenario.active,
+        seed: scenario.seed,
+        noiseLevel: scenario.noise,
+        bounds: scenario.bounded ? [-2, 2] : [-1e9, 1e9],
+        repairStrategy: scenario.bounded ? "reflect" : "none"
+      }
+    );
+    const tsStates = [];
+    for (let generationIndex = 0; generationIndex < scenario.generations; generationIndex++) {
+      const state = optimizer.step();
+      tsStates.push(state);
+      if (state.bestFitness <= CMAES_VISUALIZATION_F_TARGET) break;
     }
-    return sum;
-  };
-  const tsState = new CMAESOptimizerND(rosenbrock, {
-    dim: 5,
-    initialMean,
-    initialSigma: 0.3,
-    lambda: 16,
-    activeCMA: true,
-    seed: 1337,
-    bounds: [-1e9, 1e9],
-    repairStrategy: "none"
-  }).step();
-  const packet = wasm.cmaes_viz_run(
-    5,
-    initialMean[0],
-    initialMean[1],
-    initialMean[2],
-    initialMean[3],
-    initialMean[4],
-    0,
-    0.3,
-    16,
-    true,
-    1337n,
-    1,
-    1,
-    0,
-    false,
-    -2,
-    2,
-    NaN
-  );
-  expect(packet).toBeInstanceOf(Float64Array);
-  const decoded = decodeCmaesPacket(packet);
-  expect("refusal" in decoded).toBe(false);
-  if (!("ok" in decoded)) throw new Error(`WASM refusal: ${decoded.refusal.code}`);
-  const wasmState = decoded.ok.generations[0];
-  expect(wasmState).toBeDefined();
-  if (!wasmState) throw new Error("WASM returned no first-generation snapshot");
 
-  const maxAbsDifference = (left: ArrayLike<number>, right: ArrayLike<number>): number => {
-    let maximum = 0;
-    for (let index = 0; index < left.length; index++) maximum = Math.max(maximum, Math.abs(left[index] - right[index]));
-    return maximum;
-  };
-  const tsEigenvaluesAscending = [...tsState.eigenvalues].reverse();
+    const initial = Array.from({ length: 6 }, (_, index) => scenario.initialMean[index] ?? 0);
+    const packet = wasm.cmaes_viz_run(
+      scenario.dim,
+      initial[0], initial[1], initial[2], initial[3], initial[4], initial[5],
+      scenario.sigma,
+      scenario.lambda,
+      scenario.active,
+      BigInt(scenario.seed >>> 0),
+      scenario.generations,
+      scenario.landscape,
+      scenario.noise,
+      scenario.bounded,
+      -2,
+      2,
+      CMAES_VISUALIZATION_F_TARGET
+    );
+    expect(packet).toBeInstanceOf(Float64Array);
+    representativePacket ??= packet;
+    const decoded = decodeCmaesPacket(packet);
+    if (!("ok" in decoded)) throw new Error(`${scenario.name}: WASM refusal ${decoded.refusal.code}`);
+    const run = decoded.ok;
+    const wasmStates = wasmRunToNdStates(run);
+    const finalTsState = tsStates.at(-1);
+    if (!finalTsState) throw new Error(`${scenario.name}: TypeScript produced no generation`);
+    const expectedStopReason = finalTsState.bestFitness <= CMAES_VISUALIZATION_F_TARGET
+      ? "target-reached"
+      : "generations-exhausted";
 
-  expect(maxAbsDifference(wasmState.sz, tsState.samples.flatMap((sample) => sample.z))).toBeLessThan(2e-15);
-  expect(maxAbsDifference(wasmState.sx, tsState.samples.flatMap((sample) => sample.x))).toBeLessThan(2e-15);
-  expect(maxAbsDifference(wasmState.mean, tsState.mean)).toBeLessThan(2e-15);
-  expect(maxAbsDifference(wasmState.eigvals, tsEigenvaluesAscending)).toBeLessThan(2e-15);
-  expect(Math.abs(wasmState.sigma - tsState.sigma)).toBeLessThan(2e-15);
-  expect(Math.abs(wasmState.best_f - tsState.bestFitness)).toBeLessThan(2e-12);
-  expect(wasmState.cond).toBeCloseTo(tsState.conditionNumber, 12);
+    expect(run.generations.length).toBe(tsStates.length);
+    expect(run.total_evals).toBe(tsStates.length * scenario.lambda);
+    expect(run.stop_reason).toBe(expectedStopReason);
+    stopReasons.add(run.stop_reason);
+    comparedGenerations += run.generations.length;
+
+    for (let generationIndex = 0; generationIndex < tsStates.length; generationIndex++) {
+      const label = `${scenario.name}, generation ${generationIndex + 1}`;
+      const wasmGeneration = run.generations[generationIndex];
+      const wasmState = wasmStates[generationIndex];
+      const tsState = tsStates[generationIndex];
+      requireDifferenceWithin(`${label} ranked z`, wasmGeneration.sz, tsState.samples.flatMap((sample) => sample.z), 2e-12, false);
+      requireDifferenceWithin(`${label} samples`, wasmGeneration.sx, tsState.samples.flatMap((sample) => sample.x), 2e-8);
+      requireDifferenceWithin(`${label} ranked fitness`, wasmGeneration.sf, tsState.samples.map((sample) => sample.fitness), 2e-8);
+      requireDifferenceWithin(`${label} mean`, wasmGeneration.mean, tsState.mean, 2e-8);
+      requireDifferenceWithin(`${label} eigenvalues`, wasmGeneration.eigvals, [...tsState.eigenvalues].reverse(), 2e-8);
+      requireDifferenceWithin(`${label} covariance`, wasmState.covariance.flat(), tsState.covariance.flat(), 2e-8);
+      requireDifferenceWithin(`${label} p_sigma`, wasmGeneration.p_sigma, tsState.pSigma, 2e-8);
+      requireDifferenceWithin(`${label} p_c`, wasmGeneration.p_c, tsState.pC, 2e-8);
+      requireDifferenceWithin(`${label} sigma`, [wasmGeneration.sigma], [tsState.sigma], 2e-8);
+      requireDifferenceWithin(`${label} best fitness`, [wasmGeneration.best_f], [tsState.bestFitness], 2e-8);
+    }
+    requireDifferenceWithin(`${scenario.name} final best x`, run.best_x, finalTsState.bestX, 2e-8);
+  }
+
+  expect(comparedGenerations).toBeGreaterThanOrEqual(500);
+  expect(stopReasons).toEqual(new Set(["generations-exhausted", "target-reached"]));
+
+  if (!representativePacket) throw new Error("trajectory matrix produced no packet");
 
   const refusalPacket = wasm.cmaes_viz_run(
     1, 0, 0, 0, 0, 0, 0, 0.3, 16, true, 1337n, 1, 1, 0, false, -2, 2, NaN
@@ -439,11 +518,11 @@ test("audited packed WASM state matches the TypeScript reference", async () => {
   expect("refusal" in refusal && refusal.refusal.code).toBe("dim-out-of-range");
   expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual(["set dim within 2..=6"]);
 
-  const wrongMagic = packet.slice();
+  const wrongMagic = representativePacket.slice();
   wrongMagic[0] = 0;
   expect(() => decodeCmaesPacket(wrongMagic)).toThrow("magic");
-  const wrongStride = packet.slice();
+  const wrongStride = representativePacket.slice();
   wrongStride[11] += 1;
   expect(() => decodeCmaesPacket(wrongStride)).toThrow("generation_stride");
-  expect(() => decodeCmaesPacket(packet.slice(0, packet.length - 1))).toThrow("total_words");
+  expect(() => decodeCmaesPacket(representativePacket.slice(0, representativePacket.length - 1))).toThrow("total_words");
 });

@@ -7,6 +7,8 @@ import { LatexRenderer } from "./LatexRenderer";
 import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import {
+  CMAES_VISUALIZATION_F_TARGET,
+  evaluateCmaesVisualizationLandscape,
   initFrankenSimCmaes,
   runCmaesViz,
   wasmRunToNdStates,
@@ -28,36 +30,6 @@ const LANDSCAPES = [
   { id: 3, name: "Rastrigin", formula: "10n+\\sum\\![\\textcolor{#60a5fa}{x_i}^2-10\\cos(2\\pi \\textcolor{#60a5fa}{x_i})]", blurb: "Heavily multimodal: population size is survival." },
   { id: 4, name: "Ill-Cond.", formula: "\\sum 10^{6i/(n-1)} \\textcolor{#60a5fa}{x_i}^2", blurb: "Ellipsoid with a 10^6 condition number: covariance adaptation's home turf." },
 ] as const;
-
-function evalLandscape(id: number, x: number[]): number {
-  const n = x.length;
-  switch (id) {
-    case 0:
-      return x.reduce((s, v) => s + v * v, 0);
-    case 1: {
-      let s = 0;
-      for (let i = 0; i < n - 1; i++) s += 100 * (x[i + 1] - x[i] * x[i]) ** 2 + (1 - x[i]) ** 2;
-      return s;
-    }
-    case 2: {
-      let s = 1e6 * x[0] * x[0];
-      for (let i = 1; i < n; i++) s += x[i] * x[i];
-      return s;
-    }
-    case 3: {
-      let s = 10 * n;
-      for (const v of x) s += v * v - 10 * Math.cos(2 * Math.PI * v);
-      return s;
-    }
-    case 4: {
-      let s = 0;
-      for (let i = 0; i < n; i++) s += 10 ** ((6 * i) / Math.max(1, n - 1)) * x[i] * x[i];
-      return s;
-    }
-    default:
-      return NaN;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -120,7 +92,7 @@ export function CmaesInternalsLab() {
         boundsEnabled,
         boundMin: -2,
         boundMax: 2,
-        fTarget: NaN,
+        fTarget: CMAES_VISUALIZATION_F_TARGET,
       };
 
       // The kernel accepts dim 2..=6; skip the boundary call (and its refusal
@@ -138,7 +110,7 @@ export function CmaesInternalsLab() {
       }
 
       // TS fallback: same algorithm, same couplings, labeled as fallback.
-      const opt = new CMAESOptimizerND((v: number[]) => evalLandscape(landscape, v), {
+      const opt = new CMAESOptimizerND((v: number[]) => evaluateCmaesVisualizationLandscape(landscape, v), {
         dim,
         initialMean: x0,
         initialSigma: sigma0,
@@ -150,7 +122,11 @@ export function CmaesInternalsLab() {
         repairStrategy: boundsEnabled ? "reflect" : "none",
       });
       const hist: CMAESGenerationStateND[] = [];
-      for (let i = 0; i < generations; i++) hist.push(opt.step());
+      for (let i = 0; i < generations; i++) {
+        const state = opt.step();
+        hist.push(state);
+        if (state.bestFitness <= CMAES_VISUALIZATION_F_TARGET) break;
+      }
       if (!cancelled) {
         setStates(hist);
         setCursor(0);
@@ -261,7 +237,7 @@ export function CmaesInternalsLab() {
             }}
             className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
           >
-            {[2, 3, 4, 6, 8, 12].map((d) => (
+            {[2, 3, 4, 5, 6, 8, 12].map((d) => (
               <option key={d} value={d} className="bg-slate-900 text-slate-200">
                 {d}D
               </option>
@@ -310,7 +286,7 @@ export function CmaesInternalsLab() {
             }}
             className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
           >
-            {[0.2, 0.4, 0.6, 1.0, 1.5].map((s) => (
+            {[0.2, 0.3, 0.4, 0.6, 1.0, 1.5].map((s) => (
               <option key={s} value={s} className="bg-slate-900 text-slate-200">
                 {s.toFixed(1)}
               </option>
