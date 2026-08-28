@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Github, Brain, Rocket, Menu, X, ChevronRight, Keyboard, Command } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useScrollSpy } from "../hooks/useScrollSpy";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -137,6 +137,35 @@ export function Navbar() {
     closeBtnRef.current?.focus();
     return () => previouslyFocused?.focus();
   }, [shortcutsModalOpen]);
+
+  // True-modal focus containment: aria-modal marks the background inert for
+  // assistive tech; Tab/Shift+Tab cycle within the dialog so physical focus
+  // cannot escape an open modal. The dialog holds only the close button
+  // today; the wrap stays correct as content grows.
+  const trapDialogTab = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Tab") return;
+    const dialog = e.currentTarget;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => el.offsetParent !== null);
+    if (focusables.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const active = document.activeElement;
+    const inside = active instanceof Node && dialog.contains(active);
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && (!inside || active === first)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (!inside || active === last)) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <>
@@ -284,6 +313,7 @@ export function Navbar() {
             role="dialog"
             aria-modal="true"
             aria-label="Keyboard shortcuts"
+            onKeyDown={trapDialogTab}
             className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           >
             {/* Backdrop click dismisses; Escape/? are handled by the global
