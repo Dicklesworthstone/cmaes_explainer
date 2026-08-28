@@ -7,9 +7,11 @@ import { useInView } from "../hooks/useScrollSpy";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
+  type G1Admission,
   type G1TraceReceipt,
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
@@ -29,7 +31,13 @@ type ComparisonRow = {
 
 type WorkerResponse =
   | { type: "status"; phase: string; detail: string }
-  | { type: "trace"; trace: G1TraceReceipt; generation: number; family: G1TraceOrigin }
+  | {
+      type: "trace";
+      trace: G1TraceReceipt;
+      admission: G1Admission;
+      generation: number;
+      family: G1TraceOrigin;
+    }
   | {
       type: "progress";
       family: CmaFamily;
@@ -64,6 +72,92 @@ const LINK_PARENTS = [-1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14] as co
 const G1_HORIZON_STEPS = Math.round(
   DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds
 );
+// --- Real Unitree G1 visual meshes (unitreerobotics/unitree_ros,
+// g1_description/meshes, MIT-style license). STL vertices are authored in
+// each URDF link frame (Z-up, meters); the kernel's link frames come from the
+// same description, so each mesh group is posed directly by its trace link
+// pose. geometry.rotateX(-PI/2) bakes the owner->Three basis (x,y,z)->(x,z,-y)
+// into the vertices; the group pose conversion stays ownerToThree/ownerQuaternionToThree.
+const G1_MESH_DIR = "/robots/g1/";
+const G1_MESH_FILES: Record<string, string> = {
+  pelvis: "pelvis.STL",
+  "left hip pitch": "left_hip_pitch_link.STL",
+  "left hip roll": "left_hip_roll_link.STL",
+  "left hip yaw": "left_hip_yaw_link.STL",
+  "left knee": "left_knee_link.STL",
+  "left ankle pitch": "left_ankle_pitch_link.STL",
+  "left ankle roll": "left_ankle_roll_link.STL",
+  "right hip pitch": "right_hip_pitch_link.STL",
+  "right hip roll": "right_hip_roll_link.STL",
+  "right hip yaw": "right_hip_yaw_link.STL",
+  "right knee": "right_knee_link.STL",
+  "right ankle pitch": "right_ankle_pitch_link.STL",
+  "right ankle roll": "right_ankle_roll_link.STL",
+  "waist yaw": "waist_yaw_link.STL",
+  "waist roll": "waist_roll_link.STL",
+  torso: "torso_link.STL",
+  head: "head_link.STL",
+};
+// Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
+const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
+
+type G1MeshState =
+  | { phase: "idle" | "loading" }
+  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
+  | { phase: "failed" };
+
+function useG1Meshes(active: boolean): G1MeshState {
+  const [state, setState] = useState<G1MeshState>({ phase: active ? "loading" : "idle" });
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    let published = false;
+    let material: THREE.MeshStandardMaterial | null = null;
+    const geometries: Record<string, THREE.BufferGeometry> = {};
+    const loader = new STLLoader();
+    const disposeAssets = (): void => {
+      Object.values(geometries).forEach((geometry) => geometry.dispose());
+      material?.dispose();
+    };
+    (async () => {
+      try {
+        await Promise.all(
+          Object.entries(G1_MESH_FILES).map(async ([key, file]) => {
+            const res = await fetch(G1_MESH_DIR + file);
+            if (!res.ok) throw new Error(`HTTP ${res.status} loading ${file}`);
+            const geometry = loader.parse(await res.arrayBuffer());
+            geometry.rotateX(-Math.PI / 2);
+            geometry.computeVertexNormals();
+            geometries[key] = geometry;
+          })
+        );
+        if (cancelled) {
+          disposeAssets();
+          return;
+        }
+        material = new THREE.MeshStandardMaterial({
+          color: "#2c3138",
+          metalness: 0.42,
+          roughness: 0.5,
+        });
+        published = true;
+        setState({
+          phase: "ready",
+          geometries,
+          material,
+        });
+      } catch {
+        disposeAssets();
+        if (!cancelled) setState({ phase: "failed" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (published) disposeAssets();
+    };
+  }, [active]);
+  return active && state.phase === "idle" ? { phase: "loading" } : state;
+}
 const G1_POPULATION = 16;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
@@ -97,12 +191,6 @@ const TRACE_TITLES: Record<G1TraceOrigin, string> = {
   "lm-cma": "LM-CMA",
   "lm-ma": "LM-MA",
 };
-
-const G1_SEED_AUDIT = [
-  { family: "Separable", changes: ["−0.83", "flat", "−0.31"] },
-  { family: "LM-CMA", changes: ["−3.57", "−1.61", "−2.42"] },
-  { family: "LM-MA", changes: ["flat", "flat", "flat"] },
-] as const;
 
 function ownerToThree(position: readonly number[]): [number, number, number] {
   return [position[0], position[2], -position[1]];
@@ -183,7 +271,115 @@ function FootContact({ position, active, side }: { position: readonly number[]; 
   );
 }
 
-function RobotPose({ sample }: { sample: G1TraceSample }) {
+function TerrainSurface({ admission }: { admission: G1Admission | null }) {
+  const amplitude = admission?.config.challenge === "terrain-and-push"
+    ? admission.terrainAmplitudeMeters
+    : 0;
+  const wavenumber = admission?.terrainWavenumberRadiansPerMeter ?? 1;
+  const geometry = useMemo(() => {
+    const terrain = new THREE.PlaneGeometry(5, 3, 96, 48);
+    terrain.rotateX(-Math.PI / 2);
+    terrain.translate(0.75, 0, 0);
+    const positions = terrain.attributes.position;
+    for (let vertex = 0; vertex < positions.count; vertex++) {
+      const x = positions.getX(vertex);
+      const ownerY = -positions.getZ(vertex);
+      const sine = Math.sin(wavenumber * x);
+      positions.setY(
+        vertex,
+        amplitude * sine * sine * (1 + 0.2 * Math.sin(3 * ownerY))
+      );
+    }
+    positions.needsUpdate = true;
+    terrain.computeVertexNormals();
+    return terrain;
+  }, [amplitude, wavenumber]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  return (
+    <group>
+      <mesh geometry={geometry} receiveShadow>
+        <meshStandardMaterial color="#0a1627" roughness={0.82} metalness={0.16} />
+      </mesh>
+      <mesh geometry={geometry} position={[0, 0.0015, 0]}>
+        <meshBasicMaterial color="#155e75" wireframe transparent opacity={0.28} />
+      </mesh>
+    </group>
+  );
+}
+
+function PushArrow({
+  pelvis,
+  fraction,
+}: {
+  pelvis: readonly number[];
+  fraction: number;
+}) {
+  if (fraction <= 0) return null;
+  return (
+    <arrowHelper
+      args={[
+        new THREE.Vector3(0, 0, -1),
+        new THREE.Vector3(...ownerToThree(pelvis)).add(new THREE.Vector3(0, 0.16, 0.58)),
+        0.25 + 0.45 * fraction,
+        "#fb7185",
+        0.12,
+        0.07,
+      ]}
+    />
+  );
+}
+
+// Real-mesh rig: one group per trace link, posed by the kernel's link frame
+// (position + quaternion). The STL vertices were baked into the Three basis at
+// load time, so no per-frame conversion is needed here. Foot contact rings
+// stay as the honest data overlay (kernel contact booleans).
+function RobotPoseMeshes({
+  sample,
+  meshes,
+  pushFraction,
+}: {
+  sample: G1TraceSample;
+  meshes: { geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
+  pushFraction: number;
+}) {
+  const leftFootPoint = ownerLocalPointToThree(
+    sample.linkPoses[6].position,
+    sample.linkPoses[6].quaternionWxyz,
+    [0.035, 0, -0.032]
+  );
+  const rightFootPoint = ownerLocalPointToThree(
+    sample.linkPoses[12].position,
+    sample.linkPoses[12].quaternionWxyz,
+    [0.035, 0, -0.032]
+  );
+  return (
+    <group>
+      {LINK_NAMES.map((name, link) => {
+        const pose = sample.linkPoses[link];
+        return (
+          <group
+            key={name}
+            position={ownerToThree(pose.position)}
+            quaternion={ownerQuaternionToThree(pose.quaternionWxyz)}
+          >
+            <mesh geometry={meshes.geometries[name]} material={meshes.material} castShadow receiveShadow />
+            {name === "torso" ? (
+              <group position={ownerToThree(G1_HEAD_JOINT_ORIGIN)}>
+                <mesh geometry={meshes.geometries.head} material={meshes.material} castShadow />
+              </group>
+            ) : null}
+          </group>
+        );
+      })}
+      <FootContact position={leftFootPoint} active={sample.leftContact} side="left" />
+      <FootContact position={rightFootPoint} active={sample.rightContact} side="right" />
+      <PushArrow pelvis={sample.linkPoses[0].position} fraction={pushFraction} />
+    </group>
+  );
+}
+
+function RobotPose({ sample, pushFraction }: { sample: G1TraceSample; pushFraction: number }) {
   const pelvis = sample.linkPoses[0].position;
   const torso = sample.linkPoses[15].position;
   const torsoThree = ownerToThree(torso);
@@ -285,11 +481,22 @@ function RobotPose({ sample }: { sample: G1TraceSample }) {
 
       <FootContact position={leftFootPoint} active={sample.leftContact} side="left" />
       <FootContact position={rightFootPoint} active={sample.rightContact} side="right" />
+      <PushArrow pelvis={pelvis} fraction={pushFraction} />
     </group>
   );
 }
 
-function RobotPlayback({ trace, reduceMotion }: { trace: G1TraceReceipt; reduceMotion: boolean }) {
+function RobotPlayback({
+  trace,
+  admission,
+  reduceMotion,
+  meshState,
+}: {
+  trace: G1TraceReceipt;
+  admission: G1Admission | null;
+  reduceMotion: boolean;
+  meshState: G1MeshState;
+}) {
   const [sampleIndex, setSampleIndex] = useState(0);
   const playbackSeconds = useRef(0);
 
@@ -313,10 +520,36 @@ function RobotPlayback({ trace, reduceMotion }: { trace: G1TraceReceipt; reduceM
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
-  return sample ? <RobotPose sample={sample} /> : null;
+  const pushFraction = sample
+    && admission?.config.challenge === "terrain-and-push"
+    && sample.timeSeconds > admission.pushStartSeconds
+    && sample.timeSeconds < admission.pushEndSeconds
+    ? Math.sin(
+        Math.PI
+          * (sample.timeSeconds - admission.pushStartSeconds)
+          / (admission.pushEndSeconds - admission.pushStartSeconds)
+      )
+    : 0;
+  return sample ? (
+    meshState.phase === "ready" ? (
+      <RobotPoseMeshes sample={sample} meshes={meshState} pushFraction={pushFraction} />
+    ) : (
+      <RobotPose sample={sample} pushFraction={pushFraction} />
+    )
+  ) : null;
 }
 
-function RobotStage({ trace, reduceMotion }: { trace: G1TraceReceipt | null; reduceMotion: boolean }) {
+function RobotStage({
+  trace,
+  admission,
+  reduceMotion,
+  meshState,
+}: {
+  trace: G1TraceReceipt | null;
+  admission: G1Admission | null;
+  reduceMotion: boolean;
+  meshState: G1MeshState;
+}) {
   return (
     <Canvas
       dpr={[1, 1.5]}
@@ -324,12 +557,12 @@ function RobotStage({ trace, reduceMotion }: { trace: G1TraceReceipt | null; red
       gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        gl.toneMappingExposure = 1.3;
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
       <color attach="background" args={["#050b18"]} />
-      <fog attach="fog" args={["#050b18", 4.5, 11]} />
+      <fog attach="fog" args={["#050b18", 3.5, 9.5]} />
       <PerspectiveCamera makeDefault position={[1.55, 1.1, 1.8]} fov={38} near={0.05} far={40} />
       <ambientLight intensity={0.42} />
       <hemisphereLight args={["#bfe9ff", "#090d18", 1.15]} />
@@ -343,11 +576,7 @@ function RobotStage({ trace, reduceMotion }: { trace: G1TraceReceipt | null; red
       />
       <spotLight position={[-2.5, 2.8, -1]} intensity={12} angle={0.38} penumbra={0.8} color="#7c3aed" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[14, 9]} />
-        <meshStandardMaterial color="#0a1222" roughness={0.8} metalness={0.18} />
-      </mesh>
-      <gridHelper args={[12, 48, "#164e63", "#172554"]} position={[0, 0.003, 0]} />
+      <TerrainSurface admission={admission} />
       <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[1.95, 0.012]} />
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.68} />
@@ -356,7 +585,9 @@ function RobotStage({ trace, reduceMotion }: { trace: G1TraceReceipt | null; red
         <RobotPlayback
           key={`${trace.objective}:${trace.distanceMeters}:${trace.samples.length}`}
           trace={trace}
+          admission={admission}
           reduceMotion={reduceMotion}
+          meshState={meshState}
         />
       ) : null}
       <OrbitControls
@@ -385,8 +616,19 @@ export function G1WalkingFlagship() {
   // keeps it warm while approaching (see WingViz rationale).
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
+  // Real G1 meshes load only while the stage is near the viewport; the
+  // capsule rig stays as the honest fallback when assets can't load. Meshes
+  // are cached after first approach while the heavier WebGL stage still
+  // unmounts offscreen, then disposed when this component itself unmounts.
+  const shouldLoadMeshes = useInView(stageRef, {
+    rootMargin: "600px 0px 600px 0px",
+    once: true,
+  });
+  const meshState = useG1Meshes(shouldLoadMeshes);
+  const workerActivated = shouldLoadMeshes;
   const workerRef = useRef<Worker | null>(null);
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
+  const [admission, setAdmission] = useState<G1Admission | null>(null);
   const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
   const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
@@ -402,6 +644,7 @@ export function G1WalkingFlagship() {
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
 
   useEffect(() => {
+    if (!workerActivated) return;
     let active = true;
     let optimizerWorker: Worker;
     try {
@@ -434,6 +677,7 @@ export function G1WalkingFlagship() {
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
       } else if (message.type === "trace") {
+        setAdmission(message.admission);
         if (message.family === "stabilizer") {
           setStabilizerTrace(message.trace);
           setStatus("Standing prior received; loading the walking curriculum mean…");
@@ -453,7 +697,7 @@ export function G1WalkingFlagship() {
       } else if (message.type === "comparison") {
         setComparison(message.rows);
         setBusy(null);
-        setStatus("Equal-budget 96-D owner-family race complete.");
+        setStatus("Equal-budget 5,040-D physical owner-family race complete.");
       } else {
         setError(message.message);
         setBusy(null);
@@ -473,7 +717,7 @@ export function G1WalkingFlagship() {
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, []);
+  }, [workerActivated]);
 
   const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
     if (!workerRef.current || busy) return;
@@ -500,8 +744,14 @@ export function G1WalkingFlagship() {
         ],
         ["distance", `${number(trace.distanceMeters, 2)} m`],
         ["single support", `${number(trace.singleSupportSeconds, 2)} s`],
-        ["schedule mismatch ∫", `${number(trace.contactScheduleMismatchIntegral, 2)} s`],
-        ["flight", `${number(trace.flightSeconds, 3)} s`],
+        ["push impulse", `${number(trace.pushImpulseNewtonSeconds, 2)} N·s`],
+        ["recovery (censored)", `${number(trace.recoveryTimeSeconds, 3)} s`],
+        ["terrain peak", `${number(1_000 * trace.maximumAbsoluteTerrainHeightMeters, 1)} mm`],
+        [
+          "maximum tilt",
+          `${number(Math.asin(Math.min(1, trace.maximumTiltSine)) * 180 / Math.PI, 1)}°`,
+        ],
+        ["minimum base", `${number(trace.minimumBaseHeightMeters, 3)} m`],
         ["steps integrated", `${trace.completedSteps.toLocaleString()} / ${G1_HORIZON_STEPS}`],
         ["termination", trace.terminationReason],
       ]
@@ -509,26 +759,42 @@ export function G1WalkingFlagship() {
 
   return (
     <div className="space-y-8">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
-        <div className="glass-card min-h-[540px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
+        <div className="glass-card min-h-[620px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
           <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-none">
             <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
-              owner poses · 480 Hz physics
+              owner poses · 480 Hz terrain physics
             </span>
             <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
               {TRACE_TITLES[activeTrace]}
             </span>
           </div>
+          {meshState.phase === "loading" ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+              <span className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2 text-xs text-slate-300 backdrop-blur-md">
+                Loading the real Unitree G1 mesh rig…
+              </span>
+            </div>
+          ) : null}
+          {meshState.phase === "failed" ? (
+            <div className="absolute bottom-20 left-5 right-5 z-10 flex justify-center pointer-events-none">
+              <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
+                Mesh assets unavailable — showing the kinematic skeleton fallback.
+              </span>
+            </div>
+          ) : null}
           <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
             <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
               Cyan / violet rings are owner contact booleans. Drag to orbit; pinch to zoom.
             </span>
             <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-              Translucent upper-body shell: display-only, omitted from dynamics
+              Rose arrow: disclosed lateral push · arms/head ride the torso link kinematically (display-only)
             </span>
           </div>
-          <div ref={stageRef} className="h-[540px] w-full">
-            {shouldMountStage && <RobotStage trace={trace} reduceMotion={reduceMotion} />}
+          <div ref={stageRef} className="h-[620px] w-full">
+            {shouldMountStage && (
+              <RobotStage trace={trace} admission={admission} reduceMotion={reduceMotion} meshState={meshState} />
+            )}
           </div>
         </div>
 
@@ -550,8 +816,8 @@ export function G1WalkingFlagship() {
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
             A disclosed full-CMA curriculum learned 105 meaningful owner coordinates: standing bias,
-            periodic foot unloading, then pelvis feedback. The live run starts there and mutates all
-            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step experiment you watch.
+            periodic foot unloading, then pelvis feedback. The
+            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step terrain-and-push experiment you watch.
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[0.65rem] leading-4 text-slate-400">
@@ -584,7 +850,7 @@ export function G1WalkingFlagship() {
             <option value="lm-ma">LM-MA — bounded transform</option>
           </select>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Full CMA is implemented and tested below at 96-D, but its O(n²) covariance would contain 25,401,600 entries here; the browser boundary honestly refuses it above 256-D.
+            Full CMA is implemented on the 128-D arm below, but its O(n²) covariance would contain 25,401,600 entries here; the browser boundary honestly refuses it above 256-D.
           </p>
 
           <label className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-seed">
@@ -602,40 +868,10 @@ export function G1WalkingFlagship() {
             <option value={2}>Seed 3 · 0x47315052</option>
           </select>
 
-          <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/20">
-            <div className="border-b border-white/10 px-3 py-2 text-[0.65rem] leading-4 text-slate-400">
-              Measured v0.6.4 audit · objective change after 12 generations × 16 candidates.
-              The walking mean remains the incumbent when no sample beats it.
-            </div>
-            <table className="w-full text-center text-[0.68rem] text-slate-400">
-              <thead className="bg-white/[0.025] text-[0.6rem] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th scope="col" className="px-3 py-2 text-left font-semibold">family</th>
-                  <th scope="col" className="px-2 py-2 font-semibold">seed 1</th>
-                  <th scope="col" className="px-2 py-2 font-semibold">seed 2</th>
-                  <th scope="col" className="px-2 py-2 font-semibold">seed 3</th>
-                </tr>
-              </thead>
-              <tbody>
-                {G1_SEED_AUDIT.map((row) => (
-                  <tr key={row.family} className="border-t border-white/[0.06] first:border-t-0">
-                    <th scope="row" className="px-3 py-2 text-left font-semibold text-slate-300">{row.family}</th>
-                    {row.changes.map((change, index) => (
-                      <td
-                        key={`${row.family}-${index}`}
-                        className={change === "flat" ? "px-2 py-2" : "px-2 py-2 font-mono text-emerald-300"}
-                      >
-                        {change}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="border-t border-white/10 px-3 py-2 text-[0.62rem] leading-4 text-slate-500">
-              Negative is better. All nine retained policies reached the 720-step horizon; “flat” is a
-              measured non-improvement, not a hidden failure or a relabeled win.
-            </p>
+          <div className="mt-4 rounded-xl border border-rose-300/15 bg-rose-400/[0.055] p-3 text-[0.68rem] leading-5 text-slate-400">
+            The wave field and half-sine lateral shove are deterministic owner inputs. Survival is
+            lexicographically primary: one extra integrated physics step beats every possible shaping-score
+            difference. “Recovery” is horizon-censored when the robot never returns to the disclosed upright band.
           </div>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
@@ -656,9 +892,9 @@ export function G1WalkingFlagship() {
             aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
           />
           <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
-            The curriculum mean already completes the horizon and travels about 0.60 m. The live budget
-            tests whether this family and seed can improve the exact scalar objective; a flat result is
-            reported as flat rather than relabeled as success.
+            The curriculum mean is a disclosed starting point, not a promised solution to the harder challenge.
+            The live budget tests whether this family and seed can survive longer and then improve the physical
+            shaping terms; a flat result remains flat.
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
@@ -731,7 +967,7 @@ export function G1WalkingFlagship() {
       </div>
 
       {trace ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">
           {receiptCards.map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
@@ -745,20 +981,20 @@ export function G1WalkingFlagship() {
         <div className="glass-card p-6 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">All variants, one honest budget</p>
-              <h3 className="mt-1 text-xl font-bold text-white">A live 96-D ill-conditioned race</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">Scalable variants, one physical budget</p>
+              <h3 className="mt-1 text-xl font-bold text-white">A live 5,040-D terrain-and-push race</h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Same initial mean, seed, population of 16, evaluation budget, and 10⁴-conditioned ellipsoid objective. This compares implementations—not universal winners. Runtime is a local browser measurement and the objective improvement is seed-specific.
+                Same curriculum mean, Philox seed, population of 16, physical evaluator, and evaluation budget. Full CMA is absent only because the owner correctly refuses dense covariance above 256 dimensions; all four families race on the 128-D arm.
               </p>
             </div>
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", generations: 10 }, "compare")}
+              onClick={() => post({ type: "compare", generations: 4 }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />
-              Run four-family race
+              Run scalable-family race
             </button>
           </div>
 
@@ -768,7 +1004,7 @@ export function G1WalkingFlagship() {
                 <thead className="border-b border-white/10 text-slate-500">
                   <tr>
                     <th className="pb-3 font-semibold">owner family</th>
-                    <th className="pb-3 font-semibold">best: gen 1 → final</th>
+                    <th className="pb-3 font-semibold">curriculum → final</th>
                     <th className="pb-3 font-semibold">evals</th>
                     <th className="pb-3 font-semibold">persistent / workspace scalars</th>
                     <th className="pb-3 font-semibold">this run</th>

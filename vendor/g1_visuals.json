@@ -1,0 +1,223 @@
+{
+ "pelvis": {
+  "mesh": "pelvis.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_hip_pitch_link": {
+  "mesh": "left_hip_pitch_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_hip_roll_link": {
+  "mesh": "left_hip_roll_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_hip_yaw_link": {
+  "mesh": "left_hip_yaw_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_knee_link": {
+  "mesh": "left_knee_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_ankle_pitch_link": {
+  "mesh": "left_ankle_pitch_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "left_ankle_roll_link": {
+  "mesh": "left_ankle_roll_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_hip_pitch_link": {
+  "mesh": "right_hip_pitch_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_hip_roll_link": {
+  "mesh": "right_hip_roll_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_hip_yaw_link": {
+  "mesh": "right_hip_yaw_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_knee_link": {
+  "mesh": "right_knee_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_ankle_pitch_link": {
+  "mesh": "right_ankle_pitch_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "right_ankle_roll_link": {
+  "mesh": "right_ankle_roll_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "waist_yaw_link": {
+  "mesh": "waist_yaw_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "waist_roll_link": {
+  "mesh": "waist_roll_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "torso_link": {
+  "mesh": "torso_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "head_link": {
+  "mesh": "head_link.STL",
+  "xyz": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ }
+}

@@ -255,14 +255,8 @@ function ArmEnvironment({ admission }: { admission: HouseholdManipulationAdmissi
         <>
           <mesh position={[0, supportY + 0.5, -0.82]} receiveShadow>
             <boxGeometry args={[2.3, 1.05, 0.07]} />
-            <meshStandardMaterial color="#172033" roughness={0.82} />
+            <meshStandardMaterial color="#1d2a40" roughness={0.82} />
           </mesh>
-          {[-0.65, -0.25, 0.15, 0.55].map((x) => (
-            <mesh key={x} position={[x, supportY + 0.5, -0.785]}>
-              <boxGeometry args={[0.006, 1.0, 0.006]} />
-              <meshBasicMaterial color="#475569" />
-            </mesh>
-          ))}
         </>
       ) : task === "living-room-remote" ? (
         <>
@@ -510,14 +504,14 @@ function ArmStage({
       gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        gl.toneMappingExposure = 1.3;
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
       <color attach="background" args={["#050914"]} />
-      <fog attach="fog" args={["#050914", 4.5, 10]} />
+      <fog attach="fog" args={["#050914", 3.6, 9]} />
       <PerspectiveCamera makeDefault position={[1.55, 1.25, 1.8]} fov={38} near={0.03} far={30} />
-      <ambientLight intensity={0.38} />
+      <ambientLight intensity={0.5} />
       <hemisphereLight args={["#dff6ff", "#101522", 1.25]} />
       <directionalLight
         castShadow
@@ -531,9 +525,9 @@ function ArmStage({
       <spotLight position={[1.4, 1.8, -2.2]} intensity={8} angle={0.38} penumbra={0.9} color="#22d3ee" />
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[12, 10]} />
-        <meshStandardMaterial color="#080f1d" roughness={0.92} metalness={0.12} />
+        <meshStandardMaterial color="#0b1424" roughness={0.92} metalness={0.12} />
       </mesh>
-      <gridHelper args={[8, 40, "#1e3a5f", "#172033"]} position={[0, 0.002, 0]} />
+      <gridHelper args={[8, 40, "#24506e", "#1a2a4a"]} position={[0, 0.002, 0]} />
       {admission ? <ArmEnvironment admission={admission} /> : null}
       {trace && admission ? (
         <ArmRig
@@ -731,7 +725,7 @@ export function HouseholdArmFlagship() {
           </div>
           <div className="pointer-events-none absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-end justify-between gap-2">
             <span className="max-w-xl rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-xs leading-5 text-slate-300 backdrop-blur-md">
-              Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the rose box is the scored keep-out region.
+              Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the rose box participates in certified convex separation queries.
             </span>
             <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
               Drag to orbit · pinch to zoom
@@ -760,7 +754,7 @@ export function HouseholdArmFlagship() {
             <span className="mt-2 block font-mono text-orange-200">(7 joints + 1 gripper) × 16 = 128 variables</span>
           </p>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            CMA-ES receives only a scalar receipt after a full rollout. Contact activation, static-friction capacity, capture, release, hard limits, and the scored keep-out proxy make the objective piecewise and black-box—there is no browser gradient hiding behind the animation.
+            CMA-ES receives only a scalar receipt after a full rollout. Compliant contact, stick/slip friction, free object dynamics, release, hard limits, and owner-routed obstacle/self/object separation make the objective piecewise and black-box—there is no browser gradient hiding behind the animation.
           </p>
 
           <label htmlFor="arm-family" className="mt-6 block text-xs font-semibold uppercase tracking-wider text-slate-300">
@@ -860,7 +854,7 @@ export function HouseholdArmFlagship() {
       </div>
 
       {trace && admission ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-12">
           {[
             ["objective ↓", number(trace.objective, 2)],
             ["vs curriculum", activeTrace === "curriculum" ? "reference" : objectiveDelta !== null && objectiveDelta > 0 ? `${number(objectiveDelta, 2)} lower` : "flat"],
@@ -869,6 +863,10 @@ export function HouseholdArmFlagship() {
             ["first grasp", `${number(trace.firstGraspTimeSeconds, 2)} s`],
             ["grip force", `${number(trace.peakGripForceNewtons, 1)} N`],
             ["work", `${number(trace.actuatorWorkJoules, 1)} J`],
+            ["collision risk ∫", `${number(trace.collisionRiskIntegral, 4)} m·s`],
+            ["certified clearance", `${number(trace.minimumCertifiedClearanceMeters * 100, 2)} cm`],
+            ["possible collision", `${number(trace.possibleCollisionTimeSeconds, 3)} s`],
+            ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
             ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
@@ -948,10 +946,10 @@ export function HouseholdArmFlagship() {
           </div>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
             <li><strong className="text-slate-200">Source arm:</strong> pinned iiwa topology, masses, inertias, joint frames, axes, hard limits, and 300 N·m reference defaults.</li>
-            <li><strong className="text-slate-200">Owner math:</strong> SE(3) kinematics, inverse-dynamics computed torque, Featherstone forward dynamics, compliant pad force, and Coulomb friction.</li>
+            <li><strong className="text-slate-200">Owner math:</strong> SE(3) kinematics, inverse-dynamics computed torque, Featherstone forward dynamics, compliant pad force, Coulomb friction, and certified convex separation.</li>
             <li><strong className="text-slate-200">Rendered verbatim:</strong> the browser receives object plus eight world poses. It never solves forward kinematics.</li>
-            <li><strong className="text-slate-200">Grasp test:</strong> opposing pads must align and provide 15% more static-friction capacity than object weight.</li>
-            <li><strong className="text-slate-200">Reduced contact:</strong> no mesh collision, self-collision, impulse solver, general grasp planner, deformable object, or cable model.</li>
+            <li><strong className="text-slate-200">Grasp test:</strong> both finite pads must remain engaged while the requested translation and rotation wrench stays inside owner friction capacity.</li>
+            <li><strong className="text-slate-200">Reduced contact:</strong> collision uses conservative oriented-box link/object envelopes, not triangle meshes; there is no general impulse solver, grasp planner, deformable object, or cable model.</li>
             <li><strong className="text-slate-200">No hardware claim:</strong> this is a deterministic explainer benchmark, not a KUKA-certified model or sim-to-real controller.</li>
           </ul>
         </aside>
@@ -964,7 +962,7 @@ export function HouseholdArmFlagship() {
             <h3 className="font-bold text-white">A parametric model with a paper trail</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            The procedural shell is intentionally mesh-free. Segment endpoints come from owner poses; the table records the pinned source joint-offset magnitude and mass used by dynamics. Orange housings are visual envelopes, not collision geometry.
+            The procedural shell is intentionally mesh-free. Segment endpoints come from owner poses; the table records the pinned source joint-offset magnitude and mass used by dynamics. Orange housings are display geometry; the collision owner independently builds conservative oriented boxes from those source frames.
           </p>
           <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
             <table className="w-full min-w-[440px] text-left text-xs">
@@ -1007,9 +1005,9 @@ export function HouseholdArmFlagship() {
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {[
-              ["1 · Reach and close", "The seven joint splines must bring the flange within 4.5 cm while the finger spline is actually closing."],
-              ["2 · Earn the grasp", "Frankensim evaluates compliant indentation and friction capacity. A nearby gripper is not automatically attached."],
-              ["3 · Lift, route, release", "The object must clear 9 cm, reach the goal tolerance, and finish released on support. Source joint frames are softly penalized near or inside the keep-out box."],
+              ["1 · Reach and close", "The seven joint splines must align both finite pads with the object while the finger spline is actually closing."],
+              ["2 · Earn the grasp", "Frankensim integrates compliant normal force, friction, object translation, and object rotation. Nothing is latched or teleported."],
+              ["3 · Lift, route, release", "The object must clear 9 cm, reach the goal tolerance, finish released on support, and avoid owner-reported obstacle, self, and proximal-object collision risk."],
             ].map(([title, body]) => (
               <div key={title} className="rounded-2xl border border-white/10 bg-black/15 p-4">
                 <div className="flex items-center gap-2 text-emerald-300">
