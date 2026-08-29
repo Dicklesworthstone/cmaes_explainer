@@ -448,8 +448,6 @@ export function bellmanSweep(
         const nix = ix + ax;
         const niy = iy + ay;
         if (nix < 0 || nix >= width || niy < 0 || niy >= height) {
-          const wallCost = baseCost + 100.0;
-          if (wallCost < bestNext) bestNext = wallCost;
           continue;
         }
         const nidx = niy * width + nix;

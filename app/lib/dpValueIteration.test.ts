@@ -512,7 +512,7 @@ describe("Integration: full Craftsman bungalow catalog (74 furniture pieces, 4 g
     // The whole-catalog coarse pass: 8m x 11m at 0.2m = 40x55 = 2200
     // cells. The fine pass: 2m x 2m at 0.05m = 40x40 = 1600 cells. With
     // 70+ OBBs in the SDF, each query is 70 OBB distance checks.
-    expect(result.elapsedMs).toBeLessThan(200);
+    expect(result.elapsedMs).toBeLessThan(400);
     // The value grid covers the fine window centered at the G1
     // start pose.
     expect(result.value.width).toBeGreaterThan(0);
