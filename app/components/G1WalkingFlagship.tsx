@@ -17,6 +17,7 @@ import {
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
+import { G1HouseBackdrop } from "./G1HouseBackdrop";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -718,6 +719,7 @@ function RobotStage({
       <spotLight position={[0.6, 2.3, -2.9]} intensity={26} angle={0.5} penumbra={0.85} color="#bae6fd" />
 
       <TerrainSurface admission={admission} />
+      <G1HouseBackdrop showFurniture={true} showWalls={true} showGoals={true} />
       <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[1.95, 0.012]} />
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.68} />

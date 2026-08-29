@@ -26,6 +26,8 @@ export type PhysicsMaterialId =
   | "plastic"
   | "concrete";
 
+export type HouseholdMaterial = PhysicsMaterialId;
+
 export interface MaterialProperties {
   id: PhysicsMaterialId | string;
   staticFriction: number;

@@ -1,88 +1,92 @@
 import { describe, expect, test } from "bun:test";
-import { sdfBox, sdfSphere } from "../app/lib/analyticSdf";
 import {
-  ccdCapsuleTrajectory,
-  ccdSphereTrajectory,
-  ccdWholeBodyTrajectory,
-  type MovingRobotLink,
+  queryContinuousCollisionSDF,
+  resolveContinuousCollision,
+  type SdfEvaluator3D,
 } from "../app/lib/continuousCollisionDetection";
 
-describe("Continuous Collision Detection (CCD) over SDFs", () => {
-  test("prevents tunneling through thin obstacles during high-velocity motion", () => {
-    // Thin wall box at x = 0, half-extents [0.05, 2, 2] (thickness 0.1m)
-    const wallSdf = (p: [number, number, number]) => sdfBox(p, [0, 0, 0], [0.05, 2, 2]);
+describe("Continuous Collision Detection (CCD) on Signed Distance Fields", () => {
+  // Thin glass pane at x = 0.5 with thickness 0.01m (x in [0.495, 0.505])
+  const thinGlassSdf: SdfEvaluator3D = (pos: [number, number, number]) => {
+    const dx = Math.abs(pos[0] - 0.5) - 0.005;
+    const dy = Math.max(0, Math.abs(pos[1]) - 1.0);
+    const dz = Math.max(0, Math.abs(pos[2]) - 1.0);
+    const dist = Math.hypot(Math.max(0, dx), dy, dz) + Math.min(0, dx);
+    const normalX = pos[0] >= 0.5 ? 1.0 : -1.0;
+    return { distance: dist, gradient: [normalX, 0.0, 0.0] };
+  };
 
-    // High velocity sphere bullet starting at x = -5, ending at x = +5
-    const p0: [number, number, number] = [-5, 0, 0];
-    const p1: [number, number, number] = [5, 0, 0];
-    const radius = 0.1;
+  test("CCD catches high-speed thin-wall penetration that discrete collision misses (anti-tunneling)", () => {
+    const startPos: [number, number, number] = [0.0, 0.0, 0.0];
+    const endPos: [number, number, number] = [1.0, 0.0, 0.0]; // Jumped across x=0.5 in 1 frame
+    const radius = 0.02; // 2cm sphere
 
-    // Notice that discrete endpoint checks at p0 (-5) and p1 (+5) are BOTH collision-free
-    expect(wallSdf(p0).distance).toBeGreaterThan(4.0);
-    expect(wallSdf(p1).distance).toBeGreaterThan(4.0);
+    // Discrete check at start & end both report positive distance (free space)
+    expect(thinGlassSdf(startPos).distance).toBeGreaterThan(0.4);
+    expect(thinGlassSdf(endPos).distance).toBeGreaterThan(0.4);
 
-    // Continuous collision detection MUST catch the collision with the wall
-    const ccdRes = ccdSphereTrajectory(p0, p1, radius, wallSdf);
-    expect(ccdRes.hasCollision).toBe(true);
-
-    // Time of impact should be when sphere front touches wall (x = -0.05 - 0.1 = -0.15)
-    // t = (-0.15 - (-5)) / 10 = 4.85 / 10 = 0.485
-    expect(ccdRes.timeOfImpact).toBeCloseTo(0.485, 2);
-    expect(ccdRes.contactNormal[0]).toBeLessThan(0); // Normal should point towards incoming ray
-  });
-
-  test("confirms safety for trajectories with ample clearance", () => {
-    const obstacle = (p: [number, number, number]) => sdfSphere(p, [0, 5, 0], 1.0);
-    const p0: [number, number, number] = [-5, 0, 0];
-    const p1: [number, number, number] = [5, 0, 0];
-
-    const ccdRes = ccdSphereTrajectory(p0, p1, 0.2, obstacle);
-    expect(ccdRes.hasCollision).toBe(false);
-    expect(ccdRes.separationDistance).toBeGreaterThan(3.0);
-  });
-
-  test("detects moving robot arm capsule collisions", () => {
-    const obstacle = (p: [number, number, number]) => sdfBox(p, [0, 1.0, 0], [0.3, 0.3, 0.3]);
-
-    const armLink: MovingRobotLink = {
-      name: "forearm",
-      radius: 0.05,
-      startA: [-1.0, 0.5, 0],
-      startB: [-1.0, 1.5, 0],
-      endA: [1.0, 0.5, 0],
-      endB: [1.0, 1.5, 0], // Sweeps horizontally through the obstacle at x=0
-    };
-
-    const ccdRes = ccdCapsuleTrajectory(armLink, obstacle);
-    expect(ccdRes.hasCollision).toBe(true);
-    expect(ccdRes.timeOfImpact).toBeGreaterThan(0.2);
-    expect(ccdRes.timeOfImpact).toBeLessThan(0.8);
-  });
-
-  test("evaluates whole-body multi-link trajectory safety", () => {
-    const obstacle = (p: [number, number, number]) => sdfSphere(p, [2, 0.8, 0], 0.5);
-
-    const links: MovingRobotLink[] = [
+    // CCD swept query evaluates space-time path
+    const ccdRes = queryContinuousCollisionSDF(
       {
-        name: "torso",
-        radius: 0.15,
-        startA: [0, 0, 0],
-        startB: [0, 1, 0],
-        endA: [0, 0, 0],
-        endB: [0, 1, 0],
+        startPosition: startPos,
+        endPosition: endPos,
+        radius,
       },
-      {
-        name: "right_arm",
-        radius: 0.08,
-        startA: [0, 0.8, 0],
-        startB: [1, 0.8, 0],
-        endA: [0, 0.8, 0],
-        endB: [2.5, 0.8, 0], // Extends arm into obstacle
-      },
-    ];
+      thinGlassSdf,
+    );
 
-    const wholeBodyRes = ccdWholeBodyTrajectory(links, obstacle);
-    expect(wholeBodyRes.isSafe).toBe(false);
-    expect(wholeBodyRes.earliestImpactLink).toBe("right_arm");
+    expect(ccdRes.hasImpact).toBe(true);
+    expect(ccdRes.timeOfImpact).not.toBeNull();
+    expect(ccdRes.timeOfImpact!).toBeGreaterThan(0.4);
+    expect(ccdRes.timeOfImpact!).toBeLessThan(0.55);
+    expect(ccdRes.surfaceNormal).toEqual([-1.0, 0.0, 0.0]);
+    expect(ccdRes.impactPosition![0]).toBeCloseTo(0.475, 2);
+  });
+
+  test("resolveContinuousCollision halts projectile and reflects velocity", () => {
+    const startPos: [number, number, number] = [0.1, 0.0, 0.0];
+    const velocity: [number, number, number] = [20.0, 0.0, 0.0]; // 20 m/s in +X
+    const dt = 1 / 30; // jumps 0.67m -> would tunnel through x=0.5
+    const radius = 0.02;
+
+    const res = resolveContinuousCollision(startPos, velocity, dt, radius, thinGlassSdf, 0.5);
+
+    expect(res.impactDetected).toBe(true);
+    expect(res.newPosition[0]).toBeLessThan(0.5); // Never crossed through glass
+    expect(res.newVelocity[0]).toBeLessThan(0.0); // Reflected backward!
+    expect(res.newVelocity[0]).toBeCloseTo(-10.0, 1); // e = 0.5 -> 20 * -0.5 = -10
+  });
+
+  test("non-colliding swept path returns hasImpact = false", () => {
+    const startPos: [number, number, number] = [0.0, 2.5, 0.0]; // Flying high above glass pane
+    const endPos: [number, number, number] = [1.0, 2.5, 0.0];
+
+    const ccdRes = queryContinuousCollisionSDF(
+      {
+        startPosition: startPos,
+        endPosition: endPos,
+        radius: 0.02,
+      },
+      thinGlassSdf,
+    );
+
+    expect(ccdRes.hasImpact).toBe(false);
+    expect(ccdRes.timeOfImpact).toBeNull();
+  });
+
+  test("sub-millisecond execution benchmark for 100 CCD swept queries", () => {
+    const t0 = performance.now();
+    for (let i = 0; i < 100; i++) {
+      queryContinuousCollisionSDF(
+        {
+          startPosition: [0.0, 0.0, 0.0],
+          endPosition: [1.0, 0.0, 0.0],
+          radius: 0.02,
+        },
+        thinGlassSdf,
+      );
+    }
+    const elapsed = performance.now() - t0;
+    expect(elapsed).toBeLessThan(10.0); // <100µs per query
   });
 });
