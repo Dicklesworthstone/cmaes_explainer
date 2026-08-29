@@ -8,6 +8,7 @@ import {
   type FrankenSimG1WalkingEvaluator,
   type CmaFamily,
   type G1Admission,
+  type G1Challenge,
   type G1TraceReceipt,
 } from "../lib/frankensimCmaes";
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
@@ -21,7 +22,7 @@ type WorkerRequest =
       seedIndex: number;
       mode?: "continue" | "fresh";
     }
-  | { type: "compare"; generations: number };
+  | { type: "compare"; challenge: G1Challenge; generations: number };
 
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -89,10 +90,14 @@ function reportParallelEvaluation(
   return true;
 }
 
-async function preview(): Promise<void> {
+function g1Config(challenge: G1Challenge): typeof DEFAULT_G1_WALKING_CONFIG {
+  return { ...DEFAULT_G1_WALKING_CONFIG, challenge };
+}
+
+async function preview(challenge: G1Challenge): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
+    await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
     "G1 admission"
   );
   try {
@@ -161,12 +166,13 @@ async function optimize(
   family: Exclude<CmaFamily, "full">,
   requestedGenerations: number,
   requestedSeedIndex: number,
-  mode: "continue" | "fresh" = "continue"
+  mode: "continue" | "fresh" = "continue",
+  challenge: G1Challenge = "terrain-and-push"
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const population = G1_POPULATION;
-  const runKey = `${family}:${seedIndex}`;
+  const runKey = `${challenge}:${family}:${seedIndex}`;
 
   let run = mode === "continue" ? g1ActiveRuns.get(runKey) : undefined;
   if (run) {
@@ -192,12 +198,12 @@ async function optimize(
     // a short proxy and replaying a longer experiment rewards a different
     // behavior than the one the user sees.
     const evaluator = requireOk(
-      await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
+      await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
       "G1 admission"
     );
     const evaluationPool = new RoboticsEvaluationPool({
       model: "g1",
-      config: DEFAULT_G1_WALKING_CONFIG,
+      config: g1Config(challenge),
       dimension: 5_040,
     });
     let bestPolicy = evaluator.walkingCurriculumMean();
@@ -293,12 +299,12 @@ async function compareFamilies(requestedGenerations: number): Promise<void> {
   });
 
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(DEFAULT_G1_WALKING_CONFIG),
+    await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
     "G1 comparison admission"
   );
   const evaluationPool = new RoboticsEvaluationPool({
     model: "g1",
-    config: DEFAULT_G1_WALKING_CONFIG,
+    config: g1Config(challenge),
     dimension: 5_040,
   });
   let parallelAnnounced = false;
@@ -321,7 +327,10 @@ async function compareFamilies(requestedGenerations: number): Promise<void> {
         }),
         `${family} admission`
       );
-      const started = performance.now();
+      // Wall-clock elapsed is a labeled UI/runtime measurement, not a
+      // simulation input. Date.now's 1 ms resolution is well below the
+      // per-family budgets (hundreds of ms to seconds).
+      const started = Date.now();
       let finalBest = initialBest;
       let evaluations = 0;
       try {
@@ -349,7 +358,7 @@ async function compareFamilies(requestedGenerations: number): Promise<void> {
           evaluations,
           persistentScalars: session.admission.persistentScalars,
           workspaceScalars: session.admission.updateWorkspaceScalars,
-          elapsedMilliseconds: performance.now() - started,
+          elapsedMilliseconds: Date.now() - started,
         });
       } finally {
         session.free();
@@ -368,7 +377,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     ? preview()
     : request.type === "compare"
       ? compareFamilies(request.generations)
-      : optimize(request.family, request.generations, request.seedIndex, request.mode);
+      : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge);
   void task.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
   });

@@ -12,6 +12,7 @@ import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
   type G1Admission,
+  type G1Challenge,
   type G1TraceReceipt,
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
@@ -773,6 +774,7 @@ export function G1WalkingFlagship() {
   const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [family, setFamily] = useState<ScalableFamily>("lm-cma");
+  const [challenge, setChallenge] = useState<G1Challenge>("terrain-and-push");
   const [generations, setGenerations] = useState(16);
   const [seedIndex, setSeedIndex] = useState(0);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
@@ -1015,6 +1017,43 @@ export function G1WalkingFlagship() {
           </div>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
+            <span id="g1-challenge-label">Challenge</span>
+            <div role="radiogroup" aria-labelledby="g1-challenge-label" className="flex gap-2">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={challenge === "flat"}
+                disabled={busy !== null || !workerAvailable}
+                onClick={() => {
+                  if (challenge !== "flat") {
+                    setChallenge("flat");
+                    setGeneration(0);
+                    post({ type: "preview", challenge: "flat" }, "preview");
+                  }
+                }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${challenge === "flat" ? "bg-cyan-500/30 text-cyan-100" : "bg-white/5 text-slate-400 hover:text-slate-200"}`}
+              >
+                Flat ground
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={challenge === "terrain-and-push"}
+                disabled={busy !== null || !workerAvailable}
+                onClick={() => {
+                  if (challenge !== "terrain-and-push") {
+                    setChallenge("terrain-and-push");
+                    setGeneration(0);
+                    post({ type: "preview", challenge: "terrain-and-push" }, "preview");
+                  }
+                }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${challenge === "terrain-and-push" ? "bg-cyan-500/30 text-cyan-100" : "bg-white/5 text-slate-400 hover:text-slate-200"}`}
+              >
+                Terrain + push
+              </button>
+            </div>
+          </div>
+          <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
             <label htmlFor="g1-generations">Search budget (generations)</label>
             <span className="font-mono text-cyan-200">
               {generations} × {G1_POPULATION} = {generations * G1_POPULATION} candidates
@@ -1053,7 +1092,7 @@ export function G1WalkingFlagship() {
               disabled={busy !== null || !workerAvailable}
               onClick={() =>
                 post(
-                  { type: "optimize", family, generations, seedIndex, mode: "continue" },
+                  { type: "optimize", family, generations, seedIndex, mode: "continue", challenge },
                   "optimize"
                 )
               }
@@ -1067,7 +1106,7 @@ export function G1WalkingFlagship() {
               disabled={busy !== null || !workerAvailable}
               onClick={() => {
                 if (!curriculumTrace) {
-                  post({ type: "preview" }, "preview");
+                  post({ type: "preview", challenge }, "preview");
                   return;
                 }
                 setTrace(curriculumTrace);
@@ -1145,7 +1184,7 @@ export function G1WalkingFlagship() {
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", generations: 4 }, "compare")}
+              onClick={() => post({ type: "compare", generations: 4, challenge }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />
