@@ -322,6 +322,46 @@ function ArmRig({
   const contactMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const playbackSeconds = useRef(0);
   const sampleIndex = useRef(0);
+  // Boundary volumes the kernel's objective already avoids: the counter slab,
+  // the task's backdrop wall, and the declared obstacle box. The checker below
+  // flags visible penetrations of exactly these volumes — presentation-layer
+  // truth against the declared scene, not a second physics claim.
+  const boundaryBoxes = useMemo(() => {
+    const scene = admission.scene;
+    const supportY = scene.supportHeightMeters;
+    const boxes: Array<{ name: string; box: THREE.Box3 }> = [
+      {
+        name: "counter",
+        box: new THREE.Box3(
+          new THREE.Vector3(-1.15, supportY - 0.09, -0.825),
+          new THREE.Vector3(1.15, supportY + 0.001, 0.825)
+        ),
+      },
+      {
+        name: "obstacle",
+        box: new THREE.Box3().setFromCenterAndSize(
+          new THREE.Vector3(...ownerPositionToThree(scene.obstacleCenterMeters)),
+          new THREE.Vector3(
+            2 * scene.obstacleHalfExtentsMeters[0],
+            2 * scene.obstacleHalfExtentsMeters[2],
+            2 * scene.obstacleHalfExtentsMeters[1]
+          )
+        ),
+      },
+    ];
+    if (admission.config.task === "kitchen-mug") {
+      boxes.push({
+        name: "backdrop",
+        box: new THREE.Box3(
+          new THREE.Vector3(-1.15, supportY - 0.02, -0.86),
+          new THREE.Vector3(1.15, supportY + 1.03, -0.78)
+        ),
+      });
+    }
+    return boxes;
+  }, [admission]);
+  const boundaryStateRef = useRef({ key: "", lastTick: 0 });
+  const frameTick = useRef(0);
   const scratch = useMemo(
     () => ({
       start: new THREE.Vector3(),
@@ -330,6 +370,7 @@ function ArmRig({
       midpoint: new THREE.Vector3(),
       yAxis: new THREE.Vector3(0, 1, 0),
       quaternion: new THREE.Quaternion(),
+      probe: new THREE.Vector3(),
     }),
     []
   );
@@ -387,6 +428,38 @@ function ArmRig({
     if (contactMaterialRef.current) {
       contactMaterialRef.current.opacity = sample.grasped ? 0.95 : 0.45;
       contactMaterialRef.current.color.setHex(sample.grasped ? 0x34d399 : 0xfbbf24);
+    }
+
+    // Boundary-clipping detection: presentation-layer check of every arm link
+    // origin against the declared counter/wall/obstacle volumes. A hit tints
+    // that link's meshes red until the set of violations changes.
+    frameTick.current += 1;
+    let violatingLink = -1;
+    let violatingVolume = "";
+    for (let link = 0; link < sample.linkPoses.length && violatingLink < 0; link++) {
+      const p = sample.linkPoses[link].position;
+      scratch.probe.set(p[0], p[2], -p[1]);
+      for (const { name, box } of boundaryBoxes) {
+        if (box.distanceToPoint(scratch.probe) <= 0.05) {
+          violatingLink = link;
+          violatingVolume = name;
+          break;
+        }
+      }
+    }
+    const violationKey = violatingLink < 0 ? "" : `${violatingLink}:${violatingVolume}`;
+    if (violationKey !== boundaryStateRef.current.key && frameTick.current % 6 === 0) {
+      boundaryStateRef.current.key = violationKey;
+      for (let link = 0; link < sample.linkPoses.length; link++) {
+        const group = linkRefs.current[link];
+        if (!group) continue;
+        const hot = link === violatingLink;
+        group.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
+          if (mat && "emissive" in mat) mat.emissive.setHex(hot ? 0xdc2626 : 0x000000);
+        });
+      }
     }
   });
 
@@ -798,7 +871,7 @@ export function HouseholdArmFlagship() {
           </select>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="arm-generations">Physical search budget</label>
+            <label htmlFor="arm-generations">Search budget (generations)</label>
             <span className="font-mono text-orange-200">
               {generations} × {ARM_POPULATION} = {generations * ARM_POPULATION} rollouts
             </span>
@@ -807,23 +880,35 @@ export function HouseholdArmFlagship() {
             id="arm-generations"
             type="range"
             min={2}
-            max={20}
+            max={5000}
             step={2}
             value={generations}
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * ARM_POPULATION} complete physical rollouts`}
           />
+          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
+            <span>2</span>
+            <span>1.25k</span>
+            <span>2.5k</span>
+            <span>3.75k</span>
+            <span>5k</span>
+          </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "optimize", task, family, generations, seedIndex }, "optimize")}
+              onClick={() =>
+                post(
+                  { type: "optimize", task, family, generations, seedIndex, mode: "continue" },
+                  "optimize"
+                )
+              }
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-3 text-sm font-bold text-white shadow-lg shadow-orange-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Sparkles className="h-4 w-4" />
-              Optimize
+              {generation > 0 ? `Continue · gen ${generation}` : "Optimize"}
             </button>
             <button
               type="button"

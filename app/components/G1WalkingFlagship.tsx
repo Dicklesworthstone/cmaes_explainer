@@ -1015,7 +1015,7 @@ export function G1WalkingFlagship() {
           </div>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="g1-generations">Full-horizon search budget</label>
+            <label htmlFor="g1-generations">Search budget (generations)</label>
             <span className="font-mono text-cyan-200">
               {generations} × {G1_POPULATION} = {generations * G1_POPULATION} candidates
             </span>
@@ -1024,28 +1024,43 @@ export function G1WalkingFlagship() {
             id="g1-generations"
             type="range"
             min={8}
-            max={40}
+            max={30000}
             step={4}
             value={generations}
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
           />
+          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
+            <span>8</span>
+            <span>7.5k</span>
+            <span>15k</span>
+            <span>22.5k</span>
+            <span>30k</span>
+          </div>
           <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
-            The curriculum mean is a disclosed starting point, not a promised solution to the harder challenge.
-            The live budget tests whether this family and seed can survive longer and then improve the physical
-            shaping terms; a flat result remains flat.
+            16 gens is a refinement pass; the curriculum mean itself was
+            learned over hundreds. Every press CONTINUES the same CMA run —
+            mean, sigma, and covariance path preserved — so presses stack:
+            16 + 2000 + 2000 … up to 30k generations of real search. Wall
+            time scales with your hardware; the HUD shows the live generation.
+            A flat objective stays flat — the run is honest about that too.
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "optimize", family, generations, seedIndex }, "optimize")}
+              onClick={() =>
+                post(
+                  { type: "optimize", family, generations, seedIndex, mode: "continue" },
+                  "optimize"
+                )
+              }
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Sparkles className="h-4 w-4" />
-              Optimize
+              {generation > 0 ? `Continue · gen ${generation}` : "Optimize"}
             </button>
             <button
               type="button"
