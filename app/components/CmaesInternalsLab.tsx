@@ -153,16 +153,23 @@ export function CmaesInternalsLab() {
   const latest = states[Math.min(cursor, states.length - 1)] ?? null;
   const currentLandscape = LANDSCAPES[landscape] ?? LANDSCAPES[0];
 
+  const seedRef = useRef(seed);
+  // Keep the ref in sync with the rendered seed; the ref is read by
+  // randomizeStart so the LCG step is computed against the freshest value
+  // without depending on a stale render-time closure.
+  useEffect(() => {
+    seedRef.current = seed;
+  }, [seed]);
+
   const randomizeStart = () => {
     // Advance the seed through the same numerical-recipes LCG used by the
     // displayed counter, then derive the start point from it through
     // mulberry32: a single press always produces the same scatter.
-    setSeed((s) => {
-      const nextSeed = (s * 1664525 + 1013904223) >>> 0;
-      const rng = createMulberry32(nextSeed);
-      setStartPoint(Array.from({ length: 6 }, () => Math.round((rng() * 3 - 1.5) * 100) / 100));
-      return nextSeed;
-    });
+    const nextSeed = (seedRef.current * 1664525 + 1013904223) >>> 0;
+    const rng = createMulberry32(nextSeed);
+    const nextPoint = Array.from({ length: 6 }, () => Math.round((rng() * 3 - 1.5) * 100) / 100);
+    setSeed(nextSeed);
+    setStartPoint(nextPoint);
   };
 
   // Loss sparkline data (log10 best_f per generation).
