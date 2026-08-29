@@ -910,6 +910,12 @@ export function G1WalkingFlagship() {
             <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
               {TRACE_TITLES[activeTrace]}
             </span>
+            <span
+              className="rounded-full border border-amber-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md"
+              title="Sears Craftsman floorplan rendered as a display-only backdrop. The kernel rollout runs the disclosed terrain-and-push physics; walls/furniture do not participate in collision or the objective until cmaes-u53 (multi-obstacle kernel) lands."
+            >
+              backdrop · house floorplan (display-only)
+            </span>
           </div>
           {meshState.phase === "loading" ? (
             <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
