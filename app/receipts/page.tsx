@@ -167,7 +167,7 @@ export default function ReceiptsPage() {
           <p className="max-w-3xl text-sm leading-6 text-slate-400">
             Single human-readable evidence layer for the photo-real + dynamic-physics charter.
             Each number below comes from a markdown file that the contributor-side tests
-            parse; a hand-edit on this page is impossible. A "status board" that the
+            parse; a hand-edit on this page is impossible. A &ldquo;status board&rdquo; that the
             contributor can edit by hand is a process artifact. The numbers on this page
             are the process.
           </p>

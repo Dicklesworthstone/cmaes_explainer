@@ -123,7 +123,7 @@ export function FurnitureCatalogInspector() {
           </div>
 
           <div className="p-2.5 rounded bg-neutral-900/80 border border-neutral-800 text-[11px] text-neutral-400 italic">
-            "{activePiece.note}"
+            &ldquo;{activePiece.note}&rdquo;
           </div>
         </div>
 
