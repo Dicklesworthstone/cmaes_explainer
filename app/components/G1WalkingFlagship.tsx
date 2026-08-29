@@ -928,7 +928,7 @@ export function G1WalkingFlagship() {
               Cyan / violet rings are owner contact booleans. Drag to orbit; pinch to zoom.
             </span>
             <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-              Rose arrow: disclosed lateral push · arms/head ride the torso link kinematically (display-only)
+              Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
             </span>
           </div>
           <div ref={stageRef} className="h-[620px] w-full">
