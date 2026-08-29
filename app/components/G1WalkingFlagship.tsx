@@ -625,18 +625,34 @@ type G1MeshState =
   | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
   | { phase: "failed" };
 
+// Page-lifetime module cache: the 16MB mesh set parses ONCE per page load.
+// Disposing on active-toggle (the previous behavior) left React state pointing
+// at disposed geometries during the refetch window, causing invisible meshes
+// and WebGL errors when the user scrolled back. The cache is never disposed
+// — the browser frees GPU memory on page unload.
+let g1MeshCache: {
+  geometries: Record<string, THREE.BufferGeometry>;
+  material: THREE.MeshStandardMaterial;
+} | null = null;
+
 function useG1Meshes(active: boolean): G1MeshState {
-  const [state, setState] = useState<G1MeshState>({ phase: active ? "loading" : "idle" });
+  const [state, setState] = useState<G1MeshState>(() =>
+    g1MeshCache
+      ? { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material }
+      : { phase: active ? "loading" : "idle" }
+  );
   useEffect(() => {
     if (!active) return;
+    // Cache hit: reuse the parsed geometries (no fetch, no dispose).
+    if (g1MeshCache) {
+      setState({ phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material });
+      return;
+    }
     let cancelled = false;
-    let published = false;
-    let material: THREE.MeshStandardMaterial | null = null;
     const geometries: Record<string, THREE.BufferGeometry> = {};
     const loader = new STLLoader();
-    const disposeAssets = (): void => {
+    const disposeInFlight = (): void => {
       Object.values(geometries).forEach((geometry) => geometry.dispose());
-      material?.dispose();
     };
     (async () => {
       try {
@@ -651,31 +667,30 @@ function useG1Meshes(active: boolean): G1MeshState {
           })
         );
         if (cancelled) {
-          disposeAssets();
+          disposeInFlight();
           return;
         }
-        material = new THREE.MeshStandardMaterial({
+        const material = new THREE.MeshStandardMaterial({
           color: "#3a424d",
           metalness: 0.35,
           roughness: 0.46,
         });
-        published = true;
-        setState({
-          phase: "ready",
-          geometries,
-          material,
-        });
+        g1MeshCache = { geometries, material };
+        setState({ phase: "ready", geometries, material });
       } catch {
-        disposeAssets();
+        disposeInFlight();
         if (!cancelled) setState({ phase: "failed" });
       }
     })();
     return () => {
       cancelled = true;
-      if (published) disposeAssets();
     };
   }, [active]);
-  return active && state.phase === "idle" ? { phase: "loading" } : state;
+  return g1MeshCache
+    ? { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material }
+    : active && state.phase === "idle"
+      ? { phase: "loading" }
+      : state;
 }
 
 function RobotStage({
@@ -864,7 +879,7 @@ export function G1WalkingFlagship() {
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({ type: "preview" });
+    optimizerWorker.postMessage({ type: "preview", challenge: "terrain-and-push" });
     return () => {
       active = false;
       optimizerWorker.terminate();
@@ -881,13 +896,15 @@ export function G1WalkingFlagship() {
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
     : null;
-   // Multi-factor objective over time (cmaes-0m3):
-  // impactIntegral, jointLimitIntegral, contactScheduleMismatchIntegral, ...).
-  // The UI now surfaces them as separate cards AND computes a weighted-sum
-  // multi-factor objective so a small stabilizing correction is rewarded, not
-  // collapsed into a single scalar. Weights match the v068 shaping intent
-  // (mean forward speed positive, slip+impact negative, work/distance mildly
-  // negative so a stabilizing correction is not punished).
+  // Multi-factor objective over time (cmaes-0m3): expose the v068 kernel's
+  // per-channel integrals (actuatorWorkJoules, slipIntegral, postureIntegral,
+  // impactIntegral, jointLimitIntegral, contactScheduleMismatchIntegral,
+  // lateralErrorIntegral, headingErrorIntegral, speedErrorIntegral,
+  // backwardDistanceMeters) and a transparent weighted-sum channel card so
+  // a small stabilizing correction is visible, not collapsed into one
+  // scalar. The channel weights are owned by app/lib/g1MultiFactor.ts and
+  // match the kernel's v068 shaping intent (mean forward speed + survival
+  // positive; slip / impact / contact-schedule / work-per-meter negative).
   const multiFactor = trace
     ? computeMultiFactorObjective(trace, DEFAULT_G1_WALKING_CONFIG)
     : null;
