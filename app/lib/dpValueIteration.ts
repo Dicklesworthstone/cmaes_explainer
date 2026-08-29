@@ -388,61 +388,71 @@ export function bellmanSweep(
   gamma: number,
   actions: ActionSet,
   cost: ClearanceCostParams,
+  precomputed?: { baseCosts: Float64Array; isBlocked: Uint8Array; scratch: Float64Array },
 ): number {
   const { width, height, resolution, values, goal } = grid;
-  const next = new Float64Array(values.length);
-  // Copy goal cells (they are always 0).
-  for (let i = 0; i < values.length; i++) {
-    if (goal[i]) next[i] = 0;
-  }
+  const len = values.length;
+  const next = precomputed?.scratch ?? new Float64Array(len);
+  const baseCosts = precomputed?.baseCosts;
+  const isBlocked = precomputed?.isBlocked;
+  const actionCostFactor = cost.actionWeight * resolution * resolution;
+
   let maxDelta = 0;
   for (let iy = 0; iy < height; iy++) {
+    const rowOffset = iy * width;
     for (let ix = 0; ix < width; ix++) {
-      const idx = iy * width + ix;
-      if (goal[idx]) continue;
-      const wx = grid.origin[0] + (ix + 0.5) * resolution;
-      const wy = grid.origin[1] + (iy + 0.5) * resolution;
-      const d = sdf(wx, wy);
-      const clearanceViolation = Math.max(0, cost.safetyMargin - d);
-      const clearanceCost =
-        cost.clearanceWeight * clearanceViolation * clearanceViolation;
-      // If the cell is inside an obstacle, the value is +Infinity
-      // (unreachable). This is a guard against the cost function
-      // blowing up in the iteration.
-      if (d <= 0 && !goal[idx]) {
+      const idx = rowOffset + ix;
+      if (goal[idx]) {
+        next[idx] = 0;
+        continue;
+      }
+
+      let blocked = false;
+      let baseCost = 0;
+      if (baseCosts && isBlocked) {
+        blocked = isBlocked[idx] === 1;
+        baseCost = baseCosts[idx];
+      } else {
+        const wx = grid.origin[0] + (ix + 0.5) * resolution;
+        const wy = grid.origin[1] + (iy + 0.5) * resolution;
+        const d = sdf(wx, wy);
+        if (d <= 0) {
+          blocked = true;
+        } else {
+          const clearanceViolation = Math.max(0, cost.safetyMargin - d);
+          const clearanceCost = cost.clearanceWeight * clearanceViolation * clearanceViolation;
+          baseCost = cost.stepPenalty + clearanceCost;
+        }
+      }
+
+      if (blocked) {
         next[idx] = Number.POSITIVE_INFINITY;
         continue;
       }
-      // Per-step time + clearance penalty (independent of action).
-      const baseCost = cost.stepPenalty + clearanceCost;
-      // Action-dependent part: ||a||^2 = resolution^2 for cardinal
-      // actions, 2*resolution^2 for diagonal actions.
+
       let bestNext = Number.POSITIVE_INFINITY;
-      for (const [ax, ay] of actions) {
+      for (let a = 0; a < actions.length; a++) {
+        const [ax, ay] = actions[a];
         const nix = ix + ax;
         const niy = iy + ay;
         if (nix < 0 || nix >= width || niy < 0 || niy >= height) {
-          // Out of bounds = high cost, but not infinite (we want the
-          // iteration to converge to a finite value, not a wall).
           const wallCost = baseCost + 100.0;
           if (wallCost < bestNext) bestNext = wallCost;
           continue;
         }
         const nidx = niy * width + nix;
-        const actionMag = ax * ax + ay * ay; // 1 for cardinal, 2 for diagonal
-        const actionCost = cost.actionWeight * actionMag * resolution * resolution;
+        const actionMag = ax * ax + ay * ay;
+        const actionCost = actionCostFactor * actionMag;
         const candidate = baseCost + actionCost + gamma * values[nidx];
         if (candidate < bestNext) bestNext = candidate;
       }
       next[idx] = bestNext;
-      const delta = Math.abs(next[idx] - values[idx]);
+      const delta = Math.abs(bestNext - values[idx]);
       if (delta > maxDelta) maxDelta = delta;
     }
   }
-  // In-place copy back.
-  for (let i = 0; i < values.length; i++) {
-    values[i] = next[i];
-  }
+  // Copy back
+  values.set(next);
   return maxDelta;
 }
 
@@ -458,6 +468,32 @@ export function runValueIteration(
     maxSweeps: number;
   },
 ): { sweeps: number; finalDelta: number } {
+  const { width, height, resolution, goal } = grid;
+  const len = width * height;
+  const baseCosts = new Float64Array(len);
+  const isBlocked = new Uint8Array(len);
+  const scratch = new Float64Array(len);
+
+  // Precompute invariant SDF and stage costs for all cells once
+  for (let iy = 0; iy < height; iy++) {
+    const rowOffset = iy * width;
+    for (let ix = 0; ix < width; ix++) {
+      const idx = rowOffset + ix;
+      if (goal[idx]) continue;
+      const wx = grid.origin[0] + (ix + 0.5) * resolution;
+      const wy = grid.origin[1] + (iy + 0.5) * resolution;
+      const d = sdf(wx, wy);
+      if (d <= 0) {
+        isBlocked[idx] = 1;
+      } else {
+        const clearanceViolation = Math.max(0, options.cost.safetyMargin - d);
+        const clearanceCost = options.cost.clearanceWeight * clearanceViolation * clearanceViolation;
+        baseCosts[idx] = options.cost.stepPenalty + clearanceCost;
+      }
+    }
+  }
+
+  const precomputed = { baseCosts, isBlocked, scratch };
   let sweeps = 0;
   let finalDelta = Number.POSITIVE_INFINITY;
   while (sweeps < options.maxSweeps) {
@@ -467,6 +503,7 @@ export function runValueIteration(
       options.gamma,
       options.actions,
       options.cost,
+      precomputed,
     );
     sweeps++;
     if (finalDelta < options.epsilon) break;

@@ -1,0 +1,8 @@
+{
+  "cases": [
+    { "name": "iphone-sec-wing", "selector": "#wing-walkthrough", "capture": "viewport", "settleMs": 3500 },
+    { "name": "iphone-sec-engines", "selector": "#engines", "capture": "viewport", "settleMs": 2500 },
+    { "name": "iphone-sec-internals", "selector": "#internals", "capture": "viewport", "settleMs": 4000 },
+    { "name": "iphone-sec-addendum", "selector": "#technical-addendum", "capture": "viewport", "settleMs": 2500 }
+  ]
+}

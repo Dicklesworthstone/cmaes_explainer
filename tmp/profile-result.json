@@ -1,0 +1,78 @@
+{
+ "wallMs": 6024,
+ "profiledMs": 6294,
+ "top": [
+  {
+   "ms": 5726,
+   "key": "(idle) @ :-1"
+  },
+  {
+   "ms": 524,
+   "key": "(program) @ :-1"
+  },
+  {
+   "ms": 10,
+   "key": "query @ :5230"
+  },
+  {
+   "ms": 9,
+   "key": "(anon) @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 4,
+   "key": "c @ _next/static/chunks/25a0b016763f1e27.js:0"
+  },
+  {
+   "ms": 3,
+   "key": "previewNode @ :7508"
+  },
+  {
+   "ms": 3,
+   "key": "(garbage collector) @ :-1"
+  },
+  {
+   "ms": 2,
+   "key": "c @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 1,
+   "key": "evaluate @ :283"
+  },
+  {
+   "ms": 1,
+   "key": "InjectedScript @ :6540"
+  },
+  {
+   "ms": 1,
+   "key": "clearRect @ :-1"
+  },
+  {
+   "ms": 1,
+   "key": "querySelectorAll @ :-1"
+  },
+  {
+   "ms": 1,
+   "key": "wasm-function[5] @ http://localhost:3200/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm:0"
+  },
+  {
+   "ms": 1,
+   "key": "fill @ :-1"
+  },
+  {
+   "ms": 1,
+   "key": "(anon) @ :5228"
+  },
+  {
+   "ms": 1,
+   "key": "drawImage @ :-1"
+  },
+  {
+   "ms": 1,
+   "key": "(anon) @ :1"
+  },
+  {
+   "ms": 1,
+   "key": "requestAnimationFrame @ :-1"
+  }
+ ]
+}

@@ -1,0 +1,240 @@
+[
+  {
+    "viewport": "chromium-desktop",
+    "case": "desktop-hero",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 43/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-intro",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 19/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-no-gradients",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 38/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-wing",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 40/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-engines",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 54/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-demo",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 41/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-internals",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 55/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-g1",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 50/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "sec-addendum",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 53/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "wasm-demo-standalone",
+    "url": "http://localhost:3200/wasm-demo/examples/viz-benchmarks.html",
+    "file": "tmp/ui-audit/vision-out2/chromium-desktop-wasm-demo-standalone.png",
+    "stats": {
+      "mean": 32.6,
+      "std": 25.8,
+      "min": 7,
+      "max": 248
+    },
+    "errors": [],
+    "verdict": "ok"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "footer",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 48/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "desktop-hero",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-desktop-hero.png",
+    "stats": {
+      "mean": 34.1,
+      "std": 46.8,
+      "min": 3,
+      "max": 255
+    },
+    "errors": [],
+    "verdict": "ok"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-intro",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-intro.png",
+    "stats": {
+      "mean": 8.6,
+      "std": 11.9,
+      "min": 6,
+      "max": 255
+    },
+    "errors": [],
+    "verdict": "ok"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-no-gradients",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-no-gradients.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-wing",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-wing.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-engines",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-engines.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-demo",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-demo.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-internals",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-internals.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-g1",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-g1.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "sec-addendum",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-sec-addendum.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "wasm-demo-standalone",
+    "url": "http://localhost:3200/wasm-demo/examples/viz-benchmarks.html",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-wasm-demo-standalone.png",
+    "stats": {
+      "mean": 33.4,
+      "std": 21.3,
+      "min": 6,
+      "max": 248
+    },
+    "errors": [],
+    "verdict": "ok"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "footer",
+    "url": "http://localhost:3200/",
+    "file": "tmp/ui-audit/vision-out2/chromium-iphone-emulation-footer.png",
+    "stats": {
+      "mean": 6.4,
+      "std": 0,
+      "min": 6,
+      "max": 6
+    },
+    "errors": [],
+    "verdict": "DEGENERATE: flat"
+  }
+]

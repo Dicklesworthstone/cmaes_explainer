@@ -1,0 +1,198 @@
+[
+ {
+  "i": 0,
+  "label": "Landscape Benchmark",
+  "opts": [
+   {
+    "v": "0",
+    "t": "Sphere"
+   },
+   {
+    "v": "1",
+    "t": "Rosenbrock"
+   },
+   {
+    "v": "2",
+    "t": "Discus"
+   },
+   {
+    "v": "3",
+    "t": "Rastrigin"
+   },
+   {
+    "v": "4",
+    "t": "Ill-Cond."
+   }
+  ]
+ },
+ {
+  "i": 1,
+  "label": "Search Dimensionality n",
+  "opts": [
+   {
+    "v": "2",
+    "t": "2D"
+   },
+   {
+    "v": "3",
+    "t": "3D"
+   },
+   {
+    "v": "4",
+    "t": "4D"
+   },
+   {
+    "v": "5",
+    "t": "5D"
+   },
+   {
+    "v": "6",
+    "t": "6D"
+   },
+   {
+    "v": "8",
+    "t": "8D"
+   },
+   {
+    "v": "12",
+    "t": "12D"
+   }
+  ]
+ },
+ {
+  "i": 2,
+  "label": "Population Size lambda",
+  "opts": [
+   {
+    "v": "8",
+    "t": "8"
+   },
+   {
+    "v": "12",
+    "t": "12"
+   },
+   {
+    "v": "16",
+    "t": "16"
+   },
+   {
+    "v": "24",
+    "t": "24"
+   },
+   {
+    "v": "32",
+    "t": "32"
+   },
+   {
+    "v": "48",
+    "t": "48"
+   }
+  ]
+ },
+ {
+  "i": 3,
+  "label": "Initial Step Size sigma0",
+  "opts": [
+   {
+    "v": "0.2",
+    "t": "0.2"
+   },
+   {
+    "v": "0.3",
+    "t": "0.3"
+   },
+   {
+    "v": "0.4",
+    "t": "0.4"
+   },
+   {
+    "v": "0.6",
+    "t": "0.6"
+   },
+   {
+    "v": "1",
+    "t": "1.0"
+   },
+   {
+    "v": "1.5",
+    "t": "1.5"
+   }
+  ]
+ },
+ {
+  "i": 4,
+  "label": "Playback speed",
+  "opts": [
+   {
+    "v": "200",
+    "t": "0.5×"
+   },
+   {
+    "v": "90",
+    "t": "1×"
+   },
+   {
+    "v": "40",
+    "t": "2×"
+   },
+   {
+    "v": "12",
+    "t": "8×"
+   }
+  ]
+ }
+]
+{
+ "wallMs": 7958,
+ "profiledProgramMs": 11270,
+ "top": [
+  {
+   "ms": 9955,
+   "key": "(idle) @ internal:-1"
+  },
+  {
+   "ms": 950,
+   "key": "(program) @ internal:-1"
+  },
+  {
+   "ms": 165,
+   "key": "(garbage collector) @ internal:-1"
+  },
+  {
+   "ms": 56,
+   "key": "(anon) @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 34,
+   "key": "query @ internal:5230"
+  },
+  {
+   "ms": 24,
+   "key": "step @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 14,
+   "key": "(anon) @ internal:5228"
+  },
+  {
+   "ms": 12,
+   "key": "s @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 9,
+   "key": "projectTo3D @ _next/static/chunks/3ee5d191f5908741.js:766"
+  },
+  {
+   "ms": 5,
+   "key": "(anon) @ internal:0"
+  },
+  {
+   "ms": 5,
+   "key": "wasm-function[10] @ http://localhost:3200/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_b:0"
+  },
+  {
+   "ms": 5,
+   "key": "get clientWidth @ internal:-1"
+  }
+ ]
+}

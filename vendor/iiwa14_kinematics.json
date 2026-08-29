@@ -1,0 +1,126 @@
+{
+ "${prefix}to_${base_frame_name}": {
+  "parent": "${base_frame_name}",
+  "child": "${prefix}link0",
+  "xyz": [
+   0,
+   0,
+   0
+  ],
+  "rpy": [
+   0.0
+  ]
+ },
+ "${prefix}joint1": {
+  "parent": "${prefix}link0",
+  "child": "${prefix}link1",
+  "xyz": [
+   0.0,
+   0.0,
+   0.1575
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "${prefix}joint2": {
+  "parent": "${prefix}link1",
+  "child": "${prefix}link2",
+  "xyz": [
+   0.0,
+   0.0,
+   0.2025
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   3.141592653589793
+  ]
+ },
+ "${prefix}joint3": {
+  "parent": "${prefix}link2",
+  "child": "${prefix}link3",
+  "xyz": [
+   0.0,
+   0.2045,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   3.141592653589793
+  ]
+ },
+ "${prefix}joint4": {
+  "parent": "${prefix}link3",
+  "child": "${prefix}link4",
+  "xyz": [
+   0.0,
+   0.0,
+   0.2155
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "${prefix}joint5": {
+  "parent": "${prefix}link4",
+  "child": "${prefix}link5",
+  "xyz": [
+   0.0,
+   0.1845,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   3.141592653589793,
+   0.0
+  ]
+ },
+ "${prefix}joint6": {
+  "parent": "${prefix}link5",
+  "child": "${prefix}link6",
+  "xyz": [
+   0.0,
+   0.0,
+   0.2155
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "${prefix}joint7": {
+  "parent": "${prefix}link6",
+  "child": "${prefix}link7",
+  "xyz": [
+   0.0,
+   0.081,
+   0.0
+  ],
+  "rpy": [
+   0.0,
+   3.141592653589793,
+   0.0
+  ]
+ },
+ "${prefix}joint8": {
+  "parent": "${prefix}link7",
+  "child": "${prefix}link8",
+  "xyz": [
+   0.0,
+   0.0,
+   0.045
+  ],
+  "rpy": [
+   0.0,
+   0.0,
+   0.0
+  ]
+ }
+}

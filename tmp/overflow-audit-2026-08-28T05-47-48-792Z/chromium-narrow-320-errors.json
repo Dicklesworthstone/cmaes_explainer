@@ -1,0 +1,6 @@
+[
+  "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+  "requestfailed: GET http://localhost:3200/_next/static/chunks/039a2ef255bbc2cf.js — net::ERR_ABORTED",
+  "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+  "requestfailed: GET http://localhost:3200/_next/static/chunks/ee52e2f22b17b4a2.js — net::ERR_ABORTED"
+]

@@ -1,0 +1,114 @@
+[
+  {
+    "viewport": "chromium-desktop",
+    "case": "iphone-sec-wing",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 10380.262999999999ms exceeded.\nCall log:\n  - attempting scroll into view action\n    - waiting for element to be stable\n"
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "iphone-sec-engines",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-desktop-iphone-sec-engines.png",
+    "stats": {
+      "mean": 17.7,
+      "std": 33,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 9,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "iphone-sec-internals",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-desktop-iphone-sec-internals.png",
+    "stats": {
+      "mean": 24.1,
+      "std": 36.5,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 24,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-desktop",
+    "case": "iphone-sec-addendum",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-desktop-iphone-sec-addendum.png",
+    "stats": {
+      "mean": 15.9,
+      "std": 33.3,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 23,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "iphone-sec-wing",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-iphone-emulation-iphone-sec-wing.png",
+    "stats": {
+      "mean": 22.3,
+      "std": 34.4,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 100,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "iphone-sec-engines",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-iphone-emulation-iphone-sec-engines.png",
+    "stats": {
+      "mean": 24.1,
+      "std": 33.2,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 100,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "iphone-sec-internals",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-iphone-emulation-iphone-sec-internals.png",
+    "stats": {
+      "mean": 23.1,
+      "std": 36.4,
+      "min": 3,
+      "max": 255
+    },
+    "framesSeen": 100,
+    "verdict": "ok",
+    "errors": []
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "iphone-sec-addendum",
+    "url": "http://localhost:3200/",
+    "file": "tmp/vision-qa-tall-sections/chromium-iphone-emulation-iphone-sec-addendum.png",
+    "stats": {
+      "mean": 26.2,
+      "std": 35.9,
+      "min": 4,
+      "max": 255
+    },
+    "framesSeen": 100,
+    "verdict": "ok",
+    "errors": []
+  }
+]

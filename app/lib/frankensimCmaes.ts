@@ -1193,8 +1193,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v067/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v067/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v068/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v068/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"

@@ -1,0 +1,20 @@
+[
+  "chromium-desktop/desktop-hero: Error: page.evaluate: Error: timed out after 43/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-intro: Error: page.evaluate: Error: timed out after 19/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-no-gradients: Error: page.evaluate: Error: timed out after 38/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-wing: Error: page.evaluate: Error: timed out after 40/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-engines: Error: page.evaluate: Error: timed out after 54/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-demo: Error: page.evaluate: Error: timed out after 41/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-internals: Error: page.evaluate: Error: timed out after 55/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-g1: Error: page.evaluate: Error: timed out after 50/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/sec-addendum: Error: page.evaluate: Error: timed out after 53/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-desktop/footer: Error: page.evaluate: Error: timed out after 48/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
+  "chromium-iphone-emulation/sec-no-gradients: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-wing: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-engines: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-demo: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-internals: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-g1: DEGENERATE: flat",
+  "chromium-iphone-emulation/sec-addendum: DEGENERATE: flat",
+  "chromium-iphone-emulation/footer: DEGENERATE: flat"
+]
