@@ -135,19 +135,38 @@ export const G1_LINK_NAMES = [
 
 // Set of adjacent kinematic link pairs to ignore (parent-child or directly constrained)
 const G1_ADJACENT_PAIRS = new Set<string>([
-  "pelvis:torso", "torso:head",
+  "pelvis:torso", "torso:head", "pelvis:head",
+  // Torso to hips (adjacent through pelvis)
+  "torso:left_hip_pitch", "torso:left_hip_roll", "torso:left_hip_yaw",
+  "torso:right_hip_pitch", "torso:right_hip_roll", "torso:right_hip_yaw",
   // Left leg
-  "pelvis:left_hip_pitch", "left_hip_pitch:left_hip_roll", "left_hip_roll:left_hip_yaw", "left_hip_yaw:left_knee",
-  "left_knee:left_ankle_pitch", "left_ankle_pitch:left_ankle_roll",
+  "pelvis:left_hip_pitch", "pelvis:left_hip_roll", "pelvis:left_hip_yaw",
+  "left_hip_pitch:left_hip_roll", "left_hip_pitch:left_hip_yaw", "left_hip_pitch:left_knee",
+  "left_hip_roll:left_hip_yaw", "left_hip_roll:left_knee",
+  "left_hip_yaw:left_knee", "left_hip_yaw:left_ankle_pitch",
+  "left_knee:left_ankle_pitch", "left_knee:left_ankle_roll",
+  "left_ankle_pitch:left_ankle_roll",
   // Right leg
-  "pelvis:right_hip_pitch", "right_hip_pitch:right_hip_roll", "right_hip_roll:right_hip_yaw", "right_hip_yaw:right_knee",
-  "right_knee:right_ankle_pitch", "right_ankle_pitch:right_ankle_roll",
+  "pelvis:right_hip_pitch", "pelvis:right_hip_roll", "pelvis:right_hip_yaw",
+  "right_hip_pitch:right_hip_roll", "right_hip_pitch:right_hip_yaw", "right_hip_pitch:right_knee",
+  "right_hip_roll:right_hip_yaw", "right_hip_roll:right_knee",
+  "right_hip_yaw:right_knee", "right_hip_yaw:right_ankle_pitch",
+  "right_knee:right_ankle_pitch", "right_knee:right_ankle_roll",
+  "right_ankle_pitch:right_ankle_roll",
   // Left arm
-  "torso:left_shoulder_pitch", "left_shoulder_pitch:left_shoulder_roll", "left_shoulder_roll:left_shoulder_yaw",
-  "left_shoulder_yaw:left_elbow", "left_elbow:left_wrist_roll", "left_wrist_roll:left_wrist_pitch", "left_wrist_pitch:left_wrist_yaw",
+  "torso:left_shoulder_pitch", "torso:left_shoulder_roll", "torso:left_shoulder_yaw",
+  "left_shoulder_pitch:left_shoulder_roll", "left_shoulder_pitch:left_shoulder_yaw", "left_shoulder_pitch:left_elbow",
+  "left_shoulder_roll:left_shoulder_yaw", "left_shoulder_roll:left_elbow",
+  "left_shoulder_yaw:left_elbow", "left_shoulder_yaw:left_wrist_roll",
+  "left_elbow:left_wrist_roll", "left_elbow:left_wrist_pitch", "left_elbow:left_wrist_yaw",
+  "left_wrist_roll:left_wrist_pitch", "left_wrist_roll:left_wrist_yaw", "left_wrist_pitch:left_wrist_yaw",
   // Right arm
-  "torso:right_shoulder_pitch", "right_shoulder_pitch:right_shoulder_roll", "right_shoulder_roll:right_shoulder_yaw",
-  "right_shoulder_yaw:right_elbow", "right_elbow:right_wrist_roll", "right_wrist_roll:right_wrist_pitch", "right_wrist_pitch:right_wrist_yaw",
+  "torso:right_shoulder_pitch", "torso:right_shoulder_roll", "torso:right_shoulder_yaw",
+  "right_shoulder_pitch:right_shoulder_roll", "right_shoulder_pitch:right_shoulder_yaw", "right_shoulder_pitch:right_elbow",
+  "right_shoulder_roll:right_shoulder_yaw", "right_shoulder_roll:right_elbow",
+  "right_shoulder_yaw:right_elbow", "right_shoulder_yaw:right_wrist_roll",
+  "right_elbow:right_wrist_roll", "right_elbow:right_wrist_pitch", "right_elbow:right_wrist_yaw",
+  "right_wrist_roll:right_wrist_pitch", "right_wrist_roll:right_wrist_yaw", "right_wrist_pitch:right_wrist_yaw",
 ]);
 
 export function checkRobotSelfCollision(

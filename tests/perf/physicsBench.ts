@@ -344,7 +344,9 @@ if (require.main === module) {
   const locked = readEnvelopeFile();
   if (locked && locked.envelopes[workloadId]) {
     const pct = compareToEnvelope(result.envelope, locked.envelopes[workloadId]);
-    console.log(`drift vs locked: p50=${pct.p50?.toFixed(1)}% p95=${pct.p95?.toFixed(1)}% p99=${pct.p99?.toFixed(1)}%`);
+  console.log(
+    `drift vs locked: p50=${(pct.p50 ?? 0).toFixed(1)}% p95=${(pct.p95 ?? 0).toFixed(1)}% p99=${(pct.p99 ?? 0).toFixed(1)}%`,
+  );
   } else {
     console.log("no locked envelope yet; this is a first baseline");
   }
