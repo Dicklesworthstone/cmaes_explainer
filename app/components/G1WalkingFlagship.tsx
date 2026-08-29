@@ -1273,7 +1273,7 @@ export function G1WalkingFlagship() {
             weighted sum above re-exposes the same v068-shaping intent as a transparent sum of
             eleven per-step / per-trajectory channels. A small corrective slip, posture, or
             joint-limit term is no longer collapsed; the optimizer can reward it. The defaults
-            here match the kernel's v068 weights; future versions surface the weights as a slider
+            here match the kernel&apos;s v068 weights; future versions surface the weights as a slider
             so the user can rebias the trade-off between forward speed, stability, and
             efficiency without changing the kernel binary.
           </p>
