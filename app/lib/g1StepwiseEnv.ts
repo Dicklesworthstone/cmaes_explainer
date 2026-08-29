@@ -120,16 +120,14 @@ export class G1TrainEnv {
     const effortTorque = 0.04 * actionEffort * actionEffort;
     const angularVelRoll = effortTorque - 0.6 * this.currentRoll;
     const angularVelPitch = effortTorque - 0.6 * this.currentPitch;
-    // Height drops as the body tilts (squared). Same heuristic the kernel
-    // uses, modulo the actual rigid-body torque.
-    const tiltSineSquared = this.currentRoll * this.currentRoll
-      + this.currentPitch * this.currentPitch;
-    this.currentHeight -= 0.1 * tiltSineSquared * dt;
-    // Height drops faster as tilt grows; the original 0.1 was gentle enough
-    // that a constant tilt of 0.85 rad takes ~3 seconds to fall, which is
-    // longer than the 12-second horizon. Calibrated to match the kernel's
+    this.currentRoll += angularVelRoll * dt;
+    this.currentPitch += angularVelPitch * dt;
+
+    // Height drops faster as tilt grows; calibrated to match the kernel's
     // measured fall time on a 1.5s push pulse: a constant 0.3 rad tilt
     // falls in ~5s.
+    const tiltSineSquared = this.currentRoll * this.currentRoll
+      + this.currentPitch * this.currentPitch;
     this.currentHeight -= 0.5 * tiltSineSquared * dt;
     // Forward displacement: target speed scaled by how upright the body is.
     const tilt = Math.hypot(this.currentRoll, this.currentPitch);
