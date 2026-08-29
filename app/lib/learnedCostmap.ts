@@ -42,7 +42,7 @@ export const DEFAULT_COSTMAP_CONFIG: Required<CostmapConfig> = {
  * Deterministic pseudo-random Gaussian generator for weight matrices.
  */
 function seededNormal(seed: number): () => number {
-  let s = seed;
+  let s = (seed === 0 ? 0x12345678 : seed) >>> 0;
   return () => {
     // Marsaglia polar method using xorshift32
     s ^= s << 13;

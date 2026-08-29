@@ -113,7 +113,8 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
 
   test("survival normalizes by horizon (720 steps)", () => {
     // completedSteps / (durationSeconds / stepSeconds) = 720 / 720 = 1.0
-    // survival contribution = 1.0 * 1.0 = 1.0
+    // contribution = -1.0 * 1.0 = -1.0 (survival has weight -1.0; the negative
+    // sign is REQUIRED so a "die early" policy is not preferred).
     const r = computeMultiFactorObjective(
       buildReceipt({
         samples: makeSamples(1.5),

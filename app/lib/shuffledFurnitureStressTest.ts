@@ -66,7 +66,7 @@ export interface MultiTrialSummary {
 }
 
 function seededRandom(seed: number): () => number {
-  let s = seed;
+  let s = (seed === 0 ? 0x12345678 : seed) >>> 0;
   return () => {
     s ^= s << 13;
     s ^= s >> 17;

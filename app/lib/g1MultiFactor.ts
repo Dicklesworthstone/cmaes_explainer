@@ -19,27 +19,30 @@
 // data.
 //
 // Channel weights and sign convention (chosen so a standing prior and a
-// walking curriculum mean produce finite, comparable weighted values):
+// walking curriculum mean produce finite, comparable weighted values;
+// CMA-ES MINIMIZES the weighted sum):
 //   - mean forward speed: weight = -3.0, contribution = -3.0 * (mean -
 //     targetSpeed). Sign: positive contribution when speed < target
 //     (penalty for slow), zero at target, negative when speed > target
 //     (reward for fast). The negative weight inverts the sign of
 //     (mean - target) so the user's mental model of "below target = bad"
 //     maps to a positive contribution number.
-//   - survival: positive weight 1.0 on the (steps / horizon) ratio;
-//     positive contribution = good.
+//   - survival: weight = -1.0, contribution = -1.0 * (steps / horizon).
+//     The negative weight is REQUIRED: a positive weight would make
+//     "die early" preferred (lower survival = lower total = better),
+//     which inverts the intent. The negative weight makes "live longer"
+//     preferred (more survival = more negative contribution = better).
 //   - slip, posture, joint-limit, impact, contact-schedule, lateral,
 //     heading, speed error: positive weight on the non-negative error
 //     integral. Positive contribution = penalty.
 //   - work per meter: small positive weight 0.05; positive contribution
 //     = penalty for wasted work.
-// Sign convention (uniform across all channels): the WEIGHTED SUM
-// is what CMA-ES minimizes. Larger (more positive) weighted = worse
-// rollout. Survival is the only positive-value channel because it is
-// already a normalized "fraction of horizon completed" — more is better.
-// All other channels are non-negative integrals of "error" or "cost";
-// less is better.
-//
+// Sign convention (uniform across all channels): larger (more positive)
+// contribution = worse. The display "multi-factor ↓" means minimize.
+// A negative contribution is GOOD (speed above target; longer survival).
+// A positive contribution is BAD (slip, impact, etc.).
+// (Bug fix history: cmaes-0m3 initially shipped with survival weight
+// +1.0, which inverted the survival channel. Fixed in 3e8e0bf.)
 // Honesty: the weighted sum is computed from the same per-channel
 // integrals the kernel reports; it is not a black-box "score" with
 // hidden weights. Each channel's value, weight, and contribution is
@@ -91,7 +94,7 @@ export function computeMultiFactorObjective(
   // Weights and sign convention (see header docstring):
   //   - mean forward speed: weight -3.0; contribution inverts the sign of
   //     (mean - target) so a positive contribution = below target = penalty.
-  //   - survival: weight +1.0; contribution = steps/horizon in [0, 1].
+  //   - survival: weight -1.0; contribution = -steps/horizon in [-1, 0].
   //   - slip / posture / joint-limit / impact / contact-schedule / lateral /
   //     heading / speed error / work-per-meter: positive weight on a
   //     non-negative integral; positive contribution = penalty.

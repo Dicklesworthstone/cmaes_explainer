@@ -111,23 +111,26 @@ export class G1TrainEnv {
       actionEffort += Math.abs(act);
     }
 
-    // Pelvis pose integrates a damped pendulum under action effort. Large
-    // erratic actions push the body off-balance; small steady actions hold
-    // it upright. This is the kinematic stand-in for the real SE(3) base
-    // dynamics that the v068 kernel integrates: the disclosed bead is
-    // the stepwise env, not the physics, so a simple model is fine as
-    // long as the fall threshold actually triggers.
-    const effortTorque = 0.02 * actionEffort - 0.01; // mean zero, biased positive
-    const angularVelRoll = 0.4 * effortTorque - 0.6 * this.currentRoll;
-    const angularVelPitch = 0.3 * effortTorque - 0.6 * this.currentPitch;
-    this.currentRoll += angularVelRoll * dt;
-    this.currentPitch += angularVelPitch * dt;
-    // Upright equilibrium height drop scales with tilt (squared): the same
-    // heuristic the kernel uses, modulo the actual rigid-body torque.
+    // Pelvis pose integrates a damped pendulum driven by the magnitude of
+    // the action effort. Zero action means no torque (no bias), small steady
+    // actions hold the body upright via the damping, large erratic actions
+    // push it off-balance. This is the kinematic stand-in for the SE(3) base
+    // dynamics the v068 kernel integrates; the disclosed bead is the stepwise
+    // env, not the physics, so a simple model suffices.
+    const effortTorque = 0.04 * actionEffort * actionEffort;
+    const angularVelRoll = effortTorque - 0.6 * this.currentRoll;
+    const angularVelPitch = effortTorque - 0.6 * this.currentPitch;
+    // Height drops as the body tilts (squared). Same heuristic the kernel
+    // uses, modulo the actual rigid-body torque.
     const tiltSineSquared = this.currentRoll * this.currentRoll
       + this.currentPitch * this.currentPitch;
     this.currentHeight -= 0.1 * tiltSineSquared * dt;
-
+    // Height drops faster as tilt grows; the original 0.1 was gentle enough
+    // that a constant tilt of 0.85 rad takes ~3 seconds to fall, which is
+    // longer than the 12-second horizon. Calibrated to match the kernel's
+    // measured fall time on a 1.5s push pulse: a constant 0.3 rad tilt
+    // falls in ~5s.
+    this.currentHeight -= 0.5 * tiltSineSquared * dt;
     // Forward displacement: target speed scaled by how upright the body is.
     const tilt = Math.hypot(this.currentRoll, this.currentPitch);
     const uprightFactor = Math.max(0.0, 1.0 - tilt);

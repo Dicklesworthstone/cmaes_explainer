@@ -62,7 +62,7 @@ export const DEFAULT_NEURAL_SDF_CONFIG: Required<NeuralSdfConfig> = {
 };
 
 function seededNormal(seed: number): () => number {
-  let s = seed;
+  let s = (seed === 0 ? 0x12345678 : seed) >>> 0;
   return () => {
     s ^= s << 13;
     s ^= s >> 17;
