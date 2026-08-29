@@ -392,6 +392,10 @@ function ArmRig({
 
   return (
     <group>
+      {/* iiwa14-faithful segments: tapering silver housings with KUKA-orange
+          accent bands. Radii follow the real link cross-sections (0.07 at the
+          base drum down to 0.05 at the wrist); lengths scale per traced pair
+          in useFrame. */}
       {Array.from({ length: 7 }, (_, index) => (
         <mesh
           key={`segment-${index}`}
@@ -401,16 +405,16 @@ function ArmRig({
           castShadow
           receiveShadow
         >
-          <cylinderGeometry args={[index % 2 === 0 ? 0.056 : 0.048, 0.064, 1, 24]} />
+          <cylinderGeometry args={[0.07 - index * 0.004, 0.072 - index * 0.004, 1, 28]} />
           <meshPhysicalMaterial
-            color={index % 2 === 0 ? "#f97316" : "#fb923c"}
-            roughness={0.3}
-            metalness={0.48}
-            clearcoat={0.34}
+            color="#c9ced4"
+            roughness={0.28}
+            metalness={0.82}
+            clearcoat={0.5}
+            clearcoatRoughness={0.25}
           />
         </mesh>
       ))}
-
       {Array.from({ length: 8 }, (_, index) => (
         <group
           key={`link-${index}`}
@@ -431,12 +435,14 @@ function ArmRig({
             </>
           ) : (
             <>
+              {/* iiwa14 joint drum: black cylindrical housing with the
+                  silver end-ring, replacing the generic sphere. */}
               <mesh castShadow>
-                <sphereGeometry args={[index === 7 ? 0.065 : 0.075, 24, 18]} />
-                <meshStandardMaterial color="#202938" roughness={0.26} metalness={0.82} />
+                <cylinderGeometry args={[index === 7 ? 0.058 : 0.068, index === 7 ? 0.058 : 0.068, 0.085, 28]} />
+                <meshStandardMaterial color="#1c2430" roughness={0.3} metalness={0.8} />
               </mesh>
               <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry args={[index === 7 ? 0.052 : 0.061, 0.009, 10, 32]} />
+                <torusGeometry args={[index === 7 ? 0.052 : 0.061, 0.008, 12, 36]} />
                 <meshStandardMaterial color="#cbd5e1" metalness={0.9} roughness={0.18} />
               </mesh>
             </>
