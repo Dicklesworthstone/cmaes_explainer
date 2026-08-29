@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { BENCHMARKS, CMAESOptimizer } from "./cmaesEngine";
+import {
+  BENCHMARKS,
+  CMAESOptimizer,
+  DEFAULT_RANDOM_SEARCH_SEED,
+  createMulberry32,
+  runRandomSearch,
+} from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
 import {
   CMAES_VISUALIZATION_F_TARGET,
@@ -257,6 +263,76 @@ describe("shared CMA-ES engines", () => {
     expect(probedState.mean).toEqual(controlState.mean);
     expect(probedState.covariance).toEqual(controlState.covariance);
     expect(probedState.sigma).toBe(controlState.sigma);
+  });
+});
+
+describe("deterministic baselines and seeded streams", () => {
+  // cmaes-mky: the explanatory visualizations must be replayable so a
+  // given user action sequence always shows the same scatter, regardless of
+  // session or wall-clock context. The tests below lock in the exact
+  // trajectory of the seeded random sources and the LCG that the
+  // CmaesInternalsLab "randomize start" button reuses.
+  test("runRandomSearch replays byte-for-byte under the default seed", () => {
+    const sphere = (x: number, y: number) => x * x + y * y;
+    const domain: [number, number] = [-3, 3] as const;
+    const reference = runRandomSearch(sphere, domain, 96);
+    const replay = runRandomSearch(sphere, domain, 96);
+    expect(replay).toEqual(reference);
+    // The default seed must be the public, replayable one exported from
+    // cmaesEngine so the WasmDemo panel and any other consumer share a
+    // single source of truth.
+    const explicit = runRandomSearch(sphere, domain, 96, DEFAULT_RANDOM_SEARCH_SEED);
+    expect(explicit).toEqual(reference);
+  });
+
+  test("runRandomSearch is seed-sensitive: different seeds diverge", () => {
+    const sphere = (x: number, y: number) => x * x + y * y;
+    const domain: [number, number] = [-3, 3] as const;
+    const a = runRandomSearch(sphere, domain, 32, 0xa11ce);
+    const b = runRandomSearch(sphere, domain, 32, 0xb0b);
+    // At least one point in the trajectory must differ; if this regresses
+    // the seed plumbing was lost and the explainer is no longer honest.
+    expect(a).not.toEqual(b);
+  });
+
+  test("runRandomSearch still bounds-checks the seed parameter", () => {
+    const sphere = (x: number, y: number) => x * x + y * y;
+    expect(() => runRandomSearch(sphere, [-1, 1], 8, Number.NaN)).toThrow(
+      /seed/,
+    );
+  });
+
+  test("createMulberry32 streams are bit-identical across two constructions", () => {
+    const samples = 512;
+    const a = createMulberry32(0x5eed_cafe);
+    const b = createMulberry32(0x5eed_cafe);
+    for (let i = 0; i < samples; i++) {
+      expect(a()).toBe(b());
+    }
+  });
+
+  test("CmaesInternalsLab's LCG + mulberry32 start point is reproducible", () => {
+    // Mirrors the exact transformation in CmaesInternalsLab.randomizeStart:
+    // numerical-recipes LCG advances the seed, then a mulberry32 stream
+    // produces a six-coordinate start point in [-1.5, 1.5].
+    const rollOnce = (seed: number) => {
+      const nextSeed = (seed * 1664525 + 1013904223) >>> 0;
+      const rng = createMulberry32(nextSeed);
+      return {
+        nextSeed,
+        point: Array.from({ length: 6 }, () =>
+          Math.round((rng() * 3 - 1.5) * 100) / 100,
+        ),
+      };
+    };
+    const first = rollOnce(1337);
+    const second = rollOnce(1337);
+    expect(second.point).toEqual(first.point);
+    expect(second.nextSeed).toBe(first.nextSeed);
+    // Chained rolls compose deterministically.
+    const chained = rollOnce(first.nextSeed);
+    const chainedReplay = rollOnce(first.nextSeed);
+    expect(chained.point).toEqual(chainedReplay.point);
   });
 });
 

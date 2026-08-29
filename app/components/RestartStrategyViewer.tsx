@@ -80,8 +80,11 @@ export function RestartStrategyViewer() {
   // best contributes to the global record; skipping them would hand every
   // restart a free generation and bias the IPOP-vs-BIPOP comparison.
   const spawnRestart = useCallback((popSize: number, sigmaInit: number) => {
-    const startX = (Math.random() - 0.5) * 5.0;
-    const startY = (Math.random() - 0.5) * 5.0;
+    // Sampled from the same seeded presentation stream as the initial run, so
+    // the visible restart sequence is reproducible (law 3): a fixed user
+    // action sequence always shows the same basin trajectory.
+    const startX = (setupRng.current() - 0.5) * 5.0;
+    const startY = (setupRng.current() - 0.5) * 5.0;
     // A fresh seed per restart: with the engine's default seed every restart
     // at the same lambda would replay the identical offspring stream, and the
     // demo's premise is that restarts sample the basin structure independently.
@@ -91,7 +94,7 @@ export function RestartStrategyViewer() {
       initialSigma: sigmaInit,
       lambda: popSize,
       bounds: [-3.5, 3.5],
-      seed: (Math.random() * 0xffffffff) >>> 0
+      seed: (setupRng.current() * 0xffffffff) >>> 0
     });
     optimizerRef.current = opt;
     setCurrentLambda(popSize);
@@ -170,7 +173,9 @@ export function RestartStrategyViewer() {
           nextSigma = 0.8;
         } else {
           nextPop = 8;
-          nextSigma = 0.6 * Math.pow(10, -2 * Math.random());
+          // Drawn from the seeded presentation stream so the BIPOP small
+          // regime's log-uniform sigma schedule is reproducible (law 3).
+          nextSigma = 0.6 * Math.pow(10, -2 * setupRng.current());
         }
       }
 

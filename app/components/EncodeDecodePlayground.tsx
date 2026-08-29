@@ -14,7 +14,7 @@ export function EncodeDecodePlayground() {
   const [zAct, setZAct] = useState(0.35); // Categorical discrete [0, 1] -> 4 bins
   const [zLayers, setZLayers] = useState(0.42); // Integer discrete [6, 48]
   const [zWeightDecay, setZWeightDecay] = useState(0.68); // Continuous linear [0.0, 0.2]
-  // Persisted stream: each press advances one seeded walk (no Math.random).
+  // Persisted stream: each press advances one seeded mulberry32 walk (seeded once at mount).
   const sampleRngRef = useRef(createMulberry32(0x5eed));
   // Decoded physical configurations
   const decoded = useMemo(() => {

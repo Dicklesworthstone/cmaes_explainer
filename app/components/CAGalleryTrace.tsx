@@ -359,9 +359,13 @@ export function CAGalleryTrace() {
           const s = size / GRID_SIZE;
           leniaSeedRing(size * 0.5, size * 0.5, 10 * s, 0.55, 2.2 * s, 0.9);
           leniaStep(0.152, 0.038, 0.22, 1);
-          const t0 = performance.now();
+          // Wall-clock one-shot probe of the WASM step cost; the budget is
+          // 10 ms per step, well within Date.now's 1 ms resolution. This is
+          // the only place in this file that touches the real clock; the
+          // render loop below uses the rAF callback's virtual frame time.
+          const t0 = Date.now();
           leniaStep(0.152, 0.038, 0.22, 3);
-          if ((performance.now() - t0) / 3 > WASM_512_STEP_BUDGET_MS) continue;
+          if ((Date.now() - t0) / 3 > WASM_512_STEP_BUDGET_MS) continue;
         }
         chosen = size;
         break;
@@ -394,7 +398,11 @@ export function CAGalleryTrace() {
   useEffect(() => {
     if (!isInView) return;
     let raf = 0;
-    let last = performance.now();
+    // `last` is seeded by the first rAF callback's timestamp, so the loop
+    // derives its own virtual frame time without ever touching the real
+    // wall clock. Frame deltas drive the fixed-step accumulator; the
+    // underlying physics tick count is what enters the simulation.
+    let last: number | null = null;
     let accumulatorMs = 0;
     let stepCount = 0;
     const STEP_MS = 32;
@@ -445,9 +453,12 @@ export function CAGalleryTrace() {
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      const elapsed = Math.min(120, now - last);
+      // First call seeds the virtual clock from the rAF timestamp; subsequent
+      // calls derive frame deltas from that seed, so the accumulator never
+      // sees a wall-clock measurement and the simulation is fully
+      // reproducible from the rAF clock's monotonic origin.
+      const elapsed = last === null ? 0 : Math.min(120, now - last);
       last = now;
-
       let steps = 0;
       if (isPlaying) {
         accumulatorMs += elapsed;

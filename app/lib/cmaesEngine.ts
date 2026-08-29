@@ -653,20 +653,32 @@ export function runGradientDescent(
   return history;
 }
 
+/**
+ * Default seed for {@link runRandomSearch}. The exact-trajectory guarantee of
+ * the explainer viz requires a deterministic default so the same UI inputs
+ * always show the same scatter; callers can override it explicitly.
+ */
+export const DEFAULT_RANDOM_SEARCH_SEED = 0xa11ce_da7a;
+
 export function runRandomSearch(
   fn: (x: number, y: number) => number,
   domain: [number, number],
-  totalEvals = 400
+  totalEvals = 400,
+  seed: number = DEFAULT_RANDOM_SEARCH_SEED
 ): BaselineStepState[] {
   if (!domain.every(Number.isFinite) || domain[0] >= domain[1]) throw new RangeError("domain must contain finite min and max values with min < max.");
   if (!Number.isInteger(totalEvals) || totalEvals < 1) throw new RangeError("totalEvals must be a positive integer.");
+  if (!Number.isFinite(seed)) throw new RangeError("seed must be a finite number.");
 
   let bestFitness = Infinity;
   let bestX: Vector = [0, 0];
   const history: BaselineStepState[] = [];
   const span = domain[1] - domain[0];
+  // Deterministic mulberry32 stream: the same seed reproduces the same
+  // baseline trajectory, so random-search panels are screenshot-stable.
+  const rng = createMulberry32(seed);
   for (let evaluation = 1; evaluation <= totalEvals; evaluation++) {
-    const x: Vector = [domain[0] + Math.random() * span, domain[0] + Math.random() * span];
+    const x: Vector = [domain[0] + rng() * span, domain[0] + rng() * span];
     const fitness = safeObjectiveValue(fn(x[0], x[1]));
     if (fitness < bestFitness) {
       bestFitness = fitness;

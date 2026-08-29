@@ -6,6 +6,7 @@ import { Play, Pause, FastForward, RotateCcw, Cpu, Dices, Info } from "lucide-re
 import { LatexRenderer } from "./LatexRenderer";
 import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
 import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { createMulberry32 } from "../lib/cmaesEngine";
 import {
   CMAES_VISUALIZATION_F_TARGET,
   evaluateCmaesVisualizationLandscape,
@@ -153,8 +154,15 @@ export function CmaesInternalsLab() {
   const currentLandscape = LANDSCAPES[landscape] ?? LANDSCAPES[0];
 
   const randomizeStart = () => {
-    setSeed((s) => (s * 1664525 + 1013904223) >>> 0);
-    setStartPoint(Array.from({ length: 6 }, () => Math.round((Math.random() * 3 - 1.5) * 100) / 100));
+    // Advance the seed through the same numerical-recipes LCG used by the
+    // displayed counter, then derive the start point from it through
+    // mulberry32: a single press always produces the same scatter.
+    setSeed((s) => {
+      const nextSeed = (s * 1664525 + 1013904223) >>> 0;
+      const rng = createMulberry32(nextSeed);
+      setStartPoint(Array.from({ length: 6 }, () => Math.round((rng() * 3 - 1.5) * 100) / 100));
+      return nextSeed;
+    });
   };
 
   // Loss sparkline data (log10 best_f per generation).

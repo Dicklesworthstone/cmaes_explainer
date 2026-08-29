@@ -316,7 +316,10 @@ async function compareFamilies(
         }),
         `${family} admission`
       );
-      const started = performance.now();
+      // Wall-clock elapsed is a labeled UI/runtime measurement, not a
+      // simulation input. Date.now's 1 ms resolution is well below the
+      // per-family budgets (hundreds of ms to seconds).
+      const started = Date.now();
       let finalObjective = initialObjective;
       let evaluations = 0;
       try {
@@ -344,7 +347,7 @@ async function compareFamilies(
           evaluations,
           persistentScalars: session.admission.persistentScalars,
           workspaceScalars: session.admission.updateWorkspaceScalars,
-          elapsedMilliseconds: performance.now() - started,
+          elapsedMilliseconds: Date.now() - started,
         });
       } finally {
         session.free();
