@@ -992,6 +992,12 @@ export function G1WalkingFlagship() {
             </span>
             <span
               className="rounded-full border border-amber-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md"
+              title="Transformer policy (GPU-trained, ONNX). Bead cmaes-9v7: the training crate (cmaes-j36 / cmaes-wsr / cmaes-6m3 / cmaes-6zi) is still in_progress; the .onnx is not yet exported. When the file lands at /robots/g1/transformer/model.onnx, the worker will capability-probe and the chip will turn cyan."
+            >
+              transformer (not yet exported)
+            </span>
+            <span
+              className="rounded-full border border-amber-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md"
               title="Sears Craftsman floorplan rendered as a display-only backdrop. The kernel rollout runs the disclosed terrain-and-push physics; walls/furniture do not participate in collision or the objective until cmaes-u53 (multi-obstacle kernel) lands."
             >
               backdrop · house floorplan (display-only)
