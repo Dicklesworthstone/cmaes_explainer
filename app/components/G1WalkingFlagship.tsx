@@ -7,6 +7,7 @@ import { useInView } from "../hooks/useScrollSpy";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
@@ -80,11 +81,46 @@ const LINK_NAMES = [
   "right wrist pitch",
   "right wrist yaw",
 ] as const;
-
 const LINK_PARENTS = [
   -1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14,
   15, 16, 17, 18, 19, 20, 21, 15, 23, 24, 25, 26, 27, 28,
 ] as const;
+const G1_MESH_DIR = "/robots/g1/";
+const G1_MESH_FILES: Record<string, string> = {
+  pelvis: "pelvis.STL",
+  "left hip pitch": "left_hip_pitch_link.STL",
+  "left hip roll": "left_hip_roll_link.STL",
+  "left hip yaw": "left_hip_yaw_link.STL",
+  "left knee": "left_knee_link.STL",
+  "left ankle pitch": "left_ankle_pitch_link.STL",
+  "left ankle roll": "left_ankle_roll_link.STL",
+  "right hip pitch": "right_hip_pitch_link.STL",
+  "right hip roll": "right_hip_roll_link.STL",
+  "right hip yaw": "right_hip_yaw_link.STL",
+  "right knee": "right_knee_link.STL",
+  "right ankle pitch": "right_ankle_pitch_link.STL",
+  "right ankle roll": "right_ankle_roll_link.STL",
+  "waist yaw": "waist_yaw_link.STL",
+  "waist roll": "waist_roll_link.STL",
+  torso: "torso_link.STL",
+  head: "head_link.STL",
+  "left shoulder pitch": "left_shoulder_pitch_link.STL",
+  "left shoulder roll": "left_shoulder_roll_link.STL",
+  "left shoulder yaw": "left_shoulder_yaw_link.STL",
+  "left elbow": "left_elbow_link.STL",
+  "left wrist roll": "left_wrist_roll_link.STL",
+  "left wrist pitch": "left_wrist_pitch_link.STL",
+  "left wrist yaw": "left_wrist_yaw_link.STL",
+  "left hand": "left_rubber_hand.STL",
+  "right shoulder pitch": "right_shoulder_pitch_link.STL",
+  "right shoulder roll": "right_shoulder_roll_link.STL",
+  "right shoulder yaw": "right_shoulder_yaw_link.STL",
+  "right elbow": "right_elbow_link.STL",
+  "right wrist roll": "right_wrist_roll_link.STL",
+  "right wrist pitch": "right_wrist_pitch_link.STL",
+  "right wrist yaw": "right_wrist_yaw_link.STL",
+  "right hand": "right_rubber_hand.STL",
+};
 const G1_HORIZON_STEPS = Math.round(
   DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds
 );
@@ -109,6 +145,8 @@ const G1_RIGHT_HAND_CENTER_OWNER: [number, number, number] = [0.083, -0.003, 0];
 const SHELL_COLOR = "#dfe5e8";
 const SHELL_DARK = "#252d35";
 const JOINT_COLOR = "#111820";
+// Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
+const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 const G1_POPULATION = 16;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
@@ -323,39 +361,6 @@ function PushArrow({
 // torso). The chain table stores URDF joint origins root-first with parent
 // pointers; ArmGroup nests each link inside its parent's frame, so transforms
 // compose exactly like the URDF stack.
-function ArmGroup({
-  chain,
-  meshes,
-  idx,
-}: {
-  chain: (typeof G1_ARM_CHAINS)[number];
-  meshes: { geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
-  idx: number;
-}) {
-  const link = chain.links[idx];
-  const geometry = meshes.geometries[`${chain.side} ${armLabel(link.mesh)}`];
-  const childIdxs = chain.links
-    .map((c, ci) => (c.parent === idx ? ci : -1))
-    .filter((ci) => ci >= 0);
-  return (
-    <group position={ownerToThree(link.xyz)} rotation={[link.rpy[0], 0, 0]}>
-      {geometry ? <mesh geometry={geometry} material={meshes.material} castShadow receiveShadow /> : null}
-      {childIdxs.map((ci) => (
-        <ArmGroup key={chain.links[ci].mesh} chain={chain} meshes={meshes} idx={ci} />
-      ))}
-    </group>
-  );
-}
-
-function armLabel(mesh: string): string {
-  // "left_shoulder_pitch_link" -> "left shoulder pitch" (manifest key form);
-  // "left_rubber_hand" -> "left hand".
-  return mesh
-    .replace(/_link$/, "")
-    .replace(/_/g, " ")
-    .replace(" rubber", "");
-}
-
 
 
 function RobotPoseMeshes({
@@ -392,10 +397,16 @@ function RobotPoseMeshes({
               <group position={ownerToThree(G1_HEAD_JOINT_ORIGIN)}>
                 <mesh geometry={meshes.geometries.head} material={meshes.material} castShadow />
               </group>
+            ) : name === "left wrist yaw" ? (
+              <group position={ownerToThree([0.0415, 0.003, 0])}>
+                <mesh geometry={meshes.geometries["left hand"]} material={meshes.material} castShadow />
+              </group>
+            ) : name === "right wrist yaw" ? (
+              <group position={ownerToThree([0.0415, -0.003, 0])}>
+                <mesh geometry={meshes.geometries["right hand"]} material={meshes.material} castShadow />
+              </group>
             ) : null}
-            {name === "torso"
-              ? G1_ARM_CHAINS.map((chain) => <ArmGroup key={chain.side} chain={chain} meshes={meshes} idx={0} />)
-              : null}
+            
           </group>
         );
       })}
@@ -405,6 +416,39 @@ function RobotPoseMeshes({
     </group>
   );
 }
+
+function Segment({
+  start,
+  end,
+  radius,
+  color,
+}: {
+  start: readonly number[];
+  end: readonly number[];
+  radius: number;
+  color: string;
+}) {
+  const transform = useMemo(() => {
+    const a = new THREE.Vector3(...ownerToThree(start));
+    const b = new THREE.Vector3(...ownerToThree(end));
+    const midpoint = a.clone().add(b).multiplyScalar(0.5);
+    const direction = b.clone().sub(a);
+    const length = Math.max(direction.length(), 0.025);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0)
+    );
+    return { midpoint, quaternion, cylinderLength: Math.max(length - 2 * radius, 0.001) };
+  }, [start, end, radius]);
+
+  return (
+    <mesh position={transform.midpoint} quaternion={transform.quaternion} castShadow receiveShadow>
+      <capsuleGeometry args={[radius, transform.cylinderLength, 8, 14]} />
+      <meshStandardMaterial color={color} roughness={0.34} metalness={0.68} />
+    </mesh>
+  );
+}
+
 
 function RobotPose({ sample, pushFraction }: { sample: G1TraceSample; pushFraction: number }) {
   const pelvis = sample.linkPoses[0].position;
@@ -564,6 +608,64 @@ function RobotPlayback({
       <RobotPose sample={sample} pushFraction={pushFraction} />
     )
   ) : null;
+}
+
+type G1MeshState =
+  | { phase: "idle" | "loading" }
+  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
+  | { phase: "failed" };
+
+function useG1Meshes(active: boolean): G1MeshState {
+  const [state, setState] = useState<G1MeshState>({ phase: active ? "loading" : "idle" });
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    let published = false;
+    let material: THREE.MeshStandardMaterial | null = null;
+    const geometries: Record<string, THREE.BufferGeometry> = {};
+    const loader = new STLLoader();
+    const disposeAssets = (): void => {
+      Object.values(geometries).forEach((geometry) => geometry.dispose());
+      material?.dispose();
+    };
+    (async () => {
+      try {
+        await Promise.all(
+          Object.entries(G1_MESH_FILES).map(async ([key, file]) => {
+            const res = await fetch(G1_MESH_DIR + file);
+            if (!res.ok) throw new Error(`HTTP ${res.status} loading ${file}`);
+            const geometry = loader.parse(await res.arrayBuffer());
+            geometry.rotateX(-Math.PI / 2);
+            geometry.computeVertexNormals();
+            geometries[key] = geometry;
+          })
+        );
+        if (cancelled) {
+          disposeAssets();
+          return;
+        }
+        material = new THREE.MeshStandardMaterial({
+          color: "#3a424d",
+          metalness: 0.35,
+          roughness: 0.46,
+        });
+        published = true;
+        setState({
+          phase: "ready",
+          geometries,
+          material,
+        });
+      } catch {
+        disposeAssets();
+        if (!cancelled) setState({ phase: "failed" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (published) disposeAssets();
+    };
+  }, [active]);
+  return active && state.phase === "idle" ? { phase: "loading" } : state;
 }
 
 function RobotStage({

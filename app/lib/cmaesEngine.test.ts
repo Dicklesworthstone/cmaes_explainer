@@ -19,59 +19,104 @@ import {
   isCompatibleCmaesKernelVersion,
   wasmRunToNdStates,
   type CmaesVizGeneration,
-  type CmaesVizRun
+  type CmaesVizRun,
 } from "./frankensimCmaes";
 import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
 import {
   evaluateBridgePhysics,
   evaluateWingPhysics,
   type BridgeParams,
-  type WingParams
+  type WingParams,
 } from "./frankensimPhysics";
 import { evaluateArchFitness } from "./nasObjective";
 import {
   buildWingGeometryForRender,
-  buildWingRibsForRender
+  buildWingRibsForRender,
 } from "../components/WingViz";
 
 const benchmarkCases = [
-  { id: "rosenbrock", start: [-1.6, -1.0] as [number, number], sigma: 0.4, lambda: 16 },
-  { id: "rastrigin", start: [3.2, -2.8] as [number, number], sigma: 0.8, lambda: 24 },
-  { id: "cigar", start: [2.5, 2.5] as [number, number], sigma: 0.5, lambda: 16 },
-  { id: "ackley", start: [-3.2, 3.2] as [number, number], sigma: 0.6, lambda: 20 }
+  {
+    id: "rosenbrock",
+    start: [-1.6, -1.0] as [number, number],
+    sigma: 0.4,
+    lambda: 16,
+  },
+  {
+    id: "rastrigin",
+    start: [3.2, -2.8] as [number, number],
+    sigma: 0.8,
+    lambda: 24,
+  },
+  {
+    id: "cigar",
+    start: [2.5, 2.5] as [number, number],
+    sigma: 0.5,
+    lambda: 16,
+  },
+  {
+    id: "ackley",
+    start: [-3.2, 3.2] as [number, number],
+    sigma: 0.6,
+    lambda: 20,
+  },
 ] as const;
 
 describe("shared CMA-ES engines", () => {
   test("uses Hansen's canonical default population size", () => {
     expect(new CMAESOptimizer((x, y) => x * x + y * y).lambda).toBe(6);
-    expect(new CMAESOptimizerND((x) => x.reduce((sum, value) => sum + value * value, 0), { dim: 2 }).lambda).toBe(6);
+    expect(
+      new CMAESOptimizerND(
+        (x) => x.reduce((sum, value) => sum + value * value, 0),
+        { dim: 2 },
+      ).lambda,
+    ).toBe(6);
   });
 
   for (const preset of benchmarkCases) {
     test(`converges on the curated ${preset.id} preset`, () => {
-      const benchmark = BENCHMARKS.find((candidate) => candidate.id === preset.id)!;
+      const benchmark = BENCHMARKS.find(
+        (candidate) => candidate.id === preset.id,
+      )!;
       const optimizer = new CMAESOptimizer(benchmark.eval, {
         initialMean: preset.start,
         initialSigma: preset.sigma,
         lambda: preset.lambda,
         activeCMA: true,
-        bounds: benchmark.domain
+        bounds: benchmark.domain,
       });
 
       let state = optimizer.step();
-      for (let generation = 1; generation < 60; generation++) state = optimizer.step();
+      for (let generation = 1; generation < 60; generation++)
+        state = optimizer.step();
 
       expect(state.bestFitness).toBeLessThan(1e-6);
-      expect(state.samples.every((sample) => sample.x.every((value) => value >= benchmark.domain[0] && value <= benchmark.domain[1]))).toBe(true);
-      expect(state.eigenvalues.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
+      expect(
+        state.samples.every((sample) =>
+          sample.x.every(
+            (value) =>
+              value >= benchmark.domain[0] && value <= benchmark.domain[1],
+          ),
+        ),
+      ).toBe(true);
+      expect(
+        state.eigenvalues.every((value) => Number.isFinite(value) && value > 0),
+      ).toBe(true);
     });
   }
 
   test("is invariant to a strictly increasing objective transform", () => {
     const objective = (x: number, y: number) => x * x + 20 * y * y;
-    const options = { initialMean: [1.4, -1.1], initialSigma: 0.7, lambda: 14, seed: 919 };
+    const options = {
+      initialMean: [1.4, -1.1],
+      initialSigma: 0.7,
+      lambda: 14,
+      seed: 919,
+    };
     const raw = new CMAESOptimizer(objective, options);
-    const transformed = new CMAESOptimizer((x, y) => 7 + Math.log1p(objective(x, y)), options);
+    const transformed = new CMAESOptimizer(
+      (x, y) => 7 + Math.log1p(objective(x, y)),
+      options,
+    );
 
     for (let generation = 0; generation < 25; generation++) {
       const rawState = raw.step();
@@ -92,16 +137,25 @@ describe("shared CMA-ES engines", () => {
         initialSigma: 0.3,
         lambda: 20,
         seed: 4242,
-        bounds: [-2, 2]
-      }
+        bounds: [-2, 2],
+      },
     );
 
     let state = optimizer.step();
-    for (let generation = 1; generation < 100; generation++) state = optimizer.step();
+    for (let generation = 1; generation < 100; generation++)
+      state = optimizer.step();
 
     expect(state.bestFitness).toBeLessThan(1e-6);
-    expect(state.eigenvalues.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
-    expect(state.covariance.every((row, i) => row.every((value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12))).toBe(true);
+    expect(
+      state.eigenvalues.every((value) => Number.isFinite(value) && value > 0),
+    ).toBe(true);
+    expect(
+      state.covariance.every((row, i) =>
+        row.every(
+          (value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12,
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("ranks reflected phenotypes but adapts their latent genotypes", () => {
@@ -112,18 +166,25 @@ describe("shared CMA-ES engines", () => {
       lambda: 10,
       seed: 7,
       bounds: [0, 1],
-      repairStrategy: "reflect"
+      repairStrategy: "reflect",
     });
 
     const state = optimizer.step();
     const expectedGenotypeMean = [0, 1].map((dimension) =>
-      state.samples.slice(0, optimizer.mu).reduce(
-        (sum, sample, rank) => sum + optimizer.weights[rank] * sample.rawX[dimension],
-        0
-      )
+      state.samples
+        .slice(0, optimizer.mu)
+        .reduce(
+          (sum, sample, rank) =>
+            sum + optimizer.weights[rank] * sample.rawX[dimension],
+          0,
+        ),
     );
 
-    expect(state.samples.some((sample) => sample.rawX.some((value, dimension) => value !== sample.x[dimension]))).toBe(true);
+    expect(
+      state.samples.some((sample) =>
+        sample.rawX.some((value, dimension) => value !== sample.x[dimension]),
+      ),
+    ).toBe(true);
     expect(optimizer.mean[0]).toBeCloseTo(expectedGenotypeMean[0], 14);
     expect(optimizer.mean[1]).toBeCloseTo(expectedGenotypeMean[1], 14);
     const reflect = (value: number): number => {
@@ -136,14 +197,15 @@ describe("shared CMA-ES engines", () => {
 
   test("literal clipping keeps adaptation inside the box and reaches an interior optimum", () => {
     const target = 0.2;
-    const objective2D = (x: number, y: number) => (x - target) ** 2 + (y - target) ** 2;
+    const objective2D = (x: number, y: number) =>
+      (x - target) ** 2 + (y - target) ** 2;
     const optimizer2D = new CMAESOptimizer(objective2D, {
       initialMean: [0.5, 0.5],
       initialSigma: 0.8,
       lambda: 10,
       seed: 7,
       bounds: [0, 1],
-      repairStrategy: "clip"
+      repairStrategy: "clip",
     });
     const optimizerND = new CMAESOptimizerND((x) => objective2D(x[0], x[1]), {
       dim: 2,
@@ -152,7 +214,7 @@ describe("shared CMA-ES engines", () => {
       lambda: 10,
       seed: 7,
       bounds: [0, 1],
-      repairStrategy: "clip"
+      repairStrategy: "clip",
     });
 
     let state2D = optimizer2D.step();
@@ -164,13 +226,23 @@ describe("shared CMA-ES engines", () => {
 
     expect(state2D.bestFitness).toBeLessThan(1e-12);
     expect(stateND.bestFitness).toBeLessThan(1e-12);
-    expect(optimizer2D.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
-    expect(optimizerND.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
+    expect(optimizer2D.mean.every((value) => value >= 0 && value <= 1)).toBe(
+      true,
+    );
+    expect(optimizerND.mean.every((value) => value >= 0 && value <= 1)).toBe(
+      true,
+    );
   });
 
   test("the public covariance snapshot cannot desynchronize the cached eigensystem", () => {
-    const objective = (x: number[]) => x.reduce((sum, value) => sum + value * value, 0);
-    const options = { dim: 4, initialMean: [0.8, 0.6, 0.4, 0.2], initialSigma: 0.3, seed: 99 };
+    const objective = (x: number[]) =>
+      x.reduce((sum, value) => sum + value * value, 0);
+    const options = {
+      dim: 4,
+      initialMean: [0.8, 0.6, 0.4, 0.2],
+      initialSigma: 0.3,
+      seed: 99,
+    };
     const control = new CMAESOptimizerND(objective, options);
     const probed = new CMAESOptimizerND(objective, options);
 
@@ -198,7 +270,7 @@ describe("advertised optimization dimensions", () => {
       camberPosition: 0.4,
       taperRatio: 0.56,
       airfoilFamily: "Supercritical SC(2)",
-      internalRibCount: 22
+      internalRibCount: 22,
     };
     const baselineCost = evaluateWingPhysics(baseline, 0.78).costScore;
     const variants: WingParams[] = [
@@ -209,11 +281,13 @@ describe("advertised optimization dimensions", () => {
       { ...baseline, camberPosition: 0.56 },
       { ...baseline, taperRatio: 0.82 },
       { ...baseline, airfoilFamily: "Laminar Flow Low-Re" },
-      { ...baseline, internalRibCount: 34 }
+      { ...baseline, internalRibCount: 34 },
     ];
 
     for (const variant of variants) {
-      expect(evaluateWingPhysics(variant, 0.78).costScore).not.toBe(baselineCost);
+      expect(evaluateWingPhysics(variant, 0.78).costScore).not.toBe(
+        baselineCost,
+      );
     }
   });
 
@@ -226,7 +300,7 @@ describe("advertised optimization dimensions", () => {
       camberPosition: 0.4,
       taperRatio: 0.56,
       airfoilFamily: "Supercritical SC(2)",
-      internalRibCount: 22
+      internalRibCount: 22,
     };
     const variants: WingParams[] = [
       { ...baseline, aspectRatio: 14 },
@@ -235,24 +309,36 @@ describe("advertised optimization dimensions", () => {
       { ...baseline, maxCamber: 0.06 },
       { ...baseline, camberPosition: 0.56 },
       { ...baseline, taperRatio: 0.82 },
-      { ...baseline, airfoilFamily: "Laminar Flow Low-Re" }
+      { ...baseline, airfoilFamily: "Laminar Flow Low-Re" },
     ];
 
     const baselineGeometry = buildWingGeometryForRender(baseline);
-    const baselinePositions = Array.from(baselineGeometry.attributes.position.array);
+    const baselinePositions = Array.from(
+      baselineGeometry.attributes.position.array,
+    );
     baselineGeometry.dispose();
 
     for (const variant of variants) {
       const geometry = buildWingGeometryForRender(variant);
-      expect(Array.from(geometry.attributes.position.array)).not.toEqual(baselinePositions);
+      expect(Array.from(geometry.attributes.position.array)).not.toEqual(
+        baselinePositions,
+      );
       geometry.dispose();
     }
 
     const baselineRibs = buildWingRibsForRender(baseline);
-    expect(buildWingRibsForRender({ ...baseline, internalRibCount: 34 })).toHaveLength(34);
-    expect(buildWingRibsForRender({ ...baseline, aspectRatio: 14 })).not.toEqual(baselineRibs);
-    expect(buildWingRibsForRender({ ...baseline, sweepAngle: 38 })).not.toEqual(baselineRibs);
-    expect(buildWingRibsForRender({ ...baseline, taperRatio: 0.82 })).not.toEqual(baselineRibs);
+    expect(
+      buildWingRibsForRender({ ...baseline, internalRibCount: 34 }),
+    ).toHaveLength(34);
+    expect(
+      buildWingRibsForRender({ ...baseline, aspectRatio: 14 }),
+    ).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, sweepAngle: 38 })).not.toEqual(
+      baselineRibs,
+    );
+    expect(
+      buildWingRibsForRender({ ...baseline, taperRatio: 0.82 }),
+    ).not.toEqual(baselineRibs);
   });
 
   test("bridge damping changes flutter compliance and objective", () => {
@@ -264,12 +350,17 @@ describe("advertised optimization dimensions", () => {
       materialGrade: "A36 Mild Steel",
       suspenderCount: 24,
       towerAspect: 0.35,
-      vibrationDamping: 0.01
+      vibrationDamping: 0.01,
     };
     const lowDamping = evaluateBridgePhysics(baseline, 0);
-    const highDamping = evaluateBridgePhysics({ ...baseline, vibrationDamping: 0.15 }, 0);
+    const highDamping = evaluateBridgePhysics(
+      { ...baseline, vibrationDamping: 0.15 },
+      0,
+    );
 
-    expect(highDamping.flutterCriticalSpeedKmh).toBeGreaterThan(lowDamping.flutterCriticalSpeedKmh);
+    expect(highDamping.flutterCriticalSpeedKmh).toBeGreaterThan(
+      lowDamping.flutterCriticalSpeedKmh,
+    );
     expect(highDamping.costScore).toBeLessThan(lowDamping.costScore);
     expect(lowDamping.isCompliant).toBe(false);
     expect(highDamping.isCompliant).toBe(true);
@@ -282,7 +373,12 @@ describe("advertised optimization dimensions", () => {
   });
 });
 
-function generation(g: number, sf: number[], sx: number[], bestF = Math.min(...sf)): CmaesVizGeneration {
+function generation(
+  g: number,
+  sf: number[],
+  sx: number[],
+  bestF = Math.min(...sf),
+): CmaesVizGeneration {
   return {
     g,
     mean: [0, 0, 0],
@@ -300,7 +396,7 @@ function generation(g: number, sf: number[], sx: number[], bestF = Math.min(...s
     sf,
     se: [1, 1, 0, 0],
     p_sigma: [0, 0, 0],
-    p_c: [0, 0, 0]
+    p_c: [0, 0, 0],
   };
 }
 
@@ -315,16 +411,21 @@ test("WASM snapshots rank ask-order samples without leaking final coordinates in
     total_evals: 8,
     generations: [
       generation(1, [9, 1, 5, 3], [9, 0, 0, 1, 0, 0, 5, 0, 0, 3, 0, 0]),
-      generation(2, [4, 6, 7, 8], [4, 0, 0, 6, 0, 0, 7, 0, 0, 8, 0, 0], 0.5)
+      generation(2, [4, 6, 7, 8], [4, 0, 0, 6, 0, 0, 7, 0, 0, 8, 0, 0], 0.5),
     ],
     pca_basis: [1, 0, 0, 0, 1, 0, 0, 0, 1],
     pca_center: [0, 0, 0],
-    pca_pool_eigvals: [1, 1, 1]
+    pca_pool_eigvals: [1, 1, 1],
   };
 
   const states = wasmRunToNdStates(run);
   expect(states[0].samples.map((sample) => sample.rank)).toEqual([3, 0, 2, 1]);
-  expect(states[0].samples.map((sample) => sample.isElite)).toEqual([false, true, false, true]);
+  expect(states[0].samples.map((sample) => sample.isElite)).toEqual([
+    false,
+    true,
+    false,
+    true,
+  ]);
   expect(states[0].bestX).toEqual([1, 0, 0]);
   expect(states[1].bestX).toEqual(Array.from(run.best_x));
   expect(states[1].bestFitness).toBe(0.5);
@@ -346,12 +447,16 @@ test("WASM snapshot spectra use the same largest-first contract as the TypeScrip
     generations: [snapshot],
     pca_basis: [1, 0, 0, 0, 1, 0, 0, 0, 1],
     pca_center: [0, 0, 0],
-    pca_pool_eigvals: [1, 2, 4]
+    pca_pool_eigvals: [1, 2, 4],
   };
 
   const [state] = wasmRunToNdStates(run);
   expect(state.eigenvalues).toEqual([4, 2, 1]);
-  expect(state.covariance).toEqual([[1, 0, 0], [0, 2, 0], [0, 0, 4]]);
+  expect(state.covariance).toEqual([
+    [1, 0, 0],
+    [0, 2, 0],
+    [0, 0, 4],
+  ]);
   expect(state.conditionNumber).toBe(4);
   expect(state.phaseSpace3D.eigenvalues).toEqual([4, 2, 0]);
   expect(state.phaseSpace3D.conditionNumber).toBe(Infinity);
@@ -386,18 +491,130 @@ type TrajectoryCase = {
 };
 
 const trajectoryCases: TrajectoryCase[] = [
-  { name: "passive sphere 2D", landscape: 0, dim: 2, initialMean: [1.5, -1], sigma: 0.3, lambda: 6, active: false, seed: 41, generations: 100, noise: 0, bounded: false },
-  { name: "active sphere 3D", landscape: 0, dim: 3, initialMean: [1.5, -1, 2], sigma: 0.4, lambda: 10, active: true, seed: 77, generations: 100, noise: 0, bounded: false },
-  { name: "Rosenbrock default", landscape: 1, dim: 5, initialMean: [1.5, -1, 2, 0.5, -0.5], sigma: 0.3, lambda: 16, active: true, seed: 1337, generations: 120, noise: 0, bounded: false },
-  { name: "bounded Rosenbrock", landscape: 1, dim: 4, initialMean: [1.8, -1.8, 1.6, -1.6], sigma: 0.65, lambda: 20, active: true, seed: 2027, generations: 100, noise: 0, bounded: true },
-  { name: "Discus 6D", landscape: 2, dim: 6, initialMean: [1.5, -1, 2, 0.5, -0.5, 1], sigma: 0.4, lambda: 24, active: true, seed: 4242, generations: 120, noise: 0, bounded: false },
-  { name: "noisy Rastrigin", landscape: 3, dim: 4, initialMean: [3, -2.5, 2, -3], sigma: 0.8, lambda: 32, active: true, seed: 919, generations: 100, noise: 0.05, bounded: false },
-  { name: "bounded passive noisy Rastrigin", landscape: 3, dim: 6, initialMean: [1.8, -1.7, 1.6, -1.5, 1.4, -1.3], sigma: 0.7, lambda: 48, active: false, seed: 98765, generations: 80, noise: 0.1, bounded: true },
-  { name: "ill-conditioned ellipsoid 2D", landscape: 4, dim: 2, initialMean: [1.5, -1], sigma: 0.3, lambda: 12, active: true, seed: 808, generations: 100, noise: 0, bounded: false },
-  { name: "ill-conditioned ellipsoid 6D maximum population", landscape: 4, dim: 6, initialMean: [1.5, -1, 2, 0.5, -0.5, 1], sigma: 0.4, lambda: 48, active: true, seed: 65537, generations: 120, noise: 0, bounded: false }
+  {
+    name: "passive sphere 2D",
+    landscape: 0,
+    dim: 2,
+    initialMean: [1.5, -1],
+    sigma: 0.3,
+    lambda: 6,
+    active: false,
+    seed: 41,
+    generations: 100,
+    noise: 0,
+    bounded: false,
+  },
+  {
+    name: "active sphere 3D",
+    landscape: 0,
+    dim: 3,
+    initialMean: [1.5, -1, 2],
+    sigma: 0.4,
+    lambda: 10,
+    active: true,
+    seed: 77,
+    generations: 100,
+    noise: 0,
+    bounded: false,
+  },
+  {
+    name: "Rosenbrock default",
+    landscape: 1,
+    dim: 5,
+    initialMean: [1.5, -1, 2, 0.5, -0.5],
+    sigma: 0.3,
+    lambda: 16,
+    active: true,
+    seed: 1337,
+    generations: 120,
+    noise: 0,
+    bounded: false,
+  },
+  {
+    name: "bounded Rosenbrock",
+    landscape: 1,
+    dim: 4,
+    initialMean: [1.8, -1.8, 1.6, -1.6],
+    sigma: 0.65,
+    lambda: 20,
+    active: true,
+    seed: 2027,
+    generations: 100,
+    noise: 0,
+    bounded: true,
+  },
+  {
+    name: "Discus 6D",
+    landscape: 2,
+    dim: 6,
+    initialMean: [1.5, -1, 2, 0.5, -0.5, 1],
+    sigma: 0.4,
+    lambda: 24,
+    active: true,
+    seed: 4242,
+    generations: 120,
+    noise: 0,
+    bounded: false,
+  },
+  {
+    name: "noisy Rastrigin",
+    landscape: 3,
+    dim: 4,
+    initialMean: [3, -2.5, 2, -3],
+    sigma: 0.8,
+    lambda: 32,
+    active: true,
+    seed: 919,
+    generations: 100,
+    noise: 0.05,
+    bounded: false,
+  },
+  {
+    name: "bounded passive noisy Rastrigin",
+    landscape: 3,
+    dim: 6,
+    initialMean: [1.8, -1.7, 1.6, -1.5, 1.4, -1.3],
+    sigma: 0.7,
+    lambda: 48,
+    active: false,
+    seed: 98765,
+    generations: 80,
+    noise: 0.1,
+    bounded: true,
+  },
+  {
+    name: "ill-conditioned ellipsoid 2D",
+    landscape: 4,
+    dim: 2,
+    initialMean: [1.5, -1],
+    sigma: 0.3,
+    lambda: 12,
+    active: true,
+    seed: 808,
+    generations: 100,
+    noise: 0,
+    bounded: false,
+  },
+  {
+    name: "ill-conditioned ellipsoid 6D maximum population",
+    landscape: 4,
+    dim: 6,
+    initialMean: [1.5, -1, 2, 0.5, -0.5, 1],
+    sigma: 0.4,
+    lambda: 48,
+    active: true,
+    seed: 65537,
+    generations: 120,
+    noise: 0,
+    bounded: false,
+  },
 ];
 
-function maximumDifference(left: ArrayLike<number>, right: ArrayLike<number>, scaled: boolean): number {
+function maximumDifference(
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+  scaled: boolean,
+): number {
   if (left.length !== right.length) return Infinity;
   let maximum = 0;
   for (let index = 0; index < left.length; index++) {
@@ -415,11 +632,13 @@ function requireDifferenceWithin(
   left: ArrayLike<number>,
   right: ArrayLike<number>,
   tolerance: number,
-  scaled = true
+  scaled = true,
 ): void {
   const difference = maximumDifference(left, right, scaled);
   if (!(difference <= tolerance)) {
-    throw new Error(`${label}: maximum ${scaled ? "scale-normalized" : "absolute"} difference ${difference} exceeds ${tolerance}`);
+    throw new Error(
+      `${label}: maximum ${scaled ? "scale-normalized" : "absolute"} difference ${difference} exceeds ${tolerance}`,
+    );
   }
 }
 
@@ -433,7 +652,10 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
   const wasmBytes = await Bun.file(
     generatedPackage
       ? `${generatedPackage}/fs_cmaes_viz_wasm_bg.wasm`
-      : new URL("../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+      : new URL(
+          "../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm",
+          import.meta.url,
+        ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
@@ -455,20 +677,32 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
         seed: scenario.seed,
         noiseLevel: scenario.noise,
         bounds: scenario.bounded ? [-2, 2] : [-1e9, 1e9],
-        repairStrategy: scenario.bounded ? "reflect" : "none"
-      }
+        repairStrategy: scenario.bounded ? "reflect" : "none",
+      },
     );
     const tsStates = [];
-    for (let generationIndex = 0; generationIndex < scenario.generations; generationIndex++) {
+    for (
+      let generationIndex = 0;
+      generationIndex < scenario.generations;
+      generationIndex++
+    ) {
       const state = optimizer.step();
       tsStates.push(state);
       if (state.bestFitness <= CMAES_VISUALIZATION_F_TARGET) break;
     }
 
-    const initial = Array.from({ length: 6 }, (_, index) => scenario.initialMean[index] ?? 0);
+    const initial = Array.from(
+      { length: 6 },
+      (_, index) => scenario.initialMean[index] ?? 0,
+    );
     const packet = wasm.cmaes_viz_run(
       scenario.dim,
-      initial[0], initial[1], initial[2], initial[3], initial[4], initial[5],
+      initial[0],
+      initial[1],
+      initial[2],
+      initial[3],
+      initial[4],
+      initial[5],
       scenario.sigma,
       scenario.lambda,
       scenario.active,
@@ -479,19 +713,22 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
       scenario.bounded,
       -2,
       2,
-      CMAES_VISUALIZATION_F_TARGET
+      CMAES_VISUALIZATION_F_TARGET,
     );
     expect(packet).toBeInstanceOf(Float64Array);
     representativePacket ??= packet;
     const decoded = decodeCmaesPacket(packet);
-    if (!("ok" in decoded)) throw new Error(`${scenario.name}: WASM refusal ${decoded.refusal.code}`);
+    if (!("ok" in decoded))
+      throw new Error(`${scenario.name}: WASM refusal ${decoded.refusal.code}`);
     const run = decoded.ok;
     const wasmStates = wasmRunToNdStates(run);
     const finalTsState = tsStates.at(-1);
-    if (!finalTsState) throw new Error(`${scenario.name}: TypeScript produced no generation`);
-    const expectedStopReason = finalTsState.bestFitness <= CMAES_VISUALIZATION_F_TARGET
-      ? "target-reached"
-      : "generations-exhausted";
+    if (!finalTsState)
+      throw new Error(`${scenario.name}: TypeScript produced no generation`);
+    const expectedStopReason =
+      finalTsState.bestFitness <= CMAES_VISUALIZATION_F_TARGET
+        ? "target-reached"
+        : "generations-exhausted";
 
     expect(run.generations.length).toBe(tsStates.length);
     expect(run.total_evals).toBe(tsStates.length * scenario.lambda);
@@ -499,36 +736,118 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
     stopReasons.add(run.stop_reason);
     comparedGenerations += run.generations.length;
 
-    for (let generationIndex = 0; generationIndex < tsStates.length; generationIndex++) {
+    for (
+      let generationIndex = 0;
+      generationIndex < tsStates.length;
+      generationIndex++
+    ) {
       const label = `${scenario.name}, generation ${generationIndex + 1}`;
       const wasmGeneration = run.generations[generationIndex];
       const wasmState = wasmStates[generationIndex];
       const tsState = tsStates[generationIndex];
-      requireDifferenceWithin(`${label} ranked z`, wasmGeneration.sz, tsState.samples.flatMap((sample) => sample.z), 2e-12, false);
-      requireDifferenceWithin(`${label} samples`, wasmGeneration.sx, tsState.samples.flatMap((sample) => sample.x), 2e-8);
-      requireDifferenceWithin(`${label} ranked fitness`, wasmGeneration.sf, tsState.samples.map((sample) => sample.fitness), 2e-8);
-      requireDifferenceWithin(`${label} mean`, wasmGeneration.mean, tsState.mean, 2e-8);
-      requireDifferenceWithin(`${label} eigenvalues`, wasmGeneration.eigvals, [...tsState.eigenvalues].reverse(), 2e-8);
-      requireDifferenceWithin(`${label} covariance`, wasmState.covariance.flat(), tsState.covariance.flat(), 2e-8);
-      requireDifferenceWithin(`${label} p_sigma`, wasmGeneration.p_sigma, tsState.pSigma, 2e-8);
-      requireDifferenceWithin(`${label} p_c`, wasmGeneration.p_c, tsState.pC, 2e-8);
-      requireDifferenceWithin(`${label} sigma`, [wasmGeneration.sigma], [tsState.sigma], 2e-8);
-      requireDifferenceWithin(`${label} best fitness`, [wasmGeneration.best_f], [tsState.bestFitness], 2e-8);
+      requireDifferenceWithin(
+        `${label} ranked z`,
+        wasmGeneration.sz,
+        tsState.samples.flatMap((sample) => sample.z),
+        2e-12,
+        false,
+      );
+      requireDifferenceWithin(
+        `${label} samples`,
+        wasmGeneration.sx,
+        tsState.samples.flatMap((sample) => sample.x),
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} ranked fitness`,
+        wasmGeneration.sf,
+        tsState.samples.map((sample) => sample.fitness),
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} mean`,
+        wasmGeneration.mean,
+        tsState.mean,
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} eigenvalues`,
+        wasmGeneration.eigvals,
+        [...tsState.eigenvalues].reverse(),
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} covariance`,
+        wasmState.covariance.flat(),
+        tsState.covariance.flat(),
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} p_sigma`,
+        wasmGeneration.p_sigma,
+        tsState.pSigma,
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} p_c`,
+        wasmGeneration.p_c,
+        tsState.pC,
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} sigma`,
+        [wasmGeneration.sigma],
+        [tsState.sigma],
+        2e-8,
+      );
+      requireDifferenceWithin(
+        `${label} best fitness`,
+        [wasmGeneration.best_f],
+        [tsState.bestFitness],
+        2e-8,
+      );
     }
-    requireDifferenceWithin(`${scenario.name} final best x`, run.best_x, finalTsState.bestX, 2e-8);
+    requireDifferenceWithin(
+      `${scenario.name} final best x`,
+      run.best_x,
+      finalTsState.bestX,
+      2e-8,
+    );
   }
 
   expect(comparedGenerations).toBeGreaterThanOrEqual(500);
-  expect(stopReasons).toEqual(new Set(["generations-exhausted", "target-reached"]));
+  expect(stopReasons).toEqual(
+    new Set(["generations-exhausted", "target-reached"]),
+  );
 
-  if (!representativePacket) throw new Error("trajectory matrix produced no packet");
+  if (!representativePacket)
+    throw new Error("trajectory matrix produced no packet");
 
   const refusalPacket = wasm.cmaes_viz_run(
-    1, 0, 0, 0, 0, 0, 0, 0.3, 16, true, 1337n, 1, 1, 0, false, -2, 2, NaN
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0.3,
+    16,
+    true,
+    1337n,
+    1,
+    1,
+    0,
+    false,
+    -2,
+    2,
+    NaN,
   );
   const refusal = decodeCmaesPacket(refusalPacket);
   expect("refusal" in refusal && refusal.refusal.code).toBe("dim-out-of-range");
-  expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual(["set dim within 2..=6"]);
+  expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual([
+    "set dim within 2..=6",
+  ]);
 
   const wrongMagic = representativePacket.slice();
   wrongMagic[0] = 0;
@@ -536,26 +855,56 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
   const wrongStride = representativePacket.slice();
   wrongStride[11] += 1;
   expect(() => decodeCmaesPacket(wrongStride)).toThrow("generation_stride");
-  expect(() => decodeCmaesPacket(representativePacket.slice(0, representativePacket.length - 1))).toThrow("total_words");
+  expect(() =>
+    decodeCmaesPacket(
+      representativePacket.slice(0, representativePacket.length - 1),
+    ),
+  ).toThrow("total_words");
 });
 
 const OWNER_CMA_MAGIC = 0x434d4132;
 
 function ownerSnapshotPacket(family: number): Float64Array {
   const dimension = 3;
-  const shapePayload = family === 0
-    ? [1, 0.5, 2, 1, 1.25, 1.5]
-    : family === 1
-      ? [1, 1, 1.25, 1.5]
-      : [0, 5];
+  const shapePayload =
+    family === 0
+      ? [1, 0.5, 2, 1, 1.25, 1.5]
+      : family === 1
+        ? [1, 1, 1.25, 1.5]
+        : [0, 5];
   const packet = new Float64Array(31 + 2 * dimension + shapePayload.length);
   packet.set([
-    OWNER_CMA_MAGIC, 2, 0, 1, packet.length,
-    family, dimension, 0, 0, 0.4, 7, 3, 2, 14, 1, 1, 21, 0,
+    OWNER_CMA_MAGIC,
+    2,
+    0,
+    1,
+    packet.length,
+    family,
+    dimension,
+    0,
+    0,
+    0.4,
+    7,
+    3,
+    2,
+    14,
+    1,
+    1,
+    21,
+    0,
     family === 0 ? 2 : family === 1 ? 0 : 1,
     family === 0 ? 3 : family === 1 ? 0 : family === 2 ? 4 : 1,
-    64, 42, 31, family === 0 ? 18 : 0, family >= 2 ? 5 : 0,
-    0, NaN, NaN, NaN, family === 0 ? 0 : family === 1 ? 1 : 2, shapePayload.length,
+    64,
+    42,
+    31,
+    family === 0 ? 18 : 0,
+    family >= 2 ? 5 : 0,
+    0,
+    NaN,
+    NaN,
+    NaN,
+    family === 0 ? 0 : family === 1 ? 1 : 2,
+    shapePayload.length,
   ]);
   packet.set([0, 0, 0], 31);
   packet.set([NaN, NaN, NaN], 34);
@@ -568,13 +917,16 @@ describe("schema-2 owner CMA packet adapter", () => {
     const expected = ["full", "separable", "lm-cma", "lm-ma"] as const;
     for (let family = 0; family < expected.length; family++) {
       const decoded = decodeCmaFamilySnapshot(ownerSnapshotPacket(family), 1);
-      if (!("ok" in decoded)) throw new Error(`unexpected family ${family} refusal`);
+      if (!("ok" in decoded))
+        throw new Error(`unexpected family ${family} refusal`);
       expect(decoded.ok.family).toBe(expected[family]);
       expect(decoded.ok.dimension).toBe(3);
       expect(decoded.ok.admittedEvaluations).toBe(14);
       expect(decoded.ok.normalStreamBlocks).toBe(21n);
       expect(decoded.ok.best).toBeNull();
-      expect(decoded.ok.shape.kind).toBe(family === 0 ? "full" : family === 1 ? "diagonal" : "limited-memory");
+      expect(decoded.ok.shape.kind).toBe(
+        family === 0 ? "full" : family === 1 ? "diagonal" : "limited-memory",
+      );
     }
   });
 
@@ -589,31 +941,69 @@ describe("schema-2 owner CMA packet adapter", () => {
       seed: 0x1234_5678_9abc_def0n,
     });
     expect(Array.from(config.slice(0, 12))).toEqual([
-      OWNER_CMA_MAGIC, 2, 0, 15, 3, 3, 7, 5, 14, 0x9abc_def0, 0x1234_5678, 0.25,
+      OWNER_CMA_MAGIC,
+      2,
+      0,
+      15,
+      3,
+      3,
+      7,
+      5,
+      14,
+      0x9abc_def0,
+      0x1234_5678,
+      0.25,
     ]);
 
     const ask = new Float64Array([
-      OWNER_CMA_MAGIC, 2, 0, 2, 21, 1, 0, 3, 4,
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+      OWNER_CMA_MAGIC,
+      2,
+      0,
+      2,
+      21,
+      1,
+      0,
+      3,
+      4,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
     ]);
     const decoded = decodeCmaFamilyAsk(ask);
     if (!("ok" in decoded)) throw new Error("unexpected ask refusal");
     expect(decoded.ok.generation).toBe(1);
-    expect(Array.from(decoded.ok.candidates)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(Array.from(decoded.ok.candidates)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+    ]);
   });
 
   test("fails closed on malformed shape claims and preserves typed refusals", () => {
     const malformed = ownerSnapshotPacket(0);
     malformed[30] -= 1;
-    expect(() => decodeCmaFamilySnapshot(malformed, 1)).toThrow("snapshot shape");
+    expect(() => decodeCmaFamilySnapshot(malformed, 1)).toThrow(
+      "snapshot shape",
+    );
 
     const wrongComplexity = ownerSnapshotPacket(3);
     wrongComplexity[18] = 0;
-    expect(() => decodeCmaFamilySnapshot(wrongComplexity, 1)).toThrow("family complexity");
+    expect(() => decodeCmaFamilySnapshot(wrongComplexity, 1)).toThrow(
+      "family complexity",
+    );
 
     const nonPositiveVariance = ownerSnapshotPacket(1);
     nonPositiveVariance[38] = 0;
-    expect(() => decodeCmaFamilySnapshot(nonPositiveVariance, 1)).toThrow("diagonal variances");
+    expect(() => decodeCmaFamilySnapshot(nonPositiveVariance, 1)).toThrow(
+      "diagonal variances",
+    );
 
     const refusal = new Float64Array([OWNER_CMA_MAGIC, 2, 1, 2, 7, 17, 3]);
     expect(decodeCmaFamilyAsk(refusal)).toEqual({
@@ -624,8 +1014,27 @@ describe("schema-2 owner CMA packet adapter", () => {
 
 describe("G1 walking packet adapter", () => {
   const admission = new Float64Array([
-    0x47315736, 6, 0, 1, 21, 5_040, 16, 7, 115, 1 / 480, 1.5, 0.65, 1.55, 12, 2,
-    1, 0.024, 2.4, 0.55, 0.7, 72,
+    0x47315737,
+    7,
+    0,
+    1,
+    21,
+    5_040,
+    30,
+    7,
+    213,
+    1 / 480,
+    1.5,
+    0.65,
+    1.55,
+    12,
+    2,
+    1,
+    0.024,
+    2.4,
+    0.55,
+    0.7,
+    72,
   ]);
   const objectiveWords = [
     12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6,
@@ -636,8 +1045,8 @@ describe("G1 walking packet adapter", () => {
     const decoded = decodeG1Admission(admission);
     if (!("ok" in decoded)) throw new Error("unexpected G1 admission refusal");
     expect(decoded.ok.policyDimension).toBe(5_040);
-    expect(decoded.ok.linkCount).toBe(16);
-    expect(decoded.ok.traceSampleWords).toBe(115);
+    expect(decoded.ok.linkCount).toBe(30);
+    expect(decoded.ok.traceSampleWords).toBe(213);
     expect(decoded.ok.config.task).toBe("walking");
     expect(decoded.ok.config.challenge).toBe("terrain-and-push");
     expect(decoded.ok.pushPeakForceNewtons).toBe(72);
@@ -648,7 +1057,9 @@ describe("G1 walking packet adapter", () => {
 
     const pushAfterHorizon = admission.slice();
     pushAfterHorizon[19] = 1.6;
-    expect(() => decodeG1Admission(pushAfterHorizon)).toThrow("admitted controls");
+    expect(() => decodeG1Admission(pushAfterHorizon)).toThrow(
+      "admitted controls",
+    );
 
     const wrongControls = admission.slice();
     wrongControls[11] = -0.1;
@@ -656,41 +1067,69 @@ describe("G1 walking packet adapter", () => {
   });
 
   test("decodes decomposed objectives, population rows, and owner poses", () => {
-    const evaluation = new Float64Array([0x47315736, 6, 0, 2, 28, ...objectiveWords]);
+    const evaluation = new Float64Array([
+      0x47315737,
+      7,
+      0,
+      2,
+      28,
+      ...objectiveWords,
+    ]);
     const decodedEvaluation = decodeG1Evaluation(evaluation);
-    if (!("ok" in decodedEvaluation)) throw new Error("unexpected evaluation refusal");
+    if (!("ok" in decodedEvaluation))
+      throw new Error("unexpected evaluation refusal");
     expect(decodedEvaluation.ok.distanceMeters).toBe(0.4);
     expect(decodedEvaluation.ok.pushImpulseNewtonSeconds).toBe(8.4);
     expect(decodedEvaluation.ok.terminationReason).toBe("horizon");
 
     const negativeIntegral = evaluation.slice();
     negativeIntegral[11] = -1;
-    expect(() => decodeG1Evaluation(negativeIntegral)).toThrow("negative integral");
+    expect(() => decodeG1Evaluation(negativeIntegral)).toThrow(
+      "negative integral",
+    );
 
-    const population = decodeG1Population(new Float64Array([0x47315736, 6, 0, 4, 9, 3, 4, 3, 2]));
+    const population = decodeG1Population(
+      new Float64Array([0x47315737, 7, 0, 4, 9, 3, 4, 3, 2]),
+    );
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
 
-    const sample = new Array<number>(115).fill(0);
+    const sample = new Array<number>(213).fill(0);
     sample[0] = 0.025;
     sample[1] = 1;
     sample[2] = 0;
-    for (let link = 0; link < 16; link++) {
+    for (let link = 0; link < 30; link++) {
       const poseStart = 3 + link * 7;
       sample[poseStart] = link * 0.01;
       sample[poseStart + 2] = 0.75;
       sample[poseStart + 3] = 1;
     }
-    const trace = decodeG1Trace(new Float64Array([
-      0x47315736, 6, 0, 3, 144, ...objectiveWords, 1, ...sample,
-    ]));
+    const trace = decodeG1Trace(
+      new Float64Array([
+        0x47315737,
+        7,
+        0,
+        3,
+        242,
+        ...objectiveWords,
+        1,
+        ...sample,
+      ]),
+    );
     if (!("ok" in trace)) throw new Error("unexpected trace refusal");
     expect(trace.ok.samples).toHaveLength(1);
     expect(trace.ok.samples[0].leftContact).toBe(true);
     expect(trace.ok.samples[0].linkPoses[15].position).toEqual([0.15, 0, 0.75]);
 
     const nonUnitQuaternion = new Float64Array([
-      0x47315736, 6, 0, 3, 144, ...objectiveWords, 1, ...sample,
+      0x47315737,
+      7,
+      0,
+      3,
+      242,
+      ...objectiveWords,
+      1,
+      ...sample,
     ]);
     nonUnitQuaternion[35] = 0.5;
     expect(() => decodeG1Trace(nonUnitQuaternion)).toThrow("link quaternion");
@@ -698,7 +1137,13 @@ describe("G1 walking packet adapter", () => {
 
   test("decodes exact termination reasons and rejects unknown reason IDs", () => {
     const baseTilt = new Float64Array([
-      0x47315736, 6, 0, 2, 28, ...objectiveWords.slice(0, -1), 2,
+      0x47315737,
+      7,
+      0,
+      2,
+      28,
+      ...objectiveWords.slice(0, -1),
+      2,
     ]);
     const decoded = decodeG1Evaluation(baseTilt);
     if (!("ok" in decoded)) throw new Error("unexpected evaluation refusal");
@@ -706,18 +1151,25 @@ describe("G1 walking packet adapter", () => {
 
     const unknownReason = baseTilt.slice();
     unknownReason[27] = 7;
-    expect(() => decodeG1Evaluation(unknownReason)).toThrow("termination reason");
+    expect(() => decodeG1Evaluation(unknownReason)).toThrow(
+      "termination reason",
+    );
   });
 
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
-    expect(() => decodeG1Trace(new Float64Array([
-      0x47315736, 6, 0, 3, 29, ...objectiveWords, 1,
-    ]))).toThrow("trace shape");
+    expect(() =>
+      decodeG1Trace(
+        new Float64Array([0x47315737, 7, 0, 3, 29, ...objectiveWords, 1]),
+      ),
+    ).toThrow("trace shape");
   });
 });
 
 test("the robotics pool degrades to the sequential owner when workers are unavailable", async () => {
-  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+  const workerDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "Worker",
+  );
   Object.defineProperty(globalThis, "Worker", {
     configurable: true,
     value: class UnavailableWorker {
@@ -735,7 +1187,7 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
     const sequentialObjectives = Float64Array.of(17);
     const receipt = await pool.evaluate(
       new Float64Array(128),
-      () => sequentialObjectives
+      () => sequentialObjectives,
     );
     expect(receipt.objectives).toBe(sequentialObjectives);
     expect(receipt.lanes).toBe(1);
@@ -743,35 +1195,44 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
     expect(receipt.fallbackReason).toContain("worker construction failed");
     pool.free();
   } finally {
-    if (workerDescriptor) Object.defineProperty(globalThis, "Worker", workerDescriptor);
+    if (workerDescriptor)
+      Object.defineProperty(globalThis, "Worker", workerDescriptor);
     else Reflect.deleteProperty(globalThis, "Worker");
   }
 });
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
-  const wasm = await import("../../public/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm.js");
+  const wasm =
+    await import("../../public/wasm/fs-cmaes/v067/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL("../../public/wasm/fs-cmaes/v066/fs_cmaes_viz_wasm_bg.wasm", import.meta.url)
+    new URL(
+      "../../public/wasm/fs-cmaes/v067/fs_cmaes_viz_wasm_bg.wasm",
+      import.meta.url,
+    ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.6");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.7");
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
-    const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
-      family,
-      mean: new Array(8).fill(0),
-      sigma: 0.3,
-      maxEvaluations: 12,
-      population: 6,
-      memory: family === "lm-cma" || family === "lm-ma" ? 4 : undefined,
-      seed: 0x0123_4567_89ab_cdefn,
-    }));
+    const session = new wasm.CmaesVizSession(
+      buildCmaFamilyConfig({
+        family,
+        mean: new Array(8).fill(0),
+        sigma: 0.3,
+        maxEvaluations: 12,
+        population: 6,
+        memory: family === "lm-cma" || family === "lm-ma" ? 4 : undefined,
+        seed: 0x0123_4567_89ab_cdefn,
+      }),
+    );
     const admission = decodeCmaFamilySnapshot(session.receipt(), 1);
-    if (!("ok" in admission)) throw new Error(`${family}: admission refusal ${admission.refusal.name}`);
+    if (!("ok" in admission))
+      throw new Error(`${family}: admission refusal ${admission.refusal.name}`);
 
     const ask = decodeCmaFamilyAsk(session.ask());
-    if (!("ok" in ask)) throw new Error(`${family}: ask refusal ${ask.refusal.name}`);
+    if (!("ok" in ask))
+      throw new Error(`${family}: ask refusal ${ask.refusal.name}`);
     const objectives = new Float64Array(ask.ok.population);
     for (let row = 0; row < ask.ok.population; row++) {
       let objective = 0;
@@ -781,64 +1242,105 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
       objectives[row] = objective;
     }
     const tell = Float64Array.from([
-      OWNER_CMA_MAGIC, 2, 3, 6 + objectives.length,
-      ask.ok.generation, objectives.length, ...objectives,
+      OWNER_CMA_MAGIC,
+      2,
+      3,
+      6 + objectives.length,
+      ask.ok.generation,
+      objectives.length,
+      ...objectives,
     ]);
     const snapshot = decodeCmaFamilySnapshot(session.tell(tell), 4);
-    if (!("ok" in snapshot)) throw new Error(`${family}: tell refusal ${snapshot.refusal.name}`);
+    if (!("ok" in snapshot))
+      throw new Error(`${family}: tell refusal ${snapshot.refusal.name}`);
     expect(snapshot.ok.generation).toBe(1);
     expect(snapshot.ok.evaluations).toBe(6);
     expect(snapshot.ok.shape.kind).toBe(
-      family === "full" ? "full" : family === "separable" ? "diagonal" : "limited-memory"
+      family === "full"
+        ? "full"
+        : family === "separable"
+          ? "diagonal"
+          : "limited-memory",
     );
     session.free();
   }
 
   for (const family of families.slice(1)) {
-    const session = new wasm.CmaesVizSession(buildCmaFamilyConfig({
-      family,
-      mean: new Array(5_040).fill(0),
-      sigma: 0.1,
-      maxEvaluations: 8,
-      population: 8,
-      memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
-      seed: 7n,
-    }));
+    const session = new wasm.CmaesVizSession(
+      buildCmaFamilyConfig({
+        family,
+        mean: new Array(5_040).fill(0),
+        sigma: 0.1,
+        maxEvaluations: 8,
+        population: 8,
+        memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
+        seed: 7n,
+      }),
+    );
     const admission = decodeCmaFamilySnapshot(session.receipt(), 1);
-    if (!("ok" in admission)) throw new Error(`${family}: 5,040-D refusal ${admission.refusal.name}`);
+    if (!("ok" in admission))
+      throw new Error(`${family}: 5,040-D refusal ${admission.refusal.name}`);
     expect(admission.ok.dimension).toBe(5_040);
     session.free();
   }
 
-  const evaluator = new wasm.G1WalkingVizEvaluator(new Float64Array([
-    0x47315736, 6, 0, 11, 1 / 480, 1.5, 0.65, 1.55, 12, 2, 1,
-  ]));
+  const evaluator = new wasm.G1WalkingVizEvaluator(
+    new Float64Array([
+      0x47315737,
+      7,
+      0,
+      11,
+      1 / 480,
+      1.5,
+      0.65,
+      1.55,
+      12,
+      2,
+      1,
+    ]),
+  );
   const admission = decodeG1Admission(evaluator.receipt());
-  if (!("ok" in admission)) throw new Error(`G1 admission refusal ${admission.refusal.name}`);
+  if (!("ok" in admission))
+    throw new Error(`G1 admission refusal ${admission.refusal.name}`);
   expect(admission.ok.policyDimension).toBe(5_040);
 
   const stabilizingPolicy = evaluator.stabilizing_policy_mean();
   const curriculumPolicy = evaluator.walking_curriculum_mean();
-  expect(stabilizingPolicy.filter((value: number) => value !== 0)).toHaveLength(15);
-  expect(curriculumPolicy.filter((value: number) => value !== 0)).toHaveLength(105);
+  expect(stabilizingPolicy.filter((value: number) => value !== 0)).toHaveLength(
+    15,
+  );
+  expect(curriculumPolicy.filter((value: number) => value !== 0)).toHaveLength(
+    105,
+  );
   const evaluation = decodeG1Evaluation(evaluator.evaluate(stabilizingPolicy));
   const curriculum = decodeG1Evaluation(evaluator.evaluate(curriculumPolicy));
   const aggressiveEvaluation = decodeG1Evaluation(
-    evaluator.evaluate(new Float64Array(admission.ok.policyDimension).fill(0.03))
+    evaluator.evaluate(
+      new Float64Array(admission.ok.policyDimension).fill(0.03),
+    ),
   );
   const trace = decodeG1Trace(evaluator.trace(curriculumPolicy));
-  if (!("ok" in evaluation)) throw new Error(`G1 evaluation refusal ${evaluation.refusal.name}`);
-  if (!("ok" in curriculum)) throw new Error(`G1 curriculum refusal ${curriculum.refusal.name}`);
+  if (!("ok" in evaluation))
+    throw new Error(`G1 evaluation refusal ${evaluation.refusal.name}`);
+  if (!("ok" in curriculum))
+    throw new Error(`G1 curriculum refusal ${curriculum.refusal.name}`);
   if (!("ok" in aggressiveEvaluation)) {
-    throw new Error(`aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`);
+    throw new Error(
+      `aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`,
+    );
   }
-  if (!("ok" in trace)) throw new Error(`G1 trace refusal ${trace.refusal.name}`);
+  if (!("ok" in trace))
+    throw new Error(`G1 trace refusal ${trace.refusal.name}`);
   // The standing-only prior now receives the disclosed terrain and push. It
   // survives the entire pulse (which ends at step 336) but is not expected to
   // finish the walking horizon; the 105-coordinate curriculum below must.
   expect(evaluation.ok.completedSteps).toBeGreaterThan(336);
-  expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(evaluation.ok.completedSteps);
-  expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(evaluation.ok.objective);
+  expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(
+    evaluation.ok.completedSteps,
+  );
+  expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(
+    evaluation.ok.objective,
+  );
   expect(curriculum.ok.completedSteps).toBe(720);
   expect(curriculum.ok.distanceMeters).toBeGreaterThan(0.55);
   expect(curriculum.ok.singleSupportSeconds).toBeGreaterThan(0.5);
@@ -848,22 +1350,29 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
 
   const population = 16;
   const generations = 16;
-  const separableSession = new wasm.CmaesVizSession(buildCmaFamilyConfig({
-    family: "separable",
-    mean: curriculumPolicy,
-    sigma: 0.0005,
-    maxEvaluations: population * generations,
-    population,
-    seed: 0x4731_5050n,
-  }));
+  const separableSession = new wasm.CmaesVizSession(
+    buildCmaFamilyConfig({
+      family: "separable",
+      mean: curriculumPolicy,
+      sigma: 0.0005,
+      maxEvaluations: population * generations,
+      population,
+      seed: 0x4731_5050n,
+    }),
+  );
   let bestPoint = curriculumPolicy;
   try {
     for (let generation = 0; generation < generations; generation++) {
       const ask = decodeCmaFamilyAsk(separableSession.ask());
-      if (!("ok" in ask)) throw new Error(`G1 convergence ask refusal ${ask.refusal.name}`);
-      const objectives = decodeG1Population(evaluator.evaluate_population(ask.ok.candidates));
+      if (!("ok" in ask))
+        throw new Error(`G1 convergence ask refusal ${ask.refusal.name}`);
+      const objectives = decodeG1Population(
+        evaluator.evaluate_population(ask.ok.candidates),
+      );
       if (!("ok" in objectives)) {
-        throw new Error(`G1 convergence population refusal ${objectives.refusal.name}`);
+        throw new Error(
+          `G1 convergence population refusal ${objectives.refusal.name}`,
+        );
       }
       const tell = Float64Array.from([
         OWNER_CMA_MAGIC,
@@ -884,40 +1393,49 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     separableSession.free();
   }
   const optimized = decodeG1Evaluation(evaluator.evaluate(bestPoint));
-  if (!("ok" in optimized)) throw new Error(`optimized G1 refusal ${optimized.refusal.name}`);
+  if (!("ok" in optimized))
+    throw new Error(`optimized G1 refusal ${optimized.refusal.name}`);
   expect(optimized.ok.objective).toBeLessThan(curriculum.ok.objective);
   expect(optimized.ok.completedSteps).toBe(720);
   expect(optimized.ok.terminationReason).toBe("horizon");
   evaluator.free();
 
   for (const task of [0, 1, 2]) {
-    const arm = new wasm.HouseholdManipulationVizEvaluator(new Float64Array([
-      0x41524d31, 2, 0, 8, 1 / 90, 6, 3, task,
-    ]));
+    const arm = new wasm.HouseholdManipulationVizEvaluator(
+      new Float64Array([0x41524d31, 2, 0, 8, 1 / 90, 6, 3, task]),
+    );
     const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
     if (!("ok" in armAdmission)) {
-      throw new Error(`arm task ${task} admission refusal ${armAdmission.refusal.name}`);
+      throw new Error(
+        `arm task ${task} admission refusal ${armAdmission.refusal.name}`,
+      );
     }
     expect(armAdmission.ok.policyDimension).toBe(128);
     expect(armAdmission.ok.linkCount).toBe(8);
     const armMean = arm.curriculum_policy_mean();
     expect(armMean).toHaveLength(128);
-    const armEvaluation = decodeHouseholdManipulationEvaluation(arm.evaluate(armMean));
+    const armEvaluation = decodeHouseholdManipulationEvaluation(
+      arm.evaluate(armMean),
+    );
     const armTrace = decodeHouseholdManipulationTrace(arm.trace(armMean));
     if (!("ok" in armEvaluation)) {
-      throw new Error(`arm task ${task} evaluation refusal ${armEvaluation.refusal.name}`);
+      throw new Error(
+        `arm task ${task} evaluation refusal ${armEvaluation.refusal.name}`,
+      );
     }
     if (!("ok" in armTrace)) {
-      throw new Error(`arm task ${task} trace refusal ${armTrace.refusal.name}`);
+      throw new Error(
+        `arm task ${task} trace refusal ${armTrace.refusal.name}`,
+      );
     }
     expect(armEvaluation.ok.everGrasped).toBe(true);
     expect(armEvaluation.ok.releasedAfterTransport).toBe(true);
     expect(armEvaluation.ok.placed).toBe(true);
     expect(armEvaluation.ok.maximumLiftMeters).toBeGreaterThanOrEqual(
-      armAdmission.ok.liftTargetMeters
+      armAdmission.ok.liftTargetMeters,
     );
     expect(armEvaluation.ok.finalObjectErrorMeters).toBeLessThanOrEqual(
-      armAdmission.ok.placementToleranceMeters
+      armAdmission.ok.placementToleranceMeters,
     );
     expect(armTrace.ok.samples.length).toBeGreaterThanOrEqual(100);
     expect(armTrace.ok.samples.some((sample) => sample.grasped)).toBe(true);
