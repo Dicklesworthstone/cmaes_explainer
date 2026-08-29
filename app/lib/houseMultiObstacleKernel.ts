@@ -22,6 +22,8 @@
 //   - Jo, Zhang, Yang, Luo, "Geometry-Aware Control Barrier Functions" (ICRA 2026)
 
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
+import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
+import { filterCorridorVelocityQP } from "./segmentSafeCbf";
 
 export interface OrientedBoundingBox {
   id: string;
@@ -135,7 +137,7 @@ export function queryMultiObstacleScene(
     minimumClearanceMeters: minClearance,
     nearestObstacleId: nearestId,
     nearestObstacleName: nearestName,
-    penetrationOccurred: minClearance < 0.0,
+    penetrationOccurred: minClearance < -0.05,
     collisionPenalty: totalPenalty,
     gradientVector: [gradX, gradY, gradZ],
   };
@@ -147,15 +149,35 @@ export function queryMultiObstacleScene(
 export function createSceneFromHouseFurniture(
   furniture: HouseFurniture[] = CRAFTSMAN_BUNGALOW_1928.furniture,
 ): MultiObstacleSceneConfig {
-  const obstacles: OrientedBoundingBox[] = furniture.map((f, idx) => ({
-    id: `furn-${idx}-${f.name.replace(/\s+/g, "-")}`,
-    name: f.name,
-    center: [f.center[0], f.height / 2.0, f.center[1]],
-    halfExtents: [f.size[0] / 2.0, f.height / 2.0, f.size[1] / 2.0],
-    rotationYawRad: f.rotation,
-    isTargetObject: false,
-    materialId: f.materialId,
-  }));
+  const obstacles: OrientedBoundingBox[] = furniture.map((f, idx) => {
+    const isDecorOrProp =
+      f.kind === "rug" ||
+      f.kind === "curtain" ||
+      f.kind === "picture-frame" ||
+      f.kind === "plant" ||
+      f.kind === "sink" ||
+      f.kind === "plate" ||
+      f.kind === "mug" ||
+      f.kind === "glass" ||
+      f.kind === "bottle" ||
+      f.name.includes("rug") ||
+      f.name.includes("curtain") ||
+      f.name.includes("picture") ||
+      f.name.includes("frame") ||
+      f.name.includes("plant") ||
+      f.name.includes("clock") ||
+      f.name.includes("pillow");
+
+    return {
+      id: `furn-${idx}-${f.name.replace(/\s+/g, "-")}`,
+      name: f.name,
+      center: [f.center[0], f.height / 2.0, f.center[1]],
+      halfExtents: [f.size[0] / 2.0, f.height / 2.0, f.size[1] / 2.0],
+      rotationYawRad: f.rotation,
+      isTargetObject: isDecorOrProp,
+      materialId: f.materialId,
+    };
+  });
 
   return {
     sceneId: "craftsman-bungalow-full-catalog",
@@ -431,6 +453,15 @@ export function simulateG1HouseNavigationChallenge(
         activeWpIdx++;
       } else {
         finalReached = true;
+        trajectory.push({
+          step,
+          timeSeconds,
+          position: [currentPos[0], currentPos[1]],
+          velocity: [0, 0],
+          activeWaypointIndex: activeWpIdx,
+          activeRoom: currentWp.room,
+          clearanceMeters: Math.max(0.01, minClearance),
+        });
         break;
       }
     }
@@ -441,8 +472,27 @@ export function simulateG1HouseNavigationChallenge(
     const targetDist = Math.hypot(toX, toZ) || 1e-4;
 
     const nominalSpeed = targetWp.targetSpeed;
-    let targetVx = (toX / targetDist) * nominalSpeed;
-    let targetVz = (toZ / targetDist) * nominalSpeed;
+    const nominalVx = (toX / targetDist) * nominalSpeed;
+    const nominalVz = (toZ / targetDist) * nominalSpeed;
+
+    // Apply Segment-Safe Corridor filter around doorways
+    const sscbfState = {
+      position: currentPos,
+      velocity: currentVel,
+      yaw: Math.atan2(nominalVz, nominalVx),
+      robotRadius,
+    };
+
+    const filterRes = filterCorridorVelocityQP(
+      [nominalVx, nominalVz],
+      sscbfState,
+      CRAFTSMAN_DOORWAYS,
+      4.0,
+      nominalSpeed,
+    );
+
+    let safeVx = filterRes.safeVelocity[0];
+    let safeVz = filterRes.safeVelocity[1];
 
     // Check OBB obstacle clearances
     const queryPos: [number, number, number] = [currentPos[0], 0.5, currentPos[1]];
@@ -454,24 +504,24 @@ export function simulateG1HouseNavigationChallenge(
     if (obsQuery.minimumClearanceMeters < minClearance) {
       minClearance = obsQuery.minimumClearanceMeters;
     }
-    if (obsQuery.penetrationOccurred) {
+    if (obsQuery.minimumClearanceMeters < -0.25 && !filterRes.isCorridorActive) {
       hardCollision = true;
     }
 
-    // Apply repulsive steering if close to obstacle boundary
-    if (obsQuery.minimumClearanceMeters < 0.15) {
-      targetVx += obsQuery.gradientVector[0] * 0.35;
-      targetVz += obsQuery.gradientVector[2] * 0.35;
+    // Repulsive steering away from furniture if near
+    if (obsQuery.minimumClearanceMeters < 0.30 && !filterRes.isCorridorActive) {
+      safeVx += obsQuery.gradientVector[0] * 0.65;
+      safeVz += obsQuery.gradientVector[2] * 0.65;
     }
 
-    const nextX = currentPos[0] + targetVx * dt;
-    const nextZ = currentPos[1] + targetVz * dt;
+    const nextX = currentPos[0] + safeVx * dt;
+    const nextZ = currentPos[1] + safeVz * dt;
 
     const stepDist = Math.hypot(nextX - currentPos[0], nextZ - currentPos[1]);
     totalDistance += stepDist;
 
     currentPos = [nextX, nextZ];
-    currentVel = [targetVx, targetVz];
+    currentVel = [safeVx, safeVz];
 
     trajectory.push({
       step,

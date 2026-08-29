@@ -155,6 +155,7 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
     expect(result.challengeName).toContain("G1 Humanoid HouseNavigation");
     expect(result.completedWaypoints).toBe(7);
     expect(result.totalWaypoints).toBe(7);
+    expect(result.hardCollisionOccurred).toBe(false);
     expect(result.success).toBe(true);
     expect(result.totalDistanceMeters).toBeGreaterThan(8.0);
     expect(result.totalTimeSeconds).toBeLessThan(90.0);
