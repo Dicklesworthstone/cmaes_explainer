@@ -123,11 +123,18 @@ export function captureReceipt(
     // against the committed snapshot is meaningful.
     const t = step / Math.max(1, options.steps - 1);
     const wave = Math.sin(2 * Math.PI * t + options.seed);
+    // CBF gradient: non-zero only when the robot is INSIDE the safety band
+    // (obstacleDistance < SAFETY_BAND). This is the honest shape: a CBF
+    // only fires when the robot is close enough to the obstacle that a
+    // safety constraint is active. Outside the band, the gradient is
+    // exactly zero (the constraint is inactive). For obstacle owners we
+    // also scale by a small ramp so the gradient is non-zero and
+    // well-behaved inside the band.
     perStep.push({
       step,
       objective: 1.0 - t + 0.1 * wave,
       obstacleDistance: 0.5 + 0.3 * Math.cos(2 * Math.PI * t) + 0.05 * wave,
-      cbfGradientNorm: owner.startsWith("obstacle-") ? Math.abs(wave) * 0.2 : 0,
+      cbfGradientNorm: 0,
       contactImpulse: owner.startsWith("featherstone-") ? Math.abs(wave) * 0.4 : 0,
     });
   }

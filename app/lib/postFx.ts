@@ -154,7 +154,7 @@ export function flickerFireplace(frame: number, baseIntensity = 1.0): number {
 /** Deterministic hash → [0, 1]. Uses a 32-bit integer mixing step
  *  (splitmix32-style) and divides by 2^32 to normalize. Avoids Math.sin
  *  precision drift and Math.random. */
-function hash01(n: number): number {
+export function hash01(n: number): number {
   // Splitmix32 finalizer (Steele, Lea & Flood 2014).
   let x = (n | 0) >>> 0;
   x = (x ^ (x >>> 16)) >>> 0;
