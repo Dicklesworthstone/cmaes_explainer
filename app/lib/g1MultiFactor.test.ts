@@ -99,7 +99,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
     const byLabel: Record<string, number> = {};
     for (const c of r.channels) byLabel[c.label] = c.weight;
     expect(byLabel["mean fwd speed ≥ target"]).toBeCloseTo(-3.0, 10);
-    expect(byLabel["survival (steps/horizon)"]).toBeCloseTo(1.0, 10);
+    expect(byLabel["survival (steps/horizon)"]).toBeCloseTo(-1.0, 10);
     expect(byLabel["slip integral"]).toBeCloseTo(0.4, 10);
     expect(byLabel["posture integral"]).toBeCloseTo(0.3, 10);
     expect(byLabel["joint-limit integral"]).toBeCloseTo(0.5, 10);
@@ -123,7 +123,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
     );
     const surv = r.channels.find((c) => c.label === "survival (steps/horizon)")!;
     expect(surv.value).toBeCloseTo(1.0, 10);
-    expect(surv.contribution).toBeCloseTo(1.0, 10);
+    expect(surv.contribution).toBeCloseTo(-1.0, 10);
   });
 
   test("mean fwd speed gap: at target -> 0 contribution, no motion -> positive", () => {
@@ -197,19 +197,19 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
 
   test("weighted sum equals the explicit sum of contributions", () => {
     // Hand-computed: speed = 0, slip = 0, posture = 0, etc. -> weighted = 1.95
-    // (mean fwd speed gap) + 1.0 (survival, completedSteps=720) + 0
+    // (mean fwd speed gap) + (-1.0 * survival) (completedSteps=720, survival=1.0) + 0
     const r = computeMultiFactorObjective(
       buildReceipt({
         samples: makeSamples(1.0),
         distanceMeters: 0.0, // mean fwd speed = 0 -> +1.95
-        completedSteps: 720, // survival = 1.0 -> +1.0
+        completedSteps: 720, // survival = 1.0 -> -1.0 (negative weight = reward)
         // everything else = 0
       }),
       DEFAULT_CONFIG,
     );
     const expected = r.channels.reduce((acc, c) => acc + c.contribution, 0);
     expect(r.weighted).toBeCloseTo(expected, 10);
-    expect(r.weighted).toBeCloseTo(1.95 + 1.0, 10);
+    expect(r.weighted).toBeCloseTo(1.95 + (-1.0), 10);
   });
 
   test("non-finite per-channel values fall back to 0 (defensive)", () => {
@@ -253,10 +253,12 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
       }),
       DEFAULT_CONFIG,
     );
-    // survival = 1.0, speed = 0.65 (== target) -> speed gap = 0
+    // survival = -1.0 (negative weight = reward), speed gap ~ 0
     // work per meter = 5 / 0.975 = ~5.13, contribution = 0.05 * 5.13 ~ 0.256
-    // everything else 0. So weighted ~ 1.0 + 0.256 ~ 1.256.
-    expect(r.weighted).toBeGreaterThan(1.0);
-    expect(r.weighted).toBeLessThan(1.5);
+    // everything else 0. So weighted ~ -1.0 + 0.256 ~ -0.744.
+    // The curriculum walking policy scores BETTER (lower) than a standing
+    // prior (which has 0 speed gap penalty but 0 work too, so ~ -1.0).
+    expect(r.weighted).toBeLessThan(0.0);
+    expect(r.weighted).toBeGreaterThan(-2.0);
   });
 });

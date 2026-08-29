@@ -18,16 +18,27 @@
 // would, on the kernel side); the multi-factor is a UI lens on the same
 // data.
 //
-// Channel weights (chosen so a standing prior and a walking curriculum
-// mean produce finite, comparable weighted values):
-//   - mean forward speed: negative weight on (mean - target); penalizes
-//     speeds below the disclosed target (0.65 m/s).
-//   - survival: positive weight; rewards the run lasting the full horizon.
-//   - slip, posture, joint-limit, impact, contact-schedule: positive
-//     weights (since these integrals are non-negative; the kernel
-//     exposes slip as an "error integral").
-//   - lateral, heading, speed error: positive weights on the integrals.
-//   - work per meter: small positive weight (efficiency rewarded).
+// Channel weights and sign convention (chosen so a standing prior and a
+// walking curriculum mean produce finite, comparable weighted values):
+//   - mean forward speed: weight = -3.0, contribution = -3.0 * (mean -
+//     targetSpeed). Sign: positive contribution when speed < target
+//     (penalty for slow), zero at target, negative when speed > target
+//     (reward for fast). The negative weight inverts the sign of
+//     (mean - target) so the user's mental model of "below target = bad"
+//     maps to a positive contribution number.
+//   - survival: positive weight 1.0 on the (steps / horizon) ratio;
+//     positive contribution = good.
+//   - slip, posture, joint-limit, impact, contact-schedule, lateral,
+//     heading, speed error: positive weight on the non-negative error
+//     integral. Positive contribution = penalty.
+//   - work per meter: small positive weight 0.05; positive contribution
+//     = penalty for wasted work.
+// Sign convention (uniform across all channels): the WEIGHTED SUM
+// is what CMA-ES minimizes. Larger (more positive) weighted = worse
+// rollout. Survival is the only positive-value channel because it is
+// already a normalized "fraction of horizon completed" — more is better.
+// All other channels are non-negative integrals of "error" or "cost";
+// less is better.
 //
 // Honesty: the weighted sum is computed from the same per-channel
 // integrals the kernel reports; it is not a black-box "score" with
@@ -78,14 +89,17 @@ export function computeMultiFactorObjective(
   config: MultiFactorConfig,
 ): MultiFactorResult {
   // Weights match the v068 shaping intent:
-  //   - mean forward speed and survival are *positive* (we want more)
-  //   - slip, impact, and contact-schedule mismatch are *negative* (we want less)
-  //   - actuator work is mildly negative (efficiency rewarded, not punished)
-  //   - posture, joint-limit, lateral/heading/speed error are mildly negative
-  // Magnitudes are tuned so a standing prior (no motion, no contact) and a
-  // walking curriculum mean both produce finite, comparable weighted values;
-  // the *ratio* between channels is the new "is it doing what we want" signal.
-  const safe = (x: number, fallback: number): number =>
+  // Weights and sign convention (see header docstring):
+  //   - mean forward speed: weight -3.0; contribution inverts the sign of
+  //     (mean - target) so a positive contribution = below target = penalty.
+  //   - survival: weight +1.0; contribution = steps/horizon in [0, 1].
+  //   - slip / posture / joint-limit / impact / contact-schedule / lateral /
+  //     heading / speed error / work-per-meter: positive weight on a
+  //     non-negative integral; positive contribution = penalty.
+  // CMA-ES minimizes the weighted sum; larger = worse rollout.
+   // Magnitudes are tuned so a standing prior (no motion, no contact) and a
+   // walking curriculum mean both produce finite, comparable weighted values;
+   // the *ratio* between channels is the new "is it doing what we want" signal.
     Number.isFinite(x) ? x : fallback;
   // durationSeconds is not on the receipt; derive from samples or fall back
   // to the config. Both are equivalent in the standard G1 experiment.
@@ -114,7 +128,7 @@ export function computeMultiFactorObjective(
   // contribution (value * weight, with sign-flip on the speed gap).
   const channels: MultiFactorChannel[] = [
     { label: "mean fwd speed ≥ target", value: meanFwdSpeed, weight: -3.0, contribution: -3.0 * (meanFwdSpeed - targetSpeed) },
-    { label: "survival (steps/horizon)", value: survival, weight: 1.0, contribution: 1.0 * survival },
+    { label: "survival (steps/horizon)", value: survival, weight: -1.0, contribution: -1.0 * survival },
     { label: "slip integral", value: slip, weight: 0.4, contribution: 0.4 * slip },
     { label: "posture integral", value: posture, weight: 0.3, contribution: 0.3 * posture },
     { label: "joint-limit integral", value: jointLimit, weight: 0.5, contribution: 0.5 * jointLimit },
