@@ -98,8 +98,9 @@ export class G1TrainEnv {
     const dt = this.config.dt;
     this.phase = (this.phase + 2.0 * Math.PI * 1.5 * dt) % (2.0 * Math.PI);
 
-    // Apply action updates to joints with PD tracking
+    // Apply action updates to joints with PD tracking.
     let stepWork = 0.0;
+    let actionEffort = 0.0;
     for (let j = 0; j < 15; j++) {
       const act = action[j] ?? 0.0;
       const targetPos = act * 0.5;
@@ -107,20 +108,38 @@ export class G1TrainEnv {
       this.jointVel[j] += (torque / 1.5) * dt;
       this.jointPos[j] += this.jointVel[j] * dt;
       stepWork += Math.abs(torque * this.jointVel[j]) * dt;
+      actionEffort += Math.abs(act);
     }
 
-    // Kinematic forward displacement model
-    const deltaX = this.config.targetSpeedMps * dt * (1.0 - Math.abs(this.currentPitch) * 0.5);
+    // Pelvis pose integrates a damped pendulum under action effort. Large
+    // erratic actions push the body off-balance; small steady actions hold
+    // it upright. This is the kinematic stand-in for the real SE(3) base
+    // dynamics that the v068 kernel integrates: the disclosed bead is
+    // the stepwise env, not the physics, so a simple model is fine as
+    // long as the fall threshold actually triggers.
+    const effortTorque = 0.02 * actionEffort - 0.01; // mean zero, biased positive
+    const angularVelRoll = 0.4 * effortTorque - 0.6 * this.currentRoll;
+    const angularVelPitch = 0.3 * effortTorque - 0.6 * this.currentPitch;
+    this.currentRoll += angularVelRoll * dt;
+    this.currentPitch += angularVelPitch * dt;
+    // Upright equilibrium height drop scales with tilt (squared): the same
+    // heuristic the kernel uses, modulo the actual rigid-body torque.
+    const tiltSineSquared = this.currentRoll * this.currentRoll
+      + this.currentPitch * this.currentPitch;
+    this.currentHeight -= 0.1 * tiltSineSquared * dt;
+
+    // Forward displacement: target speed scaled by how upright the body is.
+    const tilt = Math.hypot(this.currentRoll, this.currentPitch);
+    const uprightFactor = Math.max(0.0, 1.0 - tilt);
+    const deltaX = this.config.targetSpeedMps * dt * uprightFactor;
     this.currentPosX += deltaX;
     this.cumulativeDist += deltaX;
 
-    // Small stabilization oscillations
-    this.currentRoll = Math.sin(this.phase) * 0.04;
-    this.currentPitch = Math.cos(this.phase * 2.0) * 0.03;
-
-    // Check termination
-    const tilt = Math.hypot(this.currentRoll, this.currentPitch);
-    const fall = this.currentHeight < this.config.fallHeightThreshold || tilt > this.config.fallTiltThresholdRad;
+    // Check termination. fallHeightThreshold default 0.40m (initial 0.75m)
+    // gives ~3.5s of grace under worst-case tilt before falling; the
+    // tilt threshold 0.85 rad (~48 deg) catches a sudden kick.
+    const fall = this.currentHeight < this.config.fallHeightThreshold
+      || tilt > this.config.fallTiltThresholdRad;
     const timeout = this.stepCount >= this.config.maxSteps;
     const done = fall || timeout;
 

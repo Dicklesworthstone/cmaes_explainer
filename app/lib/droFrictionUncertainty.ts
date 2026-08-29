@@ -179,17 +179,19 @@ export interface DroEvaluationResult {
 
 /**
  * The honest-scope banner for the catalog. Until real measurements
- * exist, every entry is `SYNTHETIC` (a point estimate plus a 10-30%
- * uniform perturbation in muK and 0-20% uniform perturbation in e).
+ * exist, every entry is `SYNTHETIC`: a point estimate plus a uniform
+ * +/-15% RELATIVE perturbation in muK and a +/-0.10 ABSOLUTE
+ * perturbation in e (clamped to [0, 1]) — see `syntheticSamples`,
+ * which is the single source of truth for these magnitudes.
  * The `SYNTHETIC` tag is the receipt the honest-floor requires; a
  * real measurement update swaps the tag (and the sample set) in
  * place.
  */
 const SYNTHETIC_BANNER =
-  "SYNTHETIC: point estimate (materialPairFriction.ts) + 10-30% uniform " +
-  "perturbation in muK, 0-20% uniform perturbation in e. Replace with a " +
-  "real measurement (CRC Handbook F-13, EngineeringToolbox 2024, " +
-  "ambientCG 2024, or a user measurement) by replacing the samples " +
+  "SYNTHETIC: point estimate (materialPairFriction.ts) + uniform +/-15% " +
+  "relative perturbation in muK, +/-0.10 absolute perturbation in e. " +
+  "Replace with a real measurement (CRC Handbook F-13, EngineeringToolbox " +
+  "2024, ambientCG 2024, or a user measurement) by replacing the samples " +
   "array; the SYNTHETIC tag must change to the source name.";
 
 /**
@@ -227,7 +229,8 @@ function syntheticSamples(
   for (let index = 0; index < sampleCount; index += 1) {
     // Uniform perturbation: -15% to +15% of the point estimate.
     const muK = point.kineticFriction * (1.0 + (rng() - 0.5) * 0.30);
-    // Restitution perturbation: -10% to +10% absolute (not relative).
+    // Restitution perturbation: +/-0.10 ABSOLUTE (not relative),
+    // clamped to the physical range [0, 1].
     const e = Math.max(
       0.0,
       Math.min(1.0, point.restitution + (rng() - 0.5) * 0.20),
@@ -305,29 +308,32 @@ export function getFrictionDistribution(
 }
 
 // ---------------------------------------------------------------------------
-// Wasserstein ball radius (Mohajerin-Esfahani-Kuhn 2018, Eq. 5)
+// Wasserstein ball radius (heuristic, confidence-scaled)
 // ---------------------------------------------------------------------------
 
 /**
  * Compute the Wasserstein-1 ball radius for an empirical sample set
- * of size N at a confidence level `confidence` in (0, 1). The
- * closed-form is:
+ * of size N at confidence level `confidence` in (0, 1):
  *
- *   r(N, confidence) = sqrt(2 * ln(1 / (1 - confidence)) / N)
- *                       * (1 / sqrt(N))  // ESFahani-Kuhn Thm 3.4
+ *   r(N, confidence) = sqrt(2 * ln(1 / (1 - confidence))) / sqrt(N)
  *
- * Equivalently:
- *   r(N, confidence) = sqrt(2 * (ln(1 / (1 - confidence)) + 1)) / N
- *                       * sqrt(N)  // simplified
+ * For confidence = 0.95 and N = 16, r ≈ 0.343. The radius is
+ * dimensionless in the 1-Wasserstein metric on the (muK, e) space.
  *
- * We use the standard form: r(N, confidence) = C / sqrt(N) where
- * C = sqrt(2 * ln(1 / (1 - confidence))). For confidence = 0.95
- * and N = 16, r ≈ 0.343. (The radius is dimensionless, in the
- * 1-Wasserstein metric on the friction-coefficient space.)
+ * HONEST PROVENANCE: this is a **heuristic design rule**, not the
+ * Mohajerin-Esfahani-Kuhn theorem constant. The MEK finite-sample
+ * bounds (Esfahani-Kuhn 2018, Thm 3.4 + Eq. 5) are dimension- and
+ * support-dependent — for a d-dimensional coefficient space they
+ * scale like C(d, diameter, tails) * N^(-1/d), and the constants
+ * are not universal. We use this simpler monotone rule (r shrinks
+ * like 1/sqrt(N), grows with confidence) to SIZE the ball; the
+ * actual robustness weight comes from the CVaR inner max, not from
+ * a distributional guarantee over this radius. Callers must not
+ * cite r as a formal MEK guarantee.
  *
  * @param sampleCount  N, the number of samples.
  * @param confidence  The confidence level, in (0, 1). Default 0.95.
- * @returns  The Wasserstein-1 ball radius.
+ * @returns  The heuristic Wasserstein-1 ball radius.
  */
 export function wassersteinBallRadius(
   sampleCount: number,
@@ -343,10 +349,6 @@ export function wassersteinBallRadius(
       `wassersteinBallRadius: confidence must be in (0, 1) (got ${confidence})`,
     );
   }
-  // Closed-form: r = sqrt(2 * ln(1 / (1 - delta))) / sqrt(N).
-  // This is the 1-Wasserstein radius for the empirical mean at the
-  // (1 - delta) confidence level, per Mohajerin-Esfahani-Kuhn
-  // Theorem 3.4.
   const tailMass = 1.0 - confidence;
   const C = Math.sqrt(2.0 * Math.log(1.0 / tailMass));
   return C / Math.sqrt(sampleCount);
@@ -357,26 +359,27 @@ export function wassersteinBallRadius(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the CVaR (Conditional Value at Risk) of a numeric
- * objective over an empirical sample set, at a tail probability
- * alpha. The CVaR is the average of the worst (1 - alpha) fraction
- * of the samples:
+ * Compute the upper CVaR (Conditional Value-at-Risk) of a numeric
+ * objective over an empirical sample set, at tail probability alpha,
+ * per Rockafellar-Uryasev 2000: CVaR_alpha is the mean of the WORST
+ * alpha fraction of the samples (alpha -> 0 approaches the supremum,
+ * alpha -> 1 approaches the plain mean):
  *
- *   CVaR_alpha(O) = (1 / ((1 - alpha) * N)) * sum_{i : O_i > q_alpha} O_i
+ *   CVaR_alpha(O) = (1 / ceil(alpha * N)) * sum of the largest
+ *                   ceil(alpha * N) sample values
  *
- * where q_alpha is the alpha-quantile of the objective values.
- * For a monotone objective (e.g. foot-slip penalty, where higher
- * is worse), the inner maximizer of the Wasserstein ball admits
- * the upper tail as a tractable upper bound; CVaR is the
- * sample-based inner max in the empirical case (Kuhn et al. 2019
- * §4).
+ * For a monotone higher-is-worse objective (foot-slip penalty, push
+ * failure), this is the tractable sample-based inner maximizer used
+ * by Wasserstein-DRO close to the supremum (Rockafellar-Uryasev 2000;
+ * the Wasserstein connection per Mohajerin-Esfahani-Kuhn 2018).
  *
  * For a non-monotone objective, the inner max is the
  * sample-supremum; we expose that as `sampleSupremum` so callers
  * can pick the right inner max.
  *
  * @param samples  The empirical sample values.
- * @param alpha  Tail probability, in (0, 1). Default 0.10.
+ * @param alpha  Tail probability, in (0, 1). Default 0.10 (mean of
+ *               the worst 10% of samples).
  * @returns  The CVaR value.
  */
 export function cvarUpper(
@@ -390,7 +393,8 @@ export function cvarUpper(
     throw new Error(`cvarUpper: alpha must be in (0, 1) (got ${alpha})`);
   }
   const sorted = [...samples].sort((a, b) => a - b);
-  const tailCount = Math.max(1, Math.floor((1.0 - alpha) * sorted.length));
+  // Worst alpha fraction: ceil so alpha*N < 1 still watches one sample.
+  const tailCount = Math.max(1, Math.ceil(alpha * sorted.length));
   const tail = sorted.slice(sorted.length - tailCount);
   const sum = tail.reduce((acc, value) => acc + value, 0.0);
   return sum / tail.length;
@@ -466,22 +470,39 @@ export function evaluateRobustPair(
   const confidence = options.confidence ?? 0.95;
   const sampleCount = dist.samples.length;
   const radius = options.forceRadius ?? wassersteinBallRadius(sampleCount, confidence);
-  // Per-channel CVaR on the two friction-coefficient dimensions.
-  // muK and e are treated independently; the inner max is the
-  // product of the per-channel worst cases (a conservative
-  // upper bound on the joint worst case; the joint Wasserstein
-  // ball admits the product as a bound, per Mohajerin-Esfahani-
-  // Kuhn §3.5 product structure).
+  // Per-channel upper-CVaR on the two sampled coefficient dimensions.
+  // muK and e are treated independently and combined into a single
+  // simultaneous worst-case pair — a DECOUPLED conservative bound
+  // (the joint ball's true inner max is <= the simultaneous worst of
+  // both channels for higher-is-worse objectives), not a claimed
+  // MEK product-form theorem. DIRECTIONALITY CAVEAT: upper tail
+  // presumes higher = worse for BOTH channels; an objective where
+  // lower restitution is worse (e.g. energy absorption) must pass a
+  // negated sample channel until a direction option lands.
   const muKValues = dist.samples.map((sample) => sample.muK);
   const eValues = dist.samples.map((sample) => sample.e);
   const worstMuK = cvarUpper(muKValues, alpha);
   const worstE = cvarUpper(eValues, alpha);
-  // Reconstruct the worst-case pair: the point's static, rolling,
-  // damping are anchored (not sampled); the kinetic and
-  // restitution are the CVaR upper-tail values.
+  // Reconstruct the worst-case pair.
+  //   * kineticFriction: the CVaR upper tail of the muK samples.
+  //   * staticFriction:  anchored to muS = muK * 1.20 per CRC §F-13
+  //     (mu_s / mu_k in [1.05, 1.30] for household pairs). The
+  //     worst-case muK drags the worst-case muS with it -- a
+  //     low-muK sample is not the worst case, so neither is its
+  //     low muS.
+  //   * restitution:    the CVaR upper tail of the e samples
+  //     (DIRECTIONALITY CAVEAT: assumes higher = worse; an
+  //     objective where lower restitution is worse -- e.g. energy
+  //     absorption -- must pass a negated sample channel until a
+  //     direction option lands).
+  //   * rollingFriction + damping: anchored to the point value
+  //     (not sampled; per bead scope the rolling/damping channels
+  //     are not contact-mode parameters in the kernel friction
+  //     model).
   const worstCase: MaterialPairProperties = {
     ...point,
     kineticFriction: worstMuK,
+    staticFriction: worstMuK * 1.20,
     restitution: worstE,
   };
   return {
@@ -492,6 +513,7 @@ export function evaluateRobustPair(
     provenance: dist.provenance,
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Diagnostics

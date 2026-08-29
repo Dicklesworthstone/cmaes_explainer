@@ -658,25 +658,7 @@ export function runClearanceValueIteration(
   for (const g of goals) {
     setGoalCells(fineGrid, [g.center], g.radius, sdf);
   }
-  // Soft boundary anchors: for cells on the fine-window boundary
-  // that are not goal cells, pin their value to the warm-start
-  // coarse value. This way, when the actual goal is outside the
-  // fine window (the common case for "G1 is far from the
-  // destination room"), the value iteration still converges to a
-  // finite value via these boundary anchors. Without this, cells
-  // unreachable from any in-window goal stay at +Infinity.
-  for (let iy = 0; iy < fineH; iy++) {
-    for (let ix = 0; ix < fineW; ix++) {
-      const isBoundary = ix === 0 || iy === 0 || ix === fineW - 1 || iy === fineH - 1;
-      if (!isBoundary) continue;
-      const idx = iy * fineW + ix;
-      if (fineGrid.goal[idx]) continue; // goal cells are pinned to 0
-      // The warm-start loop has already set fineGrid.values[idx]
-      // to the bilinear coarse value. Re-pin (in case the
-      // iteration touched it).
-      // (No-op here; the warm-start already set the values.)
-    }
-  }
+
   // Soft boundary anchors: re-pin at the end of every fine
   // sweep so the boundary value cannot drift.
   for (let iy = 0; iy < fineH; iy++) {

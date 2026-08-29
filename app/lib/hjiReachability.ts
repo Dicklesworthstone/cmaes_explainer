@@ -66,7 +66,9 @@ export interface BRTParams {
   /** Spatial grid counts (>= 2). */
   nx: number;
   ny: number;
-  /** Heading bins covering [0, 2pi) (>= 1; 1 = heading-blind). */
+  /** Heading bins covering [0, 2pi) (>= 1; 1 degenerates to
+   *  x-axis-only motion — the k=0 heading has zero y-speed. Prefer
+   *  >= 8 for meaningful reachability). */
   nTheta: number;
   /** Max planar speed, m/s. */
   vMax: number;

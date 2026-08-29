@@ -60,29 +60,31 @@ describe("droFrictionUncertainty", () => {
   });
 
   test("(2) Worst-case selection is the correct extreme (CVaR upper tail)", () => {
-    // Sample of 10 muK values. With alpha = 0.10, the inner max is
-    // the mean of the top 10% = mean of the single highest value
-    // (since floor((1-0.10)*10) = 9 -- wait, tailCount = max(1,
-    // floor((1-0.10) * 10)) = max(1, 9) = 9. So 9 top values, mean
-    // of 9 highest. The expected CVaR is mean(top 9).
+    // Rockafellar-Uryasev convention: CVaR_alpha = mean of the WORST
+    // alpha fraction. Sample of 10, alpha = 0.10 -> ceil(0.10 * 10) = 1
+    // -> mean of the single highest value.
     const samples = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
     const cvar = cvarUpper(samples, 0.10);
-    const expected = (0.2 + 0.3 + 0.4 + 0.5 + 0.6 + 0.7 + 0.8 + 0.9 + 1.0) / 9;
-    expect(cvar).toBeCloseTo(expected, 12);
-    // The single-sample supremum is the top value, 1.0.
+    expect(cvar).toBe(1.0);
+    // alpha = 0.50 -> mean of the top 5 values.
+    expect(cvarUpper(samples, 0.50)).toBe((0.6 + 0.7 + 0.8 + 0.9 + 1.0) / 5);
+    // Monotone in alpha: smaller tail is closer to the supremum.
+    expect(cvarUpper(samples, 0.10)).toBeGreaterThanOrEqual(
+      cvarUpper(samples, 0.50),
+    );
     expect(sampleSupremum(samples)).toBe(1.0);
   });
 
   test("(3) CVaR matches brute force on a fixed sample", () => {
-    // Sample of 20 random-looking values. Brute force: sort, take
-    // the top floor((1-alpha)*N) values, average them.
+    // Sample of 20 values. Brute force per RU2000: sort, take the
+    // top ceil(alpha*N) values, average them.
     const samples = [
       0.05, 0.12, 0.18, 0.21, 0.27, 0.33, 0.39, 0.44, 0.50, 0.55,
       0.61, 0.66, 0.71, 0.77, 0.82, 0.88, 0.93, 0.99, 1.05, 1.12,
     ];
     const bruteForce = (alpha: number): number => {
       const sorted = [...samples].sort((a, b) => a - b);
-      const tailCount = Math.max(1, Math.floor((1.0 - alpha) * sorted.length));
+      const tailCount = Math.max(1, Math.ceil(alpha * sorted.length));
       const tail = sorted.slice(sorted.length - tailCount);
       return tail.reduce((acc, value) => acc + value, 0) / tail.length;
     };
@@ -217,9 +219,8 @@ describe("droFrictionUncertainty", () => {
   test("Robust evaluation: kinetic friction is the upper tail (CVaR) for monotone foot-slip", () => {
     // For a monotone-in-muK objective (foot-slip penalty), the
     // worst case is the upper tail of the muK distribution. With
-    // alpha = 0.10 and 16 samples, tailCount = floor(0.9 * 16) = 14
-    // (we use Math.max(1, ...) so it's at least 1). The mean of
-    // the top 14 of 16 samples is the CVaR.
+    // alpha = 0.10 and 16 samples, tailCount = ceil(0.10 * 16) = 2:
+    // the RU2000 CVaR is the mean of the top 2 of 16 samples.
     const result = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
       alpha: 0.10,
@@ -227,11 +228,9 @@ describe("droFrictionUncertainty", () => {
     expect(result).not.toBeNull();
     if (result === null) return;
     // The robust kinetic friction must be >= the point estimate
-    // (we picked the upper tail, so the worst case is the
-    // larger muK). Specifically, CVaR_alpha at the 0.10 tail
-    // (top 14 of 16) is the mean of the top 14; with the
-    // deterministic LCG, the top-14 mean is deterministic and
-    // should be >= the point estimate.
+    // (upper tail of a spread around the point estimate).
+    // CVaR at the 0.10 tail (top 2 of 16) is deterministic under
+    // the fixed-seed catalog.
     expect(result.worstCase.kineticFriction).toBeGreaterThanOrEqual(
       result.pointEstimate.kineticFriction,
     );
@@ -240,6 +239,27 @@ describe("droFrictionUncertainty", () => {
     expect(result.radius).toBeCloseTo(
       wassersteinBallRadius(16, 0.95),
       12,
+    );
+  });
+  test("Robust evaluation: static friction is anchored to muS = muK * 1.20 (CRC §F-13)", () => {
+    // Per CRC Handbook §F-13, mu_s / mu_k is in [1.05, 1.30] for
+    // household pairs; the codebase uses the central value 1.20.
+    // The worst-case muK (CVaR upper tail) must drag the worst-case
+    // muS along with it -- a low-muK sample is not the worst case,
+    // so neither is its low muS.
+    const result = evaluateRobustPair("rubber", "hardwood", {
+      robust: true,
+      alpha: 0.10,
+    });
+    expect(result).not.toBeNull();
+    if (result === null) return;
+    // The anchored contract: muS = muK * 1.20 (within f64 epsilon).
+    const expectedMuS = result.worstCase.kineticFriction * 1.20;
+    expect(result.worstCase.staticFriction).toBeCloseTo(expectedMuS, 12);
+    // And the worst-case muS must be >= the point muS (the worst-case
+    // muK is at least the point muK by the upper-tail property).
+    expect(result.worstCase.staticFriction).toBeGreaterThanOrEqual(
+      result.pointEstimate.staticFriction - 1e-9,
     );
   });
 
@@ -269,12 +289,11 @@ describe("droFrictionUncertainty", () => {
     expect(result.radius).toBe(0.123);
   });
   test("Custom alpha shifts the CVaR tail", () => {
-    // alpha = 0.50 means the inner max is the mean of the top 50%
-    // of samples; alpha = 0.10 means the top 10% (stricter, larger
-    // mean when the top is concentrated). The exact relationship
-    // depends on the sample distribution; we assert that both
-    // CVaRs are in the sample range, deterministic, and that the
-    // sample supremum is an upper bound on both.
+    // RU2000 convention: alpha = 0.10 watches the worst 10% of
+    // samples; alpha = 0.50 the worst 50%. The top-k average is
+    // non-increasing in k, so the smaller alpha is >= the larger:
+    // strict (0.10) >= loose (0.50), and both are >= the point
+    // estimate and <= the sample supremum.
     const strict = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
       alpha: 0.10,
@@ -291,9 +310,14 @@ describe("droFrictionUncertainty", () => {
         (s) => s.muK,
       ),
     );
-    // Both CVaRs are in the sample range (between min and supremum).
+    // Both CVaRs are in the sample range (between min and supremum),
+    // and the tighter tail is at least as conservative as the looser
+    // one (top-k average is non-increasing in k).
     expect(strict.worstCase.kineticFriction).toBeLessThanOrEqual(sup);
     expect(loose.worstCase.kineticFriction).toBeLessThanOrEqual(sup);
+    expect(strict.worstCase.kineticFriction).toBeGreaterThanOrEqual(
+      loose.worstCase.kineticFriction,
+    );
     // Both are >= the point estimate (CVaR is upper tail; we picked the
     // mean of the top, not a lower-tail statistic).
     expect(strict.worstCase.kineticFriction).toBeGreaterThanOrEqual(

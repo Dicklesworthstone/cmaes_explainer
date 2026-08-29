@@ -642,12 +642,7 @@ function useG1Meshes(active: boolean): G1MeshState {
       : { phase: active ? "loading" : "idle" }
   );
   useEffect(() => {
-    if (!active) return;
-    // Cache hit: reuse the parsed geometries (no fetch, no dispose).
-    if (g1MeshCache) {
-      setState({ phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material });
-      return;
-    }
+    if (!active || g1MeshCache) return;
     let cancelled = false;
     const geometries: Record<string, THREE.BufferGeometry> = {};
     const loader = new STLLoader();
@@ -926,7 +921,12 @@ export function G1WalkingFlagship() {
                 }`,
         ],
         ["distance", `${number(trace.distanceMeters, 2)} m`],
-        ["mean fwd speed", `${number(trace.distanceMeters / Math.max(trace.samples[trace.samples.length - 1]?.timeSeconds ?? DEFAULT_G1_WALKING_CONFIG.durationSeconds, 1e-6), 2)} m/s`],
+        [
+          "mean fwd speed",
+          multiFactor
+            ? number(multiFactor.channels[0].value, 2) + " m/s"
+            : `${number(trace.distanceMeters / Math.max(trace.samples[trace.samples.length - 1]?.timeSeconds ?? DEFAULT_G1_WALKING_CONFIG.durationSeconds, 1e-6), 2)} m/s`,
+        ],
         ["single support", `${number(trace.singleSupportSeconds, 2)} s`],
         ["push impulse", `${number(trace.pushImpulseNewtonSeconds, 2)} N·s`],
         ["recovery (censored)", `${number(trace.recoveryTimeSeconds, 3)} s`],

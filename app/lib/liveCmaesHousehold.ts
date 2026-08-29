@@ -42,8 +42,28 @@ export interface CmaesOwnerConfig {
   seed?: number;
 }
 
+// Symmetric positive-definite Cholesky decomposition (row-major).
+// Returns lower-triangular L such that C = L L^T.
+function choleskyLower(n: number, matrix: number[][]): number[][] {
+  const l: number[][] = [];
+  for (let i = 0; i < n; i++) l.push(new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let sum = matrix[i][j];
+      for (let k = 0; k < j; k++) sum -= l[i][k] * l[j][k];
+      if (i === j) {
+        const v = sum <= 1e-12 ? 1e-12 : sum;
+        l[i][j] = Math.sqrt(v);
+      } else {
+        l[i][j] = l[j][j] > 1e-12 ? sum / l[j][j] : 0;
+      }
+    }
+  }
+  return l;
+}
+
 function seededGaussian(seed: number): () => number {
-  let s = seed;
+  let s = (seed === 0 ? 0x12345678 : seed) >>> 0;
   return () => {
     s ^= s << 13;
     s ^= s >> 17;
@@ -128,22 +148,27 @@ export class LiveCmaesOptimizer {
   }
 
   /**
-   * Samples a candidate population of parameters from the current normal distribution.
+   * Samples a candidate population of parameters from the current normal
+   * distribution. Uses the Cholesky factor of the full covariance matrix
+   * so the off-diagonal correlations the rank-mu update installs actually
+   * shape the search distribution; the per-generation O(n^3) Cholesky is
+   * dwarfed by the O(n^2 lambda) covariance update for the n we use.
    */
   public samplePopulation(): number[][] {
     const population: number[][] = [];
     const n = this.state.dimension;
-
+    const l = choleskyLower(n, this.state.covariance);
     for (let k = 0; k < this.state.lambdaPopulation; k++) {
-      const candidate: number[] = [];
+      const z: number[] = new Array(n);
+      for (let i = 0; i < n; i++) z[i] = this.rand();
+      const candidate: number[] = new Array(n);
       for (let i = 0; i < n; i++) {
-        const std = Math.sqrt(Math.max(1e-8, this.state.covariance[i][i]));
-        const sample = this.state.mean[i] + this.state.sigma * std * this.rand();
-        candidate.push(sample);
+        let acc = 0;
+        for (let j = 0; j <= i; j++) acc += l[i][j] * z[j];
+        candidate[i] = this.state.mean[i] + this.state.sigma * acc;
       }
       population.push(candidate);
     }
-
     return population;
   }
 
