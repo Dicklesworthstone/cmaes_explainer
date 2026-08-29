@@ -39,6 +39,7 @@ import {
   buildWingGeometryForRender,
   buildWingRibsForRender,
 } from "../components/WingViz";
+import { buildBookshelf } from "./houseFurniture";
 
 const benchmarkCases = [
   {
