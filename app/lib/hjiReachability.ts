@@ -17,27 +17,38 @@
  * Backward time-to-reach value function (BRT):
  *   V(s) = min time to reach the target set T from s
  *   V = 0 on T, V = +inf inside inflated obstacles and where T is
- *   unreachable (disconnected), and the viscosity solution of
- *     vmax * |grad V . d(theta)| + omegaMax * |dV/dtheta| = 1
+ *   unreachable (disconnected).
  *   (Mitchell/Bayen/Tomlin 2005; T-RO 2024 DOI 10.1109/TRO.2024.3454470;
- *    verifiable Q-filters via HJ reachability, arXiv:2506.15693).
+ *    verifiable Q-filters via HJ reachability, arXiv:2506.15693.)
  *
- * # Discretization (honest scope)
+ * # Discretization (honest scope) — label-setting on a conservative metric
  *
- * First-order Godunov / fast-sweeping on a (nx, ny, nTheta) grid. The
- * directional term is bounded via |grad V . d| <= |cos| |Vx| + |sin| |Vy|
- * (Cauchy-Schwarz), which makes the Hamiltonian axis-separable:
- *   H = aX |Vx| + aY |Vy| + aT |Vth| = 1,
- *   aX = vmax|cos|/dx, aY = vmax|sin|/dy, aT = omegaMax/dth.
- * For the L1 Hamiltonian the Godunov update takes the SMALLER upwind
- * neighbor per axis (information flows from smaller values):
- *   V_i = (aX min(Vxm,Vxp) + aY min(Vym,Vyp) + aT min(Vtm,Vtp) + 1) / sum(a)
- * This is monotone, consistent for the bounded Hamiltonian, and
- * CONSERVATIVE: the bounding step means V >= V_true, i.e. we never claim
- * a state is reachable FASTER than physics allows — the safe direction
- * for a safety certificate. Sweeping uses alternating Gauss-Seidel
- * orderings (classic fast-sweeping method; typically a handful of cycles
- * to 1e-4).
+ * The continuous HJ PDE is replaced by its standard first-order graph
+ * discretization: a shortest-path problem on the (nx, ny, nTheta) grid
+ * graph with edge weights equal to travel time under the
+ * inscribed-diamond speed bound:
+ *   - x-step at heading k: speed vx = vMax*|cos|/(|cos|+|sin|) <= vMax,
+ *     cost dx / vx (edge absent when vx = 0: that heading cannot move
+ *     along x at all — physically faithful);
+ *   - y-step at heading k: symmetric with sin;
+ *   - heading change: turn in place, cost dTheta / omegaMax.
+ * The 1/(|cos|+|sin|) scaling inscribes the L1 speed diamond in the true
+ * speed disc of radius vMax, so EVERY graph speed is physically
+ * admissible and V >= V_true: we never claim a state is reachable faster
+ * than physics allows — the safe direction for a safety certificate.
+ * (The earlier L1 fast-sweeping PDE relaxation was optimistic by up to
+ * sqrt(2) on diagonals; label-setting on explicit edges removes that
+ * failure mode entirely — no convergence epsilon, no sweep cap.)
+ *
+ * Solver: Dijkstra with a Dial bucket queue (edge weights bounded and
+ * positive; bucket width = minEdge/2, so every relaxation from the bucket
+ * being drained lands at least two buckets ahead and the drained bucket
+ * stays clean). Nodes settle once (closed flag). LIFO drain within a
+ * bucket plus a fixed edge enumeration order keeps runs bit-identical —
+ * determinism is a project doctrine.
+ *
+ * Memory layout: heading index k is FASTEST (idx = k + nTheta*(i + nx*j))
+ * so all nTheta heading values of a spatial cell are contiguous.
  *
  * Reuse: obstacle geometry comes from the same SDF abstraction as
  * dpValueIteration (OBB union, primitive-SDF grounded per
@@ -63,10 +74,6 @@ export interface BRTParams {
   omegaMax: number;
   /** Hard-block cells closer than this to an obstacle (body inflation), m. */
   bodyRadius: number;
-  /** Convergence threshold on max per-sweep delta (seconds). Default 1e-4. */
-  epsilon?: number;
-  /** Sweep-cycle cap. Default 60. */
-  maxSweeps?: number;
 }
 
 /** Target set: disc in the plane. */
@@ -75,9 +82,9 @@ export interface BRTTarget {
   radius: number;
 }
 
-/** Solved time-to-reach field. time[i + nx*(j + ny*k)] in seconds, +inf unreachable. */
+/** Solved time-to-reach field. time[k + nTheta*(i + nx*j)] in seconds, +inf unreachable. */
 export interface BRTField {
-  time: Float32Array;
+  time: Float64Array;
   nx: number;
   ny: number;
   nTheta: number;
@@ -86,8 +93,7 @@ export interface BRTField {
   dy: number;
   dTheta: number;
   /** Diagnostics. */
-  sweeps: number;
-  finalDelta: number;
+  settledNodes: number;
   solveMs: number;
 }
 
@@ -95,7 +101,7 @@ const TAU = Math.PI * 2;
 
 /**
  * Solve the BRT. Deterministic: same inputs -> bit-identical field
- * (pure typed-array arithmetic, fixed sweep order, no clocks in the loop).
+ * (fixed edge order, deterministic bucket drain, pure typed arrays).
  */
 export function solveBackwardReachableTube(
   sdf: SDF2D,
@@ -109,20 +115,22 @@ export function solveBackwardReachableTube(
   if (!(vMax > 0) || !(omegaMax > 0)) {
     throw new Error("BRT: vMax and omegaMax must be > 0");
   }
-  const epsilon = params.epsilon ?? 1e-4;
-  const maxSweeps = params.maxSweeps ?? 60;
-
   const dx = (bounds.max[0] - bounds.min[0]) / (nx - 1);
   const dy = (bounds.max[1] - bounds.min[1]) / (ny - 1);
   const dTheta = TAU / nTheta;
 
-  // cos/sin per theta bin, precomputed (inner loop stays allocation-free).
-  const cosT = new Float64Array(nTheta);
-  const sinT = new Float64Array(nTheta);
+  // Per-heading step costs from the inscribed-diamond speeds. An edge is
+  // absent (cost +inf) when that heading has zero speed along the axis.
+  const xStep = new Float64Array(nTheta);
+  const yStep = new Float64Array(nTheta);
+  const turnCost = dTheta / omegaMax;
+  let minEdge = turnCost;
   for (let k = 0; k < nTheta; k++) {
-    const th = k * dTheta;
-    cosT[k] = Math.cos(th);
-    sinT[k] = Math.sin(th);
+    const c = Math.abs(Math.cos(k * dTheta));
+    const s = Math.abs(Math.sin(k * dTheta));
+    xStep[k] = c > 1e-12 ? (dx * (c + s)) / (vMax * c) : Number.POSITIVE_INFINITY;
+    yStep[k] = s > 1e-12 ? (dy * (c + s)) / (vMax * s) : Number.POSITIVE_INFINITY;
+    minEdge = Math.min(minEdge, xStep[k], yStep[k]);
   }
 
   // Blocked mask from the inflated SDF (fixed once; static obstacles only).
@@ -130,14 +138,15 @@ export function solveBackwardReachableTube(
   for (let j = 0; j < ny; j++) {
     const wy = bounds.min[1] + j * dy;
     for (let i = 0; i < nx; i++) {
-      const wx = bounds.min[0] + i * dx;
-      if (sdf(wx, wy) < bodyRadius) blocked[i + nx * j] = 1;
+      if (sdf(bounds.min[0] + i * dx, wy) < bodyRadius) blocked[i + nx * j] = 1;
     }
   }
 
-  // Value grid: V = 0 on target, +inf elsewhere (blocked cells stay +inf).
-  const time = new Float32Array(nx * ny * nTheta);
+  // Distances; layout k fastest. V = 0 on the target set, +inf elsewhere.
+  const time = new Float64Array(nx * ny * nTheta);
   time.fill(Number.POSITIVE_INFINITY);
+  const strideI = nTheta;
+  const strideJ = nTheta * nx;
   for (let j = 0; j < ny; j++) {
     const wy = bounds.min[1] + j * dy;
     for (let i = 0; i < nx; i++) {
@@ -145,104 +154,104 @@ export function solveBackwardReachableTube(
       const ddx = bounds.min[0] + i * dx - target.center[0];
       const ddy = wy - target.center[1];
       if (Math.hypot(ddx, ddy) <= target.radius) {
-        for (let k = 0; k < nTheta; k++) time[i + nx * (j + ny * k)] = 0;
+        const base = i * strideI + j * strideJ;
+        for (let k = 0; k < nTheta; k++) time[base + k] = 0;
       }
     }
   }
 
   const solveMsStart = performance.now();
-  let sweeps = 0;
-  let finalDelta = Number.POSITIVE_INFINITY;
 
-  // Fast-sweeping: alternate the 4 spatial orderings x 2 heading directions.
-  while (sweeps < maxSweeps) {
-    let maxDelta = 0;
-    for (let dir = 0; dir < 8; dir++) {
-      const iStart = dir & 1 ? nx - 1 : 0;
-      const iStep = dir & 1 ? -1 : 1;
-      const jStart = dir & 2 ? ny - 1 : 0;
-      const jStep = dir & 2 ? -1 : 1;
-      const kStart = dir & 4 ? nTheta - 1 : 0;
-      const kStep = dir & 4 ? -1 : 1;
-      for (let jj = 0; jj < ny; jj++) {
-        const j = jStart + jStep * jj;
-        const wy = bounds.min[1] + j * dy;
-        for (let ii = 0; ii < nx; ii++) {
-          const i = iStart + iStep * ii;
-          if (blocked[i + nx * j]) continue;
-          const wx = bounds.min[0] + i * dx;
-          // Skip target cells (V=0 is absorbing).
-          const ddx = wx - target.center[0];
-          const ddy = wy - target.center[1];
-          if (Math.hypot(ddx, ddy) <= target.radius) continue;
-          for (let kk = 0; kk < nTheta; kk++) {
-            const k = kStart + kStep * kk;
-            const aX = (vMax * Math.abs(cosT[k])) / dx;
-            const aY = (vMax * Math.abs(sinT[k])) / dy;
-            const aT = omegaMax / dTheta;
-            const aSum = aX + aY + aT;
-            const xm = i > 0 ? time[i - 1 + nx * (j + ny * k)] : Number.POSITIVE_INFINITY;
-            const xp = i < nx - 1 ? time[i + 1 + nx * (j + ny * k)] : Number.POSITIVE_INFINITY;
-            const ym = j > 0 ? time[i + nx * (j - 1 + ny * k)] : Number.POSITIVE_INFINITY;
-            const yp = j < ny - 1 ? time[i + nx * (j + 1 + ny * k)] : Number.POSITIVE_INFINITY;
-            // Heading axis is periodic.
-            const km = (k - 1 + nTheta) % nTheta;
-            const kp = (k + 1) % nTheta;
-            const tm = time[i + nx * (j + ny * km)];
-            const tp = time[i + nx * (j + ny * kp)];
-            // Drop axes whose upwind neighbors are all still +inf: the
-            // weighted Godunov solve is exact for the axes present and
-            // stays conservative (unknown axes cannot vote yet). Without
-            // this, one inf neighbor poisons the average and nothing
-            // ever propagates out of the target set.
-            const mX = Math.min(xm, xp);
-            const mY = Math.min(ym, yp);
-            const mT = Math.min(tm, tp);
-            let num = 1;
-            let den = 0;
-            if (Number.isFinite(mX)) {
-              num += aX * mX;
-              den += aX;
-            }
-            if (Number.isFinite(mY)) {
-              num += aY * mY;
-              den += aY;
-            }
-            if (Number.isFinite(mT)) {
-              num += aT * mT;
-              den += aT;
-            }
-            if (den === 0) continue;
-            const cand = num / den;
-            const idx = i + nx * (j + ny * k);
-            const prev = time[idx];
-            if (cand < prev) {
-              time[idx] = cand;
-              const delta = prev - cand;
-              if (delta > maxDelta) maxDelta = delta;
-            }
-          }
-        }
-      }
+  // Dial's bucket queue. Bucket b holds nodes with floor(t/width)==b at
+  // push time; entries store the node only and the relax time is read
+  // from time[node] at pop (a closed flag skips superseded entries).
+  const width = minEdge / 2;
+  const buckets: number[][] = [];
+  let bucketBase = 0;
+  const push = (t: number, node: number): void => {
+    let b = Math.floor((t - bucketBase) / width);
+    if (b < 0) b = 0;
+    while (buckets.length <= b) buckets.push([]);
+    buckets[b].push(node);
+  };
+
+  const totalNodes = nx * ny * nTheta;
+  const closed = new Uint8Array(totalNodes);
+  let settled = 0;
+
+  // Seed: every target-set cell enters the queue at t=0; the main loop's
+  // uniform relaxation handles their spatial and heading neighbors.
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      if (blocked[i + nx * j]) continue;
+      const base = i * strideI + j * strideJ;
+      if (!Number.isFinite(time[base])) continue;
+      for (let k = 0; k < nTheta; k++) push(0, base + k);
     }
-    sweeps++;
-    finalDelta = maxDelta;
-    if (maxDelta <= epsilon) break;
   }
 
-  return {
-    time,
-    nx,
-    ny,
-    nTheta,
-    bounds,
-    dx,
-    dy,
-    dTheta,
-    sweeps,
-    finalDelta,
-    solveMs: performance.now() - solveMsStart,
+  const relax = (from: number, to: number, w: number): void => {
+    const nt = time[from] + w;
+    if (nt < time[to]) {
+      time[to] = nt;
+      push(nt, to);
+    }
   };
+
+  for (;;) {
+    // Retire empty leading buckets WITHOUT padding: when the frontier is
+    // exhausted the array must be allowed to empty out, or this loop
+    // would slide through padding forever.
+    for (;;) {
+      if (buckets.length === 0) {
+        return {
+          time,
+          nx,
+          ny,
+          nTheta,
+          bounds,
+          dx,
+          dy,
+          dTheta,
+          settledNodes: settled,
+          solveMs: performance.now() - solveMsStart,
+        };
+      }
+      if (buckets[0].length > 0) break;
+      buckets.shift();
+      bucketBase += width;
+    }
+    const bucket = buckets[0];
+    // Drain by popping: every edge weight >= 2*width, so relaxations from
+    // this bucket land strictly ahead of it and the draining bucket stays
+    // clean. LIFO within a bucket is deterministic.
+    while (bucket.length > 0) {
+      const node = bucket.pop() as number;
+      if (closed[node]) continue;
+      closed[node] = 1;
+      settled++;
+      const k = node % nTheta;
+      const rest = (node - k) / nTheta;
+      const i = rest % nx;
+      const j = (rest - i) / nx;
+      const cell = i + nx * j;
+      // Edge order fixed for determinism: x-, x+, y-, y+, turn-, turn+.
+      if (i > 0 && !blocked[cell - 1] && Number.isFinite(xStep[k])) {
+        relax(node, node - strideI, xStep[k]);
+      }
+      if (i < nx - 1 && !blocked[cell + 1] && Number.isFinite(xStep[k])) {
+        relax(node, node + strideI, xStep[k]);
+      }
+      if (j > 0 && !blocked[cell - nx] && Number.isFinite(yStep[k])) {
+        relax(node, node - strideJ, yStep[k]);
+      }
+      if (j < ny - 1 && !blocked[cell + nx] && Number.isFinite(yStep[k])) {
+        relax(node, node + strideJ, yStep[k]);
+      }
+      relax(node, node - k + ((k - 1 + nTheta) % nTheta), turnCost);
+      relax(node, node - k + ((k + 1) % nTheta), turnCost);
+    }
+  }
 }
 
 /** Sample the field at a world pose (nearest cell). +inf if unreachable/out of domain. */
@@ -251,12 +260,10 @@ export function sampleTimeAt(field: BRTField, x: number, y: number, theta: numbe
   if (x < bounds.min[0] || x > bounds.max[0] || y < bounds.min[1] || y > bounds.max[1]) {
     return Number.POSITIVE_INFINITY;
   }
-  const i = Math.round((x - bounds.min[0]) / field.dx);
-  const j = Math.round((y - bounds.min[1]) / field.dy);
+  const i = Math.min(Math.max(Math.round((x - bounds.min[0]) / field.dx), 0), nx - 1);
+  const j = Math.min(Math.max(Math.round((y - bounds.min[1]) / field.dy), 0), ny - 1);
   const k = ((Math.round(theta / field.dTheta) % nTheta) + nTheta) % nTheta;
-  const ci = Math.min(Math.max(i, 0), nx - 1);
-  const cj = Math.min(Math.max(j, 0), ny - 1);
-  return field.time[ci + nx * (cj + ny * k)];
+  return field.time[k + nTheta * (i + nx * j)];
 }
 
 /**
