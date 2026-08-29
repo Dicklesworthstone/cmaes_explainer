@@ -54,3 +54,4 @@ redirect
 
 # bv (beads viewer) lock file
 .bv.lock
+.beads/beads.db.rebuild_*
