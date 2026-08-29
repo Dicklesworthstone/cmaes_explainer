@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createMulberry32 } from "./cmaesEngine";
 
 // Procedural furniture meshes: Craftsman-era silhouettes built from
 // BufferGeometry primitives. No GLTF/GLB (law 7) — all geometry is
@@ -136,37 +137,29 @@ export function buildBookshelf(w: number, d: number, h: number): FurnitureMeshRe
   const materials: THREE.Material[] = [];
   const walnut = new THREE.MeshStandardMaterial({ color: CRAFTSMAN_PALETTE.walnutWood, roughness: 0.42, metalness: 0.08 });
   materials.push(walnut);
-  // Side panels
-  for (const side of [-1, 1]) {
-    const geo = new THREE.BoxGeometry(0.025, h, d);
-    geometries.push(geo);
-    const panel = new THREE.Mesh(geo, walnut);
-    panel.position.set(side * (w / 2 - 0.0125), h / 2, 0);
-    panel.castShadow = true;
-    group.add(panel);
-  }
-  // Back panel
-  const backGeo = new THREE.BoxGeometry(w, h, 0.012);
-  geometries.push(backGeo);
-  const back = new THREE.Mesh(backGeo, walnut);
-  back.position.set(0, h / 2, -d / 2 + 0.006);
-  group.add(back);
-  // Shelves (5 including top and bottom)
-  const shelfCount = 5;
-  for (let i = 0; i < shelfCount; i++) {
-    const sy = (h / (shelfCount - 1)) * i;
-    const shelfGeo = new THREE.BoxGeometry(w - 0.05, 0.018, d);
-    geometries.push(shelfGeo);
-    const shelf = new THREE.Mesh(shelfGeo, walnut);
-    shelf.position.y = sy;
-    shelf.castShadow = true;
-    group.add(shelf);
-    // Books (small colored boxes on each shelf except top)
-    if (i < shelfCount - 1) {
-      const bookColors = [0x8b3a3a, 0x3a5f8b, 0x3a8b5f, 0x8b7a3a];
-      const bookCount = Math.floor(w / 0.045);
-      for (let b = 0; b < bookCount; b++) {
-        if (Math.random() > 0.85) continue; // some gaps
+  // Per-bookshelf seeded stream: the same dimensions always render the same
+  // book layout. The seed mixes the dimensions so two same-sized shelves
+  // still differ, and the 0.85 gap threshold keeps the visual sparsity of
+  // the previous unseeded call.
+  const rng = createMulberry32(
+    (Math.floor(w * 1000) * 0x9e37 ^ Math.floor(d * 1000) * 0x53d7 ^ Math.floor(h * 1000) * 0x1a7b) >>> 0,
+  );
+   // Shelves (5 including top and bottom)
+   const shelfCount = 5;
+   for (let i = 0; i < shelfCount; i++) {
+     const sy = (h / (shelfCount - 1)) * i;
+     const shelfGeo = new THREE.BoxGeometry(w - 0.05, 0.018, d);
+     geometries.push(shelfGeo);
+     const shelf = new THREE.Mesh(shelfGeo, walnut);
+     shelf.position.y = sy;
+     shelf.castShadow = true;
+     group.add(shelf);
+     // Books (small colored boxes on each shelf except top)
+     if (i < shelfCount - 1) {
+       const bookColors = [0x8b3a3a, 0x3a5f8b, 0x3a8b5f, 0x8b7a3a];
+       const bookCount = Math.floor(w / 0.045);
+       for (let b = 0; b < bookCount; b++) {
+         if (rng() > 0.85) continue; // some gaps
         const bw = 0.028 + (b % 3) * 0.008;
         const bh = 0.16 + (b % 4) * 0.02;
         const bookGeo = new THREE.BoxGeometry(bw, bh, d * 0.72);
