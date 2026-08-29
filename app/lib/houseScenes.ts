@@ -18,9 +18,15 @@
 //   cmaes-u53), exactly ONE furniture piece per task maps into the kernel's
 //   single obstacle slot; everything else is display-only and labeled.
 
+import { type FurnitureKind } from "./furnitureTaxonomy";
+
 export interface HouseFurniture {
   /** Stable identifier, e.g. "dining-table". */
   name: string;
+  kind?: FurnitureKind | string;
+  materialId?: string;
+  fragility?: string | number;
+  articulation?: any;
   room: string;
   /** Footprint center in whole-house meters [x, y]. */
   center: [number, number];
@@ -121,6 +127,70 @@ export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {
     { name: "bed-master", room: "bedroom", center: [-2.6, -2.9], size: [1.4, 1.9], height: 0.6, rotation: 0, note: "iron-frame bed" },
     { name: "dresser", room: "bedroom", center: [-0.9, -3.1], size: [1.1, 0.5], height: 0.95, rotation: 0, note: "oak dresser" },
     { name: "bookshelf", room: "living room", center: [-3.6, 4.6], size: [0.35, 1.2], height: 1.9, rotation: 0, note: "built-in craftsman shelving" },
+    { name: "armchair-1", room: "living room", center: [-3.3, 3.6], size: [0.95, 0.9], height: 0.9, rotation: 0, kind: "armchair", materialId: "fabric-cotton", note: "Mission-style armchair" },
+    { name: "armchair-2", room: "living room", center: [-0.4, 4.4], size: [0.95, 0.9], height: 0.9, rotation: -0.3, kind: "armchair", materialId: "fabric-leather", note: "leather armchair" },
+    { name: "lamp-table", room: "living room", center: [-3.3, 1.6], size: [0.5, 0.5], height: 0.55, rotation: 0, kind: "side-table", materialId: "oak-wood", note: "Craftsman side table" },
+    { name: "table-lamp", room: "living room", center: [-3.2, 1.5], size: [0.35, 0.35], height: 1.6, rotation: 0, kind: "lamp", materialId: "brass", note: "brass table lamp" },
+    { name: "rug-living", room: "living room", center: [-1.4, 2.6], size: [2.4, 1.6], height: 0.02, rotation: 0, kind: "rug", materialId: "fabric-velvet", note: "oriental rug" },
+    { name: "picture-frame-1", room: "living room", center: [-2.0, 4.9], size: [0.6, 0.03], height: 1.5, rotation: 0, kind: "picture-frame", materialId: "oak-wood", note: "wall art above sofa" },
+    { name: "plant-floor", room: "living room", center: [-3.5, 0.7], size: [0.5, 0.5], height: 1.2, rotation: 0, kind: "plant", materialId: "concrete", note: "Boston fern in pot" },
+    { name: "bookshelf-small", room: "living room", center: [-0.4, 1.0], size: [0.6, 0.3], height: 1.2, rotation: 0, kind: "bookshelf", materialId: "walnut-wood", note: "small walnut bookshelf" },
+    { name: "dining-chair-1", room: "dining room", center: [1.0, 3.2], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "dining-chair-2", room: "dining room", center: [2.2, 3.2], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "dining-chair-3", room: "dining room", center: [1.0, 2.0], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "dining-chair-4", room: "dining room", center: [2.2, 2.0], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "dining-chair-5", room: "dining room", center: [1.0, 1.6], size: [0.45, 0.5], height: 0.95, rotation: 3.14159265, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "dining-chair-6", room: "dining room", center: [2.2, 1.6], size: [0.45, 0.5], height: 0.95, rotation: 3.14159265, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
+    { name: "sideboard", room: "dining room", center: [0.8, 0.9], size: [1.5, 0.5], height: 0.9, rotation: 0, kind: "console-table", materialId: "oak-wood", note: "Craftsman sideboard with drawers" },
+    { name: "rug-dining", room: "dining room", center: [1.6, 2.4], size: [2.6, 2.0], height: 0.02, rotation: 0, kind: "rug", materialId: "carpet", note: "woven rug" },
+    { name: "wall-clock", room: "dining room", center: [1.6, 4.6], size: [0.3, 0.05], height: 1.8, rotation: 0, kind: "picture-frame", materialId: "oak-wood", note: "wall clock" },
+    { name: "fridge", room: "kitchen", center: [3.4, -0.6], size: [0.9, 0.75], height: 1.8, rotation: 0, kind: "fridge", materialId: "chrome", note: "top-freezer refrigerator" },
+    { name: "sink", room: "kitchen", center: [2.5, 0.2], size: [0.6, 0.5], height: 0.85, rotation: 0, kind: "sink", materialId: "porcelain", note: "pedestal sink" },
+    { name: "range-hood", room: "kitchen", center: [2.9, -1.0], size: [0.75, 0.55], height: 0.3, rotation: 0, kind: "range-hood", materialId: "chrome", note: "wall-mounted hood above stove" },
+    { name: "plate-1", room: "kitchen", center: [1.5, 0.15], size: [0.27, 0.27], height: 0.02, rotation: 0, kind: "plate", materialId: "porcelain", fragility: 1.5, note: "dinner plate on island" },
+    { name: "plate-2", room: "kitchen", center: [1.7, 0.15], size: [0.27, 0.27], height: 0.02, rotation: 0, kind: "plate", materialId: "porcelain", fragility: 1.5, note: "dinner plate on island" },
+    { name: "mug-1", room: "kitchen", center: [1.5, -0.05], size: [0.09, 0.09], height: 0.1, rotation: 0, kind: "mug", materialId: "porcelain", fragility: 0.8, note: "coffee mug" },
+    { name: "pan", room: "kitchen", center: [2.4, 0.15], size: [0.45, 0.3], height: 0.08, rotation: 0, kind: "pan", materialId: "cast-iron", note: "cast iron skillet" },
+    { name: "bottle-1", room: "kitchen", center: [2.4, -0.05], size: [0.08, 0.08], height: 0.28, rotation: 0, kind: "bottle", materialId: "glass-clear", fragility: 1.2, note: "glass bottle" },
+    { name: "glass-1", room: "kitchen", center: [1.7, -0.05], size: [0.07, 0.07], height: 0.13, rotation: 0, kind: "glass", materialId: "glass-clear", fragility: 0.5, note: "drinking glass" },
+    { name: "curtain-window-kitchen", room: "kitchen", center: [3.5, 0.5], size: [1.2, 0.04], height: 1.8, rotation: 0, kind: "curtain", materialId: "fabric-cotton", note: "kitchen window curtain" },
+    { name: "bed-frame", room: "bedroom", center: [-2.6, -2.9], size: [1.4, 2.0], height: 0.55, rotation: 0, kind: "queen-bed", materialId: "oak-wood", note: "queen bed frame" },
+    { name: "mattress", room: "bedroom", center: [-2.6, -2.9], size: [1.4, 2.0], height: 0.25, rotation: 0, kind: "queen-bed", materialId: "fabric-cotton", note: "mattress on frame" },
+    { name: "pillow-1", room: "bedroom", center: [-2.6, -4.2], size: [0.4, 0.25], height: 0.15, rotation: 0, kind: "queen-bed", materialId: "fabric-cotton", note: "bedside pillow" },
+    { name: "pillow-2", room: "bedroom", center: [-2.0, -4.2], size: [0.4, 0.25], height: 0.15, rotation: 0, kind: "queen-bed", materialId: "fabric-cotton", note: "bedside pillow" },
+    { name: "nightstand-1", room: "bedroom", center: [-3.6, -3.5], size: [0.5, 0.5], height: 0.55, rotation: 0, kind: "side-table", materialId: "oak-wood", note: "oak nightstand" },
+    { name: "nightstand-2", room: "bedroom", center: [-1.6, -3.5], size: [0.5, 0.5], height: 0.55, rotation: 0, kind: "side-table", materialId: "oak-wood", note: "oak nightstand" },
+    { name: "lamp-bedside-1", room: "bedroom", center: [-3.5, -3.4], size: [0.35, 0.35], height: 0.6, rotation: 0, kind: "lamp", materialId: "brass", note: "bedside lamp" },
+    { name: "lamp-bedside-2", room: "bedroom", center: [-1.5, -3.4], size: [0.35, 0.35], height: 0.6, rotation: 0, kind: "lamp", materialId: "brass", note: "bedside lamp" },
+    { name: "wardrobe-1", room: "bedroom", center: [-0.3, -3.2], size: [1.4, 0.6], height: 2.0, rotation: 0, kind: "wardrobe", materialId: "walnut-wood", articulation: [{"name": "left-door", "type": "revolute", "axis": [0, 1, 0], "limits": {"min": 0, "max": 1.884955592}}, {"name": "right-door", "type": "revolute", "axis": [0, -1, 0], "limits": {"min": 0, "max": 1.884955592}}], note: "armoire with double doors" },
+    { name: "book-bedroom", room: "bedroom", center: [-3.5, -0.9], size: [0.18, 0.25], height: 0.03, rotation: 0, kind: "book", materialId: "paper", note: "bedside book" },
+    { name: "rug-bedroom", room: "bedroom", center: [-1.8, -2.5], size: [2.4, 1.6], height: 0.02, rotation: 0, kind: "rug", materialId: "carpet", note: "bedroom carpet" },
+    { name: "curtain-window-bedroom", room: "bedroom", center: [-3.9, -1.0], size: [1.2, 0.04], height: 1.8, rotation: 0, kind: "curtain", materialId: "fabric-cotton", note: "bedroom window curtain" },
+    { name: "twin-bed-2", room: "second bedroom", center: [1.9, -3.5], size: [1.0, 2.0], height: 0.55, rotation: 0, kind: "twin-bed", materialId: "oak-wood", note: "twin bed frame" },
+    { name: "desk-2", room: "second bedroom", center: [3.0, -1.4], size: [1.4, 0.7], height: 0.75, rotation: 0, kind: "desk", materialId: "oak-wood", articulation: [{"name": "drawer", "type": "prismatic", "axis": [1, 0, 0], "limits": {"min": 0, "max": 0.4}}], note: "writing desk" },
+    { name: "dresser-2", room: "second bedroom", center: [1.0, -1.4], size: [1.2, 0.5], height: 0.95, rotation: 0, kind: "dresser", materialId: "oak-wood", note: "second dresser" },
+    { name: "book-2", room: "second bedroom", center: [1.5, -3.4], size: [0.18, 0.25], height: 0.03, rotation: 0, kind: "book", materialId: "paper", note: "stack of books" },
+    { name: "lamp-table-2", room: "second bedroom", center: [3.2, -3.0], size: [0.5, 0.5], height: 0.55, rotation: 0, kind: "side-table", materialId: "oak-wood", note: "side table" },
+    { name: "chair-desk", room: "second bedroom", center: [2.4, -2.4], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "desk chair" },
+    { name: "rug-second-bedroom", room: "second bedroom", center: [1.9, -3.0], size: [2.0, 1.4], height: 0.02, rotation: 0, kind: "rug", materialId: "carpet", note: "second bedroom rug" },
+    { name: "bathtub", room: "bath", center: [-0.3, -4.2], size: [1.7, 0.75], height: 0.6, rotation: 0, kind: "bathtub", materialId: "porcelain", note: "claw-foot tub" },
+    { name: "toilet", room: "bath", center: [1.1, -3.5], size: [0.4, 0.7], height: 0.6, rotation: 0, kind: "toilet", materialId: "porcelain", articulation: [{"name": "lid", "type": "revolute", "axis": [0, 1, 0], "limits": {"min": 0, "max": 1.5707963}}], note: "two-piece toilet" },
+    { name: "vanity", room: "bath", center: [0.4, -1.5], size: [0.8, 0.55], height: 0.85, rotation: 0, kind: "vanity", materialId: "oak-wood", note: "vanity with sink" },
+    { name: "mirror", room: "bath", center: [0.4, -1.0], size: [0.6, 0.03], height: 1.5, rotation: 0, kind: "picture-frame", materialId: "glass-clear", note: "wall mirror" },
+    { name: "shower-stall", room: "bath", center: [1.1, -4.5], size: [0.9, 0.9], height: 2.0, rotation: 0, kind: "shower", materialId: "ceramic-tile", note: "shower stall" },
+    { name: "rug-bath", room: "bath", center: [0.4, -2.4], size: [0.8, 0.5], height: 0.02, rotation: 0, kind: "rug", materialId: "fabric-cotton", note: "bath mat" },
+    { name: "towel-rack", room: "bath", center: [1.1, -2.3], size: [0.6, 0.15], height: 0.05, rotation: 0, kind: "cabinet", materialId: "chrome", note: "towel rack" },
+    { name: "plant-porch", room: "entry porch", center: [-1.5, 5.2], size: [0.4, 0.4], height: 0.6, rotation: 0, kind: "planter", materialId: "concrete", note: "entry planter" },
+    { name: "plant-porch-2", room: "entry porch", center: [1.5, 5.2], size: [0.4, 0.4], height: 0.6, rotation: 0, kind: "planter", materialId: "concrete", note: "entry planter" },
+    { name: "bench-porch", room: "entry porch", center: [0, 5.4], size: [1.2, 0.4], height: 0.5, rotation: 3.14159265, kind: "side-table", materialId: "oak-wood", note: "porch bench" },
+    { name: "doormat", room: "entry porch", center: [0, 5.7], size: [0.8, 0.4], height: 0.02, rotation: 0, kind: "rug", materialId: "carpet", note: "welcome mat" },
+    { name: "console-hall", room: "central hall", center: [0.2, -0.6], size: [1.2, 0.4], height: 0.85, rotation: 0, kind: "console-table", materialId: "oak-wood", note: "hall console" },
+    { name: "mirror-hall", room: "central hall", center: [0.2, -0.4], size: [0.6, 0.03], height: 1.5, rotation: 0, kind: "picture-frame", materialId: "glass-clear", note: "hall mirror" },
+    { name: "coat-rack", room: "central hall", center: [-0.5, 0.5], size: [0.4, 0.4], height: 1.8, rotation: 0, kind: "cabinet", materialId: "oak-wood", note: "freestanding coat rack" },
+    { name: "umbrella-stand", room: "central hall", center: [0.7, 0.5], size: [0.3, 0.3], height: 0.6, rotation: 0, kind: "planter", materialId: "ceramic-tile", note: "umbrella stand" },
+    { name: "shoes-pair", room: "central hall", center: [0.2, 1.0], size: [0.3, 0.2], height: 0.15, rotation: 0, kind: "rug", materialId: "rubber", note: "shoes at hall" },
+    { name: "cat-fireplace", room: "living room", center: [-2.4, 2.6], size: [0.45, 0.2], height: 0.25, rotation: 0, kind: "pet-cat", materialId: "fabric-cotton", note: "cat sleeping by fireplace (display-only)" },
+    { name: "person-silhouette-kitchen", room: "kitchen", center: [2.0, -1.5], size: [0.45, 0.25], height: 1.75, rotation: 0, kind: "person-silhouette", materialId: "fabric-cotton", note: "person at stove (display-only)" }
   ],
   startPose: [0, 4.6, Math.PI],
   goals: [
