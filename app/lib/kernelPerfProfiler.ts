@@ -11,7 +11,7 @@
 //       p_k = X_{\lceil \frac{k}{100} N \rceil} \quad \text{for sorted sample buffer } X
 //   - Timing Jitter Standard Deviation:
 //       \sigma = \sqrt{\frac{1}{N} \sum_{i=1}^N (t_i - \bar{t})^2}
-//   - Physics Step Budget Gating (e.g. 480Hz -> 208.3µs budget):
+//   - Physics Step Budget Gating (e.g. 480Hz -> 2083.3µs budget; 240Hz -> 4166.7µs):
 //       \text{OverrunRatio} = \frac{t_{\text{total}}}{T_{\text{budget}}}, \quad \text{IsOverrun} = t_{\text{total}} > T_{\text{budget}}
 //
 // SOTA References:
