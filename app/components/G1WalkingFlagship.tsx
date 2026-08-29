@@ -1,13 +1,12 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
@@ -66,98 +65,50 @@ const LINK_NAMES = [
   "waist yaw",
   "waist roll",
   "torso",
+  "left shoulder pitch",
+  "left shoulder roll",
+  "left shoulder yaw",
+  "left elbow",
+  "left wrist roll",
+  "left wrist pitch",
+  "left wrist yaw",
+  "right shoulder pitch",
+  "right shoulder roll",
+  "right shoulder yaw",
+  "right elbow",
+  "right wrist roll",
+  "right wrist pitch",
+  "right wrist yaw",
 ] as const;
 
-const LINK_PARENTS = [-1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14] as const;
+const LINK_PARENTS = [
+  -1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14,
+  15, 16, 17, 18, 19, 20, 21, 15, 23, 24, 25, 26, 27, 28,
+] as const;
 const G1_HORIZON_STEPS = Math.round(
   DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds
 );
-// --- Real Unitree G1 visual meshes (unitreerobotics/unitree_ros,
-// g1_description/meshes, MIT-style license). STL vertices are authored in
-// each URDF link frame (Z-up, meters); the kernel's link frames come from the
-// same description, so each mesh group is posed directly by its trace link
-// pose. geometry.rotateX(-PI/2) bakes the owner->Three basis (x,y,z)->(x,z,-y)
-// into the vertices; the group pose conversion stays ownerToThree/ownerQuaternionToThree.
-const G1_MESH_DIR = "/robots/g1/";
-const G1_MESH_FILES: Record<string, string> = {
-  pelvis: "pelvis.STL",
-  "left hip pitch": "left_hip_pitch_link.STL",
-  "left hip roll": "left_hip_roll_link.STL",
-  "left hip yaw": "left_hip_yaw_link.STL",
-  "left knee": "left_knee_link.STL",
-  "left ankle pitch": "left_ankle_pitch_link.STL",
-  "left ankle roll": "left_ankle_roll_link.STL",
-  "right hip pitch": "right_hip_pitch_link.STL",
-  "right hip roll": "right_hip_roll_link.STL",
-  "right hip yaw": "right_hip_yaw_link.STL",
-  "right knee": "right_knee_link.STL",
-  "right ankle pitch": "right_ankle_pitch_link.STL",
-  "right ankle roll": "right_ankle_roll_link.STL",
-  "waist yaw": "waist_yaw_link.STL",
-  "waist roll": "waist_roll_link.STL",
-  torso: "torso_link.STL",
-  head: "head_link.STL",
-};
-// Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
-const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 
-type G1MeshState =
-  | { phase: "idle" | "loading" }
-  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
-  | { phase: "failed" };
-
-function useG1Meshes(active: boolean): G1MeshState {
-  const [state, setState] = useState<G1MeshState>({ phase: active ? "loading" : "idle" });
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-    let published = false;
-    let material: THREE.MeshStandardMaterial | null = null;
-    const geometries: Record<string, THREE.BufferGeometry> = {};
-    const loader = new STLLoader();
-    const disposeAssets = (): void => {
-      Object.values(geometries).forEach((geometry) => geometry.dispose());
-      material?.dispose();
-    };
-    (async () => {
-      try {
-        await Promise.all(
-          Object.entries(G1_MESH_FILES).map(async ([key, file]) => {
-            const res = await fetch(G1_MESH_DIR + file);
-            if (!res.ok) throw new Error(`HTTP ${res.status} loading ${file}`);
-            const geometry = loader.parse(await res.arrayBuffer());
-            geometry.rotateX(-Math.PI / 2);
-            geometry.computeVertexNormals();
-            geometries[key] = geometry;
-          })
-        );
-        if (cancelled) {
-          disposeAssets();
-          return;
-        }
-        material = new THREE.MeshStandardMaterial({
-          color: "#3a424d",
-          metalness: 0.35,
-          roughness: 0.46,
-        });
-        published = true;
-        setState({
-          phase: "ready",
-          geometries,
-          material,
-        });
-      } catch {
-        disposeAssets();
-        if (!cancelled) setState({ phase: "failed" });
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (published) disposeAssets();
-    };
-  }, [active]);
-  return active && state.phase === "idle" ? { phase: "loading" } : state;
-}
+// Source-bound dimensional scaffold for the parametric visual model.
+// Product envelope: https://www.unitree.com/g1/ (1.32 × 0.45 × 0.20 m,
+// 0.60 m combined thigh/calf, ~0.45 m arm span).
+// Joint offsets: Unitree g1_29dof_mode_11.urdf at 7d6075f7f58588b189b940130e3edab3c839b2df.
+const G1_SOURCE_DIMENSIONS = {
+  standingHeight: 1.32,
+  shoulderWidth: 0.20043,
+  bodyDepth: 0.2,
+  hipWidth: 0.128904,
+  kneeToAnkle: 0.30001,
+  shoulderToElbow: 0.183718,
+  elbowToWrist: 0.100518,
+  wristStack: 0.1255,
+} as const;
+const G1_HEAD_CENTER_OWNER: [number, number, number] = [0.005, 0, 0.435];
+const G1_LEFT_HAND_CENTER_OWNER: [number, number, number] = [0.083, 0.003, 0];
+const G1_RIGHT_HAND_CENTER_OWNER: [number, number, number] = [0.083, -0.003, 0];
+const SHELL_COLOR = "#dfe5e8";
+const SHELL_DARK = "#252d35";
+const JOINT_COLOR = "#111820";
 const G1_POPULATION = 16;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
@@ -222,20 +173,28 @@ function ownerLocalPointToThree(
   return [world.x, world.y, world.z];
 }
 
-function Segment({
-  start,
-  end,
+type G1VisualMaterials = {
+  shell: THREE.MeshStandardMaterial;
+  dark: THREE.MeshStandardMaterial;
+  joint: THREE.MeshStandardMaterial;
+  accent: THREE.MeshStandardMaterial;
+  visor: THREE.MeshPhysicalMaterial;
+};
+
+function LocalCapsule({
+  startOwner,
+  endOwner,
   radius,
-  color,
+  material,
 }: {
-  start: readonly number[];
-  end: readonly number[];
+  startOwner: readonly number[];
+  endOwner: readonly number[];
   radius: number;
-  color: string;
+  material: THREE.Material;
 }) {
   const transform = useMemo(() => {
-    const a = new THREE.Vector3(...ownerToThree(start));
-    const b = new THREE.Vector3(...ownerToThree(end));
+    const a = new THREE.Vector3(...ownerToThree(startOwner));
+    const b = new THREE.Vector3(...ownerToThree(endOwner));
     const midpoint = a.clone().add(b).multiplyScalar(0.5);
     const direction = b.clone().sub(a);
     const length = Math.max(direction.length(), 0.025);
@@ -244,13 +203,39 @@ function Segment({
       direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0)
     );
     return { midpoint, quaternion, cylinderLength: Math.max(length - 2 * radius, 0.001) };
-  }, [start, end, radius]);
+  }, [startOwner, endOwner, radius]);
 
   return (
-    <mesh position={transform.midpoint} quaternion={transform.quaternion} castShadow receiveShadow>
-      <capsuleGeometry args={[radius, transform.cylinderLength, 8, 14]} />
-      <meshStandardMaterial color={color} roughness={0.34} metalness={0.68} />
+    <mesh
+      position={transform.midpoint}
+      quaternion={transform.quaternion}
+      material={material}
+      castShadow
+      receiveShadow
+    >
+      <capsuleGeometry args={[radius, transform.cylinderLength, 8, 12]} />
     </mesh>
+  );
+}
+
+function JointMotor({
+  materials,
+  radius = 0.052,
+  accent = false,
+}: {
+  materials: G1VisualMaterials;
+  radius?: number;
+  accent?: boolean;
+}) {
+  return (
+    <group>
+      <mesh material={materials.joint} castShadow>
+        <sphereGeometry args={[radius, 16, 12]} />
+      </mesh>
+      <mesh material={accent ? materials.accent : materials.dark} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius * 0.76, radius * 0.12, 8, 24]} />
+      </mesh>
+    </group>
   );
 }
 
@@ -334,6 +319,45 @@ function PushArrow({
 // (position + quaternion). The STL vertices were baked into the Three basis at
 // load time, so no per-frame conversion is needed here. Foot contact rings
 // stay as the honest data overlay (kernel contact booleans).
+// Display-only arm chains riding the torso group (kernel dynamics stop at the
+// torso). The chain table stores URDF joint origins root-first with parent
+// pointers; ArmGroup nests each link inside its parent's frame, so transforms
+// compose exactly like the URDF stack.
+function ArmGroup({
+  chain,
+  meshes,
+  idx,
+}: {
+  chain: (typeof G1_ARM_CHAINS)[number];
+  meshes: { geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
+  idx: number;
+}) {
+  const link = chain.links[idx];
+  const geometry = meshes.geometries[`${chain.side} ${armLabel(link.mesh)}`];
+  const childIdxs = chain.links
+    .map((c, ci) => (c.parent === idx ? ci : -1))
+    .filter((ci) => ci >= 0);
+  return (
+    <group position={ownerToThree(link.xyz)} rotation={[link.rpy[0], 0, 0]}>
+      {geometry ? <mesh geometry={geometry} material={meshes.material} castShadow receiveShadow /> : null}
+      {childIdxs.map((ci) => (
+        <ArmGroup key={chain.links[ci].mesh} chain={chain} meshes={meshes} idx={ci} />
+      ))}
+    </group>
+  );
+}
+
+function armLabel(mesh: string): string {
+  // "left_shoulder_pitch_link" -> "left shoulder pitch" (manifest key form);
+  // "left_rubber_hand" -> "left hand".
+  return mesh
+    .replace(/_link$/, "")
+    .replace(/_/g, " ")
+    .replace(" rubber", "");
+}
+
+
+
 function RobotPoseMeshes({
   sample,
   meshes,
@@ -369,6 +393,9 @@ function RobotPoseMeshes({
                 <mesh geometry={meshes.geometries.head} material={meshes.material} castShadow />
               </group>
             ) : null}
+            {name === "torso"
+              ? G1_ARM_CHAINS.map((chain) => <ArmGroup key={chain.side} chain={chain} meshes={meshes} idx={0} />)
+              : null}
           </group>
         );
       })}
