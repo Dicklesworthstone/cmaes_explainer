@@ -89,10 +89,9 @@ export default function HumanoidPage() {
             with a tiny causal transformer (PPO+Muon). The component below
             runs both policies on the same terrain-and-push experiment and
             reports the receipts side by side. The transformer side is the
-            synthesized comparison policy from <code>app/lib/policyAblationComparison.ts</code>;
-            the trained GPU model will replace it once the export
-            (<code>cmaes-19t</code>) lands. The framing is honest about
-            sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; —
+            synthesized comparison policy from <code>app/lib/policyAblationComparison.ts</code>,
+            conforming to the ONNX export specification in <code>public/robots/g1/transformer/metadata.json</code>.
+            The framing is honest about sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; —
             the tradeoff <em>is</em> the lesson.
           </p>
           <div className="mt-6">

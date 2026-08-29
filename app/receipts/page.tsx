@@ -34,6 +34,9 @@
 import type { Metadata } from "next";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { HonestyChipStack } from "../components/HonestyChipStack";
+import { MaterialDatabaseInspector } from "../components/MaterialDatabaseInspector";
+import { FurnitureCatalogInspector } from "../components/FurnitureCatalogInspector";
 
 export const metadata: Metadata = {
   title: "Physics receipts — phr-env-2026",
@@ -304,6 +307,21 @@ export default function ReceiptsPage() {
               <code className="rounded bg-slate-800/80 px-2 py-0.5 font-mono text-xs">tests/perf/physicsBench.lock.json</code>.
             </p>
           )}
+        </section>
+
+        {/* Interactive Honesty Chip Stack & Mathematical Provenance */}
+        <section className="space-y-4 pt-4">
+          <HonestyChipStack />
+        </section>
+
+        {/* PBR Material Database & Contact Friction Inspector */}
+        <section className="space-y-4 pt-4">
+          <MaterialDatabaseInspector />
+        </section>
+
+        {/* 70+ Craftsman Furniture Catalog & Articulation Inspector */}
+        <section className="space-y-4 pt-4">
+          <FurnitureCatalogInspector />
         </section>
 
         <footer className="border-t border-white/10 pt-6 text-xs text-slate-500">
