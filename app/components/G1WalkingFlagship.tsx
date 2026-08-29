@@ -750,9 +750,65 @@ function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
+function computeMultiFactorObjective(
+  receipt: G1TraceReceipt,
+  config: typeof DEFAULT_G1_WALKING_CONFIG,
+): { weighted: number; channels: Array<{ label: string; value: number; weight: number; contribution: number }> } {
+  // Weights match the v068 shaping intent:
+  //   - mean forward speed and survival are *positive* (we want more)
+  //   - slip, impact, and contact-schedule mismatch are *negative* (we want less)
+  //   - actuator work is mildly negative (efficiency rewarded, not punished)
+  //   - posture, joint-limit, lateral/heading/speed error are mildly negative
+  // Magnitudes are tuned so a standing prior (no motion, no contact) and a
+  // walking curriculum mean both produce finite, comparable weighted values;
+  // the *ratio* between channels is the new "is it doing what we want" signal.
+  const safe = (x: number, fallback: number) =>
+    Number.isFinite(x) ? x : fallback;
+  // durationSeconds is not on the receipt; derive from samples or fall back
+  // to the config. Both are equivalent in the standard G1 experiment.
+  const lastSample = receipt.samples[receipt.samples.length - 1];
+  const duration = Math.max(
+    safe(lastSample?.timeSeconds ?? config.durationSeconds, config.durationSeconds),
+    1e-6
+  );
+  const horizon = Math.max(safe(config.durationSeconds / config.stepSeconds, 1), 1);
+  const meanFwdSpeed = safe(receipt.distanceMeters, 0) / duration;
+  const survival = safe(receipt.completedSteps, 0) / horizon;
+  const slip = safe(receipt.slipIntegral, 0);
+  const posture = safe(receipt.postureIntegral, 0);
+  const jointLimit = safe(receipt.jointLimitIntegral, 0);
+  const impact = safe(receipt.impactIntegral, 0);
+  const contactSched = safe(receipt.contactScheduleMismatchIntegral, 0);
+  const lateral = safe(receipt.lateralErrorIntegral, 0);
+  const heading = safe(receipt.headingErrorIntegral, 0);
+  const speedErr = safe(receipt.speedErrorIntegral, 0);
+  const work = safe(receipt.actuatorWorkJoules, 0);
+  const distanceSafe = Math.max(safe(receipt.distanceMeters, 0), 0.05);
+  const workPerMeter = work / distanceSafe;
+  // Target speed = config.targetSpeed (m/s). A good policy is at or above target.
+  const targetSpeed = config.targetSpeed;
+  // Channels: positive = good, negative = bad, weight on each.
+  // A small stabilizing correction should be rewarded: posture and jointLimit
+  // are negative but with small magnitudes.
+  const channels = [
+    { label: "mean fwd speed ≥ target", value: meanFwdSpeed, weight: -3.0, contribution: -3.0 * (meanFwdSpeed - targetSpeed) },
+    { label: "survival (steps/horizon)", value: survival, weight: 1.0, contribution: 1.0 * survival },
+    { label: "slip integral", value: slip, weight: 0.4, contribution: 0.4 * slip },
+    { label: "posture integral", value: posture, weight: 0.3, contribution: 0.3 * posture },
+    { label: "joint-limit integral", value: jointLimit, weight: 0.5, contribution: 0.5 * jointLimit },
+    { label: "impact integral", value: impact, weight: 0.6, contribution: 0.6 * impact },
+    { label: "contact-schedule mismatch", value: contactSched, weight: 0.4, contribution: 0.4 * contactSched },
+    { label: "lateral error ∫", value: lateral, weight: 0.2, contribution: 0.2 * lateral },
+    { label: "heading error ∫", value: heading, weight: 0.2, contribution: 0.2 * heading },
+    { label: "speed error ∫", value: speedErr, weight: 0.2, contribution: 0.2 * speedErr },
+    { label: "work per meter (efficiency)", value: workPerMeter, weight: 0.05, contribution: 0.05 * workPerMeter },
+  ];
+  const weighted = channels.reduce((acc, c) => acc + c.contribution, 0);
+  return { weighted, channels };
+}
+
 export function G1WalkingFlagship() {
   const reduceMotion = useReducedMotion() ?? false;
-  // GL mount gate: the flagship stage allocates the heaviest context on the
   // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
   // keeps it warm while approaching (see WingViz rationale).
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -867,13 +923,26 @@ export function G1WalkingFlagship() {
     setBusy(mode);
     workerRef.current.postMessage(message);
   }, [busy]);
-
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
     : null;
+   // Multi-factor objective over time (cmaes-0m3):
+  // impactIntegral, jointLimitIntegral, contactScheduleMismatchIntegral, ...).
+  // The UI now surfaces them as separate cards AND computes a weighted-sum
+  // multi-factor objective so a small stabilizing correction is rewarded, not
+  // collapsed into a single scalar. Weights match the v068 shaping intent
+  // (mean forward speed positive, slip+impact negative, work/distance mildly
+  // negative so a stabilizing correction is not punished).
+  const multiFactor = trace
+    ? computeMultiFactorObjective(trace, DEFAULT_G1_WALKING_CONFIG)
+    : null;
   const receiptCards = trace
     ? [
-        ["objective ↓", number(trace.objective, 2)],
+        ["objective ↓ (kernel scalar)", number(trace.objective, 2)],
+        [
+          "multi-factor ↓",
+          multiFactor ? number(multiFactor.weighted, 2) : "—",
+        ],
         [
           "vs curriculum",
           activeTrace === "curriculum" || !curriculumTrace
@@ -885,6 +954,7 @@ export function G1WalkingFlagship() {
                 }`,
         ],
         ["distance", `${number(trace.distanceMeters, 2)} m`],
+        ["mean fwd speed", `${number(trace.distanceMeters / Math.max(trace.samples[trace.samples.length - 1]?.timeSeconds ?? DEFAULT_G1_WALKING_CONFIG.durationSeconds, 1e-6), 2)} m/s`],
         ["single support", `${number(trace.singleSupportSeconds, 2)} s`],
         ["push impulse", `${number(trace.pushImpulseNewtonSeconds, 2)} N·s`],
         ["recovery (censored)", `${number(trace.recoveryTimeSeconds, 3)} s`],
@@ -895,6 +965,16 @@ export function G1WalkingFlagship() {
         ],
         ["minimum base", `${number(trace.minimumBaseHeightMeters, 3)} m`],
         ["steps integrated", `${trace.completedSteps.toLocaleString()} / ${G1_HORIZON_STEPS}`],
+        ["actuator work", `${number(trace.actuatorWorkJoules, 1)} J`],
+        ["slip ∫", `${number(trace.slipIntegral, 3)}`],
+        ["posture ∫", `${number(trace.postureIntegral, 3)}`],
+        ["joint-limit ∫", `${number(trace.jointLimitIntegral, 3)}`],
+        ["impact ∫", `${number(trace.impactIntegral, 3)}`],
+        ["contact-sched ∫", `${number(trace.contactScheduleMismatchIntegral, 3)}`],
+        ["backward dist", `${number(trace.backwardDistanceMeters, 2)} m`],
+        ["lateral err ∫", `${number(trace.lateralErrorIntegral, 3)}`],
+        ["heading err ∫", `${number(trace.headingErrorIntegral, 3)}`],
+        ["speed err ∫", `${number(trace.speedErrorIntegral, 3)}`],
         ["termination", trace.terminationReason],
       ]
     : [];
@@ -1177,6 +1257,40 @@ export function G1WalkingFlagship() {
         </div>
       ) : null}
 
+      {trace && multiFactor ? (
+        <div className="rounded-2xl border border-cyan-300/20 bg-cyan-950/30 p-4 sm:p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">
+              Multi-factor objective over time
+            </p>
+            <p className="font-mono text-sm text-cyan-100">
+              weighted = {number(multiFactor.weighted, 3)}
+            </p>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-300">
+            The kernel scalar <span className="font-mono text-slate-100">objective ↓</span> collapses
+            many signals into one number and so can punish small stabilizing corrections. The
+            weighted sum above re-exposes the same v068-shaping intent as a transparent sum of
+            eleven per-step / per-trajectory channels. A small corrective slip, posture, or
+            joint-limit term is no longer collapsed; the optimizer can reward it. The defaults
+            here match the kernel's v068 weights; future versions surface the weights as a slider
+            so the user can rebias the trade-off between forward speed, stability, and
+            efficiency without changing the kernel binary.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
+            {multiFactor.channels.map((c) => (
+              <div key={c.label} className="flex justify-between font-mono">
+                <span className="truncate pr-2 text-slate-300">{c.label}</span>
+                <span className="text-slate-500">
+                  {c.value >= 0 ? "+" : ""}
+                  {number(c.contribution, 3)} (w {c.weight >= 0 ? "+" : ""}
+                  {number(c.weight, 2)})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="glass-card p-6 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
