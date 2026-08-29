@@ -3,6 +3,8 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
+import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
+import { buildFurniture } from "../lib/houseFurniture";
 import {
   BookOpen,
   Bot,
@@ -607,6 +609,40 @@ function ArmStage({
         <meshStandardMaterial color="#0b1424" roughness={0.92} metalness={0.12} />
       </mesh>
       <gridHelper args={[8, 40, "#24506e", "#1a2a4a"]} position={[0, 0.002, 0]} />
+      {/* Sears Craftsman furniture: the kernel obstacle slot renders as its
+          designated furniture piece (kernel-active collision); surrounding
+          pieces are display-only at catalog dims. Procedural meshes from
+          houseFurniture.ts — no GLTF. */}
+      {(() => {
+        const placement = admission ? armTaskFurniture(admission.config.task) : null;
+        if (!placement) return null;
+        const obstacleName = placement.obstacle.name;
+        const goalName = placement.goal.name;
+        const pieces = CRAFTSMAN_BUNGALOW_1928.furniture.filter(
+          (f) =>
+            f.room === "kitchen" ||
+            f.room === "living room" ||
+            f.name === obstacleName ||
+            f.name === goalName
+        );
+        return pieces.map((f) => {
+          const p3 = ownerPositionToThree(f.center);
+          const isObstacle = f.name === obstacleName;
+          const { group: furnGroup } = buildFurniture(f.name, f.size[0], f.size[1], f.height);
+          return (
+            <group key={f.name} position={[p3[0], 0, p3[2]]} rotation={[0, f.rotation, 0]}>
+              <primitive object={furnGroup} />
+              {isObstacle ? (
+                <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+                  <torusGeometry args={[0.09, 0.007, 8, 36]} />
+                  <meshBasicMaterial color="#fb7185" transparent opacity={0.55} />
+                </mesh>
+              ) : null}
+            </group>
+          );
+        });
+      })()}
+
       {admission ? <ArmEnvironment admission={admission} /> : null}
       {trace && admission ? (
         <ArmRig
