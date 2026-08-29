@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { G1WalkingFlagship } from "../components/G1WalkingFlagship";
-import { Navbar } from "../components/Navbar";
+import { PolicyAblationComparison } from "../components/PolicyAblationComparison";
+ import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
 export const metadata: Metadata = {
@@ -72,7 +73,32 @@ export default function HumanoidPage() {
 
         <div className="mt-12">
           <G1WalkingFlagship />
-        </div>
+         </div>
+        <section
+          id="ablation"
+          className="mx-auto mt-16 max-w-5xl"
+          aria-label="Policy architecture ablation: phase prior vs learned-from-scratch"
+        >
+          <h2 className="font-display text-2xl font-bold text-white">
+            Phase prior vs learned-from-scratch transformer — same experiment
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+            The flagship above uses a 5,040-D linear residual policy on a
+            hand-designed phase basis — a <em>strong, sample-efficient prior</em>.
+            The honest counterfactual is to learn the same task from scratch
+            with a tiny causal transformer (PPO+Muon). The component below
+            runs both policies on the same terrain-and-push experiment and
+            reports the receipts side by side. The transformer side is the
+            synthesized comparison policy from <code>app/lib/policyAblationComparison.ts</code>;
+            the trained GPU model will replace it once the export
+            (<code>cmaes-19t</code>) lands. The framing is honest about
+            sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; —
+            the tradeoff <em>is</em> the lesson.
+          </p>
+          <div className="mt-6">
+            <PolicyAblationComparison />
+          </div>
+        </section>
 
         <section className="mx-auto mt-16 max-w-3xl space-y-6 text-sm leading-7 text-slate-300">
           <h2 className="font-display text-2xl font-bold text-white">

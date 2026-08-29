@@ -15,6 +15,7 @@ import { MathProvider } from "./components/MathProvider";
 import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 import { G1WalkingFlagship } from "./components/G1WalkingFlagship";
 import { HouseholdArmFlagship } from "./components/HouseholdArmFlagship";
+import { PolicyAblationComparison } from "./components/PolicyAblationComparison";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -58,6 +59,28 @@ export default function Page() {
               </Section>
               <Section id="household-arm" title="128 dimensions: teach a robot arm to pick, carry, and place">
                 <HouseholdArmFlagship />
+              </Section>
+              <Section
+                id="ablation"
+                title="Phase prior vs learned-from-scratch transformer — same experiment"
+              >
+                <div className="space-y-4">
+                  <p className="max-w-3xl text-sm leading-7 text-slate-400">
+                    The flagship above uses a 5,040-D linear residual policy on a
+                    hand-designed phase basis — a strong, sample-efficient prior.
+                    The honest counterfactual is to learn the same task from
+                    scratch with a tiny causal transformer (PPO+Muon). The
+                    comparison below runs both policies on the same
+                    terrain-and-push experiment and reports the receipts side
+                    by side. The transformer side is the synthesized comparison
+                    policy from <code>app/lib/policyAblationComparison.ts</code>;
+                    the trained GPU model will replace it once the export
+                    (<code>cmaes-19t</code>) lands. The framing is honest about
+                    sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; — the
+                    tradeoff is the lesson.
+                  </p>
+                  <PolicyAblationComparison />
+                </div>
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">
                 <TechnicalAddendum />
