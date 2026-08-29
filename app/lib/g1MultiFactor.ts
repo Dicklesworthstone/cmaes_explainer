@@ -88,7 +88,6 @@ export function computeMultiFactorObjective(
   receipt: G1TraceReceipt,
   config: MultiFactorConfig,
 ): MultiFactorResult {
-  // Weights match the v068 shaping intent:
   // Weights and sign convention (see header docstring):
   //   - mean forward speed: weight -3.0; contribution inverts the sign of
   //     (mean - target) so a positive contribution = below target = penalty.
@@ -100,6 +99,7 @@ export function computeMultiFactorObjective(
    // Magnitudes are tuned so a standing prior (no motion, no contact) and a
    // walking curriculum mean both produce finite, comparable weighted values;
    // the *ratio* between channels is the new "is it doing what we want" signal.
+  const safe = (x: number, fallback: number): number =>
     Number.isFinite(x) ? x : fallback;
   // durationSeconds is not on the receipt; derive from samples or fall back
   // to the config. Both are equivalent in the standard G1 experiment.
