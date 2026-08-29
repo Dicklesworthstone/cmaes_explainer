@@ -14,13 +14,14 @@ import {
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
 type WorkerRequest =
-  | { type: "preview" }
+  | { type: "preview"; challenge: G1Challenge }
   | {
       type: "optimize";
       family: Exclude<CmaFamily, "full">;
       generations: number;
       seedIndex: number;
       mode?: "continue" | "fresh";
+      challenge: G1Challenge;
     }
   | { type: "compare"; challenge: G1Challenge; generations: number };
 
@@ -287,7 +288,7 @@ async function optimize(
     throw error;
   }
 }
-async function compareFamilies(requestedGenerations: number): Promise<void> {
+async function compareFamilies(requestedGenerations: number, challenge: G1Challenge = "terrain-and-push"): Promise<void> {
   const generations = Math.max(2, Math.min(8, Math.trunc(requestedGenerations)));
   const population = 16;
   const families: Exclude<CmaFamily, "full">[] = ["separable", "lm-cma", "lm-ma"];
@@ -374,7 +375,7 @@ async function compareFamilies(requestedGenerations: number): Promise<void> {
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
   const task = request.type === "preview"
-    ? preview()
+    ? preview(request.challenge ?? "terrain-and-push")
     : request.type === "compare"
       ? compareFamilies(request.generations)
       : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge);
