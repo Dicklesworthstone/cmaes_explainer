@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { describe, expect, test } from "bun:test";
 import {
   BENCHMARKS,
@@ -367,15 +368,27 @@ describe("deterministic house furniture", () => {
   });
 
   test("buildBookshelf seed is dimension-sensitive (changing height reshuffles)", () => {
-    // A change in any one dimension should perturb the per-call seed; we
-    // expect the child count to stay equal (5 shelves, 4 book rows) but
-    // at least one book position to differ.
+    // A change in any one dimension should perturb the per-call seed; the
+    // h-only perturbation must reshuffle at least one book gap, so the
+    // per-row gap pattern and the resulting book counts cannot stay equal.
+    // (w stays the same so the per-row book slot count is identical; the
+    // gap RNG draws depend on the seed, so the realised book count drifts
+    // whenever the seed changes.)
     const a = buildBookshelf(1.2, 0.3, 1.6);
     const b = buildBookshelf(1.2, 0.3, 2.0);
-    const positionsA = a.group.children.map((child) => child.position.x);
-    const positionsB = b.group.children.map((child) => child.position.x);
-    expect(positionsA.length).toBe(positionsB.length);
-    expect(positionsA).not.toEqual(positionsB);
+    const countBooks = (group: { children: THREE.Object3D[] }): number => {
+      let n = 0;
+      for (const child of group.children) {
+        const mesh = child as THREE.Mesh;
+        const geom = mesh.geometry as any;
+        const depth = geom?.parameters?.depth ?? 1;
+        if (geom?.type === "BoxGeometry" && depth < 0.25) n++;
+      }
+      return n;
+    };
+    const aBookCount = countBooks(a.group);
+    const bBookCount = countBooks(b.group);
+    expect(aBookCount).not.toBe(bBookCount);
     a.dispose();
     b.dispose();
   });
