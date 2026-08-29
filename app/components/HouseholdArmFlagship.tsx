@@ -161,7 +161,14 @@ function HouseholdObject({
   ghost?: boolean;
 }) {
   const opacity = ghost ? 0.22 : 1;
-  const material = ghost ? "#34d399" : task === "kitchen-mug" ? "#f8fafc" : task === "living-room-remote" ? "#111827" : "#fb923c";
+  let material = "#fb923c";
+  if (ghost) {
+    material = "#34d399";
+  } else if (task === "kitchen-mug") {
+    material = "#f8fafc";
+  } else if (task === "living-room-remote") {
+    material = "#111827";
+  }
   if (task === "kitchen-mug") {
     const radius = Math.max(dimensions[0], dimensions[1]) * 0.5;
     return (
@@ -922,6 +929,7 @@ export function HouseholdArmFlagship() {
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * ARM_POPULATION} complete physical rollouts`}
+            suppressHydrationWarning
           />
           <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
             <span>2</span>

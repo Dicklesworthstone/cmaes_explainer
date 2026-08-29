@@ -152,15 +152,20 @@ export class G1TrainEnv {
   }
 
   public getObservation(): G1Observation {
+    const omegaDot = 2.0 * Math.PI * 1.5;
+    const omegaRoll = Math.cos(this.phase) * 0.04 * omegaDot;
+    const omegaPitch = -Math.sin(this.phase * 2.0) * 0.06 * omegaDot;
+    const omegaYaw = 0.0;
+
     const raw: number[] = [
       ...this.jointPos,
       ...this.jointVel,
       this.currentRoll,
       this.currentPitch,
       this.currentYaw,
-      0.0,
-      0.0,
-      0.0, // angular vel
+      omegaRoll,
+      omegaPitch,
+      omegaYaw,
       0.0,
       0.0,
       -9.81, // linear accel
@@ -173,7 +178,7 @@ export class G1TrainEnv {
       jointPositions: [...this.jointPos],
       jointVelocities: [...this.jointVel],
       baseOrientationRpy: [this.currentRoll, this.currentPitch, this.currentYaw],
-      baseAngularVelocities: [0, 0, 0],
+      baseAngularVelocities: [omegaRoll, omegaPitch, omegaYaw],
       baseLinearAccelerations: [0, 0, -9.81],
       phaseSin: Math.sin(this.phase),
       phaseCos: Math.cos(this.phase),

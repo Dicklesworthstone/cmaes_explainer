@@ -487,13 +487,21 @@ function RobotPose({ sample, pushFraction }: { sample: G1TraceSample; pushFracti
         if (parent < 0) return null;
         const isLeft = link >= 1 && link <= 6;
         const isRight = link >= 7 && link <= 12;
+        let radius = 0.042;
+        if (link === 15) radius = 0.065;
+        else if (link >= 13) radius = 0.055;
+
+        let color = "#cbd5e1";
+        if (isLeft) color = "#22d3ee";
+        else if (isRight) color = "#8b5cf6";
+
         return (
           <Segment
             key={LINK_NAMES[link]}
             start={sample.linkPoses[parent].position}
             end={sample.linkPoses[link].position}
-            radius={link === 15 ? 0.065 : link >= 13 ? 0.055 : 0.042}
-            color={isLeft ? "#22d3ee" : isRight ? "#8b5cf6" : "#cbd5e1"}
+            radius={radius}
+            color={color}
           />
         );
       })}
@@ -1108,6 +1116,7 @@ export function G1WalkingFlagship() {
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
+            suppressHydrationWarning
           />
           <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
             <span>8</span>

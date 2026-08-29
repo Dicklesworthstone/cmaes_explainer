@@ -87,7 +87,7 @@ function invertSymmetricMatrix(A: number[][]): number[][] {
     aug[i] = aug[maxRow];
     aug[maxRow] = tmp;
 
-    const pivot = aug[i][i] || 1e-9;
+    const pivot = Math.abs(aug[i][i]) > 1e-9 ? aug[i][i] : (aug[i][i] < 0 ? -1e-9 : 1e-9);
     for (let j = 0; j < 2 * n; j++) aug[i][j] /= pivot;
 
     for (let k = 0; k < n; k++) {

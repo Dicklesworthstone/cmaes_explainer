@@ -79,8 +79,8 @@ export class CmaesHyperparameterOptimizer {
     const vals: number[] = [];
     for (let i = 0; i < this.specs.length; i++) {
       const spec = this.specs[i];
-      // Map normalized genotype in [-1, 1] to parameter interval
-      const norm = Math.max(-1.0, Math.min(1.0, genotype[i]));
+      const g = genotype[i] ?? 0.0;
+      const norm = Number.isFinite(g) ? Math.max(-1.0, Math.min(1.0, g)) : 0.0;
       const u = (norm + 1.0) / 2.0;
 
       let val: number;
