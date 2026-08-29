@@ -16,7 +16,7 @@ import {
   type G1TraceReceipt,
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
-
+import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -750,62 +750,7 @@ function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-function computeMultiFactorObjective(
-  receipt: G1TraceReceipt,
-  config: typeof DEFAULT_G1_WALKING_CONFIG,
-): { weighted: number; channels: Array<{ label: string; value: number; weight: number; contribution: number }> } {
-  // Weights match the v068 shaping intent:
-  //   - mean forward speed and survival are *positive* (we want more)
-  //   - slip, impact, and contact-schedule mismatch are *negative* (we want less)
-  //   - actuator work is mildly negative (efficiency rewarded, not punished)
-  //   - posture, joint-limit, lateral/heading/speed error are mildly negative
-  // Magnitudes are tuned so a standing prior (no motion, no contact) and a
-  // walking curriculum mean both produce finite, comparable weighted values;
-  // the *ratio* between channels is the new "is it doing what we want" signal.
-  const safe = (x: number, fallback: number) =>
-    Number.isFinite(x) ? x : fallback;
-  // durationSeconds is not on the receipt; derive from samples or fall back
-  // to the config. Both are equivalent in the standard G1 experiment.
-  const lastSample = receipt.samples[receipt.samples.length - 1];
-  const duration = Math.max(
-    safe(lastSample?.timeSeconds ?? config.durationSeconds, config.durationSeconds),
-    1e-6
-  );
-  const horizon = Math.max(safe(config.durationSeconds / config.stepSeconds, 1), 1);
-  const meanFwdSpeed = safe(receipt.distanceMeters, 0) / duration;
-  const survival = safe(receipt.completedSteps, 0) / horizon;
-  const slip = safe(receipt.slipIntegral, 0);
-  const posture = safe(receipt.postureIntegral, 0);
-  const jointLimit = safe(receipt.jointLimitIntegral, 0);
-  const impact = safe(receipt.impactIntegral, 0);
-  const contactSched = safe(receipt.contactScheduleMismatchIntegral, 0);
-  const lateral = safe(receipt.lateralErrorIntegral, 0);
-  const heading = safe(receipt.headingErrorIntegral, 0);
-  const speedErr = safe(receipt.speedErrorIntegral, 0);
-  const work = safe(receipt.actuatorWorkJoules, 0);
-  const distanceSafe = Math.max(safe(receipt.distanceMeters, 0), 0.05);
-  const workPerMeter = work / distanceSafe;
-  // Target speed = config.targetSpeed (m/s). A good policy is at or above target.
-  const targetSpeed = config.targetSpeed;
-  // Channels: positive = good, negative = bad, weight on each.
-  // A small stabilizing correction should be rewarded: posture and jointLimit
-  // are negative but with small magnitudes.
-  const channels = [
-    { label: "mean fwd speed ≥ target", value: meanFwdSpeed, weight: -3.0, contribution: -3.0 * (meanFwdSpeed - targetSpeed) },
-    { label: "survival (steps/horizon)", value: survival, weight: 1.0, contribution: 1.0 * survival },
-    { label: "slip integral", value: slip, weight: 0.4, contribution: 0.4 * slip },
-    { label: "posture integral", value: posture, weight: 0.3, contribution: 0.3 * posture },
-    { label: "joint-limit integral", value: jointLimit, weight: 0.5, contribution: 0.5 * jointLimit },
-    { label: "impact integral", value: impact, weight: 0.6, contribution: 0.6 * impact },
-    { label: "contact-schedule mismatch", value: contactSched, weight: 0.4, contribution: 0.4 * contactSched },
-    { label: "lateral error ∫", value: lateral, weight: 0.2, contribution: 0.2 * lateral },
-    { label: "heading error ∫", value: heading, weight: 0.2, contribution: 0.2 * heading },
-    { label: "speed error ∫", value: speedErr, weight: 0.2, contribution: 0.2 * speedErr },
-    { label: "work per meter (efficiency)", value: workPerMeter, weight: 0.05, contribution: 0.05 * workPerMeter },
-  ];
-  const weighted = channels.reduce((acc, c) => acc + c.contribution, 0);
-  return { weighted, channels };
-}
+
 
 export function G1WalkingFlagship() {
   const reduceMotion = useReducedMotion() ?? false;
@@ -1284,7 +1229,7 @@ export function G1WalkingFlagship() {
             efficiency without changing the kernel binary.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
-            {multiFactor.channels.map((c) => (
+            {multiFactor.channels.map((c: MultiFactorChannel) => (
               <div key={c.label} className="flex justify-between font-mono">
                 <span className="truncate pr-2 text-slate-300">{c.label}</span>
                 <span className="text-slate-500">

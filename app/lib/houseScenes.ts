@@ -128,7 +128,7 @@ export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {
     { name: "dresser", room: "bedroom", center: [-0.9, -3.1], size: [1.1, 0.5], height: 0.95, rotation: 0, note: "oak dresser" },
     { name: "bookshelf", room: "living room", center: [-3.6, 4.6], size: [0.35, 1.2], height: 1.9, rotation: 0, note: "built-in craftsman shelving" },
     { name: "armchair-1", room: "living room", center: [-3.3, 3.6], size: [0.95, 0.9], height: 0.9, rotation: 0, kind: "armchair", materialId: "fabric-cotton", note: "Mission-style armchair" },
-    { name: "armchair-2", room: "living room", center: [-0.4, 4.4], size: [0.95, 0.9], height: 0.9, rotation: -0.3, kind: "armchair", materialId: "fabric-leather", note: "leather armchair" },
+    { name: "armchair-2", room: "living room", center: [-0.9, 4.4], size: [0.95, 0.9], height: 0.9, rotation: -0.3, kind: "armchair", materialId: "fabric-leather", note: "leather armchair" },
     { name: "lamp-table", room: "living room", center: [-3.3, 1.6], size: [0.5, 0.5], height: 0.55, rotation: 0, kind: "side-table", materialId: "oak-wood", note: "Craftsman side table" },
     { name: "table-lamp", room: "living room", center: [-3.2, 1.5], size: [0.35, 0.35], height: 1.6, rotation: 0, kind: "lamp", materialId: "brass", note: "brass table lamp" },
     { name: "rug-living", room: "living room", center: [-1.4, 2.6], size: [2.4, 1.6], height: 0.02, rotation: 0, kind: "rug", materialId: "fabric-velvet", note: "oriental rug" },

@@ -512,11 +512,15 @@ export class ContactGraph {
           }
         } else if (bodyB.shape.type === "plane") {
           const cList = collideBodyPlane(bodyA, bodyB);
+          for (const c of cList) {
+            // Normal from bodyA (object) to bodyB (plane) is -planeN
+            c.normal = vecScale(c.normal, -1.0);
+          }
           detectedContacts.push(...cList);
         } else if (bodyA.shape.type === "plane") {
           const cList = collideBodyPlane(bodyB, bodyA);
           for (const c of cList) {
-            c.normal = vecScale(c.normal, -1.0);
+            // Normal from bodyA (plane) to bodyB (object) is +planeN (already correct)
             const tmp = c.localPointA;
             c.localPointA = c.localPointB;
             c.localPointB = tmp;

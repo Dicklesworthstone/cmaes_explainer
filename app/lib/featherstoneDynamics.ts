@@ -234,21 +234,67 @@ export function transformSpatialInertia(
     [0, 0, 0, 0, 0, 0],
   ];
 
+  const rx = r[0], ry = r[1], rz = r[2];
+  const r00 = R[0][0], r01 = R[0][1], r02 = R[0][2];
+  const r10 = R[1][0], r11 = R[1][1], r12 = R[1][2];
+  const r20 = R[2][0], r21 = R[2][1], r22 = R[2][2];
+
   // Evaluate X^T * I * X column by column using unit basis vectors e_c
   for (let c = 0; c < 6; c++) {
-    const ec: SpatialVector = [0, 0, 0, 0, 0, 0];
-    ec[c] = 1.0;
+    // 1. v_child = X * ec
+    let wx = 0, wy = 0, wz = 0, vx = 0, vy = 0, vz = 0;
+    if (c === 0) wx = 1;
+    else if (c === 1) wy = 1;
+    else if (c === 2) wz = 1;
+    else if (c === 3) vx = 1;
+    else if (c === 4) vy = 1;
+    else if (c === 5) vz = 1;
 
-    // v_child = X * ec
-    const v_child = transformSpatialMotion(R, r, ec);
-    // f_child = I * v_child
-    const f_child = multiplyInertiaVector(I, v_child);
-    // col = X^T * f_child
-    const col = transformSpatialForce(R, r, f_child);
+    const rxw_x = ry * wz - rz * wy;
+    const rxw_y = rz * wx - rx * wz;
+    const rxw_z = rx * wy - ry * wx;
 
+    const vcw_x = r00 * wx + r01 * wy + r02 * wz;
+    const vcw_y = r10 * wx + r11 * wy + r12 * wz;
+    const vcw_z = r20 * wx + r21 * wy + r22 * wz;
+
+    const lin_px = vx - rxw_x;
+    const lin_py = vy - rxw_y;
+    const lin_pz = vz - rxw_z;
+
+    const vcv_x = r00 * lin_px + r01 * lin_py + r02 * lin_pz;
+    const vcv_y = r10 * lin_px + r11 * lin_py + r12 * lin_pz;
+    const vcv_z = r20 * lin_px + r21 * lin_py + r22 * lin_pz;
+
+    // 2. f_child = I * v_child
+    let f0 = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, f5 = 0;
     for (let row = 0; row < 6; row++) {
-      out[row][c] = col[row];
+      const I_row = I[row];
+      const sum = I_row[0] * vcw_x + I_row[1] * vcw_y + I_row[2] * vcw_z +
+                  I_row[3] * vcv_x + I_row[4] * vcv_y + I_row[5] * vcv_z;
+      if (row === 0) f0 = sum;
+      else if (row === 1) f1 = sum;
+      else if (row === 2) f2 = sum;
+      else if (row === 3) f3 = sum;
+      else if (row === 4) f4 = sum;
+      else if (row === 5) f5 = sum;
     }
+
+    // 3. col = X^T * f_child
+    const p_fx = r00 * f3 + r10 * f4 + r20 * f5;
+    const p_fy = r01 * f3 + r11 * f4 + r21 * f5;
+    const p_fz = r02 * f3 + r12 * f4 + r22 * f5;
+
+    const p_nx_rot = r00 * f0 + r10 * f1 + r20 * f2;
+    const p_ny_rot = r01 * f0 + r11 * f1 + r21 * f2;
+    const p_nz_rot = r02 * f0 + r12 * f1 + r22 * f2;
+
+    out[0][c] = p_nx_rot + (ry * p_fz - rz * p_fy);
+    out[1][c] = p_ny_rot + (rz * p_fx - rx * p_fz);
+    out[2][c] = p_nz_rot + (rx * p_fy - ry * p_fx);
+    out[3][c] = p_fx;
+    out[4][c] = p_fy;
+    out[5][c] = p_fz;
   }
 
   return out;

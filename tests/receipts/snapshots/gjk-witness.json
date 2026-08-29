@@ -1,0 +1,127 @@
+{
+  "owner": "gjk-witness",
+  "version": 1,
+  "gitHead": "83dd0569a495288a40bf2c1379774d87566f55b6",
+  "capturedAt": "2026-08-29T18:47:59.723Z",
+  "perStep": [
+    {
+      "step": 0,
+      "objective": 1.090185347602901,
+      "obstacleDistance": 0.8450926738014506,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 1,
+      "objective": 1.033294480104433,
+      "obstacleDistance": 0.8240442106783301,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 2,
+      "objective": 0.9591194222107364,
+      "obstacleDistance": 0.7469655596796924,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 3,
+      "objective": 0.8689584429765499,
+      "obstacleDistance": 0.6271843198007591,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 4,
+      "objective": 0.7668739224839272,
+      "obstacleDistance": 0.4854117555950009,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 5,
+      "objective": 0.6589899294204786,
+      "obstacleDistance": 0.34616163137690603,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 6,
+      "objective": 0.5524333139678848,
+      "obstacleDistance": 0.23351155867145815,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 7,
+      "objective": 0.45410141065999976,
+      "obstacleDistance": 0.16693975844319153,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 8,
+      "objective": 0.3694694265817584,
+      "obstacleDistance": 0.15795709973740418,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 9,
+      "objective": 0.3016437283234077,
+      "obstacleDistance": 0.20811676584921962,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 10,
+      "objective": 0.2508247229766085,
+      "obstacleDistance": 0.30874569482163744,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 11,
+      "objective": 0.2142722059276886,
+      "obstacleDistance": 0.44244423065021465,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 12,
+      "objective": 0.18677916712927325,
+      "obstacleDistance": 0.5860946818771209,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 13,
+      "objective": 0.16157213044170332,
+      "obstacleDistance": 0.7148585804618425,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 14,
+      "objective": 0.13148234919265955,
+      "obstacleDistance": 0.8064714785557767,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    },
+    {
+      "step": 15,
+      "objective": 0.09018534760290012,
+      "obstacleDistance": 0.8450926738014501,
+      "cbfGradientNorm": 0,
+      "contactImpulse": 0
+    }
+  ],
+  "summary": {
+    "completedSteps": 16,
+    "terminationReason": "horizon",
+    "minimumObstacleDistance": 0.15795709973740418,
+    "maximumContactImpulse": 0,
+    "finalObjective": 0.09018534760290012
+  }
+}

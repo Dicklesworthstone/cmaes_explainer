@@ -262,7 +262,7 @@ export function runWorkload(
 export function compareToEnvelope(
   measured: WorkloadEnvelope,
   locked: WorkloadEnvelope,
-): BenchResult["exceedancePct"] {
+): NonNullable<BenchResult["exceedancePct"]> {
   return {
     p50: ((measured.p50Ms - locked.p50Ms) / locked.p50Ms) * 100,
     p95: ((measured.p95Ms - locked.p95Ms) / locked.p95Ms) * 100,
@@ -344,9 +344,11 @@ if (require.main === module) {
   const locked = readEnvelopeFile();
   if (locked && locked.envelopes[workloadId]) {
     const pct = compareToEnvelope(result.envelope, locked.envelopes[workloadId]);
-  console.log(
-    `drift vs locked: p50=${(pct.p50 ?? 0).toFixed(1)}% p95=${(pct.p95 ?? 0).toFixed(1)}% p99=${(pct.p99 ?? 0).toFixed(1)}%`,
-  );
+    if (pct) {
+      console.log(
+        `drift vs locked: p50=${(pct.p50 ?? 0).toFixed(1)}% p95=${(pct.p95 ?? 0).toFixed(1)}% p99=${(pct.p99 ?? 0).toFixed(1)}%`,
+      );
+    }
   } else {
     console.log("no locked envelope yet; this is a first baseline");
   }

@@ -380,8 +380,15 @@ export function setGoalCells(
     }
   }
 }
-
-/** Single Bellman sweep (in-place update of the value grid). */
+/**
+ * Single Bellman sweep (in-place update of the value grid).
+ *
+ * The optional `anchors` parameter, when present, is a Float64Array
+ * the same length as `values`. Cells where `anchors[i]` is a finite
+ * number are pinned to that value (their values cannot be changed
+ * by the sweep); this is how the fine-window boundary is
+ * anchored to the coarse-grid value.
+ */
 export function bellmanSweep(
   grid: ValueGrid,
   sdf: SDF2D,
@@ -389,6 +396,7 @@ export function bellmanSweep(
   actions: ActionSet,
   cost: ClearanceCostParams,
   precomputed?: { baseCosts: Float64Array; isBlocked: Uint8Array; scratch: Float64Array },
+  anchors?: Float64Array | null,
 ): number {
   const { width, height, resolution, values, goal } = grid;
   const len = values.length;
@@ -404,6 +412,10 @@ export function bellmanSweep(
       const idx = rowOffset + ix;
       if (goal[idx]) {
         next[idx] = 0;
+        continue;
+      }
+      if (anchors && Number.isFinite(anchors[idx])) {
+        next[idx] = anchors[idx];
         continue;
       }
 
@@ -466,6 +478,7 @@ export function runValueIteration(
   sdf: SDF2D,
   options: Pick<MultiResolutionOptions, "gamma" | "actions" | "cost" | "epsilon"> & {
     maxSweeps: number;
+    anchors?: Float64Array | null;
   },
 ): { sweeps: number; finalDelta: number } {
   const { width, height, resolution, goal } = grid;
@@ -504,6 +517,7 @@ export function runValueIteration(
       options.actions,
       options.cost,
       precomputed,
+      options.anchors,
     );
     sweeps++;
     if (finalDelta < options.epsilon) break;
@@ -646,7 +660,27 @@ export function runClearanceValueIteration(
   for (const g of goals) {
     setGoalCells(fineGrid, [g.center], g.radius, sdf);
   }
-  // Warm start: interpolate the coarse value at the fine cell centers.
+  // Soft boundary anchors: for cells on the fine-window boundary
+  // that are not goal cells, pin their value to the warm-start
+  // coarse value. This way, when the actual goal is outside the
+  // fine window (the common case for "G1 is far from the
+  // destination room"), the value iteration still converges to a
+  // finite value via these boundary anchors. Without this, cells
+  // unreachable from any in-window goal stay at +Infinity.
+  for (let iy = 0; iy < fineH; iy++) {
+    for (let ix = 0; ix < fineW; ix++) {
+      const isBoundary = ix === 0 || iy === 0 || ix === fineW - 1 || iy === fineH - 1;
+      if (!isBoundary) continue;
+      const idx = iy * fineW + ix;
+      if (fineGrid.goal[idx]) continue; // goal cells are pinned to 0
+      // The warm-start loop has already set fineGrid.values[idx]
+      // to the bilinear coarse value. Re-pin (in case the
+      // iteration touched it).
+      // (No-op here; the warm-start already set the values.)
+    }
+  }
+  // Soft boundary anchors: re-pin at the end of every fine
+  // sweep so the boundary value cannot drift.
   for (let iy = 0; iy < fineH; iy++) {
     for (let ix = 0; ix < fineW; ix++) {
       const idx = iy * fineW + ix;
@@ -660,30 +694,47 @@ export function runClearanceValueIteration(
       const iy0 = Math.max(0, Math.min(coarseH - 1, Math.floor(cy)));
       const ix1 = Math.min(coarseW - 1, ix0 + 1);
       const iy1 = Math.min(coarseH - 1, iy0 + 1);
-      const fx = cx - ix0;
-      const fy = cy - iy0;
+      const fx = Math.max(0, Math.min(1, cx - ix0));
+      const fy = Math.max(0, Math.min(1, cy - iy0));
       const v00 = coarseGrid.values[iy0 * coarseW + ix0];
       const v10 = coarseGrid.values[iy0 * coarseW + ix1];
       const v01 = coarseGrid.values[iy1 * coarseW + ix0];
       const v11 = coarseGrid.values[iy1 * coarseW + ix1];
-      const v0 = Number.isFinite(v00) && Number.isFinite(v10)
-        ? v00 * (1 - fx) + v10 * fx
-        : Number.POSITIVE_INFINITY;
-      const v1 = Number.isFinite(v01) && Number.isFinite(v11)
-        ? v01 * (1 - fx) + v11 * fx
-        : Number.POSITIVE_INFINITY;
-      const v = Number.isFinite(v0) && Number.isFinite(v1)
-        ? v0 * (1 - fy) + v1 * fy
-        : Number.POSITIVE_INFINITY;
+      let sum = 0;
+      let totalW = 0;
+      const w00 = (1 - fx) * (1 - fy);
+      const w10 = fx * (1 - fy);
+      const w01 = (1 - fx) * fy;
+      const w11 = fx * fy;
+      if (Number.isFinite(v00)) { sum += v00 * w00; totalW += w00; }
+      if (Number.isFinite(v10)) { sum += v10 * w10; totalW += w10; }
+      if (Number.isFinite(v01)) { sum += v01 * w01; totalW += w01; }
+      if (Number.isFinite(v11)) { sum += v11 * w11; totalW += w11; }
+      const v = totalW > 0 ? sum / totalW : Number.POSITIVE_INFINITY;
       fineGrid.values[idx] = v;
     }
   }
+
+  // Soft boundary anchors: freeze boundary values to coarse warm-start estimates
+  const fineAnchors = new Float64Array(fineW * fineH).fill(Number.POSITIVE_INFINITY);
+  for (let iy = 0; iy < fineH; iy++) {
+    for (let ix = 0; ix < fineW; ix++) {
+      const isBoundary = ix === 0 || iy === 0 || ix === fineW - 1 || iy === fineH - 1;
+      if (!isBoundary) continue;
+      const idx = iy * fineW + ix;
+      if (!fineGrid.goal[idx]) {
+        fineAnchors[idx] = fineGrid.values[idx];
+      }
+    }
+  }
+
   const fineRes = runValueIteration(fineGrid, sdf, {
     gamma: opts.gamma,
     actions: opts.actions,
     cost: opts.cost,
     epsilon: opts.epsilon,
     maxSweeps: opts.fineMaxSweeps,
+    anchors: fineAnchors,
   });
   // Policy.
   const policy = extractPolicy(fineGrid, sdf);
@@ -727,9 +778,15 @@ export function sampleValueAt(grid: ValueGrid, wx: number, wy: number): number {
   const v10 = grid.values[iy0 * grid.width + ix1];
   const v01 = grid.values[iy1 * grid.width + ix0];
   const v11 = grid.values[iy1 * grid.width + ix1];
-  // If the cell value is +Infinity, treat it as +Infinity (unreachable).
-  // Otherwise, use the standard bilinear interpolation.
-  const v0 = v00 * (1 - fx) + (Number.isFinite(v10) ? v10 * fx : 0);
-  const v1 = v01 * (1 - fx) + (Number.isFinite(v11) ? v11 * fx : 0);
-  return v0 * (1 - fy) + (Number.isFinite(v1) ? v1 * fy : 0);
+  let sum = 0;
+  let totalW = 0;
+  const w00 = (1 - fx) * (1 - fy);
+  const w10 = fx * (1 - fy);
+  const w01 = (1 - fx) * fy;
+  const w11 = fx * fy;
+  if (Number.isFinite(v00)) { sum += v00 * w00; totalW += w00; }
+  if (Number.isFinite(v10)) { sum += v10 * w10; totalW += w10; }
+  if (Number.isFinite(v01)) { sum += v01 * w01; totalW += w01; }
+  if (Number.isFinite(v11)) { sum += v11 * w11; totalW += w11; }
+  return totalW > 0 ? sum / totalW : Number.POSITIVE_INFINITY;
 }
