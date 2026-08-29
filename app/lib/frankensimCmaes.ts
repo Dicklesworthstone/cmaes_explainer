@@ -986,7 +986,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 37;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.7";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.8";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
