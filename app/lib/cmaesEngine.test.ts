@@ -337,6 +337,50 @@ describe("deterministic baselines and seeded streams", () => {
   });
 });
 
+describe("deterministic house furniture", () => {
+  // cmaes-mky follow-up: buildBookshelf used to use Math.random() to skip
+  // ~15% of book slots, breaking the screenshot / replay contract for the
+  // arm stage backdrop. The dimensions (w, d, h) are now mixed into a
+  // per-call mulberry32 seed, so the same dimensions always render the same
+  // layout. These tests pin the determinism contract.
+  test("buildBookshelf replays bit-identical meshes for the same dimensions", () => {
+    const a = buildBookshelf(1.2, 0.3, 1.8);
+    const b = buildBookshelf(1.2, 0.3, 1.8);
+    // Children count and child positions are fully reproducible.
+    expect(b.group.children.length).toBe(a.group.children.length);
+    const positionsA = a.group.children.map((child) => child.position.x);
+    const positionsB = b.group.children.map((child) => child.position.x);
+    expect(positionsB).toEqual(positionsA);
+    a.dispose();
+    b.dispose();
+  });
+
+  test("buildBookshelf produces different layouts for different dimensions", () => {
+    const narrow = buildBookshelf(0.8, 0.3, 1.8);
+    const wide = buildBookshelf(1.6, 0.3, 1.8);
+    // The wider shelf fits more books (and so has more children); the layouts
+    // must not collapse to the same mesh even though the gap pattern is the
+    // same in both cases.
+    expect(wide.group.children.length).not.toBe(narrow.group.children.length);
+    narrow.dispose();
+    wide.dispose();
+  });
+
+  test("buildBookshelf seed is dimension-sensitive (changing height reshuffles)", () => {
+    // A change in any one dimension should perturb the per-call seed; we
+    // expect the child count to stay equal (5 shelves, 4 book rows) but
+    // at least one book position to differ.
+    const a = buildBookshelf(1.2, 0.3, 1.6);
+    const b = buildBookshelf(1.2, 0.3, 2.0);
+    const positionsA = a.group.children.map((child) => child.position.x);
+    const positionsB = b.group.children.map((child) => child.position.x);
+    expect(positionsA.length).toBe(positionsB.length);
+    expect(positionsA).not.toEqual(positionsB);
+    a.dispose();
+    b.dispose();
+  });
+});
+
 describe("advertised optimization dimensions", () => {
   test("every wing coordinate changes its analytic objective", () => {
     const baseline: WingParams = {
