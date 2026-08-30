@@ -2,10 +2,24 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  loadAblationInputs,
-  runMeasuredAblation,
   type AblationPairResult,
 } from "../lib/policyAblationComparison";
+
+type AblationWorkerResponse =
+  | { type: "result"; seed: number; result: AblationPairResult }
+  | { type: "error"; seed: number; error: string };
+
+function spawnAblationWorker(onMessage: (msg: AblationWorkerResponse) => void): Worker {
+  // Bundled worker: all measurement compute (720-step transformer rollout +
+  // CMA-ES search) runs off the main thread — the page stays responsive.
+  const worker = new Worker(
+    new URL("../workers/policyAblationWorker.ts", import.meta.url),
+  );
+  worker.onmessage = (e: MessageEvent<AblationWorkerResponse>) => onMessage(e.data);
+  worker.onerror = (e) =>
+    onMessage({ type: "error", seed: -1, error: e.message || "worker error" });
+  return worker;
+}
 
 /**
  * Side-by-side ablation between two policy architectures for the G1
@@ -13,7 +27,7 @@ import {
  *   1. CMA-ES side — a real live search (105-param phase-basis linear
  *      policy, 2,400 rollouts on G1TrainEnv) re-run per seed selection.
  *   2. Transformer side — REAL trained weights (fs-g1-train, PPO + Muon,
- *      native Rust) inferred in-browser and rolled out on the same env at
+ *      native Rust) inferred in a worker and rolled out on the same env at
  *      the same 720-step horizon. Golden-vector parity + receipt
  *      cross-checks live in tests/policyAblationComparison.test.ts.
  * Known limits, disclosed in-card: the stand-in env models no push,
@@ -29,19 +43,28 @@ export function PolicyAblationComparison() {
 
   useEffect(() => {
     let cancelled = false;
-    const run = async () => {
-      try {
-        const inputs = await loadAblationInputs();
-        const measured = runMeasuredAblation(inputs, seed);
-        if (!cancelled) setState({ loadedForSeed: seed, result: measured, error: null });
-      } catch (err: unknown) {
+    let worker: Worker | null = null;
+    // Spawn inside a microtask so every setState is async (hooks rule:
+    // no synchronous setState within the effect body).
+    Promise.resolve()
+      .then(() => {
+        worker = spawnAblationWorker((msg) => {
+          if (cancelled) return;
+          if (msg.type === "result") {
+            setState({ loadedForSeed: msg.seed, result: msg.result, error: null });
+          } else {
+            setState((prev) => ({ ...prev, error: msg.error }));
+          }
+        });
+        worker.postMessage({ type: "measure", seed });
+      })
+      .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         if (!cancelled) setState((prev) => ({ ...prev, error: message }));
-      }
-    };
-    void run();
+      });
     return () => {
       cancelled = true;
+      worker?.terminate();
     };
   }, [seed]);
 
@@ -66,8 +89,8 @@ export function PolicyAblationComparison() {
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto">
         <p className="text-neutral-400 text-xs animate-pulse">
-          Measuring both policies (live CMA-ES search + 720-step transformer
-          rollout in this browser)…
+          Measuring both policies in a background worker (live CMA-ES search +
+          720-step transformer rollout) — the page stays interactive.
         </p>
       </div>
     );
@@ -85,9 +108,9 @@ export function PolicyAblationComparison() {
             </h2>
           </div>
           <p className="text-xs text-neutral-400">
-            Both sides measured live: CMA-ES searched in this browser;
-            transformer weights trained natively (fs-g1-train, PPO+Muon) and
-            inferred here — same env, same 720-step horizon.
+            Both sides measured live in a background worker: CMA-ES searched
+            here; transformer weights trained natively (fs-g1-train, PPO+Muon)
+            and inferred here — same env, same 720-step horizon.
           </p>
         </div>
         <div className="flex items-center gap-3">

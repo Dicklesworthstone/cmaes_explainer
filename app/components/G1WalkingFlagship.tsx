@@ -824,6 +824,7 @@ function RobotStage({
   timeOfDay,
   activeRoom,
   showRoof,
+  activeRouteId,
   isPlaying,
   playbackSpeed,
   sampleIndex,
@@ -839,6 +840,7 @@ function RobotStage({
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   showRoof?: boolean;
+  activeRouteId?: string;
   isPlaying: boolean;
   playbackSpeed: number;
   sampleIndex: number;
@@ -870,6 +872,7 @@ function RobotStage({
         showFurniture={!xrayMode}
         showRoof={showRoof}
         activeRoom={activeRoom}
+        activeRouteId={activeRouteId}
         timeOfDay={timeOfDay}
       />
 
@@ -1197,9 +1200,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               embedded ? "min-h-[100svh]" : "min-h-[620px]"
             }`}
           >
+            {/* Top HUD: stacks vertically on phones (both clusters shared the
+                top band and collided); splits into left/right corners ≥sm. */}
+            <div
+              className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${
+                embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
+              } sm:flex-row sm:items-start sm:justify-between`}
+            >
             {/* Top Badges & Interactive Mode Bar */}
-            <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-auto">
-              <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
+            <div className="flex flex-wrap gap-2 pointer-events-auto">
+              <span className="max-sm:hidden rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
                 owner poses · 480 Hz terrain physics
               </span>
               <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
@@ -1218,7 +1228,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 title="Toggle between Photo-Realistic House and Cybernetic Biomechanics X-Ray View"
               >
                 <Eye className="h-3.5 w-3.5" />
-                {xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}
+                <span className="sm:hidden">{xrayMode ? "⚡ X-Ray" : "🏡 House"}</span>
+                <span className="max-sm:hidden">{xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}</span>
               </button>
 
               {/* Push Wand Button */}
@@ -1229,16 +1240,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 title="Apply a 15 N·s lateral impulse to test HOCBF balance recovery"
               >
                 <Zap className="h-3.5 w-3.5 text-rose-300" />
-                🥊 Push Robot (+15 N·s)
+                <span className="sm:hidden">🥊 Push +15 N·s</span>
+                <span className="max-sm:hidden">🥊 Push Robot (+15 N·s)</span>
               </button>
             </div>
 
             {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
-            <div
-              className={`absolute right-5 z-10 flex flex-wrap items-center gap-2 pointer-events-auto ${
-                embedded ? "top-20" : "top-5"
-              }`}
-            >
+            <div className="flex flex-wrap items-center gap-2 pointer-events-auto self-start">
               {/* Lighting Atmosphere Selector */}
               <div className="flex items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md">
                 {(
@@ -1300,6 +1308,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 })}
               </div>
             </div>
+            </div>
 
             {meshState.phase === "loading" ? (
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
@@ -1319,7 +1328,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               className={`absolute z-10 flex items-center pointer-events-none ${
                 embedded
                   ? "bottom-3 left-3 right-3 justify-center"
-                  : "bottom-5 left-5 right-5 flex-wrap justify-between gap-2"
+                  : "bottom-5 left-5 right-5 flex-wrap justify-between gap-2 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
               }`}
             >
               <span
@@ -1332,7 +1341,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   : `Cyan / violet rings are contact booleans. ${stageSceneHint(xrayMode, cameraView)}`}
               </span>
               {!embedded ? (
-                <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
+                <span className="max-sm:hidden rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
                   Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
                 </span>
               ) : null}
@@ -1349,6 +1358,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   timeOfDay={timeOfDay}
                   activeRoom={activeRoom}
                   showRoof={showRoof}
+                  activeRouteId={activeRouteId}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
                   sampleIndex={sampleIndex}

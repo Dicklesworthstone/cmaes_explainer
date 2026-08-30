@@ -987,92 +987,100 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               embedded ? "min-h-[calc(100svh-64px)]" : "min-h-[570px]"
             }`}
           >
-            {/* Top Toolbar */}
+            {/* Top HUD: stacks vertically on phones; corners ≥sm */}
             <div
-              className={`pointer-events-auto absolute z-10 flex flex-wrap items-center ${
-                embedded ? "left-3 top-3 gap-1" : "left-5 top-5 gap-2"
-              }`}
+              className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${
+                embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
+              } sm:flex-row sm:items-start sm:justify-between`}
             >
-              <span
-                className={`rounded-full border border-orange-300/25 bg-slate-950/82 font-bold uppercase text-orange-200 backdrop-blur-md ${
-                  embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
+              {/* Top Toolbar Badges */}
+              <div
+                className={`pointer-events-auto flex flex-wrap items-center ${
+                  embedded ? "gap-1" : "gap-2"
                 }`}
               >
-                8 owner poses · 90 Hz physics
-              </span>
-              <span
-                className={`rounded-full border border-emerald-300/25 bg-slate-950/82 font-bold uppercase text-emerald-200 backdrop-blur-md ${
-                  embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
-                }`}
-              >
-                {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
-              </span>
+                <span
+                  className={`max-sm:hidden rounded-full border border-orange-300/25 bg-slate-950/82 font-bold uppercase text-orange-200 backdrop-blur-md ${
+                    embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
+                  }`}
+                >
+                  8 owner poses · 90 Hz physics
+                </span>
+                <span
+                  className={`rounded-full border border-emerald-300/25 bg-slate-950/82 font-bold uppercase text-emerald-200 backdrop-blur-md ${
+                    embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
+                  }`}
+                >
+                  {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
+                </span>
 
-              {/* Microscope Mode Toggle */}
-              <button
-                type="button"
-                onClick={() => setMicroscopeMode(!microscopeMode)}
-                className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
-                } ${
-                  microscopeMode
-                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
-                }`}
-                title="Toggle 3D Coulomb friction cone overlay at contact points"
-              >
-                <Eye className="h-3.5 w-3.5" />
-                {embedded
-                  ? microscopeMode
-                    ? "Friction cones on"
-                    : "Friction cones"
-                  : microscopeMode
-                    ? "🔬 Friction Cones (μ=0.65) Active"
-                    : "🔬 Friction Cones Overlay"}
-              </button>
-            </div>
+                {/* Microscope Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setMicroscopeMode(!microscopeMode)}
+                  className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                    embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
+                  } ${
+                    microscopeMode
+                      ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                      : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                  }`}
+                  title="Toggle 3D Coulomb friction cone overlay at contact points"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span className="sm:hidden">{microscopeMode ? "Cones on" : "Friction cones"}</span>
+                  <span className="max-sm:hidden">
+                    {embedded
+                      ? microscopeMode
+                        ? "Friction cones on"
+                        : "Friction cones"
+                      : microscopeMode
+                        ? "🔬 Friction Cones (μ=0.65) Active"
+                        : "🔬 Friction Cones Overlay"}
+                  </span>
+                </button>
+              </div>
 
-            {/* Camera View Selector */}
-            <div
-              className={`pointer-events-auto absolute z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md ${
-                embedded ? "left-3 top-12" : "right-5 top-5"
-              }`}
-            >
-              {(
-                [
-                  { id: "studio", label: "Studio", icon: Camera },
-                  { id: "microscope", label: "Grasp Focus", icon: Eye },
-                  { id: "overhead", label: "Top-Down", icon: Activity },
-                ] as const
-              ).map((cam) => {
-                const Icon = cam.icon;
-                const isSelected = cameraMode === cam.id;
-                return (
-                  <button
-                    key={cam.id}
-                    type="button"
-                    onClick={() => setCameraMode(cam.id)}
-                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
-                      isSelected
-                        ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {cam.label}
-                  </button>
-                );
-              })}
+              {/* Camera View Selector */}
+              <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md self-start">
+                {(
+                  [
+                    { id: "studio", label: "Studio", icon: Camera },
+                    { id: "microscope", label: "Grasp Focus", icon: Eye },
+                    { id: "overhead", label: "Top-Down", icon: Activity },
+                  ] as const
+                ).map((cam) => {
+                  const Icon = cam.icon;
+                  const isSelected = cameraMode === cam.id;
+                  return (
+                    <button
+                      key={cam.id}
+                      type="button"
+                      onClick={() => setCameraMode(cam.id)}
+                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                        isSelected
+                          ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {cam.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div
               className={`pointer-events-none absolute z-10 flex flex-wrap items-end justify-between gap-2 ${
-                embedded ? "bottom-3 left-3 right-3" : "bottom-5 left-5 right-5"
+                embedded ? "bottom-3 left-3 right-3" : "bottom-5 left-5 right-5 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
               }`}
             >
               <span
                 className={`max-w-xl truncate rounded-xl border border-white/10 bg-slate-950/82 text-slate-300 backdrop-blur-md ${
-                  embedded ? "px-2.5 py-1.5 text-[0.62rem]" : "px-3 py-2 text-xs leading-5"
+                  embedded
+                    ? "px-2.5 py-1.5 text-[0.62rem]"
+                    : "px-3 py-2 text-xs leading-5 max-sm:hidden"
                 }`}
               >
                 {embedded

@@ -2,6 +2,10 @@
 
 import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
+import {
+  CRAFTSMAN_WALKING_ROUTES,
+  type CraftsmanWalkingRoute,
+} from "../lib/craftsmanCatalogData";
 
 // ---------------------------------------------------------------------------
 // High-Resolution Procedural Texture Generators (Three.js Skill Doctrine)
@@ -282,6 +286,7 @@ export interface SearsCraftsmanEstateProps {
     | "bedroom"
     | "bathroom"
     | "cutaway";
+  activeRouteId?: string;
   timeOfDay?: "afternoon-sun" | "golden-hour" | "evening-glow";
 }
 
@@ -290,8 +295,12 @@ export function SearsCraftsmanEstate({
   showRoof = false,
   showObstacleHulls = false,
   activeRoom = "living",
+  activeRouteId,
   timeOfDay = "afternoon-sun",
 }: SearsCraftsmanEstateProps) {
+  const activeRoute: CraftsmanWalkingRoute | undefined = activeRouteId
+    ? CRAFTSMAN_WALKING_ROUTES.find((r) => r.id === activeRouteId)
+    : undefined;
   // 1. Texture caching & disposal
   const textures = useMemo(() => {
     if (typeof document === "undefined") return null;
@@ -1140,6 +1149,47 @@ export function SearsCraftsmanEstate({
         intensity={0.7}
         color="#fed7aa"
       />
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 10. Whole-House Obstacle Traversal Waypoints & Gate Rings         */}
+      {/* ----------------------------------------------------------------- */}
+      {activeRoute && (
+        <group position={[0, 0.02, 0]}>
+          {activeRoute.waypoints.map((wp, idx) => (
+            <group key={idx} position={[wp.pos[0], 0, wp.pos[1]]}>
+              {/* Floor beacon ring */}
+              <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.22, 0.28, 32]} />
+                <meshBasicMaterial
+                  color="#38bdf8"
+                  transparent
+                  opacity={0.75}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+              {/* Inner pulsed disk */}
+              <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[0.16, 24]} />
+                <meshBasicMaterial
+                  color="#0284c7"
+                  transparent
+                  opacity={0.35}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+              {/* Waypoint vertical laser beacon */}
+              <mesh position={[0, 0.6, 0]}>
+                <cylinderGeometry args={[0.008, 0.008, 1.2, 8]} />
+                <meshBasicMaterial
+                  color="#38bdf8"
+                  transparent
+                  opacity={0.65}
+                />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      )}
     </group>
   );
 }

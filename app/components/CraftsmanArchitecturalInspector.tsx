@@ -67,7 +67,7 @@ export function CraftsmanArchitecturalInspector({
             <Home className="h-5 w-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h3 className="text-base font-bold text-white">
                 1928 Sears Craftsman Bungalow
               </h3>
@@ -82,7 +82,7 @@ export function CraftsmanArchitecturalInspector({
         </div>
 
         {/* Controls Toolbar */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {onToggleRoof && (
             <button
               type="button"
@@ -99,7 +99,7 @@ export function CraftsmanArchitecturalInspector({
           )}
 
           {/* Atmosphere Selector */}
-          <div className="flex items-center gap-1 rounded-xl border border-amber-500/30 bg-slate-900/90 p-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl border border-amber-500/30 bg-slate-900/90 p-1">
             {(
               [
                 { id: "afternoon-sun", label: "Daylight", icon: Sun },
@@ -159,7 +159,7 @@ export function CraftsmanArchitecturalInspector({
       {/* Walking Route Selector */}
       {onSelectRoute && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-y-1">
             <label className="text-[0.68rem] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
               <Footprints className="h-3.5 w-3.5 text-amber-400" />
               G1 Whole-House Obstacle Traversal Routes
@@ -200,7 +200,7 @@ export function CraftsmanArchitecturalInspector({
       {/* Active Room Metadata & Catalog Spec Grid */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:col-span-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-y-1">
             <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
               <Compass className="h-4 w-4 text-amber-400" />
               {activeRoomMeta.name} Architectural Profile
