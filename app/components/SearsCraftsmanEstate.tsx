@@ -39,11 +39,11 @@ function createOakHardwoodTexture(): THREE.CanvasTexture {
       ctx.beginPath();
       ctx.moveTo(gx, 0);
       ctx.bezierCurveTo(
-        gx + (Math.sin(gIdx) * 6),
+        gx + Math.sin(gIdx) * 6,
         340,
-        gx - (Math.cos(gIdx) * 6),
+        gx - Math.cos(gIdx) * 6,
         680,
-        gx + (Math.sin(gIdx * 2) * 4),
+        gx + Math.sin(gIdx * 2) * 4,
         1024
       );
       ctx.stroke();
@@ -192,7 +192,10 @@ function createAmberMicaTexture(): THREE.CanvasTexture {
     const y = (Math.cos(i * 27.7) * 0.5 + 0.5) * 256;
     const size = 6 + (i % 12);
     const alpha = 0.15 + (i % 5) * 0.08;
-    ctx.fillStyle = i % 2 === 0 ? `rgba(255, 235, 170, ${alpha})` : `rgba(160, 75, 15, ${alpha})`;
+    ctx.fillStyle =
+      i % 2 === 0
+        ? `rgba(255, 235, 170, ${alpha})`
+        : `rgba(160, 75, 15, ${alpha})`;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + size, y + size * 0.4);
@@ -213,12 +216,22 @@ function createAmberMicaTexture(): THREE.CanvasTexture {
 
 export interface SearsCraftsmanEstateProps {
   showFurniture?: boolean;
-  activeRoom?: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+  showRoof?: boolean;
+  activeRoom?:
+    | "all"
+    | "living"
+    | "dining"
+    | "kitchen"
+    | "porch"
+    | "bedroom"
+    | "bathroom"
+    | "cutaway";
   timeOfDay?: "afternoon-sun" | "golden-hour" | "evening-glow";
 }
 
 export function SearsCraftsmanEstate({
   showFurniture = true,
+  showRoof = false,
   activeRoom = "living",
   timeOfDay = "afternoon-sun",
 }: SearsCraftsmanEstateProps) {
@@ -368,6 +381,42 @@ export function SearsCraftsmanEstate({
       metalness: 0.05,
     });
 
+    const roofShingle = new THREE.MeshStandardMaterial({
+      color: "#2a422e", // Classic Sears moss green asphalt shingles
+      roughness: 0.86,
+      metalness: 0.05,
+    });
+
+    const cedarShake = new THREE.MeshStandardMaterial({
+      color: "#5c3a1e", // Upper gable cedar shingles
+      roughness: 0.78,
+      metalness: 0.02,
+    });
+
+    const lawnGrass = new THREE.MeshStandardMaterial({
+      color: "#2a5426",
+      roughness: 0.92,
+      metalness: 0.0,
+    });
+
+    const flagStone = new THREE.MeshStandardMaterial({
+      color: "#606b74",
+      roughness: 0.78,
+      metalness: 0.05,
+    });
+
+    const potteryRookwood = new THREE.MeshStandardMaterial({
+      color: "#3e6b48", // Matte green cucumber glaze
+      roughness: 0.32,
+      metalness: 0.08,
+    });
+
+    const potteryVanBriggle = new THREE.MeshStandardMaterial({
+      color: "#68334b", // Matte mulberry glaze
+      roughness: 0.35,
+      metalness: 0.08,
+    });
+
     return {
       oakWood,
       fumedDarkOak,
@@ -387,6 +436,12 @@ export function SearsCraftsmanEstate({
       oliveWool,
       leadedGlass,
       riverStone,
+      roofShingle,
+      cedarShake,
+      lawnGrass,
+      flagStone,
+      potteryRookwood,
+      potteryVanBriggle,
     };
   }, [textures, timeOfDay]);
 
@@ -408,6 +463,27 @@ export function SearsCraftsmanEstate({
 
   return (
     <group>
+      {/* ----------------------------------------------------------------- */}
+      {/* 0. Exterior Landscaping & Foundation Skirting                     */}
+      {/* ----------------------------------------------------------------- */}
+      {/* Green Lawn Perimeter */}
+      <mesh position={[0, -0.01, 1.0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[26, 26]} />
+        <primitive object={materials.lawnGrass} attach="material" />
+      </mesh>
+
+      {/* Flagstone Cobblestone Garden Walkway */}
+      <mesh position={[0, 0.002, 7.8]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[1.4, 4.8]} />
+        <primitive object={materials.flagStone} attach="material" />
+      </mesh>
+
+      {/* Foundation Riverstone Skirting Base */}
+      <mesh position={[0, 0.15, 0.7]} castShadow receiveShadow>
+        <boxGeometry args={[8.4, 0.3, 10.4]} />
+        <primitive object={materials.riverStone} attach="material" />
+      </mesh>
+
       {/* ----------------------------------------------------------------- */}
       {/* 1. Complete Multi-Room Flooring System                             */}
       {/* ----------------------------------------------------------------- */}
@@ -530,6 +606,26 @@ export function SearsCraftsmanEstate({
           <primitive object={materials.fumedDarkOak} attach="material" />
         </mesh>
 
+        {/* Plate Rail with Period Craftsman Art Pottery */}
+        <mesh position={[0, 1.38, 0.06]} castShadow receiveShadow>
+          <boxGeometry args={[4.2, 0.05, 0.12]} />
+          <primitive object={materials.fumedDarkOak} attach="material" />
+        </mesh>
+        {/* Rookwood & Van Briggle Pottery Vases */}
+        {[-1.8, 1.6].map((vx, vIdx) => (
+          <mesh key={vIdx} position={[vx, 1.5, 0.06]} castShadow>
+            <cylinderGeometry args={[0.04, 0.06, 0.18, 16]} />
+            <primitive
+              object={
+                vIdx % 2 === 0
+                  ? materials.potteryRookwood
+                  : materials.potteryVanBriggle
+              }
+              attach="material"
+            />
+          </mesh>
+        ))}
+
         {/* Sears Clinker Brick Fireplace Breast */}
         <group position={[-1.2, 0, 0.02]}>
           <mesh position={[0, 1.3, 0.22]} castShadow receiveShadow>
@@ -586,8 +682,49 @@ export function SearsCraftsmanEstate({
       </group>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. Formal Dining Room & Built-in China Buffet                     */}
+      {/* 4. Colonnade Room Divider & Formal Dining Room                     */}
       {/* ----------------------------------------------------------------- */}
+      {/* Craftsman Colonnade with Built-In Bookcases (Dividing Living & Dining) */}
+      <group position={[0.4, 0, 2.2]}>
+        {/* North and South Bookcase Cabinets with Tapered Columns */}
+        {[-1.2, 1.2].map((colZ, idx) => (
+          <group key={idx} position={[0, 0, colZ]}>
+            {/* Low Bookcase Base */}
+            <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+              <boxGeometry args={[0.42, 1.1, 0.95]} />
+              <primitive object={materials.fumedDarkOak} attach="material" />
+            </mesh>
+            {/* Colorful Period Books inside Shelves */}
+            {[-0.2, 0.2].map((bx, bIdx) => (
+              <mesh key={bIdx} position={[0.02, 0.45, bx]} castShadow>
+                <boxGeometry args={[0.3, 0.28, 0.38]} />
+                <meshStandardMaterial
+                  color={
+                    bIdx === 0
+                      ? "#7f1d1d"
+                      : idx === 0
+                      ? "#1e3a8a"
+                      : "#14532d"
+                  }
+                  roughness={0.7}
+                />
+              </mesh>
+            ))}
+            {/* Tapered Square Column */}
+            <mesh position={[0, 1.95, 0]} castShadow receiveShadow>
+              <boxGeometry args={[0.22, 1.7, 0.22]} />
+              <primitive object={materials.fumedDarkOak} attach="material" />
+            </mesh>
+          </group>
+        ))}
+        {/* Cased Colonnade Header Archway Beam */}
+        <mesh position={[0, 2.75, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.32, 0.18, 3.4]} />
+          <primitive object={materials.fumedDarkOak} attach="material" />
+        </mesh>
+      </group>
+
+      {/* Formal Dining Room Built-ins & Furniture */}
       <group position={[2.1, 0, 0]}>
         {/* Built-in China Buffet / Sideboard */}
         {showFurniture && (
@@ -613,7 +750,11 @@ export function SearsCraftsmanEstate({
             {/* Center Beveled Splashback Mirror */}
             <mesh position={[0, 1.35, 0.02]}>
               <planeGeometry args={[0.78, 0.65]} />
-              <meshStandardMaterial color="#c0c8d0" roughness={0.08} metalness={0.9} />
+              <meshStandardMaterial
+                color="#c0c8d0"
+                roughness={0.08}
+                metalness={0.9}
+              />
             </mesh>
 
             {/* Craftsman Trestle Dining Table & Chairs */}
@@ -625,7 +766,12 @@ export function SearsCraftsmanEstate({
               </mesh>
               {/* End Trestles */}
               {[-0.65, 0.65].map((tx, idx) => (
-                <mesh key={idx} position={[tx, 0.36, 0]} castShadow receiveShadow>
+                <mesh
+                  key={idx}
+                  position={[tx, 0.36, 0]}
+                  castShadow
+                  receiveShadow
+                >
                   <boxGeometry args={[0.08, 0.72, 0.72]} />
                   <primitive object={materials.fumedDarkOak} attach="material" />
                 </mesh>
@@ -676,8 +822,17 @@ export function SearsCraftsmanEstate({
               <primitive object={materials.whiteEnamel} attach="material" />
             </mesh>
             {/* Cooktop Burners */}
-            {[[-0.2, 0.15], [0.2, 0.15], [-0.2, -0.15], [0.2, -0.15]].map(([bx, bz], idx) => (
-              <mesh key={idx} position={[bx, 0.97, bz]} rotation={[Math.PI / 2, 0, 0]}>
+            {[
+              [-0.2, 0.15],
+              [0.2, 0.15],
+              [-0.2, -0.15],
+              [0.2, -0.15],
+            ].map(([bx, bz], idx) => (
+              <mesh
+                key={idx}
+                position={[bx, 0.97, bz]}
+                rotation={[Math.PI / 2, 0, 0]}
+              >
                 <torusGeometry args={[0.08, 0.012, 8, 24]} />
                 <primitive object={materials.castIron} attach="material" />
               </mesh>
@@ -723,7 +878,12 @@ export function SearsCraftsmanEstate({
             </mesh>
             {/* Pillows */}
             {[-0.42, 0.42].map((px, idx) => (
-              <mesh key={idx} position={[px, 0.58, -0.72]} rotation={[0.2, 0, 0]} castShadow>
+              <mesh
+                key={idx}
+                position={[px, 0.58, -0.72]}
+                rotation={[0.2, 0, 0]}
+                castShadow
+              >
                 <boxGeometry args={[0.48, 0.14, 0.32]} />
                 <meshStandardMaterial color="#f0ede6" roughness={0.8} />
               </mesh>
@@ -737,7 +897,12 @@ export function SearsCraftsmanEstate({
               <primitive object={materials.whiteEnamel} attach="material" />
             </mesh>
             {/* Ball & Claw Brass Feet */}
-            {[[-0.65, -0.28], [0.65, -0.28], [-0.65, 0.28], [0.65, 0.28]].map(([fx, fz], idx) => (
+            {[
+              [-0.65, -0.28],
+              [0.65, -0.28],
+              [-0.65, 0.28],
+              [0.65, 0.28],
+            ].map(([fx, fz], idx) => (
               <mesh key={idx} position={[fx, 0.06, fz]} castShadow>
                 <sphereGeometry args={[0.06, 12, 8]} />
                 <primitive object={materials.antiqueBrass} attach="material" />
@@ -781,7 +946,12 @@ export function SearsCraftsmanEstate({
           </mesh>
           <mesh castShadow>
             <boxGeometry args={[0.52, 0.34, 0.52]} />
-            <meshStandardMaterial color="#2d261e" wireframe roughness={0.3} metalness={0.8} />
+            <meshStandardMaterial
+              color="#2d261e"
+              wireframe
+              roughness={0.3}
+              metalness={0.8}
+            />
           </mesh>
           <pointLight
             color="#f59e0b"
@@ -793,7 +963,67 @@ export function SearsCraftsmanEstate({
       </group>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 8. Physically Realistic PBR Daylight & Sunlight Lighting Rig      */}
+      {/* 8. Low-Pitched Craftsman Gabled Roof & Rafter Tails               */}
+      {/* ----------------------------------------------------------------- */}
+      {(showRoof || activeRoom === "cutaway") && (
+        <group position={[0, 3.2, 0.8]}>
+          {/* East and West Roof Pitch Planes */}
+          <mesh
+            position={[-2.3, 0.55, 0]}
+            rotation={[0, 0, 0.28]}
+            castShadow
+            receiveShadow
+          >
+            <planeGeometry args={[5.2, 10.8]} />
+            <primitive object={materials.roofShingle} attach="material" />
+          </mesh>
+          <mesh
+            position={[2.3, 0.55, 0]}
+            rotation={[0, 0, -0.28]}
+            castShadow
+            receiveShadow
+          >
+            <planeGeometry args={[5.2, 10.8]} />
+            <primitive object={materials.roofShingle} attach="material" />
+          </mesh>
+
+          {/* Exposed Decorative Rafter Tails along the Eaves */}
+          {Array.from({ length: 16 }).map((_, rIdx) => {
+            const rz = -5.0 + rIdx * 0.68;
+            return (
+              <React.Fragment key={rIdx}>
+                <mesh position={[-4.4, 0.05, rz]} castShadow>
+                  <boxGeometry args={[0.35, 0.08, 0.06]} />
+                  <primitive object={materials.fumedDarkOak} attach="material" />
+                </mesh>
+                <mesh position={[4.4, 0.05, rz]} castShadow>
+                  <boxGeometry args={[0.35, 0.08, 0.06]} />
+                  <primitive object={materials.fumedDarkOak} attach="material" />
+                </mesh>
+              </React.Fragment>
+            );
+          })}
+
+          {/* Triangle Knee Braces under Gables */}
+          {[-3.8, 3.8].map((kx, kIdx) => (
+            <group key={kIdx} position={[kx, 0, 4.8]}>
+              <mesh rotation={[0, 0, kx < 0 ? -0.78 : 0.78]} castShadow>
+                <boxGeometry args={[0.08, 0.65, 0.08]} />
+                <primitive object={materials.fumedDarkOak} attach="material" />
+              </mesh>
+            </group>
+          ))}
+
+          {/* Exterior Brick Chimney Stack */}
+          <mesh position={[-2.8, 1.2, -0.2]} castShadow receiveShadow>
+            <boxGeometry args={[0.85, 2.2, 0.85]} />
+            <primitive object={materials.clinkerBrick} attach="material" />
+          </mesh>
+        </group>
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* 9. Physically Realistic PBR Daylight & Sunlight Lighting Rig      */}
       {/* ----------------------------------------------------------------- */}
       <hemisphereLight
         args={[

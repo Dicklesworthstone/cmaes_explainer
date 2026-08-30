@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   Layers,
   Sparkles,
+  Eye,
+  Sliders,
 } from "lucide-react";
 import {
   SEARS_CRAFTSMAN_CATALOG,
@@ -24,6 +26,8 @@ export interface CraftsmanArchitecturalInspectorProps {
   onSelectRoom: (roomId: string) => void;
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   onSelectTimeOfDay: (tod: "afternoon-sun" | "golden-hour" | "evening-glow") => void;
+  showRoof?: boolean;
+  onToggleRoof?: () => void;
 }
 
 export function CraftsmanArchitecturalInspector({
@@ -31,6 +35,8 @@ export function CraftsmanArchitecturalInspector({
   onSelectRoom,
   timeOfDay,
   onSelectTimeOfDay,
+  showRoof = false,
+  onToggleRoof,
 }: CraftsmanArchitecturalInspectorProps) {
   const [selectedPieceId, setSelectedPieceId] = useState<string>("fireplace-inglenook");
 
@@ -65,33 +71,51 @@ export function CraftsmanArchitecturalInspector({
           </div>
         </div>
 
-        {/* Atmosphere Selector */}
-        <div className="flex items-center gap-1 rounded-xl border border-amber-500/30 bg-slate-900/90 p-1">
-          {(
-            [
-              { id: "afternoon-sun", label: "Daylight", icon: Sun },
-              { id: "golden-hour", label: "Golden Hour", icon: Sunset },
-              { id: "evening-glow", label: "Evening Glow", icon: Moon },
-            ] as const
-          ).map((tod) => {
-            const Icon = tod.icon;
-            const isSelected = timeOfDay === tod.id;
-            return (
-              <button
-                key={tod.id}
-                type="button"
-                onClick={() => onSelectTimeOfDay(tod.id)}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-                  isSelected
-                    ? "bg-amber-500/30 text-amber-200 border border-amber-400/40 shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tod.label}
-              </button>
-            );
-          })}
+        {/* Controls Toolbar */}
+        <div className="flex items-center gap-2">
+          {onToggleRoof && (
+            <button
+              type="button"
+              onClick={onToggleRoof}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                showRoof
+                  ? "bg-amber-500/20 text-amber-200 border-amber-400/40"
+                  : "bg-slate-900/90 text-slate-400 border-white/10 hover:text-slate-200"
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>{showRoof ? "Roof Eaves (On)" : "Cutaway View"}</span>
+            </button>
+          )}
+
+          {/* Atmosphere Selector */}
+          <div className="flex items-center gap-1 rounded-xl border border-amber-500/30 bg-slate-900/90 p-1">
+            {(
+              [
+                { id: "afternoon-sun", label: "Daylight", icon: Sun },
+                { id: "golden-hour", label: "Golden Hour", icon: Sunset },
+                { id: "evening-glow", label: "Evening Glow", icon: Moon },
+              ] as const
+            ).map((tod) => {
+              const Icon = tod.icon;
+              const isSelected = timeOfDay === tod.id;
+              return (
+                <button
+                  key={tod.id}
+                  type="button"
+                  onClick={() => onSelectTimeOfDay(tod.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
+                    isSelected
+                      ? "bg-amber-500/30 text-amber-200 border border-amber-400/40 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tod.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

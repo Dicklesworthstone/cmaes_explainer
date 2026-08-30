@@ -813,6 +813,7 @@ function RobotStage({
   cameraView,
   timeOfDay,
   activeRoom,
+  showRoof,
   isPlaying,
   playbackSpeed,
   sampleIndex,
@@ -827,6 +828,7 @@ function RobotStage({
   cameraView: "orbit" | "follow" | "pov" | "blueprint";
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+  showRoof?: boolean;
   isPlaying: boolean;
   playbackSpeed: number;
   sampleIndex: number;
@@ -856,6 +858,7 @@ function RobotStage({
       {/* 1928 Sears Craftsman Estate (Complete 7-Room Whole-House Architectural Environment) */}
       <SearsCraftsmanEstate
         showFurniture={!xrayMode}
+        showRoof={showRoof}
         activeRoom={activeRoom}
         timeOfDay={timeOfDay}
       />
@@ -936,6 +939,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [xrayMode, setXrayMode] = useState(embedded);
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
+  const [showRoof, setShowRoof] = useState(false);
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -1270,6 +1274,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   cameraView={cameraView}
                   timeOfDay={timeOfDay}
                   activeRoom={activeRoom}
+                  showRoof={showRoof}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
                   sampleIndex={sampleIndex}
@@ -1322,6 +1327,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               onSelectRoom={(r) => setActiveRoom(r as any)}
               timeOfDay={timeOfDay}
               onSelectTimeOfDay={setTimeOfDay}
+              showRoof={showRoof}
+              onToggleRoof={() => setShowRoof(!showRoof)}
             />
           )}
         </div>
