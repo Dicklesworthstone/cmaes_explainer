@@ -86,9 +86,11 @@ The robotics-owner artifact and the live upstream FrankenSim workspace are
 related but not interchangeable provenance claims. The current upstream
 `fs-cmaes-viz-wasm` crate remains the separate low-dimensional teaching
 surface; its package version must never be used to describe the robot ABI.
-Likewise, newer upstream `fs-dfo` / `fs-ascent` APIs (including NSGA-II/III and
-Pareto tracing) are source capabilities until a versioned browser ABI, robot
-receipt contract, and parity battery admit them into this runtime.
+Likewise, newer upstream `fs-dfo` / `fs-ascent` APIs—including NSGA-II/III,
+MOEA/D, bounded Pareto archives, hypervolume accounting, gradient Pareto
+tracing, versioned mating/normalization identities, and production WFG1-WFG9
+evaluators—are source capabilities until a versioned browser ABI, robot receipt
+contract, and parity battery admit them into this runtime.
 
 The focused routes render only the flagship lab. They are also useful for deterministic visual regression testing in the web repository.
 

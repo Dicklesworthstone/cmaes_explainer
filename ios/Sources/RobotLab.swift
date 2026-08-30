@@ -195,13 +195,13 @@ enum RobotLab: String, CaseIterable, Identifiable {
         case .humanoid:
             [
                 ("Now in this app", "Whole-estate rendering, architectural room inspection, exploration sigma, live convergence, measured transformer ablation, and outer HPO are included from the latest source."),
-                ("Now in FrankenSim source", "Deterministic NSGA-II/III, public tournament selection, reference-direction survival, Pareto tracing, and DTLZ/WFG batteries materially extend the upstream optimization layer."),
+                ("Now in FrankenSim source", "Deterministic NSGA-II/III and MOEA/D, versioned mating and normalization policies, reference-direction survival, Pareto/hypervolume utilities, and production WFG1–WFG9 evaluators materially extend the upstream optimization layer."),
                 ("Not yet claimed", "Those many-objective APIs are not labeled as the active robot owner until a versioned browser ABI and robot receipt contract ship."),
             ]
         case .arm:
             [
                 ("Now in this app", "The latest multi-obstacle owner path, full Craftsman task settings, tactile microscope, long-horizon continuation, and four-family physical race are bundled."),
-                ("Now in FrankenSim source", "The upstream optimization layer can preserve a Pareto set rather than collapsing placement, force, work, clearance, and risk into one scalar."),
+                ("Now in FrankenSim source", "NSGA-II/III, MOEA/D, bounded Pareto archives, hypervolume accounting, and identity-bound WFG1–WFG9 studies can preserve and audit a frontier rather than collapsing placement, force, work, clearance, and risk into one scalar."),
                 ("Not yet claimed", "The current arm owner still returns its disclosed scalar plus transparent physical channels; a Pareto robot ABI remains future integration work."),
             ]
         }

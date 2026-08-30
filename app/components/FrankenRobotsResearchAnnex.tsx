@@ -100,10 +100,11 @@ export function FrankenRobotsResearchAnnex() {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Current upstream source</p>
             <h3 className="mt-2 font-bold text-white">Many-objective search has moved forward</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              FrankenSim now contains deterministic NSGA-II/III machinery, public tournament
-              selection, reference-direction survival, Pareto utilities, and frozen DTLZ/WFG
-              batteries. That opens a future robot lab where stability, speed, work, clearance,
-              and impact are explored as a frontier instead of collapsed prematurely.
+              FrankenSim now contains deterministic NSGA-II/III and MOEA/D, versioned mating and
+              normalization policies, reference-direction survival, bounded Pareto archives,
+              hypervolume accounting, and production WFG1–WFG9 evaluators with replay-visible
+              identities. That opens a future robot lab where stability, speed, work, clearance,
+              and impact are explored as an auditable frontier instead of collapsed prematurely.
             </p>
           </article>
           <article className="rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] p-5">
