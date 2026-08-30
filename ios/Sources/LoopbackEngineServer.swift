@@ -15,6 +15,35 @@ enum EngineServerError: LocalizedError {
     }
 }
 
+/// One-shot, lock-protected handoff for NWListener's concurrent state callback.
+/// The listener can report terminal states from Network's queue after a caller
+/// has already resumed; taking the continuation under a lock makes every later
+/// callback a no-op and is valid under Swift 6 sendability rules.
+private final class URLContinuationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<URL, Error>?
+
+    init(_ continuation: CheckedContinuation<URL, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(returning url: URL) {
+        take()?.resume(returning: url)
+    }
+
+    func resume(throwing error: Error) {
+        take()?.resume(throwing: error)
+    }
+
+    private func take() -> CheckedContinuation<URL, Error>? {
+        lock.lock()
+        defer { lock.unlock() }
+        let value = continuation
+        continuation = nil
+        return value
+    }
+}
+
 /// Serves the bundled static export on an ephemeral loopback-only port.
 ///
 /// The browser worker pool and threaded WASM kernel require an HTTP origin and
@@ -61,25 +90,20 @@ final class LoopbackEngineServer {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            var pending: CheckedContinuation<URL, Error>? = continuation
+            let gate = URLContinuationGate(continuation)
             listener.stateUpdateHandler = { state in
-                guard let active = pending else { return }
                 switch state {
                 case .ready:
                     guard let port = listener.port,
                           let url = URL(string: "http://127.0.0.1:\(port.rawValue)/") else {
-                        pending = nil
-                        active.resume(throwing: EngineServerError.failed("No loopback port was assigned."))
+                        gate.resume(throwing: EngineServerError.failed("No loopback port was assigned."))
                         return
                     }
-                    pending = nil
-                    active.resume(returning: url)
+                    gate.resume(returning: url)
                 case let .failed(error):
-                    pending = nil
-                    active.resume(throwing: EngineServerError.failed(error.localizedDescription))
+                    gate.resume(throwing: EngineServerError.failed(error.localizedDescription))
                 case .cancelled:
-                    pending = nil
-                    active.resume(throwing: EngineServerError.failed("The loopback listener was cancelled."))
+                    gate.resume(throwing: EngineServerError.failed("The loopback listener was cancelled."))
                 default:
                     break
                 }
