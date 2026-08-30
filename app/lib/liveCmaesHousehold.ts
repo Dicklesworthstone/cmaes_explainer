@@ -40,6 +40,14 @@ export interface CmaesOwnerConfig {
   initialSigma?: number;
   populationSize?: number;
   seed?: number;
+  /**
+   * WS-CMA-ES warm start (Nomura et al., "Warm Starting CMA-ES for
+   * Hyperparameter Optimization," AAAI 2021, arXiv:2012.06932): initialize the
+   * search mean at a prior optimum instead of the origin. Omitted or malformed
+   * values fall back to zeros (the historical behavior) — additive, default
+   * unchanged.
+   */
+  initialMean?: number[];
 }
 
 // Symmetric positive-definite Cholesky decomposition (row-major).
@@ -131,12 +139,17 @@ export class LiveCmaesOptimizer {
       cov.push(row);
     }
 
+    const initialMean =
+      config.initialMean && config.initialMean.length === n && config.initialMean.every(Number.isFinite)
+        ? [...config.initialMean]
+        : new Array(n).fill(0.0);
+
     this.state = {
       dimension: n,
       lambdaPopulation: lambda,
       muElite: mu,
       generation: 0,
-      mean: new Array(n).fill(0.0),
+      mean: initialMean,
       sigma: config.initialSigma ?? 0.3,
       covariance: cov,
       evolutionPathC: new Array(n).fill(0.0),
