@@ -18,10 +18,20 @@ import {
   ShieldCheck,
   Sparkles,
   TreePine,
+  Eye,
+  Camera,
+  Activity,
+  Sliders,
+  Shield,
+  Zap,
+  Pause,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
+import { ArmGraspMicroscopeOverlay, ArmGraspMicroscopeHUD } from "./ArmGraspMicroscope";
 import {
   type CmaFamily,
   type HouseholdManipulationAdmission,
@@ -317,10 +327,12 @@ function ArmRig({
   trace,
   admission,
   reduceMotion,
+  microscopeMode,
 }: {
   trace: HouseholdManipulationTraceReceipt;
   admission: HouseholdManipulationAdmission;
   reduceMotion: boolean;
+  microscopeMode: boolean;
 }) {
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
   const segmentRefs = useRef<Array<THREE.Mesh | null>>([]);
@@ -331,6 +343,9 @@ function ArmRig({
   const contactMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const playbackSeconds = useRef(0);
   const sampleIndex = useRef(0);
+  const [currentSample, setCurrentSample] = useState<HouseholdManipulationTraceSample | null>(
+    () => trace.samples[0] ?? null
+  );
   // Boundary volumes the kernel's objective already avoids: the counter slab,
   // the task's backdrop wall, and the declared obstacle box. The checker below
   // flags visible penetrations of exactly these volumes — presentation-layer
@@ -572,19 +587,68 @@ function ArmRig({
           dimensions={admission.scene.objectDimensionsMeters}
         />
       </group>
+
+      <ArmGraspMicroscopeOverlay sample={currentSample} enabled={microscopeMode} />
     </group>
   );
+}
+
+function ArmCameraRig({
+  cameraMode,
+  objectPos,
+}: {
+  cameraMode: "studio" | "microscope" | "overhead";
+  objectPos: [number, number, number];
+}) {
+  useFrame(({ camera }) => {
+    if (cameraMode === "microscope") {
+      const targetPos = new THREE.Vector3(objectPos[0] + 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32);
+      camera.position.lerp(targetPos, 0.08);
+      camera.lookAt(objectPos[0], objectPos[1], objectPos[2]);
+    } else if (cameraMode === "overhead") {
+      const topPos = new THREE.Vector3(0, 3.2, 0);
+      camera.position.lerp(topPos, 0.08);
+      camera.lookAt(0, 0.4, 0);
+    }
+  });
+
+  return cameraMode === "studio" ? (
+    <OrbitControls
+      makeDefault
+      target={[-0.05, 0.48, 0]}
+      enableDamping
+      dampingFactor={0.07}
+      minDistance={1.0}
+      maxDistance={6}
+      minPolarAngle={0.3}
+      maxPolarAngle={1.5}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+    />
+  ) : null;
 }
 
 function ArmStage({
   trace,
   admission,
   reduceMotion,
+  microscopeMode,
+  cameraMode,
+  sampleIndex,
+  onSampleChange,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
   reduceMotion: boolean;
+  microscopeMode: boolean;
+  cameraMode: "studio" | "microscope" | "overhead";
+  sampleIndex: number;
+  onSampleChange?: (sample: HouseholdManipulationTraceSample) => void;
 }) {
+  const currentSample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
+  const objectPos: [number, number, number] = currentSample
+    ? [currentSample.objectPose.position[0], currentSample.objectPose.position[2], -currentSample.objectPose.position[1]]
+    : [0.4, 0.4, 0.2];
+
   return (
     <Canvas
       dpr={[1, 1.5]}
@@ -616,10 +680,7 @@ function ArmStage({
         <meshStandardMaterial color="#0b1424" roughness={0.92} metalness={0.12} />
       </mesh>
       <gridHelper args={[8, 40, "#24506e", "#1a2a4a"]} position={[0, 0.002, 0]} />
-      {/* Sears Craftsman furniture: the kernel obstacle slot renders as its
-          designated furniture piece (kernel-active collision); surrounding
-          pieces are display-only at catalog dims. Procedural meshes from
-          houseFurniture.ts — no GLTF. */}
+      
       {(() => {
         const placement = admission ? armTaskFurniture(admission.config.task) : null;
         if (!placement) return null;
@@ -657,19 +718,10 @@ function ArmStage({
           trace={trace}
           admission={admission}
           reduceMotion={reduceMotion}
+          microscopeMode={microscopeMode}
         />
       ) : null}
-      <OrbitControls
-        makeDefault
-        target={[-0.05, 0.48, 0]}
-        enableDamping
-        dampingFactor={0.07}
-        minDistance={1.15}
-        maxDistance={6}
-        minPolarAngle={0.42}
-        maxPolarAngle={1.5}
-        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
-      />
+      <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
     </Canvas>
   );
 }
@@ -698,6 +750,11 @@ export function HouseholdArmFlagship() {
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [status, setStatus] = useState("Loading the pinned KUKA model and physical curriculum…");
   const [error, setError] = useState<string | null>(null);
+  const [microscopeMode, setMicroscopeMode] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"studio" | "microscope" | "overhead">("studio");
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -836,28 +893,89 @@ export function HouseholdArmFlagship() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]">
-        <div className="glass-card min-h-[570px] overflow-hidden border-orange-400/15 bg-slate-950/80">
-          <div className="pointer-events-none absolute left-5 top-5 z-10 flex flex-wrap gap-2">
-            <span className="rounded-full border border-orange-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-orange-200 backdrop-blur-md">
-              8 owner poses · 90 Hz physics
-            </span>
-            <span className="rounded-full border border-emerald-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-md">
-              {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
-            </span>
+        <div className="space-y-4">
+          <div className="glass-card relative min-h-[570px] overflow-hidden border-orange-400/15 bg-slate-950/80">
+            {/* Top Toolbar */}
+            <div className="pointer-events-auto absolute left-5 top-5 z-10 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-orange-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-orange-200 backdrop-blur-md">
+                8 owner poses · 90 Hz physics
+              </span>
+              <span className="rounded-full border border-emerald-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-md">
+                {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
+              </span>
+
+              {/* Microscope Mode Toggle */}
+              <button
+                type="button"
+                onClick={() => setMicroscopeMode(!microscopeMode)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  microscopeMode
+                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                }`}
+                title="Toggle 3D Coulomb friction cone overlay at contact points"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                {microscopeMode ? "🔬 Friction Cones (μ=0.65) Active" : "🔬 Friction Cones Overlay"}
+              </button>
+            </div>
+
+            {/* Camera View Selector */}
+            <div className="pointer-events-auto absolute right-5 top-5 z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md">
+              {(
+                [
+                  { id: "studio", label: "Studio", icon: Camera },
+                  { id: "microscope", label: "Grasp Focus", icon: Eye },
+                  { id: "overhead", label: "Top-Down", icon: Activity },
+                ] as const
+              ).map((cam) => {
+                const Icon = cam.icon;
+                const isSelected = cameraMode === cam.id;
+                return (
+                  <button
+                    key={cam.id}
+                    type="button"
+                    onClick={() => setCameraMode(cam.id)}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                      isSelected
+                        ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {cam.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pointer-events-none absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-end justify-between gap-2">
+              <span className="max-w-xl rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-xs leading-5 text-slate-300 backdrop-blur-md">
+                Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the cyan cones display Coulomb friction boundaries.
+              </span>
+              <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
+                Drag to orbit · pinch to zoom
+              </span>
+            </div>
+            <div ref={stageRef} className="h-[570px] w-full">
+              {shouldMountStage ? (
+                <ArmStage
+                  trace={trace}
+                  admission={admission}
+                  reduceMotion={reduceMotion}
+                  microscopeMode={microscopeMode}
+                  cameraMode={cameraMode}
+                  sampleIndex={sampleIndex}
+                />
+              ) : null}
+            </div>
           </div>
-          <div className="pointer-events-none absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-end justify-between gap-2">
-            <span className="max-w-xl rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-xs leading-5 text-slate-300 backdrop-blur-md">
-              Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the rose box participates in certified convex separation queries.
-            </span>
-            <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
-              Drag to orbit · pinch to zoom
-            </span>
-          </div>
-          <div ref={stageRef} className="h-[570px] w-full">
-            {shouldMountStage ? (
-              <ArmStage trace={trace} admission={admission} reduceMotion={reduceMotion} />
-            ) : null}
-          </div>
+
+          {/* Tactile Grasp Microscope HUD */}
+          <ArmGraspMicroscopeHUD
+            sample={trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null}
+            enabled={microscopeMode}
+          />
         </div>
 
         <div className="glass-card p-5 sm:p-6">

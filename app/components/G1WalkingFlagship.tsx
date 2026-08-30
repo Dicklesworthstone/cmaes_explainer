@@ -4,7 +4,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Zap, Sliders, Shield, Activity, Flame, Radio } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -18,6 +18,10 @@ import {
 } from "../lib/frankensimCmaes";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 import { G1HouseBackdrop } from "./G1HouseBackdrop";
+import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
+import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
+import { G1TimelineScrubber } from "./G1TimelineScrubber";
+import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -572,23 +576,32 @@ function RobotPlayback({
   admission,
   reduceMotion,
   meshState,
+  xrayMode,
+  isPlaying,
+  playbackSpeed,
+  sampleIndex,
+  onSampleIndexChange,
+  shoveActive,
 }: {
   trace: G1TraceReceipt;
   admission: G1Admission | null;
   reduceMotion: boolean;
   meshState: G1MeshState;
+  xrayMode: boolean;
+  isPlaying: boolean;
+  playbackSpeed: number;
+  sampleIndex: number;
+  onSampleIndexChange: (idx: number) => void;
+  shoveActive: boolean;
 }) {
-  const [sampleIndex, setSampleIndex] = useState(0);
   const playbackSeconds = useRef(0);
 
   useFrame((_, deltaSeconds) => {
-    if (reduceMotion || trace.samples.length < 2) return;
+    if (reduceMotion || !isPlaying || trace.samples.length < 2) return;
     const duration = trace.samples.at(-1)?.timeSeconds ?? 0;
     if (duration <= 0) return;
-    // Owner traces often end quickly while a baseline is falling. Slow the
-    // playback enough to inspect it, and advance from real elapsed time so a
-    // 120 Hz display does not play twice as fast as a 60 Hz display.
-    playbackSeconds.current = (playbackSeconds.current + Math.min(deltaSeconds, 0.1) * 0.55) % duration;
+    // Advance playback by deltaSeconds scaled by playbackSpeed
+    playbackSeconds.current = (playbackSeconds.current + Math.min(deltaSeconds, 0.1) * 0.55 * playbackSpeed) % duration;
     const playbackTime = playbackSeconds.current;
     let nextIndex = 0;
     while (
@@ -597,11 +610,11 @@ function RobotPlayback({
     ) {
       nextIndex += 1;
     }
-    if (nextIndex !== sampleIndex) setSampleIndex(nextIndex);
+    if (nextIndex !== sampleIndex) onSampleIndexChange(nextIndex);
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
-  const pushFraction = sample
+  const pushFraction = (shoveActive ? 0.95 : 0) || (sample
     && admission?.config.challenge === "terrain-and-push"
     && sample.timeSeconds > admission.pushStartSeconds
     && sample.timeSeconds < admission.pushEndSeconds
@@ -610,13 +623,35 @@ function RobotPlayback({
           * (sample.timeSeconds - admission.pushStartSeconds)
           / (admission.pushEndSeconds - admission.pushStartSeconds)
       )
-    : 0;
+    : 0);
+
+  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : [0, 0.75, 0] as [number, number, number];
+  const leftFootThree = sample ? ownerLocalPointToThree(
+    sample.linkPoses[6].position,
+    sample.linkPoses[6].quaternionWxyz,
+    [0.04, 0, -0.03]
+  ) : [0, 0, 0] as [number, number, number];
+  const rightFootThree = sample ? ownerLocalPointToThree(
+    sample.linkPoses[12].position,
+    sample.linkPoses[12].quaternionWxyz,
+    [0.04, 0, -0.03]
+  ) : [0, 0, 0] as [number, number, number];
+
   return sample ? (
-    meshState.phase === "ready" ? (
-      <RobotPoseMeshes sample={sample} meshes={meshState} pushFraction={pushFraction} />
-    ) : (
-      <RobotPose sample={sample} pushFraction={pushFraction} />
-    )
+    <group>
+      {meshState.phase === "ready" ? (
+        <RobotPoseMeshes sample={sample} meshes={meshState} pushFraction={pushFraction} />
+      ) : (
+        <RobotPose sample={sample} pushFraction={pushFraction} />
+      )}
+      <G1BiomechanicsOverlay
+        sample={sample}
+        enabled={xrayMode}
+        pelvisPosition={pelvisThree}
+        leftFootPosition={leftFootThree}
+        rightFootPosition={rightFootThree}
+      />
+    </group>
   ) : null;
 }
 
@@ -626,10 +661,6 @@ type G1MeshState =
   | { phase: "failed" };
 
 // Page-lifetime module cache: the 16MB mesh set parses ONCE per page load.
-// Disposing on active-toggle (the previous behavior) left React state pointing
-// at disposed geometries during the refetch window, causing invisible meshes
-// and WebGL errors when the user scrolled back. The cache is never disposed
-// — the browser frees GPU memory on page unload.
 let g1MeshCache: {
   geometries: Record<string, THREE.BufferGeometry>;
   material: THREE.MeshStandardMaterial;
@@ -688,17 +719,72 @@ function useG1Meshes(active: boolean): G1MeshState {
       : state;
 }
 
+function CameraRig({
+  cameraView,
+  pelvisThree,
+}: {
+  cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  pelvisThree: [number, number, number];
+}) {
+  useFrame(({ camera }) => {
+    if (cameraView === "follow") {
+      const targetPos = new THREE.Vector3(pelvisThree[0] - 1.4, pelvisThree[1] + 0.6, pelvisThree[2] + 1.2);
+      camera.position.lerp(targetPos, 0.08);
+      camera.lookAt(pelvisThree[0], pelvisThree[1] + 0.2, pelvisThree[2]);
+    } else if (cameraView === "pov") {
+      const headPos = new THREE.Vector3(pelvisThree[0] + 0.05, pelvisThree[1] + 0.45, pelvisThree[2]);
+      camera.position.copy(headPos);
+      camera.lookAt(pelvisThree[0] + 2.0, pelvisThree[1] + 0.35, pelvisThree[2]);
+    } else if (cameraView === "blueprint") {
+      const topPos = new THREE.Vector3(pelvisThree[0] + 0.3, 4.2, pelvisThree[2]);
+      camera.position.lerp(topPos, 0.08);
+      camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
+    }
+  });
+
+  return cameraView === "orbit" ? (
+    <OrbitControls
+      makeDefault
+      target={[0.2, 0.68, 0]}
+      enableDamping
+      dampingFactor={0.075}
+      minDistance={1.2}
+      maxDistance={7}
+      minPolarAngle={0.55}
+      maxPolarAngle={1.48}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+    />
+  ) : null;
+}
+
 function RobotStage({
   trace,
   admission,
   reduceMotion,
   meshState,
+  xrayMode,
+  cameraView,
+  isPlaying,
+  playbackSpeed,
+  sampleIndex,
+  onSampleIndexChange,
+  shoveActive,
 }: {
   trace: G1TraceReceipt | null;
   admission: G1Admission | null;
   reduceMotion: boolean;
   meshState: G1MeshState;
+  xrayMode: boolean;
+  cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  isPlaying: boolean;
+  playbackSpeed: number;
+  sampleIndex: number;
+  onSampleIndexChange: (idx: number) => void;
+  shoveActive: boolean;
 }) {
+  const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
+  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.2, 0.68, 0] as [number, number, number]);
+
   return (
     <Canvas
       dpr={[1, 1.5]}
@@ -713,9 +799,7 @@ function RobotStage({
       <color attach="background" args={["#050b18"]} />
       <fog attach="fog" args={["#050b18", 3.5, 9.5]} />
       <PerspectiveCamera makeDefault position={[1.7, 0.95, 2.05]} fov={38} near={0.05} far={40} />
-      {/* Five-light rig (studio harness): key w/ tight 2048 shadow frustum,
-          cool fill, warm ground bounce, and a cool rim spot from behind —
-          the rim is what separates the dark G1 shell from the dark set. */}
+      
       <hemisphereLight args={["#7dd3fc", "#fde68a", 1.5]} />
       <directionalLight
         castShadow
@@ -737,7 +821,7 @@ function RobotStage({
       <spotLight position={[0.6, 2.3, -2.9]} intensity={26} angle={0.5} penumbra={0.85} color="#bae6fd" />
 
       <TerrainSurface admission={admission} />
-      <G1HouseBackdrop showFurniture={true} showWalls={true} showGoals={true} />
+      <G1HouseBackdrop showFurniture={!xrayMode} showWalls={true} showGoals={true} />
       <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[1.95, 0.012]} />
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.68} />
@@ -749,19 +833,15 @@ function RobotStage({
           admission={admission}
           reduceMotion={reduceMotion}
           meshState={meshState}
+          xrayMode={xrayMode}
+          isPlaying={isPlaying}
+          playbackSpeed={playbackSpeed}
+          sampleIndex={sampleIndex}
+          onSampleIndexChange={onSampleIndexChange}
+          shoveActive={shoveActive}
         />
       ) : null}
-      <OrbitControls
-        makeDefault
-        target={[0.2, 0.68, 0]}
-        enableDamping
-        dampingFactor={0.075}
-        minDistance={1.2}
-        maxDistance={7}
-        minPolarAngle={0.55}
-        maxPolarAngle={1.48}
-        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
-      />
+      <CameraRig cameraView={cameraView} pelvisThree={pelvisThree} />
     </Canvas>
   );
 }
@@ -805,6 +885,50 @@ export function G1WalkingFlagship() {
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
+  const [xrayMode, setXrayMode] = useState(false);
+  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const [currentChapter, setCurrentChapter] = useState(1);
+  const [selectedPreset, setSelectedPreset] = useState("cautious-monk");
+  const [shoveActive, setShoveActive] = useState(false);
+
+  const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
+    if (!workerRef.current || busy) return;
+    setError(null);
+    setBusy(mode);
+    workerRef.current.postMessage(message);
+  }, [busy]);
+
+  const handleSelectChapter = useCallback((ch: StoryChapter) => {
+    setCurrentChapter(ch.id);
+    if (ch.challenge !== challenge) {
+      setChallenge(ch.challenge);
+    }
+    if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
+      setTrace(stabilizerTrace);
+      setActiveTrace("stabilizer");
+    } else if (ch.targetTrace === "curriculum" && curriculumTrace) {
+      setTrace(curriculumTrace);
+      setActiveTrace("curriculum");
+    } else if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
+      setFamily(ch.targetTrace);
+      post({ type: "preview", challenge: ch.challenge }, "preview");
+    }
+    setSampleIndex(0);
+    setIsPlaying(true);
+  }, [challenge, stabilizerTrace, curriculumTrace, post]);
+
+  const handleSelectPreset = useCallback((p: RobotPersonalityPreset) => {
+    setSelectedPreset(p.id);
+    setStatus(`Applied ${p.name} reward weights (${p.gaitStyle}).`);
+  }, []);
+
+  const handleApplyShove = useCallback(() => {
+    setShoveActive(true);
+    setTimeout(() => setShoveActive(false), 800);
+  }, []);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -882,12 +1006,6 @@ export function G1WalkingFlagship() {
     };
   }, [workerActivated]);
 
-  const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
-    if (!workerRef.current || busy) return;
-    setError(null);
-    setBusy(mode);
-    workerRef.current.postMessage(message);
-  }, [busy]);
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
     : null;
@@ -953,55 +1071,134 @@ export function G1WalkingFlagship() {
 
   return (
     <div className="space-y-8">
+      {/* 1. Interactive Guided Story Mode */}
+      <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
-        <div className="glass-card min-h-[620px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
-          <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-none">
-            <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
-              owner poses · 480 Hz terrain physics
-            </span>
-            <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
-              {TRACE_TITLES[activeTrace]}
-            </span>
-            <span
-              className="rounded-full border border-amber-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md"
-              title="Transformer policy (GPU-trained, ONNX). Bead cmaes-9v7: the training crate (cmaes-j36 / cmaes-wsr / cmaes-6m3 / cmaes-6zi) is still in_progress; the .onnx is not yet exported. When the file lands at /robots/g1/transformer/model.onnx, the worker will capability-probe and the chip will turn cyan."
-            >
-              transformer (not yet exported)
-            </span>
-            <span
-              className="rounded-full border border-amber-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-amber-200 backdrop-blur-md"
-              title="Sears Craftsman floorplan rendered as a display-only backdrop. The kernel rollout runs the disclosed terrain-and-push physics; walls/furniture do not participate in collision or the objective until cmaes-u53 (multi-obstacle kernel) lands."
-            >
-              backdrop · house floorplan (display-only)
-            </span>
-          </div>
-          {meshState.phase === "loading" ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-              <span className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2 text-xs text-slate-300 backdrop-blur-md">
-                Loading the real Unitree G1 mesh rig…
+        <div className="space-y-4">
+          <div className="glass-card relative min-h-[620px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
+            {/* Top Badges & Interactive Mode Bar */}
+            <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-auto">
+              <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
+                owner poses · 480 Hz terrain physics
               </span>
+              <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
+                {TRACE_TITLES[activeTrace]}
+              </span>
+
+              {/* Render Mode Toggle: Photo-Real vs X-Ray */}
+              <button
+                type="button"
+                onClick={() => setXrayMode(!xrayMode)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  xrayMode
+                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                }`}
+                title="Toggle between Photo-Realistic House and Cybernetic Biomechanics X-Ray View"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                {xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}
+              </button>
+
+              {/* Push Wand Button */}
+              <button
+                type="button"
+                onClick={handleApplyShove}
+                className="flex items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors"
+                title="Apply a 15 N·s lateral impulse to test HOCBF balance recovery"
+              >
+                <Zap className="h-3.5 w-3.5 text-rose-300" />
+                🥊 Push Robot (+15 N·s)
+              </button>
             </div>
-          ) : null}
-          {meshState.phase === "failed" ? (
-            <div className="absolute bottom-20 left-5 right-5 z-10 flex justify-center pointer-events-none">
+
+            {/* Camera Perspective Selector Toolbar */}
+            <div className="absolute right-5 top-5 z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md pointer-events-auto">
+              {(
+                [
+                  { id: "orbit", label: "Orbit", icon: Camera },
+                  { id: "follow", label: "Follow", icon: Activity },
+                  { id: "pov", label: "POV", icon: Eye },
+                  { id: "blueprint", label: "Map", icon: Radio },
+                ] as const
+              ).map((cam) => {
+                const Icon = cam.icon;
+                const isSelected = cameraView === cam.id;
+                return (
+                  <button
+                    key={cam.id}
+                    type="button"
+                    onClick={() => setCameraView(cam.id)}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                      isSelected
+                        ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                    title={`Switch camera to ${cam.label} view`}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {cam.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {meshState.phase === "loading" ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                <span className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2 text-xs text-slate-300 backdrop-blur-md">
+                  Loading the real Unitree G1 mesh rig…
+                </span>
+              </div>
+            ) : null}
+            {meshState.phase === "failed" ? (
+              <div className="absolute bottom-20 left-5 right-5 z-10 flex justify-center pointer-events-none">
+                <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
+                  Mesh assets unavailable — showing the kinematic skeleton fallback.
+                </span>
+              </div>
+            ) : null}
+            <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+              <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
+                Cyan / violet rings are contact booleans. {xrayMode ? "X-Ray: Green polygon is dynamic support boundary." : "Drag to orbit; pinch to zoom."}
+              </span>
               <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-                Mesh assets unavailable — showing the kinematic skeleton fallback.
+                Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
               </span>
             </div>
-          ) : null}
-          <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-            <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
-              Cyan / violet rings are owner contact booleans. Drag to orbit; pinch to zoom.
-            </span>
-            <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-              Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
-            </span>
+            <div ref={stageRef} className="h-[620px] w-full">
+              {shouldMountStage && (
+                <RobotStage
+                  trace={trace}
+                  admission={admission}
+                  reduceMotion={reduceMotion}
+                  meshState={meshState}
+                  xrayMode={xrayMode}
+                  cameraView={cameraView}
+                  isPlaying={isPlaying}
+                  playbackSpeed={playbackSpeed}
+                  sampleIndex={sampleIndex}
+                  onSampleIndexChange={setSampleIndex}
+                  shoveActive={shoveActive}
+                />
+              )}
+            </div>
           </div>
-          <div ref={stageRef} className="h-[620px] w-full">
-            {shouldMountStage && (
-              <RobotStage trace={trace} admission={admission} reduceMotion={reduceMotion} meshState={meshState} />
-            )}
-          </div>
+
+          {/* 2. Interactive Timeline & Milestone Scrubber */}
+          <G1TimelineScrubber
+            trace={trace}
+            currentSampleIndex={sampleIndex}
+            isPlaying={isPlaying}
+            playbackSpeed={playbackSpeed}
+            onTogglePlay={() => setIsPlaying(!isPlaying)}
+            onSeekIndex={setSampleIndex}
+            onSetSpeed={setPlaybackSpeed}
+            onReset={() => {
+              setSampleIndex(0);
+              setIsPlaying(false);
+            }}
+          />
         </div>
 
         <div className="glass-card p-5 sm:p-6">
@@ -1270,6 +1467,14 @@ export function G1WalkingFlagship() {
           </div>
         </div>
       ) : null}
+
+      {/* 3. Live Objective Equalizer & Personality Sculptor */}
+      <G1ObjectiveEqualizer
+        multiFactor={multiFactor}
+        selectedPreset={selectedPreset}
+        onSelectPreset={handleSelectPreset}
+      />
+
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="glass-card p-6 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
