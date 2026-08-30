@@ -29,6 +29,9 @@ export function HpoTrainer() {
   const [lastDelta, setLastDelta] = useState<number | null>(null);
   const [batch, setBatch] = useState<(typeof RUN_BATCH_SIZES)[number]>(1);
   const optimizerRef = useRef<CmaesHyperparameterOptimizer | null>(null);
+  // Ref (not state) so React 19 strict mode running the updater twice
+  // does NOT trigger a duplicate setLastDelta side-effect.
+  const lastBestRef = useRef<number | null>(null);
 
   const ensureOptimizer = useCallback((): CmaesHyperparameterOptimizer => {
     if (optimizerRef.current === null) {
@@ -48,15 +51,11 @@ export function HpoTrainer() {
       for (let g = 0; g < gens; g += 1) {
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         const r = optimizer.stepGeneration();
-        setResult((prev) => {
-          if (prev === null) {
-            setLastDelta(null);
-            return r;
-          }
-          const delta = r.bestFitness - prev.bestFitness;
-          setLastDelta(delta);
-          return r;
-        });
+        const prevBest = lastBestRef.current;
+        const delta = prevBest === null ? null : r.bestFitness - prevBest;
+        lastBestRef.current = r.bestFitness;
+        setResult(r);
+        setLastDelta(delta);
         setHistory((prev) => [...prev, r.bestFitness]);
       }
     } finally {
@@ -66,6 +65,7 @@ export function HpoTrainer() {
 
   const reset = useCallback(() => {
     optimizerRef.current = null;
+    lastBestRef.current = null;
     setResult(null);
     setHistory([]);
     setLastDelta(null);
