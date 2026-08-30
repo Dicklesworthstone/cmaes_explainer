@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { G1WalkingFlagship } from "../components/G1WalkingFlagship";
 import { PolicyAblationComparison } from "../components/PolicyAblationComparison";
- import { Navbar } from "../components/Navbar";
+import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
 export const metadata: Metadata = {

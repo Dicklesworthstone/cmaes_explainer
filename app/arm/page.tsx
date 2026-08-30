@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { HouseholdArmFlagship } from "../components/HouseholdArmFlagship";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
@@ -51,6 +52,14 @@ export default function ArmPage() {
             pedagogically useful here and rightly refused for the 5,040-D
             humanoid walking problem.
           </p>
+          <div className="pt-3 text-center">
+            <Link
+              className="text-sm font-semibold text-orange-300 hover:text-orange-200"
+              href="/#internals"
+            >
+              Explore 3D Covariance Space →
+            </Link>
+          </div>
         </section>
       </main>
       <Footer />

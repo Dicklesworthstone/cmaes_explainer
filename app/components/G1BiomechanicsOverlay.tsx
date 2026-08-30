@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
+
+const UP_VECTOR = new THREE.Vector3(0, 1, 0);
+const ZERO_VECTOR = new THREE.Vector3(0, 0, 0);
 
 interface G1BiomechanicsOverlayProps {
   sample: G1TraceSample;
@@ -114,6 +117,12 @@ export function G1BiomechanicsOverlay({
     };
   }, [sample.leftContact, sample.rightContact, leftFootPosition, rightFootPosition, comPosition]);
 
+  useEffect(() => {
+    return () => {
+      supportGeometry.dispose();
+    };
+  }, [supportGeometry]);
+
   if (!enabled) return null;
 
   return (
@@ -201,8 +210,8 @@ export function G1BiomechanicsOverlay({
         <group position={[leftFootPosition[0], groundY, leftFootPosition[2]]}>
           <arrowHelper
             args={[
-              new THREE.Vector3(0, 1, 0),
-              new THREE.Vector3(0, 0, 0),
+              UP_VECTOR,
+              ZERO_VECTOR,
               0.22,
               0x22d3ee,
               0.05,
@@ -216,8 +225,8 @@ export function G1BiomechanicsOverlay({
         <group position={[rightFootPosition[0], groundY, rightFootPosition[2]]}>
           <arrowHelper
             args={[
-              new THREE.Vector3(0, 1, 0),
-              new THREE.Vector3(0, 0, 0),
+              UP_VECTOR,
+              ZERO_VECTOR,
               0.22,
               0xa78bfa,
               0.05,

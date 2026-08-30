@@ -1049,9 +1049,10 @@ export function HouseholdArmFlagship() {
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * ARM_POPULATION} complete physical rollouts`}
+            style={{ touchAction: "pan-y pinch-zoom" }}
             suppressHydrationWarning
           />
-          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
+          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-400">
             <span>2</span>
             <span>1.25k</span>
             <span>2.5k</span>
@@ -1125,7 +1126,7 @@ export function HouseholdArmFlagship() {
             ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
               <p className={`mt-2 font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}>{value}</p>
             </div>
           ))}

@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
 import { Gauge, CheckCircle2, ShieldAlert } from "lucide-react";
 import type { HouseholdManipulationTraceSample } from "../lib/frankensimCmaes";
 
 interface ArmGraspMicroscopeProps {
   sample: HouseholdManipulationTraceSample | null;
-  enabled: boolean;
+  enabled?: boolean;
 }
 
 /**
@@ -17,7 +17,7 @@ interface ArmGraspMicroscopeProps {
  */
 export function ArmGraspMicroscopeOverlay({
   sample,
-  enabled,
+  enabled = true,
 }: {
   sample: HouseholdManipulationTraceSample | null;
   enabled: boolean;
@@ -28,6 +28,12 @@ export function ArmGraspMicroscopeOverlay({
     geom.translate(0, -0.04, 0); // apex at contact point
     return geom;
   }, []);
+
+  useEffect(() => {
+    return () => {
+      coneGeometry.dispose();
+    };
+  }, [coneGeometry]);
 
   if (!enabled || !sample) return null;
 
@@ -73,11 +79,9 @@ export function ArmGraspMicroscopeOverlay({
 }
 
 export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
-  if (!sample) return null;
-
-  const isGrasped = sample.grasped;
-  const gripperWidth = sample.gripperWidthMeters;
-  const gripForce = sample.gripNormalForceNewtons;
+  const isGrasped = sample?.grasped ?? false;
+  const gripperWidth = sample?.gripperWidthMeters ?? 0.105;
+  const gripForce = sample?.gripNormalForceNewtons ?? 0;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
@@ -102,38 +106,38 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
 
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
-          <span className="text-[0.65rem] text-slate-400 uppercase tracking-wider block">
+          <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
             Grip Phase
           </span>
           <span className="font-mono text-sm font-bold text-white mt-0.5 block">
-            {isGrasped ? "Locked" : "Pre-Contact"}
+            {sample ? (isGrasped ? "Locked" : "Pre-Contact") : "—"}
           </span>
         </div>
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
-          <span className="text-[0.65rem] text-slate-400 uppercase tracking-wider block">
+          <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
             Gripper Width
           </span>
           <span className="font-mono text-sm font-bold text-cyan-300 mt-0.5 block">
-            {(gripperWidth * 1000).toFixed(1)} mm
+            {sample ? `${(gripperWidth * 1000).toFixed(1)} mm` : "—"}
           </span>
         </div>
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
-          <span className="text-[0.65rem] text-slate-400 uppercase tracking-wider block">
+          <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
             Normal Pinch Force
           </span>
           <span className="font-mono text-sm font-bold text-emerald-300 mt-0.5 block">
-            {gripForce.toFixed(1)} N
+            {sample ? `${gripForce.toFixed(1)} N` : "—"}
           </span>
         </div>
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
-          <span className="text-[0.65rem] text-slate-400 uppercase tracking-wider block">
+          <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
             Coulomb Friction Cap
           </span>
           <span className="font-mono text-sm font-bold text-violet-300 mt-0.5 block">
-            {(gripForce * 0.65).toFixed(1)} N static
+            {sample ? `${(gripForce * 0.65).toFixed(1)} N static` : "—"}
           </span>
         </div>
       </div>

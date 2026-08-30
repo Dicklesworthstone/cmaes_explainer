@@ -1332,16 +1332,17 @@ export function G1WalkingFlagship() {
             disabled={busy !== null || !workerAvailable}
             onChange={(event) => setGenerations(Number(event.target.value))}
             aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
+            style={{ touchAction: "pan-y pinch-zoom" }}
             suppressHydrationWarning
           />
-          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
+          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-400">
             <span>8</span>
             <span>7.5k</span>
             <span>15k</span>
             <span>22.5k</span>
             <span>30k</span>
           </div>
-          <p className="mt-2 text-[0.68rem] leading-5 text-slate-500">
+          <p className="mt-2 text-[0.68rem] leading-5 text-slate-400">
             16 gens is a refinement pass; the curriculum mean itself was
             learned over hundreds. Every press CONTINUES the same CMA run —
             mean, sigma, and covariance path preserved — so presses stack:
@@ -1428,7 +1429,7 @@ export function G1WalkingFlagship() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">
           {receiptCards.map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
               <p className="mt-2 font-mono text-sm text-slate-100">{value}</p>
             </div>
           ))}
