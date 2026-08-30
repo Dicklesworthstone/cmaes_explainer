@@ -24,6 +24,7 @@ import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
+import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -923,6 +924,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
+  const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
   // The focused native route opens on the inspectable robot instead of the
