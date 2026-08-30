@@ -593,6 +593,8 @@ function ArmRig({
   );
 }
 
+const armCameraScratchVec = new THREE.Vector3();
+
 function ArmCameraRig({
   cameraMode,
   objectPos,
@@ -602,12 +604,12 @@ function ArmCameraRig({
 }) {
   useFrame(({ camera }) => {
     if (cameraMode === "microscope") {
-      const targetPos = new THREE.Vector3(objectPos[0] + 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32);
-      camera.position.lerp(targetPos, 0.08);
+      armCameraScratchVec.set(objectPos[0] + 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32);
+      camera.position.lerp(armCameraScratchVec, 0.08);
       camera.lookAt(objectPos[0], objectPos[1], objectPos[2]);
     } else if (cameraMode === "overhead") {
-      const topPos = new THREE.Vector3(0, 3.2, 0);
-      camera.position.lerp(topPos, 0.08);
+      armCameraScratchVec.set(0, 3.2, 0);
+      camera.position.lerp(armCameraScratchVec, 0.08);
       camera.lookAt(0, 0.4, 0);
     }
   });

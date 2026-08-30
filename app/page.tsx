@@ -73,8 +73,8 @@ export default function Page() {
                     comparison below runs both policies on the same
                     terrain-and-push experiment and reports the receipts side
                     by side. The transformer side is the synthesized comparison
-                    policy from <code>app/lib/policyAblationComparison.ts</code>,
-                    conforming to the ONNX export specification in <code>public/robots/g1/transformer/metadata.json</code>.
+                    policy from <code className="break-all">app/lib/policyAblationComparison.ts</code>,
+                    conforming to the ONNX export specification in <code className="break-all">public/robots/g1/transformer/metadata.json</code>.
                     The framing is honest about sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; — the
                     tradeoff is the lesson.
                   </p>

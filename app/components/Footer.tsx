@@ -4,7 +4,7 @@ import { Github, Heart, ExternalLink, Globe2, Terminal, Sparkles, UserCheck } fr
 
 export function Footer() {
   return (
-    <footer className="mx-auto mt-28 sm:mt-36 max-w-7xl px-4 sm:px-6 pb-16 pt-12 border-t border-white/10">
+    <footer className="mx-auto mt-28 sm:mt-36 max-w-7xl px-4 sm:px-6 pb-16 pt-12 border-t border-white/10 overflow-x-clip">
       {/* Author & Creator Spotlight Card */}
       <div className="mb-12 rounded-3xl border border-sky-500/20 bg-gradient-to-br from-slate-900/90 via-sky-950/20 to-purple-950/20 p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
         <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl group-hover:bg-sky-500/20 transition-[background-color] duration-700 pointer-events-none" />

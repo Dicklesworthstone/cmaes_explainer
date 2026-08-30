@@ -108,7 +108,9 @@ export function G1ObjectiveEqualizer({
               key={p.id}
               type="button"
               onClick={() => onSelectPreset(p)}
-              className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all ${
+              aria-pressed={isSelected}
+              aria-label={`Select ${p.name} personality archetype (${p.badge})`}
+              className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all min-h-[44px] ${
                 isSelected
                   ? "border-cyan-400/60 bg-cyan-950/40 ring-1 ring-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.12)]"
                   : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
@@ -119,16 +121,16 @@ export function G1ObjectiveEqualizer({
                   <span className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider ${p.accent}`}>
                     {p.badge}
                   </span>
-                  <Icon className="h-4 w-4 text-slate-400" />
+                  <Icon className="h-4 w-4 text-slate-300" />
                 </div>
                 <h4 className="mt-2 text-sm font-bold text-white">{p.name}</h4>
-                <p className="mt-1 text-[0.72rem] leading-relaxed text-slate-400">
+                <p className="mt-1 text-[0.72rem] leading-relaxed text-slate-300">
                   {p.description}
                 </p>
               </div>
 
               <div className="mt-3 border-t border-white/5 pt-2">
-                <span className="text-[0.65rem] text-slate-400 font-mono">
+                <span className="text-[0.65rem] text-slate-300 font-mono">
                   Gait: {p.gaitStyle}
                 </span>
               </div>

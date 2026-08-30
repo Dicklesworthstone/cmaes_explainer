@@ -95,8 +95,14 @@ export function G1TimelineScrubber({
           min={0}
           max={totalSamples - 1}
           value={currentSampleIndex}
+          aria-label="Simulation playback frame scrubber"
+          aria-valuemin={0}
+          aria-valuemax={totalSamples - 1}
+          aria-valuenow={currentSampleIndex}
+          aria-valuetext={`Time ${currentTime.toFixed(3)} seconds, Step ${currentSampleIndex + 1} of ${totalSamples}`}
+          style={{ touchAction: "pan-y pinch-zoom" }}
           onChange={(e) => onSeekIndex(Number(e.target.value))}
-          className="w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-cyan-400 h-2 focus:outline-none"
+          className="w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-cyan-400 h-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-400/50"
         />
 
         {/* Milestone Marks */}
@@ -118,7 +124,7 @@ export function G1TimelineScrubber({
                       : "bg-cyan-400"
                   }`}
                 />
-                <span className="text-[0.6rem] text-slate-400 whitespace-nowrap mt-0.5">
+                <span className="text-[0.6rem] text-slate-300 whitespace-nowrap mt-0.5 font-medium">
                   {m.label}
                 </span>
               </div>
@@ -133,8 +139,9 @@ export function G1TimelineScrubber({
           <button
             type="button"
             onClick={onTogglePlay}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-200 border border-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
-            title={isPlaying ? "Pause playback" : "Play simulation"}
+            aria-label={isPlaying ? "Pause simulation playback" : "Play simulation"}
+            className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-200 border border-cyan-400/30 hover:bg-cyan-500/30 active:scale-95 transition-[background-color,transform]"
+            title={isPlaying ? "Pause (Space)" : "Play (Space)"}
           >
             {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>
@@ -142,8 +149,9 @@ export function G1TimelineScrubber({
           <button
             type="button"
             onClick={onReset}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
-            title="Reset to frame 0"
+            aria-label="Reset simulation to initial frame"
+            className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 active:scale-95 transition-[background-color,transform]"
+            title="Reset to frame 0 (R)"
           >
             <RotateCcw className="h-4 w-4" />
           </button>
@@ -151,8 +159,9 @@ export function G1TimelineScrubber({
           <button
             type="button"
             onClick={() => onSeekIndex(Math.max(0, currentSampleIndex - 1))}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
-            title="Step backward 1 frame"
+            aria-label="Step backward one frame"
+            className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 active:scale-95 transition-[background-color,transform]"
+            title="Step backward 1 frame ([ or Left Arrow)"
           >
             <SkipBack className="h-4 w-4" />
           </button>
@@ -160,8 +169,9 @@ export function G1TimelineScrubber({
           <button
             type="button"
             onClick={() => onSeekIndex(Math.min(totalSamples - 1, currentSampleIndex + 1))}
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 transition-colors"
-            title="Step forward 1 frame"
+            aria-label="Step forward one frame"
+            className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 active:scale-95 transition-[background-color,transform]"
+            title="Step forward 1 frame (] or Right Arrow)"
           >
             <SkipForward className="h-4 w-4" />
           </button>
@@ -174,9 +184,10 @@ export function G1TimelineScrubber({
               key={s}
               type="button"
               onClick={() => onSetSpeed(s)}
-              className={`rounded-lg px-2.5 py-1 text-[0.68rem] font-mono font-semibold transition-colors ${
+              aria-label={`Set playback speed to ${s}x`}
+              className={`rounded-lg px-2.5 py-1.5 text-[0.68rem] font-mono font-semibold transition-colors min-h-[32px] ${
                 playbackSpeed === s
-                  ? "bg-cyan-500/30 text-cyan-200"
+                  ? "bg-cyan-500/30 text-cyan-200 shadow-sm"
                   : "text-slate-400 hover:text-slate-200"
               }`}
             >

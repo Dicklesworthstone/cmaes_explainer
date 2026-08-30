@@ -719,6 +719,8 @@ function useG1Meshes(active: boolean): G1MeshState {
       : state;
 }
 
+const cameraScratchVec = new THREE.Vector3();
+
 function CameraRig({
   cameraView,
   pelvisThree,
@@ -728,16 +730,16 @@ function CameraRig({
 }) {
   useFrame(({ camera }) => {
     if (cameraView === "follow") {
-      const targetPos = new THREE.Vector3(pelvisThree[0] - 1.4, pelvisThree[1] + 0.6, pelvisThree[2] + 1.2);
-      camera.position.lerp(targetPos, 0.08);
+      cameraScratchVec.set(pelvisThree[0] - 1.4, pelvisThree[1] + 0.6, pelvisThree[2] + 1.2);
+      camera.position.lerp(cameraScratchVec, 0.08);
       camera.lookAt(pelvisThree[0], pelvisThree[1] + 0.2, pelvisThree[2]);
     } else if (cameraView === "pov") {
-      const headPos = new THREE.Vector3(pelvisThree[0] + 0.05, pelvisThree[1] + 0.45, pelvisThree[2]);
-      camera.position.copy(headPos);
+      cameraScratchVec.set(pelvisThree[0] + 0.05, pelvisThree[1] + 0.45, pelvisThree[2]);
+      camera.position.copy(cameraScratchVec);
       camera.lookAt(pelvisThree[0] + 2.0, pelvisThree[1] + 0.35, pelvisThree[2]);
     } else if (cameraView === "blueprint") {
-      const topPos = new THREE.Vector3(pelvisThree[0] + 0.3, 4.2, pelvisThree[2]);
-      camera.position.lerp(topPos, 0.08);
+      cameraScratchVec.set(pelvisThree[0] + 0.3, 4.2, pelvisThree[2]);
+      camera.position.lerp(cameraScratchVec, 0.08);
       camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
     }
   });
