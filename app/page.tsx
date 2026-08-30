@@ -16,6 +16,7 @@ import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 import { G1WalkingFlagship } from "./components/G1WalkingFlagship";
 import { HouseholdArmFlagship } from "./components/HouseholdArmFlagship";
 import { PolicyAblationComparison } from "./components/PolicyAblationComparison";
+import { HpoTrainer } from "./components/HpoTrainer";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -61,6 +62,12 @@ export default function Page() {
                 <HouseholdArmFlagship />
               </Section>
               <Section
+                id="hpo"
+                title="Outer CMA-ES over 8 training hyperparameters (this site runs it client-side)"
+              >
+                <HpoTrainer />
+              </Section>
+              <Section
                 id="ablation"
                 title="Phase prior vs learned-from-scratch transformer — same experiment"
               >
@@ -69,14 +76,13 @@ export default function Page() {
                     The flagship above uses a 5,040-D linear residual policy on a
                     hand-designed phase basis — a strong, sample-efficient prior.
                     The honest counterfactual is to learn the same task from
-                    scratch with a tiny causal transformer (PPO+Muon). The
-                    comparison below runs both policies on the same
-                    terrain-and-push experiment and reports the receipts side
-                    by side. The transformer side is the synthesized comparison
-                    policy from <code className="break-all">app/lib/policyAblationComparison.ts</code>,
-                    conforming to the ONNX export specification in <code className="break-all">public/robots/g1/transformer/metadata.json</code>.
-                    The framing is honest about sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; — the
-                    tradeoff is the lesson.
+                    scratch with a causal transformer trained by PPO+Muon. The
+                    comparison below reports <em>measured</em> receipts: the
+                    transformer runs real trained weights (exported from the
+                    sibling <code className="break-all">fs-g1-train</code> crate)
+                    with in-browser inference, and the CMA-ES side is searched
+                    live under your selected seed. Neither side is synthesized;
+                    every number is a measurement.
                   </p>
                   <PolicyAblationComparison />
                 </div>
