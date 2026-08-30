@@ -86,6 +86,61 @@ function createOakHardwoodTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+function createArtsAndCraftsRugTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  // Deep olive wool background
+  ctx.fillStyle = "#3e4834";
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Outer border - warm terracotta
+  ctx.strokeStyle = "#8b4528";
+  ctx.lineWidth = 24;
+  ctx.strokeRect(12, 12, 488, 488);
+
+  // Inner border - golden ochre lotus vine
+  ctx.strokeStyle = "#c29547";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(32, 32, 448, 448);
+
+  // Corner Prairie motifs
+  const corners = [
+    [48, 48],
+    [464, 48],
+    [48, 464],
+    [464, 464],
+  ];
+  ctx.fillStyle = "#c29547";
+  corners.forEach(([cx, cy]) => {
+    ctx.fillRect(cx - 12, cy - 12, 24, 24);
+    ctx.fillStyle = "#8b4528";
+    ctx.fillRect(cx - 6, cy - 6, 12, 12);
+  });
+
+  // Central medallion
+  ctx.strokeStyle = "#c29547";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(256, 256, 72, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "#2d3526";
+  ctx.fill();
+
+  // Subtle woven yarn stippling
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+  for (let y = 0; y < 512; y += 4) {
+    ctx.fillRect(0, y, 512, 1.5);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function createHexMosaicTileTexture(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
@@ -217,6 +272,7 @@ function createAmberMicaTexture(): THREE.CanvasTexture {
 export interface SearsCraftsmanEstateProps {
   showFurniture?: boolean;
   showRoof?: boolean;
+  showObstacleHulls?: boolean;
   activeRoom?:
     | "all"
     | "living"
@@ -232,6 +288,7 @@ export interface SearsCraftsmanEstateProps {
 export function SearsCraftsmanEstate({
   showFurniture = true,
   showRoof = false,
+  showObstacleHulls = false,
   activeRoom = "living",
   timeOfDay = "afternoon-sun",
 }: SearsCraftsmanEstateProps) {
@@ -240,6 +297,7 @@ export function SearsCraftsmanEstate({
     if (typeof document === "undefined") return null;
     return {
       hardwood: createOakHardwoodTexture(),
+      rug: createArtsAndCraftsRugTexture(),
       hexMosaic: createHexMosaicTileTexture(),
       brick: createClinkerBrickTexture(),
       mica: createAmberMicaTexture(),
@@ -250,6 +308,7 @@ export function SearsCraftsmanEstate({
     return () => {
       if (textures) {
         textures.hardwood.dispose();
+        textures.rug.dispose();
         textures.hexMosaic.dispose();
         textures.brick.dispose();
         textures.mica.dispose();
@@ -277,6 +336,13 @@ export function SearsCraftsmanEstate({
       roughness: 0.28,
       metalness: 0.08,
       map: textures?.hardwood ?? null,
+    });
+
+    const craftsmanRugMat = new THREE.MeshStandardMaterial({
+      color: "#ffffff",
+      roughness: 0.85,
+      metalness: 0.0,
+      map: textures?.rug ?? null,
     });
 
     const kitchenTile = new THREE.MeshStandardMaterial({
@@ -387,12 +453,6 @@ export function SearsCraftsmanEstate({
       metalness: 0.05,
     });
 
-    const cedarShake = new THREE.MeshStandardMaterial({
-      color: "#5c3a1e", // Upper gable cedar shingles
-      roughness: 0.78,
-      metalness: 0.02,
-    });
-
     const lawnGrass = new THREE.MeshStandardMaterial({
       color: "#2a5426",
       roughness: 0.92,
@@ -417,10 +477,18 @@ export function SearsCraftsmanEstate({
       metalness: 0.08,
     });
 
+    const barrierWireframe = new THREE.MeshBasicMaterial({
+      color: "#38bdf8",
+      wireframe: true,
+      transparent: true,
+      opacity: 0.6,
+    });
+
     return {
       oakWood,
       fumedDarkOak,
       livingFloor,
+      craftsmanRugMat,
       kitchenTile,
       bathroomTile,
       porchDecking,
@@ -437,11 +505,11 @@ export function SearsCraftsmanEstate({
       leadedGlass,
       riverStone,
       roofShingle,
-      cedarShake,
       lawnGrass,
       flagStone,
       potteryRookwood,
       potteryVanBriggle,
+      barrierWireframe,
     };
   }, [textures, timeOfDay]);
 
@@ -450,16 +518,6 @@ export function SearsCraftsmanEstate({
       Object.values(materials).forEach((m) => m.dispose());
     };
   }, [materials]);
-
-  // House Floorplan Layout (Ashmore 1928 Craftsman Bungalow):
-  // Total envelope: X: [-4.0, +4.0] (8.0m wide), Z: [-4.5, +5.5] (10.0m deep), Height: 2.85m
-  // Porch:     X: [-3.8, +3.8], Z: [3.8, 5.5]
-  // Living:    X: [-3.8, 0.4],  Z: [0.0, 3.8] (where robot walks from X=0 to 2.0)
-  // Dining:    X: [0.4, 3.8],   Z: [0.6, 3.8]
-  // Kitchen:   X: [0.4, 3.8],   Z: [-2.6, 0.6]
-  // Hallway:   X: [-0.8, 0.4],  Z: [-1.8, 0.0]
-  // Bedroom:   X: [-3.8, -0.8], Z: [-3.8, 0.0]
-  // Bathroom:  X: [-0.8, 0.8],  Z: [-3.8, -1.8]
 
   return (
     <group>
@@ -499,10 +557,20 @@ export function SearsCraftsmanEstate({
         <primitive object={materials.livingFloor} attach="material" />
       </mesh>
 
-      {/* Dining Room Quartersawn Oak Flooring */}
+      {/* Living Room Woven Arts & Crafts Area Rug */}
+      <mesh position={[-1.6, 0.003, 1.9]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 2.4]} />
+        <primitive object={materials.craftsmanRugMat} attach="material" />
+      </mesh>
+
+      {/* Dining Room Quartersawn Oak Flooring & Runner Rug */}
       <mesh position={[2.1, 0, 2.2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[3.4, 3.2]} />
         <primitive object={materials.livingFloor} attach="material" />
+      </mesh>
+      <mesh position={[2.1, 0.003, 2.0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[2.6, 1.8]} />
+        <primitive object={materials.craftsmanRugMat} attach="material" />
       </mesh>
 
       {/* Kitchen Terracotta Quarry Tile Floor */}
@@ -606,6 +674,14 @@ export function SearsCraftsmanEstate({
           <primitive object={materials.fumedDarkOak} attach="material" />
         </mesh>
 
+        {/* Board and Batten Vertical Battens */}
+        {[-1.8, -1.2, -0.6, 0.6, 1.2, 1.8].map((bx, bIdx) => (
+          <mesh key={bIdx} position={[bx, 0.68, 0.03]} castShadow>
+            <boxGeometry args={[0.08, 1.32, 0.03]} />
+            <primitive object={materials.fumedDarkOak} attach="material" />
+          </mesh>
+        ))}
+
         {/* Plate Rail with Period Craftsman Art Pottery */}
         <mesh position={[0, 1.38, 0.06]} castShadow receiveShadow>
           <boxGeometry args={[4.2, 0.05, 0.12]} />
@@ -641,6 +717,13 @@ export function SearsCraftsmanEstate({
             <boxGeometry args={[0.88, 0.72, 0.34]} />
             <meshStandardMaterial color="#1a1816" roughness={0.95} />
           </mesh>
+          {/* Cast Iron Andirons */}
+          {[-0.24, 0.24].map((ax, aIdx) => (
+            <mesh key={aIdx} position={[ax, 0.4, 0.42]} castShadow>
+              <boxGeometry args={[0.04, 0.24, 0.22]} />
+              <primitive object={materials.castIron} attach="material" />
+            </mesh>
+          ))}
           {/* Glowing Embers */}
           <mesh position={[0, 0.3, 0.38]}>
             <boxGeometry args={[0.48, 0.1, 0.2]} />
