@@ -59,9 +59,17 @@ dimensions because its dense covariance would require 25,401,600 entries.
 Two audited surfaces coexist intentionally:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
-  the existing low-dimensional visualizations.
-- `public/wasm/fs-cmaes/v066/` is the owner-family ask/tell, schema-6 G1, and
-  schema-2 household-arm package used by the flagships and their workers.
+  the existing low-dimensional visualizations (CmaesIntro / CmaesInternalsLab).
+- `public/wasm/fs-cmaes/v066/` is the first ask/tell owner kernel: schema-6 G1
+  (15-DoF lower body) and schema-2 household arm (128-D). Used by the
+  flagships pre-cmaes-pvz.
+- `public/wasm/fs-cmaes/v068/` is the multi-factor-objective kernel
+  (cmaes-pvz): the v066 ask/tell surface, the schema-7 30-DoF G1, and the
+  per-step survival-bonus shaping the flagship receipt card surfaces.
+- `public/wasm/fs-cmaes/v069/` is the arm-swing-gate refinement of v068: the
+  upper-body reflex is quiet during the balance phase and ramps in over
+  gait cycles 0.5..1.5, matching the v066 effective behavior on the lower
+  body while keeping the 30-DoF inertia in the solver.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.
