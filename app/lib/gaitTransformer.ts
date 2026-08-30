@@ -58,6 +58,26 @@ export interface LoadedTransformerWeights {
 
 const MAGIC = 0x54475346; // "FSGT" bytes read as a little-endian u32
 
+/**
+ * Audited architecture pin — the ONLY weights this loader accepts, exactly
+ * like the kernel-version pins in frankensimCmaes.ts. Anything else fails
+ * closed: the shipped artifact must be the fs-g1-train-trained,
+ * golden-parity-gated model, not whatever bin happens to sit at the path.
+ * Regenerate via fs-g1-train/examples/{train_ablation,finalize_ablation}.
+ */
+const AUDITED_CONFIG: GaitTransformerConfig = {
+  dModel: 256,
+  nHeads: 8,
+  headDim: 32,
+  nKvHeads: 4,
+  kvDim: 128,
+  nLayers: 4,
+  mlpHidden: 682,
+  context: 64,
+  nInputs: 42,
+  nOutputs: 29,
+};
+
 class WeightsReader {
   private view: DataView;
   private pos = 0;
@@ -112,9 +132,28 @@ export function loadGaitTransformerWeights(buffer: ArrayBuffer): LoadedTransform
   reader.expectU32(1, "layoutVersion");
   const dims: number[] = [];
   for (let i = 0; i < 10; i++) dims.push(reader.u32());
+  const dimNames = [
+    "dModel",
+    "nHeads",
+    "headDim",
+    "nKvHeads",
+    "kvDim",
+    "nLayers",
+    "mlpHidden",
+    "context",
+    "nInputs",
+    "nOutputs",
+  ] as const;
+  for (let i = 0; i < dimNames.length; i++) {
+    if (dims[i] !== AUDITED_CONFIG[dimNames[i]]) {
+      throw new Error(
+        `weights file ${dimNames[i]}=${dims[i]} != audited ${AUDITED_CONFIG[dimNames[i]]} — foreign or stale artifact; regenerate via fs-g1-train/examples/{train_ablation,finalize_ablation}`,
+      );
+    }
+  }
   const [dModel, nHeads, headDim, nKvHeads, kvDim, nLayers, mlpHidden, context, nInputs, nOutputs] = dims;
-  const expectedShape = (rows: number, cols: number) => rows * cols;
   const layerArrays: LoadedTransformerWeights["layers"] = [];
+  const expectedShape = (rows: number, cols: number) => rows * cols;
   const arrayCount = reader.u32();
   const expectedArrays = 2 + nLayers * 9 + 5;
   if (arrayCount !== expectedArrays) {

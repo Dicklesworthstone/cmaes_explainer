@@ -34,7 +34,7 @@ async function fileExists(path: URL): Promise<boolean> {
 
 const artifactsPresent =
   (await fileExists(WEIGHTS_PATH)) && (await fileExists(RECEIPT_PATH)) && (await fileExists(GOLDEN_PATH));
-const testIfArtifacts = artifactsPresent ? test : test.skip;
+const testIfArtifacts: typeof test = artifactsPresent ? test : test.skip;
 
 interface GoldenCase {
   position: number;
@@ -94,11 +94,24 @@ describe("GaitTransformer weights loader (fail-closed)", () => {
     expect(() => loadGaitTransformerWeights(poisoned.buffer)).toThrow(/magic/);
   });
 
-  testIfArtifacts("accepts the shipped weight file", async () => {
+  testIfArtifacts("accepts the shipped weight file (audited 4-layer GQA architecture)", async () => {
     const buf = await Bun.file(WEIGHTS_PATH).arrayBuffer();
     const weights = loadGaitTransformerWeights(buf);
-    expect(weights.config.dModel).toBeGreaterThan(0);
-    expect(weights.config.nLayers).toBeGreaterThan(0);
+    expect(weights.config.dModel).toBe(256);
+    expect(weights.config.nLayers).toBe(4);
+    expect(weights.config.kvDim).toBe(128);
+  });
+
+  test("rejects foreign architectures even when internally consistent", () => {
+    // Craft a header with the right magic/version but wrong dims (the
+    // 6-layer synthetic variant that was once shipped by mistake): the
+    const header = new ArrayBuffer(96); // loader minimum-size gate is 52 bytes
+    const view = new DataView(header);
+    view.setUint32(0, 0x54475346, true); // magic
+    view.setUint32(4, 1, true); // layout version
+    const dims = [256, 8, 32, 8, 256, 6, 682, 64, 42, 29]; // 6-layer MHA variant
+    dims.forEach((d, i) => view.setUint32(8 + i * 4, d, true));
+    expect(() => loadGaitTransformerWeights(header)).toThrow(/audited/);
   });
 
   test("artifact absence is loud, not silent", () => {
@@ -190,7 +203,8 @@ describe("Measured ablation engine", () => {
     );
   });
 
-  testIfArtifacts("CMA-ES side matches the standalone evaluator contract", async () => {
+  test("CMA-ES side matches the standalone evaluator contract", async () => {
+    if (!artifactsPresent) return; // artifact-gated; absence is loud elsewhere
     const standalone = runCmaesPolicySearch({ seed: 42, episodeSteps: 240, finalSteps: 720 });
     const { weights, receipt } = await loadAblationFixtures();
     const { cmaesReceipt } = runMeasuredAblation({ weights, trainReceipt: receipt }, 42);
