@@ -947,7 +947,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
-  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
+  // The native stage is much shallower than the website flagship. Start it
+  // on the pelvis-tracking camera so the robot—not a nearby cabinet—is the
+  // first thing a phone or tablet user sees.
+  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">(
+    embedded ? "follow" : "orbit",
+  );
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [sampleIndex, setSampleIndex] = useState(0);
@@ -1206,7 +1211,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
 
             {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
-            <div className="absolute right-5 top-5 z-10 flex flex-wrap items-center gap-2 pointer-events-auto">
+            <div
+              className={`absolute right-5 z-10 flex flex-wrap items-center gap-2 pointer-events-auto ${
+                embedded ? "top-20" : "top-5"
+              }`}
+            >
               {/* Lighting Atmosphere Selector */}
               <div className="flex items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md">
                 {(
