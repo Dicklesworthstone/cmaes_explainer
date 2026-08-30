@@ -13,11 +13,17 @@ describe("G1 Transformer Policy Metadata & Browser Inference Manifest", () => {
     const raw = fs.readFileSync(metaPath, "utf-8");
     const meta = JSON.parse(raw);
 
-    expect(meta.model_name).toBe("g1-transformer-locomotion-policy-v1");
-    expect(meta.format).toBe("ONNX-Float32-DynamicBatch");
+    // FSGT = FrankenSim Gait Transformer (custom binary format; ONNX was
+    // the original plan, FSGT is what fs-g1-train actually produces).
+    // The fail-closed loader is app/lib/gaitTransformer.ts.
+    expect(meta.model_name).toBe("g1-transformer-locomotion-policy-v2");
+    expect(meta.format).toMatch(/^FSGT-Weights-v1/);
     expect(meta.sequence_length).toBe(64);
     expect(meta.observation_dim).toBe(42);
     expect(meta.action_dim).toBe(29);
+    expect(meta.weights_file).toBe("g1-ablation-weights-v1.bin");
+    expect(meta.training_receipt).toBe("g1-ablation-train-receipt.json");
+    expect(meta.golden_vectors).toBe("g1-ablation-golden.json");
 
     // Verify 42 observation signals layout
     expect(meta.obs_layout.length).toBe(42);
@@ -38,11 +44,14 @@ describe("G1 Transformer Policy Metadata & Browser Inference Manifest", () => {
       expect(min).toBeLessThan(max);
     }
 
-    // Verify training provenance
+    // Verify training provenance (FSGT plan; the exact step count lives
+    // in the training receipt JSON, not in this metadata file).
     expect(meta.training_metadata).toBeDefined();
-    expect(meta.training_metadata.total_env_steps).toBe(38000000);
-    expect(meta.training_metadata.inference_badge.label).toBe(
-      "policy: transformer (GPU-trained)",
+    expect(meta.training_metadata.trainer).toMatch(/train_ablation\.rs/);
+    expect(meta.training_metadata.inference_badge).toBeDefined();
+    expect(meta.training_metadata.inference_badge.label).toMatch(/transformer/i);
+    expect(meta.training_metadata.inference_badge.fallback_label).toBe(
+      "transformer (weights unavailable — nothing is faked)"
     );
   });
 });
