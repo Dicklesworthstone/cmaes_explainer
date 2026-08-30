@@ -33,6 +33,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var server: LoopbackEngineServer?
     private var baseURL: URL?
     private var selectedLab: RobotLab = .humanoid
+    private var activeNavigation: WKNavigation?
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
     override init() {
@@ -68,7 +69,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         } else {
             phase = .loading
             detail = "Reloading the \(selectedLab.title.lowercased()) engine…"
-            webView.reloadFromOrigin()
+            activeNavigation = webView.reloadFromOrigin()
         }
     }
 
@@ -97,7 +98,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
         phase = .loading
         detail = "Loading the \(selectedLab.title.lowercased()) lab…"
-        webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+        activeNavigation = webView.load(
+            URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        )
     }
 
     private func readBundleText(named name: String, abbreviated: Bool = false) -> String {
@@ -111,10 +114,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard owns(navigation) else { return }
         let script = "({ isolated: self.crossOriginIsolated, title: document.title, path: location.pathname })"
         webView.evaluateJavaScript(script) { [weak self] result, _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.owns(navigation) else { return }
                 let payload = result as? [String: Any]
                 self.crossOriginIsolated = payload?["isolated"] as? Bool ?? false
                 // A fast worker can report ready before this JavaScript probe
@@ -137,11 +141,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         didFailProvisionalNavigation navigation: WKNavigation!,
         withError error: Error
     ) {
-        failNavigation(error)
+        failNavigation(error, navigation: navigation)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        failNavigation(error)
+        failNavigation(error, navigation: navigation)
     }
 
     func webView(
@@ -155,13 +159,24 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             return
         }
 
+        // `WKNavigationResponse` does not carry the `WKNavigation` identity.
+        // Publishing failure here would let an HTTP response from a cancelled
+        // older route poison the newly selected lab. Cancelling causes WebKit
+        // to report the terminal navigation callback below, where ownership is
+        // identity-fenced before UI state changes.
         decisionHandler(.cancel)
-        let error = "The bundled engine returned HTTP \(response.statusCode)."
-        phase = .failed(error)
-        detail = error
     }
 
-    private func failNavigation(_ error: Error) {
+    private func owns(_ navigation: WKNavigation?) -> Bool {
+        guard let navigation, let activeNavigation else { return false }
+        return navigation === activeNavigation
+    }
+
+    private func failNavigation(_ error: Error, navigation: WKNavigation?) {
+        // Switching labs cancels the old navigation after the new one has
+        // started. Its delayed cancellation/failure must not replace the new
+        // lab's loading or ready state.
+        guard owns(navigation) else { return }
         phase = .failed(error.localizedDescription)
         detail = "The bundled engine did not load: \(error.localizedDescription)"
     }

@@ -96,6 +96,7 @@ struct FrankenRobotsView: View {
         .background(Color.black.opacity(0.38), in: Capsule())
         .overlay(Capsule().stroke(statusColor.opacity(0.30)))
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("robot-engine-status")
         .accessibilityLabel("Engine status: \(statusLabel)")
     }
 
