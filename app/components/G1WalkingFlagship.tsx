@@ -744,9 +744,13 @@ function CameraRig({
 }) {
   useFrame(({ camera }) => {
     if (cameraView === "follow") {
-      cameraScratchVec.set(pelvisThree[0] - 1.4, pelvisThree[1] + 0.6, pelvisThree[2] + 1.2);
+      cameraScratchVec.set(
+        pelvisThree[0] - 2.6,
+        pelvisThree[1] + 1.05,
+        pelvisThree[2] + 2.35,
+      );
       camera.position.lerp(cameraScratchVec, 0.08);
-      camera.lookAt(pelvisThree[0], pelvisThree[1] + 0.2, pelvisThree[2]);
+      camera.lookAt(pelvisThree[0], pelvisThree[1] + 0.12, pelvisThree[2]);
     } else if (cameraView === "pov") {
       cameraScratchVec.set(pelvisThree[0] + 0.05, pelvisThree[1] + 0.45, pelvisThree[2]);
       camera.position.copy(cameraScratchVec);
@@ -901,6 +905,23 @@ function RobotStage({
 
 function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
+function stageSceneHint(
+  xrayMode: boolean,
+  cameraView: "orbit" | "follow" | "pov" | "blueprint",
+): string {
+  if (xrayMode) return "X-Ray: Green polygon is dynamic support boundary.";
+  switch (cameraView) {
+    case "orbit":
+      return "1928 Sears Craftsman Living Room · Drag to orbit · pinch to zoom.";
+    case "follow":
+      return "1928 Sears Craftsman Living Room · Follow camera tracks the pelvis.";
+    case "pov":
+      return "1928 Sears Craftsman Living Room · Robot point of view.";
+    case "blueprint":
+      return "1928 Sears Craftsman Living Room · Top-down map view.";
+  }
 }
 
 
@@ -1294,7 +1315,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             ) : null}
             <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
               <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
-                Cyan / violet rings are contact booleans. {xrayMode ? "X-Ray: Green polygon is dynamic support boundary." : "1928 Sears Craftsman Living Room · Drag to orbit · pinch to zoom."}
+                Cyan / violet rings are contact booleans. {stageSceneHint(xrayMode, cameraView)}
               </span>
               <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
                 Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
