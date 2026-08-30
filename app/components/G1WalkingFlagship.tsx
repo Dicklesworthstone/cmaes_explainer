@@ -968,9 +968,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
-  // The native stage is much shallower than the website flagship. Start it
-  // on the pelvis-tracking camera so the robot—not a nearby cabinet—is the
-  // first thing a phone or tablet user sees.
+  const [activeRouteId, setActiveRouteId] = useState<string>("grand-tour");
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">(
     embedded ? "follow" : "orbit",
   );
@@ -1405,6 +1403,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               onSelectTimeOfDay={setTimeOfDay}
               showRoof={showRoof}
               onToggleRoof={() => setShowRoof(!showRoof)}
+              activeRouteId={activeRouteId}
+              onSelectRoute={(routeId) => {
+                setActiveRouteId(routeId);
+                if (routeId === "living-inglenook") setActiveRoom("living");
+                else if (routeId === "dining-circulation") setActiveRoom("dining");
+                else if (routeId === "kitchen-prep") setActiveRoom("kitchen");
+                else if (routeId === "grand-tour") setActiveRoom("cutaway");
+              }}
             />
           )}
         </div>

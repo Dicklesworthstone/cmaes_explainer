@@ -7,18 +7,20 @@ import {
   Sunset,
   Moon,
   Info,
-  Maximize2,
   Compass,
   CheckCircle2,
   Layers,
+  Footprints,
   Sparkles,
-  Eye,
   Sliders,
+  ShieldCheck,
 } from "lucide-react";
 import {
   SEARS_CRAFTSMAN_CATALOG,
   ROOM_ARCHITECTURAL_DETAILS,
+  CRAFTSMAN_WALKING_ROUTES,
   type CraftsmanPieceInfo,
+  type CraftsmanWalkingRoute,
 } from "../lib/craftsmanCatalogData";
 
 export interface CraftsmanArchitecturalInspectorProps {
@@ -28,6 +30,8 @@ export interface CraftsmanArchitecturalInspectorProps {
   onSelectTimeOfDay: (tod: "afternoon-sun" | "golden-hour" | "evening-glow") => void;
   showRoof?: boolean;
   onToggleRoof?: () => void;
+  activeRouteId?: string;
+  onSelectRoute?: (routeId: string) => void;
 }
 
 export function CraftsmanArchitecturalInspector({
@@ -37,6 +41,8 @@ export function CraftsmanArchitecturalInspector({
   onSelectTimeOfDay,
   showRoof = false,
   onToggleRoof,
+  activeRouteId = "grand-tour",
+  onSelectRoute,
 }: CraftsmanArchitecturalInspectorProps) {
   const [selectedPieceId, setSelectedPieceId] = useState<string>("fireplace-inglenook");
 
@@ -48,12 +54,16 @@ export function CraftsmanArchitecturalInspector({
   const selectedPiece: CraftsmanPieceInfo =
     SEARS_CRAFTSMAN_CATALOG[selectedPieceId] ?? pieceList[0];
 
+  const activeRoute: CraftsmanWalkingRoute =
+    CRAFTSMAN_WALKING_ROUTES.find((r) => r.id === activeRouteId) ??
+    CRAFTSMAN_WALKING_ROUTES[0];
+
   return (
-    <div className="rounded-2xl border border-amber-500/20 bg-slate-950/90 p-5 shadow-2xl backdrop-blur-xl">
+    <div className="rounded-2xl border border-amber-500/20 bg-slate-950/90 p-5 shadow-2xl backdrop-blur-xl space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
             <Home className="h-5 w-5" />
           </div>
           <div>
@@ -66,7 +76,7 @@ export function CraftsmanArchitecturalInspector({
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Parametric architectural reconstruction from authentic Sears Modern Homes catalog floor plans
+              Parametric architectural reconstruction with 70+ authentic period furnishings & multi-room navigation
             </p>
           </div>
         </div>
@@ -120,7 +130,7 @@ export function CraftsmanArchitecturalInspector({
       </div>
 
       {/* Room Tour Selector Pills */}
-      <div className="mt-4">
+      <div>
         <label className="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400">
           Room-by-Room Architectural Tour
         </label>
@@ -146,8 +156,49 @@ export function CraftsmanArchitecturalInspector({
         </div>
       </div>
 
-      {/* Active Room Metadata Card */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      {/* Walking Route Selector */}
+      {onSelectRoute && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[0.68rem] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <Footprints className="h-3.5 w-3.5 text-amber-400" />
+              G1 Whole-House Obstacle Traversal Routes
+            </label>
+            <span className="font-mono text-xs text-slate-400">
+              Total Corridor Distance: {activeRoute.totalDistanceMeters} m
+            </span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CRAFTSMAN_WALKING_ROUTES.map((route) => {
+              const isSelected = activeRouteId === route.id;
+              return (
+                <button
+                  key={route.id}
+                  type="button"
+                  onClick={() => onSelectRoute(route.id)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                    isSelected
+                      ? "border border-amber-400/40 bg-amber-500/20 text-amber-200"
+                      : "border border-white/10 bg-slate-900/80 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span>{route.name}</span>
+                  <span className="font-mono text-[0.65rem] text-amber-400/80">
+                    ({route.waypoints.length} gates)
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[0.7rem] text-slate-400">
+            {activeRoute.description}
+          </p>
+        </div>
+      )}
+
+      {/* Active Room Metadata & Catalog Spec Grid */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">

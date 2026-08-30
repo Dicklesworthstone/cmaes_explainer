@@ -1,4 +1,4 @@
-// Sears Modern Homes (1908-1940) Architectural Data & Historical Catalog Catalog.
+// Sears Modern Homes (1908-1940) Architectural Data & Historical Catalog.
 //
 // Ground truth historical provenance for parametric 3D reconstruction of
 // Craftsman Bungalow homes (The Ashmore, The Osborn, The Rodessa, The Valmont).
@@ -256,3 +256,66 @@ export const ROOM_ARCHITECTURAL_DETAILS = [
     focalFeatures: ["All 7 rooms simultaneously", "Continuous circulation paths", "Wall cross-sections", "Exterior roof eaves & foundation"],
   },
 ] as const;
+
+export interface CraftsmanWalkingRoute {
+  id: string;
+  name: string;
+  description: string;
+  totalDistanceMeters: number;
+  waypoints: Array<{ name: string; pos: [number, number]; speed: number }>;
+}
+
+export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
+  {
+    id: "grand-tour",
+    name: "Whole-House Grand Tour",
+    description: "Full estate traversal from front veranda through parlor, dining, kitchen, hallway, and bedroom suite.",
+    totalDistanceMeters: 18.5,
+    waypoints: [
+      { name: "Porch Entry", pos: [0.0, 5.0], speed: 0.6 },
+      { name: "Parlor Living Area", pos: [-1.4, 2.6], speed: 0.65 },
+      { name: "Colonnade Threshold", pos: [0.4, 2.2], speed: 0.55 },
+      { name: "Dining Room", pos: [1.6, 2.4], speed: 0.65 },
+      { name: "Craftsman Kitchen", pos: [1.9, -0.6], speed: 0.6 },
+      { name: "Central Hallway", pos: [0.2, 0.2], speed: 0.55 },
+      { name: "Master Bedroom", pos: [-1.8, -1.9], speed: 0.6 },
+      { name: "Ensuite Bathroom", pos: [0.4, -2.9], speed: 0.5 },
+    ],
+  },
+  {
+    id: "living-inglenook",
+    name: "Living Room Inglenook Circuit",
+    description: "Navigating between the Gustav Stickley Morris armchair, oak coffee table, and the glowing brick fireplace hearth.",
+    totalDistanceMeters: 6.2,
+    waypoints: [
+      { name: "Entry Aisle", pos: [0.0, 2.0], speed: 0.6 },
+      { name: "Stickley Morris Chair", pos: [-1.8, 1.2], speed: 0.55 },
+      { name: "Fireplace Hearth", pos: [-1.2, 0.6], speed: 0.5 },
+      { name: "Library Table", pos: [-0.4, 1.8], speed: 0.6 },
+    ],
+  },
+  {
+    id: "dining-circulation",
+    name: "Dining Room & Buffet Loop",
+    description: "Circulating smoothly around the 6-seat oak trestle dining table and inspecting the built-in china buffet.",
+    totalDistanceMeters: 7.4,
+    waypoints: [
+      { name: "Colonnade Arch", pos: [0.4, 2.2], speed: 0.55 },
+      { name: "Dining Table Head", pos: [1.2, 3.2], speed: 0.6 },
+      { name: "China Buffet Front", pos: [2.1, 0.8], speed: 0.5 },
+      { name: "Kitchen Doorway", pos: [2.1, -0.2], speed: 0.55 },
+    ],
+  },
+  {
+    id: "kitchen-prep",
+    name: "Kitchen Work Triangle",
+    description: "Classic culinary triangle between the Hoosier baking cabinet, Glenwood gas stove, and farmhouse apron sink.",
+    totalDistanceMeters: 5.8,
+    waypoints: [
+      { name: "Prep Island", pos: [2.0, -1.0], speed: 0.55 },
+      { name: "Hoosier Workstation", pos: [1.1, -2.3], speed: 0.5 },
+      { name: "Glenwood Range", pos: [2.8, -2.3], speed: 0.5 },
+      { name: "Farmhouse Sink", pos: [3.5, -1.1], speed: 0.5 },
+    ],
+  },
+];
