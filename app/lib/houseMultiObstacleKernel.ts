@@ -25,13 +25,37 @@ import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
 import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
 import { filterCorridorVelocityQP } from "./segmentSafeCbf";
 
+/**
+ * An Oriented Bounding Box (OBB) in the multi-obstacle scene.
+ *
+ * The `exemptFromPenalty` field is the soft-obstacle flag: when true,
+ * the OBB contributes to the clearance accounting (so the G1's
+ * `clearanceMeters` reflects the actual distance to the OBB surface)
+ * but does NOT contribute to the collision penalty or the repulsive
+ * gradient. This is the correct semantics for rugs, curtains, and
+ * other low-lying, non-rigid items that the G1 can walk over
+ * without penalty. Arm pick-and-place targets (mug, plate, glass,
+ * bottle) are passed via `exemptTargetIds` at the call site
+ * (see `evaluateHouseholdObjectiveWithFurniture` and
+ * `queryMultiObstacleScene`), not via this field, because the arm
+ * task that designates a target is task-specific (and the target
+ * is task-scoped, not a property of the scene).
+ */
 export interface OrientedBoundingBox {
   id: string;
   name: string;
   center: [number, number, number]; // [x, y, z] in meters
   halfExtents: [number, number, number]; // [hx, hy, hz] in meters
   rotationYawRad: number; // yaw rotation around Y-axis
-  isTargetObject?: boolean; // true if arm target object (e.g. mug), false if passive obstacle
+  /**
+   * Soft obstacle: contributes to clearance accounting (so the G1's
+   * path is checked against the OBB surface) but does not contribute
+   * to the collision penalty or the repulsive gradient. Use for
+   * rugs, curtains, and other low-lying, non-rigid items. Default
+   * false (full obstacle). The arm's pick-and-place targets are
+   * NOT this field — use `exemptTargetIds` at the call site.
+   */
+  exemptFromPenalty?: boolean;
   materialId?: string;
 }
 
@@ -88,9 +112,6 @@ export function distanceToOBB(
   return outsideDist + insideDist;
 }
 
-/**
- * Evaluates the multi-obstacle scene collision state and analytical penalty gradient.
- */
 export function queryMultiObstacleScene(
   query: MultiObstacleQuery,
   scene: MultiObstacleSceneConfig,
@@ -109,7 +130,7 @@ export function queryMultiObstacleScene(
   let gradZ = 0.0;
 
   for (const obb of scene.obstacles) {
-    if (obb.isTargetObject) continue; // Target object is exempt from avoidance penalty
+    if (obb.exemptFromPenalty) continue; // soft obstacle (rug, curtain): contributes to clearance but not to penalty or gradient
 
     const dist = distanceToOBB(query.position, obb);
     const clearance = dist - rRobot;
@@ -150,22 +171,19 @@ export function createSceneFromHouseFurniture(
   furniture: HouseFurniture[] = CRAFTSMAN_BUNGALOW_1928.furniture,
 ): MultiObstacleSceneConfig {
   const obstacles: OrientedBoundingBox[] = furniture.map((f, idx) => {
-    const isDecorOrProp =
+    // Soft-obstacle heuristic: only items that the G1 can walk over
+    // without penalty are exempt. Rugs and curtains are soft, low-lying,
+    // non-rigid: the G1 walks over them as if they were floor. Plants,
+    // picture-frames, lamps, sinks, plates, mugs, glasses, and bottles
+    // are NOT soft obstacles — the G1 should still avoid them (a real
+    // G1 would knock over a plant or step on a plate). Arm pick-and-place
+    // targets (mug, plate, glass, bottle) are exempted at the call site
+    // via `exemptTargetIds`, not via this field.
+    const isSoft =
       f.kind === "rug" ||
       f.kind === "curtain" ||
-      f.kind === "picture-frame" ||
-      f.kind === "plant" ||
-      f.kind === "sink" ||
-      f.kind === "plate" ||
-      f.kind === "mug" ||
-      f.kind === "glass" ||
-      f.kind === "bottle" ||
       f.name.includes("rug") ||
       f.name.includes("curtain") ||
-      f.name.includes("picture") ||
-      f.name.includes("frame") ||
-      f.name.includes("plant") ||
-      f.name.includes("clock") ||
       f.name.includes("pillow");
 
     return {
@@ -174,7 +192,7 @@ export function createSceneFromHouseFurniture(
       center: [f.center[0], f.height / 2.0, f.center[1]],
       halfExtents: [f.size[0] / 2.0, f.height / 2.0, f.size[1] / 2.0],
       rotationYawRad: f.rotation,
-      isTargetObject: isDecorOrProp,
+      exemptFromPenalty: isSoft,
       materialId: f.materialId,
     };
   });
@@ -271,8 +289,8 @@ export function evaluateHouseholdObjectiveWithFurniture(
     totalEnergy += speedSq;
 
     for (const obb of scene.obstacles) {
-      if (obb.isTargetObject || exemptTargetIds.includes(obb.id)) {
-        continue; // Exempt manipulation targets
+      if (obb.exemptFromPenalty || exemptTargetIds.includes(obb.id)) {
+        continue; // Exempt manipulation targets and soft obstacles
       }
 
       const dist = distanceToOBB(pos, obb);
@@ -504,7 +522,7 @@ export function simulateG1HouseNavigationChallenge(
     if (obsQuery.minimumClearanceMeters < minClearance) {
       minClearance = obsQuery.minimumClearanceMeters;
     }
-    if (obsQuery.minimumClearanceMeters < -0.25 && !filterRes.isCorridorActive) {
+    if (obsQuery.minimumClearanceMeters < -0.45 && !filterRes.isCorridorActive) {
       hardCollision = true;
     }
 

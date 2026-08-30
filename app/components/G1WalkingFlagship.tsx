@@ -4,7 +4,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Zap, Sliders, Shield, Activity, Flame, Radio } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -18,6 +18,7 @@ import {
 } from "../lib/frankensimCmaes";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 import { G1HouseBackdrop } from "./G1HouseBackdrop";
+import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
 import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
@@ -306,6 +307,7 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
     : 0;
   const wavenumber = admission?.terrainWavenumberRadiansPerMeter ?? 1;
   const geometry = useMemo(() => {
+    if (amplitude <= 0) return null;
     const terrain = new THREE.PlaneGeometry(5, 3, 96, 48);
     terrain.rotateX(-Math.PI / 2);
     terrain.translate(0.75, 0, 0);
@@ -323,15 +325,17 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
     terrain.computeVertexNormals();
     return terrain;
   }, [amplitude, wavenumber]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => geometry?.dispose(), [geometry]);
+
+  if (!geometry || amplitude <= 0) return null;
 
   return (
-    <group>
+    <group position={[0, 0.001, 0]}>
       <mesh geometry={geometry} receiveShadow>
-        <meshStandardMaterial color="#0a1627" roughness={0.82} metalness={0.16} />
+        <meshStandardMaterial color="#6e421f" roughness={0.65} metalness={0.08} />
       </mesh>
-      <mesh geometry={geometry} position={[0, 0.0015, 0]}>
-        <meshBasicMaterial color="#155e75" wireframe transparent opacity={0.28} />
+      <mesh geometry={geometry} position={[0, 0.001, 0]}>
+        <meshBasicMaterial color="#d97706" wireframe transparent opacity={0.18} />
       </mesh>
     </group>
   );
@@ -766,6 +770,7 @@ function RobotStage({
   meshState,
   xrayMode,
   cameraView,
+  timeOfDay,
   isPlaying,
   playbackSpeed,
   sampleIndex,
@@ -778,6 +783,7 @@ function RobotStage({
   meshState: G1MeshState;
   xrayMode: boolean;
   cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   isPlaying: boolean;
   playbackSpeed: number;
   sampleIndex: number;
@@ -787,6 +793,8 @@ function RobotStage({
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.2, 0.68, 0] as [number, number, number]);
 
+  const bgColor = timeOfDay === "evening-glow" ? "#120e0b" : timeOfDay === "golden-hour" ? "#1a120b" : "#12151c";
+
   return (
     <Canvas
       dpr={[1, 1.5]}
@@ -794,42 +802,27 @@ function RobotStage({
       gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.3;
+        gl.toneMappingExposure = timeOfDay === "evening-glow" ? 1.4 : 1.25;
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
-      <color attach="background" args={["#050b18"]} />
-      <fog attach="fog" args={["#050b18", 3.5, 9.5]} />
-      <PerspectiveCamera makeDefault position={[1.7, 0.95, 2.05]} fov={38} near={0.05} far={40} />
-      
-      <hemisphereLight args={["#7dd3fc", "#fde68a", 1.5]} />
-      <directionalLight
-        castShadow
-        position={[2.4, 4.5, 2.2]}
-        intensity={3.4}
-        color="#fff3df"
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-bias={-0.0002}
-        shadow-camera-left={-1.6}
-        shadow-camera-right={1.6}
-        shadow-camera-top={2.2}
-        shadow-camera-bottom={-0.4}
-        shadow-camera-near={0.5}
-        shadow-camera-far={12}
-      />
-      <directionalLight position={[-2.6, 1.6, -1.4]} intensity={1.05} color="#bfdbfe" />
-      <directionalLight position={[0, -1.2, 1.6]} intensity={0.55} color="#fef3c7" />
-      <spotLight position={[0.6, 2.3, -2.9]} intensity={26} angle={0.5} penumbra={0.85} color="#bae6fd" />
+      <color attach="background" args={[bgColor]} />
+      <fog attach="fog" args={[bgColor, 7.5, 18.0]} />
+      <PerspectiveCamera makeDefault position={[1.85, 1.15, 2.35]} fov={36} near={0.05} far={40} />
 
-      <TerrainSurface admission={admission} />
-      {/* Exterior wall meshes can sit between the default orbit camera and the robot.
-          Keep the inspectable floor, furniture, and goals, but leave orbit sight-lines open. */}
-      <G1HouseBackdrop showFurniture={!xrayMode} showWalls={false} showGoals={true} />
-      <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[1.95, 0.012]} />
-        <meshBasicMaterial color="#22d3ee" transparent opacity={0.68} />
+      {/* Super Realistic Sears Craftsman Bungalow Living Room Environment */}
+      <CraftsmanLivingRoom showFurniture={!xrayMode} timeOfDay={timeOfDay} />
+
+      {admission?.config.challenge === "terrain-and-push" && (
+        <TerrainSurface admission={admission} />
+      )}
+
+      {/* Walking Path Subfloor Guideline */}
+      <mesh position={[0.975, 0.004, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1.95, 0.008]} />
+        <meshBasicMaterial color="#f59e0b" transparent opacity={0.4} />
       </mesh>
+
       {trace ? (
         <RobotPlayback
           key={`${trace.objective}:${trace.distanceMeters}:${trace.samples.length}`}
@@ -892,6 +885,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // The focused native route opens on the inspectable robot instead of the
   // heavy house dressing; the full website keeps its cinematic default.
   const [xrayMode, setXrayMode] = useState(embedded);
+  const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -1121,35 +1115,68 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </button>
             </div>
 
-            {/* Camera Perspective Selector Toolbar */}
-            <div className="absolute right-5 top-5 z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md pointer-events-auto">
-              {(
-                [
-                  { id: "orbit", label: "Orbit", icon: Camera },
-                  { id: "follow", label: "Follow", icon: Activity },
-                  { id: "pov", label: "POV", icon: Eye },
-                  { id: "blueprint", label: "Map", icon: Radio },
-                ] as const
-              ).map((cam) => {
-                const Icon = cam.icon;
-                const isSelected = cameraView === cam.id;
-                return (
-                  <button
-                    key={cam.id}
-                    type="button"
-                    onClick={() => setCameraView(cam.id)}
-                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
-                      isSelected
-                        ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                    title={`Switch camera to ${cam.label} view`}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {cam.label}
-                  </button>
-                );
-              })}
+            {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
+            <div className="absolute right-5 top-5 z-10 flex flex-wrap items-center gap-2 pointer-events-auto">
+              {/* Lighting Atmosphere Selector */}
+              <div className="flex items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md">
+                {(
+                  [
+                    { id: "afternoon-sun", label: "Day", icon: Sun },
+                    { id: "golden-hour", label: "Sunset", icon: Sunset },
+                    { id: "evening-glow", label: "Evening", icon: Moon },
+                  ] as const
+                ).map((tod) => {
+                  const Icon = tod.icon;
+                  const isSelected = timeOfDay === tod.id;
+                  return (
+                    <button
+                      key={tod.id}
+                      type="button"
+                      onClick={() => setTimeOfDay(tod.id)}
+                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                        isSelected
+                          ? "bg-amber-500/30 text-amber-200 border border-amber-400/40"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                      title={`Craftsman atmosphere: ${tod.label}`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {tod.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Camera Perspective Selector */}
+              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md">
+                {(
+                  [
+                    { id: "orbit", label: "Orbit", icon: Camera },
+                    { id: "follow", label: "Follow", icon: Activity },
+                    { id: "pov", label: "POV", icon: Eye },
+                    { id: "blueprint", label: "Map", icon: Radio },
+                  ] as const
+                ).map((cam) => {
+                  const Icon = cam.icon;
+                  const isSelected = cameraView === cam.id;
+                  return (
+                    <button
+                      key={cam.id}
+                      type="button"
+                      onClick={() => setCameraView(cam.id)}
+                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                        isSelected
+                          ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                      title={`Switch camera to ${cam.label} view`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {cam.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {meshState.phase === "loading" ? (
@@ -1168,7 +1195,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             ) : null}
             <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
               <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
-                Cyan / violet rings are contact booleans. {xrayMode ? "X-Ray: Green polygon is dynamic support boundary." : "Drag to orbit; pinch to zoom."}
+                Cyan / violet rings are contact booleans. {xrayMode ? "X-Ray: Green polygon is dynamic support boundary." : "1928 Sears Craftsman Living Room · Drag to orbit · pinch to zoom."}
               </span>
               <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
                 Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
@@ -1183,6 +1210,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   meshState={meshState}
                   xrayMode={xrayMode}
                   cameraView={cameraView}
+                  timeOfDay={timeOfDay}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
                   sampleIndex={sampleIndex}
