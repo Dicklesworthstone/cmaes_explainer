@@ -22,8 +22,9 @@ type WorkerRequest =
       seedIndex: number;
       mode?: "continue" | "fresh";
       challenge: G1Challenge;
+      sigma?: number;
     }
-  | { type: "compare"; challenge: G1Challenge; generations: number };
+  | { type: "compare"; challenge: G1Challenge; generations: number; sigma?: number };
 
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -168,7 +169,8 @@ async function optimize(
   requestedGenerations: number,
   requestedSeedIndex: number,
   mode: "continue" | "fresh" = "continue",
-  challenge: G1Challenge = "terrain-and-push"
+  challenge: G1Challenge = "terrain-and-push",
+  requestedSigma?: number
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -217,7 +219,7 @@ async function optimize(
       await createFrankenSimCmaFamilySession({
         family,
         mean: evaluator.walkingCurriculumMean(),
-        sigma: 0.0005,
+        sigma: requestedSigma ?? 0.005,
         population,
         memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
         maxEvaluations: population * G1_MAX_TOTAL_GENERATIONS,
@@ -320,7 +322,7 @@ async function compareFamilies(requestedGenerations: number, challenge: G1Challe
         await createFrankenSimCmaFamilySession({
           family,
           mean,
-          sigma: 0.0005,
+          sigma: 0.005,
           population,
           memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
           maxEvaluations: population * generations,
@@ -378,7 +380,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     ? preview(request.challenge ?? "terrain-and-push")
     : request.type === "compare"
       ? compareFamilies(request.generations)
-      : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge);
+      : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge, request.sigma);
   void task.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
   });

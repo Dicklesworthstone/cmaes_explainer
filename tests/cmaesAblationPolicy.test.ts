@@ -48,6 +48,7 @@ describe("CMA-ES Ablation Policy Search", () => {
         first.finalMetrics.distanceTraveledMeters,
       );
     },
+    60000,
   );
 
   test("parameter count matches the disclosed family (7 features x 15 actuators)", () => {

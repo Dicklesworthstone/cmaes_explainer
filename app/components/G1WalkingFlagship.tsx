@@ -751,23 +751,26 @@ function CameraRig({
       camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
     } else if (cameraView === "orbit") {
       if (activeRoom === "porch") {
-        cameraScratchVec.set(0, 1.8, 7.8);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(-1.2, 1.35, 6.2);
+        camera.position.lerp(cameraScratchVec, 0.05);
       } else if (activeRoom === "dining") {
-        cameraScratchVec.set(2.4, 1.8, 4.5);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(0.6, 1.45, 3.8);
+        camera.position.lerp(cameraScratchVec, 0.05);
       } else if (activeRoom === "kitchen") {
-        cameraScratchVec.set(2.4, 1.8, 1.2);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(0.8, 1.45, 0.8);
+        camera.position.lerp(cameraScratchVec, 0.05);
       } else if (activeRoom === "bedroom") {
-        cameraScratchVec.set(-2.4, 1.8, 0.5);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(-0.6, 1.45, -0.2);
+        camera.position.lerp(cameraScratchVec, 0.05);
       } else if (activeRoom === "bathroom") {
-        cameraScratchVec.set(0, 1.6, -1.2);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(0, 1.45, -1.4);
+        camera.position.lerp(cameraScratchVec, 0.05);
       } else if (activeRoom === "cutaway") {
-        cameraScratchVec.set(5.5, 7.5, 8.5);
-        camera.position.lerp(cameraScratchVec, 0.04);
+        cameraScratchVec.set(5.5, 7.8, 7.8);
+        camera.position.lerp(cameraScratchVec, 0.05);
+      } else if (activeRoom === "living") {
+        cameraScratchVec.set(1.85, 1.15, 2.35);
+        camera.position.lerp(cameraScratchVec, 0.05);
       }
     }
   });
@@ -777,25 +780,25 @@ function CameraRig({
       makeDefault
       target={
         activeRoom === "porch"
-          ? [0, 0.9, 4.6]
+          ? [0, 0.75, 4.65]
           : activeRoom === "dining"
-          ? [2.1, 0.8, 1.8]
+          ? [2.1, 0.85, 2.0]
           : activeRoom === "kitchen"
           ? [2.1, 0.9, -1.2]
           : activeRoom === "bedroom"
-          ? [-2.3, 0.8, -2.0]
+          ? [-2.3, 0.85, -1.9]
           : activeRoom === "bathroom"
           ? [0, 0.7, -2.8]
           : activeRoom === "cutaway"
-          ? [0, 0.5, 0.5]
+          ? [0, 0.6, 0.6]
           : [0.2, 0.68, 0]
       }
       enableDamping
       dampingFactor={0.075}
       minDistance={1.0}
-      maxDistance={15}
-      minPolarAngle={0.25}
-      maxPolarAngle={1.5}
+      maxDistance={18}
+      minPolarAngle={0.2}
+      maxPolarAngle={1.52}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   ) : null;
@@ -918,6 +921,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [family, setFamily] = useState<ScalableFamily>("lm-cma");
   const [challenge, setChallenge] = useState<G1Challenge>("terrain-and-push");
   const [generations, setGenerations] = useState(16);
+  const [searchSigma, setSearchSigma] = useState(0.005);
   const [seedIndex, setSeedIndex] = useState(0);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [status, setStatus] = useState("Loading the owner-composed G1 experiment…");
@@ -1276,6 +1280,26 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
           </div>
 
+
+          <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+            <label htmlFor="g1-sigma">Exploration σ (search radius)</label>
+            <span className="font-mono text-purple-200">{searchSigma.toFixed(4)}</span>
+          </div>
+          <input
+            id="g1-sigma"
+            type="range"
+            min={2}
+            max={100}
+            value={Math.round(searchSigma * 10000)}
+            disabled={busy !== null || !workerAvailable}
+            onChange={(event) => setSearchSigma(Number(event.target.value) / 10000)}
+            aria-valuetext={`sigma = ${searchSigma.toFixed(4)} radians`}
+          />
+          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
+            <span>0.0002 (refine)</span>
+            <span>0.005 (explore)</span>
+            <span>0.01 (aggressive)</span>
+          </div>
           {/* 2. Interactive Timeline & Milestone Scrubber */}
           <G1TimelineScrubber
             trace={trace}
@@ -1456,7 +1480,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               disabled={busy !== null || !workerAvailable}
               onClick={() =>
                 post(
-                  { type: "optimize", family, generations, seedIndex, mode: "continue", challenge },
+                  { type: "optimize", family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
                   "optimize"
                 )
               }
