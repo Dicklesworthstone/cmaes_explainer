@@ -377,12 +377,22 @@ describe("deterministic house furniture", () => {
     const a = buildBookshelf(1.2, 0.3, 1.6);
     const b = buildBookshelf(1.2, 0.3, 2.0);
     const countBooks = (group: { children: THREE.Object3D[] }): number => {
+      // The bookshelf fixture may run under either of two three.js
+      // module instances in the test runner (the top-level 0.181.2
+      // and a nested 0.170.0 hoisted via stats-gl), so instanceof
+      // THREE.Mesh is unreliable here. Duck-typing on the class's
+      // own `isMesh`/`type` flags and on BoxGeometry's `parameters`
+      // is the only path that holds across both module copies.
       let n = 0;
       for (const child of group.children) {
-        const mesh = child as THREE.Mesh;
-        const geom = mesh.geometry as any;
-        const depth = geom?.parameters?.depth ?? 1;
-        if (geom?.type === "BoxGeometry" && depth < 0.25) n++;
+        const mesh = child as { isMesh?: unknown; geometry?: unknown };
+        if (mesh.isMesh !== true) continue;
+        const geom = mesh.geometry as
+          | { type?: unknown; parameters?: { depth?: number } }
+          | undefined;
+        if (!geom || geom.type !== "BoxGeometry") continue;
+        const depth = geom.parameters?.depth;
+        if (typeof depth === "number" && depth < 0.25) n++;
       }
       return n;
     };
