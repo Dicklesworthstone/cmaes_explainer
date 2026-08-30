@@ -265,31 +265,38 @@ export interface CraftsmanWalkingRoute {
   waypoints: Array<{ name: string; pos: [number, number]; speed: number }>;
 }
 
+// Walking-route gates are validated stand-points: every pos keeps strictly
+// positive body clearance (robotRadius 0.20 m) against the furniture
+// multi-obstacle scene (createSceneFromHouseFurniture) and clears the
+// CRAFTSMAN_BUNGALOW_1928 wall bodies (half-thickness + robot radius,
+// doorway apertures excepted). The contract is enforced by
+// tests/craftsmanRouteCollisionSafety.test.ts — do not hand-edit gate
+// positions without re-running that audit.
 export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
   {
     id: "grand-tour",
     name: "Whole-House Grand Tour",
     description: "Full estate traversal from front veranda through parlor, dining, kitchen, hallway, and bedroom suite.",
-    totalDistanceMeters: 18.5,
+    totalDistanceMeters: 15.0,
     waypoints: [
-      { name: "Porch Entry", pos: [0.0, 5.0], speed: 0.6 },
+      { name: "Porch Entry", pos: [0.003, 4.9], speed: 0.6 },
       { name: "Parlor Living Area", pos: [-1.4, 2.6], speed: 0.65 },
-      { name: "Colonnade Threshold", pos: [0.4, 2.2], speed: 0.55 },
-      { name: "Dining Room", pos: [1.6, 2.4], speed: 0.65 },
+      { name: "Colonnade Threshold", pos: [0.327, 2.491], speed: 0.55 },
+      { name: "Dining Room", pos: [1.617, 1.9], speed: 0.65 },
       { name: "Craftsman Kitchen", pos: [1.9, -0.6], speed: 0.6 },
       { name: "Central Hallway", pos: [0.2, 0.2], speed: 0.55 },
-      { name: "Master Bedroom", pos: [-1.8, -1.9], speed: 0.6 },
-      { name: "Ensuite Bathroom", pos: [0.4, -2.9], speed: 0.5 },
+      { name: "Master Bedroom", pos: [-1.5, -1.9], speed: 0.6 },
+      { name: "Ensuite Bathroom", pos: [0.41, -2.6], speed: 0.5 },
     ],
   },
   {
     id: "living-inglenook",
     name: "Living Room Inglenook Circuit",
     description: "Navigating between the Gustav Stickley Morris armchair, oak coffee table, and the glowing brick fireplace hearth.",
-    totalDistanceMeters: 6.2,
+    totalDistanceMeters: 4.4,
     waypoints: [
-      { name: "Entry Aisle", pos: [0.0, 2.0], speed: 0.6 },
-      { name: "Stickley Morris Chair", pos: [-1.8, 1.2], speed: 0.55 },
+      { name: "Entry Aisle", pos: [-0.05, 2.087], speed: 0.6 },
+      { name: "Stickley Morris Chair", pos: [-1.9, 1.027], speed: 0.55 },
       { name: "Fireplace Hearth", pos: [-1.2, 0.6], speed: 0.5 },
       { name: "Library Table", pos: [-0.4, 1.8], speed: 0.6 },
     ],
@@ -298,24 +305,24 @@ export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
     id: "dining-circulation",
     name: "Dining Room & Buffet Loop",
     description: "Circulating smoothly around the 6-seat oak trestle dining table and inspecting the built-in china buffet.",
-    totalDistanceMeters: 7.4,
+    totalDistanceMeters: 5.3,
     waypoints: [
-      { name: "Colonnade Arch", pos: [0.4, 2.2], speed: 0.55 },
-      { name: "Dining Table Head", pos: [1.2, 3.2], speed: 0.6 },
-      { name: "China Buffet Front", pos: [2.1, 0.8], speed: 0.5 },
-      { name: "Kitchen Doorway", pos: [2.1, -0.2], speed: 0.55 },
+      { name: "Colonnade Arch", pos: [0.327, 2.491], speed: 0.55 },
+      { name: "Dining Table Head", pos: [1.474, 3.322], speed: 0.6 },
+      { name: "China Buffet Front", pos: [1.956, 0.939], speed: 0.5 },
+      { name: "Kitchen Doorway", pos: [2.11, -0.5], speed: 0.55 },
     ],
   },
   {
     id: "kitchen-prep",
     name: "Kitchen Work Triangle",
     description: "Classic culinary triangle between the Hoosier baking cabinet, Glenwood gas stove, and farmhouse apron sink.",
-    totalDistanceMeters: 5.8,
+    totalDistanceMeters: 4.2,
     waypoints: [
       { name: "Prep Island", pos: [2.0, -1.0], speed: 0.55 },
       { name: "Hoosier Workstation", pos: [1.1, -2.3], speed: 0.5 },
-      { name: "Glenwood Range", pos: [2.8, -2.3], speed: 0.5 },
-      { name: "Farmhouse Sink", pos: [3.5, -1.1], speed: 0.5 },
+      { name: "Glenwood Range", pos: [2.094, -1.924], speed: 0.5 },
+      { name: "Farmhouse Sink", pos: [2.691, -0.512], speed: 0.5 },
     ],
   },
 ];
