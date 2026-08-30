@@ -220,10 +220,17 @@ export class LiveCmaesOptimizer {
     }
 
     // Update evolution path p_sigma
+    // Hansen 2016: p_sigma = (1 - c_sigma) * p_sigma + sqrt(c_sigma*(2-c_sigma)*mu_eff) *
+    //   C^{-1/2} * (m_new - m_old) / sigma. The C^{-1/2} scaling is what makes
+    //   ||p_sigma|| ~ E||N(0,I)|| so the chiN comparison below is meaningful.
+    //   For our rank-update shape (full C, Cholesky-sampled at ask), the
+    //   standard deviation for axis d is L[d][d] = sqrt(C[d][d]) (the diagonal
+    //   of the Cholesky factor), so we divide by sqrt(C[d][d]).
     const meanDiffNorm: number[] = [];
     let pathSigmaNormSq = 0;
     for (let d = 0; d < n; d++) {
-      const diff = (newMean[d] - oldMean[d]) / this.state.sigma;
+      const stdD = Math.sqrt(Math.max(1e-12, this.state.covariance[d][d]));
+      const diff = (newMean[d] - oldMean[d]) / (this.state.sigma * stdD);
       meanDiffNorm.push(diff);
       this.state.evolutionPathSigma[d] =
         (1 - this.cSigma) * this.state.evolutionPathSigma[d] +
