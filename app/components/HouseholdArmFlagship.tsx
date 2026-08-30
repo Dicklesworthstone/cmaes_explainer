@@ -130,6 +130,12 @@ const TASK_COPY: Record<
   },
 };
 
+const EMBEDDED_TASK_TITLES: Record<HouseholdManipulationTask, string> = {
+  "kitchen-mug": "Mug",
+  "living-room-remote": "Remote",
+  "backyard-trowel": "Trowel",
+};
+
 const LINK_SOURCE_ROWS = [
   ["iiwa_link_0", "base", "5.0000"],
   ["iiwa_link_1", "0.1500", "3.4525"],
@@ -728,7 +734,7 @@ function ArmStage({
   );
 }
 
-export function HouseholdArmFlagship() {
+export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean } = {}) {
   const reduceMotion = useReducedMotion() ?? false;
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
@@ -864,7 +870,11 @@ export function HouseholdArmFlagship() {
   return (
     <div className="space-y-8">
       <div className="glass-card overflow-hidden border-orange-400/15 bg-slate-950/80 p-2 sm:p-3">
-        <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="Household manipulation task">
+        <div
+          className={`grid gap-2 ${embedded ? "grid-cols-3" : "sm:grid-cols-3"}`}
+          role="tablist"
+          aria-label="Household manipulation task"
+        >
           {(Object.keys(TASK_COPY) as HouseholdManipulationTask[]).map((taskName) => {
             const info = TASK_COPY[taskName];
             const Icon = info.icon;
@@ -877,7 +887,7 @@ export function HouseholdArmFlagship() {
                 aria-selected={selected}
                 disabled={busy !== null || !workerAvailable}
                 onClick={() => selectTask(taskName)}
-                className={`min-h-16 rounded-2xl border px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`min-h-16 rounded-2xl border py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${embedded ? "px-2" : "px-4"} ${
                   selected
                     ? "border-orange-300/35 bg-orange-400/12"
                     : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
@@ -885,9 +895,11 @@ export function HouseholdArmFlagship() {
               >
                 <span className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${info.accent}`} />
-                  <span className="text-sm font-bold text-white">{info.title}</span>
+                  <span className="min-w-0 text-sm font-bold text-white line-clamp-2">
+                    {embedded ? EMBEDDED_TASK_TITLES[taskName] : info.title}
+                  </span>
                 </span>
-                <span className="mt-1 block text-xs text-slate-500">{info.short}</span>
+                <span className={embedded ? "sr-only" : "mt-1 block text-xs text-slate-500"}>{info.short}</span>
               </button>
             );
           })}

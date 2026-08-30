@@ -15,6 +15,9 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 tsconfig.tsbuildinfo
+ios/build/
+ios/Engine/
+ios/EngineWeb/out/
 
 # Local browser-smoke evidence is retained between runs but not committed.
 tmp/ui-smoke/

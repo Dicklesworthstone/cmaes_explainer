@@ -37,6 +37,10 @@
   ],
   "exclude": [
     "node_modules",
-    "vendor"
+    "vendor",
+    "ios/Engine",
+    "ios/EngineWeb/.next",
+    "ios/EngineWeb/out",
+    "ios/build"
   ]
 }

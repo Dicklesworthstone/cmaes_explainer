@@ -1,0 +1,78 @@
+name: FrankenRobots
+options:
+  bundleIdPrefix: com.frankenrobots
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: AU8V2Z6NKY
+    CODE_SIGN_STYLE: Automatic
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+schemes:
+  FrankenRobots:
+    build:
+      targets:
+        FrankenRobots: all
+        FrankenRobotsUITests: [test]
+    test:
+      targets:
+        - FrankenRobotsUITests
+
+targets:
+  FrankenRobots:
+    type: application
+    platform: iOS
+    entitlements:
+      path: FrankenRobots.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.frankenrobots.FrankenRobots
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: true
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: false
+        MACCATALYST_USE_NATIVE_DESIGN: true
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+      - path: Engine
+        type: folder
+        buildPhase: resources
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: FrankenRobots
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        LSApplicationCategoryType: public.app-category.education
+  FrankenRobotsUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: FrankenRobots
+    sources:
+      - UITests
+    dependencies:
+      - target: FrankenRobots

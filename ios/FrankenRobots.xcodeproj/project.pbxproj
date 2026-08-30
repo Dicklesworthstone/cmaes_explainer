@@ -1,0 +1,455 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		18E4BEC3C20EC7BAFDC93650 /* RobotEngineHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834FE83E0F30E47620B6440C /* RobotEngineHost.swift */; };
+		2312CE07540C383EA618BBCF /* FrankenRobotsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 668374A46370069A62881E62 /* FrankenRobotsUITests.swift */; };
+		2705A20834A4E6CDF5858F1F /* LoopbackEngineServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED901ACC971FA865AD3C24FD /* LoopbackEngineServer.swift */; };
+		2B605AE7E672C067B6EC92B9 /* RobotLab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2286162C1E78BE8600189E /* RobotLab.swift */; };
+		56D58F94F390FF434A48C9DE /* FrankenRobotsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35482C39F7D2C483B1894ADF /* FrankenRobotsApp.swift */; };
+		58AE89D9C6ED9DDD76775FF7 /* Engine in Resources */ = {isa = PBXBuildFile; fileRef = 8D193AB01F83E76EBDF81D59 /* Engine */; };
+		605C245435339D236E9FAAC0 /* FrankenRobotsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB9E73BA2708172AED444FE /* FrankenRobotsView.swift */; };
+		78AD13B1BFAB4D05DA837431 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 55F760105392CAD6A6A0ABF9 /* Assets.xcassets */; };
+		C249F6A786D388EBCBFB3102 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF49184D60282B71C87B7C1 /* Theme.swift */; };
+		D01BF10BBBFF7521941DB65B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BD3E149B33EA9B79AA86CCE8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D7D0167FB604D6EC9804356F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0FD63185EB5AE17F09A1D4D4;
+			remoteInfo = FrankenRobots;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		35482C39F7D2C483B1894ADF /* FrankenRobotsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsApp.swift; sourceTree = "<group>"; };
+		3F2286162C1E78BE8600189E /* RobotLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotLab.swift; sourceTree = "<group>"; };
+		55F760105392CAD6A6A0ABF9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		601522E0A57AE58C6133BB68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		668374A46370069A62881E62 /* FrankenRobotsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsUITests.swift; sourceTree = "<group>"; };
+		6BF49184D60282B71C87B7C1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		7DB9E73BA2708172AED444FE /* FrankenRobotsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsView.swift; sourceTree = "<group>"; };
+		834FE83E0F30E47620B6440C /* RobotEngineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotEngineHost.swift; sourceTree = "<group>"; };
+		8D193AB01F83E76EBDF81D59 /* Engine */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Engine; sourceTree = SOURCE_ROOT; };
+		C2380CFF3A19BC339A6C1A78 /* FrankenRobots.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FrankenRobots.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C9F7D23C7D0EED3E8A43281C /* FrankenRobotsUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FrankenRobotsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		ED901ACC971FA865AD3C24FD /* LoopbackEngineServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackEngineServer.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		30865DC116D4206761C8E568 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				35482C39F7D2C483B1894ADF /* FrankenRobotsApp.swift */,
+				7DB9E73BA2708172AED444FE /* FrankenRobotsView.swift */,
+				601522E0A57AE58C6133BB68 /* Info.plist */,
+				ED901ACC971FA865AD3C24FD /* LoopbackEngineServer.swift */,
+				0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */,
+				834FE83E0F30E47620B6440C /* RobotEngineHost.swift */,
+				3F2286162C1E78BE8600189E /* RobotLab.swift */,
+				6BF49184D60282B71C87B7C1 /* Theme.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		33FF0C221A6CC3276A7E16E6 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C2380CFF3A19BC339A6C1A78 /* FrankenRobots.app */,
+				C9F7D23C7D0EED3E8A43281C /* FrankenRobotsUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		617C7341E3D8505402887E6A = {
+			isa = PBXGroup;
+			children = (
+				55F760105392CAD6A6A0ABF9 /* Assets.xcassets */,
+				8D193AB01F83E76EBDF81D59 /* Engine */,
+				30865DC116D4206761C8E568 /* Sources */,
+				BA4478E5A97FDFB6D2B123F1 /* UITests */,
+				33FF0C221A6CC3276A7E16E6 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BA4478E5A97FDFB6D2B123F1 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				668374A46370069A62881E62 /* FrankenRobotsUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB68AE31612C35E1BC721C4A /* Build configuration list for PBXNativeTarget "FrankenRobots" */;
+			buildPhases = (
+				B5DB1DC52B317D72423D825E /* Sources */,
+				44CA8AF070DA3BDE94739A94 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FrankenRobots;
+			packageProductDependencies = (
+			);
+			productName = FrankenRobots;
+			productReference = C2380CFF3A19BC339A6C1A78 /* FrankenRobots.app */;
+			productType = "com.apple.product-type.application";
+		};
+		26B7118BE7470E1999B61879 /* FrankenRobotsUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D07021885A76D42F420576B /* Build configuration list for PBXNativeTarget "FrankenRobotsUITests" */;
+			buildPhases = (
+				CEA19777B57D58AA3BA00CFC /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				583060E98821A42E3E1C77B2 /* PBXTargetDependency */,
+			);
+			name = FrankenRobotsUITests;
+			packageProductDependencies = (
+			);
+			productName = FrankenRobotsUITests;
+			productReference = C9F7D23C7D0EED3E8A43281C /* FrankenRobotsUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D7D0167FB604D6EC9804356F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0FD63185EB5AE17F09A1D4D4 = {
+						DevelopmentTeam = AU8V2Z6NKY;
+						ProvisioningStyle = Automatic;
+					};
+					26B7118BE7470E1999B61879 = {
+						DevelopmentTeam = AU8V2Z6NKY;
+						ProvisioningStyle = Automatic;
+						TestTargetID = 0FD63185EB5AE17F09A1D4D4;
+					};
+				};
+			};
+			buildConfigurationList = D5B0C0B8329AAF9EA6BAE584 /* Build configuration list for PBXProject "FrankenRobots" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 617C7341E3D8505402887E6A;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 33FF0C221A6CC3276A7E16E6 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */,
+				26B7118BE7470E1999B61879 /* FrankenRobotsUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		44CA8AF070DA3BDE94739A94 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				78AD13B1BFAB4D05DA837431 /* Assets.xcassets in Resources */,
+				58AE89D9C6ED9DDD76775FF7 /* Engine in Resources */,
+				D01BF10BBBFF7521941DB65B /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B5DB1DC52B317D72423D825E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				56D58F94F390FF434A48C9DE /* FrankenRobotsApp.swift in Sources */,
+				605C245435339D236E9FAAC0 /* FrankenRobotsView.swift in Sources */,
+				2705A20834A4E6CDF5858F1F /* LoopbackEngineServer.swift in Sources */,
+				18E4BEC3C20EC7BAFDC93650 /* RobotEngineHost.swift in Sources */,
+				2B605AE7E672C067B6EC92B9 /* RobotLab.swift in Sources */,
+				C249F6A786D388EBCBFB3102 /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CEA19777B57D58AA3BA00CFC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2312CE07540C383EA618BBCF /* FrankenRobotsUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		583060E98821A42E3E1C77B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */;
+			targetProxy = BD3E149B33EA9B79AA86CCE8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		096C3E77508D36076AD13725 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = FrankenRobots;
+			};
+			name = Release;
+		};
+		297D3B877F2075423F3185FC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = AU8V2Z6NKY;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		766924D93E756DD24A18501E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FrankenRobots.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACCATALYST_USE_NATIVE_DESIGN = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobots;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D36B3BFB7880C0E69CE09A9B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = AU8V2Z6NKY;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		DFF609C6BAF512DC5E4722ED /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = FrankenRobots;
+			};
+			name = Debug;
+		};
+		F878FBC9A766EB64A4016009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = FrankenRobots.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				INFOPLIST_FILE = Sources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MACCATALYST_USE_NATIVE_DESIGN = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobots;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6D07021885A76D42F420576B /* Build configuration list for PBXNativeTarget "FrankenRobotsUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DFF609C6BAF512DC5E4722ED /* Debug */,
+				096C3E77508D36076AD13725 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AB68AE31612C35E1BC721C4A /* Build configuration list for PBXNativeTarget "FrankenRobots" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				766924D93E756DD24A18501E /* Debug */,
+				F878FBC9A766EB64A4016009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D5B0C0B8329AAF9EA6BAE584 /* Build configuration list for PBXProject "FrankenRobots" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D36B3BFB7880C0E69CE09A9B /* Debug */,
+				297D3B877F2075423F3185FC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D7D0167FB604D6EC9804356F /* Project object */;
+}

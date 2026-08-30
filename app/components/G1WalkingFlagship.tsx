@@ -823,7 +823,9 @@ function RobotStage({
       <spotLight position={[0.6, 2.3, -2.9]} intensity={26} angle={0.5} penumbra={0.85} color="#bae6fd" />
 
       <TerrainSurface admission={admission} />
-      <G1HouseBackdrop showFurniture={!xrayMode} showWalls={true} showGoals={true} />
+      {/* Exterior wall meshes can sit between the default orbit camera and the robot.
+          Keep the inspectable floor, furniture, and goals, but leave orbit sight-lines open. */}
+      <G1HouseBackdrop showFurniture={!xrayMode} showWalls={false} showGoals={true} />
       <mesh position={[0.975, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[1.95, 0.012]} />
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.68} />
@@ -854,7 +856,7 @@ function number(value: number, digits = 3): string {
 
 
 
-export function G1WalkingFlagship() {
+export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } = {}) {
   const reduceMotion = useReducedMotion() ?? false;
   // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
   // keeps it warm while approaching (see WingViz rationale).
@@ -887,7 +889,9 @@ export function G1WalkingFlagship() {
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
-  const [xrayMode, setXrayMode] = useState(false);
+  // The focused native route opens on the inspectable robot instead of the
+  // heavy house dressing; the full website keeps its cinematic default.
+  const [xrayMode, setXrayMode] = useState(embedded);
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -1073,8 +1077,10 @@ export function G1WalkingFlagship() {
 
   return (
     <div className="space-y-8">
-      {/* 1. Interactive Guided Story Mode */}
-      <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+      {/* The native app owns its compact story inspector; keep the stage first there. */}
+      {!embedded ? (
+        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+      ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
         <div className="space-y-4">
