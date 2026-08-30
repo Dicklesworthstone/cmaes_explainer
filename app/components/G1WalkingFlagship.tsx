@@ -1006,6 +1006,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else if (message.type === "progress") {
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
+        setProgressHistory((prev) => [
+          ...prev,
+          {
+            generation: message.generation,
+            bestObjective: message.bestObjective,
+            sigma: message.sigma,
+          },
+        ]);
         setStatus(
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
@@ -1509,6 +1517,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <div className="mt-3 flex justify-between font-mono text-[0.7rem] text-slate-400">
                 <span>generation {generation}</span>
                 <span>best objective {bestObjective === null ? "—" : number(bestObjective, 4)}</span>
+              </div>
+            ) : null}
+            {progressHistory.length >= 2 ? (
+              <div className="mt-3">
+                <ConvergenceChart
+                  data={progressHistory}
+                  label="CMA-ES convergence (best objective + σ)"
+                />
               </div>
             ) : null}
             {error ? <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
