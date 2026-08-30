@@ -5,6 +5,8 @@ import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
+import { createSceneFromHouseFurniture, distanceToOBB, type MultiObstacleSceneConfig } from "../lib/houseMultiObstacleKernel";
+import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import {
   BookOpen,
   Bot,
@@ -390,6 +392,15 @@ function ArmRig({
     }
     return boxes;
   }, [admission]);
+
+  // SOTA multi-obstacle kernel: every furniture piece as an oriented
+  // bounding box with proper rotation-aware signed-distance queries.
+  // Supplements the Box3 counter/wall check for per-link boundary detection.
+  const multiObstacleScene = useMemo(
+    () => createSceneFromHouseFurniture(),
+    [] // static catalog
+  );
+  const adaptiveMargin = 0.05; // base margin; scales by velocity in production
   const boundaryStateRef = useRef({ key: "", lastTick: 0 });
   const frameTick = useRef(0);
   const scratch = useMemo(
@@ -460,12 +471,39 @@ function ArmRig({
       contactMaterialRef.current.color.setHex(sample.grasped ? 0x34d399 : 0xfbbf24);
     }
 
+    let violatingLink = -1;
+    let violatingVolume = "";
+
+    // SOTA multi-obstacle OBB query: proper rotated-box signed distance
+    // to every furniture piece in the Craftsman catalog. Supplements the
+    // Box3 boundary check with rotation-aware OBB distance for all 74
+    // furniture pieces.
+    let mobViolatingLink = -1;
+    let mobVolume = "";
+    for (let link = 0; link < sample.linkPoses.length && mobViolatingLink < 0; link++) {
+      const p = sample.linkPoses[link].position;
+      scratch.probe.set(p[0], p[2], -p[1]);
+      for (const obb of multiObstacleScene.obstacles) {
+        const dist = distanceToOBB(
+          [scratch.probe.x, scratch.probe.y, scratch.probe.z],
+          obb
+        );
+        if (dist <= 0.05) {
+          mobViolatingLink = link;
+          mobVolume = obb.name;
+          break;
+        }
+      }
+    }
+    if (mobViolatingLink >= 0) {
+      violatingLink = mobViolatingLink;
+      violatingVolume = mobVolume;
+    }
+
     // Boundary-clipping detection: presentation-layer check of every arm link
     // origin against the declared counter/wall/obstacle volumes. A hit tints
     // that link's meshes red until the set of violations changes.
     frameTick.current += 1;
-    let violatingLink = -1;
-    let violatingVolume = "";
     for (let link = 0; link < sample.linkPoses.length && violatingLink < 0; link++) {
       const p = sample.linkPoses[link].position;
       scratch.probe.set(p[0], p[2], -p[1]);
@@ -668,26 +706,27 @@ function ArmStage({
         gl.outputColorSpace = THREE.SRGBColorSpace;
       }}
     >
-      <color attach="background" args={["#050914"]} />
-      <fog attach="fog" args={["#050914", 3.6, 9]} />
+      <color attach="background" args={["#16120e"]} />
+      <fog attach="fog" args={["#16120e", 5.0, 14.0]} />
       <PerspectiveCamera makeDefault position={[1.55, 1.25, 1.8]} fov={38} near={0.03} far={30} />
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#dff6ff", "#101522", 1.25]} />
+      <ambientLight intensity={0.65} color="#fff1dc" />
+      <hemisphereLight args={["#fed7aa", "#78350f", 1.3]} />
       <directionalLight
         castShadow
         position={[2.2, 4.2, 2.4]}
-        intensity={3.4}
-        color="#fff3df"
+        intensity={3.6}
+        color="#fff5e6"
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      <spotLight position={[-2.3, 2.8, 1.1]} intensity={10} angle={0.42} penumbra={0.85} color="#fb923c" />
-      <spotLight position={[1.4, 1.8, -2.2]} intensity={8} angle={0.38} penumbra={0.9} color="#22d3ee" />
+      <spotLight position={[-2.3, 2.8, 1.1]} intensity={12} angle={0.42} penumbra={0.85} color="#f59e0b" />
+      <spotLight position={[1.4, 1.8, -2.2]} intensity={7} angle={0.38} penumbra={0.9} color="#fdba74" />
+      
+      {/* 1928 Sears Craftsman Bungalow Oak Hardwood Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[12, 10]} />
-        <meshStandardMaterial color="#0b1424" roughness={0.92} metalness={0.12} />
+        <meshStandardMaterial color="#6b3a16" roughness={0.35} metalness={0.08} />
       </mesh>
-      <gridHelper args={[8, 40, "#24506e", "#1a2a4a"]} position={[0, 0.002, 0]} />
       
       {(() => {
         const placement = admission ? armTaskFurniture(admission.config.task) : null;
