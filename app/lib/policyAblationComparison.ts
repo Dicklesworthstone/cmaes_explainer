@@ -50,14 +50,15 @@ export interface PolicyAblationReceipt {
   totalStepsBudget: number;
   distanceTraveledMeters: number;
   averageSpeedMps: number;
+  /** Mechanical work done by the actuators over the rollout (J). */
+  actuatorWorkJoules: number;
+  costOfTransportCoT: number;
   costOfTransportCoT: number;
   /** Foot slip integral over the rollout (m^2). Zero for the kinematic stub
    *  since there is no contact model; non-zero only under the v068 kernel. */
   footSlipIntegral: number;
   jointLimitViolations: number;
-  costOfTransportCoT: number;
-  jointLimitViolations: number;
-  footSlipIntegral: number;
+
   /** Push magnitude (N) used in the rollout; recorded for parity with the
    *  v068 kernel challenge knob. Currently unused by the kinematic stub. */
   pushMagnitudeN: number;

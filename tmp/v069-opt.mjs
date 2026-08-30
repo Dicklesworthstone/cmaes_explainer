@@ -1,20 +1,21 @@
-import { buildCmaFamilyConfig, decodeCmaFamilyAsk, decodeCmaFamilySnapshot, decodeG1Admission, decodeG1Evaluation, decodeG1Population } from "../app/lib/frankensimCmaes.ts";
+import { buildCmaFamilyConfig, decodeCmaFamilyAsk, decodeCmaFamilySnapshot, decodeG1Admission, decodeG1Evaluation, decodeG1Population, decodeG1Trace } from "../app/lib/frankensimCmaes.ts";
 
 const OWNER_CMA_MAGIC = 0x434d4132;
 
 const wasm = await import("../public/wasm/fs-cmaes/v068/fs_cmaes_viz_wasm.js");
-const wasmBytes = await Bun.file("../public/wasm/fs-cmaes/v068/fs_cmaes_viz_wasm_bg.wasm").arrayBuffer();
+const wasmBytes = await Bun.file("/Users/jemanuel/projects/frankensim/crates/fs-cmaes-viz-wasm/pkg/fs_cmaes_viz_wasm_bg.wasm").arrayBuffer();
 await wasm.default({ module_or_path: wasmBytes });
+console.log("kernel version:", wasm.cmaes_viz_kernel_version());
 
 const evaluator = new wasm.G1WalkingVizEvaluator(
   new Float64Array([0x47315737, 7, 0, 11, 1/480, 1.5, 0.65, 1.55, 12, 2, 1])
 );
 
 const curriculum = evaluator.walking_curriculum_mean();
-const seeds = [0x47315050n, 0x47315051n, 0x47315052n];
 const population = 16;
 const generations = 16;
-for (const seed of seeds) {
+
+for (const seed of [0x47315050n, 0x47315051n, 0x47315052n]) {
   const session = new wasm.CmaesVizSession(
     buildCmaFamilyConfig({
       family: "separable",
