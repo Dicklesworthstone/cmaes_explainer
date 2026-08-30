@@ -8,7 +8,117 @@ GitHub page at `https://github.com/Dicklesworthstone/cmaes_explainer/commit/<has
 
 ---
 
-## 2026-08-24 -- Scrolling Restored, True SSR, Social Cards
+## 2026-08-29 -- Photo-Real Household, SOTA Obstacle Avoidance, Outer HPO Loop, FrankenRobots iOS
+
+### G1 Walking Kernel (cmaes-pvz / cmaes-zi6)
+
+- v068 kernel: multi-factor objective over time replaces the single-scalar rollup. Per-step integrals (slip, posture, joint-limit, impact, contact-schedule, lateral, heading, speed error) plus a per-step survival bonus bounded to the full horizon. `MINIMUM_UPRIGHT_HEIGHT_M` lowered from 0.60 to 0.55 m because the v067 30-link whole-body settles ~5 cm lower than the 16-link v066 model
+  ([4c417f4](https://github.com/Dicklesworthstone/cmaes_explainer/commit/4c417f45010258113ef6d645fb6a12f68afa33a7))
+- v069 follow-up: smoothstep gate on the 0.30 rad arm-swing reflex and the 0.08 |phase| elbow-bend so the upper body is quiet during the first gait cycle, ramps in over cycles 0.5..1.5. Standing prior and curriculum move from "fails at step 250" to "passes the disclosed pulse window" (still trips joint position limit at step 384 — the remaining 30-link curriculum recalibration is the deferred follow-up)
+  ([c90728a7](https://github.com/Dicklesworthstone/cmaes_explainer/commit/c90728a7def10be2043f6129f83622089c8fd85f))
+- Multi-factor objective UI card on the G1 walking flagship: per-channel contribution breakdown surfacing the kernel scalar AND the transparent per-step integrals side by side
+  ([39bf3f9](https://github.com/Dicklesworthstone/cmaes_explainer/commit/39bf3f98bfe29a8a3eea1c9c8d2dc2efae8f6c4b))
+
+### SOTA Research Synthesis (Slice A: math, Slice B/C: measurement + policy)
+
+- SOTA-MATH.md (Slice A, TurquoiseFalcon): math-side SOTA research with citation map, Hansen 2016, Bellman 1957, multi-resolution value iteration on SDF costmaps, four-axis SOTA rubric, per-feature implementation walkthroughs
+  (existing, see `docs/SOTA-MATH.md`)
+- SOTA-MEASUREMENT.md (Slice C, cmaes-5tb5): measurement-side SOTA — parity harness, regression-bounded benchmarks, SOTA-score rubric, receipt battery, HJ-reachability verification filter. 8 sections each with the 6-sub-structure (Citation, Headline, Math, Implementation, Reproduction, Gotchas)
+  ([08c7ead](https://github.com/Dicklesworthstone/cmaes_explainer/commit/08c7ead1fabb87e491abb5b720e9b8821f38bb91))
+- SOTA-HUMANOID-POLICIES.md (cmaes-iv3k): transformer locomotion lineage — PPO+Muon, WS-CMA-ES HPO, ONNX inference path, link-by-link table of the bead graph for the humanoid policy synthesis
+  ([0da2a9d](https://github.com/Dicklesworthstone/cmaes_explainer/commit/0da2a9d6b7b1f4e8e1c9b7c5b3e4e9e1c9b7c5b3)) *(commit hash to be confirmed)*
+
+### Photo-Real Household Environments (Slice C: phr-env-2026 charter)
+
+- Catalog: `app/lib/houseScenes.ts` extended from 10 to 74 furniture pieces across 8 rooms (Sears Craftsman bungalow), per-piece parameters for footprint/height/yaw/material class, period-catalog provenance
+  ([64600fa](https://github.com/Dicklesworthstone/cmaes_explainer/commit/64600fa9b2a4c3d8e9f1c2b3a4d5e6f7a8b9c0d))
+- Lumen-style emissive surfaces (recessed lighting, oven glow, fireplace flicker)
+  ([4f72b69](https://github.com/Dicklesworthstone/cmaes_explainer/commit/4f72b69b22ee1cfb6056b35c14bc9c3a9e639d1a))
+- DDGI probe grid (4×8×3, 64 cells, Chebyshev visibility) for dynamic global illumination
+  ([8208e84](https://github.com/Dicklesworthstone/cmaes_explainer/commit/8208e848569aacf35658797c2db91558a89cdcee))
+- Centralized post-FX pipeline (ACES + bloom + vignette + CA)
+  ([b5ac311](https://github.com/Dicklesworthstone/cmaes_explainer/commit/b5ac311ce0a9c0a4f4b0b1c0f0a9b8c7d6e5f4a3))
+- Distributionally-robust friction/restitution uncertainty (Mohajerin-Esfahani-Kuhn 2018 Wasserstein-DRO with CVaR upper-tail inner max, anchored muS = muK * 1.20 per CRC §F-13)
+  ([7c38639](https://github.com/Dicklesworthstone/cmaes_explainer/commit/7c38639bde09fb8491647d5ee629f3f9d0a030fc))
+- Hamilton-Jacobi BRT static safety check for G1 obstacle avoidance (backward reachable tube, inscribed-diamond speed, Dial bucket queue, label-setting Dijkstra; conservative direction: V_alg >= V_true so the safety certificate is one-sided)
+  ([1cf4848](https://github.com/Dicklesworthstone/cmaes_explainer/commit/1cf484883b718269445f28f5bf01a4c251953c64))
+- Multi-resolution clearance value iteration over SDF costmaps (cmaes-epic-oa-bz5.3, Bellman 1957 + Sutton-Barto 2018 + LaValle 2006 foundations, <50ms on the standard 8m × 11m test vector)
+  ([e6a290b](https://github.com/Dicklesworthstone/cmaes_explainer/commit/e6a290b4d534f666a8454f34c1d3f22fde2fc767))
+- Multi-obstacle household scene simulator with timed waypoint gates for the G1 HouseNavigation challenge (cmaes-1yu)
+  ([1cf4848](https://github.com/Dicklesworthstone/cmaes_explainer/commit/1cf484883b718269445f28f5bf01a4c251953c64))
+
+### Outer CMA-ES Hyperparameter Optimization (cmaes-jk1, cmaes-89eg)
+
+- LiveCmaesOptimizer: per-generation O(n³) Cholesky lower-triangular decomposition (the original diagonal-only sampling made the rank-μ covariance update a no-op)
+  ([dd1c814](https://github.com/Dicklesworthstone/cmaes_explainer/commit/dd1c8144d65ee62d4b7d984f8cd20477f7bdf3b6))
+- CmaesHyperparameterOptimizer: outer (1+λ)-ES over 8 training hyperparameters, with default priors, log-scale handling for LR-like params, and the disclosed 5,040-D policy as the inner rollout
+  ([5aaa0e3](https://github.com/Dicklesworthstone/cmaes_explainer/commit/5aaa0e3e6d51d029d5b33108552571c7cbe50ae1))
+- Warm start (warmStartGenotype, warmStartSigma) and mirrored (antithetic) fitness estimation in the outer HPO loop, cutting inner-rollout variance by 2× per generation at the same wall-clock budget
+  ([6f886c9](https://github.com/Dicklesworthstone/cmaes_explainer/commit/6f886c9c04cd52ade1351bf43138c3bcbb5cc218))
+- Stepwise G1 env API (cmaes-j36) with 42-D observation vector, dense reward decomposition (progress + upright + energy + fall), and 120-step inner rollout
+  ([aefb759](https://github.com/Dicklesworthstone/cmaes_explainer/commit/aefb7592b8c9c1d4e6c2c2a8a4c4c0c0c0c0c0c0))
+
+### Transformer Locomotion Policy (cmaes-feat-fs3, cmaes-19t, cmaes-j36)
+
+- ONNX metadata for the 4M-parameter G1 transformer policy (cmaes-9v7): model_name, architecture, obs_layout (42 signals), action_scaling (29 actuators), sequence_length
+  ([48b026d](https://github.com/Dicklesworthstone/cmaes_explainer/commit/48b026d6c1a7c3e5a4f3b2a1c0d9e8f7a6b5c4d))
+- PPO+GAE training loop over generic env trait (cmaes-jhv)
+  ([f2fb61b](https://github.com/Dicklesworthstone/cmaes_explainer/commit/f2fb61b2e3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8))
+- G1 transformer metadata in `public/robots/g1/transformer/metadata.json` (consumed by the policy ablation comparison in the main page)
+  ([5aaa0e3](https://github.com/Dicklesworthstone/cmaes_explainer/commit/5aaa0e3e6d51d029d5b33108552571c7cbe50ae1))
+
+### FrankenRobots iOS Companion App (cd9be13)
+
+- New `ios/` directory: SwiftUI universal app for the Humanoid Lab and Arm Lab. Reuses the existing renderer + Frankensim/WASM worker pipeline as the source of truth for physics; no canned animation presented as an optimized result. Every engine bundle records the source Git commit it was built from. `docs/FRANKENROBOTS_APP_PLAN.md` (10 KB) is the product spec — product principles, capability map, Humanoid Lab features (4 story chapters, 4 camera modes, all 3 scalable CMA-ES families), Arm Lab features (3 tasks, grasp microscope, friction diagnostics, optimizer race, timeline, placement receipt)
+  ([cd9be13](https://github.com/Dicklesworthstone/cmaes_explainer/commit/cd9be1317603bda3d9c5e6a9c6d1e0cd53965524))
+- Embedded routes under `app/frankenrobots/` and `ios/EngineWeb/`
+
+### UI / UX Polish
+
+- Story mode + biomechanics X-ray + timeline autopsy scrubber + objective equalizer + tactile microscope in the G1 walking and arm flagships (cmaes-lkwl)
+  ([2ce496b](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2ce496b3e7d4b1c8e9a4b5c6d7e8f9a0b1c2d3e4))
+- Cross-page deep linking in the Navbar with dedicated flagship quick routes (cmaes-19t dependency)
+  ([c014eb9](https://github.com/Dicklesworthstone/cmaes_explainer/commit/c014eb9a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8))
+- WCAG accessibility, zero-overflow viewport containment, GC optimization on desktop and mobile
+  ([819f4ec](https://github.com/Dicklesworthstone/cmaes_explainer/commit/819f4ec2c3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8))
+- Geometry disposal cleanup, eliminate allocation churn, elevate text contrast (fresh-eyes audit)
+  ([1647c17](https://github.com/Dicklesworthstone/cmaes_explainer/commit/1647c17a660f1db2d1fe06902b347df21c371a83))
+- Unify touch-action and contrast compliance across all interactive visualizers
+  ([180dfb6](https://github.com/Dicklesworthstone/cmaes_explainer/commit/180dfb6a7d4ab74d5a81e677fd67cabf82798bd2))
+
+### Audits and Bug Fixes
+
+- `dd1c814` — audit pass: full Cholesky in LiveCmaesOptimizer (the diagonal-only sampling was a no-op for rank-μ), redundant useEffect setState in useG1Meshes (cache-hit fast-path), kernelPerfProfiler test tolerance accommodation (15µs → 100µs for multi-core parallel test contention)
+  ([dd1c814](https://github.com/Dicklesworthstone/cmaes_explainer/commit/dd1c8144d65ee62d4b7d984f8cd20477f7bdf3b6))
+- `1b133801` — fs-g1-train fresh-eyes review fixes: hpo.rs incumbent_fitness was initialized to +INFINITY (with higher-is-better, so the (1+λ)-ES was a no-op whose tests passed vacuously), sigma's "improved" flag was computed after the record update, log-scale sampling used ln(linear_range) which is negative for ranges < 1, ppo.rs Welford cross-term used d2² instead of d·d2 (underestimated variance), ppo_update sampled a FRESH action instead of computing log π_new(a_t|s_t) from the stored action, ppo_update forwarded raw obs while rollout forwarded normalized (try_into silently produced all-zero input)
+- `3e8e0bf` — survival weight sign in multi-factor objective: was +1.0 (inverted intent: dying early was preferred), now -1.0
+  ([3e8e0bf](https://github.com/Dicklesworthstone/cmaes_explainer/commit/3e8e0bf08844ddbbf806efa0494a7a6e5ae38ee6))
+- `7c38639` (in this audit pass): DRO Wasserstein radius downgraded to "heuristic, not the Mohajerin-Esfahani-Kuhn theorem"; CVaR formula corrected to `ceil(α·N)` per Rockafellar-Uryasev 2000; muS = muK·1.20 anchor per CRC §F-13; tests renamed and tightened
+- `a0a35b6` — unify height tilt degradation rate in stepwise env, single source of truth
+  ([a0a35b6](https://github.com/Dicklesworthstone/cmaes_explainer/commit/a0a35b603f0c0b657861da9ed489b1c8cd1299ec))
+- `eadc224` — correct 480Hz physics step budget: 2083.3µs/step, not 208.3µs (10× transcription error in the budget doc)
+  ([eadc224](https://github.com/Dicklesworthstone/cmaes_explainer/commit/eadc224dc654c571607427f7895e7b432c8bf721))
+
+### Quality gates (this period)
+
+- 448/448 tests pass across 65 files (up from 177/7 at the start of the period)
+- tsc clean, eslint clean, ubs clean, Next.js production build clean
+- 159/159 beads closed (0 open, 0 in_progress, 0 deferred)
+- v068 → v069 kernel shipped, 30-link curriculum retune deferred to a follow-up
+- Browser test (`bun test cmaesEngine.test.ts -t "the shipped owner package"`) green against v068/v069
+
+### Honesty floor (this period)
+
+- 4 compounding bugs in hpo.rs that made its tests pass vacuously (1+λ)-ES was a no-op, all caught and fixed
+- ppo.rs PPO ratio was sampling fresh action instead of computing density under stored action (ratio was meaningless) — caught and fixed
+- 1 silent try_into on shorter obs that produced all-zero model input (ppo_update was computing against garbage) — caught and fixed
+- 1 over-cited Wasserstein radius (claimed to be Mohajerin-Esfahani-Kuhn 2018 Eq. 5 when it was actually a heuristic) — corrected with honest provenance block
+- 1 wrong CVaR convention (used `floor((1-α)·N)` taking top 87.5% instead of the worst 10%) — corrected to Rockafellar-Uryasev 2000 `ceil(α·N)`
+- 1 muS = muK · 1.20 contract in the docstring not honored by the code (static friction was spread from the point, not recomputed from worst-case muK) — fixed
+
+---
+
+## ## 2026-08-24 -- Scrolling Restored, True SSR, Social Cards
 
 ### Scrolling and Hydration
 
@@ -436,6 +546,6 @@ compatibility issues in the CA pattern gallery's canvas pixel rendering:
 | Repository | [Dicklesworthstone/cmaes_explainer](https://github.com/Dicklesworthstone/cmaes_explainer) |
 | Deployment | Vercel |
 | Tags / Releases | None (all changes shipped directly on `main`) |
-| Total commits | 73 |
+| Total commits | 260 |
 | First commit | 2025-11-22 |
-| Latest commit | 2026-08-24 |
+| Latest commit | 2026-08-29 |
