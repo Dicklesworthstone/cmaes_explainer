@@ -1003,6 +1003,7 @@ export function WasmDemo() {
                       setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
+                    style={{ touchAction: "pan-y pinch-zoom" }}
                     className="w-full accent-sky-400"
                   />
                 </div>
@@ -1041,6 +1042,7 @@ export function WasmDemo() {
                       setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
+                    style={{ touchAction: "pan-y pinch-zoom" }}
                     className="w-full accent-amber-400"
                   />
                 </div>
@@ -1079,6 +1081,7 @@ export function WasmDemo() {
                       setAdamHistory(adam);
                       setRsHistory(rs);
                     }}
+                    style={{ touchAction: "pan-y pinch-zoom" }}
                     className="w-full accent-purple-400"
                   />
                 </div>

@@ -886,6 +886,7 @@ export function CAGalleryTrace() {
                 step={0.002}
                 value={mu}
                 onChange={(e) => setMu(parseFloat(e.target.value))}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-pink-400"
               />
             </div>
@@ -908,6 +909,7 @@ export function CAGalleryTrace() {
                 step={0.001}
                 value={sigma}
                 onChange={(e) => setSigma(parseFloat(e.target.value))}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-purple-400"
               />
             </div>
@@ -930,6 +932,7 @@ export function CAGalleryTrace() {
                 step={0.01}
                 value={dt}
                 onChange={(e) => setDt(parseFloat(e.target.value))}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-sky-400"
               />
             </div>

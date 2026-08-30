@@ -839,6 +839,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[0].step}
                 value={params.spanLength}
                 onChange={(e) => applyManualParams({ ...params, spanLength: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-amber-400"
               />
             </div>
@@ -857,6 +858,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[1].step}
                 value={params.cableSag}
                 onChange={(e) => applyManualParams({ ...params, cableSag: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-sky-400"
               />
             </div>
@@ -875,6 +877,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[2].step}
                 value={params.deckStiffness}
                 onChange={(e) => applyManualParams({ ...params, deckStiffness: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-emerald-400"
               />
             </div>
@@ -933,6 +936,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[5].step}
                 value={params.suspenderCount}
                 onChange={(e) => applyManualParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-cyan-400"
               />
             </div>
@@ -951,6 +955,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[6].step}
                 value={params.towerAspect}
                 onChange={(e) => applyManualParams({ ...params, towerAspect: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-rose-400"
               />
             </div>
@@ -969,6 +974,7 @@ export function BridgeViz() {
                 step={BRIDGE_PARAM_SPECS[7].step}
                 value={params.vibrationDamping}
                 onChange={(e) => applyManualParams({ ...params, vibrationDamping: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-teal-400"
               />
             </div>

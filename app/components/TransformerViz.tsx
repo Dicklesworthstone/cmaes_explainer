@@ -939,6 +939,7 @@ export function TransformerViz() {
                   const val = parseFloat(e.target.value);
                   setParamVector((prev) => [val, prev[1], prev[2], prev[3], prev[4]]);
                 }}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-sky-400"
               />
             </div>
@@ -965,6 +966,7 @@ export function TransformerViz() {
                   const val = parseFloat(e.target.value);
                   setParamVector((prev) => [prev[0], val, prev[2], prev[3], prev[4]]);
                 }}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-indigo-400"
               />
             </div>
@@ -990,6 +992,7 @@ export function TransformerViz() {
                   const val = parseFloat(e.target.value);
                   setParamVector((prev) => [prev[0], prev[1], val, prev[3], prev[4]]);
                 }}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-purple-400"
               />
             </div>

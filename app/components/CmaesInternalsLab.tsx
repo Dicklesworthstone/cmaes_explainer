@@ -452,6 +452,7 @@ export function CmaesInternalsLab() {
                   setCursor(val);
                 }
               }}
+              style={{ touchAction: "pan-y pinch-zoom" }}
               className="min-w-[140px] flex-1 accent-sky-400"
               aria-label="Generation scrubber"
             />
@@ -478,7 +479,7 @@ export function CmaesInternalsLab() {
         {/* Telemetry column */}
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 font-mono text-xs space-y-2">
-            <div className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-sans font-semibold">Live internals</div>
+            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-sans font-semibold">Live internals</div>
             <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Best <LatexRenderer math="f_{\text{best}}" block={false} /></span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Step size <LatexRenderer math="\sigma" block={false} /></span><span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span></div>
             <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Condition <LatexRenderer math="\kappa(C)" block={false} /></span><span className="text-purple-300">{latest ? (Number.isFinite(latest.conditionNumber) ? latest.conditionNumber.toFixed(1) : "∞") : "—"}</span></div>
@@ -495,18 +496,18 @@ export function CmaesInternalsLab() {
 
           {/* Loss curve */}
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-            <div className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold mb-2">Convergence — log₁₀ best f(x)</div>
+            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">Convergence — log₁₀ best f(x)</div>
             <LossSparkline data={lossData} cursor={Math.min(cursor, states.length - 1)} />
           </div>
 
           {/* Variance explained */}
           {latest && (
             <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-              <div className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold mb-2">PCA variance explained</div>
+              <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">PCA variance explained</div>
               <div className="space-y-1.5">
                 {latest.phaseSpace3D.varianceExplainedPercent.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs font-mono">
-                    <span className="w-10 text-slate-500">PC{i + 1}</span>
+                    <span className="w-10 text-slate-400">PC{i + 1}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
                       <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400" style={{ width: `${Math.min(100, v).toFixed(2)}%` }} />
                     </div>

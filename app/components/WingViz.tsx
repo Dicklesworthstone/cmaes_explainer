@@ -761,6 +761,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[0].step}
                 value={params.aspectRatio}
                 onChange={(e) => applyManualParams({ ...params, aspectRatio: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-cyan-400"
               />
             </div>
@@ -779,6 +780,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[1].step}
                 value={params.sweepAngle}
                 onChange={(e) => applyManualParams({ ...params, sweepAngle: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-blue-400"
               />
             </div>
@@ -797,6 +799,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[2].step}
                 value={params.thicknessRatio}
                 onChange={(e) => applyManualParams({ ...params, thicknessRatio: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-indigo-400"
               />
             </div>
@@ -815,6 +818,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[3].step}
                 value={params.maxCamber}
                 onChange={(e) => applyManualParams({ ...params, maxCamber: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-purple-400"
               />
             </div>
@@ -833,6 +837,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[4].step}
                 value={params.camberPosition}
                 onChange={(e) => applyManualParams({ ...params, camberPosition: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-teal-400"
               />
             </div>
@@ -851,6 +856,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[5].step}
                 value={params.taperRatio}
                 onChange={(e) => applyManualParams({ ...params, taperRatio: parseFloat(e.target.value) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-rose-400"
               />
             </div>
@@ -889,6 +895,7 @@ export function WingViz() {
                 step={WING_PARAM_SPECS[7].step}
                 value={params.internalRibCount}
                 onChange={(e) => applyManualParams({ ...params, internalRibCount: parseInt(e.target.value, 10) })}
+                style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-amber-400"
               />
             </div>
