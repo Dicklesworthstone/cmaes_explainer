@@ -1194,7 +1194,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
         <div className="space-y-4">
-          <div className="glass-card relative min-h-[620px] overflow-hidden border-cyan-400/15 bg-slate-950/80">
+          <div
+            className={`glass-card relative overflow-hidden border-cyan-400/15 bg-slate-950/80 ${
+              embedded ? "min-h-[100svh]" : "min-h-[620px]"
+            }`}
+          >
             {/* Top Badges & Interactive Mode Bar */}
             <div className="absolute left-5 top-5 z-10 flex flex-wrap gap-2 pointer-events-auto">
               <span className="rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
@@ -1321,7 +1325,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
               </span>
             </div>
-            <div ref={stageRef} className="h-[620px] w-full">
+            <div ref={stageRef} className={embedded ? "h-[100svh] w-full" : "h-[620px] w-full"}>
               {shouldMountStage && (
                 <RobotStage
                   trace={trace}
