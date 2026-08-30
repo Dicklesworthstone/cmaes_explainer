@@ -1,21 +1,26 @@
 {
-  "model_name": "g1-transformer-locomotion-policy-v1",
-  "version": "1.0.0",
-  "format": "ONNX-Float32-DynamicBatch",
+  "model_name": "g1-transformer-locomotion-policy-v2",
+  "version": "2.0.0",
+  "format": "FSGT-Weights-v1 (length-prefixed little-endian f32; fail-closed loader app/lib/gaitTransformer.ts)",
+  "weights_file": "g1-ablation-weights-v1.bin",
+  "training_receipt": "g1-ablation-train-receipt.json",
+  "golden_vectors": "g1-ablation-golden.json",
   "sequence_length": 64,
   "observation_dim": 42,
   "action_dim": 29,
   "architecture": {
-    "type": "causal_transformer_decoder",
+    "type": "causal_transformer_decoder_gqa",
     "hidden_dim": 256,
-    "num_layers": 6,
+    "num_layers": 4,
     "num_heads": 8,
     "head_dim": 32,
-    "ffn_intermediate_dim": 684,
+    "num_kv_heads": 4,
+    "ffn_intermediate_dim": 682,
     "activation": "SwiGLU",
     "norm": "RMSNorm",
+    "norm_eps": 1e-6,
     "positional_embedding": "RoPE",
-    "parameter_count": 4200000
+    "parameter_count": 2902273
   },
   "obs_layout": [
     "joint_pos_0_left_hip_pitch",
@@ -86,15 +91,16 @@
     "waist_pitch": [-0.52, 0.52]
   },
   "training_metadata": {
-    "trained_at_commit": "7a867fb5-0ec4",
-    "optimizer": "Muon+AdamW-Split",
-    "total_env_steps": 38000000,
-    "trained_objective": 172.0,
-    "seeds": [42, 101, 202, 505],
+    "trainer": "frankensim crates/fs-g1-train examples/train_ablation.rs",
+    "algorithm": "PPO (clipped) + GAE; Muon on hidden 2-D weights; Adam on embed/heads/norms/log_std",
+    "environment": "StandinEnv — exact Rust port of app/lib/g1StepwiseEnv.ts, full 240-step episodes",
+    "samples_consumed": "see g1-ablation-train-receipt.json (exact count shipped with the weights)",
+    "trained_at_commit": "see g1-ablation-train-receipt.json / frankensim git log",
+    "seeds": { "rollout_rng": "0x5EEDC0FFEE5040", "model_init": "0xD1CE504020260830" },
     "inference_badge": {
       "status": "ready",
-      "label": "policy: transformer (GPU-trained)",
-      "fallback_label": "transformer (not yet exported)"
+      "label": "policy: transformer (trained, golden-parity tested)",
+      "fallback_label": "transformer (weights unavailable — nothing is faked)"
     }
   }
 }

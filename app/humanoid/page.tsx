@@ -86,13 +86,15 @@ export default function HumanoidPage() {
             The flagship above uses a 5,040-D linear residual policy on a
             hand-designed phase basis — a <em>strong, sample-efficient prior</em>.
             The honest counterfactual is to learn the same task from scratch
-            with a tiny causal transformer (PPO+Muon). The component below
-            runs both policies on the same terrain-and-push experiment and
-            reports the receipts side by side. The transformer side is the
-            synthesized comparison policy from <code className="break-all">app/lib/policyAblationComparison.ts</code>,
-            conforming to the ONNX export specification in <code className="break-all">public/robots/g1/transformer/metadata.json</code>.
-            The framing is honest about sample-efficiency vs ceiling; neither is &ldquo;the winner&rdquo; —
-            the tradeoff <em>is</em> the lesson.
+            with a causal transformer trained by PPO+Muon. The component below
+            reports <em>measured</em> receipts on the same disclosed
+            stepwise experiment: the transformer side runs real trained
+            weights (exported from the sibling{" "}
+            <code className="break-all">fs-g1-train</code> crate — see{" "}
+            <code className="break-all">public/robots/g1/transformer/</code>) with
+            in-browser inference, while the CMA-ES side is searched live in
+            this browser under your selected seed. Neither side is
+            synthesized; every number is a measurement.
           </p>
           <div className="mt-6">
             <PolicyAblationComparison />

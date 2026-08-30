@@ -17,8 +17,9 @@ import {
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
-import { G1HouseBackdrop } from "./G1HouseBackdrop";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
+import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
+import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
 import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
@@ -727,9 +728,11 @@ const cameraScratchVec = new THREE.Vector3();
 
 function CameraRig({
   cameraView,
+  activeRoom,
   pelvisThree,
 }: {
   cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   pelvisThree: [number, number, number];
 }) {
   useFrame(({ camera }) => {
@@ -745,19 +748,53 @@ function CameraRig({
       cameraScratchVec.set(pelvisThree[0] + 0.3, 4.2, pelvisThree[2]);
       camera.position.lerp(cameraScratchVec, 0.08);
       camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
+    } else if (cameraView === "orbit") {
+      if (activeRoom === "porch") {
+        cameraScratchVec.set(0, 1.8, 7.8);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      } else if (activeRoom === "dining") {
+        cameraScratchVec.set(2.4, 1.8, 4.5);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      } else if (activeRoom === "kitchen") {
+        cameraScratchVec.set(2.4, 1.8, 1.2);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      } else if (activeRoom === "bedroom") {
+        cameraScratchVec.set(-2.4, 1.8, 0.5);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      } else if (activeRoom === "bathroom") {
+        cameraScratchVec.set(0, 1.6, -1.2);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      } else if (activeRoom === "cutaway") {
+        cameraScratchVec.set(5.5, 7.5, 8.5);
+        camera.position.lerp(cameraScratchVec, 0.04);
+      }
     }
   });
 
   return cameraView === "orbit" ? (
     <OrbitControls
       makeDefault
-      target={[0.2, 0.68, 0]}
+      target={
+        activeRoom === "porch"
+          ? [0, 0.9, 4.6]
+          : activeRoom === "dining"
+          ? [2.1, 0.8, 1.8]
+          : activeRoom === "kitchen"
+          ? [2.1, 0.9, -1.2]
+          : activeRoom === "bedroom"
+          ? [-2.3, 0.8, -2.0]
+          : activeRoom === "bathroom"
+          ? [0, 0.7, -2.8]
+          : activeRoom === "cutaway"
+          ? [0, 0.5, 0.5]
+          : [0.2, 0.68, 0]
+      }
       enableDamping
       dampingFactor={0.075}
-      minDistance={1.2}
-      maxDistance={7}
-      minPolarAngle={0.55}
-      maxPolarAngle={1.48}
+      minDistance={1.0}
+      maxDistance={15}
+      minPolarAngle={0.25}
+      maxPolarAngle={1.5}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   ) : null;
@@ -771,6 +808,7 @@ function RobotStage({
   xrayMode,
   cameraView,
   timeOfDay,
+  activeRoom,
   isPlaying,
   playbackSpeed,
   sampleIndex,
@@ -784,6 +822,7 @@ function RobotStage({
   xrayMode: boolean;
   cameraView: "orbit" | "follow" | "pov" | "blueprint";
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
+  activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   isPlaying: boolean;
   playbackSpeed: number;
   sampleIndex: number;
@@ -810,8 +849,12 @@ function RobotStage({
       <fog attach="fog" args={[bgColor, 7.5, 18.0]} />
       <PerspectiveCamera makeDefault position={[1.85, 1.15, 2.35]} fov={36} near={0.05} far={40} />
 
-      {/* Super Realistic Sears Craftsman Bungalow Living Room Environment */}
-      <CraftsmanLivingRoom showFurniture={!xrayMode} timeOfDay={timeOfDay} />
+      {/* 1928 Sears Craftsman Estate (Complete 7-Room Whole-House Architectural Environment) */}
+      <SearsCraftsmanEstate
+        showFurniture={!xrayMode}
+        activeRoom={activeRoom}
+        timeOfDay={timeOfDay}
+      />
 
       {admission?.config.challenge === "terrain-and-push" && (
         <TerrainSurface admission={admission} />
@@ -838,7 +881,7 @@ function RobotStage({
           shoveActive={shoveActive}
         />
       ) : null}
-      <CameraRig cameraView={cameraView} pelvisThree={pelvisThree} />
+      <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={pelvisThree} />
     </Canvas>
   );
 }
@@ -886,6 +929,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // heavy house dressing; the full website keeps its cinematic default.
   const [xrayMode, setXrayMode] = useState(embedded);
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
+  const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">("orbit");
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -1211,6 +1255,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   xrayMode={xrayMode}
                   cameraView={cameraView}
                   timeOfDay={timeOfDay}
+                  activeRoom={activeRoom}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
                   sampleIndex={sampleIndex}
@@ -1235,6 +1280,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               setIsPlaying(false);
             }}
           />
+
+          {/* 3. 1928 Sears Craftsman Whole-House Architectural Inspector */}
+          {!xrayMode && (
+            <CraftsmanArchitecturalInspector
+              activeRoom={activeRoom}
+              onSelectRoom={(r) => setActiveRoom(r as any)}
+              timeOfDay={timeOfDay}
+              onSelectTimeOfDay={setTimeOfDay}
+            />
+          )}
         </div>
 
         <div className="glass-card p-5 sm:p-6">
