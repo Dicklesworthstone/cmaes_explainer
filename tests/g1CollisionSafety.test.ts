@@ -120,9 +120,13 @@ describe("G1 v069 owner trace safety envelope", () => {
   });
 
   test("reports the honest current curriculum outcome", () => {
-    expect(curriculumEvaluation.completedSteps).toBeGreaterThanOrEqual(336);
-    expect(curriculumEvaluation.completedSteps).toBeLessThan(720);
-    expect(curriculumEvaluation.terminationReason).toBe("joint position limit");
+    // cmaes-zi6 3-stage retune: the v0.6.9 30-link curriculum now completes
+    // the 720-step flat horizon (was failing at ~368 steps under the
+    // v0.6.6 baked-in mean on the 30-link dynamics). The
+    // termination_reason is now Horizon, not joint position limit.
+    expect(curriculumEvaluation.completedSteps).toBeGreaterThanOrEqual(720);
+    expect(curriculumEvaluation.completedSteps).toBeLessThanOrEqual(720);
+    expect(curriculumEvaluation.terminationReason).toBe("horizon");
     expect(curriculumEvaluation.minimumBaseHeightMeters).toBeGreaterThan(0.5);
     expect(curriculumEvaluation.maximumTiltSine).toBeLessThan(0.25);
   });
