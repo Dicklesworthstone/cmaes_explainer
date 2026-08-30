@@ -17,6 +17,8 @@ import { G1WalkingFlagship } from "./components/G1WalkingFlagship";
 import { HouseholdArmFlagship } from "./components/HouseholdArmFlagship";
 import { PolicyAblationComparison } from "./components/PolicyAblationComparison";
 import { HpoTrainer } from "./components/HpoTrainer";
+import { HonestyChipStack } from "./components/HonestyChipStack";
+import { FurnitureCatalogInspector } from "./components/FurnitureCatalogInspector";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -66,6 +68,18 @@ export default function Page() {
                 title="Outer CMA-ES over 8 training hyperparameters (this site runs it client-side)"
               >
                 <HpoTrainer />
+              </Section>
+              <Section
+                id="honesty"
+                title="Honesty ledger: every physics claim traced to its source, test, citation, and bead"
+              >
+                <HonestyChipStack />
+              </Section>
+              <Section
+                id="furniture-catalog"
+                title="74-piece Sears Craftsman furniture catalog (with period-catalog provenance)"
+              >
+                <FurnitureCatalogInspector />
               </Section>
               <Section
                 id="ablation"

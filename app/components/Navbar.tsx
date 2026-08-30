@@ -16,6 +16,8 @@ const sections = [
   { id: "internals", label: "3D Space" },
   { id: "g1-walking", label: "Robot" },
   { id: "household-arm", label: "Arm" },
+  { id: "hpo", label: "HPO" },
+  { id: "ablation", label: "Ablation" },
   { id: "technical-addendum", label: "Math" }
 ];
 

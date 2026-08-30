@@ -53,7 +53,8 @@
     "playwright": "^1.57.0",
     "postcss": "^8.5.6",
     "source-map": "^0.7.6",
-    "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+  },
+  "resolutions": {
+    "three": "^0.181.2"
   }
 }
