@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import {
   CmaesHyperparameterOptimizer,
+  defaultGenotypeFromSpecs,
   G1_TRAINING_HYPERPARAMETERS,
   type HpoParameterSpec,
   type HpoSweepResult,
@@ -28,6 +29,8 @@ export function HpoTrainer() {
   const [running, setRunning] = useState(false);
   const [lastDelta, setLastDelta] = useState<number | null>(null);
   const [batch, setBatch] = useState<(typeof RUN_BATCH_SIZES)[number]>(1);
+  const [warmStart, setWarmStart] = useState(false);
+  const [mirrored, setMirrored] = useState(false);
   const optimizerRef = useRef<CmaesHyperparameterOptimizer | null>(null);
   // Ref (not state) so React 19 strict mode running the updater twice
   // does NOT trigger a duplicate setLastDelta side-effect.
@@ -38,10 +41,17 @@ export function HpoTrainer() {
       optimizerRef.current = new CmaesHyperparameterOptimizer(
         G1_TRAINING_HYPERPARAMETERS,
         0x47315040,
+        {
+          warmStartGenotype: warmStart
+            ? defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS)
+            : undefined,
+          warmStartSigma: 0.2,
+          mirroredSampling: mirrored,
+        },
       );
     }
     return optimizerRef.current;
-  }, []);
+  }, [warmStart, mirrored]);
 
   const runBatch = useCallback(async (gens: number) => {
     if (running) return;
@@ -185,8 +195,45 @@ export function HpoTrainer() {
             >
               Reset
             </button>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={warmStart}
+                onChange={(e) => {
+                  setWarmStart(e.target.checked);
+                  reset();
+                }}
+                disabled={running}
+                className="accent-emerald-400"
+              />
+              <span>
+                WS warm start{" "}
+                <span className="text-slate-500">
+                  (seed at the hand-tuned defaults — Nomura, AAAI 2021)
+                </span>
+              </span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={mirrored}
+                onChange={(e) => {
+                  setMirrored(e.target.checked);
+                  reset();
+                }}
+                disabled={running}
+                className="accent-cyan-400"
+              />
+              <span>
+                Mirrored sampling{" "}
+                <span className="text-slate-500">
+                  (antithetic pairs, 2× rollouts — Conti 2017)
+                </span>
+              </span>
+            </label>
             <span className="ml-auto text-xs text-slate-500">
-              Warm start: default prior (centered). Seed: 0x47315040.
+              {warmStart ? "Warm start: ON (defaults prior)." : "Warm start: off (cold origin)."} Seed:
+              0x47315040.
             </span>
           </div>
         </div>
