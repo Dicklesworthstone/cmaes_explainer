@@ -1317,13 +1317,27 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 </span>
               </div>
             ) : null}
-            <div className="absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-              <span className="rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-300 backdrop-blur-md">
-                Cyan / violet rings are contact booleans. {stageSceneHint(xrayMode, cameraView)}
+            <div
+              className={`absolute z-10 flex items-center pointer-events-none ${
+                embedded
+                  ? "bottom-3 left-3 right-3 justify-center"
+                  : "bottom-5 left-5 right-5 flex-wrap justify-between gap-2"
+              }`}
+            >
+              <span
+                className={`max-w-full truncate rounded-xl border border-white/10 bg-slate-950/80 text-slate-300 backdrop-blur-md ${
+                  embedded ? "px-2.5 py-1.5 text-[0.62rem]" : "px-3 py-2 text-xs"
+                }`}
+              >
+                {embedded
+                  ? `Contact rings · ${stageSceneHint(xrayMode, cameraView)}`
+                  : `Cyan / violet rings are contact booleans. ${stageSceneHint(xrayMode, cameraView)}`}
               </span>
-              <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-                Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
-              </span>
+              {!embedded ? (
+                <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
+                  Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
+                </span>
+              ) : null}
             </div>
             <div ref={stageRef} className={embedded ? "h-[100svh] w-full" : "h-[620px] w-full"}>
               {shouldMountStage && (
