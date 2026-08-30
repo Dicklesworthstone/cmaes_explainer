@@ -1,6 +1,9 @@
 # FrankenRobots Universal App Plan
 
-Status: implementation started against source commit `819f4ec`.
+Status: active implementation. Every built engine records its exact
+`cmaes_explainer` source revision, the inspected FrankenSim workspace revision,
+and the versioned robotics-owner identity; this document does not pin a stale
+launch commit.
 
 FrankenRobots is a focused, native-feeling laboratory for the two physically grounded robotics experiences in CMA-ES Explainer:
 
@@ -76,8 +79,16 @@ SwiftUI app shell
   -> focused /frankenrobots/humanoid or /frankenrobots/arm route
   -> existing React + Three.js renderer
   -> existing Web Worker pool
-  -> pinned Frankensim WASM owner kernel
+  -> pinned Frankensim robotics-owner WASM artifact
 ```
+
+The robotics-owner artifact and the live upstream FrankenSim workspace are
+related but not interchangeable provenance claims. The current upstream
+`fs-cmaes-viz-wasm` crate remains the separate low-dimensional teaching
+surface; its package version must never be used to describe the robot ABI.
+Likewise, newer upstream `fs-dfo` / `fs-ascent` APIs (including NSGA-II/III and
+Pareto tracing) are source capabilities until a versioned browser ABI, robot
+receipt contract, and parity battery admit them into this runtime.
 
 The focused routes render only the flagship lab. They are also useful for deterministic visual regression testing in the web repository.
 

@@ -25,6 +25,7 @@ import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
+import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -681,6 +682,7 @@ function useG1Meshes(active: boolean): G1MeshState {
   useEffect(() => {
     if (!active || g1MeshCache) return;
     let cancelled = false;
+    const abortController = new AbortController();
     const geometries: Record<string, THREE.BufferGeometry> = {};
     const loader = new STLLoader();
     const disposeInFlight = (): void => {
@@ -690,9 +692,11 @@ function useG1Meshes(active: boolean): G1MeshState {
       try {
         await Promise.all(
           Object.entries(G1_MESH_FILES).map(async ([key, file]) => {
-            const res = await fetch(G1_MESH_DIR + file);
+            const res = await fetch(G1_MESH_DIR + file, { signal: abortController.signal });
             if (!res.ok) throw new Error(`HTTP ${res.status} loading ${file}`);
-            const geometry = loader.parse(await res.arrayBuffer());
+            const contents = await res.arrayBuffer();
+            if (cancelled) return;
+            const geometry = loader.parse(contents);
             geometry.rotateX(-Math.PI / 2);
             geometry.computeVertexNormals();
             geometries[key] = geometry;
@@ -710,19 +714,21 @@ function useG1Meshes(active: boolean): G1MeshState {
         g1MeshCache = { geometries, material };
         setState({ phase: "ready", geometries, material });
       } catch {
+        abortController.abort();
         disposeInFlight();
         if (!cancelled) setState({ phase: "failed" });
       }
     })();
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [active]);
-  return g1MeshCache
-    ? { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material }
-    : active && state.phase === "idle"
-      ? { phase: "loading" }
-      : state;
+  if (g1MeshCache) {
+    return { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material };
+  }
+  if (active && state.phase === "idle") return { phase: "loading" };
+  return state;
 }
 
 const cameraScratchVec = new THREE.Vector3();
@@ -934,9 +940,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
-  // The focused native route opens on the inspectable robot instead of the
-  // heavy house dressing; the full website keeps its cinematic default.
-  const [xrayMode, setXrayMode] = useState(embedded);
+  // The Craftsman estate is now first-class on both surfaces. X-ray remains
+  // one tap away, but embedded/native users should not silently miss the
+  // rooms, lighting, and architectural inspector added to the flagship.
+  const [xrayMode, setXrayMode] = useState(false);
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
@@ -1068,6 +1075,26 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     };
   }, [workerActivated]);
 
+  useEffect(() => {
+    if (!embedded) return;
+    let bridgeState: "loading" | "ready" | "running" | "failed";
+    if (!workerAvailable) bridgeState = "failed";
+    else if (busy === "preview") bridgeState = "loading";
+    else if (busy) bridgeState = "running";
+    else if (trace || error) bridgeState = "ready";
+    else bridgeState = "loading";
+    reportFrankenRobotsEngineState(
+      "humanoid",
+      bridgeState,
+      status,
+      {
+        generation,
+        bestObjective,
+        completedSteps: trace?.completedSteps ?? null,
+      },
+    );
+  }, [embedded, workerAvailable, error, busy, trace, status, generation, bestObjective]);
+
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
     : null;
@@ -1133,7 +1160,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
   return (
     <div className="space-y-8">
-      {/* The native app owns its compact story inspector; keep the stage first there. */}
+      {/* Keep the robot first in embedded mode; its complete story tour is
+          restored immediately after the primary stage/control grid below. */}
       {!embedded ? (
         <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
       ) : null}
@@ -1351,7 +1379,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
             A disclosed full-CMA curriculum learned 105 meaningful owner coordinates: standing bias,
-            periodic foot unloading, then pelvis feedback. The
+            periodic foot unloading, then pelvis feedback. Live search expands that curriculum to all
             5,040 weights. Every candidate is scored on the same 1.5-second, 720-step terrain-and-push experiment you watch.
           </p>
 
@@ -1562,6 +1590,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           </div>
         </div>
       </div>
+
+      {embedded ? (
+        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+      ) : null}
 
       {trace ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">

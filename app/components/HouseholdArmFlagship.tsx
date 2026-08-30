@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
 import { ArmGraspMicroscopeOverlay, ArmGraspMicroscopeHUD } from "./ArmGraspMicroscope";
+import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import {
   type CmaFamily,
   type HouseholdManipulationAdmission,
@@ -873,6 +874,26 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       workerRef.current = null;
     };
   }, [workerActivated]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    let bridgeState: "loading" | "ready" | "running" | "failed";
+    if (!workerAvailable) bridgeState = "failed";
+    else if (busy === "preview") bridgeState = "loading";
+    else if (busy) bridgeState = "running";
+    else if (trace || error) bridgeState = "ready";
+    else bridgeState = "loading";
+    reportFrankenRobotsEngineState(
+      "arm",
+      bridgeState,
+      status,
+      {
+        generation,
+        bestObjective,
+        placed: trace?.placed ? "yes" : "no",
+      },
+    );
+  }, [embedded, workerAvailable, error, busy, trace, status, generation, bestObjective]);
 
   const post = useCallback(
     (message: object, mode: "preview" | "optimize" | "compare") => {

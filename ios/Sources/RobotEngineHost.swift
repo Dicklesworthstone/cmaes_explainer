@@ -5,8 +5,18 @@ import WebKit
 enum RobotEnginePhase: Equatable {
     case starting
     case loading
+    case running
     case ready
     case failed(String)
+}
+
+@MainActor
+private final class WeakRobotScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
+    }
 }
 
 @MainActor
@@ -14,6 +24,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var phase: RobotEnginePhase = .starting
     @Published private(set) var detail = "Starting the private simulation engine…"
     @Published private(set) var sourceCommit = "not bundled"
+    @Published private(set) var frankenSimCommit = "not bundled"
+    @Published private(set) var ownerKernelVersion = "not bundled"
     @Published private(set) var crossOriginIsolated = false
 
     let webView: WKWebView
@@ -21,6 +33,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var server: LoopbackEngineServer?
     private var baseURL: URL?
     private var selectedLab: RobotLab = .humanoid
+    private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
     override init() {
         let configuration = WKWebViewConfiguration()
@@ -30,7 +43,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         configuration.websiteDataStore = .nonPersistent()
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
-        configuration.userContentController.add(self, name: "frankenrobots")
+        scriptMessageHandler.delegate = self
+        configuration.userContentController.add(scriptMessageHandler, name: "frankenrobots")
         webView.navigationDelegate = self
         webView.isOpaque = false
         webView.backgroundColor = .clear
@@ -41,10 +55,6 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         Task { [weak self] in
             await self?.start()
         }
-    }
-
-    deinit {
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "frankenrobots")
     }
 
     func select(_ lab: RobotLab) {
@@ -70,7 +80,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             let baseURL = try await server.start()
             self.server = server
             self.baseURL = baseURL
-            sourceCommit = readSourceCommit()
+            sourceCommit = readBundleText(named: "source-commit", abbreviated: true)
+            frankenSimCommit = readBundleText(named: "frankensim-workspace-commit", abbreviated: true)
+            ownerKernelVersion = readBundleText(named: "owner-kernel-version")
             loadSelectedLab()
         } catch {
             phase = .failed(error.localizedDescription)
@@ -88,14 +100,14 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
     }
 
-    private func readSourceCommit() -> String {
-        guard let url = Bundle.main.url(forResource: "source-commit", withExtension: "txt", subdirectory: "Engine"),
+    private func readBundleText(named name: String, abbreviated: Bool = false) -> String {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "txt", subdirectory: "Engine"),
               let value = try? String(contentsOf: url, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty else {
             return "unrecorded"
         }
-        return String(value.prefix(12))
+        return abbreviated ? String(value.prefix(12)) : value
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -105,10 +117,17 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 guard let self else { return }
                 let payload = result as? [String: Any]
                 self.crossOriginIsolated = payload?["isolated"] as? Bool ?? false
-                self.phase = .ready
-                self.detail = self.crossOriginIsolated
-                    ? "Isolated engine document ready · worker initialization continues in the lab"
-                    : "Engine document ready · compatibility worker mode"
+                // A fast worker can report ready before this JavaScript probe
+                // returns. Never regress that newer state back to loading.
+                switch self.phase {
+                case .starting, .loading:
+                    self.phase = .loading
+                    self.detail = self.crossOriginIsolated
+                        ? "Engine document ready · waiting for the Frankensim owner worker"
+                        : "Compatibility document ready · waiting for the owner worker"
+                case .running, .ready, .failed:
+                    break
+                }
             }
         }
     }
@@ -172,8 +191,24 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
               let type = payload["type"] as? String else {
             return
         }
-        if type == "engine.status", let status = payload["detail"] as? String {
+        if type == "engine.status",
+           let status = payload["detail"] as? String,
+           let state = payload["state"] as? String,
+           let reportedLab = payload["lab"] as? String,
+           reportedLab == selectedLab.rawValue {
             detail = status
+            switch state {
+            case "loading":
+                phase = .loading
+            case "ready":
+                phase = .ready
+            case "running":
+                phase = .running
+            case "failed":
+                phase = .failed(status)
+            default:
+                break
+            }
         }
     }
 }

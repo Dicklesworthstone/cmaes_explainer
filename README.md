@@ -48,11 +48,12 @@ Open <http://localhost:3000>.
   convergence, binary packet refusals, all four owner families, G1 challenge
   invariants, and all three manipulation tasks.
 
-The G1 demo is deliberately a reduced explainer model: 15 lower-body and waist
-DoFs are simulated; its translucent head, shoulders, arms, and hands are
-display-only. It is not a hardware controller or a sim-to-real claim. Full
-CMA-ES is exercised on the 128-D arm but intentionally refused at 5,040
-dimensions because its dense covariance would require 25,401,600 entries.
+The G1 demo is deliberately an explainer model, not a hardware controller or a
+sim-to-real claim. The current schema-7 owner integrates the 30-DoF whole-body
+model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
+is part of the physical rollout rather than display-only dressing. Full CMA-ES
+is exercised on the 128-D arm but intentionally refused at 5,040 dimensions
+because its dense covariance would require 25,401,600 entries.
 
 ## Versioned WebAssembly
 

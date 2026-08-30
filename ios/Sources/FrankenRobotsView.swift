@@ -4,6 +4,7 @@ struct FrankenRobotsView: View {
     @StateObject private var engine = RobotEngineHost()
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
+    @State private var guidePage: RobotGuidePage = .lab
 
     var body: some View {
         GeometryReader { geometry in
@@ -23,7 +24,10 @@ struct FrankenRobotsView: View {
                 .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 4 : 10)
             }
         }
-        .onChange(of: lab) { _, value in engine.select(value) }
+        .onChange(of: lab) { _, value in
+            guidePage = .lab
+            engine.select(value)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .selectRobotLab)) { note in
             guard let value = note.object as? RobotLab else { return }
             lab = value
@@ -106,6 +110,7 @@ struct FrankenRobotsView: View {
     private var statusSymbol: String {
         switch engine.phase {
         case .starting, .loading: "bolt.horizontal.circle"
+        case .running: "waveform.path.ecg"
         case .ready: "checkmark.seal.fill"
         case .failed: "exclamationmark.triangle.fill"
         }
@@ -115,21 +120,22 @@ struct FrankenRobotsView: View {
         switch engine.phase {
         case .starting: "Starting"
         case .loading: "Loading"
-        case .ready: "Lab loaded"
+        case .running: "Optimizing"
+        case .ready: "Owner ready"
         case .failed: "Needs attention"
         }
     }
 
     private var statusColor: Color {
         switch engine.phase {
-        case .starting, .loading: lab.accent
+        case .starting, .loading, .running: lab.accent
         case .ready: RobotTheme.emerald
         case .failed: .red
         }
     }
 
     private var isEngineBusy: Bool {
-        engine.phase == .starting || engine.phase == .loading
+        engine.phase == .starting || engine.phase == .loading || engine.phase == .running
     }
 
     private var labSelector: some View {
@@ -148,8 +154,10 @@ struct FrankenRobotsView: View {
                 showingDetails = true
             } label: {
                 Label("Lab guide", systemImage: "slider.horizontal.3")
-                    .labelStyle(.iconOnly)
-                    .frame(width: 42, height: 42)
+                    .font(.system(size: RobotTheme.size(10), weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .padding(.horizontal, 5)
+                    .frame(minHeight: 42)
             }
             .buttonStyle(.bordered)
             .tint(lab.accent)
@@ -162,7 +170,7 @@ struct FrankenRobotsView: View {
             stage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             inspector
-                .frame(width: 300)
+                .frame(width: 360)
         }
     }
 
@@ -256,67 +264,209 @@ struct FrankenRobotsView: View {
     private var inspector: some View {
         RobotPanel(accent: lab.accent) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Label(lab.title, systemImage: lab.symbol)
-                        .font(.system(size: RobotTheme.size(19), weight: .bold, design: .rounded))
-                        .foregroundStyle(lab.accent)
-
-                    Text(lab.summary)
-                        .font(.system(size: RobotTheme.size(12), design: .rounded))
-                        .foregroundStyle(RobotTheme.text)
-                        .lineSpacing(3)
-
-                    Divider().overlay(RobotTheme.stroke)
-
-                    VStack(spacing: 10) {
-                        ForEach(Array(lab.facts.enumerated()), id: \.offset) { _, fact in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text(fact.label)
-                                    .foregroundStyle(RobotTheme.secondary)
-                                Spacer(minLength: 8)
-                                Text(fact.value)
-                                    .foregroundStyle(RobotTheme.text)
-                                    .multilineTextAlignment(.trailing)
-                            }
-                            .font(.system(size: RobotTheme.size(10.5), design: .rounded))
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 10) {
+                        Image(systemName: lab.symbol)
+                            .font(.system(size: RobotTheme.size(19), weight: .bold))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(lab.title) Lab")
+                                .font(.system(size: RobotTheme.size(18), weight: .bold, design: .rounded))
+                            Text(lab.eyebrow)
+                                .font(.system(size: RobotTheme.size(7.5), weight: .bold, design: .monospaced))
+                                .foregroundStyle(RobotTheme.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                     }
+                    .foregroundStyle(lab.accent)
+
+                    Picker("Guide section", selection: $guidePage) {
+                        ForEach(RobotGuidePage.allCases) { page in
+                            Text(page.rawValue).tag(page)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    guideContent
 
                     Divider().overlay(RobotTheme.stroke)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ENGINE BOUNDARY")
-                            .font(.system(size: RobotTheme.size(9), weight: .bold, design: .monospaced))
-                            .kerning(1.2)
-                            .foregroundStyle(RobotTheme.emerald)
-                        Text(engine.detail)
-                            .font(.system(size: RobotTheme.size(10.5), design: .rounded))
-                            .foregroundStyle(RobotTheme.secondary)
-                        Label(
-                            engine.crossOriginIsolated ? "Threaded worker lane" : "Compatibility worker lane",
-                            systemImage: engine.crossOriginIsolated ? "cpu.fill" : "cpu"
-                        )
-                        .font(.system(size: RobotTheme.size(9.5), weight: .semibold, design: .rounded))
-                        .foregroundStyle(statusColor)
-                    }
-
-                    Button {
-                        engine.reload()
-                    } label: {
-                        Label("Reload Engine", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(lab.accent)
-
-                    Text("All simulation data stays in this app. The production engine is served from a loopback-only bundled origin so Web Workers and Frankensim WASM can run without a remote service.")
-                        .font(.system(size: RobotTheme.size(9.5), design: .rounded))
-                        .foregroundStyle(RobotTheme.secondary)
-                        .lineSpacing(2)
+                    engineBoundary
                 }
                 .padding(18)
             }
             .scrollIndicators(.hidden)
+        }
+    }
+
+    @ViewBuilder
+    private var guideContent: some View {
+        switch guidePage {
+        case .lab:
+            Text(lab.summary)
+                .font(.system(size: RobotTheme.size(11.5), design: .rounded))
+                .foregroundStyle(RobotTheme.text)
+                .lineSpacing(3)
+
+            VStack(spacing: 10) {
+                ForEach(lab.guideCards) { card in
+                    HStack(alignment: .top, spacing: 11) {
+                        Image(systemName: card.symbol)
+                            .font(.system(size: RobotTheme.size(15), weight: .semibold))
+                            .foregroundStyle(lab.accent)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(card.title)
+                                    .font(.system(size: RobotTheme.size(10.5), weight: .bold, design: .rounded))
+                                    .foregroundStyle(RobotTheme.text)
+                                Spacer(minLength: 6)
+                                Text(card.metric)
+                                    .font(.system(size: RobotTheme.size(7.8), weight: .bold, design: .monospaced))
+                                    .foregroundStyle(lab.accent)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            Text(card.detail)
+                                .font(.system(size: RobotTheme.size(9.5), design: .rounded))
+                                .foregroundStyle(RobotTheme.secondary)
+                                .lineSpacing(2)
+                        }
+                    }
+                    .padding(12)
+                    .background(RobotTheme.panelRaised.opacity(0.72), in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+
+        case .physics:
+            VStack(spacing: 10) {
+                ForEach(Array(lab.physicsPipeline.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 11) {
+                        Text("\(index + 1)")
+                            .font(.system(size: RobotTheme.size(9), weight: .black, design: .rounded))
+                            .foregroundStyle(RobotTheme.background)
+                            .frame(width: 24, height: 24)
+                            .background(lab.accent, in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(step.title)
+                                .font(.system(size: RobotTheme.size(11), weight: .bold, design: .rounded))
+                                .foregroundStyle(RobotTheme.text)
+                            Text(step.detail)
+                                .font(.system(size: RobotTheme.size(9.5), design: .rounded))
+                                .foregroundStyle(RobotTheme.secondary)
+                                .lineSpacing(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+        case .proof:
+            VStack(alignment: .leading, spacing: 12) {
+                Text("OWNER RECEIPT INCLUDES")
+                    .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+                    .kerning(1.1)
+                    .foregroundStyle(RobotTheme.emerald)
+                ForEach(lab.proofFields, id: \.self) { field in
+                    Label(field, systemImage: "checkmark.seal.fill")
+                        .font(.system(size: RobotTheme.size(9.8), design: .rounded))
+                        .foregroundStyle(RobotTheme.text)
+                        .labelStyle(ProofLabelStyle(accent: RobotTheme.emerald))
+                }
+                Divider().overlay(RobotTheme.stroke)
+                ForEach(Array(lab.facts.enumerated()), id: \.offset) { _, fact in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(fact.label).foregroundStyle(RobotTheme.secondary)
+                        Spacer(minLength: 8)
+                        Text(fact.value)
+                            .foregroundStyle(RobotTheme.text)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .font(.system(size: RobotTheme.size(10), design: .rounded))
+                }
+            }
+
+        case .frontier:
+            VStack(spacing: 10) {
+                ForEach(Array(lab.frontierNotes.enumerated()), id: \.offset) { index, note in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(note.title.uppercased())
+                            .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+                            .kerning(0.9)
+                            .foregroundStyle(index == 2 ? RobotTheme.amber : lab.accent)
+                        Text(note.detail)
+                            .font(.system(size: RobotTheme.size(9.8), design: .rounded))
+                            .foregroundStyle(RobotTheme.text)
+                            .lineSpacing(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(RobotTheme.panelRaised.opacity(0.72), in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+        }
+    }
+
+    private var engineBoundary: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("LIVE ENGINE BOUNDARY")
+                .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+                .kerning(1.1)
+                .foregroundStyle(RobotTheme.emerald)
+            Text(engine.detail)
+                .font(.system(size: RobotTheme.size(9.8), design: .rounded))
+                .foregroundStyle(RobotTheme.text)
+                .lineSpacing(2)
+            Label(
+                engine.crossOriginIsolated ? "Threaded worker lane" : "Compatibility worker lane",
+                systemImage: engine.crossOriginIsolated ? "cpu.fill" : "cpu"
+            )
+            .font(.system(size: RobotTheme.size(9.3), weight: .semibold, design: .rounded))
+            .foregroundStyle(statusColor)
+
+            provenanceRow("App source", engine.sourceCommit)
+            provenanceRow("FrankenSim workspace", engine.frankenSimCommit)
+            provenanceRow("Robot owner", engine.ownerKernelVersion)
+
+            Text("The FrankenSim workspace revision records the upstream source inspected for this build. The versioned robot-owner artifact remains a separate, fail-closed runtime boundary.")
+                .font(.system(size: RobotTheme.size(8.6), design: .rounded))
+                .foregroundStyle(RobotTheme.secondary)
+                .lineSpacing(2)
+
+            Button {
+                engine.reload()
+            } label: {
+                Label("Reload Engine", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(lab.accent)
+
+            Text("All simulation data stays in this app. Bundled assets run through a loopback-only origin so Web Workers and Frankensim WASM need no remote service.")
+                .font(.system(size: RobotTheme.size(8.8), design: .rounded))
+                .foregroundStyle(RobotTheme.secondary)
+                .lineSpacing(2)
+        }
+    }
+
+    private func provenanceRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label).foregroundStyle(RobotTheme.secondary)
+            Spacer(minLength: 6)
+            Text(value)
+                .foregroundStyle(RobotTheme.text)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+        .font(.system(size: RobotTheme.size(8.5), design: .monospaced))
+    }
+}
+
+private struct ProofLabelStyle: LabelStyle {
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            configuration.icon.foregroundStyle(accent)
+            configuration.title
         }
     }
 }
