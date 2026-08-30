@@ -928,8 +928,12 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const taskInfo = TASK_COPY[task];
 
   return (
-    <div className="space-y-8">
-      <div className="glass-card overflow-hidden border-orange-400/15 bg-slate-950/80 p-2 sm:p-3">
+    <div className={embedded ? "space-y-2" : "space-y-8"}>
+      <div
+        className={`glass-card overflow-hidden border-orange-400/15 bg-slate-950/80 ${
+          embedded ? "p-1" : "p-2 sm:p-3"
+        }`}
+      >
         <div
           className={`grid gap-2 ${embedded ? "grid-cols-3" : "sm:grid-cols-3"}`}
           role="tablist"
@@ -947,7 +951,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                 aria-selected={selected}
                 disabled={busy !== null || !workerAvailable}
                 onClick={() => selectTask(taskName)}
-                className={`min-h-16 rounded-2xl border py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${embedded ? "px-2" : "px-4"} ${
+                className={`border text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  embedded ? "min-h-10 rounded-xl px-2 py-1.5" : "min-h-16 rounded-2xl px-4 py-3"
+                } ${
                   selected
                     ? "border-orange-300/35 bg-orange-400/12"
                     : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
@@ -955,7 +961,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               >
                 <span className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${info.accent}`} />
-                  <span className="min-w-0 text-sm font-bold text-white line-clamp-2">
+                  <span
+                    className={`min-w-0 font-bold text-white line-clamp-2 ${
+                      embedded ? "text-xs" : "text-sm"
+                    }`}
+                  >
                     {embedded ? EMBEDDED_TASK_TITLES[taskName] : info.title}
                   </span>
                 </span>
@@ -966,15 +976,35 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]">
-        <div className="space-y-4">
-          <div className="glass-card relative min-h-[570px] overflow-hidden border-orange-400/15 bg-slate-950/80">
+      <div
+        className={
+          embedded ? "block" : "grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]"
+        }
+      >
+        <div className={embedded ? "space-y-0" : "space-y-4"}>
+          <div
+            className={`glass-card relative overflow-hidden border-orange-400/15 bg-slate-950/80 ${
+              embedded ? "min-h-[calc(100svh-64px)]" : "min-h-[570px]"
+            }`}
+          >
             {/* Top Toolbar */}
-            <div className="pointer-events-auto absolute left-5 top-5 z-10 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-orange-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-orange-200 backdrop-blur-md">
+            <div
+              className={`pointer-events-auto absolute z-10 flex flex-wrap items-center ${
+                embedded ? "left-3 top-3 gap-1" : "left-5 top-5 gap-2"
+              }`}
+            >
+              <span
+                className={`rounded-full border border-orange-300/25 bg-slate-950/82 font-bold uppercase text-orange-200 backdrop-blur-md ${
+                  embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
+                }`}
+              >
                 8 owner poses · 90 Hz physics
               </span>
-              <span className="rounded-full border border-emerald-300/25 bg-slate-950/82 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-md">
+              <span
+                className={`rounded-full border border-emerald-300/25 bg-slate-950/82 font-bold uppercase text-emerald-200 backdrop-blur-md ${
+                  embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
+                }`}
+              >
                 {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
               </span>
 
@@ -982,7 +1012,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               <button
                 type="button"
                 onClick={() => setMicroscopeMode(!microscopeMode)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
+                } ${
                   microscopeMode
                     ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
                     : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
@@ -990,12 +1022,22 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                 title="Toggle 3D Coulomb friction cone overlay at contact points"
               >
                 <Eye className="h-3.5 w-3.5" />
-                {microscopeMode ? "🔬 Friction Cones (μ=0.65) Active" : "🔬 Friction Cones Overlay"}
+                {embedded
+                  ? microscopeMode
+                    ? "Friction cones on"
+                    : "Friction cones"
+                  : microscopeMode
+                    ? "🔬 Friction Cones (μ=0.65) Active"
+                    : "🔬 Friction Cones Overlay"}
               </button>
             </div>
 
             {/* Camera View Selector */}
-            <div className="pointer-events-auto absolute right-5 top-5 z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md">
+            <div
+              className={`pointer-events-auto absolute z-10 flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md ${
+                embedded ? "left-3 top-12" : "right-5 top-5"
+              }`}
+            >
               {(
                 [
                   { id: "studio", label: "Studio", icon: Camera },
@@ -1023,15 +1065,30 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               })}
             </div>
 
-            <div className="pointer-events-none absolute bottom-5 left-5 right-5 z-10 flex flex-wrap items-end justify-between gap-2">
-              <span className="max-w-xl rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-xs leading-5 text-slate-300 backdrop-blur-md">
-                Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the cyan cones display Coulomb friction boundaries.
+            <div
+              className={`pointer-events-none absolute z-10 flex flex-wrap items-end justify-between gap-2 ${
+                embedded ? "bottom-3 left-3 right-3" : "bottom-5 left-5 right-5"
+              }`}
+            >
+              <span
+                className={`max-w-xl truncate rounded-xl border border-white/10 bg-slate-950/82 text-slate-300 backdrop-blur-md ${
+                  embedded ? "px-2.5 py-1.5 text-[0.62rem]" : "px-3 py-2 text-xs leading-5"
+                }`}
+              >
+                {embedded
+                  ? "Owner poses · physical grasp · drag to orbit · pinch to zoom"
+                  : "Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the cyan cones display Coulomb friction boundaries."}
               </span>
-              <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
-                Drag to orbit · pinch to zoom
-              </span>
+              {!embedded ? (
+                <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
+                  Drag to orbit · pinch to zoom
+                </span>
+              ) : null}
             </div>
-            <div ref={stageRef} className="h-[570px] w-full">
+            <div
+              ref={stageRef}
+              className={embedded ? "h-[calc(100svh-64px)] w-full" : "h-[570px] w-full"}
+            >
               {shouldMountStage ? (
                 <ArmStage
                   trace={trace}
@@ -1046,10 +1103,12 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
           </div>
 
           {/* Tactile Grasp Microscope HUD */}
-          <ArmGraspMicroscopeHUD
-            sample={trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null}
-            enabled={microscopeMode}
-          />
+          {!embedded ? (
+            <ArmGraspMicroscopeHUD
+              sample={trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null}
+              enabled={microscopeMode}
+            />
+          ) : null}
         </div>
 
         <div className="glass-card p-5 sm:p-6">
