@@ -177,12 +177,26 @@ async function loadWasmModule(
   // Next.js may bootstrap a module worker from a blob: URL. A root-relative
   // URL cannot be resolved against that href, but blob origins retain the
   // page's HTTP(S) origin.
-  const runtimeOrigin = new URL(globalThis.location.href).origin;
-  if (runtimeOrigin === "null")
+  const runtimeLocation = new URL(globalThis.location.href);
+  const isLocalFileRealm = runtimeLocation.protocol === "file:";
+  if (runtimeLocation.origin === "null" && !isLocalFileRealm) {
     throw new Error("WASM loader cannot resolve the runtime origin");
-  const runtimeBase = `${runtimeOrigin}/`;
-  const jsUrl = new URL(jsPath, runtimeBase).href;
-  const wasmUrl = new URL(wasmPath, runtimeBase).href;
+  }
+  // Bun's Worker test realm has no HTTP origin. Resolve its root-relative
+  // public assets from the file URL installed by the Bun test-worker wrapper.
+  // Keeping import.meta.url out of this client module is intentional:
+  // Turbopack treats any new URL(..., import.meta.url) expression as an asset
+  // import, including this test-only file-realm branch.
+  const runtimeBase = isLocalFileRealm
+    ? runtimeLocation.href
+    : `${runtimeLocation.origin}/`;
+  const resolveAssetUrl = (assetPath: string) =>
+    new URL(
+      isLocalFileRealm ? assetPath.replace(/^\/+/, "") : assetPath,
+      runtimeBase,
+    ).href;
+  const jsUrl = resolveAssetUrl(jsPath);
+  const wasmUrl = resolveAssetUrl(wasmPath);
   const jsText = await fetch(jsUrl, {
     signal: AbortSignal.timeout(10_000),
   }).then((r) => {
@@ -986,7 +1000,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 37;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.9";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.10";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1193,8 +1207,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v069/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v069/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0610/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0610/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -2290,9 +2304,9 @@ export interface HouseholdManipulationObjectiveReceipt {
   peakGripForceNewtons: number;
   everGrasped: boolean;
   releasedAfterTransport: boolean;
-  /** Raw schema-2 owner bit, retained so legacy-contract disagreement is visible. */
+  /** Placement bit reported by the version-gated owner kernel. */
   ownerReportedPlaced: boolean;
-  /** Collision-safe placement verdict enforced at the browser boundary. */
+  /** Collision-safe verdict recomputed at the browser boundary as a fail-closed check. */
   placed: boolean;
   completedSteps: number;
 }
