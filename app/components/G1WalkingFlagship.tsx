@@ -746,11 +746,11 @@ function buildG1Geometries(parsed: Record<string, G1ParsedMesh>): {
   return { geometries, material };
 }
 
-interface G1MeshState {
-  phase: "idle" | "loading" | "ready" | "failed";
-  geometries?: Record<string, THREE.BufferGeometry>;
-  material?: THREE.MeshStandardMaterial;
-}
+type G1MeshState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
+  | { phase: "failed" };
 
 function useG1Meshes(active: boolean): G1MeshState {
   const [state, setState] = useState<G1MeshState>({ phase: "idle" });
@@ -1149,6 +1149,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
+  // The full progress history lives in a ref so the head/body/tail downsample
+  // can see every generation from gen 0 to the current one. The state holds
+  // only the downsampled window (200 points max) so React re-renders are
+  // bounded and the convergence chart only sees what it can display.
+  const progressHistoryRef = useRef<ConvergencePoint[]>([]);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -1256,42 +1261,42 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else if (message.type === "progress") {
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
-        setProgressHistory((prev) => {
-          // Three-region downsampling: head (first 10 gens always shown), body
-          // (log-spaced in the middle so equal resolution per decade), and
-          // tail (last 10 gens always shown). This guarantees the user always
-          // sees the start, the trajectory shape, and the live progress —
-          // even on a 30k-gen run. The naive "FIFO at 200" cap lost everything
-          // before gen 29800; pure log-spacing collapses the first 150 points
-          // to gens 0-10 which is also too dense. Head+body+tail balances both.
+        setProgressHistory((_prev) => {
+          // The full history lives in the ref; we downsample it here and
+          // hand React a 200-point window. The ref grows monotonically; the
+          // state is bounded.
           const HISTORY_CAP = 200;
           const HEAD = 10;
           const TAIL = 10;
-          const next: ConvergencePoint = {
+          const point: ConvergencePoint = {
             generation: message.generation,
             bestObjective: message.bestObjective,
             sigma: message.sigma,
           };
-          const candidate = [...prev, next];
-          if (candidate.length <= HISTORY_CAP) return candidate;
-          const n = candidate.length;
+          progressHistoryRef.current.push(point);
+          const full = progressHistoryRef.current;
+          if (full.length <= HISTORY_CAP) return [...full];
+          // Head (oldest HEAD points), body (log-spaced middle), tail
+          // (newest TAIL points). The body uses log spacing so a 30k-gen
+          // run shows roughly equal resolution per decade: gens 0-10, 10-100,
+          // 100-1k, 1k-10k, 10k-30k.
+          const n = full.length;
           const kept: ConvergencePoint[] = [];
-          for (let k = 0; k < HEAD; k++) kept.push(candidate[Math.min(k, n - 1)]);
+          for (let k = 0; k < HEAD; k++) kept.push(full[k]);
           const bodyCount = HISTORY_CAP - HEAD - TAIL;
           const bodyStart = HEAD;
           const bodyEnd = n - TAIL;
           if (bodyCount > 0 && bodyEnd > bodyStart) {
-            const lo = Math.log(bodyStart + 1);  // +1 to avoid log(0)
+            const lo = Math.log(bodyStart + 1);
             const hi = Math.log(bodyEnd);
             for (let k = 0; k < bodyCount; k++) {
               const t = bodyCount > 1 ? k / (bodyCount - 1) : 0;
               const idx = Math.round(Math.exp(lo + t * (hi - lo))) - 1;
-              kept.push(candidate[Math.max(0, Math.min(n - 1, idx))]);
+              kept.push(full[Math.max(0, Math.min(n - 1, idx))]);
             }
           }
-          // Always preserve the very newest point as the final slot.
-          kept.push(candidate[n - 1]);
-          return kept.slice(0, HISTORY_CAP);
+          for (let k = 0; k < TAIL; k++) kept.push(full[n - TAIL + k]);
+          return kept;
         });
         setStatus(
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
