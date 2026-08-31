@@ -10,6 +10,7 @@ import {
   conservativeSegmentClearanceToOBB,
   distanceToOBB,
   projectPointOutOfOBB,
+  sweptSphereOBBEntryPoint,
   type MultiObstacleSceneConfig,
 } from "../lib/houseMultiObstacleKernel";
 import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
@@ -39,6 +40,7 @@ import {
   Wrench,
   Download,
 } from "lucide-react";
+import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
@@ -378,9 +380,23 @@ function ArmRig({
   const contactMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const playbackSeconds = useRef(0);
   const sampleIndex = useRef(0);
-  const [currentSample, setCurrentSample] = useState<HouseholdManipulationTraceSample | null>(
+  const publishedSampleIndex = useRef(-1);
+  // Track the previous frame's projected link positions so swept-volume CCD
+  // catches outside-to-inside tunneling instead of teleporting the link to a
+  // deep-interior closest point.
+  const previousProjectedPositions = useRef<
+    Array<[number, number, number]>
+  >([]);
+  const [currentSample, setCurrentSample] =
+    useState<HouseholdManipulationTraceSample | null>(
     () => trace.samples[0] ?? null
   );
+  useEffect(() => {
+    playbackSeconds.current = 0;
+    sampleIndex.current = 0;
+    publishedSampleIndex.current = -1;
+    previousProjectedPositions.current = [];
+  }, [trace]);
   // Boundary volumes the kernel's objective already avoids: the counter slab,
   // the task's backdrop wall, and the declared obstacle box. The checker below
   // flags visible penetrations of exactly these volumes — presentation-layer
@@ -448,12 +464,16 @@ function ArmRig({
     if (samples.length === 0) return;
     const duration = samples.at(-1)?.timeSeconds ?? 0;
     if (reduceMotion) {
+      if (sampleIndex.current !== samples.length - 1) {
+        previousProjectedPositions.current = [];
+      }
       sampleIndex.current = samples.length - 1;
     } else if (duration > 0) {
       playbackSeconds.current =
         (playbackSeconds.current + Math.min(deltaSeconds, 0.1) * 0.72) % duration;
       if (samples[sampleIndex.current]?.timeSeconds > playbackSeconds.current) {
         sampleIndex.current = 0;
+        previousProjectedPositions.current = [];
       }
       while (
         sampleIndex.current + 1 < samples.length &&
@@ -463,6 +483,10 @@ function ArmRig({
       }
     }
     const sample: HouseholdManipulationTraceSample = samples[sampleIndex.current];
+    if (publishedSampleIndex.current !== sampleIndex.current) {
+      publishedSampleIndex.current = sampleIndex.current;
+      setCurrentSample(sample);
+    }
     // SOTA PENETRATION PROJECTION (visualization-layer): the kernel's IK does
     // not check link-vs-furniture collision, so CMA-ES can place a link
     // inside a coffee cup / chair / wall. We compute, for each link
@@ -493,6 +517,25 @@ function ArmRig({
           qy = projected.point[1];
           qz = projected.point[2];
           wasProjected = true;
+        }
+      }
+      // If a previous-frame projected position exists, test the swept segment
+      // against every OBB and stop at the entry point of any detected hit.
+      const previous = previousProjectedPositions.current[link];
+      if (previous) {
+        for (const obb of multiObstacleScene.obstacles) {
+          const ccd = sweptSphereOBBEntryPoint(
+            previous,
+            [qx, qy, qz],
+            ARM_LINK_CLEARANCE_METERS,
+            obb,
+          );
+          if (ccd.wasHit && ccd.entryPoint) {
+            qx = ccd.entryPoint[0];
+            qy = ccd.entryPoint[1];
+            qz = ccd.entryPoint[2];
+            wasProjected = true;
+          }
         }
       }
       projectedPositions[link] = [qx, qy, qz];
@@ -539,6 +582,7 @@ function ArmRig({
       segment.quaternion.copy(scratch.quaternion);
       segment.scale.set(1, length, 1);
     }
+    previousProjectedPositions.current = projectedPositions;
     if (objectRef.current) applyOwnerPose(objectRef.current, sample.objectPose);
     const gripperGeometry = resolveRenderedGripperContactGeometry({
       commandedGripperWidthM: sample.gripperWidthMeters,
@@ -1559,7 +1603,8 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                   physicsDebug={physicsDebug}
                 />
               ) : null}
-            </div>
+              <FreeFlyHintBanner visible={cameraMode === "fly"} />
+             </div>
           </div>
 
           {/* Tactile Grasp Microscope HUD */}

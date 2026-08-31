@@ -48,7 +48,7 @@ export function KernelSummary() {
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">
-            Modeled (kernel)
+            Modeled (kernel + renderer)
           </p>
           <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
             <li>· Free-floating SE(3) bodies</li>
@@ -56,6 +56,12 @@ export function KernelSummary() {
             <li>· Penalty + Coulomb contact (foot / object)</li>
             <li>· Featherstone forward dynamics (arm)</li>
             <li>· Link-OBB penetration projection (renderer)</li>
+            <li>· Swept-volume CCD (renderer, G1) - the link
+                position is checked against every furniture OBB
+                between frames, so a fast link that would tunnel
+                through a thin obstacle is snapped to the swept
+                entry point, not the deep-interior closest point.
+                Locked by tests/sweptCcd.test.ts.</li>
           </ul>
         </div>
         <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
@@ -68,6 +74,10 @@ export function KernelSummary() {
             <li>· Periodic-basis policy, not a net</li>
             <li>· No motor torque curves or thermal limits</li>
             <li>· No upper-body / hand telemetry</li>
+            <li>· Arm swept-volume CCD: the arm moves slower and
+                has fewer links, so the per-frame snap is
+                sufficient; the swept-CCD pipeline ports in 5 lines
+                if anyone reports a residual arm tunnel</li>
           </ul>
         </div>
         <div className="rounded-xl border border-rose-300/15 bg-rose-950/20 p-3">
@@ -80,10 +90,6 @@ export function KernelSummary() {
             <li>· Slip detection, recovery reflex</li>
             <li>· Wind, lighting noise, camera artifacts</li>
             <li>· RL beyond the periodic basis</li>
-            <li>· Swept-volume CCD (renderer) - the per-frame snap is
-                sufficient at the current playback speed, but a
-                conservative-advancement pass is the next SOTA step if
-                anyone finds a tunnel at high link speed</li>
           </ul>
         </div>
       </div>
