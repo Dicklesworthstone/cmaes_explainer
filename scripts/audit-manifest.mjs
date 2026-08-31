@@ -3,9 +3,11 @@
 // /humanoid, /receipts (the four user-facing routes), and the smoke failure
 // on / may not be the only site of problems. The manifest gives the audit
 // reproducible per-route coverage and produces one evidence dir per route.
-export default [
+const routes = [
   { name: "home", path: "/" },
   { name: "humanoid", path: "/humanoid" },
   { name: "arm", path: "/arm" },
   { name: "receipts", path: "/receipts" },
 ];
+
+export default routes;

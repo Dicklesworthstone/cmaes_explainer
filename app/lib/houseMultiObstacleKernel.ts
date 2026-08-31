@@ -1,5 +1,3 @@
-
-
 /**
  * Find a position inside the house where the robot is provably clear of
  * every obstacle (including the interior/exterior perimeter walls). Used
@@ -13,20 +11,37 @@ export function findClearSpawnPosition(
     maxX: 3.7,
     minZ: -4.4,
     maxZ: 5.2,
-  }
+  },
 ): [number, number, number] {
+  if (!Number.isFinite(safeRadius) || safeRadius <= 0) {
+    throw new Error("spawn safeRadius must be finite and greater than zero");
+  }
+  if (
+    !Number.isFinite(bounds.minX) ||
+    !Number.isFinite(bounds.maxX) ||
+    !Number.isFinite(bounds.minZ) ||
+    !Number.isFinite(bounds.maxZ) ||
+    bounds.minX >= bounds.maxX ||
+    bounds.minZ >= bounds.maxZ
+  ) {
+    throw new Error("spawn bounds must be finite and have positive area");
+  }
   // Coarse grid search: the room interior is only a few square meters; a
   // 0.3 m step is plenty. The first cleared point wins.
   for (let z = bounds.maxZ; z >= bounds.minZ; z -= 0.3) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 0.3) {
-      const { isColliding } = clampPositionAgainstHouseCollisions([x, 0.75, z], obstacles, safeRadius, bounds);
+      const { isColliding } = clampPositionAgainstHouseCollisions(
+        [x, 0.75, z],
+        obstacles,
+        safeRadius,
+        bounds,
+      );
       if (!isColliding) {
         return [x, 0.75, z];
       }
     }
   }
-  // Fall back to bounds center if the grid sweep fails (shouldn't happen).
-  return [0, 0.75, 0];
+  throw new Error("no collision-free robot spawn exists inside the declared bounds");
 }
 // Multi-Obstacle Household Scene & Furniture Collision Kernel (cmaes-u53 / cmaes-4vs / cmaes-1yu).
 //
@@ -274,7 +289,7 @@ export function createHouseWallObstacles(
 
     const ux = dx / length;
     const uz = dz / length;
-    const yaw = -Math.atan2(dz, dx);
+    const yaw = Math.atan2(dz, dx);
     solidIntervals.forEach((interval, segmentIndex) => {
       const segmentLength = interval.end - interval.start;
       if (segmentLength <= 1e-6) return;

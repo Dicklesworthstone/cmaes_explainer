@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { pathIsCollisionFree, planWaypointPath } from "../app/lib/kmrWaypointNav";
+import {
+  createKmrPlanarSdf,
+  pathIsCollisionFree,
+  planWaypointPath,
+} from "../app/lib/kmrWaypointNav";
 import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 
 const CLEARANCE_RADIUS = 0.18;
@@ -42,6 +46,21 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
     expect(plan.path.totalDistanceMeters).toBeGreaterThan(2.0);
     expect(plan.path.minimumClearanceMeters).toBeGreaterThanOrEqual(0.0);
     expect(plan.path.planner).toBe("clearance-value-iteration");
+
+    const sdf = createKmrPlanarSdf([wall3D]);
+    let denseMinimum = Number.POSITIVE_INFINITY;
+    for (let segment = 1; segment < plan.path.points.length; segment += 1) {
+      const from = plan.path.points[segment - 1];
+      const to = plan.path.points[segment];
+      const samples = Math.max(1, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) / 0.005));
+      for (let index = 0; index <= samples; index += 1) {
+        const t = index / samples;
+        const x = from[0] + (to[0] - from[0]) * t;
+        const y = from[1] + (to[1] - from[1]) * t;
+        denseMinimum = Math.min(denseMinimum, sdf(x, y) - 0.32);
+      }
+    }
+    expect(plan.path.minimumClearanceMeters).toBeCloseTo(denseMinimum, 2);
   });
 
   test("pathIsCollisionFree: a path that misses the wall is free", () => {
@@ -70,5 +89,40 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
         [wall3D],
       ),
     ).toThrow(/goal does not clear/);
+  });
+
+  test("rejects an out-of-bounds start instead of clamping it to a different grid cell", () => {
+    expect(() =>
+      planWaypointPath(
+        { x: -5, y: 0, theta: 0 },
+        { x: 1, y: 0 },
+        [],
+      ),
+    ).toThrow(/start lies outside/);
+  });
+
+  test("rejects empty or non-finite externally supplied paths", () => {
+    expect(
+      pathIsCollisionFree(
+        {
+          points: [],
+          totalDistanceMeters: 0,
+          minimumClearanceMeters: 0,
+          planner: "clearance-value-iteration",
+        },
+        [],
+      ),
+    ).toBe(false);
+    expect(
+      pathIsCollisionFree(
+        {
+          points: [[Number.NaN, 0]],
+          totalDistanceMeters: 0,
+          minimumClearanceMeters: 0,
+          planner: "clearance-value-iteration",
+        },
+        [],
+      ),
+    ).toBe(false);
   });
 });

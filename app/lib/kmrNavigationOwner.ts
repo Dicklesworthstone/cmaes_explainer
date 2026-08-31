@@ -71,6 +71,10 @@ function wrapAngle(angle: number): number {
   return wrapped;
 }
 
+function finitePositive(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
+}
+
 function segmentIsClear(
   from: Vec2,
   to: Vec2,
@@ -111,6 +115,47 @@ export class KmrNavigationOwner {
     if (path.points.length === 0) throw new Error("KMR owner requires a non-empty path");
     this.config = { ...DEFAULT_CONFIG, ...config };
     if (
+      !finitePositive(this.config.dtSeconds) ||
+      !finitePositive(this.config.cruiseSpeedMps) ||
+      !finitePositive(this.config.headingGainPerSecond) ||
+      !finitePositive(this.config.waypointToleranceMeters) ||
+      !finitePositive(this.config.clearanceRadiusMeters)
+    ) {
+      throw new Error("KMR owner requires finite positive integration and clearance settings");
+    }
+    if (
+      !this.config.geometry ||
+      !finitePositive(this.config.geometry.baseLengthMeters) ||
+      !finitePositive(this.config.geometry.baseWidthMeters) ||
+      !finitePositive(this.config.geometry.baseHeightMeters) ||
+      !finitePositive(this.config.geometry.wheelDiameterMeters) ||
+      !finitePositive(this.config.geometry.wheelbaseXMeters) ||
+      !finitePositive(this.config.geometry.wheelbaseYMeters)
+    ) {
+      throw new Error("KMR owner requires finite positive mecanum geometry");
+    }
+    if (
+      !Number.isFinite(initialPose.x) ||
+      !Number.isFinite(initialPose.y) ||
+      !Number.isFinite(initialPose.theta)
+    ) {
+      throw new Error("KMR owner requires a finite initial pose");
+    }
+    if (
+      path.points.some(
+        (point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]),
+      )
+    ) {
+      throw new Error("KMR owner requires finite path coordinates");
+    }
+    const pathStart = path.points[0];
+    if (
+      Math.hypot(initialPose.x - pathStart[0], initialPose.y - pathStart[1]) >
+      this.config.waypointToleranceMeters
+    ) {
+      throw new Error("KMR owner initial pose does not match the supplied path start");
+    }
+    if (
       !pathIsCollisionFree(
         path,
         obstacles,
@@ -122,6 +167,9 @@ export class KmrNavigationOwner {
     this.pose = { ...initialPose };
     this.path = path;
     this.sdf = createKmrPlanarSdf(obstacles);
+    if (this.sdf(initialPose.x, initialPose.y) < this.config.clearanceRadiusMeters) {
+      throw new Error("KMR owner initial pose does not clear the obstacle field");
+    }
     this.waypointIndex = path.points.length > 1 ? 1 : 0;
     this.minimumClearanceMeters =
       this.sdf(initialPose.x, initialPose.y) - this.config.clearanceRadiusMeters;

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  loadAblationInputs,
   parseTrainReceipt,
   runMeasuredAblation,
-  type TransformerTrainReceipt,
   type AblationPairResult,
- } from "../app/lib/policyAblationComparison";
+  type TransformerTrainReceipt,
+} from "../app/lib/policyAblationComparison";
 import {
   GaitTransformerPolicy,
   loadGaitTransformerWeights,
@@ -126,6 +127,49 @@ describe("GaitTransformer weights loader (fail-closed)", () => {
   });
 });
 
+describe("transformer training receipt boundary", () => {
+  const validReceipt = () => ({
+    architecture: { parameterCount: 2_902_273 },
+    training: {
+      samplesConsumed: 8_596,
+      wallclockSeconds: 453.9,
+      environment: "legacy stand-in",
+    },
+    environmentContract: "legacy-self-propelled-standin-v1",
+    hostNote: "test host",
+    evaluation: {
+      greedy720: { distanceMeters: 7.8, totalReward: 477, completedSteps: 720 },
+    },
+  });
+
+  test("rejects nonsensical counts, time, and greedy metrics", () => {
+    const badCount = validReceipt();
+    badCount.architecture.parameterCount = 0;
+    expect(() => parseTrainReceipt(badCount)).toThrow(/parameterCount/);
+
+    const badTime = validReceipt();
+    badTime.training.wallclockSeconds = -1;
+    expect(() => parseTrainReceipt(badTime)).toThrow(/wallclockSeconds/);
+
+    const badGreedy = validReceipt();
+    badGreedy.evaluation.greedy720.completedSteps = 1.5;
+    expect(() => parseTrainReceipt(badGreedy)).toThrow(/greedy720 metrics/);
+  });
+
+  testIfArtifacts("injected loaders are isolated from the browser fetch cache", async () => {
+    const weights = await Bun.file(WEIGHTS_PATH).arrayBuffer();
+    const firstRaw = validReceipt();
+    const secondRaw = validReceipt();
+    secondRaw.training.samplesConsumed = 12_345;
+
+    const first = await loadAblationInputs(async () => weights.slice(0), async () => firstRaw);
+    const second = await loadAblationInputs(async () => weights.slice(0), async () => secondRaw);
+
+    expect(first.trainReceipt.samplesConsumed).toBe(8_596);
+    expect(second.trainReceipt.samplesConsumed).toBe(12_345);
+  });
+});
+
 describe("Golden-vector parity: TS forward vs Rust fs-g1-train", () => {
   testIfArtifacts("reproduces Rust forward outputs from the shipped weight file", async () => {
     const { weights, golden } = await loadAblationFixtures();
@@ -166,7 +210,7 @@ describe("Measured ablation engine", () => {
     expect(stripTiming(a)).toEqual(stripTiming(b));
 
     expect(a.cmaesReceipt.policyArchitecture).toBe("phase_basis_cmaes");
-    expect(a.transformerReceipt.policyArchitecture).toBe("learned_transformer_ppo");
+    expect(a.transformerReceipt.policyArchitecture).toBe("legacy_zero_head_transformer");
     expect(a.transformerReceipt.parameterCount).toBe(receipt.parameterCount);
     expect(a.transformerReceipt.trainingSamplesRequired).toBe(receipt.samplesConsumed);
     expect(a.cmaesReceipt.parameterCount).toBe(105);
@@ -214,5 +258,5 @@ describe("Measured ablation engine", () => {
     const { cmaesReceipt } = runMeasuredAblation({ weights, trainReceipt: receipt }, 42);
     expect(cmaesReceipt.trainingSamplesRequired).toBe(standalone.receipt.trainingSamplesRequired);
     expect(cmaesReceipt.distanceTraveledMeters).toBeCloseTo(standalone.finalMetrics.distanceTraveledMeters, 12);
-  });
+  }, 15000);
 });

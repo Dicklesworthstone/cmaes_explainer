@@ -61,8 +61,9 @@ export interface G1StepResult {
 }
 
 export class G1TrainEnv {
-  public config: Required<G1EnvConfig>;
+  public readonly config: Required<G1EnvConfig>;
   private stepCount = 0;
+  private terminated = false;
   private currentPosX = 0.0;
   private currentPosZ = 0.0;
   private currentHeight = 0.75;
@@ -84,10 +85,32 @@ export class G1TrainEnv {
       fallHeightThreshold: config.fallHeightThreshold ?? 0.40,
       fallTiltThresholdRad: config.fallTiltThresholdRad ?? 0.85,
     };
+    if (!Number.isSafeInteger(this.config.maxSteps) || this.config.maxSteps < 1) {
+      throw new Error("G1TrainEnv maxSteps must be a positive safe integer");
+    }
+    if (!Number.isFinite(this.config.dt) || this.config.dt <= 0) {
+      throw new Error("G1TrainEnv dt must be finite and greater than zero");
+    }
+    if (!Number.isFinite(this.config.targetSpeedMps) || this.config.targetSpeedMps < 0) {
+      throw new Error("G1TrainEnv targetSpeedMps must be finite and non-negative");
+    }
+    if (!Number.isFinite(this.config.fallHeightThreshold) || this.config.fallHeightThreshold < 0) {
+      throw new Error("G1TrainEnv fallHeightThreshold must be finite and non-negative");
+    }
+    if (
+      !Number.isFinite(this.config.fallTiltThresholdRad) ||
+      this.config.fallTiltThresholdRad <= 0
+    ) {
+      throw new Error("G1TrainEnv fallTiltThresholdRad must be finite and greater than zero");
+    }
   }
 
   public reset(seed = 42): G1Observation {
+    // The stand-in is deterministic today. Keep the Gym-compatible seed in
+    // the API without pretending it introduces stochasticity.
+    void seed;
     this.stepCount = 0;
+    this.terminated = false;
     this.currentPosX = 0.0;
     this.currentPosZ = 0.0;
     this.currentHeight = 0.75;
@@ -105,6 +128,9 @@ export class G1TrainEnv {
   }
 
   public step(action: number[]): G1StepResult {
+    if (this.terminated) {
+      throw new Error("G1TrainEnv episode is done; call reset() before stepping again");
+    }
     this.stepCount++;
     const dt = this.config.dt;
     this.phase = (this.phase + 2.0 * Math.PI * 1.5 * dt) % (2.0 * Math.PI);
@@ -176,6 +202,7 @@ export class G1TrainEnv {
       || tilt > this.config.fallTiltThresholdRad;
     const timeout = this.stepCount >= this.config.maxSteps;
     const done = fall || timeout;
+    this.terminated = done;
 
     // Decomposed dense reward
     const rProgress = 15.0 * deltaX;

@@ -21,6 +21,12 @@ function receiptAt(x: number): KmrNavigationReceipt {
   };
 }
 
+function receiptAtPose(x: number, theta: number): KmrNavigationReceipt {
+  const receipt = receiptAt(x);
+  receipt.pose.theta = theta;
+  return receipt;
+}
+
 describe("live KMR → household contact/LCP coupling", () => {
   test("a commanded base contact pushes the finite-mass chair", () => {
     const coupling = createKmrHouseholdPhysicsCoupling(
@@ -53,5 +59,19 @@ describe("live KMR → household contact/LCP coupling", () => {
     }
     expect(receipt.cumulativeBaseChairContacts).toBe(0);
     expect(receipt.chairPositionMeters[0]).toBeCloseTo(3, 9);
+  });
+
+  test("unwraps heading across ±pi before deriving base angular velocity", () => {
+    const coupling = createKmrHouseholdPhysicsCoupling(
+      { x: 0, y: 0, theta: Math.PI - 0.01 },
+      [3, 0],
+    );
+    const receipt = stepKmrHouseholdPhysics(
+      coupling,
+      receiptAtPose(0, -Math.PI + 0.01),
+    );
+
+    expect(receipt.baseAngularVelocityRadPerSecond).toBeCloseTo(1.2, 9);
+    expect(Math.abs(receipt.baseAngularVelocityRadPerSecond)).toBeLessThan(2);
   });
 });

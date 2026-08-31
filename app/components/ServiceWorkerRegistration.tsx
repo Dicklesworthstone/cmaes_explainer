@@ -20,7 +20,6 @@ export function ServiceWorkerRegistration() {
         // Soft-fail: the page still works without the SW (mesh parse runs in
         // the main thread on every visit, just without the per-file network
         // cache). Log once and move on.
-        // eslint-disable-next-line no-console
         console.warn("[sw] registration failed", err);
       });
     };

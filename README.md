@@ -40,9 +40,12 @@ Open <http://localhost:3000>.
 - The low-dimensional visual lab, whose Rust kernel is admitted only after
   complete-trajectory parity with the TypeScript reference across the tested
   landscape and option matrix.
-- A 128-D KUKA-style household arm that learns finite-pad pick/lift/transport/
-  place policies for a mug, remote, and trowel. Frankensim integrates the free
-  object and reciprocal contact wrench and routes obstacle, object, and
+- A 128-D KUKA-style household arm that evaluates finite-pad pick/lift/
+  transport/place policies for a mug, remote, and trowel. The current
+  curriculum certifies collision-safe placement for the mug and remote; the
+  trowel reaches the caddy tolerance but is honestly refused because its
+  trajectory intersects the collision envelope. Frankensim integrates the
+  free object and reciprocal contact wrench and routes obstacle, object, and
   non-adjacent self checks through certified convex-query owners.
 - A separately rendered KUKA KMR mobile-base rung. A 64-ray planar scan and
   global clearance value field consume the actual X/Z furniture footprints

@@ -64,6 +64,31 @@ describe("color palette: interactive LaTeX helpers", () => {
     expect(b).toBe(a);
   });
 
+  test("wrapInteractiveLatexTerm full output is identical across all variants (modulo class and hex)", () => {
+    // The wrapping format is fixed: \htmlData{var=<id>}{\htmlClass{...}}{\textcolor{<hex>}{<symbol>}}}.
+    // Every variant must produce the same shape with only the variant's
+    // class token and hex swapped in. This is the byte-exact contract the
+    // MathJax hydration layer depends on: any future change to the wrapping
+    // or to a single variant's hex is caught at the variant that moved.
+    const allVariants: Array<[string, string]> = [
+      ["crimson", "#f87171"],
+      ["sapphire", "#60a5fa"],
+      ["emerald", "#34d399"],
+      ["amber", "#fbbf24"],
+      ["amethyst", "#c084fc"],
+      ["cyan", "#22d3ee"],
+      ["coral", "#fb923c"],
+      ["rose", "#fb7185"],
+      ["teal", "#2dd4bf"],
+    ];
+    for (const [variant, hex] of allVariants) {
+      const out = wrapInteractiveLatexTerm("k", "K", variant as keyof typeof COLOR_STYLES);
+      expect(out).toBe(
+        `\\htmlData{var=k}{\\htmlClass{eq-term eq-term-${variant} eq-term-k}{\\textcolor{${hex}}{K}}}`,
+      );
+    }
+  });
+
   test("prepareInteractiveLatex prefers the prebuilt colorizedLatex when present", () => {
     const equation: ColorizedEquation = {
       id: "test-equation",

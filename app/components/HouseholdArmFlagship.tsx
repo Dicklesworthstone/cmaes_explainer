@@ -130,7 +130,7 @@ const TASK_COPY: Record<
   },
   "backyard-trowel": {
     title: "Backyard trowel",
-    short: "Move a hand tool into its caddy",
+    short: "Attempt caddy placement; collision gate decides",
     setting: "backyard",
     accent: "text-emerald-300",
     icon: TreePine,
@@ -960,31 +960,6 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
-
-// On the first trace load, seed armDragTarget to a clear-of-obstacles pose
-// so the arm does not start inside a wall or the table. We use the first
-// sample's object position as the seed (a real reachable target on the
-// table) and re-clamp via the same continuous-collision primitive that
-// the dragger uses on every pointerMove — the resulting position is
-// geometrically provable clear of every obstacle and above the table.
-useEffect(() => {
-  if (armDragTarget !== null) return;
-  if (!trace) return;
-  const seed = trace.samples[0];
-  if (!seed) return;
-  const raw: [number, number, number] = [
-    seed.objectPose.position[0],
-    seed.objectPose.position[2],
-    -seed.objectPose.position[1],
-  ];
-  const { clampedTarget } = clampArmTargetPosition(raw, armHouseScene.obstacles, 0.78, 0.04);
-  // Async-defer the setState so it doesn't fire synchronously inside the
-  // effect body (react-hooks/set-state-in-effect). The seed-clamp result is
-  // determined entirely by `trace` and `armHouseScene.obstacles`, both of
-  // which are stable in this effect's scope; the microtask defer is a
-  // pure scheduling concern, not a behavior change.
-  Promise.resolve().then(() => setArmDragTarget(clampedTarget));
-}, [trace, armDragTarget]);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
     isColliding: boolean;
@@ -1125,7 +1100,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
       setStatus(`Loading the ${TASK_COPY[nextTask].setting} benchmark…`);
       workerRef.current.postMessage({ type: "preview", task: nextTask });
     },
-    [busy, task]
+    [task]
   );
 
   const objectiveDelta = trace && curriculumTrace

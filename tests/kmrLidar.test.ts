@@ -91,6 +91,17 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     expect(maxA - minA).toBeCloseTo(fovRadians, 5);
   });
 
+  test("rejects malformed sensor contracts", () => {
+    expect(() => scanLidar(0, 0, [], { ...cfg, numRays: 0 })).toThrow(/numRays/);
+    expect(() => scanLidar(0, 0, [], { ...cfg, maxRangeMeters: 0.05 })).toThrow(
+      /maxRangeMeters/,
+    );
+    expect(() => scanLidar(Number.NaN, 0, [], cfg)).toThrow(/base pose/);
+    expect(() =>
+      lidarToCostmap2D({ rays: [], baseXMeters: 0, baseYMeters: 0 }, cfg),
+    ).toThrow(/at least one ray/);
+  });
+
   test("lidarToCostmap2D produces a centered grid with the right dimensions", () => {
     const scan = scanLidar(0, 0, [], cfg);
     const cm = lidarToCostmap2D(scan, cfg, 8, 8, 0.1);
@@ -105,7 +116,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     }
   });
 
-  test("lidarToCostmap2D cells past a detected wall are marked occupied", () => {
+  test("lidarToCostmap2D marks cells past a detected wall as unknown", () => {
     const wall: OrientedBoundingBox = {
       id: "front-wall",
       name: "front-wall",
@@ -116,7 +127,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     const scan = scanLidar(0, 0, [wall], cfg);
     const cm = lidarToCostmap2D(scan, cfg, 8, 8, 0.1);
     // The wall is at x=3 (front face at x=2.9). A cell BEYOND the wall
-    // (e.g. x=3.3, column 73) should be marked occupied because the
+    // (e.g. x=3.3, column 73) should be marked unknown because the
     // ray stopped before reaching it.
     // Cell center x=(i-40)*0.1, so x=3.3 is at i=73.
     const cellBeyond = cm.occupancy[40][73];

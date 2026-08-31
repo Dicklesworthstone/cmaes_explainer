@@ -1176,6 +1176,26 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [shoveActive, setShoveActive] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
+  // Spawn-safe: on first trace load, if the user has not yet
+  // dragged the robot, seed robotDragOffset to a known-clear position
+  // via the same continuous-collision primitive the ragdoll uses on every
+  // pointerMove — the G1 cannot spawn inside a wall or piece of
+  // furniture. The spawn is provable because findClearSpawnPosition
+  // iterates a coarse grid over the house bounds and returns the first
+  // interior point at which clampPositionAgainstHouseCollisions says
+  // isColliding = false with a 0.35 m safety radius (larger than any body
+  // collider sphere so the G1 is provably clear of every obstacle).
+  // Async-defer the setState so the effect body does not fire a
+  // synchronous setState inside another effect (react-hooks).
+  useEffect(() => {
+    if (robotDragOffset !== null) return;
+    if (!trace) return;
+    const pelvis = ownerToThree(trace.samples[0].linkPoses[0].position);
+    const safe = findClearSpawnPosition(houseSceneData.obstacles, 0.35);
+    Promise.resolve().then(() =>
+      setRobotDragOffset([safe[0] - pelvis[0], 0, safe[2] - pelvis[2]])
+    );
+  }, [trace, robotDragOffset]);
   const [dragCollisionState, setDragCollisionState] = useState<{
     isColliding: boolean;
     obstacleName: string | null;

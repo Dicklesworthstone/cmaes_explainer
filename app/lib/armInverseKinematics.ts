@@ -1,6 +1,6 @@
-// Jacobian Damped Least Squares (DLS) Inverse Kinematics & Contact Physics Engine for KUKA iiwa14.
-// Enforces 7-DoF joint limits, table/counter surface collision clamping, Ferrari-Canny Grasp Wrench Space (GWS),
-// and multi-object household manipulation physics.
+// Auxiliary Jacobian Damped Least Squares (DLS) reachability and contact
+// helpers for the household-arm UI. This reduced procedural chain is not the
+// source-bound FrankenSim iiwa 7 R800 owner and must not certify placement.
 
 import { distanceToOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
@@ -9,8 +9,8 @@ export interface KukaJointLimits {
   max: number;
 }
 
-// Pinned physical joint limits of KUKA LBR iiwa 14 R820 (radians)
-export const KUKA_IIWA14_LIMITS: KukaJointLimits[] = [
+// Procedural 7-DoF joint bounds used by the browser-side reachability lens.
+export const KUKA_AUXILIARY_JOINT_LIMITS: KukaJointLimits[] = [
   { min: -2.96, max: 2.96 }, // Joint 1: Base yaw (A1)
   { min: -2.09, max: 2.09 }, // Joint 2: Shoulder pitch (A2)
   { min: -2.96, max: 2.96 }, // Joint 3: Shoulder roll (A3)
@@ -20,7 +20,10 @@ export const KUKA_IIWA14_LIMITS: KukaJointLimits[] = [
   { min: -3.05, max: 3.05 }, // Joint 7: Flange yaw (A7)
 ];
 
-// DH / Link dimension offsets for iiwa14 (meters)
+/** @deprecated Use KUKA_AUXILIARY_JOINT_LIMITS; this is not the arm owner. */
+export const KUKA_IIWA14_LIMITS = KUKA_AUXILIARY_JOINT_LIMITS;
+
+// Reduced procedural link offsets (meters), not a URDF/DH source binding.
 export const KUKA_LINK_LENGTHS = {
   baseHeight: 0.36,
   upperArm: 0.42,
@@ -94,7 +97,7 @@ export interface KukaArmPose {
 }
 
 /**
- * Computes forward kinematics for the 7-DoF KUKA iiwa14 arm.
+ * Computes the reduced browser-side 7-DoF forward-kinematics surrogate.
  */
 export function computeKukaFK(
   angles: number[],
@@ -158,8 +161,9 @@ export function computeKukaFK(
 }
 
 /**
- * Analytical & numerical Damped Least Squares (DLS) Inverse Kinematics solver for KUKA iiwa14.
- * Computes exact joint angles for arbitrary 3D target reach with sub-millimeter precision.
+ * Numerical Damped Least Squares (DLS) solver for the reduced auxiliary chain.
+ * It is a UI reachability probe with a 2 mm iteration stop, not exact IK or a
+ * source-bound guarantee for the FrankenSim iiwa 7 R800 owner.
  */
 export function solveKukaIK(
   targetPos: [number, number, number],
@@ -245,8 +249,8 @@ export function solveKukaIK(
       const j = activeJoints[colIdx];
       angles[j] += Math.max(-0.4, Math.min(0.4, dq));
       angles[j] = Math.max(
-        KUKA_IIWA14_LIMITS[j].min,
-        Math.min(KUKA_IIWA14_LIMITS[j].max, angles[j])
+        KUKA_AUXILIARY_JOINT_LIMITS[j].min,
+        Math.min(KUKA_AUXILIARY_JOINT_LIMITS[j].max, angles[j])
       );
     }
   }
@@ -259,10 +263,11 @@ export function solveKukaIK(
  * and outside all obstacle OBBs (zero penetration guarantee).
  */
 /**
- * Lightweight reachability probe: runs a short 30-iteration IK attempt
+ * Lightweight, non-certifying reachability probe: runs a short 30-iteration IK attempt
  * and reports whether the end-effector converged below 5 cm. Use this
  * alongside the collision clamp so the operator cannot drag the target
- * outside the arm's reachable workspace.
+ * outside the procedural workspace. Placement success still comes exclusively
+ * from the decoded FrankenSim owner receipt.
  */
 export function isTargetKukaReachable(
   targetPos: [number, number, number],

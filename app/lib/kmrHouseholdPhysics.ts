@@ -27,6 +27,7 @@ export interface KmrHouseholdPhysicsCoupling {
 
 export interface KmrHouseholdPhysicsReceipt {
   owner: "household-contact-lcp-ts";
+  baseAngularVelocityRadPerSecond: number;
   chairPositionMeters: [number, number, number];
   chairVelocityMps: [number, number, number];
   chairDisplacementMeters: number;
@@ -35,6 +36,13 @@ export interface KmrHouseholdPhysicsReceipt {
   lcpConverged: boolean;
   lcpIterations: number;
   lcpMaxResidual: number;
+}
+
+function shortestAngularDelta(from: number, to: number): number {
+  let delta = to - from;
+  while (delta > Math.PI) delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;
+  return delta;
 }
 
 function groundBody(): RigidBody {
@@ -135,7 +143,7 @@ export function stepKmrHouseholdPhysics(
   base.angularVelocity = [
     0,
     0,
-    (navigation.pose.theta - coupling.previousPose.theta) / dt,
+    shortestAngularDelta(coupling.previousPose.theta, navigation.pose.theta) / dt,
   ];
   base.position = [
     navigation.pose.x,
@@ -155,6 +163,7 @@ export function stepKmrHouseholdPhysics(
   coupling.cumulativeBaseChairContacts += baseChairContactsThisStep;
   return {
     owner: "household-contact-lcp-ts",
+    baseAngularVelocityRadPerSecond: base.angularVelocity[2],
     chairPositionMeters: [...chair.position],
     chairVelocityMps: [...chair.linearVelocity],
     chairDisplacementMeters: Math.hypot(

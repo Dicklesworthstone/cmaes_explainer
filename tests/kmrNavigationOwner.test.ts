@@ -57,6 +57,35 @@ describe("KMR deterministic mecanum navigation owner", () => {
     ).toThrow(/refuses a path/);
   });
 
+  test("refuses a path whose declared start does not match the owner's pose", () => {
+    const detached: WaypointPath = {
+      points: [[1, 1], [2, 1]],
+      totalDistanceMeters: 1,
+      minimumClearanceMeters: 1,
+      planner: "clearance-value-iteration",
+    };
+    expect(() =>
+      new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, detached, []),
+    ).toThrow(/does not match/);
+  });
+
+  test("rejects non-finite poses and non-positive integration settings", () => {
+    const path: WaypointPath = {
+      points: [[0, 0], [1, 0]],
+      totalDistanceMeters: 1,
+      minimumClearanceMeters: 1,
+      planner: "clearance-value-iteration",
+    };
+    expect(() =>
+      new KmrNavigationOwner({ x: Number.NaN, y: 0, theta: 0 }, path, []),
+    ).toThrow(/finite initial pose/);
+    expect(() =>
+      new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, path, [], {
+        dtSeconds: 0,
+      }),
+    ).toThrow(/finite positive/);
+  });
+
   test("runs a real route through the authored Craftsman furniture and wall roster", () => {
     const scene = createHouseNavigationScene();
     const initial = { x: -1.4, y: 2.6, theta: 0 };

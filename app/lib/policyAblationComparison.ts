@@ -1,12 +1,14 @@
 // Policy Architecture Side-by-Side Ablation Engine — MEASURED (cmaes-ablation-real).
 //
-// Replaces the synthesized/placeholder receipts: BOTH sides are measured.
+// Replaces the synthesized/placeholder receipts: BOTH sides are executed and
+// measured, but they do not have equivalent training provenance.
 //   1. CMA-ES side  — real live search over a 105-param phase-basis linear
 //      policy on G1TrainEnv (app/lib/cmaesAblationPolicy.ts).
-//   2. Transformer side — REAL trained weights (fs-g1-train/examples/
-//      train_ablation.rs, PPO+Muon on the exact Rust port of G1TrainEnv),
-//      inferred in-browser by app/lib/gaitTransformer.ts and rolled out on
-//      the same env at the same 720-step flagship horizon.
+//   2. Transformer side — a committed historical checkpoint from
+//      fs-g1-train/examples/train_ablation.rs. Its policy head is all zero and
+//      its legacy training stand-in self-propelled under zero action. We still
+//      run the real artifact through app/lib/gaitTransformer.ts, but classify
+//      the result as a failed transfer onto the action-causal v2 environment.
 //
 // Provenance shipped alongside (public/robots/g1/transformer/):
 //   g1-ablation-train-receipt.json — samples consumed, wallclock, host note.
@@ -32,7 +34,7 @@ import { runCmaesPolicySearch } from "./cmaesAblationPolicy";
 
 export interface PolicyAblationReceipt {
   policyName: string;
-  policyArchitecture: "phase_basis_cmaes" | "learned_transformer_ppo";
+  policyArchitecture: "phase_basis_cmaes" | "legacy_zero_head_transformer";
   parameterCount: number;
   trainingSamplesRequired: number;
   trainingWallclockMinutes: number;
@@ -83,6 +85,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
+}
+
 /** Validates the fields we consume; unknown extra fields are ignored. */
 export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   if (typeof raw !== "object" || raw === null) throw new Error("train receipt: not an object");
@@ -109,18 +115,35 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   // Early-stopped runs accumulate wallclock across suspended intervals —
   // unknowable, so the field is optional and reported as 0 minutes
   // ("host-dependent" per the receipt's hostNote) when absent.
-  if (!isFiniteNumber(parameterCount) || !isFiniteNumber(samplesConsumed)) {
+  if (!isPositiveSafeInteger(parameterCount) || !isPositiveSafeInteger(samplesConsumed)) {
     throw new Error("train receipt: bad parameterCount/samplesConsumed");
+  }
+  if (wallclockSeconds !== undefined && (!isFiniteNumber(wallclockSeconds) || wallclockSeconds < 0)) {
+    throw new Error("train receipt: bad wallclockSeconds");
   }
   const trainingWallclockMinutes = isFiniteNumber(wallclockSeconds) ? wallclockSeconds / 60 : 0;
   let rustGreedy720 = { distanceMeters: 0, totalReward: 0, completedSteps: 0 };
   if (typeof evaluation === "object" && evaluation !== null) {
     const greedy = (evaluation as Record<string, unknown>).greedy720;
+    if (greedy !== undefined && (typeof greedy !== "object" || greedy === null)) {
+      throw new Error("train receipt: bad evaluation.greedy720");
+    }
     if (typeof greedy === "object" && greedy !== null) {
       const g = greedy as Record<string, unknown>;
-      if (isFiniteNumber(g.distanceMeters) && isFiniteNumber(g.totalReward) && isFiniteNumber(g.completedSteps)) {
-        rustGreedy720 = { distanceMeters: g.distanceMeters, totalReward: g.totalReward, completedSteps: g.completedSteps };
+      if (
+        !isFiniteNumber(g.distanceMeters) ||
+        g.distanceMeters < 0 ||
+        !isFiniteNumber(g.totalReward) ||
+        !Number.isSafeInteger(g.completedSteps) ||
+        Number(g.completedSteps) < 0
+      ) {
+        throw new Error("train receipt: bad evaluation.greedy720 metrics");
       }
+      rustGreedy720 = {
+        distanceMeters: g.distanceMeters,
+        totalReward: g.totalReward,
+        completedSteps: Number(g.completedSteps),
+      };
     }
   }
   return {
@@ -142,24 +165,46 @@ export interface AblationInputs {
 }
 
 const TRAIN_RECEIPT_URL = "/robots/g1/transformer/g1-ablation-train-receipt.json";
-let cachedInputs: AblationInputs | null = null;
+
+async function fetchTransformerWeights(): Promise<ArrayBuffer> {
+  const res = await fetch(TRANSFORMER_WEIGHTS_URL);
+  if (!res.ok) throw new Error(`weights fetch failed: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+async function fetchTransformerReceipt(): Promise<unknown> {
+  const res = await fetch(TRAIN_RECEIPT_URL);
+  if (!res.ok) throw new Error(`train receipt fetch failed: ${res.status}`);
+  return res.json();
+}
+
+let cachedInputsPromise: Promise<AblationInputs> | null = null;
 
 export async function loadAblationInputs(
-  loadWeights: () => Promise<ArrayBuffer> = async () => {
-    const res = await fetch(TRANSFORMER_WEIGHTS_URL);
-    if (!res.ok) throw new Error(`weights fetch failed: ${res.status}`);
-    return res.arrayBuffer();
-  },
-  loadReceipt: () => Promise<unknown> = async () => {
-    const res = await fetch(TRAIN_RECEIPT_URL);
-    if (!res.ok) throw new Error(`train receipt fetch failed: ${res.status}`);
-    return res.json();
-  },
+  loadWeights: () => Promise<ArrayBuffer> = fetchTransformerWeights,
+  loadReceipt: () => Promise<unknown> = fetchTransformerReceipt,
 ): Promise<AblationInputs> {
-  if (cachedInputs) return cachedInputs;
-  const [weightsBuf, receiptRaw] = await Promise.all([loadWeights(), loadReceipt()]);
-  cachedInputs = { weights: loadGaitTransformerWeights(weightsBuf), trainReceipt: parseTrainReceipt(receiptRaw) };
-  return cachedInputs;
+  const load = async (): Promise<AblationInputs> => {
+    const [weightsBuf, receiptRaw] = await Promise.all([loadWeights(), loadReceipt()]);
+    return {
+      weights: loadGaitTransformerWeights(weightsBuf),
+      trainReceipt: parseTrainReceipt(receiptRaw),
+    };
+  };
+
+  // Only cache the actual browser artifact fetch. Injected loaders are test
+  // and caller boundaries and must never receive a result produced by an
+  // earlier, unrelated loader invocation.
+  const usesDefaultLoaders =
+    loadWeights === fetchTransformerWeights && loadReceipt === fetchTransformerReceipt;
+  if (!usesDefaultLoaders) return load();
+  if (!cachedInputsPromise) {
+    cachedInputsPromise = load().catch((error: unknown) => {
+      cachedInputsPromise = null;
+      throw error;
+    });
+  }
+  return cachedInputsPromise;
 }
 
 // ─── Measured evaluation ───
@@ -215,7 +260,7 @@ function rolloutTransformerPolicy(
  * seed-independent (deterministic env + greedy policy).
  */
 export function runMeasuredAblation(inputs: AblationInputs, seed = 42): AblationPairResult {
-  // ── Transformer side (real trained weights, real inference) ──
+  // ── Transformer side (real historical artifact, failed v2 transfer) ──
   const policy = new GaitTransformerPolicy(inputs.weights);
   const tfRun = rolloutTransformerPolicy(policy, FINAL_STEPS);
   const tfDistance = tfRun.distance;
@@ -223,8 +268,8 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
   const tfCoT = tfDistance > 1e-9 ? tfRun.work / (ROBOT_MASS_KG * 9.81 * tfDistance) : 0;
 
   const transformerReceipt: PolicyAblationReceipt = {
-    policyName: "Learned Transformer (PPO + Muon, trained via fs-g1-train)",
-    policyArchitecture: "learned_transformer_ppo",
+    policyName: "Legacy zero-head transformer artifact (PPO + Muon receipt)",
+    policyArchitecture: "legacy_zero_head_transformer",
     parameterCount: inputs.trainReceipt.parameterCount,
     trainingSamplesRequired: inputs.trainReceipt.samplesConsumed,
     trainingWallclockMinutes: inputs.trainReceipt.trainingWallclockMinutes,

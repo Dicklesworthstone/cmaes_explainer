@@ -80,6 +80,22 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
     expect(solidWallDistance).toBeLessThanOrEqual(0.0);
   });
 
+  test("diagonal authored walls retain their centerline orientation", () => {
+    const [diagonal] = createHouseWallObstacles([
+      {
+        from: [0, 0],
+        to: [2, 2],
+        height: 2.4,
+        thickness: 0.1,
+        doorways: [],
+      },
+    ]);
+
+    expect(diagonal.rotationYawRad).toBeCloseTo(Math.PI / 4, 12);
+    expect(distanceToOBB([0.5, 1, 0.5], diagonal)).toBeLessThanOrEqual(0);
+    expect(distanceToOBB([0.5, 1, -0.5], diagonal)).toBeGreaterThan(0.5);
+  });
+
   test("queryMultiObstacleScene computes clearance and quadratic collision penalty", () => {
     const scene = createSceneFromHouseFurniture();
 
@@ -207,5 +223,23 @@ describe("findClearSpawnPosition — the robot never spawns inside a wall (cmaes
         `spawn at (${spawn.map((n) => n.toFixed(3)).join(", ")}) is inside OBB ${obb.name} (distance=${dist.toFixed(4)})`,
       ).toBeGreaterThanOrEqual(0.32);
     }
+  });
+
+  test("refuses a fully blocked spawn region instead of returning an unsafe fallback", () => {
+    const blocker: OrientedBoundingBox = {
+      id: "blocker",
+      name: "blocker",
+      center: [0.1, 0.75, 0.1],
+      halfExtents: [1, 1, 1],
+      rotationYawRad: 0,
+    };
+    expect(() =>
+      findClearSpawnPosition([blocker], 0.05, {
+        minX: 0,
+        maxX: 0.2,
+        minZ: 0,
+        maxZ: 0.2,
+      }),
+    ).toThrow(/no collision-free robot spawn/);
   });
 });

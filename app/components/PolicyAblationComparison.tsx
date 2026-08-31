@@ -49,6 +49,9 @@ export function PolicyAblationComparison() {
     // no synchronous setState within the effect body).
     Promise.resolve()
       .then(() => {
+        // React Strict Mode may run cleanup before this microtask executes.
+        // Do not create an orphan worker after the effect has been cancelled.
+        if (cancelled) return;
         worker = spawnAblationWorker((msg) => {
           if (cancelled) return;
           if (msg.type === "result") {

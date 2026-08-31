@@ -44,15 +44,49 @@ export interface LidarScan {
   baseYMeters: number;
 }
 
-// Seeded LCG for deterministic noise (avoids non-determinism in tests).
+function validateLidarConfig(config: LidarConfig): void {
+  if (!Number.isSafeInteger(config.numRays) || config.numRays < 1) {
+    throw new Error("LiDAR numRays must be a positive safe integer");
+  }
+  if (!Number.isFinite(config.minRangeMeters) || config.minRangeMeters < 0) {
+    throw new Error("LiDAR minRangeMeters must be finite and non-negative");
+  }
+  if (
+    !Number.isFinite(config.maxRangeMeters) ||
+    config.maxRangeMeters <= config.minRangeMeters
+  ) {
+    throw new Error("LiDAR maxRangeMeters must be finite and exceed minRangeMeters");
+  }
+  if (!Number.isFinite(config.fovDegrees) || config.fovDegrees <= 0 || config.fovDegrees > 360) {
+    throw new Error("LiDAR fovDegrees must be finite and in (0, 360]");
+  }
+  if (!Number.isFinite(config.noiseStdDevMeters) || config.noiseStdDevMeters < 0) {
+    throw new Error("LiDAR noiseStdDevMeters must be finite and non-negative");
+  }
+}
+
+// Seeded Gaussian generator for deterministic sensor noise.
 function makeSeededGaussian(seed: number): (mean: number, std: number) => number {
   let state = (seed | 0) >>> 0;
-  return (mean: number, std: number): number => {
+  let spare: number | null = null;
+  const uniform = (): number => {
     state = (state + 0x6d2b79f5) >>> 0;
     let t = state;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    const z = (((t ^ (t >>> 14)) >>> 0) / 4294967296) * 2 - 1;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return (mean: number, std: number): number => {
+    if (std === 0) return mean;
+    if (spare !== null) {
+      const z = spare;
+      spare = null;
+      return mean + std * z;
+    }
+    const radius = Math.sqrt(-2 * Math.log(Math.max(Number.EPSILON, uniform())));
+    const angle = 2 * Math.PI * uniform();
+    const z = radius * Math.cos(angle);
+    spare = radius * Math.sin(angle);
     return mean + std * z;
   };
 }
@@ -64,6 +98,14 @@ export function scanLidar(
   config: LidarConfig = KUKA_KMR_IIWA_LIDAR_DEFAULT,
   baseYawRadians = 0,
 ): LidarScan {
+  validateLidarConfig(config);
+  if (
+    !Number.isFinite(baseXMeters) ||
+    !Number.isFinite(baseYMeters) ||
+    !Number.isFinite(baseYawRadians)
+  ) {
+    throw new Error("LiDAR base pose must be finite");
+  }
   const rays: LidarRay[] = [];
   const fovRadians = (config.fovDegrees * Math.PI) / 180.0;
   const startAngle = -fovRadians / 2.0;
@@ -161,6 +203,30 @@ export function lidarToCostmap2D(
   heightMeters = 8,
   cellSizeMeters = 0.1,
 ): LidarCostmap2D {
+  validateLidarConfig(config);
+  if (scan.rays.length === 0) {
+    throw new Error("LiDAR costmap requires at least one ray");
+  }
+  if (
+    scan.rays.some(
+      (ray) =>
+        !Number.isFinite(ray.angleRadians) ||
+        !Number.isFinite(ray.rangeMeters) ||
+        ray.rangeMeters < 0,
+    )
+  ) {
+    throw new Error("LiDAR costmap received a malformed ray");
+  }
+  if (
+    !Number.isFinite(widthMeters) ||
+    widthMeters <= 0 ||
+    !Number.isFinite(heightMeters) ||
+    heightMeters <= 0 ||
+    !Number.isFinite(cellSizeMeters) ||
+    cellSizeMeters <= 0
+  ) {
+    throw new Error("LiDAR costmap dimensions must be finite and greater than zero");
+  }
   const widthCells = Math.ceil(widthMeters / cellSizeMeters);
   const heightCells = Math.ceil(heightMeters / cellSizeMeters);
   const occupancy: number[][] = [];

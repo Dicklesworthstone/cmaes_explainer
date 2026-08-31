@@ -12,7 +12,7 @@ interface ArmGraspMicroscopeProps {
 }
 
 /**
- * 3D Friction Cone overlay and Tactile HUD for KUKA iiwa14 Manipulation:
+ * 3D friction-cone overlay and tactile HUD for the household iiwa 7 exhibit:
  * Visualizes the Coulomb static friction boundary (tan theta = mu = 0.65),
  * normal grip pinch force, and contact status.
  */

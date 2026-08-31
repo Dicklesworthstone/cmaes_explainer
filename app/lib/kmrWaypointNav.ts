@@ -114,6 +114,38 @@ function segmentHasClearance(
   return true;
 }
 
+function minimumClearanceAlongPath(
+  points: readonly Vec2[],
+  sdf: SDF2D,
+  clearanceRadiusMeters: number,
+  sampleSpacingMeters: number,
+): number {
+  if (points.length === 0) return Number.NEGATIVE_INFINITY;
+  let minimum = Number.POSITIVE_INFINITY;
+  if (points.length === 1) {
+    return sdf(points[0][0], points[0][1]) - clearanceRadiusMeters;
+  }
+  for (let segment = 1; segment < points.length; segment += 1) {
+    const from = points[segment - 1];
+    const to = points[segment];
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    const samples = Math.max(1, Math.ceil(length / sampleSpacingMeters));
+    for (let index = 0; index <= samples; index += 1) {
+      const t = index / samples;
+      const x = from[0] + (to[0] - from[0]) * t;
+      const y = from[1] + (to[1] - from[1]) * t;
+      minimum = Math.min(minimum, sdf(x, y) - clearanceRadiusMeters);
+    }
+  }
+  return minimum;
+}
+
+function assertFinitePoint(label: string, point: Vec2): void {
+  if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
+    throw new Error(`${label} must contain finite coordinates`);
+  }
+}
+
 function simplifyByLineOfSight(
   points: readonly Vec2[],
   sdf: SDF2D,
@@ -265,6 +297,41 @@ export function planWaypointPath(
   bounds: AABB2D = DEFAULT_BOUNDS,
   clearanceRadiusMeters = KMR_PLANAR_CLEARANCE_RADIUS_METERS,
 ): WaypointPlan {
+  const start: Vec2 = [kmrPose.x, kmrPose.y];
+  const target: Vec2 = [targetPose.x, targetPose.y];
+  assertFinitePoint("KMR start pose", start);
+  assertFinitePoint("KMR goal pose", target);
+  if (!Number.isFinite(kmrPose.theta)) {
+    throw new Error("KMR start heading must be finite");
+  }
+  assertFinitePoint("KMR bounds minimum", bounds.min);
+  assertFinitePoint("KMR bounds maximum", bounds.max);
+  if (bounds.min[0] >= bounds.max[0] || bounds.min[1] >= bounds.max[1]) {
+    throw new Error("KMR planning bounds must have positive area");
+  }
+  if (!Number.isFinite(clearanceRadiusMeters) || clearanceRadiusMeters <= 0) {
+    throw new Error("KMR clearance radius must be finite and greater than zero");
+  }
+  if (
+    !Number.isFinite(costmapParams.stepPenalty) ||
+    costmapParams.stepPenalty <= 0 ||
+    !Number.isFinite(costmapParams.safetyMargin) ||
+    costmapParams.safetyMargin < 0 ||
+    !Number.isFinite(costmapParams.clearanceWeight) ||
+    costmapParams.clearanceWeight < 0 ||
+    !Number.isFinite(costmapParams.actionWeight) ||
+    costmapParams.actionWeight < 0
+  ) {
+    throw new Error("KMR costmap parameters must be finite and non-negative");
+  }
+  if (
+    kmrPose.x < bounds.min[0] ||
+    kmrPose.x > bounds.max[0] ||
+    kmrPose.y < bounds.min[1] ||
+    kmrPose.y > bounds.max[1]
+  ) {
+    throw new Error("KMR start lies outside the declared planning bounds");
+  }
   if (
     targetPose.x < bounds.min[0] ||
     targetPose.x > bounds.max[0] ||
@@ -316,13 +383,6 @@ export function planWaypointPath(
     result.coarseValue.resolution / 5,
   );
   let totalDistanceMeters = 0.0;
-  let minimumClearanceMeters = Number.POSITIVE_INFINITY;
-  for (const point of path) {
-    minimumClearanceMeters = Math.min(
-      minimumClearanceMeters,
-      sdf(point[0], point[1]) - clearanceRadiusMeters,
-    );
-  }
   for (let i = 1; i < path.length; i += 1) {
     const ddx = path[i][0] - path[i - 1][0];
     const ddy = path[i][1] - path[i - 1][1];
@@ -332,7 +392,12 @@ export function planWaypointPath(
     path: {
       points: path,
       totalDistanceMeters,
-      minimumClearanceMeters,
+      minimumClearanceMeters: minimumClearanceAlongPath(
+        path,
+        sdf,
+        clearanceRadiusMeters,
+        result.coarseValue.resolution / 5,
+      ),
       planner: "clearance-value-iteration",
     },
     valueGrid: result.coarseValue,
@@ -344,22 +409,16 @@ export function planWaypointPath(
 export function pathIsCollisionFree(
   path: WaypointPath,
   obstacles: readonly OrientedBoundingBox[],
-  clearanceRadiusMeters = 0.18,
+  clearanceRadiusMeters = KMR_PLANAR_CLEARANCE_RADIUS_METERS,
 ): boolean {
+  if (
+    path.points.length === 0 ||
+    !Number.isFinite(clearanceRadiusMeters) ||
+    clearanceRadiusMeters <= 0 ||
+    path.points.some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))
+  ) {
+    return false;
+  }
   const sdf = createKmrPlanarSdf(obstacles);
-  for (const [x, y] of path.points) {
-    if (sdf(x, y) < clearanceRadiusMeters) return false;
-  }
-  for (let i = 1; i < path.points.length; i++) {
-    if (
-      !segmentHasClearance(
-        path.points[i - 1],
-        path.points[i],
-        sdf,
-        clearanceRadiusMeters,
-        0.02,
-      )
-    ) return false;
-  }
-  return true;
+  return minimumClearanceAlongPath(path.points, sdf, clearanceRadiusMeters, 0.02) >= 0;
 }

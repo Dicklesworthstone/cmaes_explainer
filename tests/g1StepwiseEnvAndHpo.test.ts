@@ -67,6 +67,29 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
     expect(last.info.actuatorWorkJoules).toBe(0.0);
   });
 
+  test("rejects invalid environment contracts before they can create NaN rollouts", () => {
+    expect(() => new G1TrainEnv({ maxSteps: 0 })).toThrow(/maxSteps/);
+    expect(() => new G1TrainEnv({ maxSteps: 1.5 })).toThrow(/maxSteps/);
+    expect(() => new G1TrainEnv({ dt: 0 })).toThrow(/dt/);
+    expect(() => new G1TrainEnv({ dt: Number.NaN })).toThrow(/dt/);
+    expect(() => new G1TrainEnv({ targetSpeedMps: -0.1 })).toThrow(/targetSpeedMps/);
+    expect(() => new G1TrainEnv({ fallHeightThreshold: -0.1 })).toThrow(
+      /fallHeightThreshold/,
+    );
+    expect(() => new G1TrainEnv({ fallTiltThresholdRad: 0 })).toThrow(
+      /fallTiltThresholdRad/,
+    );
+  });
+
+  test("requires reset after a terminal step", () => {
+    const env = new G1TrainEnv({ maxSteps: 1 });
+    env.reset();
+    expect(env.step(new Array(15).fill(0)).done).toBe(true);
+    expect(() => env.step(new Array(15).fill(0))).toThrow(/call reset/);
+    expect(env.reset().rawVector).toHaveLength(42);
+    expect(env.step(new Array(15).fill(0)).done).toBe(true);
+  });
+
   test("phase-opposed leg actions causally diverge from the no-action control", () => {
     const active = new G1TrainEnv({ maxSteps: 180 });
     const idle = new G1TrainEnv({ maxSteps: 180 });
