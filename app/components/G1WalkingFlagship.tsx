@@ -1860,11 +1860,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       ) : null}
 
       {trace ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">
+        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">
           {receiptCards.map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-              <p className="mt-2 font-mono text-sm text-slate-100">{value}</p>
+            <div
+              key={label}
+              title={`${label}: ${value}`}
+              className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+            >
+              <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+              <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
             </div>
           ))}
         </div>
@@ -1890,11 +1894,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             so the user can rebias the trade-off between forward speed, stability, and
             efficiency without changing the kernel binary.
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
+          <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
             {multiFactor.channels.map((c: MultiFactorChannel) => (
-              <div key={c.label} className="flex justify-between font-mono">
+              <div key={c.label} className="flex min-w-0 justify-between font-mono">
                 <span className="truncate pr-2 text-slate-300">{c.label}</span>
-                <span className="text-slate-500">
+                <span className="shrink-0 text-slate-500">
                   {c.value >= 0 ? "+" : ""}
                   {number(c.contribution, 3)} (w {c.weight >= 0 ? "+" : ""}
                   {number(c.weight, 2)})

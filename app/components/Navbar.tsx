@@ -305,7 +305,7 @@ export function Navbar() {
       <div className="fixed bottom-5 inset-x-0 z-40 flex lg:hidden justify-center pointer-events-none px-4">
         <div
           ref={dockRef}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1.5 shadow-[0_15px_35px_rgba(0,0,0,0.8)] w-full max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar"
+          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1.5 shadow-[0_15px_35px_rgba(0,0,0,0.8)] w-full max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar dock-fade"
         >
           {sections.map((s) => (
             <a

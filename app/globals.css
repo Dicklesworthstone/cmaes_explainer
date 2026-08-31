@@ -65,6 +65,38 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  /* Right-edge fade that hints at horizontal overflow content on touch devices. */
+  .dock-fade {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      black 0,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      black 0,
+      black calc(100% - 28px),
+      transparent 100%
+    );
+  }
+  /* Reserve space on the right so a clipped section label is still partially
+     visible, hinting that more content exists. The Menu button always stays
+     visible because it lives in its own right-anchored cluster. */
+  .dock-fade-end {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      black 0,
+      black calc(100% - 12px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      black 0,
+      black calc(100% - 12px),
+      transparent 100%
+    );
+  }
 }
 
 .scroll-section {

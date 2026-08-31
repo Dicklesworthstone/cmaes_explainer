@@ -1410,7 +1410,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       </div>
 
       {trace && admission ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-12">
+        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-12">
           {[
             ["objective ↓", number(trace.objective, 2)],
             ["vs curriculum", activeTrace === "curriculum" ? "reference" : objectiveDelta !== null && objectiveDelta > 0 ? `${number(objectiveDelta, 2)} lower` : "flat"],
@@ -1425,9 +1425,18 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
             ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-              <p className={`mt-2 font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}>{value}</p>
+            <div
+              key={label}
+              title={`${label}: ${value}`}
+              className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+            >
+              <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+              <p
+                title={String(value)}
+                className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+              >
+                {value}
+              </p>
             </div>
           ))}
         </div>
