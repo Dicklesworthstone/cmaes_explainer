@@ -255,10 +255,10 @@ export interface SweptCcdResult {
  * point and snaps the link to the surface there, which is what
  * Redon, Lin, Benichou call "interval analysis for CCD" (2002).
  *
- * Implementation: we use the existing conservativeSegmentClearanceToOBB
- * (1-Lipschitz sample bound) to detect whether the segment can be
- * closer than `radius` to the OBB. If so, we bisect the segment to
- * pin the entry point to sub-mm precision.
+ * Implementation: transform the sweep into the OBB frame and intersect it
+ * with the radius-expanded box using the exact slab interval. This catches
+ * outside-to-outside enter/exit tunneling and returns the earliest admissible
+ * entry parameter without assuming endpoint collision state is monotonic.
  */
 export function sweptSphereOBBEntryPoint(
   prevPos: [number, number, number],
@@ -267,47 +267,65 @@ export function sweptSphereOBBEntryPoint(
   obb: OrientedBoundingBox,
   maximumSampleSpacingMeters = 0.005,
 ): SweptCcdResult {
-  if (!prevPos.every(Number.isFinite) || !currentPos.every(Number.isFinite)) {
+  if (
+    !prevPos.every(Number.isFinite) ||
+    !currentPos.every(Number.isFinite) ||
+    !Number.isFinite(radius) ||
+    radius < 0 ||
+    !Number.isFinite(maximumSampleSpacingMeters) ||
+    maximumSampleSpacingMeters <= 0
+  ) {
     return { wasHit: false };
   }
-  const clearance = conservativeSegmentClearanceToOBB(
-    prevPos,
-    currentPos,
-    obb,
-    maximumSampleSpacingMeters,
-  );
-  if (clearance >= radius) {
-    return { wasHit: false };
-  }
-  // Bisect: find the largest t in [0, 1] such that the segment from
-  // prevPos to prevPos + t*(currentPos - prevPos) stays clear of the OBB
-  // (i.e. distanceToOBB >= radius). The entry point is just past that t.
-  let lo = 0;
-  let hi = 1;
-  for (let iter = 0; iter < 16; iter++) {
-    const mid = 0.5 * (lo + hi);
-    const px = prevPos[0] + (currentPos[0] - prevPos[0]) * mid;
-    const py = prevPos[1] + (currentPos[1] - prevPos[1]) * mid;
-    const pz = prevPos[2] + (currentPos[2] - prevPos[2]) * mid;
-    const d = distanceToOBB([px, py, pz], obb);
-    if (d >= radius) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-  // lo is the last-clear point; project to the OBB surface with the
-  // requested radius as the clearance.
-  const exitPoint: [number, number, number] = [
-    prevPos[0] + (currentPos[0] - prevPos[0]) * lo,
-    prevPos[1] + (currentPos[1] - prevPos[1]) * lo,
-    prevPos[2] + (currentPos[2] - prevPos[2]) * lo,
+  const cosY = Math.cos(-obb.rotationYawRad);
+  const sinY = Math.sin(-obb.rotationYawRad);
+  const toLocal = (point: [number, number, number]): [number, number, number] => {
+    const dx = point[0] - obb.center[0];
+    const dy = point[1] - obb.center[1];
+    const dz = point[2] - obb.center[2];
+    return [cosY * dx - sinY * dz, dy, sinY * dx + cosY * dz];
+  };
+  const start = toLocal(prevPos);
+  const end = toLocal(currentPos);
+  const direction: [number, number, number] = [
+    end[0] - start[0],
+    end[1] - start[1],
+    end[2] - start[2],
   ];
-  const projected = projectPointOutOfOBB(exitPoint, obb, radius);
+  const extents: [number, number, number] = [
+    obb.halfExtents[0] + radius,
+    obb.halfExtents[1] + radius,
+    obb.halfExtents[2] + radius,
+  ];
+  let entryT = 0;
+  let exitT = 1;
+  for (let axis = 0; axis < 3; axis++) {
+    if (Math.abs(direction[axis]) < 1e-12) {
+      if (start[axis] < -extents[axis] || start[axis] > extents[axis]) {
+        return { wasHit: false };
+      }
+      continue;
+    }
+    const inverse = 1 / direction[axis];
+    let near = (-extents[axis] - start[axis]) * inverse;
+    let far = (extents[axis] - start[axis]) * inverse;
+    if (near > far) [near, far] = [far, near];
+    entryT = Math.max(entryT, near);
+    exitT = Math.min(exitT, far);
+    if (entryT > exitT) return { wasHit: false };
+  }
+  if (exitT < 0 || entryT > 1) return { wasHit: false };
+  const clampedEntryT = Math.max(0, Math.min(1, entryT));
+  const entryPoint: [number, number, number] = [
+    prevPos[0] + (currentPos[0] - prevPos[0]) * clampedEntryT,
+    prevPos[1] + (currentPos[1] - prevPos[1]) * clampedEntryT,
+    prevPos[2] + (currentPos[2] - prevPos[2]) * clampedEntryT,
+  ];
+  const projected = projectPointOutOfOBB(entryPoint, obb, radius);
   return {
     wasHit: true,
     entryPoint: projected.point,
-    entryT: lo,
+    entryT: clampedEntryT,
     obb,
   };
 }

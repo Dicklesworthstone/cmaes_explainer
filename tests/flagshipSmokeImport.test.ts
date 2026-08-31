@@ -41,7 +41,6 @@ describe("flagship components import without throwing", () => {
     const name = modulePath.split("/").pop();
     test(`${name} imports cleanly`, () => {
       expect(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require(modulePath);
       }).not.toThrow();
     });
@@ -50,7 +49,6 @@ describe("flagship components import without throwing", () => {
   test("every flagship module loads under 5 seconds (regression bound)", () => {
     const start = performance.now();
     for (const modulePath of FLAGSHIP_MODULES) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require(modulePath);
     }
     const elapsedMs = performance.now() - start;

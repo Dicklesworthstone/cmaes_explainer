@@ -652,12 +652,6 @@ function RobotPlayback({
   positionOffset?: [number, number, number] | null;
 }) {
   const playbackSeconds = useRef(0);
-  // Per-link previous projected position (in owner frame). Used by the
- // swept-volume CCD so a link that tunnels through a thin OBB in one
- // frame is snapped to the swept entry point, not the deep-interior
- // closest point. Reset on trace change so a new run starts fresh.
-  const prevProjectedPositionsRef = useRef<Array<[number, number, number]> | null>(null);
-  const prevTraceKeyRef = useRef<string>("");
   useFrame((_, deltaSeconds) => {
     if (reduceMotion || !isPlaying || trace.samples.length < 2) return;
     const duration = trace.samples.at(-1)?.timeSeconds ?? 0;
@@ -689,15 +683,18 @@ function RobotPlayback({
   // and the user reads that as a broken simulation (cmaes-u76s).
   const projectedSample: typeof sample | null = sample
     ? (() => {
-        let next: typeof sample = {
+        const next: typeof sample = {
           ...sample,
+          linkPoses: sample.linkPoses.map((pose) => ({
+            ...pose,
+            position: [...pose.position] as [number, number, number],
+            quaternionWxyz: [...pose.quaternionWxyz] as [number, number, number, number],
+          })),
         };
-        const traceKey = `${trace.samples.length}:${sample.timeSeconds}:${sample.linkPoses.length}`;
-        if (prevTraceKeyRef.current !== traceKey) {
-          prevTraceKeyRef.current = traceKey;
-          prevProjectedPositionsRef.current = null;
-        }
-        const prevPositions = prevProjectedPositionsRef.current;
+        const previousSample = sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null;
+        const prevPositions = previousSample
+          ? previousSample.linkPoses.map((pose) => ownerToThree(pose.position))
+          : null;
         for (let link = 0; link < next.linkPoses.length; link++) {
           const pose = next.linkPoses[link];
           const p = ownerToThree(pose.position);
@@ -750,11 +747,6 @@ function RobotPlayback({
             position: [qx, -qz, qy],
           };
         }
-        prevProjectedPositionsRef.current = next.linkPoses.map((p) => [
-          p.position[0],
-          p.position[1],
-          p.position[2],
-        ]);
         return next;
       })()
     : null;
@@ -983,21 +975,35 @@ function CameraRig({
 }) {
   const controlsRef = useRef<any>(null);
   const prevRoomRef = useRef<string | null>(null);
+  const targetCamPos = useRef<THREE.Vector3 | null>(null);
+  const targetLookAt = useRef<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     if (cameraView === "orbit" && controlsRef.current) {
       if (prevRoomRef.current !== activeRoom) {
         const vp = ROOM_VIEWPOINTS[activeRoom] || ROOM_VIEWPOINTS.living;
-        controlsRef.current.target.set(vp.target[0], vp.target[1], vp.target[2]);
-        controlsRef.current.object.position.set(vp.pos[0], vp.pos[1], vp.pos[2]);
-        controlsRef.current.update();
+        targetCamPos.current = new THREE.Vector3(vp.pos[0], vp.pos[1], vp.pos[2]);
+        targetLookAt.current = new THREE.Vector3(vp.target[0], vp.target[1], vp.target[2]);
         prevRoomRef.current = activeRoom;
       }
     }
   }, [activeRoom, cameraView]);
 
   useFrame(({ camera }) => {
-    if (cameraView === "follow") {
+    if (cameraView === "orbit" && controlsRef.current) {
+      if (targetCamPos.current && targetLookAt.current) {
+        controlsRef.current.object.position.lerp(targetCamPos.current, 0.08);
+        controlsRef.current.target.lerp(targetLookAt.current, 0.08);
+        controlsRef.current.update();
+        if (
+          controlsRef.current.object.position.distanceTo(targetCamPos.current) < 0.02 &&
+          controlsRef.current.target.distanceTo(targetLookAt.current) < 0.02
+        ) {
+          targetCamPos.current = null;
+          targetLookAt.current = null;
+        }
+      }
+    } else if (cameraView === "follow") {
       cameraScratchVec.set(
         pelvisThree[0] - 2.6,
         pelvisThree[1] + 1.05,
@@ -1014,7 +1020,6 @@ function CameraRig({
       camera.position.lerp(cameraScratchVec, 0.08);
       camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
     }
-    // In "orbit" mode, OrbitControls has 100% full, uninterrupted control!
   });
 
   return cameraView === "orbit" ? (

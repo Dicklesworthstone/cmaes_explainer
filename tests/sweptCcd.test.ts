@@ -47,27 +47,21 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
     expect(result.wasHit).toBe(false);
   });
 
-  test("no hit when both endpoints are inside the OBB (no swept crossing)", () => {
+  test("detects outside-to-outside enter-exit tunneling", () => {
+    const box = obb([0, 0, 0], [0.05, 0.5, 0.5], Math.PI / 7);
+    const result = sweptSphereOBBEntryPoint([-1, 0, 0], [1, 0, 0], 0.02, box);
+    expect(result.wasHit).toBe(true);
+    expect(result.entryT).toBeGreaterThan(0);
+    expect(result.entryT).toBeLessThan(0.5);
+    expect(distanceToOBB(result.entryPoint!, box)).toBeGreaterThanOrEqual(0.02 - 1e-6);
+  });
+
+  test("an invalid inside start is reported immediately", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
-    // Both endpoints inside; the conservative segment clearance may
-    // still report a positive value (no swept crossing).
-    const result = sweptSphereOBBEntryPoint(
-      [0.1, 0, 0],
-      [0.2, 0, 0],
-      0.05,
-      box,
-    );
-    // Either the segment is fully contained (no swept crossing) or
-    // a hit is reported; both are defensible. The contract is: when
-    // the result is a hit, entryPoint is on the OBB surface. When
-    // no hit, no entryPoint needed.
-    if (result.wasHit) {
-      expect(result.entryPoint).toBeDefined();
-      const ep = result.entryPoint as [number, number, number];
-      expect(distanceToOBB(ep, box)).toBeGreaterThanOrEqual(0.05 - 1e-6);
-    } else {
-      expect(result.entryPoint).toBeUndefined();
-    }
+    const result = sweptSphereOBBEntryPoint([0.1, 0, 0], [0.2, 0, 0], 0.05, box);
+    expect(result.wasHit).toBe(true);
+    expect(result.entryT).toBe(0);
+    expect(distanceToOBB(result.entryPoint!, box)).toBeGreaterThanOrEqual(0.05 - 1e-6);
   });
 
   test("hit when the segment crosses the OBB surface; entry point is on the surface", () => {

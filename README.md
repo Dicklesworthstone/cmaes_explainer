@@ -158,6 +158,10 @@ Two audited surfaces coexist intentionally:
   30-link owner completes the 720-step horizon; honest measured displacement
   remains ~0.24 m flat and ~0.17 m terrain-and-push, still short of the
   >1.0 m / >0.5 m/s target.
+- `public/wasm/fs-cmaes/v0612/` ships the constraint-aware v071 retune while
+  keeping standing and walking biases task-scoped. The 30-link owner completes
+  all 720 steps at ~0.40 m flat and ~0.50 m under terrain-and-push, with total
+  flight held below the strict 0.10 s anti-jump boundary in both receipts.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.

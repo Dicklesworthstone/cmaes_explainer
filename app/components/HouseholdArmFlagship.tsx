@@ -514,13 +514,20 @@ function ArmRig({
       scratch.start.set(parent[0], parent[1], parent[2]);
       scratch.end.set(child[0], child[1], child[2]);
       const segmentRadius = 0.072 - (link - 1) * 0.004;
-      segment.visible = multiObstacleScene.obstacles.every(
-        (obb) => obb.exemptFromPenalty || conservativeSegmentClearanceToOBB(
+      const requiredClearance = segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS;
+      const segmentLength = scratch.start.distanceTo(scratch.end);
+      segment.visible = multiObstacleScene.obstacles.every((obb) => {
+        if (obb.exemptFromPenalty) return true;
+        const endpointLowerBound = Math.min(
+          distanceToOBB(parent, obb),
+          distanceToOBB(child, obb),
+        ) - segmentLength * 0.5;
+        return endpointLowerBound >= requiredClearance || conservativeSegmentClearanceToOBB(
           parent,
           child,
           obb,
-        ) >= segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS,
-      );
+        ) >= requiredClearance;
+      });
       scratch.direction.subVectors(scratch.end, scratch.start);
       const length = Math.max(0.025, scratch.direction.length());
       scratch.midpoint.addVectors(scratch.start, scratch.end).multiplyScalar(0.5);

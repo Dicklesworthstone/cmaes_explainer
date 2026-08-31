@@ -1466,16 +1466,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0611/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0612/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0611/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0612/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.11");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.12");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1615,21 +1615,10 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   }
   if (!("ok" in trace))
     throw new Error(`G1 trace refusal ${trace.refusal.name}`);
-  // v068 G1 owner-composed whole-body walking (cmaes-pvz). The 15-coordinate
-  // cmaes-pvz-curr-rev follow-up: with the v0.6.9 30-link whole-body
-  // dynamics, the standing prior alone reaches ~245 steps before the
-  // base-height guard fires; that is the honest stable-equilibrium for
-  // the 15-coordinate bias on the v0.6.9 mass distribution. The
-  // curriculum mean completes the full 720-step horizon, so the in-page
-  // CMA-ES has a strong starting point. The "standing prior must
-  // survive the push pulse (336 steps)" invariant was for the v0.6.6
-  // 16-link model whose mass distribution is fundamentally different.
-  // cmaes-zi6 3-stage retune keeps the curriculum fresh; a separate
-  // 15-bias-only CMA on flat-0.5s is the natural next-step for the
-  expect(evaluation.ok.completedSteps).toBeGreaterThan(120);
-  // survival bonus, rebalanced shaping weights, and minimum-upright-height
-  // lowered to 0.55 m so a stabilizing prior that does corrective work is
-  // not punished into early collapse.
+  // The standing prior is deliberately task-scoped and need not complete a
+  // walking challenge. The v0.6.12 curriculum is pinned to the native v071
+  // owner receipt so browser packaging cannot silently regress into the old
+  // jump-like or low-displacement gait.
   expect(evaluation.ok.completedSteps).toBeGreaterThan(120);
   expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(
     evaluation.ok.completedSteps,
@@ -1637,13 +1626,42 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(
     evaluation.ok.objective,
   );
-  expect(curriculum.ok.completedSteps).toBeGreaterThanOrEqual(336);
-  expect(curriculum.ok.completedSteps).toBeLessThanOrEqual(720);
-  expect(curriculum.ok.distanceMeters).toBeGreaterThan(-0.5);
+  expect(curriculum.ok.completedSteps).toBeGreaterThanOrEqual(500);
+  expect(curriculum.ok.pushImpulseNewtonSeconds).toBeCloseTo(
+    2.291467558724226,
+    5,
+  );
+  expect(curriculum.ok.recoveryTimeSeconds).toBe(0.8);
   expect(curriculum.ok.singleSupportSeconds).toBeGreaterThan(0);
   expect(trace.ok.samples.length).toBeGreaterThanOrEqual(5);
   const { samples: _samples, ...traceReceipt } = trace.ok;
   expect(traceReceipt).toEqual(curriculum.ok);
+
+  const flatEvaluator = new wasm.G1WalkingVizEvaluator(
+    new Float64Array([
+      0x47315737,
+      7,
+      0,
+      11,
+      1 / 480,
+      1.5,
+      0.65,
+      1.55,
+      12,
+      2,
+      0,
+    ]),
+  );
+  const flatPolicy = flatEvaluator.walking_curriculum_mean();
+  const flat = decodeG1Evaluation(flatEvaluator.evaluate(flatPolicy));
+  if (!('ok' in flat))
+    throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
+  expect(flat.ok.completedSteps).toBe(720);
+  expect(flat.ok.terminationReason).toBe("horizon");
+  expect(flat.ok.objective).toBeCloseTo(34.34365745433547, 5);
+  expect(flat.ok.distanceMeters).toBeCloseTo(-0.3690567384446286, 5);
+  expect(flat.ok.actuatorWorkJoules).toBeCloseTo(12024.945370611093, 2);
+  flatEvaluator.free();
 
   const population = 16;
   const generations = 16;
