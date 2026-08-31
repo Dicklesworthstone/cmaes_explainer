@@ -233,78 +233,133 @@ export function projectPointOutOfOBB(
   obb: OrientedBoundingBox,
   clearanceMeters: number,
 ): { point: [number, number, number]; wasInside: boolean; surfacePoint: [number, number, number] } {
-  const sdf = distanceToOBB(point, obb);
-  if (sdf >= clearanceMeters) {
-    return { point: [point[0], point[1], point[2]], wasInside: false, surfacePoint: point };
-  }
-  const surface = closestPointOnOBB(point, obb);
-  // Direction from surface back to the original point (surface normal at the
-  // point of contact). If the point is exactly on the surface, the direction
-  // is the surface gradient (the SDF gradient at that point).
-  const dirX = point[0] - surface[0];
-  const dirY = point[1] - surface[1];
-  const dirZ = point[2] - surface[2];
-  const len = Math.hypot(dirX, dirY, dirZ);
-  if (len < 1e-9) {
-    // Degenerate: point is on the surface but the SDF says we are inside.
-    // Use the world-axis-aligned gradient (the maximum |qx|, |qy|, |qz|
-    // direction in local frame) to pick an exit direction.
-    const cosY = Math.cos(-obb.rotationYawRad);
-    const sinY = Math.sin(-obb.rotationYawRad);
-    const dx = point[0] - obb.center[0];
-    const dy = point[1] - obb.center[1];
-    const dz = point[2] - obb.center[2];
-    const localX = cosY * dx - sinY * dz;
-    const localY = dy;
-    const localZ = sinY * dx + cosY * dz;
-    const absX = Math.abs(localX) - obb.halfExtents[0];
-    const absY = Math.abs(localY) - obb.halfExtents[1];
-    const absZ = Math.abs(localZ) - obb.halfExtents[2];
-    const m = Math.max(absX, absY, absZ);
-    if (m === absX) {
-      const sign = localX >= 0 ? 1 : -1;
-      const worldDx = cosY * sign;
-      const worldDz = -sinY * sign;
-      return {
-        point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
-        wasInside: true,
-        surfacePoint: surface,
-      };
-    }
-    if (m === absY) {
-      const sign = localY >= 0 ? 1 : -1;
-      return {
-        point: [point[0], point[1] + sign * clearanceMeters, point[2]],
-        wasInside: true,
-        surfacePoint: surface,
-      };
-    }
-    const sign = localZ >= 0 ? 1 : -1;
-    const worldDx = sinY * sign;
-    const worldDz = cosY * sign;
-    return {
-      point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
-      wasInside: true,
-      surfacePoint: surface,
-    };
-  }
-  const inv = 1 / len;
-  const delta = clearanceMeters - sdf;
-  return {
-    point: [point[0] + dirX * inv * delta, point[1] + dirY * inv * delta, point[2] + dirZ * inv * delta],
-    wasInside: true,
-    surfacePoint: surface,
-  };
+ const sdf = distanceToOBB(point, obb);
+ if (sdf >= clearanceMeters) {
+ return { point: [point[0], point[1], point[2]], wasInside: false, surfacePoint: point };
+ }
+ const surface = closestPointOnOBB(point, obb);
+ // Direction of push-out (SDF gradient pointing AWAY from the OBB).
+ // For an EXTERIOR query (sdf > 0), closestPointOnOBB returns the boundary
+ // point nearest the query, so (point - surface) points away from the
+ // OBB — the correct push direction.
+ // For an INTERIOR query (sdf < 0), closestPointOnOBB returns the query
+ // itself (Ericson §5.5.6 only handles the exterior case), so
+ // (point - surface) is the zero vector. We must use the local-frame
+ // nearest-face projection: the surface is on the face with the smallest
+ // inward clearance, and the push direction is (surface - point) which
+ // points from the link to that face (i.e. out of the OBB).
+ const isInterior = sdf < 0;
+ let dirX: number;
+ let dirY: number;
+ let dirZ: number;
+ if (isInterior) {
+ // Compute the interior closest point by snapping to the nearest face.
+ const cosY = Math.cos(-obb.rotationYawRad);
+ const sinY = Math.sin(-obb.rotationYawRad);
+ const dx = point[0] - obb.center[0];
+ const dy = point[1] - obb.center[1];
+ const dz = point[2] - obb.center[2];
+ const lx = cosY * dx - sinY * dz;
+ const ly = dy;
+ const lz = sinY * dx + cosY * dz;
+ // Inward clearance to each face: positive when query is inside.
+ const cx = obb.halfExtents[0] - Math.abs(lx);
+ const cy = obb.halfExtents[1] - Math.abs(ly);
+ const cz = obb.halfExtents[2] - Math.abs(lz);
+ // Pick the nearest face and snap the surface point onto it.
+ const nearest = cx <= cy && cx <= cz ? "x" : cy <= cz ? "y" : "z";
+ let sLx: number;
+ let sLy: number;
+ let sLz: number;
+ if (nearest === "x") {
+ sLx = lx >= 0 ? obb.halfExtents[0] : -obb.halfExtents[0];
+ sLy = ly;
+ sLz = lz;
+ } else if (nearest === "y") {
+ sLx = lx;
+ sLy = ly >= 0 ? obb.halfExtents[1] : -obb.halfExtents[1];
+ sLz = lz;
+ } else {
+ sLx = lx;
+ sLy = ly;
+ sLz = lz >= 0 ? obb.halfExtents[2] : -obb.halfExtents[2];
+ }
+ // Forward rotate the local surface point back to world coordinates.
+ const wSx = cosY * sLx + sinY * sLz;
+ const wSy = sLy;
+ const wSz = -sinY * sLx + cosY * sLz;
+ const surfaceX = obb.center[0] + wSx;
+ const surfaceY = obb.center[1] + wSy;
+ const surfaceZ = obb.center[2] + wSz;
+ dirX = surfaceX - point[0];
+ dirY = surfaceY - point[1];
+ dirZ = surfaceZ - point[2];
+ } else {
+ dirX = point[0] - surface[0];
+ dirY = point[1] - surface[1];
+ dirZ = point[2] - surface[2];
+ }
+ const len = Math.hypot(dirX, dirY, dirZ);
+ if (len < 1e-9) {
+ // Degenerate: point is on the surface but the SDF says we are inside.
+ // Use the world-axis-aligned gradient (the maximum |qx|, |qy|, |qz|
+ // direction in local frame) to pick an exit direction.
+ const cosY = Math.cos(-obb.rotationYawRad);
+ const sinY = Math.sin(-obb.rotationYawRad);
+ const dx = point[0] - obb.center[0];
+ const dy = point[1] - obb.center[1];
+ const dz = point[2] - obb.center[2];
+ const localX = cosY * dx - sinY * dz;
+ const localY = dy;
+ const localZ = sinY * dx + cosY * dz;
+ const absX = Math.abs(localX) - obb.halfExtents[0];
+ const absY = Math.abs(localY) - obb.halfExtents[1];
+ const absZ = Math.abs(localZ) - obb.halfExtents[2];
+ const m = Math.max(absX, absY, absZ);
+ if (m === absX) {
+ const sign = localX >= 0 ? 1 : -1;
+ const worldDx = cosY * sign;
+ const worldDz = -sinY * sign;
+ return {
+ point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
+ wasInside: true,
+ surfacePoint: surface,
+ };
+ }
+ if (m === absY) {
+ const sign = localY >= 0 ? 1 : -1;
+ return {
+ point: [point[0], point[1] + sign * clearanceMeters, point[2]],
+ wasInside: true,
+ surfacePoint: surface,
+ };
+ }
+ const sign = localZ >= 0 ? 1 : -1;
+ const worldDx = sinY * sign;
+ const worldDz = cosY * sign;
+ return {
+ point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
+ wasInside: true,
+ surfacePoint: surface,
+ };
+ }
+ const inv = 1 / len;
+ const delta = clearanceMeters - sdf;
+ return {
+ point: [point[0] + dirX * inv * delta, point[1] + dirY * inv * delta, point[2] + dirZ * inv * delta],
+ wasInside: true,
+ surfacePoint: surface,
+ };
 }
 
 export function queryMultiObstacleScene(
-  query: MultiObstacleQuery,
-  scene: MultiObstacleSceneConfig,
-  collisionWeight = 100.0,
+ query: MultiObstacleQuery,
+ scene: MultiObstacleSceneConfig,
+ collisionWeight = 100.0,
 ): MultiObstacleQueryResult {
-  const rRobot = query.robotRadius ?? 0.25;
-  const margin = query.safetyMargin ?? 0.05;
-  const threshold = rRobot + margin;
+ const rRobot = query.robotRadius ?? 0.25;
+ const margin = query.safetyMargin ?? 0.05;
+ const threshold = rRobot + margin;
 
   let minClearance = Infinity;
   let nearestId: string | null = null;
