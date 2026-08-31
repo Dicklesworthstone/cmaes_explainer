@@ -923,6 +923,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [status, setStatus] = useState("Loading the pinned KUKA model and physical curriculum…");
   const [error, setError] = useState<string | null>(null);
+  // Mobile: show the 4 most consequential receipt cards by default; user can
+  // expand to all 12 so the page doesn't drown the viewport in telemetry.
+  const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [microscopeMode, setMicroscopeMode] = useState(false);
   const [cameraMode, setCameraMode] = useState<"studio" | "microscope" | "overhead">("studio");
   const [sampleIndex, setSampleIndex] = useState(0);
@@ -1435,38 +1438,70 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         </div>
       </div>
 
-      {trace && admission ? (
-        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-12">
-          {[
-            ["objective ↓", number(trace.objective, 2)],
-            ["vs curriculum", activeTrace === "curriculum" ? "reference" : objectiveDelta !== null && objectiveDelta > 0 ? `${number(objectiveDelta, 2)} lower` : "flat"],
-            ["final error", `${number(trace.finalObjectErrorMeters * 100, 1)} / ${number(admission.placementToleranceMeters * 100, 1)} cm`],
-            ["maximum lift", `${number(trace.maximumLiftMeters * 100, 1)} / ${number(admission.liftTargetMeters * 100, 1)} cm`],
-            ["first grasp", `${number(trace.firstGraspTimeSeconds, 2)} s`],
-            ["grip force", `${number(trace.peakGripForceNewtons, 1)} N`],
-            ["work", `${number(trace.actuatorWorkJoules, 1)} J`],
-            ["collision risk ∫", `${number(trace.collisionRiskIntegral, 4)} m·s`],
-            ["certified clearance", `${number(trace.minimumCertifiedClearanceMeters * 100, 2)} cm`],
-            ["possible collision", `${number(trace.possibleCollisionTimeSeconds, 3)} s`],
-            ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
-            ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              title={`${label}: ${value}`}
-              className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
-            >
-              <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-              <p
-                title={String(value)}
-                className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
-              >
-                {value}
-              </p>
+      {trace && admission ? (() => {
+        const cards: [string, string | number][] = [
+          ["objective ↓", number(trace.objective, 2)],
+          ["vs curriculum", activeTrace === "curriculum" ? "reference" : objectiveDelta !== null && objectiveDelta > 0 ? `${number(objectiveDelta, 2)} lower` : "flat"],
+          ["final error", `${number(trace.finalObjectErrorMeters * 100, 1)} / ${number(admission.placementToleranceMeters * 100, 1)} cm`],
+          ["maximum lift", `${number(trace.maximumLiftMeters * 100, 1)} / ${number(admission.liftTargetMeters * 100, 1)} cm`],
+          ["first grasp", `${number(trace.firstGraspTimeSeconds, 2)} s`],
+          ["grip force", `${number(trace.peakGripForceNewtons, 1)} N`],
+          ["work", `${number(trace.actuatorWorkJoules, 1)} J`],
+          ["collision risk ∫", `${number(trace.collisionRiskIntegral, 4)} m·s`],
+          ["certified clearance", `${number(trace.minimumCertifiedClearanceMeters * 100, 2)} cm`],
+          ["possible collision", `${number(trace.possibleCollisionTimeSeconds, 3)} s`],
+          ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
+          ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
+        ];
+        return (
+          <div className="space-y-3">
+            <div className="hidden md:grid md:grid-cols-4 md:gap-3 xl:grid-cols-12">
+              {cards.map(([label, value]) => (
+                <div
+                  key={label}
+                  title={`${label}: ${value}`}
+                  className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+                >
+                  <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                  <p
+                    title={String(value)}
+                    className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                  >
+                    {value}
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : null}
+            <div className="grid grid-cols-2 gap-3 md:hidden">
+              {(showAllReceipts ? cards : cards.slice(0, 4)).map(([label, value]) => (
+                <div
+                  key={label}
+                  title={`${label}: ${value}`}
+                  className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+                >
+                  <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                  <p
+                    title={String(value)}
+                    className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                  >
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAllReceipts((v) => !v)}
+              aria-expanded={showAllReceipts}
+              className="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10 md:hidden"
+            >
+              {showAllReceipts
+                ? `Hide ${cards.length - 4} of ${cards.length} telemetry rows`
+                : `Show all ${cards.length} telemetry rows`}
+            </button>
+          </div>
+        );
+      })() : null}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="glass-card p-6 lg:col-span-2">

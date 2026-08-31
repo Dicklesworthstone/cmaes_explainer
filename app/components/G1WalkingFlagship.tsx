@@ -1897,19 +1897,42 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       {embedded ? (
         <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
       ) : null}
-
       {trace ? (
-        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-5 xl:grid-cols-10">
-          {receiptCards.map(([label, value]) => (
-            <div
-              key={label}
-              title={`${label}: ${value}`}
-              className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
-            >
-              <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-              <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
-            </div>
-          ))}
+        <div className="space-y-3">
+          <div className="hidden md:grid md:grid-cols-5 md:gap-3 xl:grid-cols-10">
+            {receiptCards.map(([label, value]) => (
+              <div
+                key={label}
+                title={`${label}: ${value}`}
+                className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+              >
+                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:hidden">
+            {(showAllReceipts ? receiptCards : receiptCards.slice(0, 4)).map(([label, value]) => (
+              <div
+                key={label}
+                title={`${label}: ${value}`}
+                className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+              >
+                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
+                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAllReceipts((v) => !v)}
+            aria-expanded={showAllReceipts}
+            className="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10 md:hidden"
+          >
+            {showAllReceipts
+              ? `Hide ${receiptCards.length - 4} of ${receiptCards.length} telemetry rows`
+              : `Show all ${receiptCards.length} telemetry rows`}
+          </button>
         </div>
       ) : null}
 
