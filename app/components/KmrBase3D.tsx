@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * @experimental
+ *
+ * Orphaned scaffold from the early KMR bring-up (Phase 1/2). The
+ * production KMR scene that ships to users lives in
+ * `app/components/KmrScene.tsx` and owns its own internal
+ * `KmrThreeScene` mesh tree + obstacle render loop. This component
+ * re-implements the same primitives against `kmrGeometry` but is
+ * currently not imported anywhere in the app (verified Aug 2026).
+ *
+ * Per the project's no-deletion-without-permission policy, this file
+ * is preserved as-is. If you are wiring KMR into a new surface, prefer
+ * reusing `KmrScene` directly. If you intentionally resurrect this
+ * module, remove this JSDoc block and update the audit notes below.
+ */
+// KMR base 3D component (Three.js).
+
 // KMR base 3D component (Three.js).
 //
 // Renders the KUKA KMR iiwa base from the parameterized kmrGeometry
@@ -13,7 +30,7 @@ import { useMemo } from "react";
 import {
   defaultKmrMaterialSet,
   buildKmrBaseMesh,
-  KUKA_KMR_IIWA_PUBLIC_SPEC,
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
   type KmrGeometryConfig,
 } from "../lib/kmrGeometry";
 import { scanLidar, KUKA_KMR_IIWA_LIDAR_DEFAULT } from "../lib/kmrLidar";
@@ -38,7 +55,7 @@ const SCAN_RING_INNER_M = 0.55;
 const SCAN_RING_OUTER_M = 0.6;
 
 export function KmrBase3D(props: KmrBase3DProps) {
-  const cfg = props.config ?? KUKA_KMR_IIWA_PUBLIC_SPEC;
+  const cfg = props.config ?? KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
   const materials = useMemo(() => defaultKmrMaterialSet(), []);
   const baseMesh = useMemo(
     () => buildKmrBaseMesh(cfg, materials),

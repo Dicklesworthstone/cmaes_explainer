@@ -14,8 +14,9 @@ import { ThreePatch } from "./components/ThreePatch";
 import { MathProvider } from "./components/MathProvider";
 import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 import { HpoTrainer } from "./components/HpoTrainer";
-import { KmrScene } from "./components/KmrScene";
 import { HonestyChipStack } from "./components/HonestyChipStack";
+import { KernelSummary } from "./components/KernelSummary";
+import { KmrScene } from "./components/KmrScene";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -156,26 +157,30 @@ export default function Page() {
               </Section>
               <Section
                 id="kmr-navigation"
-                title="KUKA KMR + LBR iiwa: mobile base with waypoint navigation"
+                title="KUKA KMR base: collision-aware waypoint navigation"
               >
                 <div className="max-w-3xl text-sm leading-7 text-slate-400">
-                  The KUKA KMR iiwa is the standard mobile base for the
-                  LBR iiwa arm in factory automation. The KMR carries
-                  the arm through the house with 4 mecanum wheels (true
-                  lateral + in-place rotation). Click in the scene to
-                  set a goal; the KMR plans a path with multi-resolution
-                  clearance value iteration and drives the wheels along
-                  it. The KMR is a companion to the existing arm flagship
-                  (each has its own canvas and coordinate system); the
-                  arm is the recipient, the KMR is the delivery mechanism.
+                  This rung models the KMR mobile base separately from the
+                  fixed-base LBR iiwa flagship. Click a clear point to run
+                  global clearance value iteration over the actual house
+                  furniture and doorway-split wall bodies. A deterministic
+                  TS kinematic owner converts the route into mecanum-wheel
+                  commands, integrates the base pose, and refuses swept
+                  contact. It does not yet claim rigid-body traction or a
+                  physically mounted arm; those remain integration work.
                 </div>
                 <KmrScene />
+              </Section>
+              <Section
+                id="kernel-summary"
+                title="What the simulation kernel actually does (and doesn\u2019t)"
+              >
+                <KernelSummary />
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">
                 <TechnicalAddendum />
               </Section>
               <Footer />
-              <BackToTop />
             </div>
           </main>
         </MathProvider>

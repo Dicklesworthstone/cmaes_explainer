@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * @experimental
+ *
+ * Standalone Three.js scene that builds the 1928 Craftsman bungalow
+ * furniture + walls + room goals as a backdrop for the humanoid stage.
+ * Same source data as the production backdrop used inside
+ * `G1WalkingFlagship.tsx` (which composes the backdrop inline via
+ * `CraftsmanLivingRoom` and other helpers), so this file is a
+ * near-duplicate that nothing currently imports (verified Aug 2026).
+ *
+ * Per the project's no-deletion-without-permission policy, this file
+ * is preserved as-is. If a future agent needs a reusable, decoupled
+ * backdrop (e.g. for a static landing page hero), this is the right
+ * starting point - remove this JSDoc and wire it in. Otherwise, leave
+ * it alone; do not edit its visuals.
+ */
+
 import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture, type HouseWall } from "../lib/houseScenes";
