@@ -14,11 +14,9 @@ const sections = [
   { id: "engines", label: "Engines" },
   { id: "live-demo", label: "Demo" },
   { id: "internals", label: "3D Space" },
-  { id: "g1-walking", label: "Robot" },
-  { id: "household-arm", label: "Arm" },
+  { id: "robotics-flagships", label: "Robotics" },
   { id: "hpo", label: "HPO" },
-  { id: "ablation", label: "Ablation" },
-  { id: "technical-addendum", label: "Math" }
+  { id: "technical-addendum", label: "Math" },
 ];
 
 export function Navbar() {

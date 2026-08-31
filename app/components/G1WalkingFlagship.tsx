@@ -26,6 +26,11 @@ import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
+import {
+  clampPositionAgainstHouseCollisions,
+  createSceneFromHouseFurniture,
+} from "../lib/houseMultiObstacleKernel";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -589,6 +594,7 @@ function RobotPlayback({
   sampleIndex,
   onSampleIndexChange,
   shoveActive,
+  positionOffset,
 }: {
   trace: G1TraceReceipt;
   admission: G1Admission | null;
@@ -600,6 +606,7 @@ function RobotPlayback({
   sampleIndex: number;
   onSampleIndexChange: (idx: number) => void;
   shoveActive: boolean;
+  positionOffset?: [number, number, number] | null;
 }) {
   const playbackSeconds = useRef(0);
 
@@ -645,7 +652,7 @@ function RobotPlayback({
   ) : [0, 0, 0] as [number, number, number];
 
   return sample ? (
-    <group>
+    <group position={positionOffset ? [positionOffset[0], positionOffset[1], positionOffset[2]] : [0, 0, 0]}>
       {meshState.phase === "ready" ? (
         <RobotPoseMeshes sample={sample} meshes={meshState} pushFraction={pushFraction} />
       ) : (
@@ -733,6 +740,17 @@ function useG1Meshes(active: boolean): G1MeshState {
 
 const cameraScratchVec = new THREE.Vector3();
 
+const ROOM_VIEWPOINTS: Record<string, { pos: [number, number, number]; target: [number, number, number] }> = {
+  porch: { pos: [0, 1.6, 5.8], target: [0, 0.75, 2.75] },
+  living: { pos: [1.85, 1.45, 2.5], target: [-0.5, 0.75, 0.0] },
+  dining: { pos: [3.8, 1.6, 2.8], target: [2.1, 0.85, 0.0] },
+  kitchen: { pos: [3.8, 1.6, -1.8], target: [2.1, 0.9, -3.2] },
+  bedroom: { pos: [-2.0, 1.6, -1.6], target: [-2.3, 0.85, -3.2] },
+  bathroom: { pos: [0, 1.5, -2.4], target: [-0.2, 0.7, -3.8] },
+  cutaway: { pos: [6.5, 9.2, 8.5], target: [0, 0.5, 0] },
+  all: { pos: [6.5, 9.2, 8.5], target: [0, 0.5, 0] },
+};
+
 function CameraRig({
   cameraView,
   activeRoom,
@@ -742,6 +760,21 @@ function CameraRig({
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   pelvisThree: [number, number, number];
 }) {
+  const controlsRef = useRef<any>(null);
+  const prevRoomRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (cameraView === "orbit" && controlsRef.current) {
+      if (prevRoomRef.current !== activeRoom) {
+        const vp = ROOM_VIEWPOINTS[activeRoom] || ROOM_VIEWPOINTS.living;
+        controlsRef.current.target.set(vp.target[0], vp.target[1], vp.target[2]);
+        controlsRef.current.object.position.set(vp.pos[0], vp.pos[1], vp.pos[2]);
+        controlsRef.current.update();
+        prevRoomRef.current = activeRoom;
+      }
+    }
+  }, [activeRoom, cameraView]);
+
   useFrame(({ camera }) => {
     if (cameraView === "follow") {
       cameraScratchVec.set(
@@ -756,62 +789,134 @@ function CameraRig({
       camera.position.copy(cameraScratchVec);
       camera.lookAt(pelvisThree[0] + 2.0, pelvisThree[1] + 0.35, pelvisThree[2]);
     } else if (cameraView === "blueprint") {
-      cameraScratchVec.set(pelvisThree[0] + 0.3, 4.2, pelvisThree[2]);
+      cameraScratchVec.set(pelvisThree[0] + 0.3, 5.5, pelvisThree[2]);
       camera.position.lerp(cameraScratchVec, 0.08);
       camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
-    } else if (cameraView === "orbit") {
-      if (activeRoom === "porch") {
-        cameraScratchVec.set(-1.2, 1.35, 6.2);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "dining") {
-        cameraScratchVec.set(0.6, 1.45, 3.8);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "kitchen") {
-        cameraScratchVec.set(0.8, 1.45, 0.8);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "bedroom") {
-        cameraScratchVec.set(-0.6, 1.45, -0.2);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "bathroom") {
-        cameraScratchVec.set(0, 1.45, -1.4);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "cutaway") {
-        cameraScratchVec.set(5.5, 7.8, 7.8);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      } else if (activeRoom === "living") {
-        cameraScratchVec.set(1.85, 1.15, 2.35);
-        camera.position.lerp(cameraScratchVec, 0.05);
-      }
     }
+    // In "orbit" mode, OrbitControls has 100% full, uninterrupted control!
   });
 
   return cameraView === "orbit" ? (
     <OrbitControls
+      ref={controlsRef}
       makeDefault
-      target={
-        activeRoom === "porch"
-          ? [0, 0.75, 4.65]
-          : activeRoom === "dining"
-          ? [2.1, 0.85, 2.0]
-          : activeRoom === "kitchen"
-          ? [2.1, 0.9, -1.2]
-          : activeRoom === "bedroom"
-          ? [-2.3, 0.85, -1.9]
-          : activeRoom === "bathroom"
-          ? [0, 0.7, -2.8]
-          : activeRoom === "cutaway"
-          ? [0, 0.6, 0.6]
-          : [0.2, 0.68, 0]
-      }
       enableDamping
-      dampingFactor={0.075}
-      minDistance={1.0}
-      maxDistance={18}
-      minPolarAngle={0.2}
-      maxPolarAngle={1.52}
+      dampingFactor={0.08}
+      minDistance={0.5}
+      maxDistance={30}
+      minPolarAngle={0.05}
+      maxPolarAngle={Math.PI / 2 - 0.02}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   ) : null;
+}
+
+const houseSceneData = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
+
+function RagdollDragger({
+  pelvisThree,
+  dragOffset,
+  onDragChange,
+  onCollisionChange,
+}: {
+  pelvisThree: [number, number, number];
+  dragOffset: [number, number, number] | null;
+  onDragChange: (offset: [number, number, number] | null) => void;
+  onCollisionChange: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const startPointerRef = useRef<[number, number]>([0, 0]);
+  const startOffsetRef = useRef<[number, number, number]>([0, 0, 0]);
+
+  const currentPos: [number, number, number] = dragOffset
+    ? [pelvisThree[0] + dragOffset[0], pelvisThree[1] + dragOffset[1], pelvisThree[2] + dragOffset[2]]
+    : pelvisThree;
+
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    startPointerRef.current = [e.point.x, e.point.z];
+    startOffsetRef.current = dragOffset || [0, 0, 0];
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    const dx = e.point.x - startPointerRef.current[0];
+    const dz = e.point.z - startPointerRef.current[1];
+    const proposed: [number, number, number] = [
+      pelvisThree[0] + startOffsetRef.current[0] + dx,
+      pelvisThree[1],
+      pelvisThree[2] + startOffsetRef.current[2] + dz,
+    ];
+
+    // CONTINUOUS COLLISION DETECTION (CCD) & OBB/WALL SURFACE CLAMPING
+    const { clampedPosition, isColliding, nearestObstacleName, minClearance } =
+      clampPositionAgainstHouseCollisions(proposed, houseSceneData.obstacles, 0.32);
+
+    const newOffset: [number, number, number] = [
+      clampedPosition[0] - pelvisThree[0],
+      0,
+      clampedPosition[2] - pelvisThree[2],
+    ];
+
+    onDragChange(newOffset);
+    onCollisionChange({ isColliding, obstacleName: nearestObstacleName, clearance: minClearance });
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <group>
+      {/* Invisible horizontal raycast plane for smooth dragging */}
+      {isDragging && (
+        <mesh
+          position={[0, pelvisThree[1], 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          visible={false}
+        >
+          <planeGeometry args={[100, 100]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      )}
+
+      {/* Holographic Ragdoll Grab Pin / Handle above Robot */}
+      <group position={[currentPos[0], currentPos[1] + 0.38, currentPos[2]]}>
+        <mesh onPointerDown={handlePointerDown} castShadow>
+          <sphereGeometry args={[0.075, 16, 16]} />
+          <meshStandardMaterial
+            color={isDragging ? "#f59e0b" : "#38bdf8"}
+            emissive={isDragging ? "#d97706" : "#0284c7"}
+            emissiveIntensity={isDragging ? 2.5 : 1.2}
+            roughness={0.2}
+            metalness={0.8}
+          />
+        </mesh>
+        <mesh position={[0, -0.16, 0]}>
+          <cylinderGeometry args={[0.008, 0.008, 0.3, 8]} />
+          <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
+        </mesh>
+      </group>
+
+      {/* Dynamic Collision Boundary Safety Ring on Floor */}
+      <mesh
+        position={[currentPos[0], 0.02, currentPos[2]]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[0.32, 0.38, 36]} />
+        <meshBasicMaterial
+          color={isDragging ? "#fb7185" : "#34d399"}
+          transparent
+          opacity={isDragging ? 0.85 : 0.4}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
 }
 
 function RobotStage({
@@ -830,6 +935,9 @@ function RobotStage({
   sampleIndex,
   onSampleIndexChange,
   shoveActive,
+  robotDragOffset,
+  onRobotDragChange,
+  onDragCollisionChange,
 }: {
   trace: G1TraceReceipt | null;
   admission: G1Admission | null;
@@ -846,9 +954,12 @@ function RobotStage({
   sampleIndex: number;
   onSampleIndexChange: (idx: number) => void;
   shoveActive: boolean;
+  robotDragOffset?: [number, number, number] | null;
+  onRobotDragChange?: (offset: [number, number, number] | null) => void;
+  onDragCollisionChange?: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
-  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.2, 0.68, 0] as [number, number, number]);
+  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.0, 0.75, 0.0] as [number, number, number]);
 
   const bgColor = timeOfDay === "evening-glow" ? "#120e0b" : timeOfDay === "golden-hour" ? "#1a120b" : "#12151c";
 
@@ -899,8 +1010,17 @@ function RobotStage({
           sampleIndex={sampleIndex}
           onSampleIndexChange={onSampleIndexChange}
           shoveActive={shoveActive}
+          positionOffset={robotDragOffset}
         />
       ) : null}
+
+      <RagdollDragger
+        pelvisThree={pelvisThree}
+        dragOffset={robotDragOffset ?? null}
+        onDragChange={onRobotDragChange ?? (() => {})}
+        onCollisionChange={onDragCollisionChange ?? (() => {})}
+      />
+
       <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={pelvisThree} />
     </Canvas>
   );
@@ -981,6 +1101,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [currentChapter, setCurrentChapter] = useState(1);
   const [selectedPreset, setSelectedPreset] = useState("cautious-monk");
   const [shoveActive, setShoveActive] = useState(false);
+  const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
+  const [dragCollisionState, setDragCollisionState] = useState<{
+    isColliding: boolean;
+    obstacleName: string | null;
+    clearance: number;
+  }>({ isColliding: false, obstacleName: null, clearance: 1.0 });
 
   const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
     if (!workerRef.current || busy) return;
@@ -1243,6 +1369,32 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span className="sm:hidden">🥊 Push +15 N·s</span>
                 <span className="max-sm:hidden">🥊 Push Robot (+15 N·s)</span>
               </button>
+
+              {/* Drag Status & Contact Safety Readout */}
+              {robotDragOffset ? (
+                <div className="flex items-center gap-1.5 pointer-events-auto">
+                  <span
+                    className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                      dragCollisionState.isColliding
+                        ? "border border-rose-400/80 bg-rose-950/85 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                        : "border border-emerald-400/80 bg-emerald-950/85 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                    }`}
+                  >
+                    {dragCollisionState.isColliding
+                      ? `⚠️ Clamped: ${dragCollisionState.obstacleName || "Obstacle"}`
+                      : `🖐️ Dragged (${dragCollisionState.clearance.toFixed(2)}m free)`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRobotDragOffset(null)}
+                    className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
+                    title="Reset robot to nominal position"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
@@ -1364,6 +1516,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   sampleIndex={sampleIndex}
                   onSampleIndexChange={setSampleIndex}
                   shoveActive={shoveActive}
+                  robotDragOffset={robotDragOffset}
+                  onRobotDragChange={setRobotDragOffset}
+                  onDragCollisionChange={setDragCollisionState}
                 />
               )}
             </div>

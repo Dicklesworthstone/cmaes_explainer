@@ -197,77 +197,30 @@ export function CraftsmanArchitecturalInspector({
         </div>
       )}
 
-      {/* Active Room Metadata & Catalog Spec Grid */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-y-1">
-            <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-              <Compass className="h-4 w-4 text-amber-400" />
-              {activeRoomMeta.name} Architectural Profile
-            </h4>
-            <span className="font-mono text-xs text-slate-400">
-              Area: {activeRoomMeta.areaSqM} m² · Ceiling: {activeRoomMeta.ceilingHeightM} m
-            </span>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-slate-300">
-            {activeRoomMeta.description}
-          </p>
-
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {activeRoomMeta.focalFeatures.map((feat, idx) => (
-              <span
-                key={idx}
-                className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[0.68rem] font-medium text-amber-200"
-              >
-                ✨ {feat}
-              </span>
-            ))}
-          </div>
+      {/* Active Room Metadata & Physical Environment Profile */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-y-1">
+          <h4 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+            <Compass className="h-4 w-4 text-amber-400" />
+            {activeRoomMeta.name} Physical Environment Profile
+          </h4>
+          <span className="font-mono text-xs text-slate-400">
+            Room Area: {activeRoomMeta.areaSqM} m² · Ceiling Height: {activeRoomMeta.ceilingHeightM} m
+          </span>
         </div>
+        <p className="mt-2 text-xs leading-relaxed text-slate-300">
+          {activeRoomMeta.description}
+        </p>
 
-        {/* Craftsman Catalog Item Spec Card */}
-        <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-              <Info className="h-3.5 w-3.5" />
-              Sears Catalog Piece
-            </h4>
-            <span className="font-mono text-xs font-bold text-amber-300">
-              {selectedPiece.historicalPrice}
-            </span>
-          </div>
-
-          <div className="mt-2">
-            <select
-              aria-label="Select Sears Craftsman furniture piece"
-              value={selectedPieceId}
-              onChange={(e) => setSelectedPieceId(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white focus:border-amber-400 focus:outline-none"
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {activeRoomMeta.focalFeatures.map((feat, idx) => (
+            <span
+              key={idx}
+              className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[0.68rem] font-medium text-amber-200"
             >
-              {pieceList.map((piece) => (
-                <option key={piece.id} value={piece.id}>
-                  {piece.name} ({piece.catalogYear})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mt-3 space-y-1.5 text-[0.7rem] text-slate-300">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Wood / Material:</span>
-              <span className="font-medium text-amber-200">{selectedPiece.woodSpecies}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Joinery:</span>
-              <span className="font-medium text-slate-200">{selectedPiece.joinery}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Dimensions:</span>
-              <span className="font-mono text-cyan-300">
-                {selectedPiece.dimensionsMeters[0]}m × {selectedPiece.dimensionsMeters[1]}m × {selectedPiece.dimensionsMeters[2]}m
-              </span>
-            </div>
-          </div>
+              ✨ {feat}
+            </span>
+          ))}
         </div>
       </div>
     </div>

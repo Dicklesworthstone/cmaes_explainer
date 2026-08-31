@@ -664,11 +664,11 @@ function ArmCameraRig({
       makeDefault
       target={[-0.05, 0.48, 0]}
       enableDamping
-      dampingFactor={0.07}
-      minDistance={1.0}
-      maxDistance={6}
-      minPolarAngle={0.3}
-      maxPolarAngle={1.5}
+      dampingFactor={0.08}
+      minDistance={0.2}
+      maxDistance={15}
+      minPolarAngle={0.05}
+      maxPolarAngle={Math.PI / 2 - 0.02}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   ) : null;

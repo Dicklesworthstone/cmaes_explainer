@@ -13,12 +13,8 @@ import { BackToTop } from "./components/BackToTop";
 import { ThreePatch } from "./components/ThreePatch";
 import { MathProvider } from "./components/MathProvider";
 import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
-import { G1WalkingFlagship } from "./components/G1WalkingFlagship";
-import { HouseholdArmFlagship } from "./components/HouseholdArmFlagship";
-import { PolicyAblationComparison } from "./components/PolicyAblationComparison";
 import { HpoTrainer } from "./components/HpoTrainer";
 import { HonestyChipStack } from "./components/HonestyChipStack";
-import { FurnitureCatalogInspector } from "./components/FurnitureCatalogInspector";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -57,11 +53,93 @@ export default function Page() {
               <Section id="internals" title="Inside the optimizer: covariance geometry in 3D">
                 <CmaesInternalsLab />
               </Section>
-              <Section id="g1-walking" title="5,040 dimensions: teach a humanoid robot to walk">
-                <G1WalkingFlagship />
-              </Section>
-              <Section id="household-arm" title="128 dimensions: teach a robot arm to pick, carry, and place">
-                <HouseholdArmFlagship />
+              <Section
+                id="robotics-flagships"
+                title="Real-World Robotics: Whole-Body Humanoid & Articulated Arm"
+              >
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Unitree G1 Flagship Card */}
+                  <div className="rounded-2xl border border-cyan-400/30 bg-slate-950/80 p-6 shadow-xl backdrop-blur-xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-cyan-300">
+                          5,040 Dimensions · Zero Gradients
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">480 Hz Physics</span>
+                      </div>
+                      <h3 className="mt-4 text-xl font-bold text-white">
+                        Unitree G1 Whole-Body Walking Simulation
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">
+                        Watch a 29-DoF Unitree G1 humanoid optimize a 5,040-parameter locomotion policy live in your browser. Features whole-house 3D waypoint navigation across 7 rooms, zero-penetration collision detection, and ragdoll dragging.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-xs text-slate-400">
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                          <span>Whole-house multi-room waypoint navigation routes</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                          <span>Touch & ragdoll dragging with continuous collision detection</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                          <span>480 Hz articulated dynamics & terrain push balance recovery</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                      <span className="text-xs text-cyan-300 font-medium">Full Interactive Simulator</span>
+                      <a
+                        href="/humanoid"
+                        className="inline-flex items-center gap-2 rounded-xl bg-cyan-500/20 border border-cyan-400/40 px-4 py-2 text-xs font-bold uppercase tracking-wider text-cyan-200 hover:bg-cyan-500/30 transition-all hover:scale-105"
+                      >
+                        Launch Humanoid Simulator →
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* KUKA iiwa14 Flagship Card */}
+                  <div className="rounded-2xl border border-orange-400/30 bg-slate-950/80 p-6 shadow-xl backdrop-blur-xl flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="rounded-full border border-orange-400/30 bg-orange-500/10 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-orange-300">
+                          128 Dimensions · Black-Box
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">90 Hz Contact</span>
+                      </div>
+                      <h3 className="mt-4 text-xl font-bold text-white">
+                        KUKA iiwa14 Pick-and-Place Manipulation
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">
+                        A 7-DoF KUKA iiwa14 robotic arm learns to reach, grasp, transport, and place household items across kitchen countertops and dining tables against a discontinuous contact objective.
+                      </p>
+                      <ul className="mt-4 space-y-2 text-xs text-slate-400">
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                          <span>3D Coulomb friction cones & contact force verification</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                          <span>Interactive 360° camera orbit & grasp focus inspection</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                          <span>Equal-budget 4-family CMA-ES representation race</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+                      <span className="text-xs text-orange-300 font-medium">Full Interactive Simulator</span>
+                      <a
+                        href="/arm"
+                        className="inline-flex items-center gap-2 rounded-xl bg-orange-500/20 border border-orange-400/40 px-4 py-2 text-xs font-bold uppercase tracking-wider text-orange-200 hover:bg-orange-500/30 transition-all hover:scale-105"
+                      >
+                        Launch Robot Arm Simulator →
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </Section>
               <Section
                 id="hpo"
@@ -74,32 +152,6 @@ export default function Page() {
                 title="Honesty ledger: every physics claim traced to its source, test, citation, and bead"
               >
                 <HonestyChipStack />
-              </Section>
-              <Section
-                id="furniture-catalog"
-                title="74-piece Sears Craftsman furniture catalog (with period-catalog provenance)"
-              >
-                <FurnitureCatalogInspector />
-              </Section>
-              <Section
-                id="ablation"
-                title="Phase prior vs learned-from-scratch transformer — same experiment"
-              >
-                <div className="space-y-4">
-                  <p className="max-w-3xl text-sm leading-7 text-slate-400">
-                    The flagship above uses a 5,040-D linear residual policy on a
-                    hand-designed phase basis — a strong, sample-efficient prior.
-                    The honest counterfactual is to learn the same task from
-                    scratch with a causal transformer trained by PPO+Muon. The
-                    comparison below reports <em>measured</em> receipts: the
-                    transformer runs real trained weights (exported from the
-                    sibling <code className="break-all">fs-g1-train</code> crate)
-                    with in-browser inference, and the CMA-ES side is searched
-                    live under your selected seed. Neither side is synthesized;
-                    every number is a measurement.
-                  </p>
-                  <PolicyAblationComparison />
-                </div>
               </Section>
               <Section id="technical-addendum" title="Technical addendum: what is really going on">
                 <TechnicalAddendum />
