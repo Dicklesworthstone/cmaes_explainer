@@ -30,7 +30,7 @@ export default function Page() {
         <MathProvider>
           <main id="main-content" className="relative min-h-screen">
             <Navbar />
-            <div className="pt-20 pb-24">
+            <div className="pt-16 pb-28 lg:pt-20 lg:pb-24">
               <Hero />
               <Section id="what-is-cmaes" title="What CMA-ES is and why anyone should care">
                 <CmaesIntro />

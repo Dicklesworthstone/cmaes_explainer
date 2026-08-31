@@ -14,7 +14,7 @@ export default function ArmPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Navbar />
-      <main className="mx-auto max-w-7xl px-6 pb-24 pt-20">
+      <main className="mx-auto max-w-7xl px-6 pt-16 pb-28 lg:pt-20 lg:pb-24">
         <section className="mx-auto max-w-4xl text-center">
           <span className="rounded-full border border-orange-300/25 bg-orange-500/10 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-orange-200">
             Black-box manipulation · grasp verified
