@@ -106,8 +106,8 @@ export function scanLidar(
         if (Math.abs(sinA) < 1e-9) {
           if (ly > hy || ly < -hy) hitLocal = false;
         } else {
-          const t1 = (-hy - ly) / sinA;
-          const t2 = (hy - ly) / sinA;
+          const t1 = (ly - hy) / sinA;
+          const t2 = (ly + hy) / sinA;
           const tNear = Math.min(t1, t2);
           const tFar = Math.max(t1, t2);
           if (tNear > tMin) tMin = tNear;
