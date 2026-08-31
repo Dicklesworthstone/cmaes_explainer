@@ -198,8 +198,8 @@ export default function ReceiptsPage() {
           {scores.length === 0 ? (
             <p className="text-sm text-slate-400">No scores yet. The template lives at scripts/perf/sota-rubric.template.md.</p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
+              <table className="w-full text-left text-sm min-w-full">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Component</th>
@@ -213,7 +213,7 @@ export default function ReceiptsPage() {
                 <tbody className="divide-y divide-white/5">
                   {scores.map((row, index) => (
                     <tr key={index} className="text-slate-200">
-                      <td className="px-4 py-3 font-mono text-xs">{row.component}</td>
+                      <td className="px-4 py-3 font-mono text-xs break-words min-w-0">{row.component}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}>
                           {row.parity}
@@ -234,7 +234,7 @@ export default function ReceiptsPage() {
                           {row.behavioralReceipt}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{row.citations}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400 break-words min-w-0">{row.citations}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -259,8 +259,8 @@ export default function ReceiptsPage() {
           {budgets.length === 0 ? (
             <p className="text-sm text-slate-400">No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.</p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
+              <table className="w-full text-left text-sm min-w-full">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Epic</th>

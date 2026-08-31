@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ServiceWorkerRegistration } from "./components/ServiceWorkerRegistration";
 import { SmoothScroll } from "./components/SmoothScroll";
 
 export const viewport: Viewport = {
@@ -30,6 +31,7 @@ export default function RootLayout(props: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="gradient-shell">
+        <ServiceWorkerRegistration />
         <SmoothScroll>
           <a
             href="#main-content"

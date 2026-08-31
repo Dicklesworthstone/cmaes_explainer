@@ -26,10 +26,11 @@ function spawnAblationWorker(onMessage: (msg: AblationWorkerResponse) => void): 
  * walking explainer. MEASURED contract (cmaes-ablation-real):
  *   1. CMA-ES side — a real live search (105-param phase-basis linear
  *      policy, 2,400 rollouts on G1TrainEnv) re-run per seed selection.
- *   2. Transformer side — REAL trained weights (fs-g1-train, PPO + Muon,
- *      native Rust) inferred in a worker and rolled out on the same env at
- *      the same 720-step horizon. Golden-vector parity + receipt
- *      cross-checks live in tests/policyAblationComparison.test.ts.
+ *   2. Transformer side — the committed native-Rust artifact is inferred in
+ *      a worker and transferred without retraining onto the current
+ *      action-causal stand-in. Its legacy training environment self-propelled
+ *      under zero action, so the contract mismatch is a measured failure, not
+ *      presented as a learned-locomotion success.
  * Known limits, disclosed in-card: the stand-in env models no push,
  * joint-limit, or slip telemetry, so those rows read "—".
  */
@@ -116,13 +117,14 @@ export function PolicyAblationComparison() {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
             <h2 className="text-base font-bold text-neutral-100">
-              Policy Architecture Ablation: Phase Prior vs Transformer
+              Action-Causal Transfer Check: Phase Prior vs Legacy Transformer
             </h2>
           </div>
           <p className="text-xs text-neutral-400">
-            Both sides measured live in a background worker: CMA-ES searched
-            here; transformer weights trained natively (fs-g1-train, PPO+Muon)
-            and inferred here — same env, same 720-step horizon.
+            Both sides execute for the same 720-step horizon on the current
+            action-causal stand-in. CMA-ES searches that contract live; the
+            committed transformer is a historical artifact trained on the
+            superseded self-propelling environment.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -145,19 +147,32 @@ export function PolicyAblationComparison() {
         </div>
       </div>
 
+      {!tf.trainedOnEvaluationContract ? (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100">
+          Contract mismatch, shown deliberately: transformer training used
+          <code className="mx-1">{tf.trainingEnvironmentContract}</code>, while
+          this evaluation uses
+          <code className="mx-1">{tf.evaluationEnvironmentContract}</code>.
+          Its all-zero policy head now earns zero locomotion distance. A new
+          owner-coupled checkpoint is required before this can be called a
+          learned walking policy.
+        </div>
+      ) : null}
+
       {/* High-level Efficiency Callout — both numbers measured */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-neutral-950/80 border border-neutral-800 p-3 rounded-lg text-center">
-          <div className="text-xs text-neutral-400">Sample Budget Ratio (measured)</div>
+          <div className="text-xs text-neutral-400">Historical sample-count ratio</div>
           <div className="text-lg font-bold text-emerald-400 mt-0.5">
             {result.efficiencyMultiplier >= 1
-              ? `${result.efficiencyMultiplier.toLocaleString("en-US", { maximumFractionDigits: 1 })}× fewer`
-              : `${(1 / result.efficiencyMultiplier).toLocaleString("en-US", { maximumFractionDigits: 1 })}× more`}
+              ? `CMA ${result.efficiencyMultiplier.toLocaleString("en-US", { maximumFractionDigits: 1 })}× fewer`
+              : `CMA ${(1 / result.efficiencyMultiplier).toLocaleString("en-US", { maximumFractionDigits: 1 })}× more`}
           </div>
           <div className="text-[10px] text-neutral-500">
             CMA-ES {cma.trainingSamplesRequired.toLocaleString()} vs transformer{" "}
             {tf.trainingSamplesRequired.toLocaleString()} env steps — whichever
-            direction it falls
+            direction it falls; this is not a quality comparison across
+            incompatible training contracts
           </div>
         </div>
 
@@ -194,8 +209,8 @@ export function PolicyAblationComparison() {
         />
         <PolicyCard
           accent="indigo"
-          title="Learned Causal Transformer (PPO + Muon)"
-          badge={`${tf.parameterCount.toLocaleString()} Parameters • Trained + Exported`}
+          title="Legacy Zero-Head Transformer Artifact"
+          badge={`${tf.parameterCount.toLocaleString()} Parameters • Transfer Failed`}
           receipt={tf}
         />
       </div>
@@ -205,19 +220,18 @@ export function PolicyAblationComparison() {
         <p className="leading-relaxed">
           Transformer: trained by{" "}
           <code className="text-neutral-200">fs-g1-train/examples/train_ablation.rs</code> —
-          PPO (clipped) + GAE, Muon/Adam, full 240-step episodes on the exact
-          Rust port of G1TrainEnv; {tf.trainingSamplesRequired.toLocaleString()} env
-          steps consumed. Weights + receipt:
-          public/robots/g1/transformer/. Both cards roll out on the disclosed
-          kinematic stand-in (no push/joint-limit/slip telemetry — those rows
-          read “—”). Training wallclock is host-specific; sample counts are exact.
+          PPO (clipped) + GAE and Muon/Adam; {tf.trainingSamplesRequired.toLocaleString()} env
+          steps were recorded. Weights and the historical receipt live under
+          public/robots/g1/transformer/. Both cards are evaluated here on the
+          current action-causal kinematic stand-in, which still has no
+          push/joint-limit/slip telemetry. It is not the full G1 owner.
         </p>
         <p className="leading-relaxed">
-          Disclosed: for this stand-in env the best checkpoint is a
-          (near-)zero-action policy — the env&rsquo;s known optimum — reached via
-          zero-initialized policy heads and confirmed rather than beaten by
-          further PPO updates. The measured budgets, survival, and speeds are
-          real either way; the training receipt carries the full story.
+          The exported policy head contains no nonzero values. The legacy
+          environment awarded target-speed progress to that inert output; the
+          current environment does not. Golden-vector parity proves the loader
+          reproduces the artifact, while this transfer result proves the
+          artifact does not control locomotion.
         </p>
       </div>
     </div>
@@ -291,6 +305,17 @@ function PolicyCard({
         </MetricRow>
         <MetricRow label="Joint Limits / Slip / Clearance">
           <span className="text-neutral-500">— (not modeled here)</span>
+        </MetricRow>
+        <MetricRow label="Train / Eval Contract">
+          <span
+            className={
+              r.trainedOnEvaluationContract
+                ? "text-emerald-400"
+                : "text-amber-400"
+            }
+          >
+            {r.trainedOnEvaluationContract ? "matched" : "mismatch"}
+          </span>
         </MetricRow>
       </div>
     </div>

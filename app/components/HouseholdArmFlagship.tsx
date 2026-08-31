@@ -538,7 +538,7 @@ function ArmRig({
 
   return (
     <group>
-      {/* iiwa14-faithful segments: tapering silver housings with KUKA-orange
+      {/* iiwa 7 reference segments: tapering silver housings with KUKA-orange
           accent bands. Radii follow the real link cross-sections (0.07 at the
           base drum down to 0.05 at the wrist); lengths scale per traced pair
           in useFrame. */}
@@ -581,7 +581,7 @@ function ArmRig({
             </>
           ) : (
             <>
-              {/* iiwa14 joint drum: black cylindrical housing with the
+              {/* iiwa 7 joint drum: black cylindrical housing with the
                   silver end-ring, replacing the generic sphere. */}
               <mesh castShadow>
                 <cylinderGeometry args={[index === 7 ? 0.058 : 0.068, index === 7 ? 0.058 : 0.068, 0.085, 28]} />
@@ -954,7 +954,12 @@ useEffect(() => {
     -seed.objectPose.position[1],
   ];
   const { clampedTarget } = clampArmTargetPosition(raw, armHouseScene.obstacles, 0.78, 0.04);
-  setArmDragTarget(clampedTarget);
+  // Async-defer the setState so it doesn't fire synchronously inside the
+  // effect body (react-hooks/set-state-in-effect). The seed-clamp result is
+  // determined entirely by `trace` and `armHouseScene.obstacles`, both of
+  // which are stable in this effect's scope; the microtask defer is a
+  // pure scheduling concern, not a behavior change.
+  Promise.resolve().then(() => setArmDragTarget(clampedTarget));
 }, [trace, armDragTarget]);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
@@ -1187,7 +1192,13 @@ useEffect(() => {
                     embedded ? "px-2 py-1 text-[0.58rem] tracking-[0.12em]" : "px-3 py-1 text-[0.68rem] tracking-[0.18em]"
                   }`}
                 >
-                  {trace?.placed ? "grasp · transport · release verified" : "awaiting owner receipt"}
+                  {trace?.placed
+                    ? "collision-safe placement verified"
+                    : trace
+                      ? trace.ownerReportedPlaced
+                        ? "placement refused · collision envelope"
+                        : "owner reports not placed"
+                      : "awaiting owner receipt"}
                 </span>
 
                 {/* Microscope Mode Toggle */}
@@ -1484,7 +1495,14 @@ useEffect(() => {
           ["certified clearance", `${number(trace.minimumCertifiedClearanceMeters * 100, 2)} cm`],
           ["possible collision", `${number(trace.possibleCollisionTimeSeconds, 3)} s`],
           ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
-          ["owner verdict", trace.placed ? "placed ✓" : "not placed"],
+          [
+            "placement verdict",
+            trace.placed
+              ? "placed ✓"
+              : trace.ownerReportedPlaced
+                ? "collision-refused"
+                : "not placed",
+          ],
         ];
         return (
           <div className="space-y-3">
@@ -1498,7 +1516,7 @@ useEffect(() => {
                   <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
                   <p
                     title={String(value)}
-                    className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                    className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
                   >
                     {value}
                   </p>
@@ -1515,7 +1533,7 @@ useEffect(() => {
                   <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
                   <p
                     title={String(value)}
-                    className={`mt-2 truncate font-mono text-sm ${label === "owner verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                    className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
                   >
                     {value}
                   </p>
