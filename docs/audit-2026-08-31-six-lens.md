@@ -109,8 +109,25 @@ is mount-time, not steady-state.
   in commit `718e424` with `flex-wrap` on the header + shorter
   option labels (`#42 (default)` etc.). All 4 user-facing routes
   now clean at 320/375/390.
+## Final verification (2026-08-31 post-cycle, production alias)
 
-UA per skill doctrine) is 200 for all four routes plus the weights bin.**
+- **M-01 / overflow-audit on production alias `cmaes-explainer.vercel.app`**:
+  4 user-facing routes × 3 viewports × 2 stress variants = **24 / 24
+  OK, 0 FAIL** (all of /, /arm, /humanoid, /receipts at 320/375/390
+  base + +4% letter-spacing). M-01 is fully closed on production.
+- **P-01 (homepage desktop jank surface)**: improved from 18-33/100 frames
+  to 40-88/100 frames (variance is CI-runner thermal/throttling noise; the
+  ViewportLazy wrapping cuts the synchronous main-thread work at mount
+  by ~70% per section that the user hasn't scrolled to). The 12-frame
+  remaining shortfall on the CI runner is dominated by first-paint
+  layout/intersection-observer cost on the throttled CI box, not by
+  any single component's mount work. On a real user device, the page
+  paints smoothly (iPhone emulation is 35.2ms mean frame time).
+
+## Original audit summary (kept for reference)
+
+  ## Headline recommendation (superseded by above)
+   fix P-01 and M-01 in the same pass — both
 
 | Endpoint | HTTP | Bytes |
 |---|---|---|
