@@ -158,20 +158,15 @@ export function Navbar() {
   // hamburger trigger on close.
   useEffect(() => {
     if (!mobileMenuOpen) return;
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    // Defer one frame so the menu's AnimatePresence + Framer transition has
-    // mounted the close button before we focus it.
+    // Defer one frame so AnimatePresence + Framer has mounted the close
+    // button before focusing it.
     const rafId = requestAnimationFrame(() => mobileMenuCloseBtnRef.current?.focus());
     return () => {
       cancelAnimationFrame(rafId);
-      // Only restore if focus is still inside the menu (user may have moved
-      // focus elsewhere via tap).
-      if (previouslyFocused && previouslyFocused.isConnected) {
-        previouslyFocused.focus();
-      } else {
-        mobileMenuOpenBtnRef.current?.focus();
-      }
+      // Always restore focus to the hamburger trigger on close: this is a
+  // full-screen sheet with a single trigger, so the trigger is the right
+  // restoration target regardless of where focus was when the user opened it.
+  mobileMenuOpenBtnRef.current?.focus();
     };
   }, [mobileMenuOpen]);
   const trapDialogTab = (e: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -466,7 +461,7 @@ export function Navbar() {
                 ref={mobileMenuCloseBtnRef}
                 aria-label="Close navigation menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-2 rounded-full bg-white/5 text-slate-300"
+                className="flex min-h-10 min-w-10 items-center justify-center rounded-full bg-white/5 text-slate-300 hover:bg-white/10"
               >
                 <X className="h-6 w-6" />
               </button>
