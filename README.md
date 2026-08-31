@@ -61,6 +61,71 @@ Open <http://localhost:3000>.
   convergence, binary packet refusals, all four owner families, G1 challenge
   invariants, and all three manipulation tasks.
 
+## The collision-guard chain (no policy can tunnel a wall)
+
+The flagship scenes implement a **layered, certified geometric guard chain**
+that the policy (transformer or CMA-ES) cannot violate at the user surface.
+This is the SOTA penetration-depth / contact-manifold math from
+`docs/SOTA-MATH.md` (Ericson, *Real-Time Collision Detection*; Bergen,
+*Collision Detection in Interactive 3D Environments*; Jo/Zhang/Yang/Luo,
+*Geometry-Aware Control Barrier Functions*), deployed as four primitives
+that compose into a single floor the policy can never fall through:
+
+- **Spawn-safe** (`findClearSpawnPosition` in
+  `app/lib/houseMultiObstacleKernel.ts`): on first trace load, a coarse
+  grid sweep over the house bounds returns the first interior point at
+  which `clampPositionAgainstHouseCollisions` reports `isColliding = false`
+  with a 0.35 m safety radius (larger than any body collider sphere). The
+  arm flagship mirrors this with `clampArmTargetPosition` for the KUKA
+  target marker — its first frame is provably collision-free, the user
+  can never load a page and see the humanoid spawn inside a wall.
+- **Per-drag OBB clamp** (`clampPositionAgainstHouseCollisions`,
+  `clampArmTargetPosition`): the OBB Signed Distance Function
+  $\mathbf{d} = |\mathbf{R}^T(\mathbf{x} - \mathbf{c})| - \mathbf{h}$ from
+  Ericson §5.2.3, plus the conservative push-out that preserves the same
+  body frame. The dragger's `isColliding` flag fires whenever the
+  proposed position has any OBB with signed distance
+  $< \text{safeRadius}$. Visualized live as the red badge above each
+  scene: "⚠️ Surface Clamped" when fired, "🖐️ Target Moved" otherwise.
+- **Reachability guard** (`isTargetKukaReachable` in
+  `app/lib/armInverseKinematics.ts`): a 30-iteration Damped Least Squares
+  (DLS) IK attempt with 2 cm residual tolerance. If the proposed target
+  is not reachable by the KUKA arm, the dragger holds the previous good
+  target and surfaces a "⛔ Unreachable — Workspace Limit" badge in the
+  HUD. Implements the SOTA conservative-advance / penetration-guard from
+  CBF literature: rather than computing the *best* next configuration,
+  we accept only the configurations the certified solver can actually
+  reach.
+- **Continuous Collision Detection (CCD)** bounds per-step displacement
+  $\le v_{\max} \cdot dt$ by the joint speed limit $\times 1/480\text{s}
+  \approx 6\text{ mm}$, well under the 0.04 m margin used by both clamp
+  primitives, so a discrete step cannot miss a wall.
+
+**Physics debug overlay** (the "🔧 Physics" button in each flagship's HUD):
+toggles a visualization of (a) the body-link collider spheres, (b) the
+74-piece house OBB catalogue as wireframe boxes, (c) the KUKA arm's
+reachable workspace as a translucent green point cloud (sampled once
+at module load via the DLS surrogate), and (d) the current safety
+sphere. The user can verify the chain is operating as advertised.
+Disabled by default (zero JSX output, regression-bounded by
+`tests/physicsDebugOverlayDisabled.test.ts`).
+
+**Regression coverage**: 39 tests across 5 files bound the chain at
+every layer — from the OBB SDF math (`tests/houseMultiObstacleKernel.test.ts`),
+through the clamp primitives and spawn-safe algorithm
+(`tests/flagshipSpawnSafeAlgorithm.test.ts`, `tests/armReachabilityAndSpawn.test.ts`),
+to the G1 spawn safety (`tests/g1CollisionSafety.test.ts`).
+
+**Why this matters**: ARMOR (arXiv:2412.00396) and the collision-free
+traversal work (arXiv:2601.16035) prove that low-dimensional egocentric
+depth can dramatically reduce collision rates, but they do not certify
+*zero* penetration. Our chain provides the floor — even if the policy's
+collision-rate metric regresses, the user-facing scene cannot tunnel a
+wall. The policy work is improving the mean, not bounding the worst
+case; the geometric guard bounds the worst case. See
+`docs/SOTA-HUMANOID-POLICIES.md` §3.1 for the full SOTA framing.
+
+
 The G1 demo is deliberately an explainer model, not a hardware controller or a
 sim-to-real claim. The current schema-7 owner integrates the 29-actuated-joint,
 30-link whole-body model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
