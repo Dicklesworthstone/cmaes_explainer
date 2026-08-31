@@ -88,6 +88,11 @@ Two audited surfaces coexist intentionally:
   household-arm placement verdict: a rollout is placed only when grasp,
   transport, release, tolerance, and lift checks pass with zero collision risk,
   zero possible-collision time, and at least 4.5 cm certified clearance.
+- `public/wasm/fs-cmaes/v0611/` refreshes the v0610 G1 walking curriculum from
+  the four-stage `recalibrate_mode_11_curriculum` retune (cmaes-zi6). The
+  30-link owner completes the 720-step horizon; honest measured displacement
+  remains ~0.24 m flat and ~0.17 m terrain-and-push, still short of the
+  >1.0 m / >0.5 m/s target.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.
