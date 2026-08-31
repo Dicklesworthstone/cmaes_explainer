@@ -233,7 +233,87 @@ export function conservativeSegmentClearanceToOBB(
   return minimumSampleDistance - intervalLength * 0.5;
 }
 
+export interface SweptCcdResult {
+  /** True iff the swept sphere crossed the OBB. */
+  wasHit: boolean;
+  /** Conservative-advancement entry point (sphere is just outside the OBB
+   *  here). Undefined when wasHit is false. */
+  entryPoint?: [number, number, number];
+  /** Conservative entry parameter in [0, 1] (0 = at prevPos, 1 = at currentPos). */
+  entryT?: number;
+  /** The OBB that was hit, when wasHit is true. */
+  obb?: OrientedBoundingBox;
+}
+
+/**
+ * SOTA swept-volume continuous collision detection for a sphere swept
+ * along a straight segment against an OBB. When the previous-frame
+ * position is outside the OBB and the current-frame kernel position is
+ * inside, the per-frame snap-to-surface projection would teleport the
+ * link to the deep-interior closest point, which is visually wrong.
+ * The conservative-advancement CCD finds the segment-vs-OBB entry
+ * point and snaps the link to the surface there, which is what
+ * Redon, Lin, Benichou call "interval analysis for CCD" (2002).
+ *
+ * Implementation: we use the existing conservativeSegmentClearanceToOBB
+ * (1-Lipschitz sample bound) to detect whether the segment can be
+ * closer than `radius` to the OBB. If so, we bisect the segment to
+ * pin the entry point to sub-mm precision.
+ */
+export function sweptSphereOBBEntryPoint(
+  prevPos: [number, number, number],
+  currentPos: [number, number, number],
+  radius: number,
+  obb: OrientedBoundingBox,
+  maximumSampleSpacingMeters = 0.005,
+): SweptCcdResult {
+  if (!prevPos.every(Number.isFinite) || !currentPos.every(Number.isFinite)) {
+    return { wasHit: false };
+  }
+  const clearance = conservativeSegmentClearanceToOBB(
+    prevPos,
+    currentPos,
+    obb,
+    maximumSampleSpacingMeters,
+  );
+  if (clearance >= radius) {
+    return { wasHit: false };
+  }
+  // Bisect: find the largest t in [0, 1] such that the segment from
+  // prevPos to prevPos + t*(currentPos - prevPos) stays clear of the OBB
+  // (i.e. distanceToOBB >= radius). The entry point is just past that t.
+  let lo = 0;
+  let hi = 1;
+  for (let iter = 0; iter < 16; iter++) {
+    const mid = 0.5 * (lo + hi);
+    const px = prevPos[0] + (currentPos[0] - prevPos[0]) * mid;
+    const py = prevPos[1] + (currentPos[1] - prevPos[1]) * mid;
+    const pz = prevPos[2] + (currentPos[2] - prevPos[2]) * mid;
+    const d = distanceToOBB([px, py, pz], obb);
+    if (d >= radius) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  // lo is the last-clear point; project to the OBB surface with the
+  // requested radius as the clearance.
+  const exitPoint: [number, number, number] = [
+    prevPos[0] + (currentPos[0] - prevPos[0]) * lo,
+    prevPos[1] + (currentPos[1] - prevPos[1]) * lo,
+    prevPos[2] + (currentPos[2] - prevPos[2]) * lo,
+  ];
+  const projected = projectPointOutOfOBB(exitPoint, obb, radius);
+  return {
+    wasHit: true,
+    entryPoint: projected.point,
+    entryT: lo,
+    obb,
+  };
+}
+
 export function closestPointOnOBB(
+
   point: [number, number, number],
   obb: OrientedBoundingBox,
 ): [number, number, number] {

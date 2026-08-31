@@ -41,6 +41,7 @@ import {
   enclosingSpawnRadius,
   findClearSpawnPosition,
   projectPointOutOfOBB,
+  sweptSphereOBBEntryPoint,
 } from "../lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 type ScalableFamily = Exclude<CmaFamily, "full">;
@@ -651,7 +652,12 @@ function RobotPlayback({
   positionOffset?: [number, number, number] | null;
 }) {
   const playbackSeconds = useRef(0);
-
+  // Per-link previous projected position (in owner frame). Used by the
+ // swept-volume CCD so a link that tunnels through a thin OBB in one
+ // frame is snapped to the swept entry point, not the deep-interior
+ // closest point. Reset on trace change so a new run starts fresh.
+  const prevProjectedPositionsRef = useRef<Array<[number, number, number]> | null>(null);
+  const prevTraceKeyRef = useRef<string>("");
   useFrame((_, deltaSeconds) => {
     if (reduceMotion || !isPlaying || trace.samples.length < 2) return;
     const duration = trace.samples.at(-1)?.timeSeconds ?? 0;
@@ -685,14 +691,20 @@ function RobotPlayback({
     ? (() => {
         let next: typeof sample = {
           ...sample,
-          linkPoses: sample.linkPoses.map((p) => ({ ...p })),
         };
+        const traceKey = `${trace.samples.length}:${sample.timeSeconds}:${sample.linkPoses.length}`;
+        if (prevTraceKeyRef.current !== traceKey) {
+          prevTraceKeyRef.current = traceKey;
+          prevProjectedPositionsRef.current = null;
+        }
+        const prevPositions = prevProjectedPositionsRef.current;
         for (let link = 0; link < next.linkPoses.length; link++) {
           const pose = next.linkPoses[link];
           const p = ownerToThree(pose.position);
           let qx = p[0];
           let qy = p[1];
           let qz = p[2];
+          // First, per-position projection (the existing pipeline).
           for (const obb of houseSceneData.obstacles) {
             const projected = projectPointOutOfOBB(
               [qx, qy, qz],
@@ -705,6 +717,32 @@ function RobotPlayback({
               qz = projected.point[2];
             }
           }
+          // Then, swept-volume CCD: if we have a previous projected
+          // position for this link, check the swept segment from that
+          // point to the kernel position against every OBB. On a hit,
+          // override with the swept entry point so the link does not
+          // visibly teleport to a deep-interior closest point. The
+          // kernel trace stays untouched - this is a renderer-only
+          // conservative-advancement pass (Redon, Lin, Benichou 2002;
+          // Ericson 2005 §5.5.7). On the first frame prevPositions is
+          // null and we skip the CCD; the per-position projection is
+          // already a safe starting point.
+          if (prevPositions && prevPositions[link]) {
+            const prevThree = prevPositions[link];
+            for (const obb of houseSceneData.obstacles) {
+              const ccd = sweptSphereOBBEntryPoint(
+                [prevThree[0], prevThree[1], prevThree[2]],
+                [qx, qy, qz],
+                G1_LINK_CLEARANCE_METERS,
+                obb,
+              );
+              if (ccd.wasHit && ccd.entryPoint) {
+                qx = ccd.entryPoint[0];
+                qy = ccd.entryPoint[1];
+                qz = ccd.entryPoint[2];
+              }
+            }
+          }
           // Three.js uses (x, z, -y) world from owner (x, y, z) - reverse
           // the conversion to store the projected value back in owner frame.
           next.linkPoses[link] = {
@@ -712,6 +750,11 @@ function RobotPlayback({
             position: [qx, -qz, qy],
           };
         }
+        prevProjectedPositionsRef.current = next.linkPoses.map((p) => [
+          p.position[0],
+          p.position[1],
+          p.position[2],
+        ]);
         return next;
       })()
     : null;
