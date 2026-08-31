@@ -192,14 +192,13 @@ export default function ReceiptsPage() {
           </div>
         </header>
 
-        {/* SOTA rubric section. */}
-        <section className="space-y-4">
+        <section className="space-y-4 min-w-0">
           <h2 className="text-xl font-semibold text-white">SOTA-rubric scores</h2>
           {scores.length === 0 ? (
             <p className="text-sm text-slate-400">No scores yet. The template lives at scripts/perf/sota-rubric.template.md.</p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
+              <table className="w-full min-w-full text-left text-sm">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Component</th>
@@ -254,13 +253,13 @@ export default function ReceiptsPage() {
         </section>
 
         {/* Budgets section. */}
-        <section className="space-y-4">
+        <section className="space-y-4 min-w-0">
           <h2 className="text-xl font-semibold text-white">Per-epic performance budgets</h2>
           {budgets.length === 0 ? (
             <p className="text-sm text-slate-400">No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.</p>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
+              <table className="w-full min-w-full text-left text-sm">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Epic</th>
