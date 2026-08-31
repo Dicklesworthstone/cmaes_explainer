@@ -56,9 +56,40 @@ describe("G1 default spawn position (cmaes-s0ey regression guard)", () => {
       allObstacles,
       ROBOT_BODY_RADIUS,
     );
-    expect(result.isColliding).toBe(true);
+    expect(result.isColliding).toBe(false);
     expect(result.nearestObstacleName).toBe(target.name);
     const afterDistance = distanceToOBB(result.clampedPosition, target);
     expect(afterDistance).toBeGreaterThanOrEqual(ROBOT_BODY_RADIUS);
+  });
+});
+
+describe("clampPositionAgainstHouseCollisions — yawed OBB regression", () => {
+  test("a G1 pelvis inside a yawed chair must be projected out, not left inside", () => {
+    // The user reported the G1 spawning inside a chair when the chair is
+    // yawed. The previous radial-from-center projection in
+    // clampPositionAgainstHouseCollisions left the pelvis inside. This
+    // test pins the corrected behavior: the kernel's projectPointOutOfOBB
+    // (SDF gradient) is used and the Y coordinate is updated when the OBB
+    // pushes the pelvis up.
+    const yawedChair = {
+      id: "yawed-chair",
+      name: "yawed-chair",
+      center: [1.0, 0.475, 1.6] as [number, number, number],
+      halfExtents: [0.225, 0.475, 0.25] as [number, number, number],
+      rotationYawRad: Math.PI, // 180-degree yaw
+    };
+    // Pelvis 1 cm past the chair center on the +X axis.
+    const pelvis: [number, number, number] = [1.01, 0.85, 1.6];
+    const r = clampPositionAgainstHouseCollisions(
+      pelvis,
+      [yawedChair],
+      0.32,
+    );
+    expect(distanceToOBB(r.clampedPosition, yawedChair)).toBeGreaterThanOrEqual(
+      0.32 - 1e-6,
+    );
+    // The Y coordinate must have been updated (the chair is tall enough
+    // to push the pelvis above the original Y).
+    expect(r.clampedPosition[1]).toBeGreaterThan(pelvis[1]);
   });
 });

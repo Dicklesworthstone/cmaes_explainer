@@ -905,56 +905,72 @@ export function clampPositionAgainstHouseCollisions(
     maxZ: 5.2,
   }
 ): {
-  clampedPosition: [number, number, number];
-  isColliding: boolean;
-  nearestObstacleName: string | null;
-  minClearance: number;
+ clampedPosition: [number, number, number];
+ isColliding: boolean;
+ nearestObstacleName: string | null;
+ minClearance: number;
 } {
-  let cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, point[0]));
-  const cy = point[1];
-  let cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, point[2]));
+ let cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, point[0]));
+ let cy = point[1];
+ let cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, point[2]));
 
-  let isColliding = false;
-  let nearestObstacleName: string | null = null;
-  let minClearance = 999.0;
+ let isColliding = false;
+ let nearestObstacleName: string | null = null;
+ let minClearance = 999.0;
 
-  // Run up to 4 iterative relaxation passes to handle corners and tight gaps
-  for (let pass = 0; pass < 4; pass++) {
-    for (const obb of obstacles) {
-      if (obb.exemptFromPenalty) continue;
-      const dist = distanceToOBB([cx, cy, cz], obb);
-      const clearance = dist - safeRadius;
-      if (clearance < minClearance) {
-        minClearance = clearance;
-        nearestObstacleName = obb.name;
-      }
-      if (dist < safeRadius) {
-        isColliding = true;
-        nearestObstacleName = obb.name;
-        // Compute push-out vector from OBB center to current point
-        const dx = cx - obb.center[0];
-        const dz = cz - obb.center[2];
-        const len = Math.hypot(dx, dz);
-        if (len > 0.001) {
-          const nx = dx / len;
-          const nz = dz / len;
-          const pushOut = safeRadius - dist;
-          cx += nx * pushOut;
-          cz += nz * pushOut;
-        } else {
-          cx += safeRadius;
-        }
-      }
-    }
-    // Re-clamp bounds after push-out
-    cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, cx));
-    cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, cz));
-  }
+ // SOTA OBB projection: use the true SDF gradient (handles interior
+ // points, yawed OBBs, and non-cubic aspect ratios). The previous
+ // radial-from-center projection landed targets inside yawed furniture
+ // (e.g. chairs rotated 180 degrees about Y). Run multiple Gauss-Seidel
+ // passes to relax the case where one OBB's push-out drives the target
+ // into a second OBB.
+ for (let pass = 0; pass < 4; pass++) {
+ let passMoved = false;
+ for (const obb of obstacles) {
+ if (obb.exemptFromPenalty) continue;
+ const dist = distanceToOBB([cx, cy, cz], obb);
+ const clearance = dist - safeRadius;
+ if (clearance < minClearance) {
+ minClearance = clearance;
+ nearestObstacleName = obb.name;
+ }
+ if (dist < safeRadius) {
+ isColliding = true;
+ nearestObstacleName = obb.name;
+ const projected = projectPointOutOfOBB(
+ [cx, cy, cz],
+ obb,
+ safeRadius,
+ );
+ if (projected.wasInside) {
+ cx = projected.point[0];
+ cy = projected.point[1];
+ cz = projected.point[2];
+ passMoved = true;
+ }
+ }
+ }
+ if (!passMoved) break;
+ // Re-clamp bounds after push-out
+ cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, cx));
+ cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, cz));
+ }
 
-  return {
-    clampedPosition: [cx, cy, cz],
-    isColliding,
-    nearestObstacleName,
-    minClearance: Math.max(0, minClearance),
-  };
+ // Recompute isColliding based on the FINAL state so the caller learns
+ // whether the projection succeeded.
+ let finalColliding = false;
+ for (const obb of obstacles) {
+ if (obb.exemptFromPenalty) continue;
+ if (distanceToOBB([cx, cy, cz], obb) < safeRadius) {
+ finalColliding = true;
+ break;
+ }
+ }
+
+ return {
+ clampedPosition: [cx, cy, cz],
+ isColliding: finalColliding,
+ nearestObstacleName,
+ minClearance: Math.max(0, minClearance),
+ };
 }

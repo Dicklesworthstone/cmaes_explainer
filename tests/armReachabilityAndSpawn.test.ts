@@ -124,3 +124,40 @@ describe("arm spawn-safe — the arm cannot spawn inside a surface", () => {
     }
   });
 });
+
+describe("clampArmTargetPosition — yawed OBB regression (cmaes-pvz followup)", () => {
+  test("a target inside a yawed chair must be projected out, not left inside", () => {
+    // The user reported "the arm CANNOT go through objects". The previous
+    // radial-from-center projection in clampArmTargetPosition left targets
+    // inside yawed furniture. This test pins the corrected behavior: the
+    // kernel's projectPointOutOfOBB (SDF gradient) is used and the Y
+    // coordinate is updated when the OBB pushes the target up.
+    const yawedChair = {
+      id: "yawed-chair",
+      name: "yawed-chair",
+      center: [1, 0.475, 1.6] as [number, number, number],
+      halfExtents: [0.225, 0.475, 0.25] as [number, number, number],
+      rotationYawRad: Math.PI, // 180-degree yaw
+    };
+    // Target 1 cm past the chair center on the +X axis (inside the chair).
+    const target: [number, number, number] = [1.01, 0.85, 1.6];
+    const distBefore = distanceToOBB(target, yawedChair);
+    expect(distBefore).toBeLessThan(0); // confirm target is inside
+    const { clampedTarget, isColliding, minClearance } = clampArmTargetPosition(
+      target,
+      [yawedChair],
+      tableHeight,
+      safeRadius,
+    );
+    expect(isColliding).toBe(false);
+    // After projection, the target must clear the chair by the margin.
+    expect(distanceToOBB(clampedTarget, yawedChair)).toBeGreaterThanOrEqual(
+      safeRadius - 1e-6,
+    );
+    // The Y coordinate must have been updated (the chair is tall enough
+    // to push the target above the original Y).
+    expect(clampedTarget[1]).toBeGreaterThan(target[1]);
+    expect(clampedTarget[1]).toBeGreaterThanOrEqual(tableHeight + safeRadius);
+    expect(minClearance).toBeGreaterThanOrEqual(0);
+  });
+});
