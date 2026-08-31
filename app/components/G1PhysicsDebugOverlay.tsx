@@ -1,36 +1,30 @@
 "use client";
 
-// G1PhysicsDebugOverlay — visualization of the collision-guard chain.
+// G1PhysicsDebugOverlay — visual inspection surface for the drag guard.
+// It renders:
 //
-// The user complained "the humanoid robot spawns INSIDE A wall" and "I
-// cannot see why my drag is being rejected." This overlay shows the
-// actual geometry the guard operates on, so the user can SEE:
-//
-//   1. The 30 body-link sphere colliders as cyan wireframe outlines
-//      (matches the per-link radius the ragdoll uses for its visual
-//      Segment rendering).
+//   1. The 30 body-link pose envelopes as cyan wireframe outlines. These are
+//      orientation aids sized like the rendered links; they are not the
+//      collision guard's owning geometry.
 //   2. The 74+ house OBB obstacles as red wireframe boxes with their
-//      actual yaw rotation. The user can verify the guard rejects
-//      drags that would penetrate these volumes.
+//      actual yaw rotation.
 //   3. A safety ring on the ground at the robot's current pelvis
 //      position with the 0.32 m safe radius. This is the same
 //      sphere clampPositionAgainstHouseCollisions uses as the proxy
 //      for the full body — when the safety ring intersects a red
 //      obstacle box, the dragger will be flagged isColliding.
 //
-// The overlay is OFF by default. Toggle with the "🔧 Physics" button
-// in the G1 flagship top-right cluster. When OFF, zero overhead
-// (returns null early).
+// The collision guard currently owns the yellow pelvis proxy and the red house
+// obstacles. The overlay is OFF by default and allocates no edge geometry until
+// the user enables it.
 
 import React from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
 import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
 
-// 30-link body sphere radii — must match the radius logic in
-// G1WalkingFlagship's RobotPose capsule rendering (lines ~515-520).
-// We duplicate the table here rather than import it to keep this
-// component decoupled from the flagship's internal link table.
+// 30-link body pose-envelope radii, sized to the RobotPose rendering. These
+// are visual aids only; the drag guard uses the separate pelvis safety proxy.
 const LINK_RADIUS: Record<string, number> = {
   pelvis: 0.075,
   torso: 0.065,
@@ -84,10 +78,10 @@ export function G1PhysicsDebugOverlay({
   pelvisPosition,
   safeRadius = 0.32,
 }: G1PhysicsDebugOverlayProps) {
-  if (!enabled) return null;
-
-  // Pre-build the OBB wireframe geometry once per overlay mount.
+  // Hooks remain unconditional so toggling the overlay cannot change hook
+  // order. Disabled renders allocate no Three.js edge geometry.
   const obstacleEdges = React.useMemo(() => {
+    if (!enabled) return [];
     return obstacles.map((obb) => {
       const geometry = new THREE.BoxGeometry(
         obb.halfExtents[0] * 2,
@@ -98,16 +92,38 @@ export function G1PhysicsDebugOverlay({
       geometry.dispose();
       return { edges, obb };
     });
-  }, [obstacles]);
+  }, [enabled, obstacles]);
+  React.useEffect(
+    () => () => {
+      for (const { edges } of obstacleEdges) edges.dispose();
+    },
+    [obstacleEdges],
+  );
+
+  if (!enabled) return null;
+
+  const samplePelvis = sample
+    ? ownerToThree(sample.linkPoses[0]?.position ?? [0, 0, 0])
+    : pelvisPosition;
+  const bodyOffset: [number, number, number] = [
+    pelvisPosition[0] - samplePelvis[0],
+    pelvisPosition[1] - samplePelvis[1],
+    pelvisPosition[2] - samplePelvis[2],
+  ];
 
   return (
     <group>
-      {/* 1. Body link sphere colliders — cyan wireframe outlines */}
+      {/* 1. Body-link pose envelopes — orientation aids, not guard geometry */}
       {sample
         ? sample.linkPoses.map((pose, idx) => {
             const name = G1_LINK_NAMES[idx] ?? `link-${idx}`;
             const r = LINK_RADIUS[name] ?? 0.042;
-            const pos = ownerToThree(pose.position);
+            const raw = ownerToThree(pose.position);
+            const pos: [number, number, number] = [
+              raw[0] + bodyOffset[0],
+              raw[1] + bodyOffset[1],
+              raw[2] + bodyOffset[2],
+            ];
             return (
               <mesh key={`col-${idx}`} position={pos}>
                 <sphereGeometry args={[r, 8, 6]} />
