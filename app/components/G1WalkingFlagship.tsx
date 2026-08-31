@@ -1188,6 +1188,13 @@ function RobotStage({
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.0, 0.75, 0.0] as [number, number, number]);
+  const displayedPelvisThree: [number, number, number] = robotDragOffset
+    ? [
+        pelvisThree[0] + robotDragOffset[0],
+        pelvisThree[1] + robotDragOffset[1],
+        pelvisThree[2] + robotDragOffset[2],
+      ]
+    : pelvisThree;
 
   const bgColor = timeOfDay === "evening-glow" ? "#120e0b" : timeOfDay === "golden-hour" ? "#1a120b" : "#12151c";
 
@@ -1252,7 +1259,7 @@ function RobotStage({
         onCollisionChange={onDragCollisionChange ?? (() => {})}
       />
 
-      <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={pelvisThree} />
+      <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={displayedPelvisThree} />
     </Canvas>
   );
 }
