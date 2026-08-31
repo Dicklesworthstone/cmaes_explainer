@@ -706,6 +706,7 @@ function ArmTargetDragger({
     e.stopPropagation();
     setIsDragging(true);
     setUnreachable(false);
+    onUnreachableChange?.(false);
     startPointerRef.current = [e.point.x, e.point.z];
     startPosRef.current = targetPos;
   };
