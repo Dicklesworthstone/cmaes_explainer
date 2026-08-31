@@ -162,6 +162,10 @@ Two audited surfaces coexist intentionally:
   keeping standing and walking biases task-scoped. The 30-link owner completes
   all 720 steps at ~0.40 m flat and ~0.50 m under terrain-and-push, with total
   flight held below the strict 0.10 s anti-jump boundary in both receipts.
+- `public/wasm/fs-cmaes/v0613/` adds owner-side feasible-step control for the
+  household arm. Certified hard penetration may not increase: proposed joint
+  updates are deterministically backtracked, while intentional gripper/object
+  proximity remains outside the hard obstacle and self-collision barrier.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.

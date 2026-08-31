@@ -1,6 +1,6 @@
 // Safety and coordinate-contract checks for the versioned G1 owner trace.
 //
-// Important boundary: the v0612 terrain-and-push owner does not consume the
+// Important boundary: the v0613 terrain-and-push owner does not consume the
 // Craftsman house wall OBBs. Whole-house path collision is verified by
 // houseMultiObstacleKernel.test.ts, where those obstacles actually participate
 // in the computation. The owner checks below cover finite 30-link poses, a
@@ -33,18 +33,18 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0612/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v0612/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();
 await ownerModule.default({ module_or_path: ownerBytes });
 
 const Evaluator = ownerModule.G1WalkingVizEvaluator;
-if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from v0612 WASM");
+if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from v0613 WASM");
 const evaluator = new Evaluator(
   new Float64Array([
     0x47315737,
@@ -101,7 +101,7 @@ function receiptWithoutSamples(receipt: G1TraceReceipt): G1ObjectiveReceipt {
   return objective;
 }
 
-describe("G1 v0612 owner trace safety envelope", () => {
+describe("G1 v0613 owner trace safety envelope", () => {
   test("emits finite, bounded, 30-link world poses", () => {
     expect(curriculumTrace.samples.length).toBeGreaterThanOrEqual(5);
     assertFiniteBoundedOwnerTrace(curriculumTrace);
@@ -127,7 +127,7 @@ describe("G1 v0612 owner trace safety envelope", () => {
   });
 
   test("reports the honest current curriculum outcome", () => {
-    // v0.6.12 (v073 constraint-aware retune): the 30-link flat curriculum now
+    // v0.6.13 (v073 constraint-aware retune): the 30-link flat curriculum now
     // completes the full 720-step horizon with ~0.31 m forward displacement and
     // ~0.08 s total flight. The >1.0 m / >0.5 m/s bead target remains unmet, so
     // the honest current displacement stays documented in g1_walking.rs
