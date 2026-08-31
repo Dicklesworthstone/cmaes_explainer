@@ -29,6 +29,7 @@ import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
 import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
 import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
 import { G1PhysicsDebugOverlay } from "./G1PhysicsDebugOverlay";
+import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
@@ -2215,6 +2216,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   onDragCollisionChange={setDragCollisionState}
                 />
               )}
+              <FreeFlyHintBanner visible={cameraView === "fly"} />
             </div>
           </div>
 

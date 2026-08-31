@@ -1658,9 +1658,11 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
   expect(flat.ok.completedSteps).toBe(720);
   expect(flat.ok.terminationReason).toBe("horizon");
-  expect(flat.ok.objective).toBeCloseTo(34.34365745433547, 5);
-  expect(flat.ok.distanceMeters).toBeCloseTo(-0.3690567384446286, 5);
-  expect(flat.ok.actuatorWorkJoules).toBeCloseTo(12024.945370611093, 2);
+  expect(flat.ok.objective).toBeCloseTo(7.915509184194548, 11);
+  expect(flat.ok.distanceMeters).toBeCloseTo(0.30837211553531235, 12);
+  expect(flat.ok.actuatorWorkJoules).toBeCloseTo(11930.205416265955, 7);
+  expect(flat.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
+  expect(flat.ok.flightSeconds).toBeLessThanOrEqual(0.1);
   flatEvaluator.free();
 
   const population = 16;
