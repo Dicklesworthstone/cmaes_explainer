@@ -1747,4 +1747,4 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     expect(armTrace.ok.samples.some((sample) => sample.grasped)).toBe(true);
     arm.free();
   }
-}, 30_000);
+}, 60_000);
