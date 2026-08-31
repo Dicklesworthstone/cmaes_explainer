@@ -156,8 +156,6 @@ const g1ActiveRuns = new Map<string, G1ActiveRun>();
 // optimize, future code) can interleave and corrupt the CMA session.
 // Hold the gate for the lifetime of one request and queue any extras.
 let g1Gate: Promise<void> = Promise.resolve();
-let g1QueueDepth = 0;
-
 function g1FreeRun(run: G1ActiveRun): void {
   try {
     run.session.free();

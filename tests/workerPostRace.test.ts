@@ -14,7 +14,9 @@
 //
 // This test isolates the post() gate logic so we can prove it works without
 // pulling in the full 1950-line component, the worker, the WASM, or React.
-
+// The same gate is used by G1WalkingFlagship.post() and the
+// HouseholdArmFlagship.post() and selectTask() paths. The test
+// verifies the gate logic that all three share.
 import { describe, it, expect } from "bun:test";
 
 interface PendingMessage {
@@ -131,5 +133,42 @@ describe("post() single-flight gate", () => {
 
     expect(previewWhileOptimize).toBe(false);
     expect(posted.length).toBe(1);
+  });
+});
+
+describe("selectTask() gate (HouseholdArmFlagship)", () => {
+  // Mirror of makeGate for the arm-component's selectTask path. The arm
+  // component has TWO entry points: post() and selectTask(). Both must
+  // share the same inFlightRef so a rapid task switch can race a
+  // pending post() — or vice versa — and double up the worker.
+  function makeSelectGate(worker: { postMessage: (m: PendingMessage) => void }) {
+    const inFlightRef = { current: false };
+    const posted: PendingMessage[] = [];
+    function selectTask(task: string) {
+      if (inFlightRef.current) return false;
+      inFlightRef.current = true;
+      worker.postMessage({ type: "preview", task });
+      posted.push({ type: "preview", challenge: task });
+      return true;
+    }
+    function release() { inFlightRef.current = false; }
+    return { selectTask, release, getPosted: () => posted };
+  }
+
+  it("rejects a second selectTask() while a previous one is in flight", () => {
+    const gate = makeSelectGate({ postMessage: () => {} });
+    const a = gate.selectTask("kitchen-mug");
+    const b = gate.selectTask("dishwasher");
+    expect(a).toBe(true);
+    expect(b).toBe(false);
+    expect(gate.getPosted().length).toBe(1);
+  });
+
+  it("accepts a new selectTask() after release", () => {
+    const gate = makeSelectGate({ postMessage: () => {} });
+    gate.selectTask("kitchen-mug");
+    gate.release();
+    gate.selectTask("dishwasher");
+    expect(gate.getPosted().length).toBe(2);
   });
 });

@@ -48,6 +48,12 @@ export interface HouseholdWorld {
    *  `dt` each call to `stepHouseholdPhysicsWorld`. The sleep manager's
    *  dwell-time logic reads this clock. */
   elapsedSeconds: number;
+  /** Sleep manager event cursor. MultiBodySleepManager.getEvents returns
+   *  the FULL accumulated event history (the API has no consume), so we
+   *  track the last observed count and return only the delta each tick.
+   *  This keeps `HouseholdStepResult.sleepTransitions` from growing
+   *  unboundedly over a world's lifetime. */
+  lastSleepEventCount: number;
 }
 
 export interface HouseholdStepResult {
@@ -97,10 +103,10 @@ export function createHouseholdWorld(
     sleep,
     meta: metaById,
     gravity: options.gravity ?? DEFAULT_GRAVITY,
-    ccdSpeedThreshold: options.ccdSpeedThreshold ?? 4.0,
+    ccdSpeedThreshold: options.ccdSpeedThreshold ?? 5.0,
     dt: options.dt ?? 1 / 60,
-    sdf: defaultGroundPlaneSdf,
     elapsedSeconds: 0,
+    lastSleepEventCount: 0,
   };
 }
 
@@ -128,9 +134,11 @@ export function stepHouseholdPhysicsWorld(
   }
   world.elapsedSeconds += world.dt;
   world.sleep.updateSleepStates(world.dt, world.elapsedSeconds);
-  const sleepTransitions: SleepTransitionEvent[] = world.sleep.getEvents();
-  const manifolds = world.contactGraph.updateContacts();
+  const allSleepEvents: SleepTransitionEvent[] = world.sleep.getEvents();
+  const sleepTransitions: SleepTransitionEvent[] = allSleepEvents.slice(world.lastSleepEventCount);
+  world.lastSleepEventCount = allSleepEvents.length;
 
+  const manifolds = world.contactGraph.updateContacts();
   const ccdImpacts: HouseholdStepResult["ccdImpacts"] = [];
   if (world.sdf) {
     for (const body of bodies.values()) {
@@ -191,19 +199,20 @@ export function stepHouseholdPhysicsWorld(
     if (body.isStatic) continue;
     const meta = world.meta.get(body.id);
     if (!meta?.rolling) continue;
-    // stepRollingSphere mutates its body argument in place (integrates the
-    // sphere on the floor plane), so we build a complete RollingBody from
-    // the RigidBody + meta, let the integrator update it, and write the
-    // resulting planar state back to the 3D rigid body.
+    // stepRollingSphere is a 2D planar integrator whose vertical axis is
+    // index [1] (Y-down). The Frankensim contact/LCP world is Z-up, so swap
+    // Y and Z when crossing the boundary: their [0,1,2] ↔ our [0,2,1].
+    // Gravity in their frame is negative-Y; with the swap that becomes
+    // negative-Z, i.e. our floor at z = 0 with the usual downward pull.
     const rollingBody: RollingBody = {
       id: body.id,
       type: "sphere",
-      position: [body.position[0], body.position[1], body.position[2]],
-      velocity: [body.linearVelocity[0], body.linearVelocity[1], body.linearVelocity[2]],
+      position: [body.position[0], body.position[2], body.position[1]],
+      velocity: [body.linearVelocity[0], body.linearVelocity[2], body.linearVelocity[1]],
       angularVelocity: [
         body.angularVelocity[0],
-        body.angularVelocity[1],
         body.angularVelocity[2],
+        body.angularVelocity[1],
       ],
       mass: body.mass,
       radius: meta.boundingRadius,
@@ -215,18 +224,18 @@ export function stepHouseholdPhysicsWorld(
     stepRollingSphere(rollingBody, 0.0, world.dt);
     body.position = [
       rollingBody.position[0],
-      rollingBody.position[1],
       rollingBody.position[2],
+      rollingBody.position[1],
     ];
     body.linearVelocity = [
       rollingBody.velocity[0],
-      rollingBody.velocity[1],
       rollingBody.velocity[2],
+      rollingBody.velocity[1],
     ];
     body.angularVelocity = [
       rollingBody.angularVelocity[0],
-      rollingBody.angularVelocity[1],
       rollingBody.angularVelocity[2],
+      rollingBody.angularVelocity[1],
     ];
   }
 

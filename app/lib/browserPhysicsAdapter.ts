@@ -219,7 +219,21 @@ export class BrowserPhysicsAdapter {
         };
       }
 
+      if (
+        config.enableRollingFriction &&
+        !manifest.supportedCapabilities.includes("rolling-friction")
+      ) {
+        return {
+          success: false,
+          error: {
+            code: "ERR_UNSUPPORTED_CAPABILITY",
+            message: "Rolling friction not supported by this v068 kernel build",
+          },
+        };
+      }
+
       return { success: true, value: true };
+
     }
 
     return { success: true, value: true };

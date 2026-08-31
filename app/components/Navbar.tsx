@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Github, Brain, Rocket, Menu, X, ChevronRight, Keyboard, Command, ShieldCheck } from "lucide-react";
+import { Github, Brain, Rocket, Menu, X, ChevronLeft, ChevronRight, Keyboard, Command, ShieldCheck } from "lucide-react";
 import { useEffect, useState, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useScrollSpy } from "../hooks/useScrollSpy";
 import { AnimatePresence, motion } from "framer-motion";
@@ -298,18 +298,18 @@ export function Navbar() {
       </header>
 
       {/* --- Mobile Top Bar (Logo + Menu Toggle) --- */}
-      <div className="fixed top-0 inset-x-0 z-40 flex lg:hidden items-center justify-between px-5 py-2.5 bg-[#020617]/90 backdrop-blur-lg border-b border-white/10">
+      <div className="fixed top-0 inset-x-0 z-40 flex lg:hidden items-center justify-between px-4 py-1.5 bg-[#020617]/90 backdrop-blur-lg border-b border-white/10">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-white/10 flex items-center justify-center">
             <Brain className="h-4 w-4 text-sky-300" />
           </div>
           <span className="text-sm font-bold text-white font-display">CMA-ES Explainer</span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             aria-label="Keyboard Shortcuts"
             onClick={() => setShortcutsModalOpen(true)}
-            className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300"
           >
             <Keyboard className="h-4 w-4" />
           </button>
@@ -317,7 +317,7 @@ export function Navbar() {
             ref={mobileMenuOpenBtnRef}
             aria-label="Open navigation menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -325,16 +325,16 @@ export function Navbar() {
       </div>
 
       {/* --- Mobile Floating Dock (Bottom with Smooth Horizontal Scroll) --- */}
-      <div className="fixed bottom-5 inset-x-0 z-40 flex lg:hidden justify-center pointer-events-none px-4">
+      <div className="fixed bottom-5 inset-x-0 z-40 flex lg:hidden items-center gap-2 pointer-events-none px-4">
         <div
           ref={dockRef}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1.5 shadow-[0_15px_35px_rgba(0,0,0,0.8)] w-full max-w-[calc(100vw-2rem)] overflow-x-auto no-scrollbar dock-fade"
+          className="pointer-events-auto flex items-center gap-1 rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 p-1 shadow-[0_15px_35px_rgba(0,0,0,0.8)] flex-1 min-w-0 overflow-x-auto no-scrollbar dock-fade"
         >
           {sections.map((s) => (
             <a
               key={s.id}
               href={getHref(s.id)}
-              className={`flex min-h-9 items-center px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
+              className={`flex h-8 items-center px-2.5 rounded-full text-[0.7rem] font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
                 pathname === "/" && activeId === s.id
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-slate-200"
@@ -343,15 +343,19 @@ export function Navbar() {
               {s.label}
             </a>
           ))}
-          <div className="w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" />
-          <button
-            aria-label="Open full menu"
-            onClick={() => setMobileMenuOpen(true)}
-            className="flex min-h-9 min-w-9 items-center justify-center p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
         </div>
+        <div className="pointer-events-auto flex h-8 shrink-0 items-center gap-1 rounded-full bg-[#030712]/90 px-2.5 backdrop-blur-2xl border border-white/15 font-mono text-[0.7rem] text-slate-300">
+          <span>{Math.max(1, sections.findIndex((s) => s.id === activeId) + 1)}</span>
+          <span className="text-slate-500">/</span>
+          <span>{sections.length}</span>
+        </div>
+        <button
+          aria-label="Open full menu"
+          onClick={() => setMobileMenuOpen(true)}
+          className="pointer-events-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#030712]/90 backdrop-blur-2xl border border-white/15 text-slate-300 shadow-[0_15px_35px_rgba(0,0,0,0.8)]"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
       </div>
 
       {/* --- Keyboard Shortcuts Modal Overlay --- */}
