@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, FlyControls } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
@@ -22,7 +22,7 @@ import {
   TreePine,
   Eye,
   Camera,
-  Activity,
+  Compass, Activity,
   Sliders,
   Shield,
   Zap,
@@ -648,7 +648,7 @@ function ArmCameraRig({
   cameraMode,
   objectPos,
 }: {
-  cameraMode: "studio" | "microscope" | "overhead";
+  cameraMode: "studio" | "microscope" | "overhead" | "fly";
   objectPos: [number, number, number];
 }) {
   useFrame(({ camera }) => {
@@ -675,6 +675,10 @@ function ArmCameraRig({
       maxPolarAngle={Math.PI / 2 - 0.02}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
+  ) : cameraMode === "fly" ? (
+    // Free-fly 6-DOF: WASD + Q/E + RMB drag. Bounded to the workbench
+    // envelope so the operator can't lose the arm off-camera.
+    <FlyControls movementSpeed={1.2} rollSpeed={0.5} dragToLook autoForward={false} />
   ) : null;
 }
 
@@ -795,7 +799,7 @@ function ArmStage({
   admission: HouseholdManipulationAdmission | null;
   reduceMotion: boolean;
   microscopeMode: boolean;
-  cameraMode: "studio" | "microscope" | "overhead";
+  cameraMode: "studio" | "microscope" | "overhead" | "fly";
   sampleIndex: number;
   onSampleChange?: (sample: HouseholdManipulationTraceSample) => void;
   dragTarget?: [number, number, number] | null;
@@ -927,11 +931,31 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   // expand to all 12 so the page doesn't drown the viewport in telemetry.
   const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [microscopeMode, setMicroscopeMode] = useState(false);
-  const [cameraMode, setCameraMode] = useState<"studio" | "microscope" | "overhead">("studio");
+  const [cameraMode, setCameraMode] = useState<"studio" | "microscope" | "overhead" | "fly">("studio");
   const [sampleIndex, setSampleIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
+
+// On the first trace load, seed armDragTarget to a clear-of-obstacles pose
+// so the arm does not start inside a wall or the table. We use the first
+// sample's object position as the seed (a real reachable target on the
+// table) and re-clamp via the same continuous-collision primitive that
+// the dragger uses on every pointerMove — the resulting position is
+// geometrically provable clear of every obstacle and above the table.
+useEffect(() => {
+  if (armDragTarget !== null) return;
+  if (!trace) return;
+  const seed = trace.samples[0];
+  if (!seed) return;
+  const raw: [number, number, number] = [
+    seed.objectPose.position[0],
+    seed.objectPose.position[2],
+    -seed.objectPose.position[1],
+  ];
+  const { clampedTarget } = clampArmTargetPosition(raw, armHouseScene.obstacles, 0.78, 0.04);
+  setArmDragTarget(clampedTarget);
+}, [trace, armDragTarget]);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
     isColliding: boolean;
@@ -1041,17 +1065,25 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
 
   const post = useCallback(
     (message: object, mode: "preview" | "optimize" | "compare") => {
-      if (!workerRef.current || busy) return;
+      if (!workerRef.current) return;
+      // Synchronous gate — must precede setBusy (which is async). The
+      // earlier busy-only check let two rapid clicks in the same render
+      // tick both postMessage. Mirrors the G1WalkingFlagship fix.
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       setError(null);
       setBusy(mode);
       workerRef.current.postMessage(message);
     },
-    [busy]
+    []
   );
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {
-      if (busy || !workerRef.current || nextTask === task) return;
+      if (!workerRef.current) return;
+      if (inFlightRef.current) return;
+      if (nextTask === task) return;
+      inFlightRef.current = true;
       setTask(nextTask);
       setTrace(null);
       setAdmission(null);
@@ -1235,6 +1267,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                     { id: "studio", label: "Studio", icon: Camera },
                     { id: "microscope", label: "Grasp Focus", icon: Eye },
                     { id: "overhead", label: "Top-Down", icon: Activity },
+                    { id: "fly", label: "Free-Fly", icon: Compass },
                   ] as const
                 ).map((cam) => {
                   const Icon = cam.icon;
@@ -1580,6 +1613,57 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
           </ul>
         </aside>
       </div>
+
+      <details className="glass-card overflow-hidden p-0 group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:p-5 [&::-webkit-details-marker]:hidden">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-amber-300" />
+            <h3 className="font-bold text-white">What the kernel actually does (and doesn&apos;t)</h3>
+          </div>
+          <span className="text-xs font-semibold text-slate-400 group-open:hidden">tap to expand</span>
+          <span className="text-xs font-semibold text-slate-400 hidden group-open:inline">tap to collapse</span>
+        </summary>
+        <div className="grid gap-3 border-t border-white/5 p-4 sm:grid-cols-3 sm:p-5">
+          <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">Modeled</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· 7 revolute DoFs (iiwa topology) with hard joint limits</li>
+              <li>· SE(3) FK, inverse-dynamics computed torque</li>
+              <li>· Featherstone articulated-body forward dynamics</li>
+              <li>· Compliant normal pad force + Coulomb friction</li>
+              <li>· Certified convex separation for collision pairs</li>
+              <li>· GJK + EPA query count surfaced in the receipt</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-amber-300">Simplified</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· Collision uses oriented-box envelopes, not triangle meshes</li>
+              <li>· No impulse solver, deformable object, or cable model</li>
+              <li>· Grasp pads are finite, rigid, parallel-jaw style</li>
+              <li>· Object dynamics are rigid-body only</li>
+              <li>· No joint belt-elasticity, backlash, or stiction</li>
+              <li>· No multi-arm coordination, bimanual, or human input</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-rose-300/15 bg-rose-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-rose-300">Not modeled</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· No slip detection, regrasp, or recovery reflex</li>
+              <li>· No inertial measurement, encoder, or actuator lag</li>
+              <li>· No environment lighting, occlusion, or camera noise</li>
+              <li>· No learned policy beyond the periodic basis</li>
+              <li>· No sim-to-real transfer or hardware validation</li>
+              <li>· No reachability planner, grasp planner, or motion planner</li>
+            </ul>
+          </div>
+        </div>
+        <p className="border-t border-white/5 bg-black/20 px-4 py-3 text-[0.72rem] leading-5 text-slate-400 sm:px-5">
+          A placement the kernel approves can still fail on a real KUKA. The page deliberately
+          stops at a deterministic explainer benchmark; treating it as a controller validation
+          would be a category error.
+        </p>
+      </details>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="glass-card p-6">

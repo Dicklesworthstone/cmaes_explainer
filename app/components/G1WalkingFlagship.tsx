@@ -2056,6 +2056,57 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           </ul>
         </aside>
       </div>
+
+      <details className="glass-card overflow-hidden p-0 group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:p-5 [&::-webkit-details-marker]:hidden">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-amber-300" />
+            <h3 className="font-bold text-white">What the kernel actually does (and doesn&apos;t)</h3>
+          </div>
+          <span className="text-xs font-semibold text-slate-400 group-open:hidden">tap to expand</span>
+          <span className="text-xs font-semibold text-slate-400 hidden group-open:inline">tap to collapse</span>
+        </summary>
+        <div className="grid gap-3 border-t border-white/5 p-4 sm:grid-cols-3 sm:p-5">
+          <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">Modeled</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· 15 actuated DoFs (legs + waist)</li>
+              <li>· Free-floating base, SE(3) poses</li>
+              <li>· Semi-implicit Euler, fixed dt = 1/480 s</li>
+              <li>· Penalty-based normal contact + Coulomb friction (μ ≈ 0.6)</li>
+              <li>· Static Hertz preload at simulation start</li>
+              <li>· Five terminal-guard detectors (horizon, height, tilt, contact, joint-limit)</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-amber-300">Simplified</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· Four compliant foot patches, not full soles</li>
+              <li>· No torso arms, hands, or upper shell</li>
+              <li>· No motor torque curves or thermal limits</li>
+              <li>· No joint belt-elasticity or backlash</li>
+              <li>· Terrain is a 1-D heightfield, not a mesh</li>
+              <li>· Policy is a periodic basis, not a neural net</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-rose-300/15 bg-rose-950/20 p-3">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-rose-300">Not modeled</p>
+            <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
+              <li>· No rolling or sliding friction asymmetry</li>
+              <li>· No slip detection or recovery reflex</li>
+              <li>· No inertial measurement, encoder, or actuator lag</li>
+              <li>· No environment wind, vibration, or camera noise</li>
+              <li>· No sim-to-real transfer or hardware validation</li>
+              <li>· No learned controller beyond the periodic basis</li>
+            </ul>
+          </div>
+        </div>
+        <p className="border-t border-white/5 bg-black/20 px-4 py-3 text-[0.72rem] leading-5 text-slate-400 sm:px-5">
+          A walker that survives the kernel can still fall on real hardware. The page deliberately
+          stops at a deterministic explainer experiment; treating it as a Unitree validation would
+          be a category error.
+        </p>
+      </details>
     </div>
   );
 }
