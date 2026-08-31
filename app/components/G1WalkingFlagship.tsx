@@ -36,11 +36,13 @@ import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { WalkQualityComparison } from "./WalkQualityComparison";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import {
+  clampPositionAgainstHouseCollisions,
   createHouseNavigationScene,
   enclosingSpawnRadius,
   findClearSpawnPosition,
   projectPointOutOfOBB,
 } from "../lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -173,6 +175,7 @@ const JOINT_COLOR = "#111820";
 // Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
 const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 const G1_POPULATION = 16;
+const G1_LINK_CLEARANCE_METERS = 0.05;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
   full: {
@@ -660,7 +663,52 @@ function RobotPlayback({
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
-
+  // SOTA PENETRATION PROJECTION (visualization-layer): the G1 kernel's IK
+  // is obstacle-blind, so a foot or knee can land inside a chair, table,
+  // or wall OBB during the rendered trajectory. We compute, for every
+  // link, the closest point on the OBB surface and snap the link mesh
+  // there. The kernel trace stays untouched; the projection is applied
+  // per-frame to a derived sample that RobotPoseMeshes / RobotPose
+  // consume. Matches the arm's SOTA pipeline (see
+  // tests/armLinkCollisionResponse.test.ts for the regression guard;
+  // G1 has the same guard via tests/householdArmCollision.test.ts).
+  // Without this fix, the humanoid visibly tunnels through furniture
+  // and the user reads that as a broken simulation (cmaes-u76s).
+  const projectedSample: typeof sample | null = sample
+    ? (() => {
+        let next: typeof sample = {
+          ...sample,
+          linkPoses: sample.linkPoses.map((p) => ({ ...p })),
+        };
+        for (let link = 0; link < next.linkPoses.length; link++) {
+          const pose = next.linkPoses[link];
+          const p = ownerToThree(pose.position);
+          let qx = p[0];
+          let qy = p[1];
+          let qz = p[2];
+          for (const obb of houseSceneData.obstacles) {
+            const projected = projectPointOutOfOBB(
+              [qx, qy, qz],
+              obb,
+              G1_LINK_CLEARANCE_METERS,
+            );
+            if (projected.wasInside) {
+              qx = projected.point[0];
+              qy = projected.point[1];
+              qz = projected.point[2];
+            }
+          }
+          // Three.js uses (x, z, -y) world from owner (x, y, z) - reverse
+          // the conversion to store the projected value back in owner frame.
+          next.linkPoses[link] = {
+            ...pose,
+            position: [qx, -qz, qy],
+          };
+        }
+        return next;
+      })()
+    : null;
+  const renderSample = projectedSample ?? sample;
   // Procedural synthesized footstep acoustics on contact state changes
   const prevContactsRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
   useEffect(() => {

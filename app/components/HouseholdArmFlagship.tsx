@@ -701,6 +701,7 @@ function ArmRig({
       <ArmPhysicsDebugOverlay
         enabled={physicsDebug ?? false}
         sample={currentSample}
+        admission={admission}
         obstacles={multiObstacleScene.obstacles}
         targetPosition={targetPosition ?? null}
         safeRadius={0.04}
