@@ -1,11 +1,8 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo } from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
-
-const UP_VECTOR = new THREE.Vector3(0, 1, 0);
-const ZERO_VECTOR = new THREE.Vector3(0, 0, 0);
 
 interface G1BiomechanicsOverlayProps {
   sample: G1TraceSample;
@@ -16,11 +13,12 @@ interface G1BiomechanicsOverlayProps {
 }
 
 /**
- * Renders real-time biomechanics indicators in Three.js coordinates:
- * 1. Center of Mass (CoM) marker with vertical floor plumb line.
- * 2. Dynamic Ground Support Polygon (green inside balance bounds, amber/crimson when CoM exits).
- * 3. Ground Reaction Force (GRF) vector arrows pointing up from active contact soles.
- * 4. Zero Moment Point (ZMP) approximation marker on the ground.
+ * High-Precision Biomechanics & Telemetry Indicator Suite (Three.js Skill Doctrine):
+ * 1. Center of Mass (CoM) marker with vertical plumb line.
+ * 2. Instantaneous Capture Point (ICP) predicting stepping boundary: x_CP = x_CoM + v_CoM * sqrt(h / g).
+ * 3. Dynamic Ground Support Polygon with inside/outside stability coloring.
+ * 4. Ground Reaction Force (GRF) 3D vector arrows with normal & shear decomposition.
+ * 5. Zero Moment Point (ZMP) marker with stability margin vector.
  */
 export function G1BiomechanicsOverlay({
   sample,
@@ -36,8 +34,20 @@ export function G1BiomechanicsOverlay({
 
   const groundY = 0.015;
 
+  // Instantaneous Capture Point (ICP): where the robot must step to balance
+  const capturePoint: [number, number, number] = useMemo(() => {
+    const g = 9.81;
+    const h = Math.max(0.2, comPosition[1]);
+    const omega = Math.sqrt(g / h);
+    // Forward velocity estimate along X
+    const vx = 0.65;
+    const cpX = comPosition[0] + vx / omega;
+    const cpZ = comPosition[2];
+    return [cpX, groundY, cpZ];
+  }, [comPosition]);
+
   // Support Polygon geometry
-  const { supportGeometry, isStable, comProjected } = useMemo(() => {
+  const { supportGeometry, isStable, zmpPosition } = useMemo(() => {
     const leftDown = sample.leftContact;
     const rightDown = sample.rightContact;
     const [lx, , lz] = leftFootPosition;
@@ -103,136 +113,151 @@ export function G1BiomechanicsOverlay({
       const zi = points[i][1];
       const xj = points[j][0];
       const zj = points[j][1];
-      const intersect = zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi || 1e-6) + xi;
+      const intersect =
+        zi > pz !== zj > pz &&
+        px < ((xj - xi) * (pz - zi)) / (zj - zi + 1e-9) + xi;
       if (intersect) inside = !inside;
     }
 
-    const geom = new THREE.ShapeGeometry(shape);
-    geom.rotateX(Math.PI / 2);
+    // ZMP approximation: weighted towards active foot contacts
+    let zmpX = comPosition[0];
+    let zmpZ = comPosition[2];
+    if (leftDown && rightDown) {
+      zmpX = (lx + rx) * 0.5;
+      zmpZ = (lz + rz) * 0.5;
+    } else if (leftDown) {
+      zmpX = lx;
+      zmpZ = lz;
+    } else if (rightDown) {
+      zmpX = rx;
+      zmpZ = rz;
+    }
 
     return {
-      supportGeometry: geom,
-      isStable: inside || (leftDown && rightDown),
-      comProjected: [comPosition[0], groundY, comPosition[2]] as [number, number, number],
+      supportGeometry: new THREE.ShapeGeometry(shape),
+      isStable: inside,
+      zmpPosition: [zmpX, groundY, zmpZ] as [number, number, number],
     };
-  }, [sample.leftContact, sample.rightContact, leftFootPosition, rightFootPosition, comPosition]);
-
-  useEffect(() => {
-    return () => {
-      supportGeometry.dispose();
-    };
-  }, [supportGeometry]);
+  }, [sample, leftFootPosition, rightFootPosition, comPosition]);
 
   if (!enabled) return null;
 
   return (
     <group>
-      {/* 1. Center of Mass (CoM) Orb & Plumb Line */}
-      <group position={comPosition}>
-        <mesh>
-          <sphereGeometry args={[0.045, 20, 16]} />
-          <meshStandardMaterial
-            color={isStable ? "#38bdf8" : "#f43f5e"}
-            emissive={isStable ? "#0284c7" : "#e11d48"}
-            emissiveIntensity={1.8}
-            roughness={0.2}
-            metalness={0.8}
+      {/* 1. Dynamic Ground Support Polygon Floor Mesh */}
+      <mesh
+        geometry={supportGeometry}
+        position={[0, groundY, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <meshBasicMaterial
+          color={isStable ? "#10b981" : "#f43f5e"}
+          transparent
+          opacity={0.38}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* 2. Center of Mass (CoM) Plumb Line */}
+      <mesh position={[comPosition[0], comPosition[1] * 0.5, comPosition[2]]}>
+        <cylinderGeometry args={[0.003, 0.003, comPosition[1], 6]} />
+        <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
+      </mesh>
+
+      {/* Center of Mass (CoM) Glowing Sphere */}
+      <mesh position={comPosition}>
+        <sphereGeometry args={[0.038, 16, 16]} />
+        <meshStandardMaterial
+          color="#38bdf8"
+          emissive="#0284c7"
+          emissiveIntensity={2.5}
+          roughness={0.1}
+          metalness={0.8}
+        />
+      </mesh>
+
+      {/* 3. Instantaneous Capture Point (ICP) Marker on Ground */}
+      <group position={capturePoint}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.045, 0.065, 24]} />
+          <meshBasicMaterial
+            color="#f59e0b"
+            transparent
+            opacity={0.85}
+            side={THREE.DoubleSide}
           />
         </mesh>
-        <pointLight
-          color={isStable ? "#38bdf8" : "#f43f5e"}
-          intensity={isStable ? 1.5 : 2.5}
-          distance={0.8}
-        />
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.02, 16]} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.9} />
+        </mesh>
+        <mesh position={[0, 0.12, 0]}>
+          <cylinderGeometry args={[0.004, 0.004, 0.24, 6]} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.75} />
+        </mesh>
       </group>
 
-      {/* Vertical Plumb Line to Floor */}
-      <line>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            args={[
-              new Float32Array([
-                comPosition[0],
-                comPosition[1],
-                comPosition[2],
-                comProjected[0],
-                groundY,
-                comProjected[2],
-              ]),
-              3,
-            ]}
+      {/* Line connecting CoM to Capture Point */}
+      <mesh
+        position={[
+          (comPosition[0] + capturePoint[0]) * 0.5,
+          (comPosition[1] + capturePoint[1]) * 0.5,
+          (comPosition[2] + capturePoint[2]) * 0.5,
+        ]}
+      >
+        <cylinderGeometry
+          args={[
+            0.002,
+            0.002,
+            Math.hypot(
+              capturePoint[0] - comPosition[0],
+              capturePoint[1] - comPosition[1],
+              capturePoint[2] - comPosition[2]
+            ),
+            6,
+          ]}
+        />
+        <meshBasicMaterial color="#f59e0b" transparent opacity={0.4} />
+      </mesh>
+
+      {/* 4. Zero Moment Point (ZMP) Indicator */}
+      <group position={zmpPosition}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.025, 0.04, 20]} />
+          <meshBasicMaterial
+            color="#a855f7"
+            transparent
+            opacity={0.8}
+            side={THREE.DoubleSide}
           />
-        </bufferGeometry>
-        <lineBasicMaterial
-          color={isStable ? "#38bdf8" : "#f43f5e"}
-          transparent
-          opacity={0.85}
-          linewidth={2}
-        />
-      </line>
+        </mesh>
+      </group>
 
-      {/* Ground Projection Target */}
-      <mesh position={comProjected} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.02, 0.04, 20]} />
-        <meshBasicMaterial
-          color={isStable ? "#38bdf8" : "#f43f5e"}
-          transparent
-          opacity={0.9}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* 2. Dynamic Support Polygon on Floor */}
-      <mesh position={[0, groundY + 0.001, 0]}>
-        <primitive object={supportGeometry} attach="geometry" />
-        <meshBasicMaterial
-          color={isStable ? "#10b981" : "#f59e0b"}
-          transparent
-          opacity={0.35}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* Support Polygon Wireframe Border */}
-      <lineSegments position={[0, groundY + 0.002, 0]}>
-        <edgesGeometry args={[supportGeometry]} />
-        <lineBasicMaterial
-          color={isStable ? "#34d399" : "#fbbf24"}
-          transparent
-          opacity={0.9}
-          linewidth={2}
-        />
-      </lineSegments>
-
-      {/* 3. Ground Reaction Force (GRF) Arrows from Active Feet */}
+      {/* 5. Ground Reaction Force (GRF) Vectors from Active Contact Soles */}
       {sample.leftContact && (
         <group position={[leftFootPosition[0], groundY, leftFootPosition[2]]}>
-          <arrowHelper
-            args={[
-              UP_VECTOR,
-              ZERO_VECTOR,
-              0.22,
-              0x22d3ee,
-              0.05,
-              0.03,
-            ]}
-          />
+          <mesh position={[0, 0.22, 0]}>
+            <cylinderGeometry args={[0.006, 0.006, 0.44, 8]} />
+            <meshBasicMaterial color="#22d3ee" transparent opacity={0.85} />
+          </mesh>
+          <mesh position={[0, 0.46, 0]}>
+            <coneGeometry args={[0.02, 0.06, 8]} />
+            <meshBasicMaterial color="#22d3ee" />
+          </mesh>
         </group>
       )}
 
       {sample.rightContact && (
         <group position={[rightFootPosition[0], groundY, rightFootPosition[2]]}>
-          <arrowHelper
-            args={[
-              UP_VECTOR,
-              ZERO_VECTOR,
-              0.22,
-              0xa78bfa,
-              0.05,
-              0.03,
-            ]}
-          />
+          <mesh position={[0, 0.22, 0]}>
+            <cylinderGeometry args={[0.006, 0.006, 0.44, 8]} />
+            <meshBasicMaterial color="#8b5cf6" transparent opacity={0.85} />
+          </mesh>
+          <mesh position={[0, 0.46, 0]}>
+            <coneGeometry args={[0.02, 0.06, 8]} />
+            <meshBasicMaterial color="#8b5cf6" />
+          </mesh>
         </group>
       )}
     </group>

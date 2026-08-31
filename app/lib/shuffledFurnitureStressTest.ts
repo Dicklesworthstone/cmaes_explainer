@@ -20,6 +20,21 @@
 
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
 import {
+  createSceneFromHouseFurniture,
+  queryMultiObstacleScene,
+} from "./houseMultiObstacleKernel";
+
+// Stress-trial controller parameters. The robot disc radius 0.25 m matches
+// the existing rolling-piece interaction (distToRolling - 0.25 - radius) and
+// the G1 house-navigation challenge convention (simulateG1HouseNavigation
+// ChallengeConfig.robotRadius default 0.20; bumped to 0.25 here because the
+// stress trial explicitly tests obstacle interaction). Repulsion activates
+// when furniture clearance drops below REPULSION_RANGE_M.
+const STRESS_TRIAL_ROBOT_RADIUS = 0.25;
+const REPULSION_RANGE_M = 0.8;
+const FURNITURE_REPULSION_GAIN = 0.6;
+const PENETRATION_THRESHOLD_M = -0.05;
+import {
   createRollingPieceState,
   ROLLING_PIECE_DEFAULTS,
   type RollingFurnitureKind,
@@ -51,6 +66,10 @@ export interface StressTrialResult {
   totalSteps: number;
   distanceTraveledMeters: number;
   minimumClearanceMeters: number;
+  // Minimum body clearance against the furniture OBB scene across the trial
+  // (soft obstacles such as rugs/curtains/pillows are exempt by the kernel).
+  // Collapses to +Infinity when the robot never entered the house envelope.
+  minimumFurnitureClearanceMeters: number;
   collisionOccurred: boolean;
   rollingPieceFinalSpeed: number;
   rollingPieceDisplacement: number;
@@ -130,8 +149,8 @@ export function generateShuffledScene(config: ShuffledSceneConfig): ShuffledScen
  */
 export function runShuffledStressTrial(
   scene: ShuffledScene,
-  startPos: [number, number] = [1.5, -1.0],
-  goalPos: [number, number] = [3.5, 2.5],
+  startPos: [number, number] = [0.5, 4.5],
+  goalPos: [number, number] = [-1.5, 2.5],
   maxSteps = 400,
   dt = 1 / 60,
 ): StressTrialResult {
@@ -139,8 +158,13 @@ export function runShuffledStressTrial(
   let currentVel: [number, number] = [0.0, 0.0];
   let rollingState = { ...scene.rollingPiece.state };
   const rollingCfg = ROLLING_PIECE_DEFAULTS[scene.rollingPiece.kind];
+  // Build the furniture OBB scene from the (jittered) shuffled furniture list.
+  // The scene is static for the trial; queryMultiObstacleScene now drives both
+  // the collision flip and a repulsion force in the goal-seek loop.
+  const furnitureScene = createSceneFromHouseFurniture(scene.furniture);
 
   let minClearance = Infinity;
+  let furnitureMinClearance = Infinity;
   let totalDist = 0.0;
   let collisionOccurred = false;
   let success = false;
@@ -196,6 +220,32 @@ export function runShuffledStressTrial(
       safeVz += repelZ;
     }
 
+    // Furniture OBB clearance check + repulsive steering. Mirrors the rolling
+    // repulsion: when the robot body comes within REPULSION_RANGE_M of any
+    // non-soft furniture piece, the kernel's gradient vector (unit vector
+    // away from the nearest OBB center, in the house plan) pushes the safe
+    // velocity away. The clearance also feeds minClearance so the existing
+    // < PENETRATION_THRESHOLD_M break guards against hard penetrations.
+    const furnRes = queryMultiObstacleScene(
+      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius: STRESS_TRIAL_ROBOT_RADIUS, safetyMargin: 0.05 },
+      furnitureScene,
+    );
+    if (furnRes.minimumClearanceMeters < furnitureMinClearance) {
+      furnitureMinClearance = furnRes.minimumClearanceMeters;
+    }
+    if (furnRes.minimumClearanceMeters < minClearance) {
+      minClearance = furnRes.minimumClearanceMeters;
+    }
+    if (
+      furnRes.minimumClearanceMeters < REPULSION_RANGE_M &&
+      furnRes.minimumClearanceMeters > PENETRATION_THRESHOLD_M
+    ) {
+      const proximity = (REPULSION_RANGE_M - furnRes.minimumClearanceMeters) / REPULSION_RANGE_M;
+      const push = FURNITURE_REPULSION_GAIN * speed * proximity;
+      safeVx += furnRes.gradientVector[0] * push;
+      safeVz += furnRes.gradientVector[2] * push;
+    }
+
     // Integrate motion
     const nextPosX = currentPos[0] + safeVx * dt;
     const nextPosZ = currentPos[1] + safeVz * dt;
@@ -204,7 +254,7 @@ export function runShuffledStressTrial(
     currentPos = [nextPosX, nextPosZ];
     currentVel = [safeVx, safeVz];
 
-    if (minClearance < -0.05) {
+    if (minClearance < PENETRATION_THRESHOLD_M) {
       collisionOccurred = true;
       break;
     }
@@ -222,11 +272,14 @@ export function runShuffledStressTrial(
     totalSteps: stepsTaken,
     distanceTraveledMeters: totalDist,
     minimumClearanceMeters: Math.max(0.01, minClearance),
+    minimumFurnitureClearanceMeters:
+      furnitureMinClearance === Infinity ? 0.0 : Math.max(0.01, furnitureMinClearance),
     collisionOccurred,
     rollingPieceFinalSpeed: finalSpeed,
     rollingPieceDisplacement: rollingDisplacement,
   };
 }
+
 
 /**
  * Runs a multi-trial stress test across K randomized room configurations.

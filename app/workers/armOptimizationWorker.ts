@@ -91,6 +91,11 @@ function armFreeRun(run: ArmActiveRun): void {
 }
 
 const worker = self as DedicatedWorkerGlobalScope;
+
+// Single-flight gate. The arm worker has the same non-reentrant CMA
+// session hazard as the G1 worker; see g1OptimizationWorker for the
+// full rationale. Serializes every request through one Promise.
+let armGate: Promise<void> = Promise.resolve();
 const POPULATION = 12;
 
 function post(message: WorkerResponse): void {
@@ -362,12 +367,17 @@ async function compareFamilies(
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
-  const task = request.type === "preview"
-    ? preview(request.task)
-    : request.type === "compare"
-      ? compareFamilies(request.task, request.generations)
-      : optimize(request.task, request.family, request.generations, request.seedIndex, request.mode);
-  void task.catch((error: unknown) => {
+  // See g1OptimizationWorker for the work-factory rationale: invoking
+  // the work inside .then() is what actually serializes, because the
+  // IIFE cannot start until the previous task resolves.
+  const work = () =>
+    request.type === "preview"
+      ? preview(request.task)
+      : request.type === "compare"
+        ? compareFamilies(request.task, request.generations)
+        : optimize(request.task, request.family, request.generations, request.seedIndex, request.mode);
+  armGate = armGate.then(() => work(), () => work());
+  void armGate.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
   });
 };

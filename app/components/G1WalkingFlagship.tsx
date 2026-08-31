@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import React, { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
@@ -30,6 +30,7 @@ import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
   clampPositionAgainstHouseCollisions,
   createSceneFromHouseFurniture,
+  findClearSpawnPosition,
 } from "../lib/houseMultiObstacleKernel";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
@@ -756,7 +757,7 @@ function CameraRig({
   activeRoom,
   pelvisThree,
 }: {
-  cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly";
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   pelvisThree: [number, number, number];
 }) {
@@ -944,7 +945,7 @@ function RobotStage({
   reduceMotion: boolean;
   meshState: G1MeshState;
   xrayMode: boolean;
-  cameraView: "orbit" | "follow" | "pov" | "blueprint";
+  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly";
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
   showRoof?: boolean;
@@ -1032,7 +1033,7 @@ function number(value: number, digits = 3): string {
 
 function stageSceneHint(
   xrayMode: boolean,
-  cameraView: "orbit" | "follow" | "pov" | "blueprint",
+  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly" | "fly",
 ): string {
   if (xrayMode) return "X-Ray: Green polygon is dynamic support boundary.";
   switch (cameraView) {
@@ -1066,6 +1067,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const meshState = useG1Meshes(shouldLoadMeshes);
   const workerActivated = shouldLoadMeshes;
   const workerRef = useRef<Worker | null>(null);
+  // Synchronous in-flight gate. React state (busy) updates
+  // asynchronously; two rapid clicks within the same render tick both
+  // see busy === null and would both postMessage, racing the worker's
+  // CMA session. The ref updates synchronously when post() runs.
+  const inFlightRef = useRef<boolean>(false);
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
   const [admission, setAdmission] = useState<G1Admission | null>(null);
   const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
@@ -1092,7 +1098,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
   const [activeRouteId, setActiveRouteId] = useState<string>("grand-tour");
-  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint">(
+  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint" | "fly" | "fly">(
     embedded ? "follow" : "orbit",
   );
   const [isPlaying, setIsPlaying] = useState(true);
@@ -1109,11 +1115,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   }>({ isColliding: false, obstacleName: null, clearance: 1.0 });
 
   const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
-    if (!workerRef.current || busy) return;
+    if (!workerRef.current) return;
+    // Synchronous gate — must precede setBusy (which is async). Two rapid
+    // clicks in the same render tick both see busy === null without this.
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setError(null);
     setBusy(mode);
     workerRef.current.postMessage(message);
-  }, [busy]);
+  }, []);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
     setCurrentChapter(ch.id);
@@ -1174,14 +1184,20 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else if (message.type === "progress") {
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
-        setProgressHistory((prev) => [
-          ...prev,
-          {
-            generation: message.generation,
-            bestObjective: message.bestObjective,
-            sigma: message.sigma,
-          },
-        ]);
+        setProgressHistory((prev) => {
+          const next = prev.length >= 200
+            ? [...prev.slice(prev.length - 199), {
+                generation: message.generation,
+                bestObjective: message.bestObjective,
+                sigma: message.sigma,
+              }]
+            : [...prev, {
+                generation: message.generation,
+                bestObjective: message.bestObjective,
+                sigma: message.sigma,
+              }];
+          return next;
+        });
         setStatus(
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
@@ -1190,6 +1206,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (message.family === "stabilizer") {
           setStabilizerTrace(message.trace);
           setStatus("Standing prior received; loading the walking curriculum mean…");
+          // The stabilizer trace is a one-shot at init; release the gate.
+          inFlightRef.current = false;
           return;
         }
         setTrace(message.trace);
@@ -1198,6 +1216,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus(
           message.family === "curriculum"
             ? "Walking curriculum mean replayed from Frankensim WASM."
@@ -1206,16 +1225,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else if (message.type === "comparison") {
         setComparison(message.rows);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus("Equal-budget 5,040-D physical owner-family race complete.");
       } else {
         setError(message.message);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus("The owner kernel refused or could not complete this request.");
       }
     };
     optimizerWorker.onerror = (event) => {
       setError(event.message || "The optimization worker failed before returning a typed result.");
       setBusy(null);
+      inFlightRef.current = false;
       setWorkerAvailable(false);
       optimizerWorker.terminate();
       workerRef.current = null;

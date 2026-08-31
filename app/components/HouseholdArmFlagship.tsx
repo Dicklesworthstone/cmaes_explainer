@@ -674,6 +674,103 @@ function ArmCameraRig({
   ) : null;
 }
 
+import { clampArmTargetPosition } from "../lib/armInverseKinematics";
+
+const armHouseScene = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
+
+function ArmTargetDragger({
+  targetPos,
+  onTargetChange,
+  onCollisionChange,
+}: {
+  targetPos: [number, number, number];
+  onTargetChange: (pos: [number, number, number] | null) => void;
+  onCollisionChange: (col: { isColliding: boolean; clearance: number }) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const startPointerRef = useRef<[number, number]>([0, 0]);
+  const startPosRef = useRef<[number, number, number]>(targetPos);
+
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    startPointerRef.current = [e.point.x, e.point.z];
+    startPosRef.current = targetPos;
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    const dx = e.point.x - startPointerRef.current[0];
+    const dz = e.point.z - startPointerRef.current[1];
+    const proposed: [number, number, number] = [
+      startPosRef.current[0] + dx,
+      startPosRef.current[1],
+      startPosRef.current[2] + dz,
+    ];
+
+    // CONTINUOUS COLLISION DETECTION (CCD) & SURFACE CLAMPING (Y >= 0.78)
+    const { clampedTarget, isColliding, minClearance } =
+      clampArmTargetPosition(proposed, armHouseScene.obstacles, 0.78, 0.04);
+
+    onTargetChange(clampedTarget);
+    onCollisionChange({ isColliding, clearance: minClearance });
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <group>
+      {isDragging && (
+        <mesh
+          position={[0, targetPos[1], 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          visible={false}
+        >
+          <planeGeometry args={[100, 100]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      )}
+
+      {/* Holographic Interactive Target Grab Pin above Object */}
+      <group position={[targetPos[0], targetPos[1] + 0.22, targetPos[2]]}>
+        <mesh onPointerDown={handlePointerDown} castShadow>
+          <sphereGeometry args={[0.045, 16, 16]} />
+          <meshStandardMaterial
+            color={isDragging ? "#fb923c" : "#f59e0b"}
+            emissive={isDragging ? "#ea580c" : "#d97706"}
+            emissiveIntensity={isDragging ? 2.5 : 1.2}
+            roughness={0.2}
+            metalness={0.8}
+          />
+        </mesh>
+        <mesh position={[0, -0.09, 0]}>
+          <cylinderGeometry args={[0.005, 0.005, 0.18, 6]} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.7} />
+        </mesh>
+      </group>
+
+      {/* Floor/Counter Contact Ring */}
+      <mesh
+        position={[targetPos[0], 0.782, targetPos[2]]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[0.06, 0.09, 24]} />
+        <meshBasicMaterial
+          color={isDragging ? "#fb7185" : "#34d399"}
+          transparent
+          opacity={isDragging ? 0.85 : 0.4}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function ArmStage({
   trace,
   admission,
@@ -682,6 +779,9 @@ function ArmStage({
   cameraMode,
   sampleIndex,
   onSampleChange,
+  dragTarget,
+  onDragTargetChange,
+  onCollisionChange,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
@@ -690,11 +790,16 @@ function ArmStage({
   cameraMode: "studio" | "microscope" | "overhead";
   sampleIndex: number;
   onSampleChange?: (sample: HouseholdManipulationTraceSample) => void;
+  dragTarget?: [number, number, number] | null;
+  onDragTargetChange?: (pos: [number, number, number] | null) => void;
+  onCollisionChange?: (col: { isColliding: boolean; clearance: number }) => void;
 }) {
   const currentSample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
-  const objectPos: [number, number, number] = currentSample
+  const rawObjectPos: [number, number, number] = currentSample
     ? [currentSample.objectPose.position[0], currentSample.objectPose.position[2], -currentSample.objectPose.position[1]]
-    : [0.4, 0.4, 0.2];
+    : [0.4, 0.82, 0.2];
+
+  const objectPos: [number, number, number] = dragTarget ?? rawObjectPos;
 
   return (
     <Canvas
@@ -769,6 +874,13 @@ function ArmStage({
           microscopeMode={microscopeMode}
         />
       ) : null}
+
+      <ArmTargetDragger
+        targetPos={objectPos}
+        onTargetChange={onDragTargetChange ?? (() => {})}
+        onCollisionChange={onCollisionChange ?? (() => {})}
+      />
+
       <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
     </Canvas>
   );
@@ -783,6 +895,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     once: true,
   });
   const workerRef = useRef<Worker | null>(null);
+  // Synchronous in-flight gate — see G1WalkingFlagship for the rationale.
+  // React state (busy) updates asynchronously; without this, two rapid
+  // clicks in the same render tick both postMessage, racing the worker's
+  // CMA session.
+  const inFlightRef = useRef<boolean>(false);
   const [trace, setTrace] = useState<HouseholdManipulationTraceReceipt | null>(null);
   const [curriculumTrace, setCurriculumTrace] = useState<HouseholdManipulationTraceReceipt | null>(null);
   const [admission, setAdmission] = useState<HouseholdManipulationAdmission | null>(null);
@@ -803,6 +920,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const [sampleIndex, setSampleIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
+  const [armCollisionState, setArmCollisionState] = useState<{
+    isColliding: boolean;
+    clearance: number;
+  }>({ isColliding: false, clearance: 1.0 });
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -845,6 +967,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus(
           message.family === "curriculum"
             ? `${TASK_COPY[message.admission.config.task].title} curriculum replayed from Frankensim WASM.`
@@ -853,16 +976,19 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       } else if (message.type === "comparison") {
         setComparison(message.rows);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus("Equal-budget four-family physical race complete.");
       } else {
         setError(message.message);
         setBusy(null);
+        inFlightRef.current = false;
         setStatus("The owner kernel refused or could not complete this request.");
       }
     };
     optimizerWorker.onerror = (event) => {
       setError(event.message || "The household-arm worker failed before returning a typed result.");
       setBusy(null);
+      inFlightRef.current = false;
       setWorkerAvailable(false);
       optimizerWorker.terminate();
       workerRef.current = null;
@@ -1039,6 +1165,32 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                         : "🔬 Friction Cones Overlay"}
                   </span>
                 </button>
+
+                {/* Drag Status & Contact Safety Readout */}
+                {armDragTarget ? (
+                  <div className="flex items-center gap-1.5 pointer-events-auto">
+                    <span
+                      className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                        armCollisionState.isColliding
+                          ? "border border-rose-400/80 bg-rose-950/85 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                          : "border border-emerald-400/80 bg-emerald-950/85 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                      }`}
+                    >
+                      {armCollisionState.isColliding
+                        ? `⚠️ Surface Clamped (${armCollisionState.clearance.toFixed(2)}m)`
+                        : `🖐️ Target Moved (${armCollisionState.clearance.toFixed(2)}m free)`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setArmDragTarget(null)}
+                      className="flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-orange-200 hover:bg-orange-900/60 transition-colors"
+                      title="Reset target object to nominal trajectory position"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reset
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               {/* Camera View Selector */}
@@ -1105,6 +1257,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                   microscopeMode={microscopeMode}
                   cameraMode={cameraMode}
                   sampleIndex={sampleIndex}
+                  dragTarget={armDragTarget}
+                  onDragTargetChange={setArmDragTarget}
+                  onCollisionChange={setArmCollisionState}
                 />
               ) : null}
             </div>

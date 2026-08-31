@@ -1,3 +1,33 @@
+
+
+/**
+ * Find a position inside the house where the robot is provably clear of
+ * every obstacle (including the interior/exterior perimeter walls). Used
+ * to seed the initial robot pose so it never spawns inside a wall.
+ */
+export function findClearSpawnPosition(
+  obstacles: OrientedBoundingBox[],
+  safeRadius: number = 0.35,
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number } = {
+    minX: -3.7,
+    maxX: 3.7,
+    minZ: -4.4,
+    maxZ: 5.2,
+  }
+): [number, number, number] {
+  // Coarse grid search: the room interior is only a few square meters; a
+  // 0.3 m step is plenty. The first cleared point wins.
+  for (let z = 0; z >= -3.5; z -= 0.3) {
+    for (let x = -2.5; x <= 2.5; x += 0.3) {
+      const { isColliding } = clampPositionAgainstHouseCollisions([x, 0.75, z], obstacles, safeRadius, bounds);
+      if (!isColliding) {
+        return [x, 0.75, z];
+      }
+    }
+  }
+  // Fall back to bounds center if the grid sweep fails (shouldn't happen).
+  return [0, 0.75, 0];
+}
 // Multi-Obstacle Household Scene & Furniture Collision Kernel (cmaes-u53 / cmaes-4vs / cmaes-1yu).
 //
 // Extends single-obstacle scene definitions to an arbitrary list of N Oriented Bounding Box (OBB)

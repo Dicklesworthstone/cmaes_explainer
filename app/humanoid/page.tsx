@@ -36,7 +36,7 @@ export default function HumanoidPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Navbar />
-      <main className="mx-auto max-w-7xl px-6 pb-24 pt-10">
+      <main className="mx-auto max-w-7xl px-6 pb-24 pt-20">
         <section className="mx-auto max-w-4xl text-center">
           <span className="rounded-full border border-cyan-300/25 bg-sky-500/10 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200">
             Live physics · zero gradients

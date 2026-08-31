@@ -151,6 +151,13 @@ const G1_MAX_TOTAL_GENERATIONS = 30_000;
 const G1_POPULATION = 16;
 const g1ActiveRuns = new Map<string, G1ActiveRun>();
 
+// Single-flight gate. The worker is single-threaded but optimize() is
+// async and yields at every await; two requests (rapid click, compare +
+// optimize, future code) can interleave and corrupt the CMA session.
+// Hold the gate for the lifetime of one request and queue any extras.
+let g1Gate: Promise<void> = Promise.resolve();
+let g1QueueDepth = 0;
+
 function g1FreeRun(run: G1ActiveRun): void {
   try {
     run.session.free();
@@ -376,12 +383,20 @@ async function compareFamilies(requestedGenerations: number, challenge: G1Challe
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
-  const task = request.type === "preview"
-    ? preview(request.challenge ?? "terrain-and-push")
-    : request.type === "compare"
-      ? compareFamilies(request.generations)
-      : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge, request.sigma);
-  void task.catch((error: unknown) => {
+  // The work factory is invoked ONLY inside the gate's .then callback,
+  // so the async IIFE cannot start until the previous task resolves.
+  // Calling optimize()/compareFamilies() eagerly would start the IIFE
+  // immediately and only serialize the .then continuation, which is
+  // not enough to prevent two optimize()s from interleaving at their
+  // first await (createFrankenSimG1WalkingEvaluator).
+  const work = () =>
+    request.type === "preview"
+      ? preview(request.challenge ?? "terrain-and-push")
+      : request.type === "compare"
+        ? compareFamilies(request.generations)
+        : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge, request.sigma);
+  g1Gate = g1Gate.then(() => work(), () => work());
+  void g1Gate.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
   });
 };

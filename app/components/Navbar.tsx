@@ -276,7 +276,7 @@ export function Navbar() {
       </header>
 
       {/* --- Mobile Top Bar (Logo + Menu Toggle) --- */}
-      <div className="fixed top-0 inset-x-0 z-40 flex lg:hidden items-center justify-between px-5 py-3.5 bg-[#020617]/90 backdrop-blur-lg border-b border-white/10">
+      <div className="fixed top-0 inset-x-0 z-40 flex lg:hidden items-center justify-between px-5 py-2.5 bg-[#020617]/90 backdrop-blur-lg border-b border-white/10">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-white/10 flex items-center justify-center">
             <Brain className="h-4 w-4 text-sky-300" />
@@ -287,14 +287,14 @@ export function Navbar() {
           <button
             aria-label="Keyboard Shortcuts"
             onClick={() => setShortcutsModalOpen(true)}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300"
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300"
           >
             <Keyboard className="h-4 w-4" />
           </button>
           <button
             aria-label="Open navigation menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -311,8 +311,7 @@ export function Navbar() {
             <a
               key={s.id}
               href={getHref(s.id)}
-              className={`flex min-h-[44px] items-center px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
-                pathname === "/" && activeId === s.id
+              className={`flex min-h-9 items-center px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-slate-200"
               }`}
@@ -324,8 +323,7 @@ export function Navbar() {
           <button
             aria-label="Open full menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
-          >
+            className="flex min-h-9 min-w-9 items-center justify-center p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
             <Menu className="h-4 w-4" />
           </button>
         </div>
