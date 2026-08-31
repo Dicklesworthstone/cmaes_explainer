@@ -162,13 +162,13 @@ export function HpoTrainer() {
               type="button"
               onClick={() => void runBatch(batch)}
               disabled={running}
-              className="rounded-lg border border-emerald-500/60 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-emerald-500/60 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {running
                 ? "Running..."
                 : `Run ${batch} generation${batch === 1 ? "" : "s"}`}
             </button>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-3 text-xs text-slate-400">
               <span>Batch</span>
               <select
                 value={batch}
@@ -191,11 +191,11 @@ export function HpoTrainer() {
               type="button"
               onClick={reset}
               disabled={running}
-              className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 px-4 text-sm text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Reset
             </button>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-3 text-xs text-slate-400">
               <input
                 type="checkbox"
                 checked={warmStart}
@@ -204,7 +204,7 @@ export function HpoTrainer() {
                   reset();
                 }}
                 disabled={running}
-                className="accent-emerald-400"
+                className="h-4 w-4 accent-emerald-400"
               />
               <span>
                 WS warm start{" "}
@@ -213,7 +213,7 @@ export function HpoTrainer() {
                 </span>
               </span>
             </label>
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-3 text-xs text-slate-400">
               <input
                 type="checkbox"
                 checked={mirrored}
@@ -222,7 +222,7 @@ export function HpoTrainer() {
                   reset();
                 }}
                 disabled={running}
-                className="accent-cyan-400"
+                className="h-4 w-4 accent-cyan-400"
               />
               <span>
                 Mirrored sampling{" "}

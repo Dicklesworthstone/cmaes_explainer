@@ -26,6 +26,7 @@ import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
+import { WalkQualityComparison } from "./WalkQualityComparison";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
@@ -685,73 +686,99 @@ function RobotPlayback({
   ) : null;
 }
 
-type G1MeshState =
-  | { phase: "idle" | "loading" }
-  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
-  | { phase: "failed" };
 
-// Page-lifetime module cache: the 16MB mesh set parses ONCE per page load.
-let g1MeshCache: {
+// Page-lifetime cache of raw parsed mesh data. Reused across mount/unmount
+// (the stage unmounts offscreen but the parsed geometry stays). Built once
+// per page load by the worker, then converted to THREE.BufferGeometry only
+// when the stage actually mounts.
+type G1ParsedMesh = { positions: Float32Array; normals: Float32Array };
+let g1MeshCache: Record<string, G1ParsedMesh> | null = null;
+let g1MeshCachePromise: Promise<Record<string, G1ParsedMesh>> | null = null;
+
+function ensureG1Meshes(): Promise<Record<string, G1ParsedMesh>> {
+  if (g1MeshCache) return Promise.resolve(g1MeshCache);
+  if (!g1MeshCachePromise) {
+    g1MeshCachePromise = (async () => {
+      const worker = new Worker(
+        new URL("../workers/g1MeshParseWorker.ts", import.meta.url),
+      );
+      const result = await new Promise<Record<string, G1ParsedMesh>>(
+        (resolve, reject) => {
+          worker.onmessage = (e: MessageEvent<unknown>) => {
+            const m = e.data as
+              | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
+              | { type: "error"; error: string };
+            worker.terminate();
+            if (m.type === "ok") resolve(m.geometries);
+            else reject(new Error(m.error));
+          };
+          worker.postMessage({
+            type: "parse",
+            files: G1_MESH_FILES,
+            baseUrl: G1_MESH_DIR,
+            rotateXRad: -Math.PI / 2,
+          });
+        },
+      );
+      g1MeshCache = result;
+      return result;
+    })();
+  }
+  return g1MeshCachePromise;
+}
+
+function buildG1Geometries(parsed: Record<string, G1ParsedMesh>): {
   geometries: Record<string, THREE.BufferGeometry>;
   material: THREE.MeshStandardMaterial;
-} | null = null;
+} {
+  const geometries: Record<string, THREE.BufferGeometry> = {};
+  for (const [key, data] of Object.entries(parsed)) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(data.normals, 3));
+    geometries[key] = geometry;
+  }
+  const material = new THREE.MeshStandardMaterial({
+    color: "#3a424d",
+    metalness: 0.35,
+    roughness: 0.46,
+  });
+  return { geometries, material };
+}
+
+interface G1MeshState {
+  phase: "idle" | "loading" | "ready" | "failed";
+  geometries?: Record<string, THREE.BufferGeometry>;
+  material?: THREE.MeshStandardMaterial;
+}
 
 function useG1Meshes(active: boolean): G1MeshState {
-  const [state, setState] = useState<G1MeshState>(() =>
-    g1MeshCache
-      ? { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material }
-      : { phase: active ? "loading" : "idle" }
-  );
+  const [state, setState] = useState<G1MeshState>({ phase: "idle" });
   useEffect(() => {
-    if (!active || g1MeshCache) return;
+    if (!active) return;
     let cancelled = false;
-    const abortController = new AbortController();
-    const geometries: Record<string, THREE.BufferGeometry> = {};
-    const loader = new STLLoader();
-    const disposeInFlight = (): void => {
-      Object.values(geometries).forEach((geometry) => geometry.dispose());
-    };
     (async () => {
       try {
-        await Promise.all(
-          Object.entries(G1_MESH_FILES).map(async ([key, file]) => {
-            const res = await fetch(G1_MESH_DIR + file, { signal: abortController.signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status} loading ${file}`);
-            const contents = await res.arrayBuffer();
-            if (cancelled) return;
-            const geometry = loader.parse(contents);
-            geometry.rotateX(-Math.PI / 2);
-            geometry.computeVertexNormals();
-            geometries[key] = geometry;
-          })
-        );
+        const parsed = await ensureG1Meshes();
+        if (cancelled) return;
+        const built = buildG1Geometries(parsed);
         if (cancelled) {
-          disposeInFlight();
+          // Disposing mid-build is wasteful but safe; the cache retains
+          // the parsed data so a re-mount is instant.
+          for (const g of Object.values(built.geometries)) g.dispose();
           return;
         }
-        const material = new THREE.MeshStandardMaterial({
-          color: "#3a424d",
-          metalness: 0.35,
-          roughness: 0.46,
-        });
-        g1MeshCache = { geometries, material };
-        setState({ phase: "ready", geometries, material });
+        setState({ phase: "ready", ...built });
       } catch {
-        abortController.abort();
-        disposeInFlight();
         if (!cancelled) setState({ phase: "failed" });
       }
     })();
     return () => {
       cancelled = true;
-      abortController.abort();
     };
   }, [active]);
-  if (g1MeshCache) {
-    return { phase: "ready", geometries: g1MeshCache.geometries, material: g1MeshCache.material };
-  }
-  if (active && state.phase === "idle") return { phase: "loading" };
-  return state;
+  if (state.phase === "ready") return state;
+  return { phase: active ? "loading" : "idle" };
 }
 
 const cameraScratchVec = new THREE.Vector3();
@@ -1230,18 +1257,41 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
         setProgressHistory((prev) => {
-          const next = prev.length >= 200
-            ? [...prev.slice(prev.length - 199), {
-                generation: message.generation,
-                bestObjective: message.bestObjective,
-                sigma: message.sigma,
-              }]
-            : [...prev, {
-                generation: message.generation,
-                bestObjective: message.bestObjective,
-                sigma: message.sigma,
-              }];
-          return next;
+          // Three-region downsampling: head (first 10 gens always shown), body
+          // (log-spaced in the middle so equal resolution per decade), and
+          // tail (last 10 gens always shown). This guarantees the user always
+          // sees the start, the trajectory shape, and the live progress —
+          // even on a 30k-gen run. The naive "FIFO at 200" cap lost everything
+          // before gen 29800; pure log-spacing collapses the first 150 points
+          // to gens 0-10 which is also too dense. Head+body+tail balances both.
+          const HISTORY_CAP = 200;
+          const HEAD = 10;
+          const TAIL = 10;
+          const next: ConvergencePoint = {
+            generation: message.generation,
+            bestObjective: message.bestObjective,
+            sigma: message.sigma,
+          };
+          const candidate = [...prev, next];
+          if (candidate.length <= HISTORY_CAP) return candidate;
+          const n = candidate.length;
+          const kept: ConvergencePoint[] = [];
+          for (let k = 0; k < HEAD; k++) kept.push(candidate[Math.min(k, n - 1)]);
+          const bodyCount = HISTORY_CAP - HEAD - TAIL;
+          const bodyStart = HEAD;
+          const bodyEnd = n - TAIL;
+          if (bodyCount > 0 && bodyEnd > bodyStart) {
+            const lo = Math.log(bodyStart + 1);  // +1 to avoid log(0)
+            const hi = Math.log(bodyEnd);
+            for (let k = 0; k < bodyCount; k++) {
+              const t = bodyCount > 1 ? k / (bodyCount - 1) : 0;
+              const idx = Math.round(Math.exp(lo + t * (hi - lo))) - 1;
+              kept.push(candidate[Math.max(0, Math.min(n - 1, idx))]);
+            }
+          }
+          // Always preserve the very newest point as the final slot.
+          kept.push(candidate[n - 1]);
+          return kept.slice(0, HISTORY_CAP);
         });
         setStatus(
           `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
@@ -1889,6 +1939,20 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 />
               </div>
             ) : null}
+            {trace && curriculumTrace ? (
+              <div className="mt-3">
+                <WalkQualityComparison
+                  curriculum={curriculumTrace}
+                  candidate={trace}
+                  candidateLabel={
+                    activeTrace === "curriculum"
+                      ? "Curriculum mean (self)"
+                      : `${TRACE_TITLES[activeTrace]} · gen ${generation || "—"}`
+                  }
+                  curriculumLabel="Walking curriculum mean"
+                />
+              </div>
+            ) : null}
             {error ? <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
           </div>
         </div>
@@ -1923,16 +1987,53 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAllReceipts((v) => !v)}
-            aria-expanded={showAllReceipts}
-            className="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10 md:hidden"
-          >
-            {showAllReceipts
-              ? `Hide ${receiptCards.length - 4} of ${receiptCards.length} telemetry rows`
-              : `Show all ${receiptCards.length} telemetry rows`}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row md:hidden">
+            <button
+              type="button"
+              onClick={() => {
+                const obj = Object.fromEntries(
+                  receiptCards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
+                );
+                const json = JSON.stringify(obj, null, 2);
+                if (navigator.clipboard) {
+                  void navigator.clipboard.writeText(json);
+                }
+                setStatus("Receipt copied to clipboard as JSON.");
+              }}
+              className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/15"
+            >
+              Copy as JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAllReceipts((v) => !v)}
+              aria-expanded={showAllReceipts}
+              className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10"
+            >
+              {showAllReceipts
+                ? `Hide ${receiptCards.length - 4} of ${receiptCards.length} telemetry rows`
+                : `Show all ${receiptCards.length} telemetry rows`}
+            </button>
+          </div>
+          {/* Desktop: copy button always visible (no expand toggle needed) */}
+          <div className="hidden md:flex md:justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                const obj = Object.fromEntries(
+                  receiptCards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
+                );
+                const json = JSON.stringify(obj, null, 2);
+                if (navigator.clipboard) {
+                  void navigator.clipboard.writeText(json);
+                }
+                setStatus("Receipt copied to clipboard as JSON.");
+              }}
+              className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/15"
+            >
+              Copy {receiptCards.length}-row receipt as JSON
+            </button>
+          </div>
         </div>
       ) : null}
 

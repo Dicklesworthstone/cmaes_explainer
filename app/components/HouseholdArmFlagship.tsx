@@ -1522,16 +1522,52 @@ useEffect(() => {
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAllReceipts((v) => !v)}
-              aria-expanded={showAllReceipts}
-              className="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10 md:hidden"
-            >
-              {showAllReceipts
-                ? `Hide ${cards.length - 4} of ${cards.length} telemetry rows`
-                : `Show all ${cards.length} telemetry rows`}
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row md:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  const obj = Object.fromEntries(
+                    cards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
+                  );
+                  const json = JSON.stringify(obj, null, 2);
+                  if (navigator.clipboard) {
+                    void navigator.clipboard.writeText(json);
+                  }
+                  setStatus("Receipt copied to clipboard as JSON.");
+                }}
+                className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/15"
+              >
+                Copy as JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAllReceipts((v) => !v)}
+                aria-expanded={showAllReceipts}
+                className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-semibold text-slate-200 hover:bg-white/10"
+              >
+                {showAllReceipts
+                  ? `Hide ${cards.length - 4} of ${cards.length} telemetry rows`
+                  : `Show all ${cards.length} telemetry rows`}
+              </button>
+            </div>
+            <div className="hidden md:flex md:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const obj = Object.fromEntries(
+                    cards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
+                  );
+                  const json = JSON.stringify(obj, null, 2);
+                  if (navigator.clipboard) {
+                    void navigator.clipboard.writeText(json);
+                  }
+                  setStatus("Receipt copied to clipboard as JSON.");
+                }}
+                className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/15"
+              >
+                Copy {cards.length}-row receipt as JSON
+              </button>
+            </div>
           </div>
         );
       })() : null}
