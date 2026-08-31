@@ -175,10 +175,17 @@ const JOINT_COLOR = "#111820";
 // Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
 const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 const G1_POPULATION = 16;
-const G1_LINK_CLEARANCE_METERS = 0.05;
+// SOTA per-link clearance: must be >= the largest link sphere radius
+// (0.105 m at the pelvis, 0.075 m at mid-links) plus a small margin so
+// the visible link surface does not penetrate OBBs. The previous
+// constant 0.05 m was less than the link radius, so the link mesh still
+// visibly tunneled through furniture (verified cmaes-u76s followup).
+const G1_LINK_RADIUS_METERS = 0.105;
+const G1_LINK_CLEARANCE_MARGIN_METERS = 0.015;
+const G1_LINK_CLEARANCE_METERS = G1_LINK_RADIUS_METERS + G1_LINK_CLEARANCE_MARGIN_METERS;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
-  full: {
+ full: {
     title: "Full CMA-ES",
     representation: "Every covariance interaction",
     order: "O(n²) storage · O(n³) update",

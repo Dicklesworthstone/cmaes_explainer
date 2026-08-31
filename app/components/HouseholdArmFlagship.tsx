@@ -162,8 +162,15 @@ const LINK_SOURCE_ROWS = [
 ] as const;
 
 const ARM_POPULATION = 12;
-const ARM_LINK_CLEARANCE_METERS = 0.05;
-
+// SOTA per-link clearance: must be >= the link cylinder radius (which
+// tapers from 0.07 m at the base to 0.05 m at the wrist) plus a small
+// margin so the visible link surface does not penetrate OBBs. The
+// previous constant 0.05 m was less than the link radius, so the link
+// mesh still visibly tunneled through obstacles (verified cmaes-u76s
+// regression followup).
+const ARM_LINK_RADIUS_METERS = 0.07;
+const ARM_LINK_CLEARANCE_MARGIN_METERS = 0.015;
+const ARM_LINK_CLEARANCE_METERS = ARM_LINK_RADIUS_METERS + ARM_LINK_CLEARANCE_MARGIN_METERS;
 function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
