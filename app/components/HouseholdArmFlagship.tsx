@@ -950,6 +950,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     }
     workerRef.current = optimizerWorker;
     optimizerWorker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      // See G1WalkingFlagship for the active-flag rationale: the
+      // cleanup function runs on unmount and strict-mode re-runs;
+      // without this guard, stale messages trigger setState on a
+      // component that no longer owns the worker.
+      if (!active) return;
       const message = event.data;
       if (message.type === "status") {
         setStatus(message.detail);
@@ -986,6 +991,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       }
     };
     optimizerWorker.onerror = (event) => {
+      if (!active) return;
       setError(event.message || "The household-arm worker failed before returning a typed result.");
       setBusy(null);
       inFlightRef.current = false;
