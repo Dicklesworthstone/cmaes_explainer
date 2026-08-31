@@ -47,6 +47,7 @@ type WorkerResponse =
     }
   | {
       type: "comparison";
+      complete: boolean;
       rows: Array<{
         family: CmaFamily;
         initialBest: number;
@@ -368,6 +369,7 @@ async function compareFamilies(requestedGenerations: number, challenge: G1Challe
           workspaceScalars: session.admission.updateWorkspaceScalars,
           elapsedMilliseconds: Date.now() - started,
         });
+        post({ type: "comparison", rows: rows.slice(), complete: false });
       } finally {
         session.free();
       }
@@ -376,7 +378,7 @@ async function compareFamilies(requestedGenerations: number, challenge: G1Challe
     evaluationPool.free();
     evaluator.free();
   }
-  post({ type: "comparison", rows });
+  post({ type: "comparison", rows, complete: true });
 }
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
@@ -391,7 +393,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     request.type === "preview"
       ? preview(request.challenge ?? "terrain-and-push")
       : request.type === "compare"
-        ? compareFamilies(request.generations)
+        ? compareFamilies(request.generations, request.challenge)
         : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge, request.sigma);
   g1Gate = g1Gate.then(() => work(), () => work());
   void g1Gate.catch((error: unknown) => {

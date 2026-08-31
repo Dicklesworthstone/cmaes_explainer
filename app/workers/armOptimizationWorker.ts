@@ -97,7 +97,6 @@ const worker = self as DedicatedWorkerGlobalScope;
 // full rationale. Serializes every request through one Promise.
 let armGate: Promise<void> = Promise.resolve();
 const POPULATION = 12;
-const COMPARISON_POPULATION = 6;
 
 function post(message: WorkerResponse): void {
   worker.postMessage(message);
@@ -313,16 +312,16 @@ async function compareFamilies(
       post({
         type: "status",
         phase: "comparing",
-        detail: `${family}: evaluating ${COMPARISON_POPULATION * generations} equal-budget physical rollouts…`,
+        detail: `${family}: evaluating ${POPULATION * generations} equal-budget physical rollouts…`,
       });
       const session = requireOk(
         await createFrankenSimCmaFamilySession({
           family,
           mean,
           sigma: 0.001,
-          population: COMPARISON_POPULATION,
+          population: POPULATION,
           memory: memoryFor(family),
-          maxEvaluations: COMPARISON_POPULATION * generations,
+          maxEvaluations: POPULATION * generations,
           seed: 0x4152_c0den,
         }),
         `${family} admission`

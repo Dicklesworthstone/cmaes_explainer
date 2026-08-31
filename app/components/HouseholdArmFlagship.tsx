@@ -10,7 +10,6 @@ import {
   distanceToOBB,
   type MultiObstacleSceneConfig,
 } from "../lib/houseMultiObstacleKernel";
-import { resolveArmObjectContact } from "../lib/armContactPhysics";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import {
   BookOpen,
@@ -468,46 +467,18 @@ function ArmRig({
       segment.quaternion.copy(scratch.quaternion);
       segment.scale.set(1, length, 1);
     }
-    const rawEndEffector: [number, number, number] = [
-      sample.linkPoses[7].position[0],
-      sample.linkPoses[7].position[2],
-      -sample.linkPoses[7].position[1],
-    ];
-    const rawObject: [number, number, number] = [
-      sample.objectPose.position[0],
-      sample.objectPose.position[2],
-      -sample.objectPose.position[1],
-    ];
-
-    const contact = resolveArmObjectContact({
-      rawEndEffectorPos: rawEndEffector,
-      rawObjectPos: rawObject,
-      commandedGripperWidthM: sample.gripperWidthMeters,
-      taskOrObjectId: admission.config.task,
-      isGraspedIntent: sample.grasped,
-      tableY: admission.scene.supportHeightMeters,
-      obstacles: multiObstacleScene.obstacles,
-    });
-
-    if (objectRef.current) {
-      applyOwnerPose(objectRef.current, sample.objectPose);
-      objectRef.current.position.set(
-        contact.resolvedObjectPos[0],
-        contact.resolvedObjectPos[1],
-        contact.resolvedObjectPos[2]
-      );
-    }
-    const halfWidth = 0.5 * contact.effectiveGripperWidthM;
+    if (objectRef.current) applyOwnerPose(objectRef.current, sample.objectPose);
+    const halfWidth = 0.5 * sample.gripperWidthMeters;
     if (leftFingerRef.current) leftFingerRef.current.position.x = -halfWidth;
     if (rightFingerRef.current) rightFingerRef.current.position.x = halfWidth;
     if (contactRingRef.current) {
-      const forceScale = 1 + Math.min(1.2, contact.normalForceN / 14);
+      const forceScale = 1 + Math.min(1.2, sample.gripNormalForceNewtons / 14);
       contactRingRef.current.scale.setScalar(forceScale);
-      contactRingRef.current.visible = contact.normalForceN > 0.01;
+      contactRingRef.current.visible = sample.gripNormalForceNewtons > 0.01;
     }
     if (contactMaterialRef.current) {
-      contactMaterialRef.current.opacity = contact.isGrasped ? 0.95 : 0.45;
-      contactMaterialRef.current.color.setHex(contact.isGrasped ? 0x34d399 : 0xfbbf24);
+      contactMaterialRef.current.opacity = sample.grasped ? 0.95 : 0.45;
+      contactMaterialRef.current.color.setHex(sample.grasped ? 0x34d399 : 0xfbbf24);
     }
 
     let violatingLink = -1;
