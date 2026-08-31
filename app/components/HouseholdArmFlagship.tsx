@@ -5,7 +5,11 @@ import { OrbitControls, PerspectiveCamera, FlyControls } from "@react-three/drei
 import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
-import { createSceneFromHouseFurniture, distanceToOBB, type MultiObstacleSceneConfig } from "../lib/houseMultiObstacleKernel";
+import {
+  createHouseNavigationScene,
+  distanceToOBB,
+  type MultiObstacleSceneConfig,
+} from "../lib/houseMultiObstacleKernel";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import {
   BookOpen,
@@ -402,7 +406,7 @@ function ArmRig({
   // bounding box with proper rotation-aware signed-distance queries.
   // Supplements the Box3 counter/wall check for per-link boundary detection.
   const multiObstacleScene = useMemo(
-    () => createSceneFromHouseFurniture(),
+    () => createHouseNavigationScene(),
     [] // static catalog
   );
   const adaptiveMargin = 0.05; // base margin; scales by velocity in production
@@ -684,7 +688,7 @@ function ArmCameraRig({
 
 import { clampArmTargetPosition, isTargetKukaReachable } from "../lib/armInverseKinematics";
 
-const armHouseScene = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
+const armHouseScene = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function ArmTargetDragger({
   targetPos,
@@ -1094,6 +1098,9 @@ const [armUnreachable, setArmUnreachable] = useState(false);
       setAdmission(null);
       setCurriculumTrace(null);
       setComparison(null);
+      setArmDragTarget(null);
+      setArmUnreachable(false);
+      setArmCollisionState({ isColliding: false, clearance: 1.0 });
       setGeneration(0);
       setError(null);
       setBusy("preview");

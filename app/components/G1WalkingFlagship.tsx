@@ -31,7 +31,7 @@ import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
   clampPositionAgainstHouseCollisions,
-  createSceneFromHouseFurniture,
+  createHouseNavigationScene,
   findClearSpawnPosition,
 } from "../lib/houseMultiObstacleKernel";
 type ScalableFamily = Exclude<CmaFamily, "full">;
@@ -863,7 +863,7 @@ function CameraRig({
   ) : null;
 }
 
-const houseSceneData = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
+const houseSceneData = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function RagdollDragger({
   pelvisThree,
@@ -1190,11 +1190,24 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (robotDragOffset !== null) return;
     if (!trace) return;
-    const pelvis = ownerToThree(trace.samples[0].linkPoses[0].position);
+    const firstSample = trace.samples[0];
+    const pelvisPose = firstSample?.linkPoses[0];
+    if (!pelvisPose) return;
+    let cancelled = false;
+    const pelvis = ownerToThree(pelvisPose.position);
     const safe = findClearSpawnPosition(houseSceneData.obstacles, 0.35);
-    Promise.resolve().then(() =>
-      setRobotDragOffset([safe[0] - pelvis[0], 0, safe[2] - pelvis[2]])
-    );
+    const safeOffset: [number, number, number] = [
+      safe[0] - pelvis[0],
+      0,
+      safe[2] - pelvis[2],
+    ];
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setRobotDragOffset((current) => current ?? safeOffset);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [trace, robotDragOffset]);
   const [dragCollisionState, setDragCollisionState] = useState<{
     isColliding: boolean;

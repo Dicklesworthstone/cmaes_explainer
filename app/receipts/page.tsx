@@ -213,7 +213,7 @@ export default function ReceiptsPage() {
                 <tbody className="divide-y divide-white/5">
                   {scores.map((row, index) => (
                     <tr key={index} className="text-slate-200">
-                      <td className="px-4 py-3 font-mono text-xs break-words min-w-0">{row.component}</td>
+                      <td className="px-4 py-3 font-mono text-xs break-all min-w-0">{row.component}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}>
                           {row.parity}
@@ -234,7 +234,7 @@ export default function ReceiptsPage() {
                           {row.behavioralReceipt}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400 break-words min-w-0">{row.citations}</td>
+                      <td className="px-4 py-3 text-xs text-slate-400 break-all min-w-0">{row.citations}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -272,12 +272,12 @@ export default function ReceiptsPage() {
                 <tbody className="divide-y divide-white/5">
                   {budgets.map((row, index) => (
                     <tr key={index} className="text-slate-200">
-                      <td className="px-4 py-3 font-mono text-xs">{row.epic}</td>
-                      <td className="px-4 py-3 text-center font-mono text-xs">
-                        {row.ownerSideP95Ms === null ? "n/a" : `${row.ownerSideP95Ms.toFixed(2)} ms`}
+                      <td className="px-4 py-3 font-mono text-xs break-all min-w-0">{row.epic}</td>
+                      <td className="px-4 py-3 text-center font-mono text-xs break-all">
+                        {row.ownerSideP95Ms === null ? "n/a" : `${row.ownerSideP95Ms.toFixed(1)} ms`}
                       </td>
-                      <td className="px-4 py-3 text-center font-mono text-xs">
-                        {row.explorerSideP95Ms === null ? "n/a" : `${row.explorerSideP95Ms.toFixed(2)} ms`}
+                      <td className="px-4 py-3 text-center font-mono text-xs break-all">
+                        {row.explorerSideP95Ms === null ? "n/a" : `${row.explorerSideP95Ms.toFixed(1)} ms`}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-400">{row.reference}</td>
                     </tr>
@@ -296,7 +296,7 @@ export default function ReceiptsPage() {
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-white">Bench envelopes</h2>
           {envelopeMd ? (
-            <pre className="overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/40 p-4 text-xs text-slate-200">
+            <pre className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 p-4 text-xs text-slate-200 whitespace-pre-wrap break-all">
               {envelopeMd}
             </pre>
           ) : (
