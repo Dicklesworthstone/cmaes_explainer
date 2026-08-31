@@ -814,6 +814,7 @@ function ArmStage({
   dragTarget,
   onDragTargetChange,
   onCollisionChange,
+  onUnreachableChange,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
@@ -825,6 +826,7 @@ function ArmStage({
   dragTarget?: [number, number, number] | null;
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
   onCollisionChange?: (col: { isColliding: boolean; clearance: number }) => void;
+  onUnreachableChange?: (unreachable: boolean) => void;
 }) {
   const currentSample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const rawObjectPos: [number, number, number] = currentSample
@@ -911,7 +913,7 @@ function ArmStage({
         targetPos={objectPos}
         onTargetChange={onDragTargetChange ?? (() => {})}
         onCollisionChange={onCollisionChange ?? (() => {})}
-        onUnreachableChange={setArmUnreachable}
+        onUnreachableChange={onUnreachableChange}
       />
 
       <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
@@ -1284,7 +1286,10 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                     </span>
                     <button
                       type="button"
-                      onClick={() => setArmDragTarget(null)}
+                      onClick={() => {
+                        setArmDragTarget(null);
+                        setArmUnreachable(false);
+                      }}
                       className="flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-orange-200 hover:bg-orange-900/60 transition-colors"
                       title="Reset target object to nominal trajectory position"
                     >
@@ -1363,6 +1368,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                   dragTarget={armDragTarget}
                   onDragTargetChange={setArmDragTarget}
                   onCollisionChange={setArmCollisionState}
+                  onUnreachableChange={setArmUnreachable}
                 />
               ) : null}
             </div>

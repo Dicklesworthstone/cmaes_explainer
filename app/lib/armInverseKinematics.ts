@@ -269,9 +269,9 @@ export function isTargetKukaReachable(
   basePos: [number, number, number] = [0, 0.78, 0],
 ): boolean {
   // 30 iterations is enough for a cheap reachability check; the
-  // convergence criterion of solveKukaIK is 2 mm; we use 5 cm here
-  // (slightly lax) so a near-reachable target is not spuriously
-  // rejected at the joint limit or near a singularity.
+  // convergence criterion of solveKukaIK is 2 mm. We use 2 cm here so
+  // a near-reachable target at the workspace boundary is rejected (the
+  // user explicitly asked the arm cannot be placed outside its reach).
   const angles = solveKukaIK(targetPos, [0, 0.4, 0, -1.2, 0, 0.8, 0], basePos, 30);
   const { endEffector } = computeKukaFK(angles, basePos);
   const err = Math.hypot(
@@ -279,7 +279,7 @@ export function isTargetKukaReachable(
     targetPos[1] - endEffector[1],
     targetPos[2] - endEffector[2],
   );
-  return err < 0.05;
+  return err < 0.02;
 }
 
 export function clampArmTargetPosition(
