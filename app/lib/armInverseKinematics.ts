@@ -299,21 +299,11 @@ export function clampArmTargetPosition(
  // Workspace bounds (matches the actual table footprint)
  let safeX = Math.max(-1.5, Math.min(1.5, target[0]));
  let safeZ = Math.max(-1.5, Math.min(1.5, target[2]));
- // Soft table floor: the target MUST stay above the table surface, but
  // an OBB taller than the table (e.g. a chair) is allowed to push the
  // target upward. We take the maximum of the table floor and the
- // projection after each pass so the final Y respects both constraints.
  let safeY = Math.max(tableHeight + margin, target[1]);
-
- let isColliding = false;
  let minClearance = 999.0;
-
- // SOTA OBB projection: use the kernel's projectPointOutOfOBB so the
- // push direction is the true SDF gradient (handles interior points,
- // yawed OBBs, and non-cubic aspect ratios). The previous radial-from-
- // center projection landed targets inside yawed furniture. Run multiple
- // Gauss-Seidel passes to relax the case where one OBB's push-out
- // drives the target into a second OBB.
+ let isColliding = false;
  for (let pass = 0; pass < 3; pass++) {
  let passMoved = false;
  for (const obb of obstacles) {
@@ -337,9 +327,19 @@ export function clampArmTargetPosition(
  }
  if (!passMoved) break;
  }
+ // After all passes, recompute isColliding based on the FINAL state so
+ // the caller learns whether the projection succeeded.
+ let finalColliding = false;
+ for (const obb of obstacles) {
+ if (obb.exemptFromPenalty) continue;
+ if (distanceToOBB([safeX, safeY, safeZ], obb) < margin) {
+ finalColliding = true;
+ break;
+ }
+ }
  return {
  clampedTarget: [safeX, safeY, safeZ],
- isColliding,
+ isColliding: finalColliding,
  minClearance: Math.max(0, minClearance),
  };
 }
