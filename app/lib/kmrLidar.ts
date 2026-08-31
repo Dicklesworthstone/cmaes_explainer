@@ -62,6 +62,7 @@ export function scanLidar(
   baseYMeters: number,
   obstacles: OrientedBoundingBox[],
   config: LidarConfig = KUKA_KMR_IIWA_LIDAR_DEFAULT,
+  baseYawRadians = 0,
 ): LidarScan {
   const rays: LidarRay[] = [];
   const fovRadians = (config.fovDegrees * Math.PI) / 180.0;
@@ -73,29 +74,35 @@ export function scanLidar(
   for (let i = 0; i < config.numRays; i += 1) {
     const t = i / Math.max(1, config.numRays - 1);
     const angle = startAngle + t * fovRadians;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
+    const worldAngle = baseYawRadians + angle;
+    const worldDirX = Math.cos(worldAngle);
+    const worldDirY = Math.sin(worldAngle);
     let range = config.maxRangeMeters;
     let hit = false;
     for (const obb of obstacles) {
       if (obb.exemptFromPenalty) continue;
       // Ray-AABB intersection in 2D.
       const ox = obb.center[0] - baseXMeters;
-      const oy = obb.center[1] - baseYMeters;
+      // Household OBBs are Y-up. A planar scan therefore consumes the X/Z
+      // footprint, not X/Y; the old mapping collapsed every catalog object
+      // onto the house's y=0 centerline.
+      const oy = obb.center[2] - baseYMeters;
       const c = Math.cos(-obb.rotationYawRad);
       const s = Math.sin(-obb.rotationYawRad);
       const lx = ox * c - oy * s;
       const ly = ox * s + oy * c;
+      const localDirX = worldDirX * c - worldDirY * s;
+      const localDirY = worldDirX * s + worldDirY * c;
       const hx = obb.halfExtents[0];
-      const hy = obb.halfExtents[1];
+      const hy = obb.halfExtents[2];
       let tMin = 0.0;
       let tMax = config.maxRangeMeters;
       let hitLocal = true;
-      if (Math.abs(cosA) < 1e-9) {
+      if (Math.abs(localDirX) < 1e-9) {
         if (lx > hx || lx < -hx) hitLocal = false;
       } else {
-        const t1 = (lx - hx) / cosA;
-        const t2 = (lx + hx) / cosA;
+        const t1 = (lx - hx) / localDirX;
+        const t2 = (lx + hx) / localDirX;
         const tNear = Math.min(t1, t2);
         const tFar = Math.max(t1, t2);
         if (tNear > tMin) tMin = tNear;
@@ -103,11 +110,11 @@ export function scanLidar(
         if (tMin > tMax) hitLocal = false;
       }
       if (hitLocal) {
-        if (Math.abs(sinA) < 1e-9) {
+        if (Math.abs(localDirY) < 1e-9) {
           if (ly > hy || ly < -hy) hitLocal = false;
         } else {
-          const t1 = (ly - hy) / sinA;
-          const t2 = (ly + hy) / sinA;
+          const t1 = (ly - hy) / localDirY;
+          const t2 = (ly + hy) / localDirY;
           const tNear = Math.min(t1, t2);
           const tFar = Math.max(t1, t2);
           if (tNear > tMin) tMin = tNear;

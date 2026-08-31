@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildKmrBaseMesh,
   defaultKmrMaterialSet,
-  KUKA_KMR_IIWA_PUBLIC_SPEC,
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
 } from "../app/lib/kmrGeometry";
 
 describe("KMR base 3D component (underlying geometry)", () => {
@@ -20,7 +20,7 @@ describe("KMR base 3D component (underlying geometry)", () => {
 
   test("buildKmrBaseMesh respects a custom config", () => {
     const custom = {
-      ...KUKA_KMR_IIWA_PUBLIC_SPEC,
+      ...KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
       baseLengthMeters: 1.2,
     };
     const mesh = buildKmrBaseMesh(custom);

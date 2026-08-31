@@ -14,12 +14,26 @@ import * as THREE from "three";
 import {
   buildKmrBaseMesh,
   defaultKmrMaterialSet,
-  KUKA_KMR_IIWA_PUBLIC_SPEC,
+  KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
 } from "../lib/kmrGeometry";
 import { scanLidar, KUKA_KMR_IIWA_LIDAR_DEFAULT } from "../lib/kmrLidar";
 import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
-import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
+import {
+  createHouseNavigationScene,
+  type OrientedBoundingBox,
+} from "../lib/houseMultiObstacleKernel";
+import {
+  KmrNavigationOwner,
+  type KmrNavigationReceipt,
+} from "../lib/kmrNavigationOwner";
+import {
+  createKmrHouseholdPhysicsCoupling,
+  stepKmrHouseholdPhysics,
+  type KmrHouseholdPhysicsCoupling,
+  type KmrHouseholdPhysicsReceipt,
+} from "../lib/kmrHouseholdPhysics";
 
 interface KmrPose {
   x: number;
@@ -32,38 +46,45 @@ export interface KmrSceneProps {
 }
 
 function obstaclesFromCatalog(): OrientedBoundingBox[] {
-  // Build a simple OBB list from the catalog furniture. Each
-  // piece becomes a 2D footprint at its center.
-  return CRAFTSMAN_BUNGALOW_1928.furniture.map((f) => ({
-    id: f.name,
-    name: f.name,
-    center: [f.center[0], 0, f.center[1]],
-    halfExtents: [f.size[0] / 2, 0.5, f.size[1] / 2],
-    rotationYawRad: f.rotation,
-  }));
+  return createHouseNavigationScene().obstacles;
 }
 
 function KmrThreeScene({
   pose,
-  setPose,
   path,
+  dynamicReceipt,
   onSetWaypoint,
 }: {
   pose: KmrPose;
-  setPose: (p: KmrPose) => void;
   path: WaypointPath | null;
+  dynamicReceipt: KmrHouseholdPhysicsReceipt | null;
   onSetWaypoint: (world: { x: number; y: number }) => void;
 }) {
   const materials = useMemo(() => defaultKmrMaterialSet(), []);
   const baseGroup = useMemo(
-    () => buildKmrBaseMesh(KUKA_KMR_IIWA_PUBLIC_SPEC, materials),
+    () => buildKmrBaseMesh(KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS, materials),
     [materials],
   );
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
   const scan = useMemo(
-    () => scanLidar(pose.x, pose.y, obstacles, KUKA_KMR_IIWA_LIDAR_DEFAULT),
-    [pose.x, pose.y, obstacles],
+    () =>
+      scanLidar(
+        pose.x,
+        pose.y,
+        obstacles,
+        KUKA_KMR_IIWA_LIDAR_DEFAULT,
+        pose.theta,
+      ),
+    [pose.x, pose.y, pose.theta, obstacles],
   );
+  const pathGeometry = useMemo(() => {
+    if (!path || path.points.length < 2) return null;
+    return new THREE.BufferGeometry().setFromPoints(
+      path.points.map((point) => new THREE.Vector3(point[0], 0.025, point[1])),
+    );
+  }, [path]);
+
+  useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
 
   const handleClick = (e: any) => {
     if (!e.point) return;
@@ -79,11 +100,13 @@ function KmrThreeScene({
       />
       {scan.rays.map((r, i) => {
         if (!r.hit) return null;
-        const cosA = Math.cos(r.angleRadians - pose.theta);
-        const sinA = Math.sin(r.angleRadians - pose.theta);
+        const cosA = Math.cos(r.angleRadians + pose.theta);
+        const sinA = Math.sin(r.angleRadians + pose.theta);
         const x = pose.x + r.rangeMeters * cosA;
         const y = pose.y + r.rangeMeters * sinA;
-        const z = KUKA_KMR_IIWA_PUBLIC_SPEC.mountingPlateHeightMeters + 0.06;
+        const z =
+          KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.mountingPlateHeightMeters +
+          0.06;
         const color =
           r.rangeMeters < 1.0
             ? "#ef4444"
@@ -97,23 +120,46 @@ function KmrThreeScene({
           </mesh>
         );
       })}
-      {path && path.points.length > 1 ? (
-        <line>
-          <bufferGeometry
-            attach="geometry"
-            onUpdate={(g) => {
-              const pos = g.getAttribute("position") as
-                | { setXYZ: (i: number, x: number, y: number, z: number) => void; count: number }
-                | undefined;
-              if (!pos) return;
-              for (let i = 0; i < path.points.length; i += 1) {
-                pos.setXYZ(i, path.points[i][0], 0.02, path.points[i][1]);
-              }
-              pos.count = path.points.length;
-            }}
-          />
-          <lineBasicMaterial color="#22d3ee" />
-        </line>
+      {obstacles.map((obstacle) => {
+        if (obstacle.exemptFromPenalty) return null;
+        const isWall = obstacle.materialId === "house-wall";
+        return (
+          <mesh
+            key={obstacle.id}
+            position={obstacle.center}
+            rotation={[0, obstacle.rotationYawRad, 0]}
+          >
+            <boxGeometry
+              args={[
+                obstacle.halfExtents[0] * 2,
+                obstacle.halfExtents[1] * 2,
+                obstacle.halfExtents[2] * 2,
+              ]}
+            />
+            <meshStandardMaterial
+              color={isWall ? "#334155" : "#78350f"}
+              transparent
+              opacity={isWall ? 0.38 : 0.24}
+              depthWrite={false}
+            />
+          </mesh>
+        );
+      })}
+      {pathGeometry ? (
+        <primitive object={new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: "#22d3ee" }))} />
+      ) : null}
+      {dynamicReceipt ? (
+        <mesh
+          position={[
+            dynamicReceipt.chairPositionMeters[0],
+            dynamicReceipt.chairPositionMeters[2],
+            dynamicReceipt.chairPositionMeters[1],
+          ]}
+          castShadow
+        >
+          <sphereGeometry args={[0.22, 16, 12]} />
+          <meshStandardMaterial color="#a16207" roughness={0.82} />
+        </mesh>
       ) : null}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -132,45 +178,106 @@ function KmrThreeScene({
 }
 
 export function KmrScene({ initialPose }: KmrSceneProps) {
+  const navigationStart = CRAFTSMAN_BUNGALOW_1928.goals[0].center;
   const [pose, setPose] = useState<KmrPose>(
-    initialPose ?? { x: -3, y: -2, theta: 0 },
+    initialPose ?? {
+      x: navigationStart[0],
+      y: navigationStart[1],
+      theta: 0,
+    },
   );
   const [path, setPath] = useState<WaypointPath | null>(null);
+  const [receipt, setReceipt] = useState<KmrNavigationReceipt | null>(null);
+  const [dynamicReceipt, setDynamicReceipt] =
+    useState<KmrHouseholdPhysicsReceipt | null>(null);
+  const [planningError, setPlanningError] = useState<string | null>(null);
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
   const animRef = useRef<number | null>(null);
-  const pathRef = useRef<WaypointPath | null>(null);
+  const ownerRef = useRef<KmrNavigationOwner | null>(null);
+  const householdCouplingRef = useRef<KmrHouseholdPhysicsCoupling | null>(null);
+  const lastFrameMsRef = useRef<number | null>(null);
+  const accumulatedSecondsRef = useRef(0);
 
   useEffect(() => {
-    pathRef.current = path;
-  }, [path]);
+    return () => {
+      if (animRef.current !== null) cancelAnimationFrame(animRef.current);
+    };
+  }, []);
 
   const setWaypoint = (target: { x: number; y: number }) => {
-    const newPath = planWaypointPath(pose, target, obstacles);
-    setPath(newPath.path);
-    // Animate along the path.
     if (animRef.current !== null) {
       cancelAnimationFrame(animRef.current);
       animRef.current = null;
     }
-    const start = performance.now();
-    const totalMs = Math.max(500, newPath.path.totalDistanceMeters * 1000);
-    const animate = (now: number) => {
-      const elapsed = now - start;
-      const t = Math.min(1, elapsed / totalMs);
-      const idx = Math.min(
-        newPath.path.points.length - 1,
-        Math.floor(t * newPath.path.points.length),
+    setPlanningError(null);
+    let owner: KmrNavigationOwner;
+    try {
+      const newPath = planWaypointPath(
+        pose,
+        target,
+        obstacles,
+        undefined,
+        CRAFTSMAN_BUNGALOW_1928.bounds,
       );
-      const next = newPath.path.points[idx];
-      if (next) {
-        const prevIdx = Math.max(0, idx - 1);
-        const prev = newPath.path.points[prevIdx];
-        const dx = next[0] - prev[0];
-        const dy = next[1] - prev[1];
-        const theta = Math.atan2(dy, dx);
-        setPose({ x: next[0], y: next[1], theta });
+      owner = new KmrNavigationOwner(pose, newPath.path, obstacles);
+      const firstDrivePoint = newPath.path.points[1] ?? [target.x, target.y];
+      const driveDx = firstDrivePoint[0] - pose.x;
+      const driveDy = firstDrivePoint[1] - pose.y;
+      const driveLength = Math.hypot(driveDx, driveDy) || 1;
+      const chairDistance = Math.min(0.75, driveLength * 0.6);
+      householdCouplingRef.current = createKmrHouseholdPhysicsCoupling(
+        pose,
+        [
+          pose.x + (driveDx / driveLength) * chairDistance,
+          pose.y + (driveDy / driveLength) * chairDistance,
+        ],
+      );
+      ownerRef.current = owner;
+      setPath(newPath.path);
+      setReceipt(owner.receipt());
+      setDynamicReceipt(null);
+    } catch (error) {
+      ownerRef.current = null;
+      setPath(null);
+      setReceipt(null);
+      setDynamicReceipt(null);
+      householdCouplingRef.current = null;
+      setPlanningError(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    lastFrameMsRef.current = null;
+    accumulatedSecondsRef.current = 0;
+    const animate = (now: number) => {
+      const activeOwner = ownerRef.current;
+      if (!activeOwner) return;
+      const previousFrame = lastFrameMsRef.current ?? now;
+      lastFrameMsRef.current = now;
+      accumulatedSecondsRef.current += Math.min(0.1, (now - previousFrame) / 1000);
+      let nextReceipt = activeOwner.receipt();
+      let substeps = 0;
+      while (accumulatedSecondsRef.current >= 1 / 60 && substeps < 6) {
+        nextReceipt = activeOwner.step();
+        if (householdCouplingRef.current) {
+          setDynamicReceipt(
+            stepKmrHouseholdPhysics(
+              householdCouplingRef.current,
+              nextReceipt,
+            ),
+          );
+        }
+        accumulatedSecondsRef.current -= 1 / 60;
+        substeps += 1;
       }
-      if (t < 1) {
+      setPose(nextReceipt.pose);
+      setReceipt(nextReceipt);
+      if (nextReceipt.collisionRefusals > 0) {
+        setPlanningError(
+          "Kinematic owner refused a swept step; movement stopped before contact.",
+        );
+        ownerRef.current = null;
+        animRef.current = null;
+      } else if (!nextReceipt.completed) {
         animRef.current = requestAnimationFrame(animate);
       } else {
         animRef.current = null;
@@ -184,12 +291,15 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="text-base font-bold text-orange-300">
-            KMR + LBR iiwa: waypoint navigation
+            KMR base: collision-aware household navigation
           </h3>
           <p className="text-xs text-slate-400">
-            Click in the scene to set a goal. The KMR plans a path with
-            multi-resolution clearance value iteration and drives the
-            4 mecanum wheels along it.
+            Click a clear floor point. Global clearance value iteration feeds
+            a fixed-step TS kinematic owner, which issues four mecanum-wheel
+            commands and refuses swept contact with furniture or walls.
+            The clearance proxy uses the procedural 600 mm chassis width plus
+            a 20 mm margin; it is not a rigid-body certification of the larger
+            official vehicle envelope.
           </p>
         </div>
         <div className="text-xs text-slate-500">
@@ -218,28 +328,59 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
           />
           <KmrThreeScene
             pose={pose}
-            setPose={setPose}
             path={path}
+            dynamicReceipt={dynamicReceipt}
             onSetWaypoint={setWaypoint}
           />
         </Canvas>
       </div>
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+      {planningError ? (
+        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+          {planningError}
+        </p>
+      ) : null}
+      <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
         <span>
-          KUKA KMR iiwa public spec, parameterized. 4 mecanum wheels,
-          800×600×380 mm base.
+          Official whole-vehicle envelope: {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.lengthMeters * 1000)}×
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.widthMeters * 1000)}×
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters * 1000)} mm,
+          {" "}{KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg} kg. Inner chassis and wheelbase are disclosed procedural assumptions.
         </span>
-        <span>
+        <span className="sm:text-right">
           {path ? (
             <>
-              Path: {path.points.length} waypoints,{" "}
-              {path.totalDistanceMeters.toFixed(2)} m
+              Value path: {path.points.length} waypoints, {path.totalDistanceMeters.toFixed(2)} m,
+              {" "}planned clearance {path.minimumClearanceMeters.toFixed(3)} m
             </>
           ) : (
             "No path yet"
           )}
         </span>
       </div>
+      {receipt ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-cyan-500/20 bg-cyan-950/10 p-3 font-mono text-[11px] text-cyan-100 sm:grid-cols-4">
+          <span>owner: TS kinematic mecanum</span>
+          <span>distance: {receipt.distanceTraveledMeters.toFixed(2)} m</span>
+          <span>clearance: {receipt.minimumClearanceMeters.toFixed(3)} m</span>
+          <span>refusals: {receipt.collisionRefusals}</span>
+          <span>time: {receipt.elapsedSeconds.toFixed(2)} s</span>
+          <span>gate: {receipt.waypointIndex + 1}/{receipt.totalWaypoints}</span>
+          <span>
+            wheels: {receipt.wheelSpeeds.speeds.map((speed) => speed.toFixed(1)).join(" / ")} rad/s
+          </span>
+          <span>{receipt.completed ? "goal reached" : "integrating"}</span>
+        </div>
+      ) : null}
+      {dynamicReceipt ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-amber-500/20 bg-amber-950/10 p-3 font-mono text-[11px] text-amber-100 sm:grid-cols-4">
+          <span>matter owner: household contact/LCP TS</span>
+          <span>base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}</span>
+          <span>
+            chair speed: {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s
+          </span>
+          <span>LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

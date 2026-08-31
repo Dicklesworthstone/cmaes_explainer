@@ -1683,6 +1683,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <span>0.005 (explore)</span>
             <span>0.01 (aggressive)</span>
           </div>
+          <p className="mt-1 text-[0.6rem] leading-4 text-slate-500" data-testid="g1-sigma-hint">
+            {searchSigma <= 0.0008
+              ? "Tight radius: each candidate is a small perturbation of the current mean — best for refining a known good policy."
+              : searchSigma <= 0.003
+                ? "Refine-to-explore crossover: most candidates stay near the mean, but a few venture out — the safe default for early optimization."
+                : searchSigma <= 0.006
+                  ? "Balanced exploration (default): roughly half the population diverges meaningfully from the mean — the recommended starting point."
+                  : "Wide exploration: large perturbations dominate the population — the search may find a better optimum but takes more generations to converge."}
+          </p>
           {/* 2. Interactive Timeline & Milestone Scrubber */}
           <G1TimelineScrubber
             trace={trace}

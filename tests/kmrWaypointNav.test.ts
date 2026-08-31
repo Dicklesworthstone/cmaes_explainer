@@ -31,23 +31,25 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
     expect(pathIsCollisionFree(plan.path, [], CLEARANCE_RADIUS)).toBe(true);
   });
 
-  test("a single wall in the path: the straight-line path collides", () => {
+  test("a single wall in the path: value-policy extraction routes around it", () => {
     const plan = planWaypointPath(
       { x: 0, y: 0, theta: 0 },
       { x: 2, y: 0 },
       [wall3D],
     );
-    expect(pathIsCollisionFree(plan.path, [wall3D], CLEARANCE_RADIUS)).toBe(
-      false,
-    );
+    expect(pathIsCollisionFree(plan.path, [wall3D], CLEARANCE_RADIUS)).toBe(true);
+    expect(plan.path.points.some(([, y]) => Math.abs(y) > 2.0)).toBe(true);
+    expect(plan.path.totalDistanceMeters).toBeGreaterThan(2.0);
+    expect(plan.path.minimumClearanceMeters).toBeGreaterThanOrEqual(0.0);
+    expect(plan.path.planner).toBe("clearance-value-iteration");
   });
 
   test("pathIsCollisionFree: a path that misses the wall is free", () => {
     const offWall: OrientedBoundingBox = {
       id: "off-wall",
       name: "off-wall",
-      center: [0, 3, 0],
-      halfExtents: [4, 0.1, 2],
+      center: [0, 1, 3],
+      halfExtents: [4, 1, 0.1],
       rotationYawRad: 0,
     };
     const plan = planWaypointPath(
@@ -58,5 +60,15 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
     expect(pathIsCollisionFree(plan.path, [offWall], CLEARANCE_RADIUS)).toBe(
       true,
     );
+  });
+
+  test("rejects goals that overlap an obstacle instead of animating through it", () => {
+    expect(() =>
+      planWaypointPath(
+        { x: 0, y: 0, theta: 0 },
+        { x: 1, y: 0 },
+        [wall3D],
+      ),
+    ).toThrow(/goal does not clear/);
   });
 });

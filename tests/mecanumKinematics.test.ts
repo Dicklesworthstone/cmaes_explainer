@@ -6,9 +6,9 @@ import {
   KUKA_KMR_IIWA_LIMITS,
   type MecanumCommand,
 } from "../app/lib/mecanumKinematics";
-import { KUKA_KMR_IIWA_PUBLIC_SPEC } from "../app/lib/kmrGeometry";
+import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS } from "../app/lib/kmrGeometry";
 
-const cfg = KUKA_KMR_IIWA_PUBLIC_SPEC;
+const cfg = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
 const r = cfg.wheelDiameterMeters / 2.0;
 const a = cfg.wheelbaseXMeters / 2.0;
 const b = cfg.wheelbaseYMeters / 2.0;

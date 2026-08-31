@@ -50,6 +50,38 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     expect(frontRays[0].rangeMeters).toBeCloseTo(2.9, 0);
   });
 
+  test("uses the household X/Z footprint instead of collapsing obstacles onto Y-up", () => {
+    const cabinet: OrientedBoundingBox = {
+      id: "cabinet",
+      name: "cabinet",
+      center: [3, 2.5, 0],
+      halfExtents: [0.1, 2.5, 0.8],
+      rotationYawRad: 0,
+    };
+    const scan = scanLidar(0, 0, [cabinet], cfg);
+    const forward = scan.rays.filter(
+      (ray) => ray.hit && Math.abs(ray.angleRadians) < 6 * Math.PI / 180,
+    );
+    expect(forward.length).toBeGreaterThan(0);
+    expect(forward[0].rangeMeters).toBeCloseTo(2.9, 0);
+  });
+
+  test("base yaw rotates the sensor rays in the house plane", () => {
+    const northWall: OrientedBoundingBox = {
+      id: "north-wall",
+      name: "north-wall",
+      center: [0, 1, 3],
+      halfExtents: [1, 1, 0.1],
+      rotationYawRad: 0,
+    };
+    const scan = scanLidar(0, 0, [northWall], cfg, Math.PI / 2);
+    const forward = scan.rays.filter(
+      (ray) => ray.hit && Math.abs(ray.angleRadians) < 6 * Math.PI / 180,
+    );
+    expect(forward.length).toBeGreaterThan(0);
+    expect(forward[0].rangeMeters).toBeCloseTo(2.9, 0);
+  });
+
   test("scan angles span the configured FOV", () => {
     const scan = scanLidar(0, 0, [], cfg);
     const angles = scan.rays.map((r) => r.angleRadians);

@@ -1,13 +1,11 @@
 // KUKA KMR (KUKA Mobile Robotics) iiwa base geometry + mecanum wheel geometry.
-// Parameterized procedural Three.js assets (no GLTF downloads; per the
-// threejs-visualizations skill doctrine #7: dimension table from public
-// KUKA KMR iiwa spec sheets with citations, no invented dimensions).
+// Parameterized procedural Three.js assets (no GLTF downloads).
 //
 // SOTA / public-spec sources:
-// - KUKA Roboter GmbH, "KMR iiwa product specification" (public spec sheet).
-//   The KMR iiwa is the standard mobile base for the LBR iiwa arm family
-//   in factory automation. Public dimensions are quoted from the KUKA
-//   "KMR iiwa Technical Data" sheet and the KUKA "LBR iiwa" specification.
+// - KUKA Roboter GmbH, "KMR iiwa" official technical-data sheet, revision
+//   904d956018284109b9eee3bd8b350d20. It publishes the WHOLE-VEHICLE
+//   envelope, mass, and payload. It does not publish every inner chassis,
+//   wheel, or wheelbase dimension used by this procedural approximation.
 // - For the mecanum wheel pattern (4 diagonal rollers per wheel), see
 //   Killpack, "A Brief Overview of the Omnidirectional WMR (Mecanum
 //   Wheel)" (Carnegie Mellon University, 2012). The IK formulas in the
@@ -33,8 +31,23 @@ export interface KmrGeometryConfig {
   mountingPlateOffsetXMeters: number;
 }
 
-export const KUKA_KMR_IIWA_PUBLIC_SPEC: KmrGeometryConfig = {
-  // KUKA KMR iiwa public dimensions (from kuka.com product spec sheet).
+export const KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE = {
+  lengthMeters: 1.19,
+  widthMeters: 0.72,
+  heightMeters: 0.7,
+  massKg: 375,
+  maximumPayloadKg: 175,
+  sourceUrl:
+    "https://www.kuka.com/-/media/kuka-downloads/files/87f2706ce77c4318877932fb36f6002d/kuka_kmriiwa_en.pdf?hash=26D80DD98AAA6393BEBD35ED82F7F0C2&rev=904d956018284109b9eee3bd8b350d20",
+  sourceRevision: "904d956018284109b9eee3bd8b350d20",
+} as const;
+
+/**
+ * Procedural inner-chassis assumptions used to draw and integrate the demo.
+ * These are not represented as exact KUKA public dimensions; the official
+ * whole-vehicle envelope above is the authoritative published boundary.
+ */
+export const KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS: KmrGeometryConfig = {
   baseLengthMeters: 0.800,
   baseWidthMeters: 0.600,
   baseHeightMeters: 0.380,
@@ -44,6 +57,10 @@ export const KUKA_KMR_IIWA_PUBLIC_SPEC: KmrGeometryConfig = {
   mountingPlateHeightMeters: 0.380,
   mountingPlateOffsetXMeters: 0.0,
 };
+
+/** @deprecated Use the explicitly named procedural assumptions constant. */
+export const KUKA_KMR_IIWA_PUBLIC_SPEC =
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
 
 export interface KmrDimensions {
   wheelRadiusMeters: number;
@@ -154,8 +171,10 @@ function buildMecanumWheel(
   positionX: number,
   positionY: number,
   materials: KmrMaterialSet,
+  name = "kmr_wheel",
 ): THREE.Group {
   const group = new THREE.Group();
+  group.name = name;
   const wheelRadius = config.wheelDiameterMeters / 2.0;
   const wheelWidth = wheelRadius * 0.6;
 
@@ -222,7 +241,7 @@ function buildMecanumWheel(
 }
 
 export function buildKmrBaseMesh(
-  config: KmrGeometryConfig = KUKA_KMR_IIWA_PUBLIC_SPEC,
+  config: KmrGeometryConfig = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
   materials: KmrMaterialSet = defaultKmrMaterialSet(),
 ): THREE.Group {
   const group = new THREE.Group();
@@ -270,17 +289,18 @@ export function buildKmrBaseMesh(
   // 4 mecanum wheels at the corners.
   const a = config.wheelbaseXMeters / 2.0;
   const b = config.wheelbaseYMeters / 2.0;
-  for (const [signX, signY] of [
-    [-1, 1],
-    [1, 1],
-    [-1, -1],
-    [1, -1],
+  for (const [signX, signY, cornerName] of [
+    [-1, 1, "kmr_wheel_FL"],
+    [1, 1, "kmr_wheel_FR"],
+    [-1, -1, "kmr_wheel_RL"],
+    [1, -1, "kmr_wheel_RR"],
   ] as const) {
     const wheel = buildMecanumWheel(
       config,
       signX * a,
       signY * b,
       materials,
+      cornerName,
     );
     group.add(wheel);
   }
