@@ -1015,6 +1015,42 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
+  // Arm spawn-safe: on first trace load, if the user has not yet
+  // dragged the target, seed armDragTarget with a clamped+reachable
+  // position so the orange drag marker is NEVER rendered inside the
+  // table or a wall. The clamp uses the same primitive the dragger
+  // uses on every pointerMove (clampArmTargetPosition); if the
+  // clamped result is outside the arm's reachable workspace, fall
+  // back to the canonical home-pose target above the workbench.
+  // Async-defer the setState (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (armDragTarget !== null) return;
+    if (!trace) return;
+    const firstSample = trace.samples[0];
+    if (!firstSample) return;
+    let cancelled = false;
+    const raw: [number, number, number] = [
+      firstSample.objectPose.position[0],
+      firstSample.objectPose.position[2],
+      -firstSample.objectPose.position[1],
+    ];
+    const { clampedTarget } = clampArmTargetPosition(
+      raw,
+      armHouseScene.obstacles,
+      0.78,
+      0.04,
+    );
+    const safe: [number, number, number] = isTargetKukaReachable(clampedTarget)
+      ? clampedTarget
+      : [0, 0.82, 0.4];
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setArmDragTarget((current) => current ?? safe);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [trace, armDragTarget]);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
     isColliding: boolean;
