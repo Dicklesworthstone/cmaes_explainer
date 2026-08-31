@@ -30,9 +30,10 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
 
   test("a single wall in front produces a hit at the wall distance", () => {
     const wall: OrientedBoundingBox = {
+      id: "front-wall",
       name: "front-wall",
-      center: [3, 0],
-      halfExtents: [0.1, 4],
+      center: [3, 0, 0],
+      halfExtents: [0.1, 4, 1],
       rotationYawRad: 0,
     };
     const scan = scanLidar(0, 0, [wall], cfg);
@@ -74,9 +75,10 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
 
   test("lidarToCostmap2D cells past a detected wall are marked occupied", () => {
     const wall: OrientedBoundingBox = {
+      id: "front-wall",
       name: "front-wall",
-      center: [3, 0],
-      halfExtents: [0.5, 4],
+      center: [3, 0, 0],
+      halfExtents: [0.5, 4, 1],
       rotationYawRad: 0,
     };
     const scan = scanLidar(0, 0, [wall], cfg);
@@ -95,9 +97,10 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
 
   test("lidarToCostmap2D is deterministic: same input gives same output", () => {
     const wall: OrientedBoundingBox = {
+      id: "front-wall",
       name: "front-wall",
-      center: [3, 0],
-      halfExtents: [0.5, 4],
+      center: [3, 0, 0],
+      halfExtents: [0.5, 4, 1],
       rotationYawRad: 0,
     };
     const scan1 = scanLidar(0, 0, [wall], cfg);

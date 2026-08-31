@@ -147,7 +147,7 @@ describe("selectTask() gate (HouseholdArmFlagship)", () => {
     function selectTask(task: string) {
       if (inFlightRef.current) return false;
       inFlightRef.current = true;
-      worker.postMessage({ type: "preview", task });
+      worker.postMessage({ type: "preview", task } as unknown as PendingMessage);
       posted.push({ type: "preview", challenge: task });
       return true;
     }
