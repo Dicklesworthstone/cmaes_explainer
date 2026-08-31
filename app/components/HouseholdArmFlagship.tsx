@@ -11,6 +11,7 @@ import {
   projectPointOutOfOBB,
   type MultiObstacleSceneConfig,
 } from "../lib/houseMultiObstacleKernel";
+import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import {
   BookOpen,
@@ -30,12 +31,11 @@ import {
   Compass, Activity,
   Sliders,
   Shield,
-  Zap,
   Pause,
   SkipBack,
-  SkipForward,
   Volume2,
   VolumeX,
+  Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -348,11 +348,15 @@ function ArmRig({
   admission,
   reduceMotion,
   microscopeMode,
+  physicsDebug,
+  targetPosition,
 }: {
   trace: HouseholdManipulationTraceReceipt;
   admission: HouseholdManipulationAdmission;
   reduceMotion: boolean;
   microscopeMode: boolean;
+  physicsDebug?: boolean;
+  targetPosition?: [number, number, number] | null;
 }) {
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
   const segmentRefs = useRef<Array<THREE.Mesh | null>>([]);
@@ -693,6 +697,14 @@ function ArmRig({
       </group>
 
       <ArmGraspMicroscopeOverlay sample={currentSample} enabled={microscopeMode} />
+
+      <ArmPhysicsDebugOverlay
+        enabled={physicsDebug ?? false}
+        sample={currentSample}
+        obstacles={multiObstacleScene.obstacles}
+        targetPosition={targetPosition ?? null}
+        safeRadius={0.04}
+      />
     </group>
   );
 }
@@ -871,6 +883,7 @@ function ArmStage({
   onDragTargetChange,
   onCollisionChange,
   onUnreachableChange,
+  physicsDebug,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
@@ -883,6 +896,7 @@ function ArmStage({
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
   onCollisionChange?: (col: { isColliding: boolean; clearance: number }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
+  physicsDebug: boolean;
 }) {
   const currentSample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const rawObjectPos: [number, number, number] = currentSample
@@ -962,6 +976,8 @@ function ArmStage({
           admission={admission}
           reduceMotion={reduceMotion}
           microscopeMode={microscopeMode}
+          physicsDebug={physicsDebug}
+          targetPosition={objectPos}
         />
       ) : null}
 
@@ -1057,6 +1073,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     clearance: number;
   }>({ isColliding: false, clearance: 1.0 });
 const [armUnreachable, setArmUnreachable] = useState(false);
+  const [physicsDebug, setPhysicsDebug] = useState(false);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -1345,6 +1362,20 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                   <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => setPhysicsDebug((enabled) => !enabled)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                    physicsDebug
+                      ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                      : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                  }`}
+                  title="Show arm and object collision envelopes"
+                >
+                  <Wrench className="h-3.5 w-3.5" />
+                  <span>{physicsDebug ? "Physics ON" : "Physics"}</span>
+                </button>
+
                 {/* Drag Status & Contact Safety Readout */}
                 {armDragTarget ? (
                   <div className="flex items-center gap-1.5 pointer-events-auto">
@@ -1446,6 +1477,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                   onDragTargetChange={setArmDragTarget}
                   onCollisionChange={setArmCollisionState}
                   onUnreachableChange={setArmUnreachable}
+                  physicsDebug={physicsDebug}
                 />
               ) : null}
             </div>

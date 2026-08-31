@@ -3,7 +3,7 @@
 import React, { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -35,12 +35,11 @@ import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset 
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { WalkQualityComparison } from "./WalkQualityComparison";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
-import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
-  clampPositionAgainstHouseCollisions,
   createHouseNavigationScene,
   enclosingSpawnRadius,
   findClearSpawnPosition,
+  projectPointOutOfOBB,
 } from "../lib/houseMultiObstacleKernel";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
@@ -363,20 +362,29 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
 function PushArrow({
   pelvis,
   fraction,
+  pushAngleDeg = 90,
+  pushImpulseNs = 15,
 }: {
   pelvis: readonly number[];
   fraction: number;
+  pushAngleDeg?: number;
+  pushImpulseNs?: number;
 }) {
   if (fraction <= 0) return null;
+  const rad = (pushAngleDeg * Math.PI) / 180;
+  const dir = new THREE.Vector3(Math.cos(rad), 0, Math.sin(rad)).normalize();
+  const pelvisPos = new THREE.Vector3(...ownerToThree(pelvis));
+  const arrowLength = (0.25 + 0.45 * fraction) * Math.max(0.6, pushImpulseNs / 15);
+
   return (
     <arrowHelper
       args={[
-        new THREE.Vector3(0, 0, -1),
-        new THREE.Vector3(...ownerToThree(pelvis)).add(new THREE.Vector3(0, 0.16, 0.58)),
-        0.25 + 0.45 * fraction,
+        dir,
+        pelvisPos.clone().add(new THREE.Vector3(0, 0.16, 0)).sub(dir.clone().multiplyScalar(arrowLength)),
+        arrowLength,
         "#fb7185",
-        0.12,
-        0.07,
+        0.12 * Math.max(0.8, Math.min(1.6, pushImpulseNs / 15)),
+        0.07 * Math.max(0.8, Math.min(1.6, pushImpulseNs / 15)),
       ]}
     />
   );
@@ -396,10 +404,14 @@ function RobotPoseMeshes({
   sample,
   meshes,
   pushFraction,
+  pushAngleDeg = 90,
+  pushImpulseNs = 15,
 }: {
   sample: G1TraceSample;
   meshes: { geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
   pushFraction: number;
+  pushAngleDeg?: number;
+  pushImpulseNs?: number;
 }) {
   const leftFootPoint = ownerLocalPointToThree(
     sample.linkPoses[6].position,
@@ -441,7 +453,12 @@ function RobotPoseMeshes({
       })}
       <FootContact position={leftFootPoint} active={sample.leftContact} side="left" />
       <FootContact position={rightFootPoint} active={sample.rightContact} side="right" />
-      <PushArrow pelvis={sample.linkPoses[0].position} fraction={pushFraction} />
+      <PushArrow
+        pelvis={sample.linkPoses[0].position}
+        fraction={pushFraction}
+        pushAngleDeg={pushAngleDeg}
+        pushImpulseNs={pushImpulseNs}
+      />
     </group>
   );
 }
@@ -605,6 +622,8 @@ function RobotPlayback({
   sampleIndex,
   onSampleIndexChange,
   shoveActive,
+  pushAngleDeg = 90,
+  pushImpulseNs = 15,
   positionOffset,
 }: {
   trace: G1TraceReceipt;
@@ -617,6 +636,8 @@ function RobotPlayback({
   sampleIndex: number;
   onSampleIndexChange: (idx: number) => void;
   shoveActive: boolean;
+  pushAngleDeg?: number;
+  pushImpulseNs?: number;
   positionOffset?: [number, number, number] | null;
 }) {
   const playbackSeconds = useRef(0);
@@ -679,7 +700,13 @@ function RobotPlayback({
   return sample ? (
     <group position={positionOffset ? [positionOffset[0], positionOffset[1], positionOffset[2]] : [0, 0, 0]}>
       {meshState.phase === "ready" ? (
-        <RobotPoseMeshes sample={sample} meshes={meshState} pushFraction={pushFraction} />
+        <RobotPoseMeshes
+          sample={sample}
+          meshes={meshState}
+          pushFraction={pushFraction}
+          pushAngleDeg={pushAngleDeg}
+          pushImpulseNs={pushImpulseNs}
+        />
       ) : (
         <RobotPose sample={sample} pushFraction={pushFraction} />
       )}
@@ -1156,6 +1183,8 @@ function RobotStage({
   sampleIndex,
   onSampleIndexChange,
   shoveActive,
+  pushAngleDeg = 90,
+  pushImpulseNs = 15,
   robotDragOffset,
   dragMode = "pelvis",
   limbOffsets = {},
@@ -1179,6 +1208,8 @@ function RobotStage({
   sampleIndex: number;
   onSampleIndexChange: (idx: number) => void;
   shoveActive: boolean;
+  pushAngleDeg?: number;
+  pushImpulseNs?: number;
   robotDragOffset?: [number, number, number] | null;
   dragMode?: "pelvis" | "limbs";
   limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
@@ -1196,7 +1227,7 @@ function RobotStage({
       ]
     : pelvisThree;
 
-  const bgColor = timeOfDay === "evening-glow" ? "#120e0b" : timeOfDay === "golden-hour" ? "#1a120b" : "#12151c";
+  const bgColor = timeOfDay === "golden-hour" ? "#1e1308" : timeOfDay === "evening-glow" ? "#070b14" : "#0f172a";
 
   return (
     <Canvas
@@ -1245,6 +1276,8 @@ function RobotStage({
           sampleIndex={sampleIndex}
           onSampleIndexChange={onSampleIndexChange}
           shoveActive={shoveActive}
+          pushAngleDeg={pushAngleDeg}
+          pushImpulseNs={pushImpulseNs}
           positionOffset={robotDragOffset}
         />
       ) : null}
@@ -1365,8 +1398,47 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [currentChapter, setCurrentChapter] = useState(1);
   const [selectedPreset, setSelectedPreset] = useState("cautious-monk");
   const [shoveActive, setShoveActive] = useState(false);
+  const [pushAngleDeg, setPushAngleDeg] = useState(90);
+  const [pushImpulseNs, setPushImpulseNs] = useState(15);
+  const [showPushOptions, setShowPushOptions] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
+
+  const handleExportTelemetry = useCallback(() => {
+    if (!trace) return;
+    const telemetryData = {
+      exportTimestamp: new Date().toISOString(),
+      challenge,
+      family,
+      generation,
+      bestObjective,
+      distanceMeters: trace.distanceMeters,
+      completedSteps: trace.completedSteps,
+      actuatorWorkJoules: trace.actuatorWorkJoules,
+      pushImpulseNs: trace.pushImpulseNewtonSeconds,
+      recoveryTimeSeconds: trace.recoveryTimeSeconds,
+      maximumTiltDegrees: (Math.asin(Math.min(1, trace.maximumTiltSine)) * 180) / Math.PI,
+      samples: trace.samples.map((s) => ({
+        timeSeconds: s.timeSeconds,
+        pelvisPosition: s.linkPoses[0].position,
+        leftContact: s.leftContact,
+        rightContact: s.rightContact,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(telemetryData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `g1-telemetry-${challenge}-${family}-gen${generation}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("Exported trajectory telemetry JSON receipt.");
+  }, [trace, challenge, family, generation, bestObjective]);
+
+  const handleApplyShove = useCallback(() => {
+    setShoveActive(true);
+    setTimeout(() => setShoveActive(false), 800);
+  }, []);
   // Spawn-safe: enclose every owner link center plus a conservative 12 cm
   // body shell in one pelvis-centered sphere, then seed the display offset at
   // a house position where that entire sphere clears every rigid obstacle.
@@ -1455,11 +1527,6 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const handleSelectPreset = useCallback((p: RobotPersonalityPreset) => {
     setSelectedPreset(p.id);
     setStatus(`Applied ${p.name} reward weights (${p.gaitStyle}).`);
-  }, []);
-
-  const handleApplyShove = useCallback(() => {
-    setShoveActive(true);
-    setTimeout(() => setShoveActive(false), 800);
   }, []);
 
   useEffect(() => {
@@ -1756,17 +1823,119 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
               </button>
 
-              {/* Push Wand Button */}
-              <button
-                type="button"
-                onClick={handleApplyShove}
-                className="flex items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors"
-                title="Apply a 15 N·s lateral impulse to test HOCBF balance recovery"
-              >
-                <Zap className="h-3.5 w-3.5 text-rose-300" />
-                <span className="sm:hidden">🥊 Push +15 N·s</span>
-                <span className="max-sm:hidden">🥊 Push Robot (+15 N·s)</span>
-              </button>
+              {/* Push Wand & Direction Controller */}
+              <div className="relative flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={handleApplyShove}
+                  className="flex items-center gap-1.5 rounded-l-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors shadow-[0_0_10px_rgba(244,63,94,0.25)]"
+                  title={`Apply a ${pushImpulseNs} N·s impulse at ${pushAngleDeg}° to test HOCBF balance recovery`}
+                >
+                  <Zap className="h-3.5 w-3.5 text-rose-300" />
+                  <span>🥊 Push {pushImpulseNs} N·s ({pushAngleDeg}°)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPushOptions(!showPushOptions)}
+                  className={`rounded-r-full border-y border-r border-rose-400/40 px-2 py-1 text-[0.68rem] font-bold text-rose-200 backdrop-blur-md transition-colors ${
+                    showPushOptions ? "bg-rose-500/40 text-white" : "bg-rose-500/20 hover:bg-rose-500/30"
+                  }`}
+                  title="Configure Push Angle and Impulse Magnitude"
+                >
+                  <Sliders className="h-3 w-3" />
+                </button>
+
+                {showPushOptions && (
+                  <div className="absolute top-full left-0 mt-2 z-50 w-64 rounded-xl border border-rose-500/30 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-2">
+                      <span className="text-[0.7rem] font-bold uppercase tracking-wider text-rose-300">🥊 3D Push Gizmo</span>
+                      <span className="text-[0.65rem] text-slate-400">{pushAngleDeg}° · {pushImpulseNs} N·s</span>
+                    </div>
+
+                    {/* Quick Direction Selector */}
+                    <div className="mb-2.5">
+                      <div className="text-[0.62rem] text-slate-400 mb-1">Direction Angle:</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[
+                          { label: "⬅️ Left", angle: 90 },
+                          { label: "➡️ Right", angle: 270 },
+                          { label: "⬆️ Back", angle: 0 },
+                          { label: "⬇️ Front", angle: 180 },
+                        ].map((d) => (
+                          <button
+                            key={d.angle}
+                            type="button"
+                            onClick={() => setPushAngleDeg(d.angle)}
+                            className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
+                              pushAngleDeg === d.angle
+                                ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
+                                : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={360}
+                        step={5}
+                        value={pushAngleDeg}
+                        onChange={(e) => setPushAngleDeg(Number(e.target.value))}
+                        className="mt-1.5 w-full accent-rose-400 h-1.5 rounded-lg bg-slate-800 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Impulse Magnitude Selector */}
+                    <div className="mb-3">
+                      <div className="text-[0.62rem] text-slate-400 mb-1">Impulse Magnitude:</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {[10, 15, 25, 45].map((ns) => (
+                          <button
+                            key={ns}
+                            type="button"
+                            onClick={() => setPushImpulseNs(ns)}
+                            className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
+                              pushImpulseNs === ns
+                                ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
+                                : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
+                            }`}
+                          >
+                            {ns} N·s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleApplyShove();
+                        setShowPushOptions(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 py-1.5 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:brightness-110 active:scale-[0.98] transition-all"
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                      Apply 3D Shove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Export Telemetry Receipt Button */}
+              {trace && (
+                <button
+                  type="button"
+                  onClick={handleExportTelemetry}
+                  className="flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-cyan-200 backdrop-blur-md hover:bg-cyan-900/60 transition-colors"
+                  title="Export full kinematic & dynamic trajectory receipt as JSON"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="sm:hidden">Export</span>
+                  <span className="max-sm:hidden">Export Telemetry</span>
+                </button>
+              )}
 
               {/* Drag Mode Selector: Pelvis vs 6-Pin Multi-Limb IK */}
               <button
@@ -1934,6 +2103,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   sampleIndex={sampleIndex}
                   onSampleIndexChange={setSampleIndex}
                   shoveActive={shoveActive}
+                  pushAngleDeg={pushAngleDeg}
+                  pushImpulseNs={pushImpulseNs}
                   robotDragOffset={robotDragOffset}
                   dragMode={dragMode}
                   limbOffsets={limbOffsets}

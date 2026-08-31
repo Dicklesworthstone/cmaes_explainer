@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { HouseholdArmFlagship } from "../components/HouseholdArmFlagship";
+import { ArmPageClient } from "../components/ArmPageClient";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
@@ -30,7 +30,7 @@ export default function ArmPage() {
         </section>
 
         <div className="mt-12">
-          <HouseholdArmFlagship />
+          <ArmPageClient />
         </div>
 
         <section className="mx-auto mt-16 max-w-3xl space-y-6 text-sm leading-7 text-slate-300">
