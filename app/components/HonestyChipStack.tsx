@@ -1,14 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  HONESTY_CHIP_REGISTRY,
-  type HonestyCategory,
-  type HonestyChip,
-} from "../lib/honestyLedger";
+import { HONESTY_CHIP_REGISTRY } from "../lib/honestyLedger";
 
 export function HonestyChipStack() {
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [copyToast, setCopyToast] = useState<string | null>(null);
   // Auto-dismiss the copy confirmation after 2.4s.
   useEffect(() => {
@@ -58,6 +55,7 @@ export function HonestyChipStack() {
         </div>
       ) : null}
       {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
