@@ -142,6 +142,22 @@
   @apply font-mono text-[0.85em] px-1.5 py-0.5 rounded-md bg-slate-800/50 border border-white/10 text-sky-300 align-middle;
 }
 
+.prose-cmaes ul,
+.prose-cmaes ol {
+  @apply overflow-x-auto my-6 pl-6 list-outside;
+}
+
+.prose-cmaes ul {
+  @apply list-disc;
+}
+
+.prose-cmaes ol {
+  @apply list-decimal;
+}
+
+.prose-cmaes li {
+  @apply min-w-0 break-words text-slate-400 font-light text-base md:text-lg leading-relaxed md:leading-8 mb-2 tracking-wide;
+}
 .prose-cmaes pre {
   @apply bg-[#0B1121] border border-white/5 rounded-2xl p-5 text-sm font-mono overflow-x-auto shadow-inner my-8;
 }

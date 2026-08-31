@@ -1726,12 +1726,13 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     }
     expect(armEvaluation.ok.everGrasped).toBe(true);
     expect(armEvaluation.ok.releasedAfterTransport).toBe(true);
-    expect(armEvaluation.ok.ownerReportedPlaced).toBe(true);
     if (task === 2) {
+      expect(armEvaluation.ok.ownerReportedPlaced).toBe(false);
       expect(armEvaluation.ok.collisionRiskIntegral).toBeGreaterThan(0);
       expect(armEvaluation.ok.possibleCollisionTimeSeconds).toBeGreaterThan(0);
       expect(armEvaluation.ok.placed).toBe(false);
     } else {
+      expect(armEvaluation.ok.ownerReportedPlaced).toBe(true);
       expect(armEvaluation.ok.collisionRiskIntegral).toBe(0);
       expect(armEvaluation.ok.possibleCollisionTimeSeconds).toBe(0);
       expect(armEvaluation.ok.placed).toBe(true);

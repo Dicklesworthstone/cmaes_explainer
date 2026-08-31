@@ -81,7 +81,7 @@ type WorkerResponse =
       bestObjective: number;
       sigma: number;
     }
-  | { type: "comparison"; rows: ComparisonRow[] }
+  | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
 
 const FAMILY_COPY: Record<
@@ -1025,9 +1025,11 @@ const [armUnreachable, setArmUnreachable] = useState(false);
         );
       } else if (message.type === "comparison") {
         setComparison(message.rows);
-        setBusy(null);
-        inFlightRef.current = false;
-        setStatus("Equal-budget four-family physical race complete.");
+        if (message.complete) {
+          setBusy(null);
+          inFlightRef.current = false;
+          setStatus("Equal-budget four-family physical race complete.");
+        }
       } else {
         setError(message.message);
         setBusy(null);
@@ -1616,7 +1618,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", task, generations: 4 }, "compare")}
+              onClick={() => post({ type: "compare", task, generations: 2 }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />

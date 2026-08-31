@@ -10,6 +10,12 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
+  G1_INTERACTIVE_PINS,
+  clampSphereAgainstHouse,
+  solveFullBodyG1IK,
+  type InteractiveLimbPinId,
+} from "../lib/humanoidRagdollIk";
+import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
   type G1Admission,
@@ -911,15 +917,114 @@ function CameraRig({
 
 const houseSceneData = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
+function LimbPinHandle({
+  pin,
+  pelvisThree,
+  offset,
+  onDrag,
+}: {
+  pin: (typeof G1_INTERACTIVE_PINS)[number];
+  pelvisThree: [number, number, number];
+  offset: [number, number, number] | null;
+  onDrag: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const startPointerRef = useRef<[number, number]>([0, 0]);
+  const startOffsetRef = useRef<[number, number, number]>([0, 0, 0]);
+
+  const basePos: [number, number, number] = [
+    pelvisThree[0] + pin.nominalOffset[0],
+    pelvisThree[1] + pin.nominalOffset[1],
+    pelvisThree[2] + pin.nominalOffset[2],
+  ];
+
+  const currentPos: [number, number, number] = offset
+    ? [basePos[0] + offset[0], basePos[1] + offset[1], basePos[2] + offset[2]]
+    : basePos;
+
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    startPointerRef.current = [e.point.x, e.point.z];
+    startOffsetRef.current = offset || [0, 0, 0];
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    const dx = e.point.x - startPointerRef.current[0];
+    const dz = e.point.z - startPointerRef.current[1];
+    const proposed: [number, number, number] = [
+      basePos[0] + startOffsetRef.current[0] + dx,
+      basePos[1],
+      basePos[2] + startOffsetRef.current[2] + dz,
+    ];
+
+    const { clamped, contact } = clampSphereAgainstHouse(
+      proposed,
+      pin.radius,
+      houseSceneData.obstacles,
+      0.02
+    );
+
+    if (contact) {
+      robotAudio.playCollisionBump(0.03);
+    }
+
+    onDrag(pin.id, [
+      clamped[0] - basePos[0],
+      clamped[1] - basePos[1],
+      clamped[2] - basePos[2],
+    ]);
+  };
+
+  const handlePointerUp = () => {
+    setIsDragging(false);
+  };
+
+  return (
+    <group position={currentPos}>
+      {isDragging && (
+        <mesh
+          position={[0, 0, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          visible={false}
+        >
+          <planeGeometry args={[100, 100]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+      )}
+      <mesh onPointerDown={handlePointerDown} castShadow>
+        <sphereGeometry args={[pin.radius, 16, 16]} />
+        <meshStandardMaterial
+          color={isDragging ? "#f59e0b" : pin.color}
+          emissive={isDragging ? "#d97706" : pin.color}
+          emissiveIntensity={isDragging ? 2.5 : 1.2}
+          roughness={0.2}
+          metalness={0.8}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function RagdollDragger({
   pelvisThree,
   dragOffset,
+  dragMode = "pelvis",
+  limbOffsets = {},
   onDragChange,
+  onLimbDragChange,
   onCollisionChange,
 }: {
   pelvisThree: [number, number, number];
   dragOffset: [number, number, number] | null;
+  dragMode?: "pelvis" | "limbs";
+  limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
   onDragChange: (offset: [number, number, number] | null) => void;
+  onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -1017,6 +1122,21 @@ function RagdollDragger({
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Multi-Limb Ragdoll IK Interactive Pins */}
+      {dragMode === "limbs" && onLimbDragChange && (
+        <group>
+          {G1_INTERACTIVE_PINS.map((pin) => (
+            <LimbPinHandle
+              key={pin.id}
+              pin={pin}
+              pelvisThree={currentPos}
+              offset={limbOffsets[pin.id] || null}
+              onDrag={onLimbDragChange}
+            />
+          ))}
+        </group>
+      )}
     </group>
   );
 }
@@ -1038,7 +1158,10 @@ function RobotStage({
   onSampleIndexChange,
   shoveActive,
   robotDragOffset,
+  dragMode = "pelvis",
+  limbOffsets = {},
   onRobotDragChange,
+  onLimbDragChange,
   onDragCollisionChange,
 }: {
   trace: G1TraceReceipt | null;
@@ -1057,7 +1180,10 @@ function RobotStage({
   onSampleIndexChange: (idx: number) => void;
   shoveActive: boolean;
   robotDragOffset?: [number, number, number] | null;
+  dragMode?: "pelvis" | "limbs";
+  limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
   onRobotDragChange?: (offset: [number, number, number] | null) => void;
+  onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
   onDragCollisionChange?: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
@@ -1119,7 +1245,10 @@ function RobotStage({
       <RagdollDragger
         pelvisThree={pelvisThree}
         dragOffset={robotDragOffset ?? null}
+        dragMode={dragMode}
+        limbOffsets={limbOffsets}
         onDragChange={onRobotDragChange ?? (() => {})}
+        onLimbDragChange={onLimbDragChange}
         onCollisionChange={onDragCollisionChange ?? (() => {})}
       />
 
@@ -1260,6 +1389,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     obstacleName: string | null;
     clearance: number;
   }>({ isColliding: false, obstacleName: null, clearance: 1.0 });
+  const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
+  const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
+
+  const handleLimbDrag = useCallback((pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => {
+    setLimbOffsets((prev) => ({
+      ...prev,
+      [pinId]: offset ? offset : undefined,
+    }));
+  }, []);
 
   const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
     if (!workerRef.current) return;
@@ -1587,8 +1725,23 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span className="max-sm:hidden">🥊 Push Robot (+15 N·s)</span>
               </button>
 
+              {/* Drag Mode Selector: Pelvis vs 6-Pin Multi-Limb IK */}
+              <button
+                type="button"
+                onClick={() => setDragMode(dragMode === "pelvis" ? "limbs" : "pelvis")}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  dragMode === "limbs"
+                    ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                }`}
+                title="Toggle between Whole-Body Pelvis Drag and 6-Pin Multi-Limb Ragdoll IK"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span>{dragMode === "limbs" ? "🖐️ 6-Pin IK Mode" : "📍 Root Drag"}</span>
+              </button>
+
               {/* Drag Status & Contact Safety Readout */}
-              {robotDragOffset ? (
+              {robotDragOffset || Object.keys(limbOffsets).length > 0 ? (
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                   <span
                     className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
@@ -1603,9 +1756,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   </span>
                   <button
                     type="button"
-                    onClick={() => setRobotDragOffset(null)}
+                    onClick={() => {
+                      setRobotDragOffset(null);
+                      setLimbOffsets({});
+                    }}
                     className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
-                    title="Reset robot to nominal position"
+                    title="Reset robot and limbs to nominal position"
                   >
                     <RotateCcw className="h-3 w-3" />
                     Reset
@@ -1735,7 +1891,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   onSampleIndexChange={setSampleIndex}
                   shoveActive={shoveActive}
                   robotDragOffset={robotDragOffset}
+                  dragMode={dragMode}
+                  limbOffsets={limbOffsets}
                   onRobotDragChange={setRobotDragOffset}
+                  onLimbDragChange={handleLimbDrag}
                   onDragCollisionChange={setDragCollisionState}
                 />
               )}

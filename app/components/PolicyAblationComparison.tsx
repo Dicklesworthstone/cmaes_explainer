@@ -137,9 +137,10 @@ export function PolicyAblationComparison() {
             </label>
             <select
               id="ablation-seed-select"
-              className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
+              className="bg-neutral-800 text-xs px-2.5 py-2 min-h-9 rounded border border-neutral-700 text-neutral-200"
               value={seed}
               onChange={(e) => setSeed(Number(e.target.value))}
+              aria-label="CMA-ES search seed"
             >
               <option value={42}>Seed #42 (Default)</option>
               <option value={101}>Seed #101</option>
