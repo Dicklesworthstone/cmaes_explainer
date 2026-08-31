@@ -1309,6 +1309,124 @@ describe("G1 walking packet adapter", () => {
   });
 });
 
+async function withEvaluationWorkerDouble(
+  mutate: (objectives: Float64Array) => void,
+  run: (terminated: () => number) => Promise<void>,
+): Promise<void> {
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  let terminatedWorkers = 0;
+  class EvaluationWorkerDouble extends EventTarget {
+    postMessage(message: { requestId: number; policies: Float64Array }): void {
+      const rows = message.policies.length / 128;
+      const objectives = new Float64Array(rows);
+      for (let row = 0; row < rows; row++) {
+        objectives[row] = message.policies[row * 128];
+      }
+      mutate(objectives);
+      queueMicrotask(() => {
+        this.dispatchEvent(new MessageEvent("message", {
+          data: { type: "result", requestId: message.requestId, objectives },
+        }));
+      });
+    }
+
+    terminate(): void {
+      terminatedWorkers++;
+    }
+  }
+  Object.defineProperty(globalThis, "Worker", {
+    configurable: true,
+    value: EvaluationWorkerDouble,
+  });
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { hardwareConcurrency: 4 },
+  });
+  try {
+    await run(() => terminatedWorkers);
+  } finally {
+    if (workerDescriptor)
+      Object.defineProperty(globalThis, "Worker", workerDescriptor);
+    else Reflect.deleteProperty(globalThis, "Worker");
+    if (navigatorDescriptor)
+      Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+    else Reflect.deleteProperty(globalThis, "navigator");
+  }
+}
+
+test("the robotics pool admits exact parallel results and reuses the verified lanes", async () => {
+  await withEvaluationWorkerDouble(
+    () => {},
+    async (terminated) => {
+      const pool = new RoboticsEvaluationPool({
+        model: "arm",
+        config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+        dimension: 128,
+      }, 2);
+      const policies = new Float64Array(4 * 128);
+      policies[0] = 11;
+      policies[128] = 12;
+      policies[256] = 13;
+      policies[384] = 14;
+      let sequentialCalls = 0;
+      const sequential = () => {
+        sequentialCalls++;
+        return Float64Array.of(11, 12, 13, 14);
+      };
+      const first = await pool.evaluate(policies, sequential);
+      expect(Array.from(first.objectives)).toEqual([11, 12, 13, 14]);
+      expect(first.lanes).toBe(2);
+      expect(first.firstBatchVerified).toBe(true);
+      expect(first.fallbackReason).toBeNull();
+      expect(sequentialCalls).toBe(1);
+
+      const second = await pool.evaluate(policies, sequential);
+      expect(Array.from(second.objectives)).toEqual([11, 12, 13, 14]);
+      expect(second.lanes).toBe(2);
+      expect(second.firstBatchVerified).toBe(true);
+      expect(second.fallbackReason).toBeNull();
+      expect(sequentialCalls).toBe(1);
+      pool.free();
+      expect(terminated()).toBe(2);
+    },
+  );
+});
+
+test("the robotics pool permanently falls back after an exact-parity mismatch", async () => {
+  await withEvaluationWorkerDouble(
+    (objectives) => {
+      objectives[0] += 1;
+    },
+    async (terminated) => {
+      const pool = new RoboticsEvaluationPool({
+        model: "arm",
+        config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+        dimension: 128,
+      }, 2);
+      const policies = new Float64Array(2 * 128);
+      policies[0] = 21;
+      policies[128] = 22;
+      const sequentialObjectives = Float64Array.of(21, 22);
+      const first = await pool.evaluate(policies, () => sequentialObjectives);
+      expect(first.objectives).toBe(sequentialObjectives);
+      expect(first.lanes).toBe(1);
+      expect(first.firstBatchVerified).toBe(false);
+      expect(first.fallbackReason).toBe("parallel/sequential objective mismatch");
+      expect(terminated()).toBe(2);
+
+      const secondObjectives = Float64Array.of(31, 32);
+      const second = await pool.evaluate(policies, () => secondObjectives);
+      expect(second.objectives).toBe(secondObjectives);
+      expect(second.lanes).toBe(1);
+      expect(second.firstBatchVerified).toBe(false);
+      expect(second.fallbackReason).toBe("parallel/sequential objective mismatch");
+      expect(terminated()).toBe(2);
+      pool.free();
+    },
+  );
+});
+
 test("the robotics pool degrades to the sequential owner when workers are unavailable", async () => {
   const workerDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
