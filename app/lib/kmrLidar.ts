@@ -94,8 +94,8 @@ export function scanLidar(
       if (Math.abs(cosA) < 1e-9) {
         if (lx > hx || lx < -hx) hitLocal = false;
       } else {
-        const t1 = (-hx - lx) / cosA;
-        const t2 = (hx - lx) / cosA;
+        const t1 = (lx - hx) / cosA;
+        const t2 = (lx + hx) / cosA;
         const tNear = Math.min(t1, t2);
         const tFar = Math.max(t1, t2);
         if (tNear > tMin) tMin = tNear;
@@ -179,9 +179,18 @@ export function lidarToCostmap2D(
           bestRay = ray;
         }
       }
-      occupancy[j][i] = bestRay.rangeMeters < dist - cellSizeMeters * 0.5
-        ? 0.5
-        : 1;
+      // Three-case occupancy: ray reached the cell (free), ray hit near
+      // the cell (occupied), or ray hit before reaching the cell (unknown).
+      // The original two-case ternary was inverted (had 0.5/1 swapped), and
+      // had no case for "ray hit at the cell."
+      const rangeMargin = bestRay.rangeMeters - dist;
+      if (rangeMargin > cellSizeMeters * 0.5) {
+        occupancy[j][i] = 0;   // ray passed through: free
+      } else if (rangeMargin < -cellSizeMeters * 0.5) {
+        occupancy[j][i] = 0.5; // ray stopped before reaching: unknown
+      } else {
+        occupancy[j][i] = 1;   // ray hit at this cell: occupied
+      }
     }
   }
   return {

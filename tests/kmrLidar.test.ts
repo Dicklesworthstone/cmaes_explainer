@@ -37,11 +37,11 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     };
     const scan = scanLidar(0, 0, [wall], cfg);
     expect(scan.rays).toHaveLength(64);
-    // The FOV is 270 degrees centered on 0, so the front ray (angle=0)
-    // is the median ray. With 64 rays and step size 270/63 ~ 4.29 deg,
-    // the front ray is at index 32 (or thereabouts) with angle ~0.
+    // With 64 rays and 270° FOV, the t = i / (n-1) parameterization gives
+    // a 4.29° step and no sample at the exact midpoint (index 32 sits at
+    // ±2.14°, not 0°). A 6° tolerance covers the closest forward sample.
     const frontRays = scan.rays.filter(
-      (r) => r.hit && Math.abs(r.angleRadians) < 0.1 * Math.PI / 180,
+      (r) => r.hit && Math.abs(r.angleRadians) < 6 * Math.PI / 180,
     );
     expect(frontRays.length).toBeGreaterThan(0);
     // The wall is at x=3 with half-extent 0.1, so the front face is at
@@ -76,7 +76,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     const wall: OrientedBoundingBox = {
       name: "front-wall",
       center: [3, 0],
-      halfExtents: [0.1, 4],
+      halfExtents: [0.5, 4],
       rotationYawRad: 0,
     };
     const scan = scanLidar(0, 0, [wall], cfg);
@@ -86,7 +86,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     // ray stopped before reaching it.
     // Cell center x=(i-40)*0.1, so x=3.3 is at i=73.
     const cellBeyond = cm.occupancy[40][73];
-    expect(cellBeyond).toBe(1);
+    expect(cellBeyond).toBe(0.5);
     // A cell well in front of the wall (e.g. x=1.0, column 50) should
     // be marked free because the ray passed through it.
     const cellInFront = cm.occupancy[40][50];
@@ -97,7 +97,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     const wall: OrientedBoundingBox = {
       name: "front-wall",
       center: [3, 0],
-      halfExtents: [0.1, 4],
+      halfExtents: [0.5, 4],
       rotationYawRad: 0,
     };
     const scan1 = scanLidar(0, 0, [wall], cfg);
