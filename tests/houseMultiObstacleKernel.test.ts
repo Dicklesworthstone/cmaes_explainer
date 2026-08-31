@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  findClearSpawnPosition,
   createSceneFromHouseFurniture,
   distanceToOBB,
   evaluateHouseholdObjectiveWithFurniture,
@@ -161,5 +162,30 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
     expect(result.totalTimeSeconds).toBeLessThan(90.0);
     expect(result.finalObjectiveScore).toBeGreaterThan(300.0);
     expect(result.trajectory.length).toBeGreaterThan(100);
+  });
+});
+
+describe("findClearSpawnPosition — the robot never spawns inside a wall (cmaes-s0ey regression)", () => {
+  test("returns a position inside the house bounds (x, z in the configured box)", () => {
+    const scene = createSceneFromHouseFurniture();
+    const [x, , z] = findClearSpawnPosition(scene.obstacles);
+    expect(x).toBeGreaterThanOrEqual(scene.bounds.min[0]);
+    expect(x).toBeLessThanOrEqual(scene.bounds.max[0]);
+    expect(z).toBeGreaterThanOrEqual(scene.bounds.min[1]);
+    expect(z).toBeLessThanOrEqual(scene.bounds.max[1]);
+  });
+
+  test("the returned position has positive clearance against every OBB obstacle", () => {
+    // If a returned spawn is inside a wall, the robot cannot move. We
+    // require a 0.32 m clearance to match the ragdoll-dragger safe radius.
+    const scene = createSceneFromHouseFurniture();
+    const spawn = findClearSpawnPosition(scene.obstacles);
+    for (const obb of scene.obstacles) {
+      const dist = distanceToOBB(spawn, obb);
+      expect(
+        dist,
+        `spawn at (${spawn.map((n) => n.toFixed(3)).join(", ")}) is inside OBB ${obb.name} (distance=${dist.toFixed(4)})`,
+      ).toBeGreaterThanOrEqual(0.32);
+    }
   });
 });

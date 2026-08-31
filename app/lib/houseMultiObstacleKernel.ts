@@ -17,8 +17,8 @@ export function findClearSpawnPosition(
 ): [number, number, number] {
   // Coarse grid search: the room interior is only a few square meters; a
   // 0.3 m step is plenty. The first cleared point wins.
-  for (let z = 0; z >= -3.5; z -= 0.3) {
-    for (let x = -2.5; x <= 2.5; x += 0.3) {
+  for (let z = bounds.maxZ; z >= bounds.minZ; z -= 0.3) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 0.3) {
       const { isColliding } = clampPositionAgainstHouseCollisions([x, 0.75, z], obstacles, safeRadius, bounds);
       if (!isColliding) {
         return [x, 0.75, z];
