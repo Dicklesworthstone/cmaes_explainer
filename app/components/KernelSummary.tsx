@@ -4,10 +4,12 @@ import { Sparkles } from "lucide-react";
 
 /**
  * Compact disclosure panel surfaced on the home page so a first-time
- * visitor sees the kernel's actual scope *before* clicking through to
- * a flagship. The same shape lives in expanded form on the
- * /humanoid and /arm pages (see the `<details>` blocks there for
- * the full Modeled / Simplified / Not modeled lists with citations).
+ * visitor sees the kernel's actual scope *before* clicking into a
+ * flagship. Lists what the kernel computes, what is rendered-layer
+ * (the link-OBB penetration projection, see Ericson 2005 §5.5.6), and
+ * what is honestly missing (swept-volume CCD, sim-to-real, IMU lag,
+ * etc.). The same shape lives in expanded form on the /humanoid and
+ * /arm pages.
  *
  * Keep this component free of the flagship-only details (terminology
  * from the receipt cards, CMA-ES specifics, etc.) - the goal here is
@@ -27,20 +29,33 @@ export function KernelSummary() {
         Every animation on this site is driven by a compiled Rust multibody
         kernel (semi-implicit Euler at 1/480 s, penalty contact, Coulomb
         friction, Featherstone forward dynamics on the arm). The browser
-        renders the world frames it receives and never solves forward
-        kinematics or invents trajectories. That is the contract.
+        receives the per-link poses and renders them. That is the kernel
+        contract.
+      </p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">
+        The kernel is obstacle-blind (it has no catalogue of the Craftsman
+        bungalow furniture), so a CMA-ES search can place a link inside a
+        chair, table, or wall. The browser runs a visualization-layer
+        link-OBB projection (Ericson 2005 §5.5.6, OBBTree SIGGRAPH 1996)
+        to snap every link to the nearest furniture surface with a
+        positive clearance. The kernel trace is unchanged; the projection
+        is renderer-only. A regression test
+        (<code className="text-amber-200">g1LinkPenetrationProjection.test.ts</code>,
+        <code className="text-amber-200">armLinkCollisionResponse.test.ts</code>)
+        locks the behavior. If the kernel ever grows a real
+        link-vs-furniture check, the renderer projection can be removed.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
           <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">
-            Modeled
+            Modeled (kernel)
           </p>
           <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
             <li>· Free-floating SE(3) bodies</li>
             <li>· Fixed-step, 1/480 s integration</li>
-            <li>· Penalty + Coulomb contact</li>
-            <li>· Featherstone forward dynamics</li>
-            <li>· Certified convex collision (arm)</li>
+            <li>· Penalty + Coulomb contact (foot / object)</li>
+            <li>· Featherstone forward dynamics (arm)</li>
+            <li>· Link-OBB penetration projection (renderer)</li>
           </ul>
         </div>
         <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
@@ -49,7 +64,7 @@ export function KernelSummary() {
           </p>
           <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
             <li>· Compliant pads, not full soles</li>
-            <li>· Oriented-box collision envelopes</li>
+            <li>· Oriented-box collision envelopes (furniture)</li>
             <li>· Periodic-basis policy, not a net</li>
             <li>· No motor torque curves or thermal limits</li>
             <li>· No upper-body / hand telemetry</li>
@@ -65,6 +80,10 @@ export function KernelSummary() {
             <li>· Slip detection, recovery reflex</li>
             <li>· Wind, lighting noise, camera artifacts</li>
             <li>· RL beyond the periodic basis</li>
+            <li>· Swept-volume CCD (renderer) - the per-frame snap is
+                sufficient at the current playback speed, but a
+                conservative-advancement pass is the next SOTA step if
+                anyone finds a tunnel at high link speed</li>
           </ul>
         </div>
       </div>
