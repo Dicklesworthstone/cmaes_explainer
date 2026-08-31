@@ -19,27 +19,78 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
     expect(Number.isFinite(obs.phaseCos)).toBe(true);
   });
 
-  test("G1TrainEnv step computes dense rewards and tracks forward progress", () => {
+  test("G1TrainEnv step computes dense rewards and tracks action-caused forward progress", () => {
     const env = new G1TrainEnv({ maxSteps: 50 });
-    env.reset(42);
+    let obs = env.reset(42);
 
-    const action = new Array(15).fill(0.1);
+    const action = new Array(15).fill(0.0);
+    action[0] = 0.45 * obs.phaseSin;
+    action[3] = -0.35 * obs.phaseSin;
+    action[6] = -0.45 * obs.phaseSin;
+    action[9] = 0.35 * obs.phaseSin;
     const stepRes = env.step(action);
 
     expect(stepRes.observation.rawVector.length).toBe(42);
     expect(Number.isFinite(stepRes.reward)).toBe(true);
     expect(stepRes.info.step).toBe(1);
-    expect(stepRes.info.cumulativeDistanceMeters).toBeGreaterThan(0.0);
+    expect(stepRes.info.gaitDrive).toBeGreaterThanOrEqual(0.0);
     expect(stepRes.done).toBe(false);
 
     // Step until timeout
     for (let s = 1; s < 50; s++) {
+      obs = env.getObservation();
+      action[0] = 0.45 * obs.phaseSin;
+      action[3] = -0.35 * obs.phaseSin;
+      action[6] = -0.45 * obs.phaseSin;
+      action[9] = 0.35 * obs.phaseSin;
       const r = env.step(action);
       if (r.done) {
         expect(r.info.terminationReason).toBe("timeout");
+        expect(r.info.cumulativeDistanceMeters).toBeGreaterThan(0.0);
+        expect(r.info.actuatorWorkJoules).toBeGreaterThan(0.0);
         break;
       }
     }
+  });
+
+  test("planted no-action control cannot earn locomotion distance", () => {
+    const env = new G1TrainEnv({ maxSteps: 720 });
+    env.reset(42);
+    let last = env.step(new Array(15).fill(0.0));
+    while (!last.done) {
+      last = env.step(new Array(15).fill(0.0));
+    }
+
+    expect(last.info.cumulativeDistanceMeters).toBe(0.0);
+    expect(last.info.forwardSpeedMps).toBe(0.0);
+    expect(last.info.gaitDrive).toBe(0.0);
+    expect(last.info.actuatorWorkJoules).toBe(0.0);
+  });
+
+  test("phase-opposed leg actions causally diverge from the no-action control", () => {
+    const active = new G1TrainEnv({ maxSteps: 180 });
+    const idle = new G1TrainEnv({ maxSteps: 180 });
+    let activeObs = active.reset(7);
+    idle.reset(7);
+    let activeResult = active.step(new Array(15).fill(0));
+    let idleResult = idle.step(new Array(15).fill(0));
+
+    for (let step = 1; step < 180; step++) {
+      const action = new Array(15).fill(0.0);
+      action[0] = 0.55 * activeObs.phaseSin;
+      action[3] = -0.4 * activeObs.phaseSin;
+      action[6] = -0.55 * activeObs.phaseSin;
+      action[9] = 0.4 * activeObs.phaseSin;
+      activeResult = active.step(action);
+      idleResult = idle.step(new Array(15).fill(0));
+      activeObs = activeResult.observation;
+    }
+
+    expect(activeResult.info.cumulativeDistanceMeters).toBeGreaterThan(0.05);
+    expect(idleResult.info.cumulativeDistanceMeters).toBe(0.0);
+    expect(activeResult.info.cumulativeDistanceMeters).toBeGreaterThan(
+      idleResult.info.cumulativeDistanceMeters,
+    );
   });
 
   test("CmaesHyperparameterOptimizer decodes and optimizes 8-D HPO space across generations", () => {

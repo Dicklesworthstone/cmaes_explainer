@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "KUKA iiwa14 Pick-and-Place — 128-D CMA-ES Simulation";
+export const alt = "KUKA LBR iiwa 7 R800 Pick-and-Place — 128-D CMA-ES Simulation";
 export const size = { width: 1200, height: 600 };
 export const contentType = "image/png";
 
@@ -72,7 +72,7 @@ export default function Image() {
             color: "#ffffff",
           }}
         >
-          {"KUKA iiwa14: "}
+          {"KUKA iiwa 7 R800: "}
         </div>
         <div
           style={{

@@ -8,7 +8,7 @@ launch commit.
 FrankenRobots is a focused, native-feeling laboratory for the two physically grounded robotics experiences in CMA-ES Explainer:
 
 - **Humanoid Lab** — the 29-DoF Unitree G1, its 5,040-parameter locomotion policy, terrain and push challenges, story chapters, biomechanics, objective shaping, timeline, and source receipts.
-- **Arm Lab** — the 7-DoF KUKA iiwa14 household manipulation benchmark, its 128-parameter trajectory, three tasks, grasp microscope, friction diagnostics, optimizer race, timeline, and placement receipt.
+- **Arm Lab** — the 7-DoF KUKA LBR iiwa 7 R800 household manipulation benchmark, its 128-parameter trajectory, three reduced scenes, grasp microscope, friction diagnostics, optimizer race, timeline, and collision-safe placement receipt.
 
 The app must not become a generic website wrapper. Its app-level navigation, information hierarchy, status, platform adaptation, accessibility, and lifecycle are native SwiftUI. The existing renderer and Frankensim/WASM worker pipeline remain the source of truth for physics until a measured native renderer can reproduce the same receipts. No canned animation may be presented as an optimized result.
 

@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next";
 export const metadata: Metadata = {
   title: "FrankenRobots Lab",
   description:
-    "Focused on-device robotics laboratories for the Unitree G1 humanoid and KUKA iiwa14 arm.",
+    "Focused on-device robotics laboratories for the Unitree G1 humanoid and KUKA LBR iiwa 7 R800 arm.",
   robots: { index: false, follow: false },
 };
 

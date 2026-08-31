@@ -44,21 +44,23 @@ Open <http://localhost:3000>.
   place policies for a mug, remote, and trowel. Frankensim integrates the free
   object and reciprocal contact wrench and routes obstacle, object, and
   non-adjacent self checks through certified convex-query owners.
-- A KUKA KMR iiwa mobile base that drives the LBR iiwa around the house
-  with 4 mecanum wheels (true lateral + in-place rotation). The KMR is
-  rendered as a parameterized procedural Three.js asset with the KUKA
-  public spec dimensions (800x600x380 mm base, 150 mm wheels, 600x450 mm
-  wheelbase, 380 mm mounting plate). A 2D LiDAR-style scan (64 rays, 8 m
-  range, 270 deg FOV) feeds a multi-resolution clearance value-iteration
-  planner; click the scene to set a goal and the KMR plans and executes a
-  collision-free path with the textbook mecanum inverse kinematics.
+- A separately rendered KUKA KMR mobile-base rung. A 64-ray planar scan and
+  global clearance value field consume the actual X/Z furniture footprints
+  plus doorway-split wall bodies. Click a clear goal and a deterministic TS
+  kinematic owner extracts a collision-free route, issues four mecanum-wheel
+  commands, integrates pose, and refuses swept contact. A moving infinite-mass
+  base proxy also feeds the live household contact/LCP stack, so contact can
+  push a finite-mass chair. This does **not** yet claim rigid-body wheel
+  traction or a physically mounted LBR iiwa. KUKA's published whole-vehicle
+  envelope is 1190×720×700 mm at 375 kg; the 800×600 mm inner chassis,
+  wheel, and wheelbase values are disclosed procedural assumptions.
 - Deterministic tests for every advertised wing coordinate, optimizer
   convergence, binary packet refusals, all four owner families, G1 challenge
   invariants, and all three manipulation tasks.
 
 The G1 demo is deliberately an explainer model, not a hardware controller or a
-sim-to-real claim. The current schema-7 owner integrates the 30-DoF whole-body
-model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
+sim-to-real claim. The current schema-7 owner integrates the 29-actuated-joint,
+30-link whole-body model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
 is part of the physical rollout rather than display-only dressing. Full CMA-ES
 is exercised on the 128-D arm but intentionally refused at 5,040 dimensions
 because its dense covariance would require 25,401,600 entries.

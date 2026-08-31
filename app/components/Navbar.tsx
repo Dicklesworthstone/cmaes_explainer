@@ -498,7 +498,7 @@ export function Navbar() {
                     Flagship 2
                   </span>
                   <span className="text-sm font-bold text-white block mt-0.5">
-                    iiwa14 Arm
+                    iiwa 7 Arm
                   </span>
                   <span className="text-[0.7rem] text-orange-200/70 block mt-1">
                     128-D Household

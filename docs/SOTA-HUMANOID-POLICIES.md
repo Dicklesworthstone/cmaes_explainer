@@ -2,7 +2,7 @@
 
 > **Owner:** SapphireElm (cmaes-iv3k).
 > **Companion docs:** `docs/SOTA-MATH.md` (TurquoiseFalcon, math side), `docs/SOTA-MEASUREMENT.md` (RubyThrush, measurement side).
-> **Status:** complete as of 2026-08-30. Research method: arXiv abstracts/methods + project pages, papers read 2026-08-30; every claim below carries its arXiv id.
+> **Status:** literature review completed 2026-08-30; repository-grounding corrections applied 2026-08-31 after direct artifact inspection.
 > **Grounding:** repo facts verified against `public/robots/g1/transformer/metadata.json`, `app/lib/{frankensimCmaes,g1StepwiseEnv,cmaesHyperparameterLoop,policyAblationComparison}.ts`, `app/workers/{g1OptimizationWorker,roboticsEvaluationWorker}.ts`, `app/lib/roboticsEvaluationPool.ts`, and the sibling `/Users/jemanuel/projects/frankensim` crates (`fs-g1-train`, `fs-mbd`, `fs-cmaes-viz-wasm`).
 
 ## What this doc is
@@ -10,7 +10,7 @@
 The project already contains the two halves this research connects:
 
 1. **CMA-ES-native path** — the G1 flagship optimizes a **5,040-D linear residual policy** (15 actuators × 336 phase-basis features) directly in-browser, seeded from a disclosed 105-coordinate curriculum, on a 720-step @ 480 Hz terrain-and-push rollout (`fs-mbd/src/robot_models.rs`, `fs-cmaes-viz-wasm/src/g1_walking.rs`, coordinated through `app/workers/g1OptimizationWorker.ts` with a bit-exact first-batch parallel-parity gate).
-2. **Transformer-native path** — a **4.2M-param causal transformer policy** (64-step context, 42-D obs, 29 actions, 6 layers, d=256, 8 heads, SwiGLU/RMSNorm/RoPE) specified in `public/robots/g1/transformer/metadata.json`, trained natively with **PPO + Muon** and **CMA-ES (1+λ) HPO over 8 hyperparameters** in the sibling crate `fs-g1-train` (`transformer.rs`, `ppo.rs`, `muon.rs`, `hpo.rs`), and surfaced in the UI as an honest sample-efficiency-vs-ceiling ablation (`app/lib/policyAblationComparison.ts`: ~15,000× fewer training samples for the CMA-ES residual path at 5,040 params vs 38M samples/24 h on 8×H100 for the transformer at 4.2M params).
+2. **Transformer-native path** — a **2,902,273-parameter causal transformer** (64-step context, 42-D observations, 29 actions, 4 layers, d=256, 8 query / 4 KV heads, SwiGLU/RMSNorm/RoPE) with real PPO+GAE and Muon/Adam training/export code in `fs-g1-train`. The committed checkpoint is not a locomotion success: its 7,424-value policy head is entirely zero, and its historical training stand-in advanced at target speed without action. The browser now transfers that artifact onto `action-causal-standin-v2`, where it correctly earns zero distance, while golden vectors continue to prove inference parity.
 
 This doc is the **why** behind that architecture and the map of where it can go next: what the literature says about transformer policies for humanoid walking/running/navigation/obstacle avoidance, where RL and CMA-ES each belong (they are **complementary loops, not rivals**), and how to keep all of it fast in the browser. Each section: citation → headline → mechanism → how it maps here → gotchas.
 
@@ -29,7 +29,7 @@ This doc is the **why** behind that architecture and the map of where it can go 
 - **Citation:** Radosavovic et al., "Humanoid Locomotion as Next Token Prediction," arXiv:2402.19469.
 - **Headline:** Casting control as modality-aligned autoregressive prediction lets one causal transformer train on **heterogeneous data** — RL trajectories, model-based controllers, mocap, even YouTube video (no actions) — and still transfer zero-shot to the real world; 27 h of walking data sufficed for SF walking.
 - **Mechanism:** for each input token, predict the next token **of the same modality** (masked-modality prediction). Missing modalities during training are fine; at deploy the model still predicts actions.
-- **Maps here:** if we ever want the explainer to ship a *trained* transformer policy (today the comparison policy in `policyAblationComparison.ts` is synthesized from the spec, not trained weights), this is the recipe that lets us mix our CMA-ES-optimized trajectories (which have no "values" or "log-probs") with PPO rollouts as one pretraining corpus, then fine-tune with RL.
+- **Maps here:** the explainer ships a real but failed native checkpoint rather than synthesized output. A future successful artifact could mix CMA-ES-optimized trajectories with PPO rollouts as one pretraining corpus, then fine-tune with RL; the present zero-head checkpoint does not demonstrate that outcome.
 - **Gotchas:** this is a *pretraining* story; the RL fine-tune on top is still PPO. Don't expect CMA-ES to compete with 38M-sample pretraining at 4.2M params — that asymmetry is exactly our ablation's lesson, and it is honest.
 
 ### 1.3 LocoFormer — long context is the adaptation lever
@@ -44,8 +44,8 @@ This doc is the **why** behind that architecture and the map of where it can go 
 
 - **Citations:** HugWBC, arXiv:2502.03206 (unified whole-body gait controller, transformer-based); HOVER, arXiv:2410.21229 (one neural controller spanning RL/MPC/teleop modes); ExBody2, arXiv:2412.13196; HumanPlus, arXiv:2406.10454; OmniH2O, arXiv:2406.08858. Index: github.com/YanjieZe/awesome-humanoid-robot-learning (2.7k★).
 - **Headline:** the field's frontier moved from lower-body locomotion (our 15 DoF) to **whole-body loco-manipulation** with upper-body command conditioning; transformer decoders are the shared backbone; teacher-student distillation from privileged sim states is the standard recipe for deployment-side robustness.
-- **Maps here:** deliberately out of scope — our G1 is an explainer model with 15 actuated lower-body/waist joints; arms are display-only (README). The 29-action action_dim in `metadata.json` covers the 29 model actuators (15 policy-driven; the rest kinematic), matching the honest reduced scope.
-- **Gotchas:** do not import whole-body reward shaping blindly; upper-body motion priors (AMASS-based, as in ExBody2/ARMOR) presume actuated arms we don't simulate.
+- **Maps here:** the owner has 29 physical articulated DoFs and real arm mass/reaction, but the learned/residual policy controls 15 lower-body/waist channels. Fourteen arm channels follow a deterministic swing-and-balance reflex. The 29-action transformer output shape is therefore broader than the policy-controlled locomotion rung actually validated here.
+- **Gotchas:** do not describe the arms as display-only, but do not describe the deterministic reflex as learned whole-body control either.
 
 ## 2. Training recipes: where RL lives
 
@@ -69,7 +69,7 @@ This is the load-bearing section. CMA-ES appears in the literature and in this r
 
 - **Citations:** Igel, "Evolution Strategies for Direct Policy Search" (NAC/CMA-ES comparisons; PPSN/GECCO lineage); Heidrich-Meisner & Igel, "Uncertainty handling CMA-ES for reinforcement learning," GECCO 2009; Salimans et al., "Evolution strategies as a scalable alternative to reinforcement learning," arXiv:1703.03864 (OpenAI ES); Conti et al. (ES with common random numbers + fitness shaping), arXiv:1712.06560; Chatzilygeroudis et al., "Black-Box Data-efficient Policy Search for Robotics" (Black-DROPS), arXiv:1703.07261; ES-vs-gradient benchmark, arXiv:2402.06912.
 - **Headline:** ES/CMA-ES is a **competitive direct-policy-search method exactly when evaluations are cheap, parallel, and noise-manageable, and parameters number in the hundreds-to-thousands** — and it dominates sample-efficiency per wallclock when simulation is free and gradients are not needed. That is precisely the browser case: 16-candidate populations × 720-step rollouts in workers, no autodiff available.
-- **Maps here:** the 5,040-D linear residual is inside CMA-ES's historical comfort zone *because it's linear + phase-feature-structured*; separable/LM-CMA/LM-MA at 5,040-D with population 16 and σ₀=5e-4 is a faithful small-population high-D regime (LM variants exist for exactly this). The ablation receipt's "15,000× sample efficiency vs transformer-PPO" is the literature's expected ordering, not an anomaly: parameter count (5,040 vs 4.2M) is the dominant term.
+- **Maps here:** the 5,040-D linear residual is inside CMA-ES's historical comfort zone *because it's linear + phase-feature-structured*; separable/LM-CMA/LM-MA at 5,040-D with population 16 and σ₀=5e-4 is a faithful small-population high-D regime. No sample-efficiency conclusion may be drawn against the current transformer artifact because it was trained on a superseded non-causal environment and has a zero policy head.
 - **Gotchas:** ES papers consistently show the crossover flips above ~10⁵–10⁶ params or when evaluation noise is unstructured (arXiv:2402.06912). Never present the two paths as rivals on equal parameter budgets — the ablation framing (different params, different data budgets, both honest) is the defensible one.
 
 ### 4.2 Hyperparameter / reward-shaping search (the outer loop)
@@ -97,20 +97,20 @@ This is the load-bearing section. CMA-ES appears in the literature and in this r
 
 ### 5.1 What the repo already does right (verified)
 
-- Physics is **Rust→wasm-pack, committed per-version, fail-closed version-gated** (`AUDITED_CMAES_KERNEL_VERSION` 0.4.1; `FRANKENSIM_OWNER_KERNEL_VERSION` 0.6.8; refusal envelopes, never silent TS fallback) — this is the mega-kernel doctrine's parity-first culture already in miniature.
+- Physics is **Rust→wasm-pack, committed per-version, fail-closed version-gated** (`AUDITED_CMAES_KERNEL_VERSION` 0.4.1; current G1/arm owner package 0.6.9; refusal envelopes, never silent TS fallback) — this is the mega-kernel doctrine's parity-first culture already in miniature.
 - Evaluation fan-out with a **bit-exact first-batch sequential-parity check** (`roboticsEvaluationPool.ts`, `Object.is`) with permanent honest fallback: exactly the "parallelize independence dimensions only, prove identity" rule.
 - All cross-boundary data is **packed little-endian typed arrays with zero-copy transfer** (Float64Array words, transferable buffers, schema-8 zero-copy ABI).
 - Determinism from keyed Philox RNG + fixed eigendecomposition cadence (`fs-dfo/cma.rs`) — cross-run reproducibility without float-order luck.
 
 ### 5.2 The transformer-in-browser decision
 
-Per-decision cost of the specified policy: ~2 × 4.2M FLOPs ≈ **8.4 MFLOP/token**; a 720-step rollout ≈ **6 GFLOP/candidate**; a 16-candidate generation ≈ **96 GFLOP**. At WASM-scaler f32 speeds (~2–8 GFLOP/s/core) that is ~15–50 s/generation/core — the reason the eval-worker fan-out exists, and the reason **exploration-time transformer inference must be WASM-kernel-grade or it dominates everything**. Options, with the literature/engineering tradeoffs:
+Per-decision cost of the 2.90M-parameter policy is roughly **5.8 MFLOP/token** by the same two-FLOPs-per-weight estimate; a 720-step rollout is about **4.2 GFLOP/candidate** before cache effects. These are estimates, not measured browser budgets.
 
-1. **ONNX Runtime Web (WASM SIMD + WebGPU EPs)** — fastest path to working inference; used widely for browser policy demos. Costs: multi-MB runtime, non-deterministic op scheduling across EPs (breaks our bit-exact parity culture unless pinned to the CPU EP), and an external dep in a repo whose culture is fail-closed self-owned kernels. The ablation component currently *synthesizes* outputs conforming to the spec rather than shipping ORT — consistent with that culture.
+1. **ONNX Runtime Web (WASM SIMD + WebGPU EPs)** — fastest path to working inference; used widely for browser policy demos. Costs: multi-MB runtime and backend-dependent reduction order. The current browser path instead loads the committed custom binary format into the hand-rolled TypeScript decoder and verifies it against Rust golden vectors.
 2. **Hand-rolled Rust→WASM-SIMD128 GEMM/attention kernel** (the `fs-g1-train/transformer.rs` forward pass compiled to wasm32 with `fs-simd` kernels) — full ownership, deterministic, byte-comparable against a scalar oracle; incremental work: SIMD128 matvec/GEMM, pre-packed weights, f16→f32 or int8 weight quantization for the FFN GEMMs only (per the quantized-decoder-GEMM doctrine: keep norms/router/RoPE high-precision).
 3. **WebGPU tier** — 10–50× more headroom, but a different parity regime (float-order across backends) and a new dispatch tier; correct as a *future* lever behind explicit opt-in, never as the default path.
 
-**Recommendation (evidence-based):** option 2 for anything inside the optimization loop (determinism + parity receipts + no deps), with option 1 acceptable for a *display-only* "watch the real policy think" panel where bit-exactness doesn't gate anything. This mirrors the repo's existing split: audited kernel surfaces for everything load-bearing, honest synthesized lenses for display.
+**Recommendation (evidence-based):** option 2 for anything inside the optimization loop, with the existing TypeScript decoder retained as a transparent parity/debug implementation. Inference plumbing is no longer the primary blocker; action-causal owner-coupled training is.
 
 ### 5.3 Speed levers ranked (measured-literature + repo-shaped)
 

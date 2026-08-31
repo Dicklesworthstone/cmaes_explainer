@@ -73,28 +73,26 @@ export default function HumanoidPage() {
 
         <div className="mt-12">
           <G1WalkingFlagship />
-         </div>
+        </div>
         <section
           id="ablation"
           className="mx-auto mt-16 max-w-5xl"
-          aria-label="Policy architecture ablation: phase prior vs learned-from-scratch"
+          aria-label="Action-causal transfer check: phase prior vs legacy transformer"
         >
           <h2 className="font-display text-2xl font-bold text-white">
-            Phase prior vs learned-from-scratch transformer — same experiment
+            Phase prior vs legacy transformer — action-causal transfer check
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
             The flagship above uses a 5,040-D linear residual policy on a
             hand-designed phase basis — a <em>strong, sample-efficient prior</em>.
-            The honest counterfactual is to learn the same task from scratch
-            with a causal transformer trained by PPO+Muon. The component below
-            reports <em>measured</em> receipts on the same disclosed
-            stepwise experiment: the transformer side runs real trained
-            weights (exported from the sibling{" "}
-            <code className="break-all">fs-g1-train</code> crate — see{" "}
-            <code className="break-all">public/robots/g1/transformer/</code>) with
-            in-browser inference, while the CMA-ES side is searched live in
-            this browser under your selected seed. Neither side is
-            synthesized; every number is a measurement.
+            The committed transformer is a real PPO+Muon artifact, but its
+            policy head is all zero and its superseded training stand-in moved
+            without action. The component below transfers those exact weights
+            without retraining onto the current action-causal stand-in beside a
+            live CMA-ES search. The resulting zero-distance transformer run is
+            an honest measured failure, not a learned-walking claim. Artifacts
+            remain under{" "}
+            <code className="break-all">public/robots/g1/transformer/</code>.
           </p>
           <div className="mt-6">
             <PolicyAblationComparison />

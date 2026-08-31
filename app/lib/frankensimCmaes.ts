@@ -2234,6 +2234,12 @@ const ARM_TASK_NAMES = [
   "backyard-trowel",
 ] as const satisfies readonly HouseholdManipulationTask[];
 
+/**
+ * Schema-2's owner-composed collision margin. Keep this compatibility guard
+ * until the FrankenSim v3 placement contract is the only shipped artifact.
+ */
+export const HOUSEHOLD_PLACEMENT_CLEARANCE_METERS = 0.045;
+
 export const DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG: HouseholdManipulationConfig =
   {
     task: "kitchen-mug",
@@ -2284,6 +2290,9 @@ export interface HouseholdManipulationObjectiveReceipt {
   peakGripForceNewtons: number;
   everGrasped: boolean;
   releasedAfterTransport: boolean;
+  /** Raw schema-2 owner bit, retained so legacy-contract disagreement is visible. */
+  ownerReportedPlaced: boolean;
+  /** Collision-safe placement verdict enforced at the browser boundary. */
   placed: boolean;
   completedSteps: number;
 }
@@ -2490,6 +2499,8 @@ function decodeHouseholdReceiptPayload(
   if (packet.length < ARM_RECEIPT_WORDS) {
     throw new Error("malformed household-arm packet: objective receipt");
   }
+  const ownerReportedPlaced =
+    exactPacketInteger(packet, 20, "placed", 0, 1) === 1;
   const receipt: HouseholdManipulationObjectiveReceipt = {
     objective: finitePacketNumber(packet, 5, "objective"),
     finalObjectErrorMeters: finitePacketNumber(packet, 6, "final object error"),
@@ -2531,9 +2542,16 @@ function decodeHouseholdReceiptPayload(
     everGrasped: exactPacketInteger(packet, 18, "ever grasped", 0, 1) === 1,
     releasedAfterTransport:
       exactPacketInteger(packet, 19, "released", 0, 1) === 1,
-    placed: exactPacketInteger(packet, 20, "placed", 0, 1) === 1,
+    ownerReportedPlaced,
+    placed: false,
     completedSteps: exactPacketInteger(packet, 21, "completed steps", 1, 1_440),
   };
+  receipt.placed =
+    ownerReportedPlaced &&
+    receipt.collisionRiskIntegral === 0 &&
+    receipt.minimumCertifiedClearanceMeters >=
+      HOUSEHOLD_PLACEMENT_CLEARANCE_METERS &&
+    receipt.possibleCollisionTimeSeconds === 0;
   if (
     receipt.finalObjectErrorMeters < 0 ||
     receipt.minimumReachErrorMeters < 0 ||
@@ -2546,7 +2564,7 @@ function decodeHouseholdReceiptPayload(
     receipt.firstGraspTimeSeconds < 0 ||
     receipt.graspDurationSeconds < 0 ||
     receipt.peakGripForceNewtons < 0 ||
-    (receipt.placed &&
+    (ownerReportedPlaced &&
       (!receipt.everGrasped || !receipt.releasedAfterTransport))
   ) {
     throw new Error("malformed household-arm packet: objective invariants");

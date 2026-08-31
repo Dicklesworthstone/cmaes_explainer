@@ -23,6 +23,13 @@ export interface G1EnvConfig {
   fallTiltThresholdRad?: number; // default 0.85 rad (~48 deg)
 }
 
+/**
+ * Increment when the transition/reward contract changes in a way that makes
+ * historical training receipts non-comparable. Version 2 removes the legacy
+ * self-propelling transition: forward motion now requires lower-body action.
+ */
+export const G1_TRAIN_ENV_CONTRACT = "action-causal-standin-v2" as const;
+
 export interface G1Observation {
   jointPositions: number[]; // 15 DoF lower body + waist
   jointVelocities: number[]; // 15 DoF
@@ -43,6 +50,8 @@ export interface G1StepResult {
     step: number;
     timeSeconds: number;
     forwardProgressMeters: number;
+    forwardSpeedMps: number;
+    gaitDrive: number;
     cumulativeDistanceMeters: number;
     cumulativeReward: number;
     fallOccurred: boolean;
@@ -60,6 +69,7 @@ export class G1TrainEnv {
   private currentRoll = 0.0;
   private currentPitch = 0.0;
   private currentYaw = 0.0;
+  private currentForwardSpeed = 0.0;
   private cumulativeDist = 0.0;
   private cumulativeReward = 0.0;
   private jointPos: number[] = new Array(15).fill(0.0);
@@ -84,6 +94,7 @@ export class G1TrainEnv {
     this.currentRoll = 0.0;
     this.currentPitch = 0.0;
     this.currentYaw = 0.0;
+    this.currentForwardSpeed = 0.0;
     this.cumulativeDist = 0.0;
     this.cumulativeReward = 0.0;
     this.jointPos.fill(0.0);
@@ -102,7 +113,10 @@ export class G1TrainEnv {
     let stepWork = 0.0;
     let actionEffort = 0.0;
     for (let j = 0; j < 15; j++) {
-      const act = action[j] ?? 0.0;
+      const candidate = action[j] ?? 0.0;
+      const act = Number.isFinite(candidate)
+        ? Math.max(-1.0, Math.min(1.0, candidate))
+        : 0.0;
       const targetPos = act * 0.5;
       const torque = 120.0 * (targetPos - this.jointPos[j]) - 8.0 * this.jointVel[j];
       this.jointVel[j] += (torque / 1.5) * dt;
@@ -111,13 +125,12 @@ export class G1TrainEnv {
       actionEffort += Math.abs(act);
     }
 
-    // Pelvis pose integrates a damped pendulum driven by the magnitude of
-    // the action effort. Zero action means no torque (no bias), small steady
-    // actions hold the body upright via the damping, large erratic actions
-    // push it off-balance. This is the kinematic stand-in for the SE(3) base
-    // dynamics the v068 kernel integrates; the disclosed bead is the stepwise
-    // env, not the physics, so a simple model suffices.
-    const effortTorque = 0.04 * actionEffort * actionEffort;
+    // Pelvis pose integrates a deliberately reduced damped-pendulum proxy.
+    // Action magnitude can destabilize the proxy, but it is normalized by
+    // actuator count so an ordinary bounded gait command is not treated like
+    // fifteen independent full-body kicks.
+    const meanActionEffort = actionEffort / 15.0;
+    const effortTorque = 0.12 * meanActionEffort * meanActionEffort;
     const angularVelRoll = effortTorque - 0.6 * this.currentRoll;
     const angularVelPitch = effortTorque - 0.6 * this.currentPitch;
     this.currentRoll += angularVelRoll * dt;
@@ -129,10 +142,30 @@ export class G1TrainEnv {
     const tiltSineSquared = this.currentRoll * this.currentRoll
       + this.currentPitch * this.currentPitch;
     this.currentHeight -= 0.5 * tiltSineSquared * dt;
-    // Forward displacement: target speed scaled by how upright the body is.
+    // Forward displacement is ACTION-CAUSAL. The previous stand-in advanced
+    // at targetSpeed even when every action was exactly zero, making an inert
+    // zero-head policy look like successful locomotion. Here a gait-drive
+    // proxy is derived from actual lower-body joint motion and bilateral hip
+    // opposition. It remains a disclosed kinematic proxy (not owner SE(3)
+    // dynamics), but no action means no propulsion and therefore no distance.
     const tilt = Math.hypot(this.currentRoll, this.currentPitch);
     const uprightFactor = Math.max(0.0, 1.0 - tilt);
-    const deltaX = this.config.targetSpeedMps * dt * uprightFactor;
+    let legVelocitySquared = 0.0;
+    for (let j = 0; j < 12; j++) {
+      legVelocitySquared += this.jointVel[j] * this.jointVel[j];
+    }
+    const legVelocityRms = Math.sqrt(legVelocitySquared / 12.0);
+    const hipOpposition = Math.min(
+      1.0,
+      Math.abs(this.jointVel[0] - this.jointVel[6]) / 2.0,
+    );
+    const motionDrive = Math.min(1.0, legVelocityRms / 2.0);
+    const gaitDrive = motionDrive * (0.25 + 0.75 * hipOpposition);
+    const requestedForwardSpeed = this.config.targetSpeedMps * gaitDrive;
+    const speedResponse = Math.min(1.0, 6.0 * dt);
+    this.currentForwardSpeed +=
+      (requestedForwardSpeed - this.currentForwardSpeed) * speedResponse;
+    const deltaX = Math.max(0.0, this.currentForwardSpeed) * dt * uprightFactor;
     this.currentPosX += deltaX;
     this.cumulativeDist += deltaX;
 
@@ -162,6 +195,8 @@ export class G1TrainEnv {
         step: this.stepCount,
         timeSeconds: this.stepCount * dt,
         forwardProgressMeters: deltaX,
+        forwardSpeedMps: this.currentForwardSpeed,
+        gaitDrive,
         cumulativeDistanceMeters: this.cumulativeDist,
         cumulativeReward: this.cumulativeReward,
         fallOccurred: fall,

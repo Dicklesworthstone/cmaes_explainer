@@ -167,6 +167,7 @@ export function simulateHouseNavigation(
   let activeWpIdx = 0;
   let totalDistance = 0.0;
   let minClearance = Infinity;
+  let lastStepClearance = 0.35; // initial value; updated each step
   const trajectory: HouseNavSimulationResult["trajectory"] = [];
   let finalReached = false;
 
@@ -191,9 +192,9 @@ export function simulateHouseNavigation(
           velocity: [0, 0],
           activeWaypointIndex: activeWpIdx,
           activeRoom: currentWp.room,
-          clearanceMeters: Math.max(0.1, minClearance),
+          clearanceMeters: Math.max(0.1, lastStepClearance),
         });
-        break;
+         break;
       }
     }
 
@@ -240,6 +241,7 @@ export function simulateHouseNavigation(
     if (stepClearance < minClearance) {
       minClearance = stepClearance;
     }
+    lastStepClearance = stepClearance;
 
     trajectory.push({
       step,

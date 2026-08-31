@@ -173,6 +173,10 @@ export interface ValuePolicy {
 
 /** Output of {@link runClearanceValueIteration}. */
 export interface ClearanceValueResult {
+  /** Whole-domain value function used for global route extraction. */
+  readonly coarseValue: ValueGrid;
+  /** Whole-domain policy used for global route extraction. */
+  readonly coarsePolicy: ValuePolicy;
   readonly value: ValueGrid;
   readonly policy: ValuePolicy;
   /** Number of Bellman sweeps until convergence. */
@@ -717,9 +721,12 @@ export function runClearanceValueIteration(
     anchors: fineAnchors,
   });
   // Policy.
+  const coarsePolicy = extractPolicy(coarseGrid, sdf);
   const policy = extractPolicy(fineGrid, sdf);
   const t1 = performanceNow();
   return {
+    coarseValue: coarseGrid,
+    coarsePolicy,
     value: fineGrid,
     policy,
     sweeps: coarseRes.sweeps + fineRes.sweeps,

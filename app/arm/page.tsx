@@ -5,9 +5,9 @@ import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
 export const metadata: Metadata = {
-  title: "KUKA iiwa14 Pick-and-Place — 128-D CMA-ES Simulation",
+  title: "KUKA LBR iiwa 7 R800 Pick-and-Place — 128-D CMA-ES Simulation",
   description:
-    "A source-bound KUKA iiwa14 performs black-box pick-and-place: CMA-ES optimizes 128 joint-curve variables against a piecewise physical objective — contact, friction, and hard limits included.",
+    "A source-bound KUKA LBR iiwa 7 R800 performs black-box pick-and-place: CMA-ES optimizes 128 joint-curve variables against a piecewise physical objective with contact, friction, collision envelopes, and hard limits.",
 };
 
 export default function ArmPage() {
@@ -20,7 +20,7 @@ export default function ArmPage() {
             Black-box manipulation · grasp verified
           </span>
           <h1 className="mt-6 font-display text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Teach a KUKA iiwa14 to pick, carry, and place
+            Teach a KUKA LBR iiwa 7 R800 to pick, carry, and place
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-400">
             Seven joint target curves plus one gripper-width curve, sampled at
@@ -38,7 +38,7 @@ export default function ArmPage() {
           <p>
             Seven joint target curves and one gripper-width curve are sampled at
             sixteen knots — 128 CMA-ES variables. The objective is assembled from
-            a full iiwa14 rollout with contact activation, static-slip friction
+            a full LBR iiwa 7 R800 rollout with contact activation, static-slip friction
             capacity, free-space dynamics, release timing, hard limits, and an
             owner-routed obstacle/self/object separation — piecewise and
             black-box by construction. There is no browser-side gradient to

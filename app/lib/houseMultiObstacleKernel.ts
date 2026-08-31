@@ -51,7 +51,12 @@ export function findClearSpawnPosition(
 //   - Ericson, "Real-Time Collision Detection" (Morgan Kaufmann 2005)
 //   - Jo, Zhang, Yang, Luo, "Geometry-Aware Control Barrier Functions" (ICRA 2026)
 
-import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
+import {
+  CRAFTSMAN_BUNGALOW_1928,
+  type HouseFurniture,
+  type HouseSceneConfig,
+  type HouseWall,
+} from "./houseScenes";
 import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
 import { filterCorridorVelocityQP } from "./segmentSafeCbf";
 
@@ -232,6 +237,78 @@ export function createSceneFromHouseFurniture(
     name: "Sears Craftsman 1928 Multi-Obstacle Catalog Scene",
     bounds: CRAFTSMAN_BUNGALOW_1928.bounds,
     obstacles,
+  };
+}
+
+/**
+ * Converts authored wall centerlines into solid OBB segments while preserving
+ * each doorway aperture. Navigation and LiDAR consume these same bodies, so a
+ * rendered doorway is no longer invisible to the planner and a rendered wall
+ * is no longer display-only.
+ */
+export function createHouseWallObstacles(
+  walls: readonly HouseWall[] = CRAFTSMAN_BUNGALOW_1928.walls,
+): OrientedBoundingBox[] {
+  const obstacles: OrientedBoundingBox[] = [];
+  walls.forEach((wall, wallIndex) => {
+    const dx = wall.to[0] - wall.from[0];
+    const dz = wall.to[1] - wall.from[1];
+    const length = Math.hypot(dx, dz);
+    if (!(length > 0)) return;
+
+    const gaps = wall.doorways
+      .map((doorway) => ({
+        start: Math.max(0, doorway.at - doorway.width / 2),
+        end: Math.min(length, doorway.at + doorway.width / 2),
+      }))
+      .filter((gap) => gap.end > gap.start)
+      .sort((a, b) => a.start - b.start);
+
+    const solidIntervals: Array<{ start: number; end: number }> = [];
+    let cursor = 0;
+    for (const gap of gaps) {
+      if (gap.start > cursor) solidIntervals.push({ start: cursor, end: gap.start });
+      cursor = Math.max(cursor, gap.end);
+    }
+    if (cursor < length) solidIntervals.push({ start: cursor, end: length });
+
+    const ux = dx / length;
+    const uz = dz / length;
+    const yaw = -Math.atan2(dz, dx);
+    solidIntervals.forEach((interval, segmentIndex) => {
+      const segmentLength = interval.end - interval.start;
+      if (segmentLength <= 1e-6) return;
+      const along = (interval.start + interval.end) / 2;
+      obstacles.push({
+        id: `wall-${wallIndex}-segment-${segmentIndex}`,
+        name: `wall ${wallIndex + 1}, segment ${segmentIndex + 1}`,
+        center: [
+          wall.from[0] + ux * along,
+          wall.height / 2,
+          wall.from[1] + uz * along,
+        ],
+        halfExtents: [segmentLength / 2, wall.height / 2, wall.thickness / 2],
+        rotationYawRad: yaw,
+        materialId: "house-wall",
+      });
+    });
+  });
+  return obstacles;
+}
+
+/** Full physical obstacle roster for household navigation: furniture + walls. */
+export function createHouseNavigationScene(
+  house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+): MultiObstacleSceneConfig {
+  const furnitureScene = createSceneFromHouseFurniture(house.furniture);
+  return {
+    sceneId: `${furnitureScene.sceneId}-with-walls`,
+    name: `${furnitureScene.name} with physical wall apertures`,
+    bounds: house.bounds,
+    obstacles: [
+      ...furnitureScene.obstacles,
+      ...createHouseWallObstacles(house.walls),
+    ],
   };
 }
 

@@ -21,7 +21,7 @@
 //     golden-vector parity test covers the forward pass, and the receipt's
 //     Rust-side greedy metrics are cross-checked in tests).
 
-import { G1TrainEnv } from "./g1StepwiseEnv";
+import { G1_TRAIN_ENV_CONTRACT, G1TrainEnv } from "./g1StepwiseEnv";
 import {
   GaitTransformerPolicy,
   LoadedTransformerWeights,
@@ -49,6 +49,9 @@ export interface PolicyAblationReceipt {
   footSlipIntegral: number; // not modeled in the stand-in env → 0
   minimumObstacleClearanceMeters: number; // not modeled in the stand-in env → 0
   survivalRatePercent: number;
+  evaluationEnvironmentContract: string;
+  trainingEnvironmentContract: string;
+  trainedOnEvaluationContract: boolean;
 }
 
 export interface AblationPairResult {
@@ -71,6 +74,8 @@ export interface TransformerTrainReceipt {
   samplesConsumed: number;
   trainingWallclockMinutes: number;
   hostNote: string;
+  trainingEnvironment: string;
+  environmentContract: string;
   rustGreedy720: { distanceMeters: number; totalReward: number; completedSteps: number };
 }
 
@@ -93,6 +98,14 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   const parameterCount = archRecord.parameterCount;
   const samplesConsumed = trainingRecord.samplesConsumed;
   const wallclockSeconds = trainingRecord.wallclockSeconds;
+  const trainingEnvironment =
+    typeof trainingRecord.environment === "string"
+      ? trainingRecord.environment
+      : "unknown";
+  const environmentContract =
+    typeof record.environmentContract === "string"
+      ? record.environmentContract
+      : "legacy-self-propelled-standin-v1";
   // Early-stopped runs accumulate wallclock across suspended intervals —
   // unknowable, so the field is optional and reported as 0 minutes
   // ("host-dependent" per the receipt's hostNote) when absent.
@@ -115,6 +128,8 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
     samplesConsumed,
     trainingWallclockMinutes,
     hostNote: typeof record.hostNote === "string" ? record.hostNote : "",
+    trainingEnvironment,
+    environmentContract,
     rustGreedy720,
   };
 }
@@ -225,6 +240,10 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
     footSlipIntegral: 0, // not modeled in the stand-in env
     minimumObstacleClearanceMeters: 0, // not modeled in the stand-in env
     survivalRatePercent: (tfRun.completed / FINAL_STEPS) * 100,
+    evaluationEnvironmentContract: G1_TRAIN_ENV_CONTRACT,
+    trainingEnvironmentContract: inputs.trainReceipt.environmentContract,
+    trainedOnEvaluationContract:
+      inputs.trainReceipt.environmentContract === G1_TRAIN_ENV_CONTRACT,
   };
 
   // ── CMA-ES side (real search, real rollouts) ──
@@ -247,6 +266,9 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
     footSlipIntegral: 0,
     minimumObstacleClearanceMeters: 0,
     survivalRatePercent: search.finalMetrics.survivalRatePercent,
+    evaluationEnvironmentContract: G1_TRAIN_ENV_CONTRACT,
+    trainingEnvironmentContract: G1_TRAIN_ENV_CONTRACT,
+    trainedOnEvaluationContract: true,
   };
 
   return {

@@ -2,8 +2,9 @@
 
 import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
-import { Gauge, CheckCircle2, ShieldAlert } from "lucide-react";
+import { Gauge, CheckCircle2, ShieldAlert, Sparkles, Activity } from "lucide-react";
 import type { HouseholdManipulationTraceSample } from "../lib/frankensimCmaes";
+import { computeFerrariCannyGWS } from "../lib/armInverseKinematics";
 
 interface ArmGraspMicroscopeProps {
   sample: HouseholdManipulationTraceSample | null;
@@ -83,17 +84,21 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
   const gripperWidth = sample?.gripperWidthMeters ?? 0.105;
   const gripForce = sample?.gripNormalForceNewtons ?? 0;
 
+  const gws = useMemo(() => {
+    return computeFerrariCannyGWS(gripForce, gripperWidth, 0.04, 0.65);
+  }, [gripForce, gripperWidth]);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
       <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-cyan-400" />
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-            Tactile Grasp Microscope & Friction Cone HUD
+            Tactile Grasp Microscope & Ferrari-Canny GWS HUD
           </span>
         </div>
         <span
-          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-wider ${
+          className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.68rem] font-bold uppercase tracking-wider ${
             isGrasped
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
               : "bg-amber-500/20 text-amber-300 border border-amber-400/30"
@@ -116,10 +121,10 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
           <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
-            Gripper Width
+            Ferrari-Canny GWS (ε)
           </span>
-          <span className="font-mono text-sm font-bold text-cyan-300 mt-0.5 block">
-            {sample ? `${(gripperWidth * 1000).toFixed(1)} mm` : "—"}
+          <span className="font-mono text-sm font-bold text-amber-300 mt-0.5 block">
+            {sample ? `${(gws.gwsRadius * 100).toFixed(1)}%` : "—"}
           </span>
         </div>
 
@@ -134,10 +139,10 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2">
           <span className="text-[0.65rem] text-slate-300 uppercase tracking-wider block">
-            Coulomb Friction Cap
+            Friction Cone Capacity
           </span>
           <span className="font-mono text-sm font-bold text-violet-300 mt-0.5 block">
-            {sample ? `${(gripForce * 0.65).toFixed(1)} N static` : "—"}
+            {sample ? `${gws.maxFrictionForceN.toFixed(1)} N static` : "—"}
           </span>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   HONESTY_CHIP_REGISTRY,
   type HonestyCategory,
@@ -8,9 +8,15 @@ import {
 } from "../lib/honestyLedger";
 
 export function HonestyChipStack() {
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedChipId, setSelectedChipId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  // Auto-dismiss the copy confirmation after 2.4s.
+  useEffect(() => {
+    if (!copyToast) return;
+    const t = setTimeout(() => setCopyToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [copyToast]);
+  const [selectedChipId, setSelectedChipId] = useState<string | null>(null);
 
   const categories: { id: string; label: string }[] = [
     { id: "all", label: "All Verifications" },
@@ -42,8 +48,16 @@ export function HonestyChipStack() {
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto shadow-2xl space-y-4">
+      {copyToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200"
+        >
+          {copyToast}
+        </div>
+      ) : null}
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-3 gap-2">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -53,14 +67,42 @@ export function HonestyChipStack() {
             100% Mathematical & Empirical Provenance • Every Claim Linked to Code, Tests, and Beads ID
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
             placeholder="Search equations, beads..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-neutral-950 text-xs px-2.5 py-1.5 rounded-lg border border-neutral-700 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-amber-500 w-48 sm:w-60"
+            aria-label="Search honesty claims"
+            className="bg-neutral-950 text-xs px-2.5 py-2.5 min-h-9 rounded-lg border border-neutral-700 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-amber-500 flex-1 sm:w-60 sm:flex-initial"
           />
+          <button
+            type="button"
+            onClick={() => {
+              // Export the *visible* (filtered) set so the user can audit the
+              // exact claims they are reading, not a hidden superset.
+              const payload = {
+                schema: "cmaes-explainer.honesty-claims/v1",
+                exportedAt: new Date().toISOString(),
+                source: "app/lib/honestyLedger.ts",
+                filter: {
+                  category: selectedCategory,
+                  search: searchQuery.trim(),
+                },
+                count: filteredChips.length,
+                claims: filteredChips,
+              };
+              const json = JSON.stringify(payload, null, 2);
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(json);
+              }
+              setCopyToast(`Copied ${filteredChips.length} claim${filteredChips.length === 1 ? "" : "s"} as JSON to clipboard`);
+            }}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/15 transition-colors"
+          >
+            <span aria-hidden="true">⎘</span>
+            Copy {filteredChips.length} claim{filteredChips.length === 1 ? "" : "s"} JSON
+          </button>
         </div>
       </div>
 

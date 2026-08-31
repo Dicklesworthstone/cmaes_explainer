@@ -258,6 +258,30 @@ export function solveKukaIK(
  * Clamps end-effector or target object position to stay strictly above table/counter surfaces
  * and outside all obstacle OBBs (zero penetration guarantee).
  */
+/**
+ * Lightweight reachability probe: runs a short 30-iteration IK attempt
+ * and reports whether the end-effector converged below 5 cm. Use this
+ * alongside the collision clamp so the operator cannot drag the target
+ * outside the arm's reachable workspace.
+ */
+export function isTargetKukaReachable(
+  targetPos: [number, number, number],
+  basePos: [number, number, number] = [0, 0.78, 0],
+): boolean {
+  // 30 iterations is enough for a cheap reachability check; the
+  // convergence criterion of solveKukaIK is 2 mm; we use 5 cm here
+  // (slightly lax) so a near-reachable target is not spuriously
+  // rejected at the joint limit or near a singularity.
+  const angles = solveKukaIK(targetPos, [0, 0.4, 0, -1.2, 0, 0.8, 0], basePos, 30);
+  const { endEffector } = computeKukaFK(angles, basePos);
+  const err = Math.hypot(
+    targetPos[0] - endEffector[0],
+    targetPos[1] - endEffector[1],
+    targetPos[2] - endEffector[2],
+  );
+  return err < 0.05;
+}
+
 export function clampArmTargetPosition(
   target: [number, number, number],
   obstacles: OrientedBoundingBox[],

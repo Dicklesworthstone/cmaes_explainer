@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   findClearSpawnPosition,
+  createHouseNavigationScene,
+  createHouseWallObstacles,
   createSceneFromHouseFurniture,
   distanceToOBB,
   evaluateHouseholdObjectiveWithFurniture,
@@ -58,6 +60,24 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
       expect(Number.isFinite(obb.center[1])).toBe(true);
       expect(Number.isFinite(obb.center[2])).toBe(true);
     }
+  });
+
+  test("house navigation scene turns walls into physical segments while preserving doorways", () => {
+    const walls = createHouseWallObstacles();
+    const scene = createHouseNavigationScene();
+    expect(walls.length).toBeGreaterThan(8);
+    expect(scene.obstacles.length).toBeGreaterThan(
+      createSceneFromHouseFurniture().obstacles.length,
+    );
+
+    const doorwayClearance = Math.min(
+      ...walls.map((wall) => distanceToOBB([0, 1, 5.5], wall)),
+    );
+    const solidWallDistance = Math.min(
+      ...walls.map((wall) => distanceToOBB([3, 1, 5.5], wall)),
+    );
+    expect(doorwayClearance).toBeGreaterThan(1.0);
+    expect(solidWallDistance).toBeLessThanOrEqual(0.0);
   });
 
   test("queryMultiObstacleScene computes clearance and quadratic collision penalty", () => {

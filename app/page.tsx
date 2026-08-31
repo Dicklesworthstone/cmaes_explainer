@@ -101,7 +101,7 @@ export default function Page() {
                     </div>
                   </div>
 
-                  {/* KUKA iiwa14 Flagship Card */}
+                  {/* KUKA LBR iiwa 7 R800 flagship card */}
                   <div className="rounded-2xl border border-orange-400/30 bg-slate-950/80 p-6 shadow-xl backdrop-blur-xl flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between">
@@ -111,10 +111,10 @@ export default function Page() {
                         <span className="text-xs font-mono text-slate-400">90 Hz Contact</span>
                       </div>
                       <h3 className="mt-4 text-xl font-bold text-white">
-                        KUKA iiwa14 Pick-and-Place Manipulation
+                        KUKA LBR iiwa 7 R800 Pick-and-Place
                       </h3>
                       <p className="mt-2 text-sm leading-6 text-slate-300">
-                        A 7-DoF KUKA iiwa14 robotic arm learns to reach, grasp, transport, and place household items across kitchen countertops and dining tables against a discontinuous contact objective.
+                        A source-bound 7-DoF KUKA LBR iiwa 7 R800 is optimized to reach, grasp, transport, and release objects in three reduced household scenes. Placement is accepted only when the collision receipt is clear.
                       </p>
                       <ul className="mt-4 space-y-2 text-xs text-slate-400">
                         <li className="flex items-center gap-2">
