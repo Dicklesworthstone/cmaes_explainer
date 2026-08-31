@@ -235,16 +235,50 @@ export class CmaesHyperparameterOptimizer {
     for (let rep = 0; rep < this.replicationsPerCandidate; rep++) {
       this.env.reset(rep === 0 ? 42 : this.baseRolloutSeed + rep);
       let totalReward = 0.0;
+      // Muon momentum: carry an exponential moving average of the
+      // previous action so consecutive actions smooth out. Stand-in
+      // for the optimizer's gradient-EMA; absent this, only the action
+      // amplitude (muonLearningRate) affects the env.
+      const momentum = Math.max(0.0, Math.min(0.99, hparams.muonMomentum));
+      let prevAction = new Array(15).fill(0.0);
+      // Deterministic per-rollout noise generator so fitness stays
+      // reproducible per seed. xorshift32 — same scheme as the
+      // LiveCmaesOptimizer PRNG. ppoEntropyCoef scales the noise
+      // amplitude: 0 ⇒ deterministic, large ⇒ exploration-heavy.
+      let noiseState = (0x9e3779b9 ^ (this.baseRolloutSeed + rep)) >>> 0;
+      const noiseStep = (mean: number, std: number) => {
+        noiseState ^= noiseState << 13;
+        noiseState ^= noiseState >> 17;
+        noiseState ^= noiseState << 5;
+        const u1 = Math.max(1e-7, (noiseState >>> 0) / 4294967296);
+        noiseState ^= noiseState << 13;
+        noiseState ^= noiseState >> 17;
+        noiseState ^= noiseState << 5;
+        const u2 = (noiseState >>> 0) / 4294967296;
+        return mean + std * Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      };
 
       for (let s = 0; s < 120; s++) {
-        // Mock inner policy action influenced by HPO parameters
-        const action = new Array(15).fill(0.0).map((_, idx) =>
-          Math.sin(s * 0.1 + idx) * (hparams.muonLearningRate * 10.0),
+        // Action amplitude scales with muonLearningRate (the most
+        // consequential hyperparameter on the linear-phase prior).
+        // Momentum EMA on the previous action smooths consecutive
+        // commands (Muon's "spectral whitening" stand-in). ppoEntropyCoef
+        // injects exploration noise — also clipped to a sane range.
+        const amp = hparams.muonLearningRate * 10.0;
+        const noise = hparams.ppoEntropyCoef * 20.0;
+        const baseAction = new Array(15).fill(0.0).map((_, idx) =>
+          Math.sin(s * 0.1 + idx) * amp,
         );
+        const rawAction = baseAction.map((value, idx) => {
+          const perturbed = value + (noise > 0 ? noiseStep(0, noise) : 0);
+          return momentum * prevAction[idx] + (1 - momentum) * perturbed;
+        });
+        const action = rawAction;
 
         const res = this.env.step(action);
         totalReward += res.reward;
         if (res.done) break;
+        prevAction = action;
       }
 
       aggregate += totalReward;
