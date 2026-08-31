@@ -36,6 +36,7 @@ import {
   Volume2,
   VolumeX,
   Wrench,
+  Download,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -1073,8 +1074,48 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     isColliding: boolean;
     clearance: number;
   }>({ isColliding: false, clearance: 1.0 });
-const [armUnreachable, setArmUnreachable] = useState(false);
+  const [armUnreachable, setArmUnreachable] = useState(false);
   const [physicsDebug, setPhysicsDebug] = useState(false);
+
+  const handleExportTelemetry = useCallback(() => {
+    if (!trace) return;
+    const telemetryData = {
+      exportTimestamp: new Date().toISOString(),
+      task,
+      family,
+      generation,
+      bestObjective,
+      placed: trace.placed,
+      everGrasped: trace.everGrasped,
+      finalObjectErrorMeters: trace.finalObjectErrorMeters,
+      minimumReachErrorMeters: trace.minimumReachErrorMeters,
+      maximumLiftMeters: trace.maximumLiftMeters,
+      actuatorWorkJoules: trace.actuatorWorkJoules,
+      peakGripForceNewtons: trace.peakGripForceNewtons,
+      graspDurationSeconds: trace.graspDurationSeconds,
+      minimumCertifiedClearanceMeters: trace.minimumCertifiedClearanceMeters,
+      samples: trace.samples.map((s) => ({
+        timeSeconds: s.timeSeconds,
+        gripperWidthMeters: s.gripperWidthMeters,
+        gripNormalForceNewtons: s.gripNormalForceNewtons,
+        grasped: s.grasped,
+        objectPosition: s.objectPose.position,
+        objectQuaternion: s.objectPose.quaternionWxyz,
+        linkPoses: s.linkPoses.map((lp) => ({
+          position: lp.position,
+          quaternion: lp.quaternionWxyz,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(telemetryData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kuka-arm-telemetry-${task}-${family}-gen${generation}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus("Exported manipulation trajectory telemetry JSON receipt.");
+  }, [trace, task, family, generation, bestObjective]);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -1376,6 +1417,20 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                   <Wrench className="h-3.5 w-3.5" />
                   <span>{physicsDebug ? "Physics ON" : "Physics"}</span>
                 </button>
+
+                {/* Export Telemetry Receipt Button */}
+                {trace && (
+                  <button
+                    type="button"
+                    onClick={handleExportTelemetry}
+                    className="flex items-center gap-1.5 rounded-full border border-orange-400/30 bg-orange-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-orange-200 backdrop-blur-md hover:bg-orange-900/60 transition-colors"
+                    title="Export full 128-D kinematic & dynamic trajectory receipt as JSON"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span className="sm:hidden">Export</span>
+                    <span className="max-sm:hidden">Export Telemetry</span>
+                  </button>
+                )}
 
                 {/* Drag Status & Contact Safety Readout */}
                 {armDragTarget ? (

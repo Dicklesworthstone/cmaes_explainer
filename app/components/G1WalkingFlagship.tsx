@@ -758,7 +758,7 @@ function RobotPlayback({
         <RobotPose sample={renderSample} pushFraction={pushFraction} />
       )}
       <G1BiomechanicsOverlay
-        sample={sample}
+        sample={renderSample}
         enabled={xrayMode}
         pelvisPosition={pelvisThree}
         leftFootPosition={leftFootThree}

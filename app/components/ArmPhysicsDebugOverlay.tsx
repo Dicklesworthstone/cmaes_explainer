@@ -21,10 +21,10 @@
 //      red box, the dragger flags isColliding.
 //
 // The overlay is OFF by default. Toggle with the "🔧 Physics" button
-// in the arm flagship top-right cluster. When OFF, zero overhead
-// (returns null early).
+// in the arm flagship top-right cluster. When OFF, it allocates or uploads no
+// debug geometry and returns null.
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import {
   computeKukaFK,
@@ -124,8 +124,7 @@ export function ArmPhysicsDebugOverlay({
 }: ArmPhysicsDebugOverlayProps) {
   // Pre-build the OBB wireframe geometry once per overlay mount.
   // Hooks remain unconditional so toggling the overlay cannot change
-  // hook order; the body short-circuits when disabled so the
-  // "zero overhead when disabled" claim holds.
+  // hook order; disabled mode avoids all debug-geometry allocation.
   const obstacleEdges = useMemo(() => {
     if (!enabled) return [];
     return obstacles.map((obb) => {
@@ -141,19 +140,28 @@ export function ArmPhysicsDebugOverlay({
   }, [enabled, obstacles]);
 
   // Buffer geometry for the reachable workspace point cloud.
-  // The memo body always allocates a geometry (so the consumer's
-  // `geometry={...}` prop type-checks); the early-return below
-  // skips rendering when disabled, so the buffer is never uploaded.
   const workspaceGeometry = useMemo(() => {
+    if (!enabled) return null;
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute(
       "position",
       new THREE.BufferAttribute(REACHABLE_WORKSPACE_POINTS, 3),
     );
     return geometry;
-  }, [enabled, obstacles]);
+  }, [enabled]);
+
+  useEffect(() => {
+    return () => {
+      for (const { edges } of obstacleEdges) edges.dispose();
+    };
+  }, [obstacleEdges]);
+
+  useEffect(() => {
+    return () => workspaceGeometry?.dispose();
+  }, [workspaceGeometry]);
 
   if (!enabled) return null;
+  if (!workspaceGeometry) return null;
 
   const objectDimensions = admission.scene.objectDimensionsMeters;
   const objectThreeDimensions: [number, number, number] = [
