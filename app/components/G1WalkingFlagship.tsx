@@ -694,23 +694,59 @@ function RobotPlayback({
 type G1ParsedMesh = { positions: Float32Array; normals: Float32Array };
 let g1MeshCache: Record<string, G1ParsedMesh> | null = null;
 let g1MeshCachePromise: Promise<Record<string, G1ParsedMesh>> | null = null;
+const G1_MESH_WORKER_TIMEOUT_MS = 30_000;
 
 function ensureG1Meshes(): Promise<Record<string, G1ParsedMesh>> {
   if (g1MeshCache) return Promise.resolve(g1MeshCache);
   if (!g1MeshCachePromise) {
     g1MeshCachePromise = (async () => {
-      const worker = new Worker(
-        new URL("../workers/g1MeshParseWorker.ts", import.meta.url),
-      );
+      // This worker is a real JavaScript asset under `public/`. Passing a
+      // TypeScript module through `new URL(..., import.meta.url)` makes
+      // Turbopack emit the raw `.ts` source as media, which WebKit cannot
+      // execute in the native app's loopback origin.
+      const worker = new Worker("/workers/g1MeshParseWorker.js", {
+        type: "module",
+        name: "g1-mesh-parser",
+      });
       const result = await new Promise<Record<string, G1ParsedMesh>>(
         (resolve, reject) => {
+          let settled = false;
+          const finish = (
+            outcome:
+              | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
+              | { type: "error"; error: string },
+          ) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeout);
+            worker.terminate();
+            if (outcome.type === "ok") resolve(outcome.geometries);
+            else reject(new Error(outcome.error));
+          };
+          const timeout = window.setTimeout(() => {
+            finish({
+              type: "error",
+              error: "Timed out while loading the Unitree G1 mesh rig.",
+            });
+          }, G1_MESH_WORKER_TIMEOUT_MS);
           worker.onmessage = (e: MessageEvent<unknown>) => {
             const m = e.data as
               | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
               | { type: "error"; error: string };
-            worker.terminate();
-            if (m.type === "ok") resolve(m.geometries);
-            else reject(new Error(m.error));
+            finish(m);
+          };
+          worker.onerror = (event) => {
+            event.preventDefault();
+            finish({
+              type: "error",
+              error: event.message || "The Unitree G1 mesh worker failed to start.",
+            });
+          };
+          worker.onmessageerror = () => {
+            finish({
+              type: "error",
+              error: "The Unitree G1 mesh worker returned unreadable data.",
+            });
           };
           worker.postMessage({
             type: "parse",
@@ -722,7 +758,12 @@ function ensureG1Meshes(): Promise<Record<string, G1ParsedMesh>> {
       );
       g1MeshCache = result;
       return result;
-    })();
+    })().catch((error: unknown) => {
+      // A failed attempt must not poison the page-lifetime cache. A later
+      // mount can retry after a transient WebKit or memory-pressure failure.
+      g1MeshCachePromise = null;
+      throw error;
+    });
   }
   return g1MeshCachePromise;
 }
@@ -750,7 +791,7 @@ type G1MeshState =
   | { phase: "idle" }
   | { phase: "loading" }
   | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
-  | { phase: "failed" };
+  | { phase: "failed"; error: string };
 
 function useG1Meshes(active: boolean): G1MeshState {
   const [state, setState] = useState<G1MeshState>({ phase: "idle" });
@@ -769,15 +810,20 @@ function useG1Meshes(active: boolean): G1MeshState {
           return;
         }
         setState({ phase: "ready", ...built });
-      } catch {
-        if (!cancelled) setState({ phase: "failed" });
+      } catch (error: unknown) {
+        if (!cancelled) {
+          setState({
+            phase: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [active]);
-  if (state.phase === "ready") return state;
+  if (state.phase === "ready" || state.phase === "failed") return state;
   return { phase: active ? "loading" : "idle" };
 }
 

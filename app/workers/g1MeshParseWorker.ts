@@ -59,9 +59,10 @@ function parseBinarySTL(buffer: ArrayBuffer): Float32Array {
   const positions = new Float32Array(triCount * 9);
   for (let t = 0; t < triCount; t++) {
     const base = 84 + t * 50;
-    // Skip normal (3 floats at base+12..+24), read 9 floats at base+24..+60.
+    // Skip the 12-byte normal, then read the three vertices. The record's
+    // final two bytes are the attribute count.
     for (let v = 0; v < 9; v++) {
-      positions[t * 9 + v] = view.getFloat32(base + 24 + v * 4, true);
+      positions[t * 9 + v] = view.getFloat32(base + 12 + v * 4, true);
     }
   }
   return positions;
@@ -146,7 +147,9 @@ self_.onmessage = async (e: MessageEvent<Msg>) => {
   const { files, rotateXRad, baseUrl } = e.data;
   const resolveUrl = (u: string): string => {
     if (/^https?:\/\//i.test(u)) return u;
-    if (baseUrl) return new URL(u, baseUrl).toString();
+    if (baseUrl) {
+      return new URL(u, new URL(baseUrl, `${self_.location.origin}/`)).toString();
+    }
     return new URL(u, self_.location.origin).toString();
   };
   try {
