@@ -194,11 +194,9 @@ export function distanceToOBB(
 }
 
 /**
- * Closest point on the surface of an OBB to a query point. If the point is
- * already inside the OBB, the returned point lies on the face, edge, or
- * corner nearest to the query. Used to project penetrating link samples
- * back onto the obstacle surface so the arm never visibly tunnels through
- * a furniture piece. Analytic, branch-light, and matches the SDF above.
+ * Conservative lower bound on the clearance between an entire segment and
+ * an OBB. OBB signed distance is 1-Lipschitz, so subtracting half the sample
+ * interval guarantees the unsampled points cannot be closer than the result.
  */
 export function conservativeSegmentClearanceToOBB(
   start: [number, number, number],

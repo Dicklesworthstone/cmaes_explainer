@@ -7,6 +7,7 @@ import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import {
   createHouseNavigationScene,
+  conservativeSegmentClearanceToOBB,
   distanceToOBB,
   projectPointOutOfOBB,
   type MultiObstacleSceneConfig,
@@ -512,6 +513,14 @@ function ArmRig({
       const child = projectedPositions[link];
       scratch.start.set(parent[0], parent[1], parent[2]);
       scratch.end.set(child[0], child[1], child[2]);
+      const segmentRadius = 0.072 - (link - 1) * 0.004;
+      segment.visible = multiObstacleScene.obstacles.every(
+        (obb) => obb.exemptFromPenalty || conservativeSegmentClearanceToOBB(
+          parent,
+          child,
+          obb,
+        ) >= segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS,
+      );
       scratch.direction.subVectors(scratch.end, scratch.start);
       const length = Math.max(0.025, scratch.direction.length());
       scratch.midpoint.addVectors(scratch.start, scratch.end).multiplyScalar(0.5);

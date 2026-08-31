@@ -4,6 +4,7 @@ import {
   createHouseNavigationScene,
   createHouseWallObstacles,
   createSceneFromHouseFurniture,
+  conservativeSegmentClearanceToOBB,
   distanceToOBB,
   evaluateHouseholdObjectiveWithFurniture,
   type OrientedBoundingBox,
@@ -42,6 +43,44 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
     // Point along Z should now match the long half-extent (1.0)
     const distRotatedZ = distanceToOBB([0.0, 0.0, 2.0], rotatedObb);
     expect(distRotatedZ).toBeCloseTo(1.0, 5);
+  });
+
+  test("conservatively detects a link segment crossing an OBB with clear endpoints", () => {
+    const obb: OrientedBoundingBox = {
+      id: "thin-wall",
+      name: "Thin wall",
+      center: [0, 0, 0],
+      halfExtents: [0.05, 0.5, 0.5],
+      rotationYawRad: Math.PI / 6,
+    };
+    expect(distanceToOBB([-1, 0, 0], obb)).toBeGreaterThan(0);
+    expect(distanceToOBB([1, 0, 0], obb)).toBeGreaterThan(0);
+    expect(conservativeSegmentClearanceToOBB([-1, 0, 0], [1, 0, 0], obb)).toBeLessThan(0);
+  });
+
+  test("segment clearance preserves a certified grazing margin", () => {
+    const obb: OrientedBoundingBox = {
+      id: "box",
+      name: "Box",
+      center: [0, 0, 0],
+      halfExtents: [0.5, 0.5, 0.5],
+      rotationYawRad: 0,
+    };
+    const clearance = conservativeSegmentClearanceToOBB([-1, 0.7, 0], [1, 0.7, 0], obb, 0.01);
+    expect(clearance).toBeGreaterThan(0.19);
+    expect(clearance).toBeLessThanOrEqual(0.2);
+  });
+
+  test("segment clearance rejects malformed inputs", () => {
+    const obb: OrientedBoundingBox = {
+      id: "box",
+      name: "Box",
+      center: [0, 0, 0],
+      halfExtents: [0.5, 0.5, 0.5],
+      rotationYawRad: 0,
+    };
+    expect(() => conservativeSegmentClearanceToOBB([0, 0, 0], [1, 0, 0], obb, 0)).toThrow("positive spacing");
+    expect(() => conservativeSegmentClearanceToOBB([Number.NaN, 0, 0], [1, 0, 0], obb)).toThrow("must be finite");
   });
 
   test("createSceneFromHouseFurniture converts 70+ pieces into complete OBB scene roster", () => {

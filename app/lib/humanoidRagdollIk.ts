@@ -3,8 +3,9 @@
 // full-body multi-sphere continuous collision projection against house obstacles, and impulse dynamics.
 
 import {
-  distanceToOBB,
-  type OrientedBoundingBox,
+ distanceToOBB,
+ projectPointOutOfOBB,
+ type OrientedBoundingBox,
 } from "./houseMultiObstacleKernel";
 
 export type InteractiveLimbPinId =
