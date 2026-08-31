@@ -122,7 +122,9 @@ export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {
     { name: "library table", room: "living room", center: [-1.2, 1.6], size: [1.1, 0.6], height: 0.75, rotation: 0, note: "Craftsman oak table" },
     { name: "dining-table", room: "dining room", center: [1.6, 2.6], size: [1.4, 0.9], height: 0.76, rotation: 0, note: "solid oak, six chairs" },
     { name: "china-cabinet", room: "dining room", center: [2.85, 3.4], size: [0.45, 1.1], height: 1.8, rotation: 0, note: "built-in china niche" },
-    { name: "kitchen-island", room: "kitchen", center: [1.9, 0.15], size: [1.3, 0.7], height: 0.92, rotation: 0, note: "hoosier-style work table" },
+    // cmaes-feox: shrunk and shifted south so the dining/kitchen doorway
+    // aperture x[1.025,1.975]@y=0.7 stays navigable at robotRadius 0.20.
+    { name: "kitchen-island", room: "kitchen", center: [2.0, -0.3], size: [1.0, 0.6], height: 0.92, rotation: 0, note: "hoosier-style work table (sized for doorway clearance)" },
     { name: "stove", room: "kitchen", center: [2.9, -1.4], size: [0.75, 0.65], height: 0.95, rotation: 0, note: "cast-iron range" },
     { name: "bed-master", room: "bedroom", center: [-2.6, -2.9], size: [1.4, 1.9], height: 0.6, rotation: 0, note: "iron-frame bed" },
     { name: "dresser", room: "bedroom", center: [-0.9, -3.1], size: [1.1, 0.5], height: 0.95, rotation: 0, note: "oak dresser" },
@@ -141,7 +143,9 @@ export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {
     { name: "dining-chair-4", room: "dining room", center: [2.2, 2.0], size: [0.45, 0.5], height: 0.95, rotation: 0, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
     { name: "dining-chair-5", room: "dining room", center: [1.0, 1.6], size: [0.45, 0.5], height: 0.95, rotation: 3.14159265, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
     { name: "dining-chair-6", room: "dining room", center: [2.2, 1.6], size: [0.45, 0.5], height: 0.95, rotation: 3.14159265, kind: "dining-chair", materialId: "oak-wood", note: "turned-leg chair" },
-    { name: "sideboard", room: "dining room", center: [0.8, 0.9], size: [1.5, 0.5], height: 0.9, rotation: 0, kind: "console-table", materialId: "oak-wood", note: "Craftsman sideboard with drawers" },
+    // cmaes-feox: relocated to the dining-room east end against the south
+    // wall; previously covered the west half of the dining/kitchen doorway.
+    { name: "sideboard", room: "dining room", center: [2.75, 0.95], size: [1.5, 0.5], height: 0.9, rotation: 0, kind: "console-table", materialId: "oak-wood", note: "Craftsman sideboard with drawers" },
     { name: "rug-dining", room: "dining room", center: [1.6, 2.4], size: [2.6, 2.0], height: 0.02, rotation: 0, kind: "rug", materialId: "carpet", note: "woven rug" },
     { name: "wall-clock", room: "dining room", center: [1.6, 4.6], size: [0.3, 0.05], height: 1.8, rotation: 0, kind: "picture-frame", materialId: "oak-wood", note: "wall clock" },
     { name: "fridge", room: "kitchen", center: [3.4, -0.6], size: [0.9, 0.75], height: 1.8, rotation: 0, kind: "fridge", materialId: "chrome", note: "top-freezer refrigerator" },

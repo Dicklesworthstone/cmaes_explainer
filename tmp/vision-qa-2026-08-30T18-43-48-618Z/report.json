@@ -1,0 +1,16 @@
+[
+  {
+    "viewport": "chromium-desktop",
+    "case": "smoke",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: case action left the audited origin: https://vercel.com/login?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fcmaes-explainer-cb10yjwy8-dicklesworthstones-projects.vercel.app%252F%26nonce%3D2e7ac186acd839d7264edbbaa9283e62aadfc638821c028357e5284093f94fd4"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "smoke",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: case action left the audited origin: https://vercel.com/login?next=%2Fsso-api%3Furl%3Dhttps%253A%252F%252Fcmaes-explainer-cb10yjwy8-dicklesworthstones-projects.vercel.app%252F%26nonce%3D1a7a6b71af3365175bd75c0769ea502602920890b6436a68c272df5439fe2400"
+  }
+]

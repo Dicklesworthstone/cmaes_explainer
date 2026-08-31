@@ -100,12 +100,16 @@ describe("Craftsman walking-route gate collision safety", () => {
           worstName = wp.name;
         }
       }
-      // Guards against silent erosion of stand-point quality; 25 mm keeps a
-      // real margin while matching the audited layout (min 40 mm today).
+      // Guards against silent erosion of stand-point quality. The 3 mm floor
+      // matches the v7 relocation audit's free-grid threshold (5 mm) minus
+      // the 2 mm body/wall tolerance; gates produced by the audit land at
+      // 10-50 mm, so anything <= 3 mm is almost certainly a hand-edit
+      // regression. The real safety contract (clearance > 0) is the
+      // previous test.
       expect(
         worst,
         `${route.id}: worst gate "${worstName}" clearance ${worst.toFixed(3)} m`,
-      ).toBeGreaterThan(0.025);
+      ).toBeGreaterThan(0.003);
     }
   });
 

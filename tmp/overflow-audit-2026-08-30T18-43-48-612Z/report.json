@@ -1,0 +1,125 @@
+{
+  "browserChoice": "chromium",
+  "settleMs": 2500,
+  "results": [
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "base",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "base",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "base",
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "innerWidth": 320,
+      "screenWidth": 320,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "innerWidth": 320,
+      "screenWidth": 320,
+      "offenders": [
+        "g left=-8 right=8 overflow=8",
+        "path left=-8 right=8 overflow=8",
+        "div.w-[14px].h-[7px].absolute left=-7 right=7 overflow=7",
+        "svg left=-7 right=7 overflow=7"
+      ],
+      "errors": [
+        "requestfailed: GET https://accounts.google.com/gsi/client — net::ERR_BLOCKED_BY_ORB",
+        "console: Failed to load resource: the server responded with a status of 403 ()"
+      ]
+    }
+  ],
+  "failures": [
+    "chromium/iphone-390: 2 runtime error(s)",
+    "chromium/iphone-375: 2 runtime error(s)",
+    "chromium/narrow-320: 2 runtime error(s)"
+  ]
+}

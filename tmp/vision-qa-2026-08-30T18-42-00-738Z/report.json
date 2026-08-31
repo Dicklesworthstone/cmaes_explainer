@@ -1,0 +1,48 @@
+[
+  {
+    "viewport": "chromium-desktop",
+    "case": "smoke",
+    "url": "http://localhost:3777/",
+    "file": "tmp/vision-qa-2026-08-30T18-42-00-738Z/chromium-desktop-smoke.png",
+    "stats": {
+      "mean": 253.3,
+      "std": 16.1,
+      "min": 0,
+      "max": 255
+    },
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/b3164e1ce4d7ccde.css — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/79868e7e06b527c6.js — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/35f912250c161ba0.js — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/5b0c4cab73096d0f.js — net::ERR_ABORTED"
+    ],
+    "verdict": "ok"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "smoke",
+    "url": "http://localhost:3777/",
+    "file": "tmp/vision-qa-2026-08-30T18-42-00-738Z/chromium-iphone-emulation-smoke.png",
+    "stats": {
+      "mean": 246.6,
+      "std": 36.4,
+      "min": 0,
+      "max": 255
+    },
+    "errors": [
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/b3164e1ce4d7ccde.css — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/79868e7e06b527c6.js — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/35f912250c161ba0.js — net::ERR_ABORTED",
+      "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "requestfailed: GET http://localhost:3777/_next/static/chunks/5b0c4cab73096d0f.js — net::ERR_ABORTED"
+    ],
+    "verdict": "ok"
+  }
+]

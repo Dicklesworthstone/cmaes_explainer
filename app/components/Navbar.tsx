@@ -28,6 +28,8 @@ export function Navbar() {
   const progressBarRef = useRef<HTMLDivElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuOpenBtnRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuCloseBtnRef = useRef<HTMLButtonElement | null>(null);
   const activeId = useScrollSpy(sections.map((s) => s.id));
 
   // The mobile dock scrolls horizontally with a hidden scrollbar, so keep
@@ -122,15 +124,24 @@ export function Navbar() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Lock body scroll when modals or mobile menu are open
+  // Lock body scroll when modals or mobile menu are open. Save the previous
+  // overflow value (and compensate for the scrollbar disappearing on desktop
+  // so the page doesn't jump horizontally when a modal opens) and restore both
+  // on close.
   useEffect(() => {
-    if (mobileMenuOpen || shortcutsModalOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.removeProperty("overflow");
-    }
+    const open = mobileMenuOpen || shortcutsModalOpen;
+    if (!open) return;
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      if (previousOverflow) body.style.overflow = previousOverflow;
+      else body.style.removeProperty("overflow");
+      body.style.removeProperty("padding-right");
+    };
   }, [mobileMenuOpen, shortcutsModalOpen]);
-
   // Dialog semantics (WCAG 2.4.3): move focus into the dialog on open and
   // restore it to the trigger on close. Escape and ? keep working through
   // the global keydown handler above; the close button gets initial focus.
@@ -142,10 +153,27 @@ export function Navbar() {
     return () => previouslyFocused?.focus();
   }, [shortcutsModalOpen]);
 
-  // True-modal focus containment: aria-modal marks the background inert for
-  // assistive tech; Tab/Shift+Tab cycle within the dialog so physical focus
-  // cannot escape an open modal. The dialog holds only the close button
-  // today; the wrap stays correct as content grows.
+  // Mirror for the mobile menu: focus the close button on open (so Tab/Shift
+  // + the dialog trap below stay inside the menu), restore focus to the
+  // hamburger trigger on close.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Defer one frame so the menu's AnimatePresence + Framer transition has
+    // mounted the close button before we focus it.
+    const rafId = requestAnimationFrame(() => mobileMenuCloseBtnRef.current?.focus());
+    return () => {
+      cancelAnimationFrame(rafId);
+      // Only restore if focus is still inside the menu (user may have moved
+      // focus elsewhere via tap).
+      if (previouslyFocused && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      } else {
+        mobileMenuOpenBtnRef.current?.focus();
+      }
+    };
+  }, [mobileMenuOpen]);
   const trapDialogTab = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") return;
     const dialog = e.currentTarget;
@@ -292,6 +320,7 @@ export function Navbar() {
             <Keyboard className="h-4 w-4" />
           </button>
           <button
+            ref={mobileMenuOpenBtnRef}
             aria-label="Open navigation menu"
             onClick={() => setMobileMenuOpen(true)}
             className="flex min-h-10 min-w-10 items-center justify-center rounded-xl bg-slate-900 border border-white/10 text-slate-300 hover:text-white"
@@ -418,6 +447,10 @@ export function Navbar() {
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            onKeyDown={trapDialogTab}
             initial={{ opacity: 0, y: "100%" }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
@@ -430,6 +463,7 @@ export function Navbar() {
                 <span className="text-lg font-bold font-display text-white">Table of Contents</span>
               </div>
               <button
+                ref={mobileMenuCloseBtnRef}
                 aria-label="Close navigation menu"
                 onClick={() => setMobileMenuOpen(false)}
                 className="p-2 rounded-full bg-white/5 text-slate-300"
