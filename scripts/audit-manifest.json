@@ -1,0 +1,8 @@
+{
+  "cases": [
+    { "name": "home", "path": "/", "capture": "page" },
+    { "name": "humanoid", "path": "/humanoid", "capture": "page" },
+    { "name": "arm", "path": "/arm", "capture": "page" },
+    { "name": "receipts", "path": "/receipts", "capture": "page" }
+  ]
+}
