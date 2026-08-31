@@ -57,7 +57,7 @@ export function HonestyChipStack() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <h2 className="text-base font-bold text-neutral-100">Interactive Honesty Chip Stack</h2>
           </div>
@@ -172,7 +172,7 @@ export function HonestyChipStack() {
             ✕ Close
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
               {activeChip.beadId}
             </span>

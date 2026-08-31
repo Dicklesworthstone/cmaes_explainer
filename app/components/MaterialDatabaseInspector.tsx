@@ -151,7 +151,7 @@ export function MaterialDatabaseInspector() {
           <h2 className="text-base font-bold text-amber-400">PBR Material Database & Physical Matrix</h2>
           <p className="text-xs text-neutral-400">Craftsman 1928 Catalog • BRDF Validation & Contact Properties</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs text-neutral-400">Filter:</label>
           <select
             className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"

@@ -45,7 +45,7 @@ export function FurnitureCatalogInspector() {
             {CRAFTSMAN_BUNGALOW_1928.model} ({CRAFTSMAN_BUNGALOW_1928.catalogYear}) • {CRAFTSMAN_BUNGALOW_1928.furniture.length} Parameterized Pieces
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs text-neutral-400">Room:</label>
           <select
             className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"

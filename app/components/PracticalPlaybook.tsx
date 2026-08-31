@@ -113,7 +113,7 @@ function HyperparameterCalculator() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setIsMultimodal(!isMultimodal)}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-[background-color,color,border-color] ${
