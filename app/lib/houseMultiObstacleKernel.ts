@@ -30,14 +30,14 @@ export function findClearSpawnPosition(
   // 0.3 m step is plenty. The first cleared point wins.
   for (let z = bounds.maxZ; z >= bounds.minZ; z -= 0.3) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 0.3) {
-      const { isColliding } = clampPositionAgainstHouseCollisions(
+      const { clampedPosition, isColliding } = clampPositionAgainstHouseCollisions(
         [x, 0.75, z],
         obstacles,
         safeRadius,
         bounds,
       );
       if (!isColliding) {
-        return [x, 0.75, z];
+        return clampedPosition;
       }
     }
   }

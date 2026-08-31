@@ -205,10 +205,10 @@ describe("findClearSpawnPosition — the robot never spawns inside a wall (cmaes
   test("returns a position inside the house bounds (x, z in the configured box)", () => {
     const scene = createSceneFromHouseFurniture();
     const [x, , z] = findClearSpawnPosition(scene.obstacles);
-    expect(x).toBeGreaterThanOrEqual(scene.bounds.min[0]);
-    expect(x).toBeLessThanOrEqual(scene.bounds.max[0]);
-    expect(z).toBeGreaterThanOrEqual(scene.bounds.min[1]);
-    expect(z).toBeLessThanOrEqual(scene.bounds.max[1]);
+    expect(x).toBeGreaterThanOrEqual(scene.bounds.min[0] + 0.35);
+    expect(x).toBeLessThanOrEqual(scene.bounds.max[0] - 0.35);
+    expect(z).toBeGreaterThanOrEqual(scene.bounds.min[1] + 0.35);
+    expect(z).toBeLessThanOrEqual(scene.bounds.max[1] - 0.35);
   });
 
   test("the returned position has positive clearance against every OBB obstacle", () => {
@@ -222,6 +222,15 @@ describe("findClearSpawnPosition — the robot never spawns inside a wall (cmaes
         dist,
         `spawn at (${spawn.map((n) => n.toFixed(3)).join(", ")}) is inside OBB ${obb.name} (distance=${dist.toFixed(4)})`,
       ).toBeGreaterThanOrEqual(0.32);
+    }
+  });
+
+  test("finds a spawn that also clears the authored wall roster", () => {
+    const scene = createHouseNavigationScene();
+    const spawn = findClearSpawnPosition(scene.obstacles, 0.35);
+    for (const obstacle of scene.obstacles) {
+      if (obstacle.exemptFromPenalty) continue;
+      expect(distanceToOBB(spawn, obstacle), obstacle.name).toBeGreaterThanOrEqual(0.35);
     }
   });
 
