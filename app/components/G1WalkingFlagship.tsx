@@ -39,6 +39,7 @@ import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
   clampPositionAgainstHouseCollisions,
   createHouseNavigationScene,
+  enclosingSpawnRadius,
   findClearSpawnPosition,
 } from "../lib/houseMultiObstacleKernel";
 type ScalableFamily = Exclude<CmaFamily, "full">;
@@ -71,7 +72,7 @@ type WorkerResponse =
       bestObjective: number;
       sigma: number;
     }
-  | { type: "comparison"; rows: ComparisonRow[] }
+  | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
 
 const LINK_NAMES = [
@@ -1366,15 +1367,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [shoveActive, setShoveActive] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
-  // Spawn-safe: on first trace load, if the user has not yet
-  // dragged the robot, seed robotDragOffset to a known-clear position
-  // via the same continuous-collision primitive the ragdoll uses on every
-  // pointerMove — the G1 cannot spawn inside a wall or piece of
-  // furniture. The spawn is provable because findClearSpawnPosition
-  // iterates a coarse grid over the house bounds and returns the first
-  // interior point at which clampPositionAgainstHouseCollisions says
-  // isColliding = false with a 0.35 m safety radius (larger than any body
-  // collider sphere so the G1 is provably clear of every obstacle).
+  // Spawn-safe: enclose every owner link center plus a conservative 12 cm
+  // body shell in one pelvis-centered sphere, then seed the display offset at
+  // a house position where that entire sphere clears every rigid obstacle.
+  // This is deliberately stronger than checking only the 32 cm interactive
+  // drag proxy.
   // Async-defer the setState so the effect body does not fire a
   // synchronous setState inside another effect (react-hooks).
   useEffect(() => {
@@ -1385,7 +1382,18 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     if (!pelvisPose) return;
     let cancelled = false;
     const pelvis = ownerToThree(pelvisPose.position);
-    const safe = findClearSpawnPosition(houseSceneData.obstacles, 0.35);
+    const linkPositions = firstSample.linkPoses.map((linkPose) =>
+      ownerToThree(linkPose.position),
+    );
+    // findClearSpawnPosition evaluates at its declared 0.75 m pelvis height,
+    // so center the enclosing sphere at that exact search height.
+    const spawnRadius = enclosingSpawnRadius(
+      [pelvis[0], 0.75, pelvis[2]],
+      linkPositions,
+      0.12,
+      0.35,
+    );
+    const safe = findClearSpawnPosition(houseSceneData.obstacles, spawnRadius);
     const safeOffset: [number, number, number] = [
       safe[0] - pelvis[0],
       0,
@@ -1556,9 +1564,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         );
       } else if (message.type === "comparison") {
         setComparison(message.rows);
-        setBusy(null);
-        inFlightRef.current = false;
-        setStatus("Equal-budget 5,040-D physical owner-family race complete.");
+        if (message.complete) {
+          setBusy(null);
+          inFlightRef.current = false;
+          setStatus("Equal-budget 5,040-D physical owner-family race complete.");
+        } else {
+          setStatus(
+            `Equal-budget 5,040-D race: ${message.rows.length}/3 scalable families complete…`,
+          );
+        }
       } else {
         setError(message.message);
         setBusy(null);
@@ -1713,7 +1727,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span className="max-sm:hidden">{xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}</span>
               </button>
 
-              {/* Physics Debug Overlay Toggle — show body colliders + obstacle OBBs */}
+              {/* Physics Debug Overlay Toggle — inspect link poses, drag proxy, and obstacle OBBs */}
               <button
                 type="button"
                 onClick={() => setPhysicsDebug(!physicsDebug)}
@@ -1722,7 +1736,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                     ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
                     : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
                 }`}
-                title="Show body collider spheres + obstacle OBBs to verify the G1 cannot tunnel"
+                title="Inspect link pose envelopes, the pelvis drag proxy, and house obstacle OBBs"
               >
                 <Wrench className="h-3.5 w-3.5" />
                 <span className="sm:hidden">{physicsDebug ? "🔧 Physics" : "🔧 Off"}</span>

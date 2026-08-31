@@ -10,6 +10,7 @@ import {
   distanceToOBB,
   type MultiObstacleSceneConfig,
 } from "../lib/houseMultiObstacleKernel";
+import { resolveArmObjectContact } from "../lib/armContactPhysics";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import {
   BookOpen,
@@ -44,6 +45,7 @@ import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import { MANIPULABLE_OBJECT_PRESETS, computeFerrariCannyGWS } from "../lib/armInverseKinematics";
 import {
+  HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
   type CmaFamily,
   type HouseholdManipulationAdmission,
   type HouseholdManipulationTask,
@@ -466,18 +468,46 @@ function ArmRig({
       segment.quaternion.copy(scratch.quaternion);
       segment.scale.set(1, length, 1);
     }
-    if (objectRef.current) applyOwnerPose(objectRef.current, sample.objectPose);
-    const halfWidth = 0.5 * sample.gripperWidthMeters;
+    const rawEndEffector: [number, number, number] = [
+      sample.linkPoses[7].position[0],
+      sample.linkPoses[7].position[2],
+      -sample.linkPoses[7].position[1],
+    ];
+    const rawObject: [number, number, number] = [
+      sample.objectPose.position[0],
+      sample.objectPose.position[2],
+      -sample.objectPose.position[1],
+    ];
+
+    const contact = resolveArmObjectContact({
+      rawEndEffectorPos: rawEndEffector,
+      rawObjectPos: rawObject,
+      commandedGripperWidthM: sample.gripperWidthMeters,
+      taskOrObjectId: admission.config.task,
+      isGraspedIntent: sample.grasped,
+      tableY: admission.scene.supportHeightMeters,
+      obstacles: multiObstacleScene.obstacles,
+    });
+
+    if (objectRef.current) {
+      applyOwnerPose(objectRef.current, sample.objectPose);
+      objectRef.current.position.set(
+        contact.resolvedObjectPos[0],
+        contact.resolvedObjectPos[1],
+        contact.resolvedObjectPos[2]
+      );
+    }
+    const halfWidth = 0.5 * contact.effectiveGripperWidthM;
     if (leftFingerRef.current) leftFingerRef.current.position.x = -halfWidth;
     if (rightFingerRef.current) rightFingerRef.current.position.x = halfWidth;
     if (contactRingRef.current) {
-      const forceScale = 1 + Math.min(1.2, sample.gripNormalForceNewtons / 14);
+      const forceScale = 1 + Math.min(1.2, contact.normalForceN / 14);
       contactRingRef.current.scale.setScalar(forceScale);
-      contactRingRef.current.visible = sample.gripNormalForceNewtons > 0.01;
+      contactRingRef.current.visible = contact.normalForceN > 0.01;
     }
     if (contactMaterialRef.current) {
-      contactMaterialRef.current.opacity = sample.grasped ? 0.95 : 0.45;
-      contactMaterialRef.current.color.setHex(sample.grasped ? 0x34d399 : 0xfbbf24);
+      contactMaterialRef.current.opacity = contact.isGrasped ? 0.95 : 0.45;
+      contactMaterialRef.current.color.setHex(contact.isGrasped ? 0x34d399 : 0xfbbf24);
     }
 
     let violatingLink = -1;
@@ -1115,6 +1145,11 @@ const [armUnreachable, setArmUnreachable] = useState(false);
   const objectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
     : null;
+  const collisionRefused = trace !== null && !trace.placed && (
+    trace.collisionRiskIntegral > 0 ||
+    trace.minimumCertifiedClearanceMeters < HOUSEHOLD_PLACEMENT_CLEARANCE_METERS ||
+    trace.possibleCollisionTimeSeconds > 0
+  );
   const taskInfo = TASK_COPY[task];
 
   return (
@@ -1204,7 +1239,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
                   {trace?.placed
                     ? "collision-safe placement verified"
                     : trace
-                      ? trace.ownerReportedPlaced
+                      ? collisionRefused
                         ? "placement refused · collision envelope"
                         : "owner reports not placed"
                       : "awaiting owner receipt"}
@@ -1514,7 +1549,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
             "placement verdict",
             trace.placed
               ? "placed ✓"
-              : trace.ownerReportedPlaced
+              : collisionRefused
                 ? "collision-refused"
                 : "not placed",
           ],
@@ -1618,7 +1653,7 @@ const [armUnreachable, setArmUnreachable] = useState(false);
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", task, generations: 2 }, "compare")}
+              onClick={() => post({ type: "compare", task, generations: 4 }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />

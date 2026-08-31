@@ -84,6 +84,10 @@ Two audited surfaces coexist intentionally:
   upper-body reflex is quiet during the balance phase and ramps in over
   gait cycles 0.5..1.5, matching the v066 effective behavior on the lower
   body while keeping the 30-DoF inertia in the solver.
+- `public/wasm/fs-cmaes/v0610/` keeps the v069 G1 contract and tightens the
+  household-arm placement verdict: a rollout is placed only when grasp,
+  transport, release, tolerance, and lift checks pass with zero collision risk,
+  zero possible-collision time, and at least 4.5 cm certified clearance.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.
