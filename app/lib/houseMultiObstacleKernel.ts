@@ -1,3 +1,35 @@
+/** Conservative sphere radius enclosing all supplied points around a center. */
+export function enclosingSpawnRadius(
+  center: [number, number, number],
+  points: readonly [number, number, number][],
+  shellPadding = 0,
+  minimumRadius = 0,
+): number {
+  if (
+    !center.every(Number.isFinite) ||
+    !Number.isFinite(shellPadding) ||
+    shellPadding < 0 ||
+    !Number.isFinite(minimumRadius) ||
+    minimumRadius < 0 ||
+    points.length === 0 ||
+    points.some((point) => !point.every(Number.isFinite))
+  ) {
+    throw new Error("spawn envelope requires finite points and non-negative radii");
+  }
+  return points.reduce(
+    (radius, point) =>
+      Math.max(
+        radius,
+        Math.hypot(
+          point[0] - center[0],
+          point[1] - center[1],
+          point[2] - center[2],
+        ) + shellPadding,
+      ),
+    minimumRadius,
+  );
+}
+
 /**
  * Find a position inside the house where the robot is provably clear of
  * every obstacle (including the interior/exterior perimeter walls). Used

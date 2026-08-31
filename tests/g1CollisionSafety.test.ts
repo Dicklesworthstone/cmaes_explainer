@@ -1,6 +1,6 @@
 // Safety and coordinate-contract checks for the versioned G1 owner trace.
 //
-// Important boundary: the v069 terrain-and-push owner does not consume the
+// Important boundary: the v0610 terrain-and-push owner does not consume the
 // Craftsman house wall OBBs. Whole-house path collision is verified by
 // houseMultiObstacleKernel.test.ts, where those obstacles actually participate
 // in the computation. The owner checks below cover finite 30-link poses, a
@@ -20,6 +20,7 @@ import {
 import {
   createHouseNavigationScene,
   distanceToOBB,
+  enclosingSpawnRadius,
   findClearSpawnPosition,
 } from "../app/lib/houseMultiObstacleKernel";
 
@@ -32,18 +33,18 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v069/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0610/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v069/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0610/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();
 await ownerModule.default({ module_or_path: ownerBytes });
 
 const Evaluator = ownerModule.G1WalkingVizEvaluator;
-if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from v069 WASM");
+if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from v0610 WASM");
 const evaluator = new Evaluator(
   new Float64Array([
     0x47315737,
@@ -100,7 +101,7 @@ function receiptWithoutSamples(receipt: G1TraceReceipt): G1ObjectiveReceipt {
   return objective;
 }
 
-describe("G1 v069 owner trace safety envelope", () => {
+describe("G1 v0610 owner trace safety envelope", () => {
   test("emits finite, bounded, 30-link world poses", () => {
     expect(curriculumTrace.samples.length).toBeGreaterThanOrEqual(5);
     assertFiniteBoundedOwnerTrace(curriculumTrace);
@@ -149,18 +150,15 @@ describe("G1 v069 owner trace safety envelope", () => {
       -position[1],
     ];
     const pelvis = ownerToThree(firstSample.linkPoses[0].position);
-    const bodyRadius = firstSample.linkPoses.reduce((radius, linkPose) => {
-      const link = ownerToThree(linkPose.position);
-      return Math.max(
-        radius,
-        Math.hypot(
-          link[0] - pelvis[0],
-          link[1] - pelvis[1],
-          link[2] - pelvis[2],
-        ) + 0.12,
-      );
-    }, 0.35);
-    const spawnRadius = bodyRadius + Math.abs(pelvis[1] - 0.75);
+    const linkPositions = firstSample.linkPoses.map((linkPose) =>
+      ownerToThree(linkPose.position),
+    );
+    const spawnRadius = enclosingSpawnRadius(
+      [pelvis[0], 0.75, pelvis[2]],
+      linkPositions,
+      0.12,
+      0.35,
+    );
     const scene = createHouseNavigationScene();
     const spawn = findClearSpawnPosition(scene.obstacles, spawnRadius);
     const offset: [number, number, number] = [

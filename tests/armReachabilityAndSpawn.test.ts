@@ -1,10 +1,4 @@
-// Regression tests for the arm collision + reachability guard chain.
-// The user's specific complaints were:
-//   - "the arm CANNOT go THROUGH objects, EVER"
-//   - "the arm CANNOT go OUTSIDE its workspace"
-//   - "the arm CANNOT be placed at the same surface as a wall"
-//
-// The chain that enforces these:
+// Regression tests for the arm collision + reachability guard chain:
 //   1. clampArmTargetPosition  — continuous OBB push-out so a drag
 //      cannot put the target inside a piece of furniture, the table,
 //      or a wall.
@@ -12,10 +6,6 @@
 //      cannot put the target outside the arm's reachable workspace.
 //   3. spawn-safe (findClearSpawnPosition) — the arm target cannot
 //      spawn inside the table on the first trace load.
-//
-// If any of these guards regress, the tests below must fail so the
-// user is not silently re-introduced to the bug they reported.
-
 import { describe, expect, test } from "bun:test";
 import {
   clampArmTargetPosition,
@@ -23,6 +13,7 @@ import {
 } from "../app/lib/armInverseKinematics";
 import {
   createSceneFromHouseFurniture,
+  distanceToOBB,
   findClearSpawnPosition,
 } from "../app/lib/houseMultiObstacleKernel";
 
@@ -128,10 +119,8 @@ describe("arm spawn-safe — the arm cannot spawn inside a surface", () => {
     const spawn = findClearSpawnPosition(obstacles, 0.1);
     expect(spawn[1]).toBeCloseTo(0.75, 2);
     for (const obb of obstacles) {
-      const dx = spawn[0] - obb.center[0];
-      const dz = spawn[2] - obb.center[2];
-      const dist = Math.hypot(dx, dz);
-      expect(dist, obb.name).toBeGreaterThanOrEqual(0.1);
+      if (obb.exemptFromPenalty) continue;
+      expect(distanceToOBB(spawn, obb), obb.name).toBeGreaterThanOrEqual(0.1);
     }
   });
 });
