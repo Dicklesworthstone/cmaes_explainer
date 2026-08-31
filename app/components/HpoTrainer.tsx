@@ -272,8 +272,40 @@ export function HpoTrainer() {
               <div className="text-xs uppercase tracking-wider text-slate-500">
                 Fitness history (lower is better)
               </div>
-              <div className="text-xs text-slate-500">
-                {history.length} point{history.length === 1 ? "" : "s"}
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-slate-500">
+                  {history.length} point{history.length === 1 ? "" : "s"}
+                </div>
+                <button
+                  type="button"
+                  disabled={history.length === 0}
+                  onClick={() => {
+                    // Export the trajectory as a 2-column CSV: generation,bestFitness.
+                    // Also inline JSON so the user can paste it into a tool without
+                    // re-parsing. The fitness axis is the negation of mean inner-
+                    // rollout reward, so lower is better.
+                    const csv = [
+                      "generation,best_fitness",
+                      ...history.map((v, i) => `${i + 1},${v.toExponential(6)}`),
+                    ].join("\n");
+                    const payload = {
+                      schema: "cmaes-explainer.hpo-history/v1",
+                      exportedAt: new Date().toISOString(),
+                      seed: "0x47315040",
+                      warmStart,
+                      mirrored,
+                      generations: history.length,
+                      csv,
+                    };
+                    const json = JSON.stringify(payload, null, 2);
+                    if (typeof navigator !== "undefined" && navigator.clipboard) {
+                      void navigator.clipboard.writeText(json);
+                    }
+                  }}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Copy history
+                </button>
               </div>
             </div>
             <FitnessSparkline values={history} />
