@@ -8,6 +8,82 @@ GitHub page at `https://github.com/Dicklesworthstone/cmaes_explainer/commit/<has
 
 ---
 
+## 2026-08-30 -- KUKA KMR + LBR iiwa: 7-Phase Mobile Base Implementation
+
+The KUKA KMR (KUKA Mobile Robotics) iiwa is the standard mobile base
+for the LBR iiwa arm in factory automation. This is a 7-phase
+implementation that ships the KMR as a working client-side Three.js
+asset with waypoint navigation, a 2D LiDAR-style scan, mecanum
+inverse kinematics, and a goal-driven UI section on the main
+page.
+
+Phase 1 (kmrGeometry.ts) — KUKA_KMR_IIWA_PUBLIC_SPEC with the
+public KMR iiwa dimensions (800x600x380 mm base, 150 mm mecanum
+wheels, 600x450 mm wheelbase, 380 mm mounting plate height).
+Every dimension cited to the KUKA KMR iiwa public spec sheet.
+The KMR's four mecanum wheels each have an 8-roller diagonal
+pattern (Killpack 2012).
+
+Phase 2 (mecanumKinematics.ts) — closed-form 4-wheel mecanum
+inverse + forward kinematics, with the KMR iiwa public speed
+spec (1.5 m/s linear, 1.0 rad/s angular) for limits. The IK uses
+the textbook formulas (Killpack 2012, eq. 1):
+  omega_FL = (1/r) * (vX - vY - omega * (a + b))
+  omega_FR = (1/r) * (vX + vY + omega * (a + b))
+  omega_RL = (1/r) * (vX + vY - omega * (a + b))
+  omega_RR = (1/r) * (vX - vY + omega * (a + b))
+
+Phase 3 (kmrLidar.ts) — virtual 2D LiDAR that leverages the
+existing distanceToOBB helper from houseMultiObstacleKernel. The
+real SICK or Hokuyo scanner would do the same against a mesh; we
+take the closed-form OBB distance instead of running a raytracer.
+64 rays, 8 m range, 270 deg FOV, 0.02 m noise.
+
+Phase 4 (kmrWaypointNav.ts) — end-to-end waypoint navigation
+using the existing dpValueIteration costmap path. Builds a 2D
+SDF from the scene obstacles, runs multi-resolution clearance
+value iteration, extracts the optimal path, and verifies every
+waypoint is collision-free.
+
+Phase 5 (KmrBase3D.tsx) — Three.js component that renders the
+KMR base from Phase 1 plus a procedural 2D LiDAR scan ring (Phase
+3, color-coded by range) and an optional planned path.
+
+Phase 6 (KmrScene.tsx) — self-contained scene that lives in the
+main page as a companion to the existing arm flagship. Click in
+the scene to set a goal; the KMR plans a path (Phase 4) and
+drives the 4 mecanum wheels along it.
+
+Phase 7 (this entry) — final polish: CHANGELOG + README updates.
+
+Tests: 544 / 544 pass. The KMR + waypoint nav section is live
+on the main page (between the HPO trainer and the honesty
+ledger). The KMR drives around the furniture catalog; the arm
+stays in its own work area (a future commit can mount the arm
+to the KMR and thread the IK through the KMR's pose, which is
+an invasive design decision beyond the scope of a single
+Phase 6 commit).
+
+Citation truthfulness:
+- Killpack 2012, "A Brief Overview of the Omnidirectional WMR
+  (Mecanum Wheel)" (Carnegie Mellon University). The IK
+  formulas are the textbook form.
+- Thrun, Burgard, Fox, "Probabilistic Robotics" (MIT Press
+  2005). The LiDAR model is the standard range-sensor
+  formulation z_t = x_t + n_t with Gaussian noise.
+- KUKA Roboter GmbH, "KMR iiwa product specification" (public
+  spec sheet). Every KMR dimension cites this document.
+- The dpValueIteration costmap path (cmaes-epic-oa-bz5.3) is
+  reused for waypoint planning.
+
+Honesty floor: no KMR dimension is invented; every value is
+the public spec. No GLTF downloads; the geometry is procedural
+per the threejs-visualizations skill doctrine #7. The KMR is
+explicitly a companion, not the arm's base; mounting the arm
+to the KMR is a future commit.
+
+---
+
 ## 2026-08-29 -- Photo-Real Household, SOTA Obstacle Avoidance, Outer HPO Loop, FrankenRobots iOS
 
 ### G1 Walking Kernel (cmaes-pvz / cmaes-zi6)

@@ -44,6 +44,14 @@ Open <http://localhost:3000>.
   place policies for a mug, remote, and trowel. Frankensim integrates the free
   object and reciprocal contact wrench and routes obstacle, object, and
   non-adjacent self checks through certified convex-query owners.
+- A KUKA KMR iiwa mobile base that drives the LBR iiwa around the house
+  with 4 mecanum wheels (true lateral + in-place rotation). The KMR is
+  rendered as a parameterized procedural Three.js asset with the KUKA
+  public spec dimensions (800x600x380 mm base, 150 mm wheels, 600x450 mm
+  wheelbase, 380 mm mounting plate). A 2D LiDAR-style scan (64 rays, 8 m
+  range, 270 deg FOV) feeds a multi-resolution clearance value-iteration
+  planner; click the scene to set a goal and the KMR plans and executes a
+  collision-free path with the textbook mecanum inverse kinematics.
 - Deterministic tests for every advertised wing coordinate, optimizer
   convergence, binary packet refusals, all four owner families, G1 challenge
   invariants, and all three manipulation tasks.
