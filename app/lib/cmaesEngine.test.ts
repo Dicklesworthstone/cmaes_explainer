@@ -1528,6 +1528,26 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     session.free();
   }
 
+  const refusedDenseSession = new wasm.CmaesVizSession(
+    buildCmaFamilyConfig({
+      family: "full",
+      mean: new Array(5_040).fill(0),
+      sigma: 0.1,
+      maxEvaluations: 8,
+      population: 8,
+      seed: 7n,
+    }),
+  );
+  const refusedDenseAdmission = decodeCmaFamilySnapshot(refusedDenseSession.receipt(), 1);
+  expect(refusedDenseAdmission).toEqual({
+    refusal: {
+      code: 5,
+      name: "full-dimension-limit",
+      detail: null,
+    },
+  });
+  refusedDenseSession.free();
+
   for (const family of families.slice(1)) {
     const session = new wasm.CmaesVizSession(
       buildCmaFamilyConfig({
