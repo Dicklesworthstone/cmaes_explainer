@@ -71,8 +71,45 @@ is mount-time, not steady-state.
 
 ---
 
-## LENS 4 — CORRECTNESS
-**No console errors across any route at any viewport. SSR smoke (custom
+## Closure status (2026-08-31 evening, post-fix)
+- **VS-01**: confirmed clean (no change).
+- **C-01**: confirmed clean; CI gate live (`.github/workflows/ci.yml`).
+- **H-01**: confirmed clean (static sweep: no fabricated numbers in
+  user-facing content).
+- **U-01**: **fixed** — `app/components/PolicyAblationComparison.tsx`
+  has `aria-busy`+`role="status"`+`aria-live="polite"` on loading,
+  `role="region"`+`aria-label` on result, `role="alert"` on error,
+  `htmlFor`/`id` on the seed select.
+- **P-02**: **fixed** — `public/sw.js` (cache-first SW for
+  `/robots/g1/*.STL`) + `app/components/ServiceWorkerRegistration.tsx`
+  (client-side registration, gated to production). Returning visitors
+  no longer re-download the 16 MB of mesh files.
+- **P-03**: **fixed** (independently) — sibling commit `243f83e` seeds
+  the arm drag target from a collision-safe, reachable spawn position;
+  sibling also added the `Promise.resolve().then(...)` defer pattern
+  in `armHouseScene` init (which fixed the pre-existing
+  setState-in-effect lint).
+- **P-01** (mesh worker + G1/HouseholdArm flagship frame starvation):
+  **partially fixed** — `app/workers/g1MeshParseWorker.ts` offloads
+  STL fetch + parse + `computeVertexNormals` + rotation to a Worker.
+  The flagship pages `/humanoid` and `/arm` benefit (mobile audit
+  clean; desktop frame timing improved per local production build).
+  The HOMEPAGE desktop jank is a separate, larger pass — it has
+  19 client components mounting eagerly. **Mitigation applied**:
+  `app/components/ViewportLazy.tsx` defers the 4 heaviest homepage
+  sections (WasmDemo, CmaesInternalsLab, HpoTrainer, KmrScene) to
+  mount only when the user scrolls within 200px of them. Placeholder
+  heights prevent CLS. This landed in commit `8c5fa95`; full effect on
+  the homepage smoke requires the next production deploy.
+- **M-01**: **fixed** — siblings `5c15d82` ("clean table overflow")
+  and `15de9f9` ("constrain SOTA rubric table width") landed the
+  `overflow-x-auto` + `min-w-0` + `max-w-full` pattern for both SOTA
+  and Budget tables. A residual 28-47px overflow at 320px remained on
+  the ablation panel's header seed selector (label + select); fixed
+  in commit `718e424` with `flex-wrap` on the header + shorter
+  option labels (`#42 (default)` etc.). All 4 user-facing routes
+  now clean at 320/375/390.
+
 UA per skill doctrine) is 200 for all four routes plus the weights bin.**
 
 | Endpoint | HTTP | Bytes |
