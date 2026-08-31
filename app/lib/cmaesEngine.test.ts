@@ -29,6 +29,7 @@ import {
   type CmaesVizRun,
 } from "./frankensimCmaes";
 import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
+import { resolveRenderedGripperContactGeometry } from "./armContactPhysics";
 import {
   evaluateBridgePhysics,
   evaluateWingPhysics,
@@ -1745,6 +1746,14 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     );
     expect(armTrace.ok.samples.length).toBeGreaterThanOrEqual(100);
     expect(armTrace.ok.samples.some((sample) => sample.grasped)).toBe(true);
+    for (const sample of armTrace.ok.samples) {
+      const renderedContact = resolveRenderedGripperContactGeometry({
+        commandedGripperWidthM: sample.gripperWidthMeters,
+        graspHalfWidthM: armAdmission.ok.scene.graspHalfWidthMeters,
+        objectHalfHeightM: armAdmission.ok.scene.objectDimensionsMeters[2] * 0.5,
+      });
+      expect(renderedContact.minimumObjectClearanceM).toBeGreaterThanOrEqual(0.002 - 1e-12);
+    }
     arm.free();
   }
 }, 60_000);
