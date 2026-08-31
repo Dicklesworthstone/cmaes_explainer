@@ -732,31 +732,30 @@ function RobotPlayback({
           / (admission.pushEndSeconds - admission.pushStartSeconds)
       )
     : 0);
-
-  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : [0, 0.75, 0] as [number, number, number];
-  const leftFootThree = sample ? ownerLocalPointToThree(
-    sample.linkPoses[6].position,
-    sample.linkPoses[6].quaternionWxyz,
+  const pelvisThree = renderSample ? ownerToThree(renderSample.linkPoses[0].position) : [0, 0.75, 0] as [number, number, number];
+  const leftFootThree = renderSample ? ownerLocalPointToThree(
+    renderSample.linkPoses[6].position,
+    renderSample.linkPoses[6].quaternionWxyz,
     [0.04, 0, -0.03]
   ) : [0, 0, 0] as [number, number, number];
-  const rightFootThree = sample ? ownerLocalPointToThree(
-    sample.linkPoses[12].position,
-    sample.linkPoses[12].quaternionWxyz,
+  const rightFootThree = renderSample ? ownerLocalPointToThree(
+    renderSample.linkPoses[12].position,
+    renderSample.linkPoses[12].quaternionWxyz,
     [0.04, 0, -0.03]
   ) : [0, 0, 0] as [number, number, number];
 
-  return sample ? (
+  return renderSample ? (
     <group position={positionOffset ? [positionOffset[0], positionOffset[1], positionOffset[2]] : [0, 0, 0]}>
       {meshState.phase === "ready" ? (
         <RobotPoseMeshes
-          sample={sample}
+          sample={renderSample}
           meshes={meshState}
           pushFraction={pushFraction}
           pushAngleDeg={pushAngleDeg}
           pushImpulseNs={pushImpulseNs}
         />
       ) : (
-        <RobotPose sample={sample} pushFraction={pushFraction} />
+        <RobotPose sample={renderSample} pushFraction={pushFraction} />
       )}
       <G1BiomechanicsOverlay
         sample={sample}
