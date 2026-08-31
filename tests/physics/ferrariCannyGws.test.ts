@@ -5,6 +5,7 @@ import {
   solveKukaIK,
   computeKukaFK,
   clampArmTargetPosition,
+  isTargetKukaReachable,
 } from "../../app/lib/armInverseKinematics";
 import { createSceneFromHouseFurniture } from "../../app/lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../../app/lib/houseScenes";
@@ -63,5 +64,10 @@ describe("Ferrari-Canny Grasp Wrench Space & Manipulation Physics", () => {
     const { clampedTarget, isColliding } = clampArmTargetPosition(belowTable, scene.obstacles, 0.78, 0.04);
 
     expect(clampedTarget[1]).toBeGreaterThanOrEqual(0.78 + 0.04);
+  });
+
+  test("distinguishes reachable targets from positions outside the arm workspace", () => {
+    expect(isTargetKukaReachable([0.35, 0.95, 0.25])).toBe(true);
+    expect(isTargetKukaReachable([1.5, 0.82, 1.5])).toBe(false);
   });
 });
