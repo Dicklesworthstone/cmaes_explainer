@@ -32,11 +32,6 @@ function analyticSphereSphereToi(
   if (remaining <= 0) return 0;
   return remaining / sweptLen;
 }
-    const sdf = (pos: [number, number, number]) => {
-      const d = Math.hypot(pos[0] - 0.5, pos[1], pos[2]) - rStationary;
-      const g: [number, number, number] = [1, 0, 0];
-      return { distance: d, gradient: g };
-    };
 describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
   test("sweeping sphere toward stationary sphere reports TOI within 1e-3 of the closed-form oracle", () => {
     const stationaryCenter: [number, number, number] = [0.5, 0, 0];
@@ -44,10 +39,11 @@ describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
     const rStart = 0.1;
     const start: [number, number, number] = [0, 0, 0];
     const end: [number, number, number] = [1, 0, 0];
-    const sdf = (pos: [number, number, number]) => ({
-      distance: Math.hypot(pos[0] - 0.5, pos[1], pos[2]) - rStationary,
-      gradient: [1, 0, 0],
-    });
+    const sdf = (pos: [number, number, number]) => {
+      const d = Math.hypot(pos[0] - 0.5, pos[1], pos[2]) - rStationary;
+      const g: [number, number, number] = [1, 0, 0];
+      return { distance: d, gradient: g };
+    };
     const expectedToi = analyticSphereSphereToi(start, end, rStart, stationaryCenter, rStationary);
     const result = queryContinuousCollisionSDF(
       { startPosition: start, endPosition: end, radius: rStart, tolerance: 1e-5 },
@@ -60,10 +56,11 @@ describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
   });
 
   test("non-collision sweep: sphere passes well clear of the stationary sphere", () => {
-    const sdf = (pos: [number, number, number]) => ({
-      distance: Math.hypot(pos[0] - 10, pos[1] - 10, pos[2] - 10) - 0.25,
-      gradient: [1, 0, 0],
-    });
+    const sdf = (pos: [number, number, number]) => {
+      const d = Math.hypot(pos[0] - 10, pos[1] - 10, pos[2] - 10) - 0.25;
+      const g: [number, number, number] = [1, 0, 0];
+      return { distance: d, gradient: g };
+    };
     const result = queryContinuousCollisionSDF(
       { startPosition: [0, 0, 0], endPosition: [1, 0, 0], radius: 0.1, tolerance: 1e-5 },
       sdf,
@@ -72,10 +69,11 @@ describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
   });
 
   test("already-overlapping start position reports immediate impact (TOI ~= 0)", () => {
-    const sdf = (pos: [number, number, number]) => ({
-      distance: Math.hypot(pos[0], pos[1], pos[2]) - 0.5,
-      gradient: [1, 0, 0],
-    });
+    const sdf = (pos: [number, number, number]) => {
+      const d = Math.hypot(pos[0], pos[1], pos[2]) - 0.5;
+      const g: [number, number, number] = [1, 0, 0];
+      return { distance: d, gradient: g };
+    };
     const result = queryContinuousCollisionSDF(
       { startPosition: [0, 0, 0], endPosition: [1, 0, 0], radius: 0.5, tolerance: 1e-5 },
       sdf,
