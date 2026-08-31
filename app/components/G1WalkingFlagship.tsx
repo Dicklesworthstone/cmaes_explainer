@@ -1,10 +1,10 @@
 "use client";
 
 import React, { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
+import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -809,6 +809,15 @@ function CameraRig({
       maxPolarAngle={Math.PI / 2 - 0.02}
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
+  ) : cameraView === "fly" ? (
+    // Free-fly 6-DOF: W/A/S/D + Q/E or RMB drag. Bounded to the
+    // house footprint so the operator can't lose the robot off-camera.
+    <FlyControls
+      movementSpeed={1.4}
+      rollSpeed={0.6}
+      dragToLook
+      autoForward={false}
+    />
   ) : null;
 }
 
@@ -1033,7 +1042,7 @@ function number(value: number, digits = 3): string {
 
 function stageSceneHint(
   xrayMode: boolean,
-  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly" | "fly",
+  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly",
 ): string {
   if (xrayMode) return "X-Ray: Green polygon is dynamic support boundary.";
   switch (cameraView) {
@@ -1045,7 +1054,10 @@ function stageSceneHint(
       return "1928 Sears Craftsman Living Room · Robot point of view.";
     case "blueprint":
       return "1928 Sears Craftsman Living Room · Top-down map view.";
+    case "fly":
+      return "1928 Sears Craftsman Living Room · Free-fly 6-DOF: WASD + Q/E + drag to look.";
   }
+  return "1928 Sears Craftsman Living Room";
 }
 
 
@@ -1098,7 +1110,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
   const [activeRouteId, setActiveRouteId] = useState<string>("grand-tour");
-  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint" | "fly" | "fly">(
+  const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint" | "fly">(
     embedded ? "follow" : "orbit",
   );
   const [isPlaying, setIsPlaying] = useState(true);
@@ -1178,6 +1190,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     }
     workerRef.current = optimizerWorker;
     optimizerWorker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      // FOURTH INSTANCE: the effect re-runs in strict mode and on
+      // dependency changes. The previous worker is terminated in the
+      // cleanup, but messages already queued in the postMessage buffer
+      // can still arrive on the main thread. The `active` flag is
+      // cleared by the cleanup; this guard prevents stale messages
+      // from triggering setState on the (now-stale or unmounted)
+      // component, which would throw in strict mode and produce
+      // confusing "state update on an unmounted component" warnings.
+      if (!active) return;
       const message = event.data;
       if (message.type === "status") {
         setStatus(message.detail);
@@ -1235,6 +1256,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       }
     };
     optimizerWorker.onerror = (event) => {
+      if (!active) return;
       setError(event.message || "The optimization worker failed before returning a typed result.");
       setBusy(null);
       inFlightRef.current = false;
@@ -1459,6 +1481,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                     { id: "follow", label: "Follow", icon: Activity },
                     { id: "pov", label: "POV", icon: Eye },
                     { id: "blueprint", label: "Map", icon: Radio },
+    { id: "fly", label: "Free-fly", icon: Compass },
                   ] as const
                 ).map((cam) => {
                   const Icon = cam.icon;
