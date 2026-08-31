@@ -55,7 +55,7 @@ type WorkerResponse =
       bestObjective: number;
       sigma: number;
     }
-  | { type: "comparison"; rows: ComparisonRow[] }
+  | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
 
 
@@ -97,6 +97,7 @@ const worker = self as DedicatedWorkerGlobalScope;
 // full rationale. Serializes every request through one Promise.
 let armGate: Promise<void> = Promise.resolve();
 const POPULATION = 12;
+const COMPARISON_POPULATION = 6;
 
 function post(message: WorkerResponse): void {
   worker.postMessage(message);
@@ -309,14 +310,19 @@ async function compareFamilies(
       "household-arm curriculum evaluation"
     ).objective;
     for (const family of families) {
+      post({
+        type: "status",
+        phase: "comparing",
+        detail: `${family}: evaluating ${COMPARISON_POPULATION * generations} equal-budget physical rollouts…`,
+      });
       const session = requireOk(
         await createFrankenSimCmaFamilySession({
           family,
           mean,
           sigma: 0.001,
-          population: POPULATION,
+          population: COMPARISON_POPULATION,
           memory: memoryFor(family),
-          maxEvaluations: POPULATION * generations,
+          maxEvaluations: COMPARISON_POPULATION * generations,
           seed: 0x4152_c0den,
         }),
         `${family} admission`
@@ -354,6 +360,7 @@ async function compareFamilies(
           workspaceScalars: session.admission.updateWorkspaceScalars,
           elapsedMilliseconds: Date.now() - started,
         });
+        post({ type: "comparison", rows: rows.slice(), complete: false });
       } finally {
         session.free();
       }
@@ -362,7 +369,7 @@ async function compareFamilies(
     evaluationPool.free();
     evaluator.free();
   }
-  post({ type: "comparison", rows });
+  post({ type: "comparison", rows, complete: true });
 }
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
