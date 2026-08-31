@@ -75,7 +75,10 @@ export function PolicyAblationComparison() {
 
   if (error) {
     return (
-      <div className="bg-neutral-900 border border-red-900 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto">
+      <div
+        className="bg-neutral-900 border border-red-900 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto"
+        role="alert"
+      >
         <p className="text-red-400 text-xs">
           Ablation failed to load its measured artifacts ({error}). The weight
           file and training receipt must exist under
@@ -87,7 +90,12 @@ export function PolicyAblationComparison() {
 
   if (pending || !result || !cma || !tf) {
     return (
-      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto">
+      <div
+        className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto"
+        aria-busy="true"
+        role="status"
+        aria-live="polite"
+      >
         <p className="text-neutral-400 text-xs animate-pulse">
           Measuring both policies in a background worker (live CMA-ES search +
           720-step transformer rollout) — the page stays interactive.
@@ -97,7 +105,11 @@ export function PolicyAblationComparison() {
   }
 
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto shadow-2xl space-y-4">
+    <div
+      className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-5xl mx-auto shadow-2xl space-y-4"
+      role="region"
+      aria-label="Measured ablation: phase prior vs transformer"
+    >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-800 pb-3 gap-2">
         <div>
@@ -115,8 +127,11 @@ export function PolicyAblationComparison() {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-neutral-400">Search seed:</label>
+            <label className="text-xs text-neutral-400" htmlFor="ablation-seed-select">
+              Search seed:
+            </label>
             <select
+              id="ablation-seed-select"
               className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
               value={seed}
               onChange={(e) => setSeed(Number(e.target.value))}
