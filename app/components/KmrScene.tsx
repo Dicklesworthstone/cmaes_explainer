@@ -77,14 +77,29 @@ function KmrThreeScene({
       ),
     [pose.x, pose.y, pose.theta, obstacles],
   );
-  const pathGeometry = useMemo(() => {
+  const pathLine = useMemo(() => {
     if (!path || path.points.length < 2) return null;
-    return new THREE.BufferGeometry().setFromPoints(
+    const geometry = new THREE.BufferGeometry().setFromPoints(
       path.points.map((point) => new THREE.Vector3(point[0], 0.025, point[1])),
+    );
+    return new THREE.Line(
+      geometry,
+      new THREE.LineBasicMaterial({ color: "#22d3ee" }),
     );
   }, [path]);
 
-  useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
+  useEffect(
+    () => () => {
+      if (!pathLine) return;
+      pathLine.geometry.dispose();
+      if (Array.isArray(pathLine.material)) {
+        pathLine.material.forEach((material) => material.dispose());
+      } else {
+        pathLine.material.dispose();
+      }
+    },
+    [pathLine],
+  );
 
   const handleClick = (e: any) => {
     if (!e.point) return;
@@ -145,9 +160,7 @@ function KmrThreeScene({
           </mesh>
         );
       })}
-      {pathGeometry ? (
-        <primitive object={new THREE.Line(pathGeometry, new THREE.LineBasicMaterial({ color: "#22d3ee" }))} />
-      ) : null}
+      {pathLine ? <primitive object={pathLine} /> : null}
       {dynamicReceipt ? (
         <mesh
           position={[
@@ -255,22 +268,24 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       lastFrameMsRef.current = now;
       accumulatedSecondsRef.current += Math.min(0.1, (now - previousFrame) / 1000);
       let nextReceipt = activeOwner.receipt();
+      let nextDynamicReceipt: KmrHouseholdPhysicsReceipt | null = null;
       let substeps = 0;
       while (accumulatedSecondsRef.current >= 1 / 60 && substeps < 6) {
         nextReceipt = activeOwner.step();
         if (householdCouplingRef.current) {
-          setDynamicReceipt(
-            stepKmrHouseholdPhysics(
-              householdCouplingRef.current,
-              nextReceipt,
-            ),
+          nextDynamicReceipt = stepKmrHouseholdPhysics(
+            householdCouplingRef.current,
+            nextReceipt,
           );
         }
         accumulatedSecondsRef.current -= 1 / 60;
         substeps += 1;
       }
-      setPose(nextReceipt.pose);
-      setReceipt(nextReceipt);
+      if (substeps > 0) {
+        setPose(nextReceipt.pose);
+        setReceipt(nextReceipt);
+        if (nextDynamicReceipt) setDynamicReceipt(nextDynamicReceipt);
+      }
       if (nextReceipt.collisionRefusals > 0) {
         setPlanningError(
           "Kinematic owner refused a swept step; movement stopped before contact.",
@@ -333,6 +348,16 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
             onSetWaypoint={setWaypoint}
           />
         </Canvas>
+        {!path ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          >
+            <div className="rounded-full border border-orange-300/40 bg-slate-950/80 px-4 py-2 text-xs font-semibold text-orange-200 shadow-lg backdrop-blur-sm">
+              Tap to set a waypoint
+            </div>
+          </div>
+        ) : null}
       </div>
       {planningError ? (
         <p className="mt-3 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-xs text-red-300">
