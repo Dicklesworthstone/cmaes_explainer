@@ -190,8 +190,111 @@ export function distanceToOBB(
 
   const outsideDist = Math.hypot(Math.max(0, qx), Math.max(0, qy), Math.max(0, qz));
   const insideDist = Math.min(Math.max(qx, qy, qz), 0.0);
-
   return outsideDist + insideDist;
+}
+
+/**
+ * Closest point on the surface of an OBB to a query point. If the point is
+ * already inside the OBB, the returned point lies on the face, edge, or
+ * corner nearest to the query. Used to project penetrating link samples
+ * back onto the obstacle surface so the arm never visibly tunnels through
+ * a furniture piece. Analytic, branch-light, and matches the SDF above.
+ */
+export function closestPointOnOBB(
+  point: [number, number, number],
+  obb: OrientedBoundingBox,
+): [number, number, number] {
+  const cosY = Math.cos(-obb.rotationYawRad);
+  const sinY = Math.sin(-obb.rotationYawRad);
+  const dx = point[0] - obb.center[0];
+  const dy = point[1] - obb.center[1];
+  const dz = point[2] - obb.center[2];
+  const localX = cosY * dx - sinY * dz;
+  const localY = dy;
+  const localZ = sinY * dx + cosY * dz;
+  const cx = Math.max(-obb.halfExtents[0], Math.min(obb.halfExtents[0], localX));
+  const cy = Math.max(-obb.halfExtents[1], Math.min(obb.halfExtents[1], localY));
+  const cz = Math.max(-obb.halfExtents[2], Math.min(obb.halfExtents[2], localZ));
+  // Rotate the clamped local point back into world coordinates.
+  const worldX = cosY * cx + sinY * cz;
+  const worldY = cy;
+  const worldZ = -sinY * cx + cosY * cz;
+  return [obb.center[0] + worldX, obb.center[1] + worldY, obb.center[2] + worldZ];
+}
+
+/**
+ * Push a query point out of an OBB by the required clearance along the
+ * surface normal. Returns the (possibly unchanged) point and the surface
+ * point it was projected from. If the point is already outside with the
+ * requested clearance, the input point is returned unchanged.
+ */
+export function projectPointOutOfOBB(
+  point: [number, number, number],
+  obb: OrientedBoundingBox,
+  clearanceMeters: number,
+): { point: [number, number, number]; wasInside: boolean; surfacePoint: [number, number, number] } {
+  const sdf = distanceToOBB(point, obb);
+  if (sdf >= clearanceMeters) {
+    return { point: [point[0], point[1], point[2]], wasInside: false, surfacePoint: point };
+  }
+  const surface = closestPointOnOBB(point, obb);
+  // Direction from surface back to the original point (surface normal at the
+  // point of contact). If the point is exactly on the surface, the direction
+  // is the surface gradient (the SDF gradient at that point).
+  const dirX = point[0] - surface[0];
+  const dirY = point[1] - surface[1];
+  const dirZ = point[2] - surface[2];
+  const len = Math.hypot(dirX, dirY, dirZ);
+  if (len < 1e-9) {
+    // Degenerate: point is on the surface but the SDF says we are inside.
+    // Use the world-axis-aligned gradient (the maximum |qx|, |qy|, |qz|
+    // direction in local frame) to pick an exit direction.
+    const cosY = Math.cos(-obb.rotationYawRad);
+    const sinY = Math.sin(-obb.rotationYawRad);
+    const dx = point[0] - obb.center[0];
+    const dy = point[1] - obb.center[1];
+    const dz = point[2] - obb.center[2];
+    const localX = cosY * dx - sinY * dz;
+    const localY = dy;
+    const localZ = sinY * dx + cosY * dz;
+    const absX = Math.abs(localX) - obb.halfExtents[0];
+    const absY = Math.abs(localY) - obb.halfExtents[1];
+    const absZ = Math.abs(localZ) - obb.halfExtents[2];
+    const m = Math.max(absX, absY, absZ);
+    if (m === absX) {
+      const sign = localX >= 0 ? 1 : -1;
+      const worldDx = cosY * sign;
+      const worldDz = -sinY * sign;
+      return {
+        point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
+        wasInside: true,
+        surfacePoint: surface,
+      };
+    }
+    if (m === absY) {
+      const sign = localY >= 0 ? 1 : -1;
+      return {
+        point: [point[0], point[1] + sign * clearanceMeters, point[2]],
+        wasInside: true,
+        surfacePoint: surface,
+      };
+    }
+    const sign = localZ >= 0 ? 1 : -1;
+    const worldDx = sinY * sign;
+    const worldDz = cosY * sign;
+    return {
+      point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
+      wasInside: true,
+      surfacePoint: surface,
+    };
+  }
+  const inv = 1 / len;
+  const delta = clearanceMeters - sdf;
+  return {
+    point: [point[0] + dirX * inv * delta, point[1] + dirY * inv * delta, point[2] + dirZ * inv * delta],
+    wasInside: true,
+    surfacePoint: surface,
+  };
 }
 
 export function queryMultiObstacleScene(

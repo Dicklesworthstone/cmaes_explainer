@@ -77,7 +77,7 @@ describe("armOptimizationWorker compareFamilies integration", () => {
       const families = rows.map((r) => r.family).sort();
       expect(families).toEqual(["full", "lm-cma", "lm-ma", "separable"]);
       for (const row of rows) {
-        expect(row.evaluations).toBeGreaterThan(0);
+        expect(row.evaluations).toBe(24);
       }
       const statusMessages = messages.filter((m) => m.type === "status");
       expect(statusMessages.length).toBeGreaterThanOrEqual(1);
@@ -121,7 +121,7 @@ describe("g1OptimizationWorker compareFamilies integration", () => {
       const families = rows.map((r) => r.family).sort();
       expect(families).toEqual(["lm-cma", "lm-ma", "separable"]);
       for (const row of rows) {
-        expect(row.evaluations).toBeGreaterThan(0);
+        expect(row.evaluations).toBe(32);
       }
       const comparisonMessages = messages.filter((m) => m.type === "comparison");
       expect(comparisonMessages.map((m) => m.complete)).toEqual([

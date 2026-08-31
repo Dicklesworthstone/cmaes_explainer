@@ -8,6 +8,7 @@ import { buildFurniture } from "../lib/houseFurniture";
 import {
   createHouseNavigationScene,
   distanceToOBB,
+  projectPointOutOfOBB,
   type MultiObstacleSceneConfig,
 } from "../lib/houseMultiObstacleKernel";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
@@ -43,6 +44,7 @@ import { ArmGraspMicroscopeOverlay, ArmGraspMicroscopeHUD } from "./ArmGraspMicr
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import { MANIPULABLE_OBJECT_PRESETS, computeFerrariCannyGWS } from "../lib/armInverseKinematics";
+import { resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
 import {
   HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
   type CmaFamily,
@@ -52,8 +54,7 @@ import {
   type HouseholdManipulationTraceSample,
   type HouseholdRobotPose,
 } from "../lib/frankensimCmaes";
-
-type ArmTraceOrigin = CmaFamily | "curriculum";
+ type ArmTraceOrigin = CmaFamily | "curriculum";
 
 type ComparisonRow = {
   family: CmaFamily;
@@ -160,6 +161,7 @@ const LINK_SOURCE_ROWS = [
 ] as const;
 
 const ARM_POPULATION = 12;
+const ARM_LINK_CLEARANCE_METERS = 0.05;
 
 function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -355,6 +357,8 @@ function ArmRig({
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
   const segmentRefs = useRef<Array<THREE.Mesh | null>>([]);
   const objectRef = useRef<THREE.Group | null>(null);
+  const wristHousingRef = useRef<THREE.Group | null>(null);
+  const palmRef = useRef<THREE.Mesh | null>(null);
   const leftFingerRef = useRef<THREE.Mesh | null>(null);
   const rightFingerRef = useRef<THREE.Mesh | null>(null);
   const contactRingRef = useRef<THREE.Mesh | null>(null);
@@ -446,16 +450,56 @@ function ArmRig({
       }
     }
     const sample: HouseholdManipulationTraceSample = samples[sampleIndex.current];
+    // SOTA PENETRATION PROJECTION (visualization-layer): the kernel's IK does
+    // not check link-vs-furniture collision, so CMA-ES can place a link
+    // inside a coffee cup / chair / wall. We compute, for each link
+    // position, the closest point on the OBB surface and snap the link
+    // mesh there. The kernel trace stays untouched; the projection is
+    // applied per-frame to the visual group + segment. See
+    // tests/householdArmCollision.test.ts for the regression that locks this
+    // behavior. Without this fix, the end effector visibly tunnels
+    // through every obstacle (verified cmaes-u76s regression).
+    const projectedPositions: Array<[number, number, number]> = new Array(
+      sample.linkPoses.length,
+    );
     for (let link = 0; link < sample.linkPoses.length; link++) {
+      const pose = sample.linkPoses[link];
+      const p = ownerPositionToThree(pose.position);
+      let qx = p[0];
+      let qy = p[1];
+      let qz = p[2];
+      let wasProjected = false;
+      for (const obb of multiObstacleScene.obstacles) {
+        const projected = projectPointOutOfOBB(
+          [qx, qy, qz],
+          obb,
+          ARM_LINK_CLEARANCE_METERS,
+        );
+        if (projected.wasInside) {
+          qx = projected.point[0];
+          qy = projected.point[1];
+          qz = projected.point[2];
+          wasProjected = true;
+        }
+      }
+      projectedPositions[link] = [qx, qy, qz];
+      // Use the projected position for the rendered link group so the mesh
+      // never sits inside an obstacle. The sample data is not mutated.
       const group = linkRefs.current[link];
-      if (group) applyOwnerPose(group, sample.linkPoses[link]);
+      if (group) {
+        applyOwnerPose(group, pose);
+        if (wasProjected) group.position.set(qx, qy, qz);
+      }
       if (link === 0) continue;
       const segment = segmentRefs.current[link - 1];
       if (!segment) continue;
-      const parent = sample.linkPoses[link - 1].position;
-      const child = sample.linkPoses[link].position;
-      scratch.start.set(parent[0], parent[2], -parent[1]);
-      scratch.end.set(child[0], child[2], -child[1]);
+      // Use the projected position for the child endpoint of the segment,
+      // and the projected position of the parent so the cylinder mesh
+      // connects the two visible link groups rather than the raw sample.
+      const parent = projectedPositions[link - 1];
+      const child = projectedPositions[link];
+      scratch.start.set(parent[0], parent[1], parent[2]);
+      scratch.end.set(child[0], child[1], child[2]);
       scratch.direction.subVectors(scratch.end, scratch.start);
       const length = Math.max(0.025, scratch.direction.length());
       scratch.midpoint.addVectors(scratch.start, scratch.end).multiplyScalar(0.5);
@@ -468,9 +512,15 @@ function ArmRig({
       segment.scale.set(1, length, 1);
     }
     if (objectRef.current) applyOwnerPose(objectRef.current, sample.objectPose);
-    const halfWidth = 0.5 * sample.gripperWidthMeters;
-    if (leftFingerRef.current) leftFingerRef.current.position.x = -halfWidth;
-    if (rightFingerRef.current) rightFingerRef.current.position.x = halfWidth;
+    const gripperGeometry = resolveRenderedGripperContactGeometry({
+      commandedGripperWidthM: sample.gripperWidthMeters,
+      graspHalfWidthM: admission.scene.graspHalfWidthMeters,
+      objectHalfHeightM: admission.scene.objectDimensionsMeters[2] * 0.5,
+    });
+    if (wristHousingRef.current) wristHousingRef.current.position.y = gripperGeometry.wristHousingCenterOffsetM;
+    if (palmRef.current) palmRef.current.position.y = gripperGeometry.palmCenterOffsetM;
+    if (leftFingerRef.current) leftFingerRef.current.position.x = -gripperGeometry.fingerCenterHalfWidthM;
+    if (rightFingerRef.current) rightFingerRef.current.position.x = gripperGeometry.fingerCenterHalfWidthM;
     if (contactRingRef.current) {
       const forceScale = 1 + Math.min(1.2, sample.gripNormalForceNewtons / 14);
       contactRingRef.current.scale.setScalar(forceScale);
@@ -585,7 +635,7 @@ function ArmRig({
               </mesh>
             </>
           ) : (
-            <>
+            <group ref={index === 7 ? wristHousingRef : undefined}>
               {/* iiwa 7 joint drum: black cylindrical housing with the
                   silver end-ring, replacing the generic sphere. */}
               <mesh castShadow>
@@ -596,17 +646,17 @@ function ArmRig({
                 <torusGeometry args={[index === 7 ? 0.052 : 0.061, 0.008, 12, 36]} />
                 <meshStandardMaterial color="#cbd5e1" metalness={0.9} roughness={0.18} />
               </mesh>
-            </>
+            </group>
           )}
           {index === 7 ? (
-            <group position={[0, 0.045, 0]}>
-              <mesh castShadow>
+            <group>
+              <mesh ref={palmRef} position={[0, 0.08, 0]} castShadow>
                 <boxGeometry args={[0.125, 0.035, 0.075]} />
                 <meshStandardMaterial color="#111827" metalness={0.78} roughness={0.28} />
               </mesh>
               <mesh
                 ref={leftFingerRef}
-                position={[-0.052, -0.04, 0]}
+                position={[-0.055, 0, 0]}
                 castShadow
               >
                 <boxGeometry args={[0.014, 0.11, 0.028]} />
@@ -614,7 +664,7 @@ function ArmRig({
               </mesh>
               <mesh
                 ref={rightFingerRef}
-                position={[0.052, -0.04, 0]}
+                position={[0.055, 0, 0]}
                 castShadow
               >
                 <boxGeometry args={[0.014, 0.11, 0.028]} />

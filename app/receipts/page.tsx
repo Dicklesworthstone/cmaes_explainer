@@ -198,7 +198,7 @@ export default function ReceiptsPage() {
             <p className="text-sm text-slate-400">No scores yet. The template lives at scripts/perf/sota-rubric.template.md.</p>
           ) : (
             <div className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
-              <table className="w-full min-w-full text-left text-sm">
+              <table className="w-full text-left text-sm table-fixed">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Component</th>
@@ -259,7 +259,7 @@ export default function ReceiptsPage() {
             <p className="text-sm text-slate-400">No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.</p>
           ) : (
             <div className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0">
-              <table className="w-full min-w-full text-left text-sm">
+              <table className="w-full text-left text-sm table-fixed">
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Epic</th>

@@ -1,13 +1,11 @@
 /**
- * State-of-the-Art (SOTA) Contact Physics, Continuous Collision Detection (CCD),
- * and Non-Penetration Solver for Robotic Manipulation.
+ * Experimental static contact-display approximation.
  *
- * Implements:
- * 1. Signorini-Coulomb Non-Penetration Complementarity Conditions (g_N >= 0, F_N >= 0, g_N * F_N = 0)
- * 2. Exact Gripper Finger Radial Clamping against solid Object Meshes (Mug, Pitcher, Apple, Bowl, Remote, Trowel)
- * 3. End-Effector Palm Axial Clearance Enforcement
- * 4. Rigid-Body 6-DoF Kinematic Attachment during grasp & transport
- * 5. Tabletop & Environment Non-Penetration Surface Projections
+ * This is not the household-arm physics owner, a continuous-collision solver,
+ * or a Signorini complementarity solve. It derives a conservative visual state
+ * from one already-simulated sample. The flagship must render the version-gated
+ * FrankenSim trace directly; this helper is retained only for isolated display
+ * experiments and must never certify placement or replace owner telemetry.
  */
 
 import { distanceToOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
@@ -72,28 +70,81 @@ export const OBJECT_CONTACT_HULLS: Record<string, ObjectContactHull> = {
   },
 };
 
+export interface RenderedGripperContactGeometry {
+  fingerCenterHalfWidthM: number;
+  palmCenterOffsetM: number;
+  wristHousingCenterOffsetM: number;
+  minimumObjectClearanceM: number;
+}
+
+export function resolveRenderedGripperContactGeometry({
+  commandedGripperWidthM,
+  graspHalfWidthM,
+  objectHalfHeightM,
+  fingerPadThicknessM = 0.014,
+  palmHeightM = 0.035,
+  wristHousingHeightM = 0.085,
+  clearanceMarginM = 0.002,
+}: {
+  commandedGripperWidthM: number;
+  graspHalfWidthM: number;
+  objectHalfHeightM: number;
+  fingerPadThicknessM?: number;
+  palmHeightM?: number;
+  wristHousingHeightM?: number;
+  clearanceMarginM?: number;
+}): RenderedGripperContactGeometry {
+  const values = [
+    commandedGripperWidthM,
+    graspHalfWidthM,
+    objectHalfHeightM,
+    fingerPadThicknessM,
+    palmHeightM,
+    wristHousingHeightM,
+    clearanceMarginM,
+  ];
+  if (!values.every(Number.isFinite) || values.some((value) => value < 0)) {
+    throw new Error("rendered gripper contact dimensions must be finite and non-negative");
+  }
+  const fingerCenterHalfWidthM = Math.max(
+    commandedGripperWidthM * 0.5,
+    graspHalfWidthM + fingerPadThicknessM * 0.5 + clearanceMarginM,
+  );
+  const palmCenterOffsetM = objectHalfHeightM + palmHeightM * 0.5 + clearanceMarginM;
+  const wristHousingCenterOffsetM = palmCenterOffsetM + palmHeightM * 0.5 + wristHousingHeightM * 0.5;
+  const fingerClearanceM = fingerCenterHalfWidthM - fingerPadThicknessM * 0.5 - graspHalfWidthM;
+  const palmClearanceM = palmCenterOffsetM - palmHeightM * 0.5 - objectHalfHeightM;
+  const wristClearanceM = wristHousingCenterOffsetM - wristHousingHeightM * 0.5 - objectHalfHeightM;
+  return {
+    fingerCenterHalfWidthM,
+    palmCenterOffsetM,
+    wristHousingCenterOffsetM,
+    minimumObjectClearanceM: Math.min(fingerClearanceM, palmClearanceM, wristClearanceM),
+  };
+}
+
 export interface ResolvedArmObjectContact {
-  // Clamped non-penetrating gripper width in meters
+  // Clamped display aperture in meters
   effectiveGripperWidthM: number;
-  // Computed normal pinch force from virtual spring contact
+  // Approximate normal pinch force for display experiments
   normalForceN: number;
-  // Whether the object is actively grasped and locked to the gripper
+  // Whether the display state follows the gripper
   isGrasped: boolean;
-  // Ferrari-Canny Grasp Wrench Space radius epsilon in [0, 1]
+  // Heuristic friction-support score in [0, 1], not a Ferrari-Canny solve
   gwsRadius: number;
-  // Resolved non-penetrating 3D position of the object [X, Y, Z]
+  // Table-clamped display position of the object [X, Y, Z]
   resolvedObjectPos: [number, number, number];
-  // Clamped non-penetrating 3D position of the end-effector [X, Y, Z]
+  // Table/rim-clamped display position of the end-effector [X, Y, Z]
   resolvedEndEffectorPos: [number, number, number];
-  // Clearance to the nearest obstacle in meters
+  // Static spherical-envelope clearance to the nearest rigid obstacle [m]
   minObstacleClearanceM: number;
-  // True if contacting or penetrating an obstacle
+  // True if a static spherical envelope contacts or penetrates an obstacle
   isCollidingWithEnvironment: boolean;
 }
 
 /**
- * Solves the exact Signorini non-penetration condition between the KUKA gripper,
- * the manipulated object, and the household tabletop environment.
+ * Derives one static display sample. It performs no time-of-impact sweep and
+ * returns no safety certificate.
  */
 export function resolveArmObjectContact({
   rawEndEffectorPos,
@@ -112,16 +163,26 @@ export function resolveArmObjectContact({
   tableY?: number;
   obstacles?: OrientedBoundingBox[];
 }): ResolvedArmObjectContact {
-  const hull = OBJECT_CONTACT_HULLS[taskOrObjectId] ?? OBJECT_CONTACT_HULLS["kitchen-mug"];
+  const hull = OBJECT_CONTACT_HULLS[taskOrObjectId];
+  if (!hull) throw new Error(`unknown arm contact hull: ${taskOrObjectId}`);
+  if (
+    !rawEndEffectorPos.every(Number.isFinite) ||
+    !rawObjectPos.every(Number.isFinite) ||
+    !Number.isFinite(commandedGripperWidthM) ||
+    commandedGripperWidthM < 0 ||
+    !Number.isFinite(tableY)
+  ) {
+    throw new Error("arm contact display inputs must be finite and physically bounded");
+  }
   const fingerPadThicknessM = 0.014; // physical thickness of the rubber finger pad
 
-  // 1. SIGNORINI CONTACT NON-PENETRATION ON GRIPPER FINGERS
-  // The outer diameter of the object plus finger pad thickness defines the absolute
-  // hard limit on finger closure. Fingers CANNOT penetrate the solid shell of the mug.
+  // 1. STATIC APERTURE CLAMP FOR GRIPPER-FINGER DISPLAY
+  // The outer diameter plus pad thickness keeps the displayed fingers from
+  // overlapping the object's spherical contact envelope.
   const minPhysicalApertureM = 2 * hull.radiusM + fingerPadThicknessM;
   const effectiveGripperWidthM = Math.max(commandedGripperWidthM, minPhysicalApertureM);
 
-  // 2. VIRTUAL SPRING NORMAL PINCH FORCE (Hertzian Contact Model)
+  // 2. VIRTUAL-SPRING DISPLAY FORCE (not a Hertz contact solve)
   // Displacement past contact surface generates proportional normal force
   const penetrationDepthM = Math.max(0, minPhysicalApertureM - commandedGripperWidthM);
   const contactStiffnessNPerM = 650.0; // elastomer finger pad stiffness
@@ -131,7 +192,7 @@ export function resolveArmObjectContact({
     ? penetrationDepthM * contactStiffnessNPerM
     : 0;
 
-  // 3. FERRARI-CANNY GRASP WRENCH SPACE RADIUS
+  // 3. HEURISTIC FRICTION-SUPPORT SCORE
   const mu = hull.frictionCoeff;
   const maxFrictionN = mu * normalForceN;
   const objectWeightN = hull.massKg * 9.81;
@@ -142,28 +203,33 @@ export function resolveArmObjectContact({
 
   const isGrasped = isGraspedIntent && normalForceN >= 2.0;
 
-  // 4. END-EFFECTOR PALM AXIAL CLEARANCE CLAMP
-  // The palm box must not plunge into the top rim of the mug.
+  // 4. END-EFFECTOR PALM AXIAL DISPLAY CLAMP
+  // The palm box must not plunge into the top rim of the mug when directly overhead.
+  const horizontalDistM = Math.hypot(
+    rawEndEffectorPos[0] - rawObjectPos[0],
+    rawEndEffectorPos[2] - rawObjectPos[2]
+  );
+  const isDirectlyAboveObject = horizontalDistM <= hull.radiusM + 0.04;
   const objectTopRimYM = rawObjectPos[1] + hull.heightM * 0.5;
-  const minFlangeYM = objectTopRimYM + 0.015; // 15mm clearance above rim
+  const minFlangeYM = isDirectlyAboveObject ? objectTopRimYM + 0.015 : tableY + 0.06;
 
   const resolvedEndEffectorPos: [number, number, number] = [
     rawEndEffectorPos[0],
-    Math.max(rawEndEffectorPos[1], tableY + 0.06), // table non-penetration
+    Math.max(rawEndEffectorPos[1], tableY + 0.06, minFlangeYM),
     rawEndEffectorPos[2],
   ];
 
-  // 5. RESOLVED OBJECT 3D POSITION WITH RIGID KINEMATIC LOCKING
+  // 5. OBJECT DISPLAY POSITION WITH KINEMATIC FOLLOWING
   let resolvedObjectPos: [number, number, number];
   if (isGrasped) {
-    // Rigidly attached to gripper end-effector coordinate center
+    // Follow the gripper end-effector coordinate center for display.
     resolvedObjectPos = [
       resolvedEndEffectorPos[0],
       Math.max(resolvedEndEffectorPos[1] - 0.04, tableY + hull.heightM * 0.5),
       resolvedEndEffectorPos[2],
     ];
   } else {
-    // Resting on tabletop or in motion, strictly non-penetrating table surface (Y >= tableY + height/2)
+    // Clamp the display center above the tabletop.
     resolvedObjectPos = [
       rawObjectPos[0],
       Math.max(rawObjectPos[1], tableY + hull.heightM * 0.5),
@@ -171,20 +237,25 @@ export function resolveArmObjectContact({
     ];
   }
 
-  // 6. CONTINUOUS COLLISION DETECTION (CCD) AGAINST CRAFTSMAN FURNITURE & WALLS
-  let minObstacleClearanceM = 1.0;
+  // 6. STATIC SPHERICAL-ENVELOPE QUERY AGAINST FURNITURE AND WALLS
+  let minObstacleClearanceM = Infinity;
   let isCollidingWithEnvironment = false;
 
   for (const obb of obstacles) {
-    const distArm = distanceToOBB(resolvedEndEffectorPos, obb);
-    const distObj = distanceToOBB(resolvedObjectPos, obb);
-    const minDist = Math.min(distArm, distObj);
-    if (minDist < minObstacleClearanceM) {
-      minObstacleClearanceM = minDist;
+    if (obb.exemptFromPenalty) continue;
+    const armClearance = distanceToOBB(resolvedEndEffectorPos, obb) - 0.02;
+    const objectClearance = distanceToOBB(resolvedObjectPos, obb) - hull.radiusM;
+    const clearance = Math.min(armClearance, objectClearance);
+    if (clearance < minObstacleClearanceM) {
+      minObstacleClearanceM = clearance;
     }
-    if (minDist <= 0.02) {
+    if (clearance <= 0) {
       isCollidingWithEnvironment = true;
     }
+  }
+
+  if (!Number.isFinite(minObstacleClearanceM)) {
+    minObstacleClearanceM = 1.0;
   }
 
   return {
