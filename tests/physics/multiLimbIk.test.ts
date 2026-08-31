@@ -73,3 +73,39 @@ describe("Multi-Limb Inverse Kinematics & Collision Ragdoll Suite", () => {
     expect(ids).toContain("rightFoot");
   });
 });
+
+describe("clampSphereAgainstHouse — yawed OBB regression (cmaes-pvz followup)", () => {
+  test("a sphere inside a yawed chair must be projected out, not left inside", () => {
+    // The user reported the G1 colliding with furniture when the chair is
+    // yawed. The previous radial-from-center projection in
+    // clampSphereAgainstHouse left the sphere inside. This test pins the
+    // corrected behavior: the kernel's projectPointOutOfOBB (SDF gradient)
+    // is used and the Y coordinate is updated when the OBB pushes the
+    // sphere up.
+    const yawedChair = {
+      id: "yawed-chair",
+      name: "yawed-chair",
+      center: [1, 0.475, 1.6] as [number, number, number],
+      halfExtents: [0.225, 0.475, 0.25] as [number, number, number],
+      rotationYawRad: Math.PI, // 180-degree yaw
+    };
+    const sphere: [number, number, number] = [1.01, 0.85, 1.6];
+    const radius = 0.06;
+    const { clamped, contact } = clampSphereAgainstHouse(
+      sphere,
+      radius,
+      [yawedChair],
+      0.0,
+    );
+    expect(contact).not.toBeNull();
+    expect(contact?.obstacleName).toBe("yawed-chair");
+    // After projection, the sphere must clear the chair by the radius.
+    const { distanceToOBB } = require("../../app/lib/houseMultiObstacleKernel");
+    expect(distanceToOBB(clamped, yawedChair)).toBeGreaterThanOrEqual(
+      radius - 1e-6,
+    );
+    // The Y coordinate must have been updated (the chair is tall enough
+    // to push the sphere above the original Y).
+    expect(clamped[1]).toBeGreaterThan(sphere[1]);
+  });
+});

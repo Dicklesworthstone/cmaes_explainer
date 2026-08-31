@@ -197,52 +197,68 @@ export function clampSphereAgainstHouse(
   contact: G1CollisionContact | null;
 } {
   let cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, pos[0]));
-  let cy = Math.max(floorY + radius, pos[1]);
-  let cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, pos[2]));
+ let cy = Math.max(floorY + radius, pos[1]);
+ let cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, pos[2]));
 
-  let contact: G1CollisionContact | null = null;
+ let contact: G1CollisionContact | null = null;
 
-  // Floor contact check
-  if (pos[1] - radius < floorY) {
-    contact = {
-      point: [cx, floorY, cz],
-      normal: [0, 1, 0],
-      penetration: floorY - (pos[1] - radius),
-      obstacleName: "Hardwood Floor",
-    };
-  }
+ // Floor contact check
+ if (cy - radius < floorY) {
+ contact = {
+ point: [cx, floorY, cz],
+ normal: [0, 1, 0],
+ penetration: floorY - (cy - radius),
+ obstacleName: "Hardwood Floor",
+ };
+ }
 
-  // OBB obstacle contacts
-  for (const obb of obstacles) {
-    if (obb.exemptFromPenalty) continue;
-    const dist = distanceToOBB([cx, cy, cz], obb);
-    if (dist < radius) {
-      const dx = cx - obb.center[0];
-      const dz = cz - obb.center[2];
-      const len = Math.hypot(dx, dz);
-      let nx = 1;
-      let nz = 0;
-      if (len > 0.001) {
-        nx = dx / len;
-        nz = dz / len;
-      }
-      const pushOut = radius - dist;
-      cx += nx * pushOut;
-      cz += nz * pushOut;
+ // SOTA OBB projection: use the kernel's projectPointOutOfOBB so the
+ // push direction is the true SDF gradient (handles interior points,
+ // yawed OBBs, and non-cubic aspect ratios). The previous radial-from-
+ // center projection left the sphere inside yawed furniture. Run
+ // multiple Gauss-Seidel passes to relax the case where one OBB's push-
+ // out drives the sphere into a second OBB.
+ for (let pass = 0; pass < 3; pass++) {
+ let passMoved = false;
+ for (const obb of obstacles) {
+ if (obb.exemptFromPenalty) continue;
+ const dist = distanceToOBB([cx, cy, cz], obb);
+ if (dist < radius) {
+ const projected = projectPointOutOfOBB(
+ [cx, cy, cz],
+ obb,
+ radius,
+ );
+ if (projected.wasInside) {
+ const pushOut = radius - dist;
+ // Normal of the OBB surface at the contact point: from the contact
+ // point toward the sphere center. For an EXTERIOR query the kernel
+ // pushes AWAY from the OBB, so (sphere - projected) points outward.
+ // For an INTERIOR query the kernel pushes TOWARD the nearest face, so
+ // (sphere - projected) also points outward (toward the face).
+ const nx = (cx - projected.point[0]) / Math.max(1e-9, pushOut);
+ const ny = (cy - projected.point[1]) / Math.max(1e-9, pushOut);
+ const nz = (cz - projected.point[2]) / Math.max(1e-9, pushOut);
+ cx = projected.point[0];
+ cy = projected.point[1];
+ cz = projected.point[2];
+ contact = {
+ point: [cx - nx * radius, cy - ny * radius, cz - nz * radius],
+ normal: [nx, ny, nz],
+ penetration: pushOut,
+ obstacleName: obb.name,
+ };
+ passMoved = true;
+ }
+ }
+ }
+ if (!passMoved) break;
+ }
 
-      contact = {
-        point: [cx - nx * radius, cy, cz - nz * radius],
-        normal: [nx, 0, nz],
-        penetration: pushOut,
-        obstacleName: obb.name,
-      };
-    }
-  }
+ cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, cx));
+ cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, cz));
 
-  cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, cx));
-  cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, cz));
-
-  return { clamped: [cx, cy, cz], contact };
+ return { clamped: [cx, cy, cz], contact };
 }
 
 /**
