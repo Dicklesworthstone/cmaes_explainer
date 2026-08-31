@@ -280,7 +280,7 @@ export function Navbar() {
               href="https://github.com/Dicklesworthstone/cmaes_explainer"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+              className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
             >
               <Github className="h-4 w-4" />
               <span className="hidden xl:inline">Source</span>
@@ -288,7 +288,7 @@ export function Navbar() {
 
             <a
               href={getHref("live-demo")}
-              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-[background-image,transform] hover:scale-105"
+              className="flex flex-wrap items-center gap-2 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-glow-sm transition-[background-image,transform] hover:scale-105"
             >
               <Rocket className="h-3.5 w-3.5" />
               <span>Run Demo</span>
