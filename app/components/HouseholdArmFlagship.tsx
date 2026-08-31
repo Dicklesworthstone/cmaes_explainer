@@ -682,7 +682,7 @@ function ArmCameraRig({
   ) : null;
 }
 
-import { clampArmTargetPosition } from "../lib/armInverseKinematics";
+import { clampArmTargetPosition, isTargetKukaReachable } from "../lib/armInverseKinematics";
 
 const armHouseScene = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
 
@@ -690,18 +690,22 @@ function ArmTargetDragger({
   targetPos,
   onTargetChange,
   onCollisionChange,
+  onUnreachableChange = () => {},
 }: {
   targetPos: [number, number, number];
   onTargetChange: (pos: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; clearance: number }) => void;
+  onUnreachableChange?: (unreachable: boolean) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const startPointerRef = useRef<[number, number]>([0, 0]);
   const startPosRef = useRef<[number, number, number]>(targetPos);
+  const [unreachable, setUnreachable] = useState(false);
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
     setIsDragging(true);
+    setUnreachable(false);
     startPointerRef.current = [e.point.x, e.point.z];
     startPosRef.current = targetPos;
   };
@@ -720,6 +724,22 @@ function ArmTargetDragger({
     // CONTINUOUS COLLISION DETECTION (CCD) & SURFACE CLAMPING (Y >= 0.78)
     const { clampedTarget, isColliding, minClearance } =
       clampArmTargetPosition(proposed, armHouseScene.obstacles, 0.78, 0.04);
+      // Reachability: even if the collision clamp moves the target to a
+      // free interior point, the arm may not be able to reach it. Verify
+      // with a short DLS attempt; if it fails, the proposed position is
+      // unreachable in the arm's workspace and the dragger must not
+      // propagate it (the previous good armDragTarget stays).
+      if (!isTargetKukaReachable(clampedTarget)) {
+        if (!unreachable) {
+          setUnreachable(true);
+          onUnreachableChange?.(true);
+        }
+        return;
+      }
+      if (unreachable) {
+        setUnreachable(false);
+        onUnreachableChange?.(false);
+      }
 
     if (isColliding) {
       robotAudio.playCollisionBump(0.03);
@@ -891,6 +911,7 @@ function ArmStage({
         targetPos={objectPos}
         onTargetChange={onDragTargetChange ?? (() => {})}
         onCollisionChange={onCollisionChange ?? (() => {})}
+        onUnreachableChange={setArmUnreachable}
       />
 
       <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
@@ -966,6 +987,7 @@ useEffect(() => {
     isColliding: boolean;
     clearance: number;
   }>({ isColliding: false, clearance: 1.0 });
+const [armUnreachable, setArmUnreachable] = useState(false);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -1256,7 +1278,9 @@ useEffect(() => {
                     >
                       {armCollisionState.isColliding
                         ? `⚠️ Surface Clamped (${armCollisionState.clearance.toFixed(2)}m)`
-                        : `🖐️ Target Moved (${armCollisionState.clearance.toFixed(2)}m free)`}
+                        : armUnreachable
+                          ? `⛔ Unreachable — Workspace Limit`
+                          : `🖐️ Target Moved (${armCollisionState.clearance.toFixed(2)}m free)`}
                     </span>
                     <button
                       type="button"
