@@ -200,6 +200,41 @@ export function distanceToOBB(
  * back onto the obstacle surface so the arm never visibly tunnels through
  * a furniture piece. Analytic, branch-light, and matches the SDF above.
  */
+export function conservativeSegmentClearanceToOBB(
+  start: [number, number, number],
+  end: [number, number, number],
+  obb: OrientedBoundingBox,
+  maximumSampleSpacingMeters = 0.01,
+): number {
+  if (
+    !start.every(Number.isFinite) ||
+    !end.every(Number.isFinite) ||
+    !Number.isFinite(maximumSampleSpacingMeters) ||
+    maximumSampleSpacingMeters <= 0
+  ) {
+    throw new Error("segment clearance inputs must be finite with positive spacing");
+  }
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const dz = end[2] - start[2];
+  const length = Math.hypot(dx, dy, dz);
+  const intervals = Math.max(1, Math.ceil(length / maximumSampleSpacingMeters));
+  const intervalLength = length / intervals;
+  let minimumSampleDistance = Infinity;
+  for (let index = 0; index <= intervals; index++) {
+    const t = index / intervals;
+    minimumSampleDistance = Math.min(
+      minimumSampleDistance,
+      distanceToOBB([
+        start[0] + dx * t,
+        start[1] + dy * t,
+        start[2] + dz * t,
+      ], obb),
+    );
+  }
+  return minimumSampleDistance - intervalLength * 0.5;
+}
+
 export function closestPointOnOBB(
   point: [number, number, number],
   obb: OrientedBoundingBox,

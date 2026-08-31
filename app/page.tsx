@@ -16,7 +16,6 @@ import { CmaesInternalsLab } from "./components/CmaesInternalsLab";
 import { HpoTrainer } from "./components/HpoTrainer";
 import { HonestyChipStack } from "./components/HonestyChipStack";
 import { KernelSummary } from "./components/KernelSummary";
-import { KmrScene } from "./components/KmrScene";
 import { ViewportLazy } from "./components/ViewportLazy";
 
 // Server component: everything below SSRs (client components still render on
@@ -107,8 +106,8 @@ export default function Page() {
                       <p className="mt-2 text-sm leading-6 text-slate-300">A source-bound 7-DoF KUKA LBR iiwa 7 R800 is optimized to reach, grasp, transport, and release objects in three reduced household scenes. Placement is accepted only when the collision receipt is clear.</p>
                       <ul className="mt-4 space-y-2 text-xs text-slate-400">
                         <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-orange-400" /><span>3D Coulomb friction cones & contact force verification</span></li>
-                        <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-orange-400" /><span>Interactive 360° camera orbit & grasp focus inspection</span></li>
-                        <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-orange-400" /><span>Equal-budget 4-family CMA-ES representation race</span></li>
+                        <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-orange-400" /><span>KMR iiwa 4-mecanum mobile base navigation & 2D LiDAR raycasting</span></li>
+                        <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-orange-400" /><span>Interactive 360° camera orbit & grasp microscope inspection</span></li>
                       </ul>
                     </div>
                     <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
@@ -123,19 +122,6 @@ export default function Page() {
               </Section>
               <Section id="honesty" title="Honesty ledger: every physics claim traced to its source, test, citation, and bead">
                 <ViewportLazy minHeight={420}><HonestyChipStack /></ViewportLazy>
-              </Section>
-              <Section id="kmr-navigation" title="KUKA KMR base: collision-aware waypoint navigation">
-                <div className="max-w-3xl text-sm leading-7 text-slate-400">
-                  This rung models the KMR mobile base separately from the
-                  fixed-base LBR iiwa flagship. Click a clear point to run
-                  global clearance value iteration over the actual house
-                  furniture and doorway-split wall bodies. A deterministic
-                  TS kinematic owner converts the route into mecanum-wheel
-                  commands, integrates the base pose, and refuses swept
-                  contact. It does not yet claim rigid-body traction or a
-                  physically mounted arm; those remain integration work.
-                </div>
-                <ViewportLazy minHeight={520}><KmrScene /></ViewportLazy>
               </Section>
               <Section id="kernel-summary" title="What the simulation kernel actually does (and doesn’t)">
                 <ViewportLazy minHeight={420}><KernelSummary /></ViewportLazy>
