@@ -312,6 +312,7 @@ export function Navbar() {
               key={s.id}
               href={getHref(s.id)}
               className={`flex min-h-9 items-center px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-[background-color,color,box-shadow] ${
+                pathname === "/" && activeId === s.id
                   ? "bg-sky-500 text-white shadow-glow-sm"
                   : "text-slate-400 hover:text-slate-200"
               }`}
@@ -324,6 +325,7 @@ export function Navbar() {
             aria-label="Open full menu"
             onClick={() => setMobileMenuOpen(true)}
             className="flex min-h-9 min-w-9 items-center justify-center p-2 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 shrink-0"
+          >
             <Menu className="h-4 w-4" />
           </button>
         </div>
