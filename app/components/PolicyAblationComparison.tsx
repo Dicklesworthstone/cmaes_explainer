@@ -130,7 +130,7 @@ export function PolicyAblationComparison() {
             superseded self-propelling environment.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-neutral-400" htmlFor="ablation-seed-select">
               Search seed:
@@ -142,10 +142,10 @@ export function PolicyAblationComparison() {
               onChange={(e) => setSeed(Number(e.target.value))}
               aria-label="CMA-ES search seed"
             >
-              <option value={42}>Seed #42 (Default)</option>
-              <option value={101}>Seed #101</option>
-              <option value={202}>Seed #202</option>
-              <option value={505}>Seed #505</option>
+            <option value={42}>#42 (default)</option>
+            <option value={101}>#101</option>
+            <option value={202}>#202</option>
+            <option value={505}>#505</option>
             </select>
           </div>
         </div>
