@@ -1,8 +1,7 @@
-// Auxiliary Jacobian Damped Least Squares (DLS) reachability and contact
+import { distanceToOBB, projectPointOutOfOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 // helpers for the household-arm UI. This reduced procedural chain is not the
 // source-bound FrankenSim iiwa 7 R800 owner and must not certify placement.
 
-import { distanceToOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
 export interface KukaJointLimits {
   min: number;
@@ -288,46 +287,61 @@ export function isTargetKukaReachable(
 }
 
 export function clampArmTargetPosition(
-  target: [number, number, number],
-  obstacles: OrientedBoundingBox[],
-  tableHeight: number = 0.78,
-  margin: number = 0.04
+ target: [number, number, number],
+ obstacles: OrientedBoundingBox[],
+ tableHeight: number = 0.78,
+ margin: number = 0.04
 ): {
-  clampedTarget: [number, number, number];
-  isColliding: boolean;
-  minClearance: number;
+ clampedTarget: [number, number, number];
+ isColliding: boolean;
+ minClearance: number;
 } {
-  // Height constraint: MUST stay above table surface
-  const safeY = Math.max(tableHeight + margin, target[1]);
-  let safeX = Math.max(-1.5, Math.min(1.5, target[0]));
-  let safeZ = Math.max(-1.5, Math.min(1.5, target[2]));
+ // Workspace bounds (matches the actual table footprint)
+ let safeX = Math.max(-1.5, Math.min(1.5, target[0]));
+ let safeZ = Math.max(-1.5, Math.min(1.5, target[2]));
+ // Soft table floor: the target MUST stay above the table surface, but
+ // an OBB taller than the table (e.g. a chair) is allowed to push the
+ // target upward. We take the maximum of the table floor and the
+ // projection after each pass so the final Y respects both constraints.
+ let safeY = Math.max(tableHeight + margin, target[1]);
 
-  let isColliding = false;
-  let minClearance = 999.0;
+ let isColliding = false;
+ let minClearance = 999.0;
 
-  for (const obb of obstacles) {
-    if (obb.exemptFromPenalty) continue;
-    const dist = distanceToOBB([safeX, safeY, safeZ], obb);
-    if (dist < minClearance) minClearance = dist;
-    if (dist < margin) {
-      isColliding = true;
-      const dx = safeX - obb.center[0];
-      const dz = safeZ - obb.center[2];
-      const len = Math.hypot(dx, dz);
-      if (len > 0.001) {
-        safeX += (dx / len) * (margin - dist);
-        safeZ += (dz / len) * (margin - dist);
-      } else {
-        safeX += margin;
-      }
-    }
-  }
-
-  return {
-    clampedTarget: [safeX, safeY, safeZ],
-    isColliding,
-    minClearance: Math.max(0, minClearance),
-  };
+ // SOTA OBB projection: use the kernel's projectPointOutOfOBB so the
+ // push direction is the true SDF gradient (handles interior points,
+ // yawed OBBs, and non-cubic aspect ratios). The previous radial-from-
+ // center projection landed targets inside yawed furniture. Run multiple
+ // Gauss-Seidel passes to relax the case where one OBB's push-out
+ // drives the target into a second OBB.
+ for (let pass = 0; pass < 3; pass++) {
+ let passMoved = false;
+ for (const obb of obstacles) {
+ if (obb.exemptFromPenalty) continue;
+ const dist = distanceToOBB([safeX, safeY, safeZ], obb);
+ if (dist < minClearance) minClearance = dist;
+ if (dist < margin) {
+ isColliding = true;
+ const projected = projectPointOutOfOBB(
+ [safeX, safeY, safeZ],
+ obb,
+ margin,
+ );
+ if (projected.wasInside) {
+ safeX = projected.point[0];
+ safeY = Math.max(tableHeight + margin, projected.point[1]);
+ safeZ = projected.point[2];
+ passMoved = true;
+ }
+ }
+ }
+ if (!passMoved) break;
+ }
+ return {
+ clampedTarget: [safeX, safeY, safeZ],
+ isColliding,
+ minClearance: Math.max(0, minClearance),
+ };
 }
 
 /**

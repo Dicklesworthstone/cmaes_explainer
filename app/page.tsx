@@ -17,6 +17,7 @@ import { HpoTrainer } from "./components/HpoTrainer";
 import { HonestyChipStack } from "./components/HonestyChipStack";
 import { KernelSummary } from "./components/KernelSummary";
 import { KmrScene } from "./components/KmrScene";
+import { ViewportLazy } from "./components/ViewportLazy";
 
 // Server component: everything below SSRs (client components still render on
 // the server in the App Router). The only former SSR suppressor was the
@@ -50,10 +51,14 @@ export default function Page() {
                 <OpenSourceEngines />
               </Section>
               <Section id="live-demo" title="Live CMA-ES landscape explorer (TypeScript + WASM)">
-                <WasmDemo />
+                <ViewportLazy minHeight={420}>
+                  <WasmDemo />
+                </ViewportLazy>
               </Section>
               <Section id="internals" title="Inside the optimizer: covariance geometry in 3D">
-                <CmaesInternalsLab />
+                <ViewportLazy minHeight={420}>
+                  <CmaesInternalsLab />
+                </ViewportLazy>
               </Section>
               <Section
                 id="robotics-flagships"
@@ -147,7 +152,9 @@ export default function Page() {
                 id="hpo"
                 title="Outer CMA-ES over 8 training hyperparameters (this site runs it client-side)"
               >
-                <HpoTrainer />
+                <ViewportLazy minHeight={480}>
+                  <HpoTrainer />
+                </ViewportLazy>
               </Section>
               <Section
                 id="honesty"
@@ -162,11 +169,11 @@ export default function Page() {
                 <div className="max-w-3xl text-sm leading-7 text-slate-400">
                   This rung models the KMR mobile base separately from the
                   fixed-base LBR iiwa flagship. Click a clear point to run
-                  global clearance value iteration over the actual house
+                <ViewportLazy minHeight={520}>
                   furniture and doorway-split wall bodies. A deterministic
                   TS kinematic owner converts the route into mecanum-wheel
                   commands, integrates the base pose, and refuses swept
-                  contact. It does not yet claim rigid-body traction or a
+                </ViewportLazy>
                   physically mounted arm; those remain integration work.
                 </div>
                 <KmrScene />
