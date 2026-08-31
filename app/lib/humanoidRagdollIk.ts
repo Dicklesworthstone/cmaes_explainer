@@ -1,12 +1,36 @@
 // Multi-Limb Inverse Kinematics (IK) & Continuous Collision Ragdoll Engine for Unitree G1.
-// Provides analytical 2-bone limb IK, joint limit clamping, root pose translation,
-// and full-body multi-sphere continuous collision projection against house obstacles.
+// Provides analytical 2-bone limb IK, joint limit clamping, multi-pin interactive manipulation,
+// full-body multi-sphere continuous collision projection against house obstacles, and impulse dynamics.
 
-import * as THREE from "three";
 import {
   distanceToOBB,
   type OrientedBoundingBox,
 } from "./houseMultiObstacleKernel";
+
+export type InteractiveLimbPinId =
+  | "head"
+  | "pelvis"
+  | "leftHand"
+  | "rightHand"
+  | "leftFoot"
+  | "rightFoot";
+
+export interface InteractiveLimbPin {
+  id: InteractiveLimbPinId;
+  label: string;
+  nominalOffset: [number, number, number];
+  color: string;
+  radius: number;
+}
+
+export const G1_INTERACTIVE_PINS: InteractiveLimbPin[] = [
+  { id: "head", label: "Head", nominalOffset: [0, 0.58, 0], color: "#38bdf8", radius: 0.05 },
+  { id: "pelvis", label: "Pelvis / Root", nominalOffset: [0, 0, 0], color: "#f59e0b", radius: 0.06 },
+  { id: "leftHand", label: "Left Hand", nominalOffset: [0.15, 0.15, -0.22], color: "#22d3ee", radius: 0.045 },
+  { id: "rightHand", label: "Right Hand", nominalOffset: [0.15, 0.15, 0.22], color: "#a855f7", radius: 0.045 },
+  { id: "leftFoot", label: "Left Foot", nominalOffset: [0, -0.72, -0.12], color: "#10b981", radius: 0.05 },
+  { id: "rightFoot", label: "Right Foot", nominalOffset: [0, -0.72, 0.12], color: "#ec4899", radius: 0.05 },
+];
 
 export interface G1LimbIKTarget {
   leftFoot?: [number, number, number];
@@ -379,5 +403,31 @@ export function solveFullBodyG1IK(
     contacts,
     isColliding: contacts.length > 0,
     minClearance: Math.max(0, minClearance),
+  };
+}
+
+/**
+ * Applies a 3D perturbation impulse to humanoid center of mass and computes stepping reflex response.
+ */
+export function computeImpulseResponse(
+  impulseNs: number, // 5 to 50 N*s
+  impulseAngleRad: number, // 0 to 2*PI in horizontal plane
+  robotMassKg: number = 35.0
+): { deltaV: [number, number, number]; recoveryStepOffset: [number, number, number] } {
+  const speedDelta = impulseNs / robotMassKg;
+  const dvX = Math.cos(impulseAngleRad) * speedDelta;
+  const dvZ = Math.sin(impulseAngleRad) * speedDelta;
+
+  // Linear inverted pendulum capture point stepping offset: delta_step = delta_v * sqrt(h / g)
+  const h = 0.75;
+  const g = 9.81;
+  const tc = Math.sqrt(h / g);
+
+  const stepX = dvX * tc;
+  const stepZ = dvZ * tc;
+
+  return {
+    deltaV: [dvX, 0, dvZ],
+    recoveryStepOffset: [stepX, 0, stepZ],
   };
 }

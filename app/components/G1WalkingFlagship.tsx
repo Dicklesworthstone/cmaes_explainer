@@ -4,10 +4,11 @@ import React, { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { useInView } from "../hooks/useScrollSpy";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   type CmaFamily,
@@ -629,6 +630,20 @@ function RobotPlayback({
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
+
+  // Procedural synthesized footstep acoustics on contact state changes
+  const prevContactsRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
+  useEffect(() => {
+    if (!sample) return;
+    if (sample.leftContact && !prevContactsRef.current.left) {
+      robotAudio.playFootstep(1.0, true);
+    }
+    if (sample.rightContact && !prevContactsRef.current.right) {
+      robotAudio.playFootstep(1.0, false);
+    }
+    prevContactsRef.current = { left: sample.leftContact, right: sample.rightContact };
+  }, [sample]);
+
   const pushFraction = (shoveActive ? 0.95 : 0) || (sample
     && admission?.config.challenge === "terrain-and-push"
     && sample.timeSeconds > admission.pushStartSeconds
@@ -870,6 +885,10 @@ function RagdollDragger({
       clampedPosition[2] - pelvisThree[2],
     ];
 
+    if (isColliding) {
+      robotAudio.playCollisionBump(0.04);
+    }
+
     onDragChange(newOffset);
     onCollisionChange({ isColliding, obstacleName: nearestObstacleName, clearance: minClearance });
   };
@@ -1097,6 +1116,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [status, setStatus] = useState("Loading the owner-composed G1 experiment…");
   const [error, setError] = useState<string | null>(null);
+  // Mobile: show the 4 most consequential receipt cards by default; user can
+  // expand to all 22 (or hide them) so the page doesn't drown the viewport
+  // in 11 rows of telemetry. Desktop: show all (md:block).
+  const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
@@ -1119,6 +1142,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [currentChapter, setCurrentChapter] = useState(1);
   const [selectedPreset, setSelectedPreset] = useState("cautious-monk");
   const [shoveActive, setShoveActive] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
   const [dragCollisionState, setDragCollisionState] = useState<{
     isColliding: boolean;
@@ -1154,7 +1178,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     }
     setSampleIndex(0);
     setIsPlaying(true);
-  }, [challenge, stabilizerTrace, curriculumTrace, post]);
+  }, [challenge, stabilizerTrace, curriculumTrace, post, setCurrentChapter, setSampleIndex]);
 
   const handleSelectPreset = useCallback((p: RobotPersonalityPreset) => {
     setSelectedPreset(p.id);
@@ -1278,7 +1302,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     if (!workerAvailable) bridgeState = "failed";
     else if (busy === "preview") bridgeState = "loading";
     else if (busy) bridgeState = "running";
-    else if (trace || error) bridgeState = "ready";
+    else if (trace) bridgeState = "ready";
     else bridgeState = "loading";
     reportFrankenRobotsEngineState(
       "humanoid",
@@ -1290,7 +1314,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         completedSteps: trace?.completedSteps ?? null,
       },
     );
-  }, [embedded, workerAvailable, error, busy, trace, status, generation, bestObjective]);
+  }, [embedded, workerAvailable, busy, trace, status, generation, bestObjective]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
@@ -1400,6 +1424,21 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <Eye className="h-3.5 w-3.5" />
                 <span className="sm:hidden">{xrayMode ? "⚡ X-Ray" : "🏡 House"}</span>
                 <span className="max-sm:hidden">{xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}</span>
+              </button>
+
+              {/* Sound Synthesizer Toggle */}
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(robotAudio.toggleMute())}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  soundEnabled
+                    ? "border-emerald-400 bg-emerald-500/25 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                    : "border-white/20 bg-slate-950/80 text-slate-400 hover:text-slate-200"
+                }`}
+                title="Toggle Synthesized Footstep & Actuator Acoustics"
+              >
+                {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
               </button>
 
               {/* Push Wand Button */}

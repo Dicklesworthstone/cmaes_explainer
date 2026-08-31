@@ -52,7 +52,7 @@ describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
     expect(expectedToi).toBeGreaterThan(0);
     expect(result.hasImpact).toBe(true);
     expect(result.timeOfImpact).toBeGreaterThan(0);
-    expect(Math.abs(result.timeOfImpact - expectedToi)).toBeLessThan(1e-3);
+    expect(Math.abs((result.timeOfImpact ?? 0) - expectedToi)).toBeLessThan(1e-3);
   });
 
   test("non-collision sweep: sphere passes well clear of the stationary sphere", () => {

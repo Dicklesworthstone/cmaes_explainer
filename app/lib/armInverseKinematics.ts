@@ -1,5 +1,6 @@
 // Jacobian Damped Least Squares (DLS) Inverse Kinematics & Contact Physics Engine for KUKA iiwa14.
-// Enforces 7-DoF joint limits, table/counter surface collision clamping, and obstacle avoidance.
+// Enforces 7-DoF joint limits, table/counter surface collision clamping, Ferrari-Canny Grasp Wrench Space (GWS),
+// and multi-object household manipulation physics.
 
 import { distanceToOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
@@ -26,6 +27,60 @@ export const KUKA_LINK_LENGTHS = {
   forearm: 0.40,
   flange: 0.126,
   gripperLength: 0.15,
+};
+
+export interface ManipulableObjectSpec {
+  id: "kitchen-mug" | "glass-pitcher" | "orchard-apple" | "cereal-bowl";
+  name: string;
+  massKg: number;
+  frictionCoeff: number;
+  color: string;
+  dimensionsM: [number, number, number]; // [radius, height, width]
+  nominalStart: [number, number, number];
+  goalPosition: [number, number, number];
+}
+
+export const MANIPULABLE_OBJECT_PRESETS: Record<string, ManipulableObjectSpec> = {
+  "kitchen-mug": {
+    id: "kitchen-mug",
+    name: "Craftsman Ceramic Coffee Mug",
+    massKg: 0.35,
+    frictionCoeff: 0.65,
+    color: "#0284c7",
+    dimensionsM: [0.042, 0.095, 0.042],
+    nominalStart: [0.4, 0.82, 0.2],
+    goalPosition: [-0.35, 0.82, 0.3],
+  },
+  "glass-pitcher": {
+    id: "glass-pitcher",
+    name: "Hand-Blown Glass Pitcher",
+    massKg: 1.10,
+    frictionCoeff: 0.45,
+    color: "#38bdf8",
+    dimensionsM: [0.065, 0.18, 0.065],
+    nominalStart: [0.35, 0.86, 0.15],
+    goalPosition: [-0.3, 0.86, 0.25],
+  },
+  "orchard-apple": {
+    id: "orchard-apple",
+    name: "Orchard Honeycrisp Apple",
+    massKg: 0.18,
+    frictionCoeff: 0.70,
+    color: "#f43f5e",
+    dimensionsM: [0.038, 0.075, 0.038],
+    nominalStart: [0.42, 0.81, 0.25],
+    goalPosition: [-0.4, 0.81, 0.35],
+  },
+  "cereal-bowl": {
+    id: "cereal-bowl",
+    name: "Fired Stoneware Cereal Bowl",
+    massKg: 0.55,
+    frictionCoeff: 0.60,
+    color: "#eab308",
+    dimensionsM: [0.075, 0.06, 0.075],
+    nominalStart: [0.38, 0.81, 0.18],
+    goalPosition: [-0.32, 0.81, 0.28],
+  },
 };
 
 export interface KukaArmPose {
@@ -109,8 +164,7 @@ export function solveKukaIK(
   targetPos: [number, number, number],
   initialAngles: number[],
   basePos: [number, number, number] = [0, 0.78, 0],
-  maxIterations: number = 12,
-  damping: number = 0.05
+  maxIterations: number = 12
 ): number[] {
   let angles = [...initialAngles];
   if (angles.length < 7) angles = [0, 0.4, 0, -1.2, 0, 0.8, 0];
@@ -191,5 +245,38 @@ export function clampArmTargetPosition(
     clampedTarget: [safeX, safeY, safeZ],
     isColliding,
     minClearance: Math.max(0, minClearance),
+  };
+}
+
+/**
+ * Computes Ferrari-Canny Grasp Wrench Space (GWS) radius metric and contact forces.
+ */
+export function computeFerrariCannyGWS(
+  padForceN: number, // 0 to 40 N
+  apertureM: number, // 0 to 0.08 m
+  objectRadiusM: number = 0.04,
+  frictionCoeff: number = 0.65
+): {
+  gwsRadius: number; // radius of largest origin-centered ball in wrench space
+  normalForceN: number;
+  maxFrictionForceN: number;
+  isStableGrasp: boolean;
+} {
+  const normalForce = Math.max(0, padForceN);
+  const maxFriction = normalForce * frictionCoeff;
+
+  // Aperture matching quality: best when aperture matches object diameter
+  const targetDiam = objectRadiusM * 2.0;
+  const diamError = Math.abs(apertureM - targetDiam);
+  const fitScore = Math.max(0, 1.0 - diamError / 0.04);
+
+  // GWS radius estimate: min normal force * friction * geometric fit
+  const gws = (normalForce / 30.0) * frictionCoeff * fitScore;
+
+  return {
+    gwsRadius: Math.min(1.0, Math.max(0, gws)),
+    normalForceN: normalForce,
+    maxFrictionForceN: maxFriction,
+    isStableGrasp: normalForce > 6.0 && diamError < 0.02,
   };
 }

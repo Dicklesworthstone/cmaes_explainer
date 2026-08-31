@@ -29,12 +29,16 @@ import {
   Pause,
   SkipBack,
   SkipForward,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
 import { ArmGraspMicroscopeOverlay, ArmGraspMicroscopeHUD } from "./ArmGraspMicroscope";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
+import { robotAudio } from "../lib/robotAudioSynthesizer";
+import { MANIPULABLE_OBJECT_PRESETS, computeFerrariCannyGWS } from "../lib/armInverseKinematics";
 import {
   type CmaFamily,
   type HouseholdManipulationAdmission,
@@ -713,6 +717,10 @@ function ArmTargetDragger({
     const { clampedTarget, isColliding, minClearance } =
       clampArmTargetPosition(proposed, armHouseScene.obstacles, 0.78, 0.04);
 
+    if (isColliding) {
+      robotAudio.playCollisionBump(0.03);
+    }
+
     onTargetChange(clampedTarget);
     onCollisionChange({ isColliding, clearance: minClearance });
   };
@@ -921,6 +929,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
     isColliding: boolean;
     clearance: number;
@@ -1170,6 +1179,23 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                         ? "🔬 Friction Cones (μ=0.65) Active"
                         : "🔬 Friction Cones Overlay"}
                   </span>
+                </button>
+
+                {/* Sound Synthesizer Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setSoundEnabled(robotAudio.toggleMute())}
+                  className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                    embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
+                  } ${
+                    soundEnabled
+                      ? "border-emerald-400 bg-emerald-500/25 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                      : "border-white/20 bg-slate-950/80 text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Toggle Synthesized Contact Acoustics"
+                >
+                  {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                  <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
                 </button>
 
                 {/* Drag Status & Contact Safety Readout */}

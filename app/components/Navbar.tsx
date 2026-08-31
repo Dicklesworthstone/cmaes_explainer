@@ -158,15 +158,14 @@ export function Navbar() {
   // hamburger trigger on close.
   useEffect(() => {
     if (!mobileMenuOpen) return;
+    const openBtn = mobileMenuOpenBtnRef.current;
     // Defer one frame so AnimatePresence + Framer has mounted the close
     // button before focusing it.
     const rafId = requestAnimationFrame(() => mobileMenuCloseBtnRef.current?.focus());
     return () => {
       cancelAnimationFrame(rafId);
-      // Always restore focus to the hamburger trigger on close: this is a
-  // full-screen sheet with a single trigger, so the trigger is the right
-  // restoration target regardless of where focus was when the user opened it.
-  mobileMenuOpenBtnRef.current?.focus();
+      // Always restore focus to the hamburger trigger on close
+      openBtn?.focus();
     };
   }, [mobileMenuOpen]);
   const trapDialogTab = (e: ReactKeyboardEvent<HTMLDivElement>) => {
