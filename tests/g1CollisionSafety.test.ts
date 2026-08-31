@@ -3,9 +3,10 @@
 // Important boundary: the v069 terrain-and-push owner does not consume the
 // Craftsman house wall OBBs. Whole-house path collision is verified by
 // houseMultiObstacleKernel.test.ts, where those obstacles actually participate
-// in the computation. This file checks only claims the G1 owner really makes:
-// finite 30-link world poses, a bounded local experiment, plausible z-up
-// heights, and an evaluation receipt identical to the one attached to trace.
+// in the computation. The owner checks below cover finite 30-link poses, a
+// bounded local experiment, plausible z-up heights, and receipt parity. The
+// final test separately verifies the browser's explicit composition of that
+// owner pose with its house-aware spawn guard.
 
 import { afterAll, describe, expect, test } from "bun:test";
 import {
@@ -16,6 +17,11 @@ import {
   type G1TraceReceipt,
   type PackedOwnerRefusal,
 } from "../app/lib/frankensimCmaes";
+import {
+  createHouseNavigationScene,
+  distanceToOBB,
+  findClearSpawnPosition,
+} from "../app/lib/houseMultiObstacleKernel";
 
 function unwrap<T>(
   result: { ok: T } | { refusal: PackedOwnerRefusal },
@@ -133,5 +139,52 @@ describe("G1 v069 owner trace safety envelope", () => {
 
   test("attaches the exact evaluation receipt to the rendered trace", () => {
     expect(receiptWithoutSamples(curriculumTrace)).toEqual(curriculumEvaluation);
+  });
+
+  test("places a conservative whole-body envelope clear of every rigid house obstacle", () => {
+    const firstSample = curriculumTrace.samples[0];
+    const ownerToThree = (position: readonly number[]): [number, number, number] => [
+      position[0],
+      position[2],
+      -position[1],
+    ];
+    const pelvis = ownerToThree(firstSample.linkPoses[0].position);
+    const bodyRadius = firstSample.linkPoses.reduce((radius, linkPose) => {
+      const link = ownerToThree(linkPose.position);
+      return Math.max(
+        radius,
+        Math.hypot(
+          link[0] - pelvis[0],
+          link[1] - pelvis[1],
+          link[2] - pelvis[2],
+        ) + 0.12,
+      );
+    }, 0.35);
+    const spawnRadius = bodyRadius + Math.abs(pelvis[1] - 0.75);
+    const scene = createHouseNavigationScene();
+    const spawn = findClearSpawnPosition(scene.obstacles, spawnRadius);
+    const offset: [number, number, number] = [
+      spawn[0] - pelvis[0],
+      0,
+      spawn[2] - pelvis[2],
+    ];
+
+    for (const obstacle of scene.obstacles) {
+      if (obstacle.exemptFromPenalty) continue;
+      expect(distanceToOBB(spawn, obstacle), obstacle.name).toBeGreaterThanOrEqual(
+        spawnRadius,
+      );
+      for (const linkPose of firstSample.linkPoses) {
+        const link = ownerToThree(linkPose.position);
+        const translated: [number, number, number] = [
+          link[0] + offset[0],
+          link[1],
+          link[2] + offset[2],
+        ];
+        expect(distanceToOBB(translated, obstacle), obstacle.name).toBeGreaterThanOrEqual(
+          0.12,
+        );
+      }
+    }
   });
 });

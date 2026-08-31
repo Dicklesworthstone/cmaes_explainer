@@ -1,0 +1,210 @@
+"use client";
+
+// G1PhysicsDebugOverlay — visualization of the collision-guard chain.
+//
+// The user complained "the humanoid robot spawns INSIDE A wall" and "I
+// cannot see why my drag is being rejected." This overlay shows the
+// actual geometry the guard operates on, so the user can SEE:
+//
+//   1. The 30 body-link sphere colliders as cyan wireframe outlines
+//      (matches the per-link radius the ragdoll uses for its visual
+//      Segment rendering).
+//   2. The 74+ house OBB obstacles as red wireframe boxes with their
+//      actual yaw rotation. The user can verify the guard rejects
+//      drags that would penetrate these volumes.
+//   3. A safety ring on the ground at the robot's current pelvis
+//      position with the 0.32 m safe radius. This is the same
+//      sphere clampPositionAgainstHouseCollisions uses as the proxy
+//      for the full body — when the safety ring intersects a red
+//      obstacle box, the dragger will be flagged isColliding.
+//
+// The overlay is OFF by default. Toggle with the "🔧 Physics" button
+// in the G1 flagship top-right cluster. When OFF, zero overhead
+// (returns null early).
+
+import React from "react";
+import * as THREE from "three";
+import type { G1TraceSample } from "../lib/frankensimCmaes";
+import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
+
+// 30-link body sphere radii — must match the radius logic in
+// G1WalkingFlagship's RobotPose capsule rendering (lines ~515-520).
+// We duplicate the table here rather than import it to keep this
+// component decoupled from the flagship's internal link table.
+const LINK_RADIUS: Record<string, number> = {
+  pelvis: 0.075,
+  torso: 0.065,
+  "left hip pitch": 0.042,
+  "left hip roll": 0.042,
+  "left hip yaw": 0.042,
+  "left knee": 0.042,
+  "left ankle pitch": 0.042,
+  "left ankle roll": 0.042,
+  "right hip pitch": 0.042,
+  "right hip roll": 0.042,
+  "right hip yaw": 0.042,
+  "right knee": 0.042,
+  "right ankle pitch": 0.042,
+  "right ankle roll": 0.042,
+  "waist yaw": 0.055,
+  "waist roll": 0.055,
+  "left shoulder pitch": 0.055,
+  "left shoulder roll": 0.042,
+  "left shoulder yaw": 0.042,
+  "left elbow": 0.042,
+  "left wrist roll": 0.042,
+  "left wrist pitch": 0.042,
+  "left wrist yaw": 0.042,
+  "right shoulder pitch": 0.055,
+  "right shoulder roll": 0.042,
+  "right shoulder yaw": 0.042,
+  "right elbow": 0.042,
+  "right wrist roll": 0.042,
+  "right wrist pitch": 0.042,
+  "right wrist yaw": 0.042,
+};
+
+function ownerToThree(position: readonly number[]): [number, number, number] {
+  // owner frame is x-forward, y-left, z-up; three is x-right, y-up, z-back
+  return [position[0], position[2], -position[1]];
+}
+
+export interface G1PhysicsDebugOverlayProps {
+  enabled: boolean;
+  sample: G1TraceSample | null;
+  obstacles: OrientedBoundingBox[];
+  pelvisPosition: [number, number, number];
+  safeRadius?: number;
+}
+
+export function G1PhysicsDebugOverlay({
+  enabled,
+  sample,
+  obstacles,
+  pelvisPosition,
+  safeRadius = 0.32,
+}: G1PhysicsDebugOverlayProps) {
+  if (!enabled) return null;
+
+  // Pre-build the OBB wireframe geometry once per overlay mount.
+  const obstacleEdges = React.useMemo(() => {
+    return obstacles.map((obb) => {
+      const geometry = new THREE.BoxGeometry(
+        obb.halfExtents[0] * 2,
+        obb.halfExtents[1] * 2,
+        obb.halfExtents[2] * 2,
+      );
+      const edges = new THREE.EdgesGeometry(geometry);
+      geometry.dispose();
+      return { edges, obb };
+    });
+  }, [obstacles]);
+
+  return (
+    <group>
+      {/* 1. Body link sphere colliders — cyan wireframe outlines */}
+      {sample
+        ? sample.linkPoses.map((pose, idx) => {
+            const name = G1_LINK_NAMES[idx] ?? `link-${idx}`;
+            const r = LINK_RADIUS[name] ?? 0.042;
+            const pos = ownerToThree(pose.position);
+            return (
+              <mesh key={`col-${idx}`} position={pos}>
+                <sphereGeometry args={[r, 8, 6]} />
+                <meshBasicMaterial
+                  color="#22d3ee"
+                  wireframe
+                  transparent
+                  opacity={0.45}
+                />
+              </mesh>
+            );
+          })
+        : null}
+
+      {/* 2. House OBB obstacles — red wireframe boxes with yaw */}
+      {obstacleEdges.map(({ edges, obb }, idx) => (
+        <lineSegments
+          key={`obb-${idx}-${obb.name}`}
+          geometry={edges}
+          position={[
+            obb.center[0],
+            obb.center[1],
+            obb.center[2],
+          ]}
+          rotation={[0, obb.rotationYawRad, 0]}
+        >
+          <lineBasicMaterial
+            color="#f43f5e"
+            transparent
+            opacity={0.55}
+            depthWrite={false}
+          />
+        </lineSegments>
+      ))}
+
+      {/* 3. Pelvis safety sphere — yellow wireframe */}
+      <mesh position={pelvisPosition}>
+        <sphereGeometry args={[safeRadius, 12, 8]} />
+        <meshBasicMaterial
+          color="#facc15"
+          wireframe
+          transparent
+          opacity={0.75}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* 4. Ground projection of the safety sphere */}
+      <mesh
+        position={[pelvisPosition[0], 0.02, pelvisPosition[2]]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <ringGeometry args={[safeRadius, safeRadius + 0.04, 32]} />
+        <meshBasicMaterial
+          color="#facc15"
+          transparent
+          opacity={0.6}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// Link-name table — same order as G1WalkingFlagship LINK_NAMES. We
+// keep a local copy so the overlay is decoupled from the flagship's
+// internal layout.
+const G1_LINK_NAMES: readonly string[] = [
+  "pelvis",
+  "left hip pitch",
+  "left hip roll",
+  "left hip yaw",
+  "left knee",
+  "left ankle pitch",
+  "left ankle roll",
+  "right hip pitch",
+  "right hip roll",
+  "right hip yaw",
+  "right knee",
+  "right ankle pitch",
+  "right ankle roll",
+  "waist yaw",
+  "waist roll",
+  "torso",
+  "left shoulder pitch",
+  "left shoulder roll",
+  "left shoulder yaw",
+  "left elbow",
+  "left wrist roll",
+  "left wrist pitch",
+  "left wrist yaw",
+  "right shoulder pitch",
+  "right shoulder roll",
+  "right shoulder yaw",
+  "right elbow",
+  "right wrist roll",
+  "right wrist pitch",
+  "right wrist yaw",
+];

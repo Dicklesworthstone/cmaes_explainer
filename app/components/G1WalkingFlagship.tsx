@@ -3,8 +3,8 @@
 import React, { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
@@ -28,6 +28,7 @@ import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
 import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
 import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
 import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
+import { G1PhysicsDebugOverlay } from "./G1PhysicsDebugOverlay";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
@@ -1028,9 +1029,9 @@ function RagdollDragger({
   onCollisionChange: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
+  const [lastColliding, setLastColliding] = useState(false);
   const startPointerRef = useRef<[number, number]>([0, 0]);
   const startOffsetRef = useRef<[number, number, number]>([0, 0, 0]);
-
   const currentPos: [number, number, number] = dragOffset
     ? [pelvisThree[0] + dragOffset[0], pelvisThree[1] + dragOffset[1], pelvisThree[2] + dragOffset[2]]
     : pelvisThree;
@@ -1062,17 +1063,13 @@ function RagdollDragger({
       0,
       clampedPosition[2] - pelvisThree[2],
     ];
-
-    if (isColliding) {
-      robotAudio.playCollisionBump(0.04);
-    }
-
     onDragChange(newOffset);
     onCollisionChange({ isColliding, obstacleName: nearestObstacleName, clearance: minClearance });
+    setLastColliding(isColliding);
   };
-
   const handlePointerUp = () => {
     setIsDragging(false);
+    setLastColliding(false);
   };
 
   return (
@@ -1096,9 +1093,9 @@ function RagdollDragger({
         <mesh onPointerDown={handlePointerDown} castShadow>
           <sphereGeometry args={[0.075, 16, 16]} />
           <meshStandardMaterial
-            color={isDragging ? "#f59e0b" : "#38bdf8"}
-            emissive={isDragging ? "#d97706" : "#0284c7"}
-            emissiveIntensity={isDragging ? 2.5 : 1.2}
+            color={lastColliding ? "#f43f5e" : isDragging ? "#f59e0b" : "#38bdf8"}
+            emissive={lastColliding ? "#be123c" : isDragging ? "#d97706" : "#0284c7"}
+            emissiveIntensity={lastColliding ? 3.0 : isDragging ? 2.5 : 1.2}
             roughness={0.2}
             metalness={0.8}
           />
@@ -1147,6 +1144,7 @@ function RobotStage({
   reduceMotion,
   meshState,
   xrayMode,
+  physicsDebug,
   cameraView,
   timeOfDay,
   activeRoom,
@@ -1169,6 +1167,7 @@ function RobotStage({
   reduceMotion: boolean;
   meshState: G1MeshState;
   xrayMode: boolean;
+  physicsDebug: boolean;
   cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly";
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
   activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
@@ -1260,6 +1259,14 @@ function RobotStage({
       />
 
       <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={displayedPelvisThree} />
+
+      <G1PhysicsDebugOverlay
+        enabled={physicsDebug}
+        sample={sample}
+        obstacles={houseSceneData.obstacles}
+        pelvisPosition={displayedPelvisThree}
+        safeRadius={0.32}
+      />
     </Canvas>
   );
 }
@@ -1343,6 +1350,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // one tap away, but embedded/native users should not silently miss the
   // rooms, lighting, and architectural inspector added to the flagship.
   const [xrayMode, setXrayMode] = useState(false);
+  const [physicsDebug, setPhysicsDebug] = useState(false);
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
   const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
   const [showRoof, setShowRoof] = useState(false);
@@ -1705,7 +1713,21 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span className="max-sm:hidden">{xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}</span>
               </button>
 
-              {/* Sound Synthesizer Toggle */}
+              {/* Physics Debug Overlay Toggle — show body colliders + obstacle OBBs */}
+              <button
+                type="button"
+                onClick={() => setPhysicsDebug(!physicsDebug)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  physicsDebug
+                    ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                }`}
+                title="Show body collider spheres + obstacle OBBs to verify the G1 cannot tunnel"
+              >
+                <Wrench className="h-3.5 w-3.5" />
+                <span className="sm:hidden">{physicsDebug ? "🔧 Physics" : "🔧 Off"}</span>
+                <span className="max-sm:hidden">{physicsDebug ? "🔧 Physics Debug" : "🔧 Physics"}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setSoundEnabled(robotAudio.toggleMute())}
@@ -1887,6 +1909,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   reduceMotion={reduceMotion}
                   meshState={meshState}
                   xrayMode={xrayMode}
+                  physicsDebug={physicsDebug}
                   cameraView={cameraView}
                   timeOfDay={timeOfDay}
                   activeRoom={activeRoom}
