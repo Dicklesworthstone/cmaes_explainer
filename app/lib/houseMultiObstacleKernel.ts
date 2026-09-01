@@ -259,6 +259,17 @@ export interface SweptCcdResult {
  * with the radius-expanded box using the exact slab interval. This catches
  * outside-to-outside enter/exit tunneling and returns the earliest admissible
  * entry parameter without assuming endpoint collision state is monotonic.
+ *
+ * Single-OBB contract: when the swept segment crosses only the OBB
+ * passed in, the returned entryPoint is on the entry face at the
+ * requested radius clearance. For multi-OBB scenarios where neighboring
+ * obstacles overlap or sit close together, callers must follow the
+ * swept-CCD step with a per-position projection pass over the full
+ * OBB catalog (the HouseholdArmFlagship pipeline does this 3 times via
+ * projectArmLinksOutOfObstacles({ iterations: 3 })). A single
+ * swept-CCD step is not sufficient when the entry face of OBB A
+ * overlaps the volume of OBB B; that requires Gauss-Seidel relaxation
+ * to converge.
  */
 export function sweptSphereOBBEntryPoint(
   prevPos: [number, number, number],
