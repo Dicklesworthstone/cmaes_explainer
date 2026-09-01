@@ -30,3 +30,6 @@ jobs:
 
       - name: Production build
         run: bun run build
+
+      - name: Bundle-size guard
+        run: bun run scripts/check-large-js.mjs
