@@ -1580,7 +1580,13 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               </span>
               {!embedded ? (
                 <span className="rounded-xl border border-white/10 bg-slate-950/82 px-3 py-2 text-[0.7rem] text-slate-400 backdrop-blur-md">
-                  Drag to orbit · pinch to zoom
+                  {cameraMode === "fly"
+                    ? "Free-fly 6-DOF: WASD + Q/E + drag to look."
+                    : cameraMode === "microscope"
+                      ? "Grasp focus: target held still at the workbench."
+                      : cameraMode === "overhead"
+                        ? "Top-down map view."
+                        : "Drag to orbit · pinch to zoom"}
                 </span>
               ) : null}
             </div>
