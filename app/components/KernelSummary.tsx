@@ -61,7 +61,7 @@ export function KernelSummary() {
                 between frames, so a fast link that would tunnel
                 through a thin obstacle is snapped to the swept
                 entry point, not the deep-interior closest point.
-                Locked by tests/sweptCcd.test.ts and the arm's
+                Locked by tests/sweptCcd.test.ts and the arm&rsquo;s
                 previousProjectedPositions pipeline in
                 HouseholdArmFlagship.</li>
           </ul>
