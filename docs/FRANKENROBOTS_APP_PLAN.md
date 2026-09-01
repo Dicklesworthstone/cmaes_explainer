@@ -41,14 +41,27 @@ The app must not become a generic website wrapper. Its app-level navigation, inf
 
 
 ### Arm Lab
-
 - Kitchen mug, living-room remote, and backyard trowel tasks.
 - Curriculum replay and live CMA-ES optimization.
 - Full, separable, LM-CMA, and LM-MA at the honest 128-D comparison scale.
-- Studio, grasp-microscope, and overhead cameras.
+- Studio, grasp-microscope, overhead, and free-fly cameras (free-fly is 6-DOF WASD + Q/E + RMB drag, bounded to the workbench envelope).
+- Free-fly keybinding discoverability banner (shared with the Humanoid Lab).
 - Play/pause, seek, reset, and replay-speed controls.
 - Gripper width, pinch force, Coulomb friction capacity, grasp state, and object halo.
+- Touch & orange-drag target manipulation with continuous collision detection and surface clamping; the drag target is also gated by a 2 cm residual reachability solver (DLS-IK) so the operator cannot place the target outside the arm's reachable workspace.
+- Physics debug overlay (the "🔧 Physics" button): toggleable visualization of the 8 KUKA link collider spheres, the 74-piece house OBB catalogue as wireframe boxes, the arm's reachable workspace as a translucent green point cloud (sampled once at module load), and the current target safety sphere. Disabled by default with zero JSX output.
 - Physical receipt: reach error, lift, work, clearance, collision risk, grasp timing, peak force, release, and placement.
+
+### Collision-guard chain (both labs)
+
+The user-facing focused routes enforce a four-primitive geometric guard chain that the policy (transformer or CMA-ES) cannot violate at the user surface. The chain is the SOTA penetration-depth / contact-manifold math from `docs/SOTA-MATH.md` (Ericson, *Real-Time Collision Detection*; Bergen, *Collision Detection in Interactive 3D Environments*; Jo/Zhang/Yang/Luo, *Geometry-Aware Control Barrier Functions*), deployed as:
+
+- **Spawn-safe** — on first trace load, a coarse grid sweep over the house bounds returns the first interior point at which the per-drag clamp reports `isColliding = false` with a 0.35 m safety radius (larger than any body collider sphere). The first frame is provably collision-free.
+- **Per-drag OBB clamp** — the OBB Signed Distance Function with conservative push-out; the dragger's `isColliding` flag fires whenever the proposed position has any OBB with signed distance `< safeRadius`. Visualized live as a red badge.
+- **Reachability guard** — for the arm, a 30-iteration Damped Least Squares (DLS) IK attempt with 2 cm residual tolerance. If the proposed target is not reachable, the dragger holds the previous good target and surfaces a "⛔ Unreachable — Workspace Limit" badge. Implements the SOTA conservative-advance from CBF literature.
+- **Continuous Collision Detection (CCD)** — swept-volume penetration projection; per-step displacement bounded by the joint speed limit so a discrete step cannot miss a wall.
+
+39 regression tests across 5 files bound the chain (`tests/houseMultiObstacleKernel.test.ts`, `tests/g1SpawnSafety.test.ts`, `tests/g1CollisionSafety.test.ts`, `tests/armReachabilityAndSpawn.test.ts`, `tests/flagshipSpawnSafeAlgorithm.test.ts`, `tests/physicsDebugOverlayDisabled.test.ts`). See `docs/SOTA-HUMANOID-POLICIES.md` §3.1 for the full SOTA framing and `README.md` "The collision-guard chain (no policy can tunnel a wall)" for the user-facing summary.
 
 ## Platform-specific information architecture
 
