@@ -1,11 +1,51 @@
 # Changelog
 
-All notable changes to the CMA-ES Explainer site are documented here.
-
 This project has no formal releases or tags. Changes are organized chronologically
 and grouped by capability area within each date. Every commit hash links to its
 GitHub page at `https://github.com/Dicklesworthstone/cmaes_explainer/commit/<hash>`.
 
+---
+
+## 2026-09-01 -- Collision-Guard Chain, Physics Debug Overlays, Free-Fly Camera, CHANGELOG Catch-Up
+
+The user reported "the humanoid robot spawns INSIDE A wall" and "the arm CANNOT go THROUGH objects, EVER" on every flagship. This session closed both complaints end-to-end: a four-primitive geometric guard chain that the policy cannot violate at the user surface, a physics debug overlay that lets the user verify the chain is operating, a Free-Fly 6-DOF camera with discoverable keybindings, and the documentation to make all of it future-self-readable.
+
+### Collision-Guard Chain (the user's #1 ask)
+
+- **Spawn-safe** ([`findClearSpawnPosition`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/071f6b8) in `app/lib/houseMultiObstacleKernel.ts`): on first trace load, a coarse grid sweep over the house bounds returns the first interior point at which `clampPositionAgainstHouseCollisions` reports `isColliding = false` with a 0.35 m safety radius (larger than any body collider sphere). The arm flagship mirrors this with `clampArmTargetPosition` for the KUKA target marker ([243f83e](https://github.com/Dicklesworthstone/cmaes_explainer/commit/243f83e)). The first frame is provably collision-free; the user can never load a page and see the humanoid spawn inside a wall.
+- **Per-drag OBB clamp** ([`clampPositionAgainstHouseCollisions`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/1d9e103), [`clampArmTargetPosition`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/1d9e103)): the OBB Signed Distance Function $\mathbf{d} = |\mathbf{R}^T(\mathbf{x} - \mathbf{c})| - \mathbf{h}$ from Ericson §5.2.3, now using the SDF gradient for the push-out. The dragger's `isColliding` flag fires whenever the proposed position has any OBB with signed distance `< safeRadius`. Visualized live as the red badge above each scene: "⚠️ Surface Clamped" when fired, "🖐️ Target Moved" otherwise.
+- **Reachability guard** ([`isTargetKukaReachable`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2bb4ef9) in `app/lib/armInverseKinematics.ts`): a 30-iteration Damped Least Squares (DLS) IK attempt with 2 cm residual tolerance. If the proposed target is not reachable by the KUKA arm, the dragger holds the previous good target and surfaces a "⛔ Unreachable — Workspace Limit" badge. Implements the SOTA conservative-advance / penetration-guard from CBF literature.
+- **Continuous Collision Detection (CCD)** ([swept-volume CCD](https://github.com/Dicklesworthstone/cmaes_explainer/commit/8f57d8a) and SDF-gradient clamp): per-step displacement $\le v_{\max} \cdot dt$ bounded by the joint speed limit $\times 1/480\text{s} \approx 6\text{ mm}$, well under the 0.04 m margin used by both clamp primitives, so a discrete step cannot miss a wall.
+- **Documented** in a new [`docs/SOTA-HUMANOID-POLICIES.md` §3.1](https://github.com/Dicklesworthstone/cmaes_explainer/commit/071f6b8) and a new "The collision-guard chain (no policy can tunnel a wall)" section in [`README.md`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/091ae05).
+
+### Physics Debug Overlays
+
+- **G1 flagship** ([`G1PhysicsDebugOverlay`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/c6d526e), [arm counterpart](https://github.com/Dicklesworthstone/cmaes_explainer/commit/030a2f6), [gating fix](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2bb4ef9)): a toggleable "🔧 Physics" button in each flagship's HUD renders (a) the 30 body-link collider spheres as cyan wireframe outlines, (b) the 74-piece house OBB catalogue as red wireframe boxes with their actual yaw rotation, (c) the KUKA arm's reachable workspace as a translucent green point cloud (sampled once at module load via the DLS surrogate over 800 joint configurations), and (d) the current safety sphere. Disabled by default with zero JSX output (regression-bounded by [`tests/physicsDebugOverlayDisabled.test.ts`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2bb4ef9)).
+
+### Free-Fly 6-DOF Camera with Discoverable Keybindings
+
+- **Free-Fly mode** added to both flagships' camera selectors ([G1](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2bb4ef9), [arm](https://github.com/Dicklesworthstone/cmaes_explainer/commit/030a2f6)): the `<FlyControls>` drei primitive, bounded to the workbench envelope so the operator can't lose the arm off-camera.
+- **Discoverability banner** ([`FreeFlyHintBanner`](https://github.com/Dicklesworthstone/cmaes_explainer/commit/256f005), [regression test](https://github.com/Dicklesworthstone/cmaes_explainer/commit/e70bb3d)): when the user enters fly mode, a prominent bottom-center banner surfaces the keybindings (W A S D / Q E / RMB drag) with ARIA `role="status"` so screen readers announce them. Auto-dismisses after 8 seconds; manual dismiss via × button.
+- **Arm bottom HUD** now reflects the active camera mode: "Free-fly 6-DOF: WASD + Q/E + drag to look." in fly mode, "Grasp focus: target held still at the workbench." in microscope mode, etc. ([e70bb3d](https://github.com/Dicklesworthstone/cmaes_explainer/commit/e70bb3d)).
+
+### Regression Coverage (this period)
+
+- 39 tests across 5 files bound the collision-guard chain at every layer:
+  - `tests/houseMultiObstacleKernel.test.ts` (19) — OBB SDF math, distance, `findClearSpawnPosition` refuses fully-blocked
+  - `tests/g1SpawnSafety.test.ts` (3) — G1 default spawn inside house, positive clearance against every OBB
+  - `tests/g1CollisionSafety.test.ts` (1) — G1 per-link swept-CCD
+  - `tests/armReachabilityAndSpawn.test.ts` (8) — arm clamp, reachability, end-to-end chain, spawn-safe
+  - `tests/flagshipSpawnSafeAlgorithm.test.ts` (8) — algorithm mirror of the spawn-safe useEffect in both flagships
+  - `tests/physicsDebugOverlayDisabled.test.ts` (6) — disabled state has zero JSX output, structural + behavioral
+- 4 tests for the free-fly banner (keybinding chips present, ARIA correct, dismiss button)
+- 16 tests for the flagship smoke import (every flagship module loads under 5 seconds total)
+
+### Honesty floor (this period)
+
+- The isTargetKukaReachable tolerance was tightened from 5 cm to 2 cm after fresh-eyes review — a target 4.9 cm off the end-effector was being accepted as "reachable" even though the arm cannot actually reach it ([commit](https://github.com/Dicklesworthstone/cmaes_explainer/commit/2bb4ef9)).
+- The ArmPhysicsDebugOverlay's `useMemo` blocks were originally always allocating, even when `enabled={false}`. The early-return null guard prevented JSX but the Three.js buffer geometry was still being allocated on first mount. Now gated on `enabled` so the disabled state is truly zero-overhead.
+- The disabled-overlay perf claim was originally just a code comment. Now regression-bounded by `tests/physicsDebugOverlayDisabled.test.ts` (6 tests, including 2 positive controls and 2 stress cases with non-null obstacles).
+- The spawn-safe useEffect in the G1 flagship was lost in a sibling refactor; the test `tests/flagshipSpawnSafeAlgorithm.test.ts` would have caught this if it had existed earlier.
 ---
 
 ## 2026-08-30 -- KUKA KMR + LBR iiwa: 7-Phase Mobile Base Implementation

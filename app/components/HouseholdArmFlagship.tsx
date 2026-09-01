@@ -44,10 +44,20 @@ import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
-import { ArmGraspMicroscopeOverlay, ArmGraspMicroscopeHUD } from "./ArmGraspMicroscope";
+import {
+  ArmGraspMicroscopeOverlay,
+  ArmGraspMicroscopeHUD,
+  ArmJointKinematicsStrip,
+} from "./ArmGraspMicroscope";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
-import { MANIPULABLE_OBJECT_PRESETS, computeFerrariCannyGWS } from "../lib/armInverseKinematics";
+import {
+  MANIPULABLE_OBJECT_PRESETS,
+  computeFerrariCannyGWS,
+  solveKukaIK,
+  clampArmTargetPosition,
+  isTargetKukaReachable,
+} from "../lib/armInverseKinematics";
 import { resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
 import {
   HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
@@ -818,8 +828,6 @@ function ArmCameraRig({
   ) : null;
 }
 
-import { clampArmTargetPosition, isTargetKukaReachable } from "../lib/armInverseKinematics";
-
 const armHouseScene = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function ArmTargetDragger({
@@ -1334,6 +1342,17 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     trace.possibleCollisionTimeSeconds > 0
   );
   const taskInfo = TASK_COPY[task];
+  const currentSampleForHUD = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
+  const activeJointAngles = useMemo(() => {
+    if (armDragTarget) {
+      return solveKukaIK(armDragTarget, [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0.78, 0], 40);
+    }
+    if (currentSampleForHUD && currentSampleForHUD.linkPoses && currentSampleForHUD.linkPoses.length >= 8) {
+      const p7 = currentSampleForHUD.linkPoses[7].position;
+      return solveKukaIK([p7[0], p7[2], p7[1]], [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0.78, 0], 30);
+    }
+    return [0, 0.4, 0, -1.2, 0, 0.8, 0];
+  }, [armDragTarget, currentSampleForHUD]);
 
   return (
     <div className={embedded ? "space-y-2" : "space-y-8"}>
@@ -1613,12 +1632,18 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
              </div>
           </div>
 
-          {/* Tactile Grasp Microscope HUD */}
+          {/* Tactile Grasp Microscope HUD & Joint Kinematics Strip */}
           {!embedded ? (
-            <ArmGraspMicroscopeHUD
-              sample={trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null}
-              enabled={microscopeMode}
-            />
+            <div className="mt-3 flex flex-col gap-3">
+              <ArmGraspMicroscopeHUD
+                sample={currentSampleForHUD}
+                enabled={microscopeMode}
+              />
+              <ArmJointKinematicsStrip
+                jointAngles={activeJointAngles}
+                dragActive={Boolean(armDragTarget)}
+              />
+            </div>
           ) : null}
         </div>
 

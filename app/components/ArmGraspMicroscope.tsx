@@ -185,3 +185,93 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
     </div>
   );
 }
+
+export interface ArmJointKinematicsStripProps {
+  jointAngles: number[];
+  dragActive?: boolean;
+}
+
+const JOINT_SPECS = [
+  { name: "A1 Base", limit: 2.96 },
+  { name: "A2 Shoulder", limit: 2.09 },
+  { name: "A3 Arm", limit: 2.96 },
+  { name: "A4 Elbow", limit: 2.09 },
+  { name: "A5 Wrist 1", limit: 2.96 },
+  { name: "A6 Wrist 2", limit: 2.09 },
+  { name: "A7 Flange", limit: 3.05 },
+];
+
+export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKinematicsStripProps) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/85 p-3.5 backdrop-blur-md">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-orange-400" />
+          <span className="text-xs font-bold uppercase tracking-[0.16em] text-orange-300">
+            7-DoF iiwa Joint Kinematics & Mechanical Limit Telemetry
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {dragActive && (
+            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/20 px-2 py-0.5 text-[0.62rem] font-bold uppercase text-cyan-200">
+              Interactive IK Active
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="text-[0.65rem] text-slate-400 hover:text-slate-200"
+          >
+            {isOpen ? "Collapse" : "Expand"}
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+          {JOINT_SPECS.map((spec, idx) => {
+            const angle = jointAngles[idx] ?? 0;
+            const deg = (angle * 180) / Math.PI;
+            const limitDeg = (spec.limit * 180) / Math.PI;
+            const absRatio = Math.min(1, Math.abs(angle) / spec.limit);
+            const isNearLimit = Math.abs(angle) >= spec.limit - 0.22;
+
+            return (
+              <div
+                key={spec.name}
+                className={`rounded-xl border p-2 text-center transition-colors ${
+                  isNearLimit
+                    ? "border-amber-400/40 bg-amber-500/10"
+                    : "border-white/5 bg-white/[0.02]"
+                }`}
+              >
+                <div className="flex items-center justify-between text-[0.62rem] text-slate-400">
+                  <span className="font-semibold">{spec.name}</span>
+                  <span className="font-mono">±{limitDeg.toFixed(0)}°</span>
+                </div>
+                <div className={`mt-1 font-mono text-sm font-bold ${
+                  isNearLimit ? "text-amber-300" : "text-white"
+                }`}>
+                  {deg >= 0 ? `+${deg.toFixed(1)}°` : `${deg.toFixed(1)}°`}
+                </div>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className={`h-full rounded-full transition-all duration-75 ${
+                      isNearLimit
+                        ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                        : "bg-orange-500"
+                    }`}
+                    style={{ width: `${absRatio * 100}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
