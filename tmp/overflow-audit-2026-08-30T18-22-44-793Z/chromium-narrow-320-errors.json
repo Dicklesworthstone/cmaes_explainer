@@ -1,4 +1,0 @@
-[
-  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
-  "requestfailed: GET http://localhost:3777/_next/static/chunks/3d2bfc015a006141.js — net::ERR_ABORTED"
-]

@@ -20,8 +20,10 @@ ios/Engine/
 ios/EngineWeb/out/
 
 # Local browser-smoke evidence is retained between runs but not committed.
-tmp/ui-smoke/
 .env*
 
 # bv (beads viewer) local config and caches
 .bv/
+
+# Ephemeral audit/scratch artifacts (overflow-audit-*, vision-qa-*, ui-smoke, g1fix)
+/tmp/

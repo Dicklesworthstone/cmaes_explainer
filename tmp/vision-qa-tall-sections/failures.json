@@ -1,3 +1,0 @@
-[
-  "chromium-desktop/iphone-sec-wing: TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 10380.262999999999ms exceeded.\nCall log:\n  - attempting scroll into view action\n    - waiting for element to be stable\n"
-]

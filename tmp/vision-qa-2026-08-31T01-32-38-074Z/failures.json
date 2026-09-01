@@ -1,6 +1,0 @@
-[
-  "chromium-desktop/home: Error: page.evaluate: Error: timed out after 19/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
-  "chromium-desktop/humanoid: Error: page.evaluate: Error: timed out after 18/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
-  "chromium-desktop/arm: Error: page.evaluate: Error: timed out after 20/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)",
-  "chromium-iphone-emulation/arm: Error: page.evaluate: Error: timed out after 21/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
-]
