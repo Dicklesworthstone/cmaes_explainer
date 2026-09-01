@@ -1,0 +1,88 @@
+{
+  "browserChoice": "chromium",
+  "settleMs": 2500,
+  "results": [
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "base",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "base",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "base",
+      "scrollWidth": 348,
+      "clientWidth": 320,
+      "innerWidth": 348,
+      "screenWidth": 320,
+      "offenders": [
+        "div.flex.items-center.gap-2 left=122 right=348 overflow=28",
+        "select.bg-neutral-800.text-xs.px-2 left=180 right=348 overflow=28",
+        "div.flex.items-center.gap-2 left=139 right=322 overflow=2",
+        "select.bg-neutral-800.text-xs.px-2 left=183 right=322 overflow=2"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 367,
+      "clientWidth": 320,
+      "innerWidth": 367,
+      "screenWidth": 320,
+      "offenders": [
+        "div.flex.items-center.gap-2 left=127 right=366 overflow=46",
+        "select.bg-neutral-800.text-xs.px-2 left=189 right=366 overflow=46",
+        "div.flex.items-center.gap-2 left=145 right=337 overflow=17",
+        "select.bg-neutral-800.text-xs.px-2 left=191 right=337 overflow=17"
+      ],
+      "errors": []
+    }
+  ],
+  "failures": [
+    "chromium/narrow-320/base: requested viewport/screen width was not active (missing mobile viewport metadata is one possible cause)",
+    "chromium/narrow-320/base: layout viewport inflated",
+    "chromium/narrow-320/+4% letter-spacing: requested viewport/screen width was not active (missing mobile viewport metadata is one possible cause)",
+    "chromium/narrow-320/+4% letter-spacing: layout viewport inflated"
+  ]
+}

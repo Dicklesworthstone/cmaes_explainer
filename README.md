@@ -158,14 +158,15 @@ Two audited surfaces coexist intentionally:
   30-link owner completes the 720-step horizon; honest measured displacement
   remains ~0.24 m flat and ~0.17 m terrain-and-push, still short of the
   >1.0 m / >0.5 m/s target.
-- `public/wasm/fs-cmaes/v0612/` ships the constraint-aware v071 retune while
-  keeping standing and walking biases task-scoped. The 30-link owner completes
-  all 720 steps at ~0.40 m flat and ~0.50 m under terrain-and-push, with total
-  flight held below the strict 0.10 s anti-jump boundary in both receipts.
+- `public/wasm/fs-cmaes/v0612/` closes the native/browser math drift and ships
+  the task-scoped v073 dual-environment curriculum. Its exact 720-step browser
+  receipts are 0.308 m flat and 0.329 m under terrain-and-push; both spend
+  0.083 s in flight and remain below the disclosed lateral and heading gates.
 - `public/wasm/fs-cmaes/v0613/` adds owner-side feasible-step control for the
   household arm. Certified hard penetration may not increase: proposed joint
   updates are deterministically backtracked, while intentional gripper/object
-  proximity remains outside the hard obstacle and self-collision barrier.
+  proximity remains outside the hard obstacle and self-collision barrier. It
+  preserves the bit-identical v0612 G1 receipts above.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.

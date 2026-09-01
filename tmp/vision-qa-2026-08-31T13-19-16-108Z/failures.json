@@ -1,0 +1,3 @@
+[
+  "chromium-desktop/smoke: Error: page.evaluate: Error: timed out after 40/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+]

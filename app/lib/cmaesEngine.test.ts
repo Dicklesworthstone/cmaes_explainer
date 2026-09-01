@@ -1616,9 +1616,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   if (!("ok" in trace))
     throw new Error(`G1 trace refusal ${trace.refusal.name}`);
   // The standing prior is deliberately task-scoped and need not complete a
-  // walking challenge. The v0.6.12 curriculum is pinned to the native v071
+  // walking challenge. The v0.6.13 curriculum is pinned to the native v073
   // owner receipt so browser packaging cannot silently regress into the old
-  // jump-like or low-displacement gait.
+  // jump-like, low-displacement, or cross-target-divergent gait.
   expect(evaluation.ok.completedSteps).toBeGreaterThan(120);
   expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(
     evaluation.ok.completedSteps,
@@ -1626,7 +1626,21 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(
     evaluation.ok.objective,
   );
-  expect(curriculum.ok.completedSteps).toBeGreaterThanOrEqual(500);
+  expect(curriculum.ok.completedSteps).toBe(720);
+  expect(curriculum.ok.terminationReason).toBe("horizon");
+  expect(curriculum.ok.objective).toBeCloseTo(1.3168446135481418, 11);
+  expect(curriculum.ok.distanceMeters).toBeCloseTo(0.32916830547315423, 12);
+  expect(curriculum.ok.actuatorWorkJoules).toBeCloseTo(11796.419770004608, 7);
+  expect(curriculum.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
+  expect(curriculum.ok.flightSeconds).toBeLessThan(0.1);
+  expect(curriculum.ok.lateralErrorIntegral).toBeCloseTo(
+    0.38117352800697313,
+    12,
+  );
+  expect(curriculum.ok.headingErrorIntegral).toBeCloseTo(
+    0.9341669126226677,
+    12,
+  );
   expect(curriculum.ok.pushImpulseNewtonSeconds).toBeCloseTo(
     2.291467558724226,
     5,
@@ -1654,7 +1668,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   );
   const flatPolicy = flatEvaluator.walking_curriculum_mean();
   const flat = decodeG1Evaluation(flatEvaluator.evaluate(flatPolicy));
-  if (!('ok' in flat))
+  if (!("ok" in flat))
     throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
   expect(flat.ok.completedSteps).toBe(720);
   expect(flat.ok.terminationReason).toBe("horizon");
@@ -1662,7 +1676,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   expect(flat.ok.distanceMeters).toBeCloseTo(0.30837211553531235, 12);
   expect(flat.ok.actuatorWorkJoules).toBeCloseTo(11930.205416265955, 7);
   expect(flat.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
-  expect(flat.ok.flightSeconds).toBeLessThanOrEqual(0.1);
+  expect(flat.ok.flightSeconds).toBeLessThan(0.1);
+  expect(flat.ok.lateralErrorIntegral).toBeCloseTo(0.2912452028687668, 12);
+  expect(flat.ok.headingErrorIntegral).toBeCloseTo(0.9185544290374063, 12);
   flatEvaluator.free();
 
   const population = 16;

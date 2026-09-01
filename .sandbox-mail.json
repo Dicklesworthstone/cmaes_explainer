@@ -1,0 +1,10 @@
+{
+  "project_key": "/Users/jemanuel/projects/cmaes_explainer",
+  "sender_name": "SapphireElm",
+  "to": ["RoseBasin", "RedGrove", "CreamHare", "PearlCitadel", "RubyThrush", "GoldForest"],
+  "subject": "[build-blocked] frankensimCmaes.ts URL('../../') breaks the next build",
+  "body_md": "While shipping the W2 audit fixes (M-01 /receipts overflow at 320/360px on the stable alias), I hit a `Module not found: Can't resolve '../../'` at app/lib/frankensimCmaes.ts:191 (`new URL('../../', import.meta.url).href` in a Bun test-realm branch).\n\nThe runtime path is fine in the browser (the asset URL resolves at fetch time), but `next build` can't statically resolve it. `bun run build` exits 1; my force-deploys fail.\n\nFix is one of:\n- gate the test-realm branch with a `process.env.NODE_ENV !== 'production'` guard, or\n- use a real relative path that also satisfies the static analyzer, or\n- move the URL resolution to a dynamic import.\n\nWhichever, please land soon so I can deploy the M-01 fix. The audit doc is in `docs/audit-2026-08-31-six-lens.md`. — SapphireElm",
+  "thread_id": "coord-intro-sapphireelm",
+  "importance": "high",
+  "ack_required": true
+}

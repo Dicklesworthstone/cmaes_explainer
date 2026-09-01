@@ -8,7 +8,7 @@
 // the integration is additive: the arm and the KMR each have
 // their own coordinate system and their own canvas.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import {
@@ -190,6 +190,14 @@ function KmrThreeScene({
   );
 }
 
+const ROOM_DESTINATIONS = [
+  { name: "🛋️ Living Room", x: -1.4, y: 2.6 },
+  { name: "🍽️ Dining Room", x: 1.6, y: 2.4 },
+  { name: "🍳 Kitchen", x: 1.9, y: -0.6 },
+  { name: "🛏️ Bedroom", x: -1.8, y: -1.9 },
+  { name: "🌿 Porch", x: 0.0, y: 4.8 },
+];
+
 export function KmrScene({ initialPose }: KmrSceneProps) {
   const navigationStart = CRAFTSMAN_BUNGALOW_1928.goals[0].center;
   const [pose, setPose] = useState<KmrPose>(
@@ -216,6 +224,75 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       if (animRef.current !== null) cancelAnimationFrame(animRef.current);
     };
   }, []);
+
+  const handleManualDrive = useCallback(
+    (dx: number, dy: number, dTheta: number = 0) => {
+      if (animRef.current !== null) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      setPath(null);
+      setPlanningError(null);
+      const cosT = Math.cos(pose.theta);
+      const sinT = Math.sin(pose.theta);
+      const worldDx = dx * cosT - dy * sinT;
+      const worldDy = dx * sinT + dy * cosT;
+      const nextX = Math.max(
+        CRAFTSMAN_BUNGALOW_1928.bounds.min[0] + 0.35,
+        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[0] - 0.35, pose.x + worldDx)
+      );
+      const nextY = Math.max(
+        CRAFTSMAN_BUNGALOW_1928.bounds.min[1] + 0.35,
+        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[1] - 0.35, pose.y + worldDy)
+      );
+      const nextTheta = (pose.theta + dTheta + Math.PI * 2) % (Math.PI * 2);
+
+      const radius = 0.32;
+      let collision = false;
+      for (const obb of obstacles) {
+        if (obb.exemptFromPenalty) continue;
+        const relX = nextX - obb.center[0];
+        const relZ = nextY - obb.center[2];
+        const cosYaw = Math.cos(-obb.rotationYawRad);
+        const sinYaw = Math.sin(-obb.rotationYawRad);
+        const localX = relX * cosYaw - relZ * sinYaw;
+        const localZ = relX * sinYaw + relZ * cosYaw;
+        const hx = obb.halfExtents[0] + radius;
+        const hz = obb.halfExtents[2] + radius;
+        if (Math.abs(localX) < hx && Math.abs(localZ) < hz) {
+          collision = true;
+          break;
+        }
+      }
+
+      if (!collision) {
+        setPose({ x: nextX, y: nextY, theta: nextTheta });
+      } else {
+        setPlanningError("Manual drive stopped: obstacle clearance envelope reached.");
+      }
+    },
+    [pose, obstacles]
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (["ArrowUp", "KeyW"].includes(e.code)) {
+        handleManualDrive(0.12, 0);
+      } else if (["ArrowDown", "KeyS"].includes(e.code)) {
+        handleManualDrive(-0.12, 0);
+      } else if (["ArrowLeft", "KeyA"].includes(e.code)) {
+        handleManualDrive(0, -0.12);
+      } else if (["ArrowRight", "KeyD"].includes(e.code)) {
+        handleManualDrive(0, 0.12);
+      } else if (e.code === "KeyQ") {
+        handleManualDrive(0, 0, 0.15);
+      } else if (e.code === "KeyE") {
+        handleManualDrive(0, 0, -0.15);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleManualDrive]);
 
   const setWaypoint = (target: { x: number; y: number }) => {
     if (animRef.current !== null) {
@@ -303,24 +380,39 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
 
   return (
     <div className="rounded-2xl border border-orange-400/20 bg-slate-950/80 p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-base font-bold text-orange-300">
             KMR base: collision-aware household navigation
           </h3>
           <p className="text-xs text-slate-400">
-            Click a clear floor point. Global clearance value iteration feeds
-            a fixed-step TS kinematic owner, which issues four mecanum-wheel
-            commands and refuses swept contact with furniture or walls.
-            The clearance proxy uses the procedural 600 mm chassis width plus
-            a 20 mm margin; it is not a rigid-body certification of the larger
-            official vehicle envelope.
+            Click a floor point, select a room preset, or use the D-Pad / WASD / Arrow keys to drive the 4-mecanum mobile base in real-time with 2D LiDAR raycasting.
           </p>
         </div>
-        <div className="text-xs text-slate-500">
-          {pose.x.toFixed(2)} m, {pose.y.toFixed(2)} m
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-white/10 bg-slate-900 px-3 py-1 font-mono text-xs text-orange-200">
+            X: {pose.x.toFixed(2)}m · Y: {pose.y.toFixed(2)}m · θ: {((pose.theta * 180) / Math.PI).toFixed(0)}°
+          </span>
         </div>
       </div>
+
+      {/* Room Destination Presets */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <span className="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400 mr-1">
+          Route To:
+        </span>
+        {ROOM_DESTINATIONS.map((dest) => (
+          <button
+            key={dest.name}
+            type="button"
+            onClick={() => setWaypoint({ x: dest.x, y: dest.y })}
+            className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-200 transition-colors"
+          >
+            {dest.name}
+          </button>
+        ))}
+      </div>
+
       <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-slate-800">
         <Canvas
           camera={{ position: [0, 12, 8], fov: 50, near: 0.1, far: 40 }}
@@ -348,13 +440,70 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
             onSetWaypoint={setWaypoint}
           />
         </Canvas>
+
+        {/* Interactive Manual Mecanum Drive D-Pad */}
+        <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-white/15 bg-slate-950/85 p-2 shadow-2xl backdrop-blur-md">
+            <div className="grid grid-cols-3 gap-1">
+              <button
+                type="button"
+                onClick={() => handleManualDrive(0, 0, 0.15)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 active:scale-95"
+                title="Rotate CCW (Q)"
+              >
+                ↺
+              </button>
+              <button
+                type="button"
+                onClick={() => handleManualDrive(0.15, 0)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-orange-200 hover:bg-orange-500/20 active:scale-95"
+                title="Forward (W / ↑)"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                onClick={() => handleManualDrive(0, 0, -0.15)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-cyan-300 hover:bg-cyan-500/20 active:scale-95"
+                title="Rotate CW (E)"
+              >
+                ↻
+              </button>
+              <button
+                type="button"
+                onClick={() => handleManualDrive(0, -0.15)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-orange-200 hover:bg-orange-500/20 active:scale-95"
+                title="Strafe Left (A / ←)"
+              >
+                ◄
+              </button>
+              <button
+                type="button"
+                onClick={() => handleManualDrive(-0.15, 0)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-orange-200 hover:bg-orange-500/20 active:scale-95"
+                title="Reverse (S / ↓)"
+              >
+                ▼
+              </button>
+              <button
+                type="button"
+                onClick={() => handleManualDrive(0, 0.15)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-orange-200 hover:bg-orange-500/20 active:scale-95"
+                title="Strafe Right (D / →)"
+              >
+                ►
+              </button>
+            </div>
+          </div>
+        </div>
+
         {!path ? (
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
           >
             <div className="rounded-full border border-orange-300/40 bg-slate-950/80 px-4 py-2 text-xs font-semibold text-orange-200 shadow-lg backdrop-blur-sm">
-              Tap to set a waypoint
+              Tap floor or use D-Pad / WASD to drive
             </div>
           </div>
         ) : null}

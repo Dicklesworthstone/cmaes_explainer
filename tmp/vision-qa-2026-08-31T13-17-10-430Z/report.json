@@ -1,0 +1,23 @@
+[
+  {
+    "viewport": "chromium-desktop",
+    "case": "smoke",
+    "errors": [],
+    "verdict": "ERROR: case did not complete",
+    "detail": "Error: page.evaluate: Error: timed out after 88/100 animation frames\n    at eval (eval at evaluate (:290:30), <anonymous>:4:43)"
+  },
+  {
+    "viewport": "chromium-iphone-emulation",
+    "case": "smoke",
+    "url": "https://cmaes-explainer.vercel.app/",
+    "file": "tmp/vision-qa-2026-08-31T13-17-10-430Z/chromium-iphone-emulation-smoke.png",
+    "stats": {
+      "mean": 35.2,
+      "std": 47.4,
+      "min": 4,
+      "max": 255
+    },
+    "errors": [],
+    "verdict": "ok"
+  }
+]

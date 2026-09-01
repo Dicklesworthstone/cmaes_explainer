@@ -1,0 +1,144 @@
+{
+  "browserChoice": "chromium",
+  "settleMs": 2500,
+  "results": [
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "base",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=796 overflow=406",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=796 overflow=406",
+        "tr left=25 right=796 overflow=406",
+        "th.px-4.py-3 left=543 right=796 overflow=406",
+        "tbody.divide-y.divide-white/5 left=25 right=796 overflow=406",
+        "tr.text-slate-200 left=25 right=796 overflow=406",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=406",
+        "tr.text-slate-200 left=25 right=796 overflow=406",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=406",
+        "tr.text-slate-200 left=25 right=796 overflow=406"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-390",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "innerWidth": 390,
+      "screenWidth": 390,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=775 overflow=385",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=775 overflow=385",
+        "tr left=25 right=775 overflow=385",
+        "th.px-4.py-3 left=503 right=775 overflow=385",
+        "tbody.divide-y.divide-white/5 left=25 right=775 overflow=385",
+        "tr.text-slate-200 left=25 right=775 overflow=385",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=385",
+        "tr.text-slate-200 left=25 right=775 overflow=385",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=385",
+        "tr.text-slate-200 left=25 right=775 overflow=385"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "base",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=796 overflow=421",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=796 overflow=421",
+        "tr left=25 right=796 overflow=421",
+        "th.px-4.py-3 left=543 right=796 overflow=421",
+        "tbody.divide-y.divide-white/5 left=25 right=796 overflow=421",
+        "tr.text-slate-200 left=25 right=796 overflow=421",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=421",
+        "tr.text-slate-200 left=25 right=796 overflow=421",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=421",
+        "tr.text-slate-200 left=25 right=796 overflow=421"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "iphone-375",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "innerWidth": 375,
+      "screenWidth": 375,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=775 overflow=400",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=775 overflow=400",
+        "tr left=25 right=775 overflow=400",
+        "th.px-4.py-3 left=503 right=775 overflow=400",
+        "tbody.divide-y.divide-white/5 left=25 right=775 overflow=400",
+        "tr.text-slate-200 left=25 right=775 overflow=400",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=400",
+        "tr.text-slate-200 left=25 right=775 overflow=400",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=400",
+        "tr.text-slate-200 left=25 right=775 overflow=400"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "base",
+      "scrollWidth": 348,
+      "clientWidth": 320,
+      "innerWidth": 348,
+      "screenWidth": 320,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=796 overflow=476",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=796 overflow=476",
+        "tr left=25 right=796 overflow=476",
+        "th.px-4.py-3 left=543 right=796 overflow=476",
+        "tbody.divide-y.divide-white/5 left=25 right=796 overflow=476",
+        "tr.text-slate-200 left=25 right=796 overflow=476",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=476",
+        "tr.text-slate-200 left=25 right=796 overflow=476",
+        "td.px-4.py-3.text-xs left=543 right=796 overflow=476",
+        "tr.text-slate-200 left=25 right=796 overflow=476"
+      ],
+      "errors": []
+    },
+    {
+      "browser": "chromium",
+      "viewport": "narrow-320",
+      "label": "+4% letter-spacing",
+      "scrollWidth": 367,
+      "clientWidth": 320,
+      "innerWidth": 367,
+      "screenWidth": 320,
+      "offenders": [
+        "table.w-full.text-left.text-sm left=25 right=775 overflow=455",
+        "thead.text-[0.65rem].font-bold.uppercase left=25 right=775 overflow=455",
+        "tr left=25 right=775 overflow=455",
+        "th.px-4.py-3 left=503 right=775 overflow=455",
+        "tbody.divide-y.divide-white/5 left=25 right=775 overflow=455",
+        "tr.text-slate-200 left=25 right=775 overflow=455",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=455",
+        "tr.text-slate-200 left=25 right=775 overflow=455",
+        "td.px-4.py-3.text-xs left=503 right=775 overflow=455",
+        "tr.text-slate-200 left=25 right=775 overflow=455"
+      ],
+      "errors": []
+    }
+  ],
+  "failures": [
+    "chromium/narrow-320/base: requested viewport/screen width was not active (missing mobile viewport metadata is one possible cause)",
+    "chromium/narrow-320/base: layout viewport inflated",
+    "chromium/narrow-320/+4% letter-spacing: requested viewport/screen width was not active (missing mobile viewport metadata is one possible cause)",
+    "chromium/narrow-320/+4% letter-spacing: layout viewport inflated"
+  ]
+}

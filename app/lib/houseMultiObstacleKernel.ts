@@ -315,6 +315,36 @@ export function sweptSphereOBBEntryPoint(
     if (entryT > exitT) return { wasHit: false };
   }
   if (exitT < 0 || entryT > 1) return { wasHit: false };
+  // A previous projection commonly leaves the sphere exactly tangent to an
+  // expanded face. The inclusive slab interval then starts at t=0 even when
+  // the next motion is tangent to, or away from, that face. Treat only motion
+  // strictly into every touched face as a new collision; otherwise the
+  // renderer would pin a link at its first contact point forever.
+  if (entryT <= 1e-12) {
+    const boundaryTolerance = 1e-9;
+    const boundaryAxes: number[] = [];
+    let startsWithinExpandedBox = true;
+    for (let axis = 0; axis < 3; axis++) {
+      const boundaryGap = extents[axis] - Math.abs(start[axis]);
+      if (boundaryGap < -boundaryTolerance) {
+        startsWithinExpandedBox = false;
+        break;
+      }
+      if (Math.abs(boundaryGap) <= boundaryTolerance) boundaryAxes.push(axis);
+    }
+    const movesStrictlyInward =
+      boundaryAxes.length > 0 &&
+      boundaryAxes.every(
+        (axis) => start[axis] * direction[axis] < -boundaryTolerance,
+      );
+    if (
+      startsWithinExpandedBox &&
+      boundaryAxes.length > 0 &&
+      !movesStrictlyInward
+    ) {
+      return { wasHit: false };
+    }
+  }
   const clampedEntryT = Math.max(0, Math.min(1, entryT));
   const entryPoint: [number, number, number] = [
     prevPos[0] + (currentPos[0] - prevPos[0]) * clampedEntryT,

@@ -64,6 +64,40 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
     expect(distanceToOBB(result.entryPoint!, box)).toBeGreaterThanOrEqual(0.05 - 1e-6);
   });
 
+  test("a sphere already at clearance can move away without being pinned", () => {
+    const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
+    const result = sweptSphereOBBEntryPoint(
+      [0.55, 0, 0],
+      [0.7, 0, 0],
+      0.05,
+      box,
+    );
+    expect(result.wasHit).toBe(false);
+  });
+
+  test("a sphere already at clearance can slide along the face", () => {
+    const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
+    const result = sweptSphereOBBEntryPoint(
+      [0.55, -0.2, 0],
+      [0.55, 0.2, 0],
+      0.05,
+      box,
+    );
+    expect(result.wasHit).toBe(false);
+  });
+
+  test("motion inward from the clearance boundary remains a hit", () => {
+    const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
+    const result = sweptSphereOBBEntryPoint(
+      [0.55, 0, 0],
+      [0.4, 0, 0],
+      0.05,
+      box,
+    );
+    expect(result.wasHit).toBe(true);
+    expect(result.entryT).toBe(0);
+  });
+
   test("hit when the segment crosses the OBB surface; entry point is on the surface", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
     // Segment starts outside (x=1.0) and ends inside (x=0.0). The swept
