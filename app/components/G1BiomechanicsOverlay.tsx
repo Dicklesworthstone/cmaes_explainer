@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
 
@@ -139,6 +139,12 @@ export function G1BiomechanicsOverlay({
       zmpPosition: [zmpX, groundY, zmpZ] as [number, number, number],
     };
   }, [sample, leftFootPosition, rightFootPosition, comPosition]);
+
+  useEffect(() => {
+    return () => {
+      supportGeometry.dispose();
+    };
+  }, [supportGeometry]);
 
   if (!enabled) return null;
 
