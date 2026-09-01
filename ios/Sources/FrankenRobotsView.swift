@@ -6,6 +6,27 @@ struct FrankenRobotsView: View {
     @State private var showingDetails = false
     @State private var guidePage: RobotGuidePage = .lab
 
+    init() {
+#if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if let rawLab = environment["FROBOTS_INITIAL_LAB"],
+           let requestedLab = RobotLab(rawValue: rawLab.lowercased())
+        {
+            _lab = State(initialValue: requestedLab)
+        }
+        if environment["FROBOTS_SHOW_GUIDE"] == "1" {
+            _showingDetails = State(initialValue: true)
+        }
+        if let rawPage = environment["FROBOTS_GUIDE_PAGE"],
+           let requestedPage = RobotGuidePage.allCases.first(where: {
+               $0.rawValue.caseInsensitiveCompare(rawPage) == .orderedSame
+           })
+        {
+            _guidePage = State(initialValue: requestedPage)
+        }
+#endif
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -28,6 +49,7 @@ struct FrankenRobotsView: View {
             guidePage = .lab
             engine.select(value)
         }
+        .task { engine.select(lab) }
         .onReceive(NotificationCenter.default.publisher(for: .selectRobotLab)) { note in
             guard let value = note.object as? RobotLab else { return }
             lab = value
