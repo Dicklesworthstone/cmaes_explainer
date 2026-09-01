@@ -788,13 +788,15 @@ function ArmRig({
   );
 }
 
+export type ArmCameraMode = "studio" | "microscope" | "overhead" | "side" | "front" | "fly";
+
 const armCameraScratchVec = new THREE.Vector3();
 
 function ArmCameraRig({
   cameraMode,
   objectPos,
 }: {
-  cameraMode: "studio" | "microscope" | "overhead" | "fly";
+  cameraMode: ArmCameraMode;
   objectPos: [number, number, number];
 }) {
   useFrame(({ camera }) => {
@@ -806,6 +808,14 @@ function ArmCameraRig({
       armCameraScratchVec.set(0, 3.2, 0);
       camera.position.lerp(armCameraScratchVec, 0.08);
       camera.lookAt(0, 0.4, 0);
+    } else if (cameraMode === "side") {
+      armCameraScratchVec.set(0, 0.85, 1.75);
+      camera.position.lerp(armCameraScratchVec, 0.08);
+      camera.lookAt(0, 0.45, 0);
+    } else if (cameraMode === "front") {
+      armCameraScratchVec.set(1.75, 0.85, 0);
+      camera.position.lerp(armCameraScratchVec, 0.08);
+      camera.lookAt(0, 0.45, 0);
     }
   });
 
@@ -966,7 +976,7 @@ function ArmStage({
   admission: HouseholdManipulationAdmission | null;
   reduceMotion: boolean;
   microscopeMode: boolean;
-  cameraMode: "studio" | "microscope" | "overhead" | "fly";
+  cameraMode: ArmCameraMode;
   sampleIndex: number;
   onSampleChange?: (sample: HouseholdManipulationTraceSample) => void;
   dragTarget?: [number, number, number] | null;
@@ -1103,7 +1113,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   // expand to all 12 so the page doesn't drown the viewport in telemetry.
   const [showAllReceipts, setShowAllReceipts] = useState(false);
   const [microscopeMode, setMicroscopeMode] = useState(false);
-  const [cameraMode, setCameraMode] = useState<"studio" | "microscope" | "overhead" | "fly">("studio");
+  const [cameraMode, setCameraMode] = useState<ArmCameraMode>("studio");
   const [sampleIndex, setSampleIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -1556,7 +1566,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                   [
                     { id: "studio", label: "Studio", icon: Camera },
                     { id: "microscope", label: "Grasp Focus", icon: Eye },
-                    { id: "overhead", label: "Top-Down", icon: Activity },
+                    { id: "overhead", label: "Top", icon: Activity },
+                    { id: "side", label: "Side", icon: Sliders },
+                    { id: "front", label: "Front", icon: Eye },
                     { id: "fly", label: "Free-Fly", icon: Compass },
                   ] as const
                 ).map((cam) => {
@@ -1605,7 +1617,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                       ? "Grasp focus: target held still at the workbench."
                       : cameraMode === "overhead"
                         ? "Top-down map view."
-                        : "Drag to orbit · pinch to zoom"}
+                        : cameraMode === "side"
+                          ? "Side elevation profile."
+                          : cameraMode === "front"
+                            ? "Front elevation workbench perspective."
+                            : "Drag to orbit · pinch to zoom"}
                 </span>
               ) : null}
             </div>

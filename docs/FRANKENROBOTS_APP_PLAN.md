@@ -30,11 +30,15 @@ The app must not become a generic website wrapper. Its app-level navigation, inf
 - Flat and terrain-plus-push challenges.
 - Separable CMA-ES, LM-CMA, and LM-MA; dense full CMA remains honestly refused at 5,040 dimensions.
 - Four story chapters: puppet, faceplant, footfalls, obstacle mastery.
-- Orbit, follow, first-person, and blueprint cameras.
+- Orbit, follow, first-person, blueprint, and free-fly cameras (free-fly is 6-DOF WASD + Q/E + RMB drag, bounded to the workbench envelope).
+- Free-fly keybinding discoverability banner (`FreeFlyHintBanner`): a prominent bottom-center overlay that surfaces the WASD + Q/E + RMB drag controls with ARIA `role="status"`; auto-dismisses after 8 seconds.
+- Touch & ragdoll dragging with continuous collision detection and swept-volume penetration projection.
 - Play/pause, seek, reset, slow motion, and accelerated replay.
 - Center of mass, support polygon, ground reaction, and ZMP overlays.
 - Cautious Monk, Olympic Sprinter, and Glass-Floor Walker objective presets plus per-channel weighting.
+- Physics debug overlay (the "🔧 Physics" button): toggleable visualization of the 30 body-link collider spheres, the 74-piece house OBB catalogue as wireframe boxes, and the current pelvis safety sphere. Disabled by default with zero JSX output.
 - Physical receipt: distance, speed, work, slip, posture, impacts, contacts, terrain, push recovery, limits, and exact termination.
+
 
 ### Arm Lab
 
