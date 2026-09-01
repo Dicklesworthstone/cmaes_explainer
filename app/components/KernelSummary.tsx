@@ -56,12 +56,14 @@ export function KernelSummary() {
             <li>· Penalty + Coulomb contact (foot / object)</li>
             <li>· Featherstone forward dynamics (arm)</li>
             <li>· Link-OBB penetration projection (renderer)</li>
-            <li>· Swept-volume CCD (renderer, G1) - the link
+            <li>· Swept-volume CCD (renderer, G1 + arm) - the link
                 position is checked against every furniture OBB
                 between frames, so a fast link that would tunnel
                 through a thin obstacle is snapped to the swept
                 entry point, not the deep-interior closest point.
-                Locked by tests/sweptCcd.test.ts.</li>
+                Locked by tests/sweptCcd.test.ts and the arm's
+                previousProjectedPositions pipeline in
+                HouseholdArmFlagship.</li>
           </ul>
         </div>
         <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
@@ -72,12 +74,7 @@ export function KernelSummary() {
             <li>· Compliant pads, not full soles</li>
             <li>· Oriented-box collision envelopes (furniture)</li>
             <li>· Periodic-basis policy, not a net</li>
-            <li>· No motor torque curves or thermal limits</li>
             <li>· No upper-body / hand telemetry</li>
-            <li>· Arm swept-volume CCD: the arm moves slower and
-                has fewer links, so the per-frame snap is
-                sufficient; the swept-CCD pipeline ports in 5 lines
-                if anyone reports a residual arm tunnel</li>
           </ul>
         </div>
         <div className="rounded-xl border border-rose-300/15 bg-rose-950/20 p-3">
