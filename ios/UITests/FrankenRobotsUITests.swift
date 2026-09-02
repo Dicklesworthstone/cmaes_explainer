@@ -186,7 +186,9 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
 
-        let equalizer = app.staticTexts["Receipt Objective Equalizer"]
+        let equalizer = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS[c] 'receipt objective equalizer'")
+        ).firstMatch
         XCTAssertTrue(equalizer.waitForExistence(timeout: 30), app.debugDescription)
 
         let kernelReceipt = app.descendants(matching: .any).matching(
@@ -199,17 +201,17 @@ final class FrankenRobotsUITests: XCTestCase {
             (
                 button: "Analyze this receipt with The Cautious Monk (Maximum Balance)",
                 status: "Viewing The Cautious Monk receipt lens",
-                sum: "WEIGHTED SUM: 27.16"
+                sum: "27.16"
             ),
             (
                 button: "Analyze this receipt with The Olympic Sprinter (Dynamic Forward)",
                 status: "Viewing The Olympic Sprinter receipt lens",
-                sum: "WEIGHTED SUM: 12.70"
+                sum: "12.70"
             ),
             (
                 button: "Analyze this receipt with The Glass-Floor Walker (Zero Impact)",
                 status: "Viewing The Glass-Floor Walker receipt lens",
-                sum: "WEIGHTED SUM: 50.36"
+                sum: "50.36"
             ),
         ]
 
@@ -222,11 +224,11 @@ final class FrankenRobotsUITests: XCTestCase {
             XCTAssertTrue(button.isHittable, "Lens control never became hittable: \(lens.button)")
             button.tap()
 
-            XCTAssertTrue(app.staticTexts.matching(
+            XCTAssertTrue(app.descendants(matching: .any).matching(
                 NSPredicate(format: "label CONTAINS[c] %@", lens.status)
             ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
-            XCTAssertTrue(app.staticTexts.matching(
-                NSPredicate(format: "label CONTAINS[c] %@", lens.sum)
+            XCTAssertTrue(app.descendants(matching: .any).matching(
+                NSPredicate(format: "label CONTAINS[c] 'weighted sum' AND label CONTAINS[c] %@", lens.sum)
             ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
             XCTAssertEqual(kernelReceipt.label, originalKernelLabel)
         }

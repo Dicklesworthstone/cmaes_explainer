@@ -178,7 +178,10 @@ export function G1ObjectiveEqualizer({
       {multiFactor && (
         <div className="mt-6 border-t border-white/10 pt-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+            <span
+              aria-label={`Selected-lens contributions, weighted sum ${multiFactor.weighted.toFixed(2)}`}
+              className="text-xs font-semibold uppercase tracking-wider text-slate-300"
+            >
               Selected-Lens Contributions (Weighted Sum: {multiFactor.weighted.toFixed(2)})
             </span>
             <span className="text-[0.68rem] font-mono text-cyan-300">
