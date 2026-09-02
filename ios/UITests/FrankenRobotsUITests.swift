@@ -65,4 +65,62 @@ final class FrankenRobotsUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    func testArmTracePlaybackControlsReachEmbeddedOwnerTrace() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let stage = app.descendants(matching: .any)
+            .matching(identifier: "robot-stage")
+            .firstMatch
+        XCTAssertTrue(stage.waitForExistence(timeout: 12))
+
+        let arm = app.segmentedControls.buttons["Robot Arm"]
+        XCTAssertTrue(arm.waitForExistence(timeout: 5))
+        arm.tap()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+
+        let playbackButton = app.buttons.matching(
+            NSPredicate(format: "label == 'Play arm trace' OR label == 'Pause arm trace'")
+        ).firstMatch
+        let restartButton = app.buttons["Restart arm trace"]
+        let positionSlider = app.sliders["Arm trace position"]
+        let speedControl = app.descendants(matching: .any)["Arm trace playback speed"]
+
+        XCTAssertTrue(playbackButton.waitForExistence(timeout: 25), app.debugDescription)
+        XCTAssertTrue(restartButton.exists)
+        XCTAssertTrue(positionSlider.exists)
+        XCTAssertTrue(speedControl.exists)
+
+        if playbackButton.label == "Pause arm trace" {
+            playbackButton.tap()
+        } else {
+            playbackButton.tap()
+            XCTAssertTrue(app.buttons["Pause arm trace"].waitForExistence(timeout: 5))
+            app.buttons["Pause arm trace"].tap()
+        }
+        XCTAssertTrue(app.buttons["Play arm trace"].waitForExistence(timeout: 5))
+
+        restartButton.tap()
+        let startPosition = String(describing: positionSlider.value)
+        XCTAssertTrue(positionSlider.isHittable)
+        let seekEnd = positionSlider.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)
+        )
+        seekEnd.tap()
+        let soughtPosition = String(describing: positionSlider.value)
+        XCTAssertNotEqual(soughtPosition, startPosition)
+
+        restartButton.tap()
+        XCTAssertEqual(String(describing: positionSlider.value), startPosition)
+    }
 }

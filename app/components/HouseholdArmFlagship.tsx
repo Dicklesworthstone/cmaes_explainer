@@ -1964,15 +1964,51 @@ export function HouseholdArmFlagship({
               </div>
 
               {/* Camera View Selector */}
-              <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md self-start">
+              <div
+                className={`pointer-events-auto flex items-center rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md ${
+                  embedded
+                    ? "w-full justify-between gap-0.5"
+                    : "self-start gap-1"
+                }`}
+              >
                 {(
                   [
-                    { id: "studio", label: "Studio", icon: Camera },
-                    { id: "microscope", label: "Grasp Focus", icon: Eye },
-                    { id: "overhead", label: "Top", icon: Activity },
-                    { id: "side", label: "Side", icon: Sliders },
-                    { id: "front", label: "Front", icon: Eye },
-                    { id: "fly", label: "Free-Fly", icon: Compass },
+                    {
+                      id: "studio",
+                      label: "Studio",
+                      compactLabel: "Studio",
+                      icon: Camera,
+                    },
+                    {
+                      id: "microscope",
+                      label: "Grasp Focus",
+                      compactLabel: "Focus",
+                      icon: Eye,
+                    },
+                    {
+                      id: "overhead",
+                      label: "Top",
+                      compactLabel: "Top",
+                      icon: Activity,
+                    },
+                    {
+                      id: "side",
+                      label: "Side",
+                      compactLabel: "Side",
+                      icon: Sliders,
+                    },
+                    {
+                      id: "front",
+                      label: "Front",
+                      compactLabel: "Front",
+                      icon: Eye,
+                    },
+                    {
+                      id: "fly",
+                      label: "Free-Fly",
+                      compactLabel: "Fly",
+                      icon: Compass,
+                    },
                   ] as const
                 ).map((cam) => {
                   const Icon = cam.icon;
@@ -1981,15 +2017,20 @@ export function HouseholdArmFlagship({
                     <button
                       key={cam.id}
                       type="button"
+                      aria-label={`${cam.label} camera`}
                       onClick={() => setCameraMode(cam.id)}
-                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                      className={`flex min-w-0 items-center whitespace-nowrap rounded-lg py-1 font-bold transition-all ${
+                        embedded
+                          ? "gap-0.5 px-1.5 text-[0.58rem]"
+                          : "gap-1 px-2 text-[0.65rem]"
+                      } ${
                         isSelected
                           ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
                           : "text-slate-400 hover:text-slate-200"
                       }`}
                     >
-                      <Icon className="h-3 w-3" />
-                      {cam.label}
+                      <Icon className="h-3 w-3 shrink-0" />
+                      {embedded ? cam.compactLabel : cam.label}
                     </button>
                   );
                 })}
