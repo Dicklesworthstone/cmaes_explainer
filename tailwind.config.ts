@@ -25,9 +25,9 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
-          "Inter", 
           "-apple-system", 
           "BlinkMacSystemFont", 
+          "SF Pro Text",
           "Segoe UI", 
           "Roboto", 
           "Helvetica Neue", 
@@ -35,17 +35,20 @@ const config: Config = {
           "sans-serif"
         ],
         display: [
-          "Manrope", 
-          "Inter", 
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "SF Pro Display",
+          "Segoe UI",
           "system-ui", 
           "sans-serif"
         ],
         mono: [
-          "JetBrains Mono", 
-          "Fira Code", 
           "ui-monospace", 
-          "SF Mono", 
+          "SFMono-Regular",
+          "SF Mono",
           "Menlo", 
+          "Monaco",
+          "Consolas",
           "monospace"
         ]
       },

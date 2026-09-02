@@ -8,6 +8,19 @@ import { fileURLToPath } from "node:url";
 const scriptPath = new URL("../ios/prepare-engine.sh", import.meta.url);
 const scriptFilePath = fileURLToPath(scriptPath);
 const script = readFileSync(scriptPath, "utf8");
+const globalsCss = readFileSync(
+  fileURLToPath(new URL("../app/globals.css", import.meta.url)),
+  "utf8",
+);
+const benchmarkGallery = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../public/wasm-demo/examples/viz-benchmarks.html",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 function manifestFixture(): { directory: string; digest: string } {
   const directory = mkdtempSync(join(tmpdir(), "frankenrobots-manifest-test-"));
@@ -70,6 +83,17 @@ async function resolveOwnerRuntimeDirectory(ownerVersion: string) {
 }
 
 describe("FrankenRobots engine exporter safety boundary", () => {
+  test("keeps shared and bundled typography independent of remote font hosts", () => {
+    for (const source of [globalsCss, benchmarkGallery]) {
+      expect(source).not.toContain("fonts.googleapis.com");
+      expect(source).not.toContain("fonts.gstatic.com");
+    }
+
+    expect(globalsCss).toContain("typography uses platform fonts");
+    expect(benchmarkGallery).toContain("-apple-system");
+    expect(benchmarkGallery).toContain("SF Pro Text");
+  });
+
   test("defaults to a staging-only mode", () => {
     expect(script).toContain("without changing ios/Engine (default)");
     expect(script).toContain('MODE="stage"');
