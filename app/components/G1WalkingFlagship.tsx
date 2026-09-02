@@ -2583,10 +2583,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   candidate={trace}
                   candidateLabel={
                     activeTrace === "curriculum"
-                      ? "Curriculum mean (self)"
+                      ? `${G1_TASK_COPY[task].label} seed (self)`
                       : `${TRACE_TITLES[activeTrace]} · gen ${generation || "—"}`
                   }
-                  curriculumLabel="Walking curriculum mean"
+                  curriculumLabel={`${G1_TASK_COPY[task].label} policy seed`}
+                  title={`${G1_TASK_COPY[task].label} policy comparison`}
                 />
               </div>
             ) : null}

@@ -32,6 +32,8 @@ export interface WalkQualityComparisonProps {
   candidateLabel?: string;
   /** Caption for the curriculum row. */
   curriculumLabel?: string;
+  /** Task-aware title shown above the comparison. */
+  title?: string;
   /** Compact mode: drop the multi-factor breakdown (used on narrow screens). */
   compact?: boolean;
 }
@@ -104,7 +106,7 @@ const PRIMARY_ROWS: MetricRow[] = [
     scalar: (m) => m?.multiFactor?.weighted ?? null,
   },
   {
-    label: "Distance walked",
+    label: "Forward displacement",
     higherBetter: true,
     format: (m) => (m ? `${m.distanceMeters.toFixed(2)} m` : "—"),
     detail: (m) => (m ? `${m.durationSeconds.toFixed(1)} s experiment` : null),
@@ -214,6 +216,7 @@ export function WalkQualityComparison({
   candidate,
   candidateLabel = "Current trace",
   curriculumLabel = "Curriculum mean",
+  title = "Policy quality comparison",
   compact = false,
 }: WalkQualityComparisonProps) {
   const curriculumMetrics = useMemo(() => derive(curriculum), [curriculum]);
@@ -242,7 +245,7 @@ export function WalkQualityComparison({
   if (!curriculum || !candidate) {
     return (
       <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-4 text-xs text-slate-500">
-        Walk-quality comparison needs a curriculum reference trace and a current trace.
+        Policy comparison needs a reference trace and a current trace.
         Both will appear once the standing-prior preview and the first optimization both run.
       </div>
     );
@@ -263,7 +266,7 @@ export function WalkQualityComparison({
     <div className="rounded-2xl border border-cyan-300/15 bg-slate-950/70 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h4 className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200">
-          Walk quality comparison
+          {title}
         </h4>
         {verdicts ? (
           <p className="text-[0.65rem] text-slate-400">
