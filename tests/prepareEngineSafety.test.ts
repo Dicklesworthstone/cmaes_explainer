@@ -40,6 +40,35 @@ async function runManifestVerification(directory: string, digest: string) {
   return process.exited;
 }
 
+async function resolveOwnerRuntimeDirectory(ownerVersion: string) {
+  const outputDirectory = mkdtempSync(
+    join(tmpdir(), "frankenrobots-runtime-dir-test-"),
+  );
+  const stdoutPath = join(outputDirectory, "stdout.txt");
+  const stderrPath = join(outputDirectory, "stderr.txt");
+  const process = Bun.spawn({
+    cmd: [
+      "zsh",
+      "-c",
+      'source "$1"; resolve_owner_runtime_dir "$2" >"$3" 2>"$4"',
+      "resolve-owner-runtime",
+      scriptFilePath,
+      ownerVersion,
+      stdoutPath,
+      stderrPath,
+    ],
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await process.exited;
+  return {
+    exitCode,
+    stdout: readFileSync(stdoutPath, "utf8"),
+    stderr: readFileSync(stderrPath, "utf8"),
+  };
+}
+
 describe("FrankenRobots engine exporter safety boundary", () => {
   test("defaults to a staging-only mode", () => {
     expect(script).toContain("without changing ios/Engine (default)");
@@ -67,6 +96,26 @@ describe("FrankenRobots engine exporter safety boundary", () => {
     expect(script).toContain("fs_cmaes_viz_wasm_bg.wasm");
     expect(script).toContain("workers/g1MeshParseWorker.js");
     expect(script).toContain("engine-content-sha256.txt");
+  });
+
+  test("maps the full owner-kernel contract to its versioned runtime directory", async () => {
+    const result = await resolveOwnerRuntimeDirectory(
+      "fs-cmaes-viz-wasm 0.6.13",
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("v0613\n");
+    expect(result.stderr).toBe("");
+  });
+
+  test("refuses an owner-kernel contract without an exact semver suffix", async () => {
+    const result = await resolveOwnerRuntimeDirectory(
+      "fs-cmaes-viz-wasm latest",
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "owner kernel version has no valid semantic-version suffix",
+    );
   });
 
   test("preserves an existing engine at a printed rollback path during explicit activation", () => {

@@ -25,6 +25,15 @@ fail() {
   exit 1
 }
 
+resolve_owner_runtime_dir() {
+  local owner_version="$1"
+  local owner_semver="${owner_version##* }"
+
+  print -r -- "$owner_semver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || fail "owner kernel version has no valid semantic-version suffix: $owner_version"
+  print -r -- "v${owner_semver//./}"
+}
+
 verify_source_fences() {
   [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]] \
     || fail "cmaes_explainer HEAD moved during export"
@@ -250,7 +259,7 @@ main() {
   OWNER_KERNEL_VERSION=$(sed -n 's/^export const FRANKENSIM_OWNER_KERNEL_VERSION = "\([^"]*\)";/\1/p' \
     "$PROJECT_ROOT/app/lib/frankensimCmaes.ts")
   [[ -n "$OWNER_KERNEL_VERSION" ]] || fail "FRANKENSIM_OWNER_KERNEL_VERSION could not be resolved"
-  OWNER_RUNTIME_DIR="v${OWNER_KERNEL_VERSION//./}"
+  OWNER_RUNTIME_DIR=$(resolve_owner_runtime_dir "$OWNER_KERNEL_VERSION")
 
   if [[ "$MODE" == "activate-stage" ]]; then
     STAGED_ENGINE="${ACTIVATION_STAGE:A}"
