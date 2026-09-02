@@ -57,6 +57,49 @@ function runWorkerCompare(
   });
 }
 
+function runWorkerPreview(
+  message: object,
+  timeoutMs: number,
+): Promise<{ messages: MessageFromWorker[]; traces: MessageFromWorker[]; error: string | null }> {
+  return new Promise((resolve) => {
+    const worker = new Worker(new URL("./g1CompareTestWorker.ts", import.meta.url).href, { type: "module" });
+    const messages: MessageFromWorker[] = [];
+    const traces: MessageFromWorker[] = [];
+    let error: string | null = null;
+    const timer = setTimeout(() => {
+      worker.terminate();
+      resolve({ messages, traces, error: error ?? "timed out" });
+    }, timeoutMs);
+
+    worker.onmessage = (event: MessageEvent<MessageFromWorker>) => {
+      const received = event.data;
+      messages.push(received);
+      if (received.type === "trace") {
+        traces.push(received);
+        if (traces.length === 2) {
+          clearTimeout(timer);
+          worker.terminate();
+          resolve({ messages, traces, error });
+        }
+      } else if (received.type === "error") {
+        error = String((received as any).message ?? "unknown worker error");
+        clearTimeout(timer);
+        worker.terminate();
+        resolve({ messages, traces, error });
+      }
+    };
+
+    worker.onerror = (event: ErrorEvent) => {
+      error = event.message ?? "worker error event";
+      clearTimeout(timer);
+      worker.terminate();
+      resolve({ messages, traces, error });
+    };
+
+    worker.postMessage(message);
+  });
+}
+
 describe("armOptimizationWorker compareFamilies integration", () => {
   test(
     "runs a bounded 128-D equal-budget race across all four CMA families",
@@ -103,12 +146,39 @@ describe("armOptimizationWorker compareFamilies integration", () => {
 
 describe("g1OptimizationWorker compareFamilies integration", () => {
   test(
+    "admits and traces both non-walking tasks through the real WASM worker boundary",
+    async () => {
+      for (const [task, challenge] of [
+        ["balance", "flat"],
+        ["stepping", "terrain-and-push"],
+      ] as const) {
+        const { traces, error } = await runWorkerPreview(
+          { type: "preview", task, challenge },
+          120_000,
+        );
+        expect(error).toBeNull();
+        expect(traces.map((trace) => trace.family)).toEqual(["stabilizer", "curriculum"]);
+        for (const trace of traces) {
+          const admission = trace.admission as {
+            config: { task: string; challenge: string };
+          };
+          expect(admission.config.task).toBe(task);
+          expect(admission.config.challenge).toBe(challenge);
+          expect((trace.trace as { completedSteps: number }).completedSteps).toBeGreaterThan(0);
+        }
+      }
+    },
+    { timeout: 260_000 },
+  );
+
+  test(
     "runs a bounded 5,040-D equal-budget race across scalable CMA families and omits full",
     async () => {
       const { messages, complete, error } = await runWorkerCompare(
         new URL("./g1CompareTestWorker.ts", import.meta.url).href,
         {
           type: "compare",
+          task: "walking",
           challenge: "terrain-and-push",
           generations: 2,
         },

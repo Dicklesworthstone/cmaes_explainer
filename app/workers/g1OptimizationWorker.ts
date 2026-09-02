@@ -1,7 +1,6 @@
 /// <reference lib="webworker" />
 
 import {
-  DEFAULT_G1_WALKING_CONFIG,
   createFrankenSimCmaFamilySession,
   createFrankenSimG1WalkingEvaluator,
   type FrankenSimCmaFamilySession,
@@ -9,22 +8,17 @@ import {
   type CmaFamily,
   type G1Admission,
   type G1Challenge,
+  type G1Task,
   type G1TraceReceipt,
 } from "../lib/frankensimCmaes";
+import {
+  g1OptimizationConfig,
+  g1OptimizationRunKey,
+  type G1OptimizationRequest,
+} from "../lib/g1OptimizationProtocol";
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
-type WorkerRequest =
-  | { type: "preview"; challenge: G1Challenge }
-  | {
-      type: "optimize";
-      family: Exclude<CmaFamily, "full">;
-      generations: number;
-      seedIndex: number;
-      mode?: "continue" | "fresh";
-      challenge: G1Challenge;
-      sigma?: number;
-    }
-  | { type: "compare"; challenge: G1Challenge; generations: number; sigma?: number };
+type WorkerRequest = G1OptimizationRequest;
 
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -93,14 +87,10 @@ function reportParallelEvaluation(
   return true;
 }
 
-function g1Config(challenge: G1Challenge): typeof DEFAULT_G1_WALKING_CONFIG {
-  return { ...DEFAULT_G1_WALKING_CONFIG, challenge };
-}
-
-async function preview(challenge: G1Challenge): Promise<void> {
+async function preview(task: G1Task, challenge: G1Challenge): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
+    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
     "G1 admission"
   );
   try {
@@ -175,13 +165,14 @@ async function optimize(
   requestedGenerations: number,
   requestedSeedIndex: number,
   mode: "continue" | "fresh" = "continue",
+  task: G1Task = "walking",
   challenge: G1Challenge = "terrain-and-push",
   requestedSigma?: number
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const population = G1_POPULATION;
-  const runKey = `${challenge}:${family}:${seedIndex}`;
+  const runKey = g1OptimizationRunKey(task, challenge, family, seedIndex);
 
   let run = mode === "continue" ? g1ActiveRuns.get(runKey) : undefined;
   if (run) {
@@ -207,12 +198,12 @@ async function optimize(
     // a short proxy and replaying a longer experiment rewards a different
     // behavior than the one the user sees.
     const evaluator = requireOk(
-      await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
+      await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
       "G1 admission"
     );
     const evaluationPool = new RoboticsEvaluationPool({
       model: "g1",
-      config: g1Config(challenge),
+      config: g1OptimizationConfig(task, challenge),
       dimension: 5_040,
     });
     let bestPolicy = evaluator.walkingCurriculumMean();
@@ -296,7 +287,11 @@ async function optimize(
     throw error;
   }
 }
-async function compareFamilies(requestedGenerations: number, challenge: G1Challenge = "terrain-and-push"): Promise<void> {
+async function compareFamilies(
+  requestedGenerations: number,
+  task: G1Task = "walking",
+  challenge: G1Challenge = "terrain-and-push",
+): Promise<void> {
   const generations = Math.max(2, Math.min(8, Math.trunc(requestedGenerations)));
   const population = 16;
   const families: Exclude<CmaFamily, "full">[] = ["separable", "lm-cma", "lm-ma"];
@@ -304,16 +299,16 @@ async function compareFamilies(requestedGenerations: number, challenge: G1Challe
   post({
     type: "status",
     phase: "comparing",
-    detail: "Running all three scalable owners on the identical 5,040-D terrain-and-push objective…",
+    detail: `Running all three scalable owners on the identical 5,040-D ${task}, ${challenge} objective…`,
   });
 
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(g1Config(challenge)),
+    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
     "G1 comparison admission"
   );
   const evaluationPool = new RoboticsEvaluationPool({
     model: "g1",
-    config: g1Config(challenge),
+    config: g1OptimizationConfig(task, challenge),
     dimension: 5_040,
   });
   let parallelAnnounced = false;
@@ -391,10 +386,10 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // first await (createFrankenSimG1WalkingEvaluator).
   const work = () =>
     request.type === "preview"
-      ? preview(request.challenge ?? "terrain-and-push")
+      ? preview(request.task ?? "walking", request.challenge ?? "terrain-and-push")
       : request.type === "compare"
-        ? compareFamilies(request.generations, request.challenge)
-        : optimize(request.family, request.generations, request.seedIndex, request.mode, request.challenge, request.sigma);
+        ? compareFamilies(request.generations, request.task ?? "walking", request.challenge)
+        : optimize(request.family, request.generations, request.seedIndex, request.mode, request.task ?? "walking", request.challenge, request.sigma);
   g1Gate = g1Gate.then(() => work(), () => work());
   void g1Gate.catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

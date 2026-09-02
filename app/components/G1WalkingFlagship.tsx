@@ -20,9 +20,11 @@ import {
   type CmaFamily,
   type G1Admission,
   type G1Challenge,
+  type G1Task,
   type G1TraceReceipt,
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
+import type { G1OptimizationRequest } from "../lib/g1OptimizationProtocol";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
 import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
@@ -216,6 +218,24 @@ const TRACE_TITLES: Record<G1TraceOrigin, string> = {
   separable: "Separable CMA-ES",
   "lm-cma": "LM-CMA",
   "lm-ma": "LM-MA",
+};
+
+const G1_TASK_COPY: Record<G1Task, { label: string; action: string; detail: string }> = {
+  balance: {
+    label: "Balance",
+    action: "balancing",
+    detail: "Hold an upright stance against the selected physical challenge.",
+  },
+  stepping: {
+    label: "Step",
+    action: "stepping",
+    detail: "Transfer weight and sustain the owner-defined stepping objective.",
+  },
+  walking: {
+    label: "Walk",
+    action: "walking",
+    detail: "Advance with the full owner-defined walking objective.",
+  },
 };
 
 function ownerToThree(position: readonly number[]): [number, number, number] {
@@ -1462,6 +1482,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [family, setFamily] = useState<ScalableFamily>("lm-cma");
+  const [task, setTask] = useState<G1Task>("walking");
   const [challenge, setChallenge] = useState<G1Challenge>("terrain-and-push");
   const [generations, setGenerations] = useState(16);
   const [searchSigma, setSearchSigma] = useState(0.005);
@@ -1511,6 +1532,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     if (!trace) return;
     const telemetryData = {
       exportTimestamp: new Date().toISOString(),
+      task,
       challenge,
       family,
       generation,
@@ -1532,11 +1554,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `g1-telemetry-${challenge}-${family}-gen${generation}.json`;
+    a.download = `g1-telemetry-${task}-${challenge}-${family}-gen${generation}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported trajectory telemetry JSON receipt.");
-  }, [trace, challenge, family, generation, bestObjective]);
+  }, [trace, task, challenge, family, generation, bestObjective]);
 
   const handleApplyShove = useCallback(() => {
     setShoveActive(true);
@@ -1597,7 +1619,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     }));
   }, []);
 
-  const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
+  const post = useCallback((message: G1OptimizationRequest, mode: "preview" | "optimize" | "compare") => {
     if (!workerRef.current) return;
     // Synchronous gate — must precede setBusy (which is async). Two rapid
     // clicks in the same render tick both see busy === null without this.
@@ -1608,10 +1630,30 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     workerRef.current.postMessage(message);
   }, []);
 
+  const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
+    setTask(nextTask);
+    setChallenge(nextChallenge);
+    setTrace(null);
+    setAdmission(null);
+    setStabilizerTrace(null);
+    setCurriculumTrace(null);
+    setGeneration(0);
+    setBestObjective(null);
+    setComparison(null);
+    setActiveTrace("curriculum");
+    progressHistoryRef.current = [];
+    setProgressHistory([]);
+    setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
+    post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
+  }, [post]);
+
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
     setCurrentChapter(ch.id);
     if (ch.challenge !== challenge) {
-      setChallenge(ch.challenge);
+      requestPreview(task, ch.challenge);
+      setSampleIndex(0);
+      setIsPlaying(true);
+      return;
     }
     if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
       setTrace(stabilizerTrace);
@@ -1621,11 +1663,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setActiveTrace("curriculum");
     } else if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
       setFamily(ch.targetTrace);
-      post({ type: "preview", challenge: ch.challenge }, "preview");
+      requestPreview(task, ch.challenge);
     }
     setSampleIndex(0);
     setIsPlaying(true);
-  }, [challenge, stabilizerTrace, curriculumTrace, post, setCurrentChapter, setSampleIndex]);
+  }, [task, challenge, stabilizerTrace, curriculumTrace, requestPreview, setCurrentChapter, setSampleIndex]);
 
   const handleSelectPreset = useCallback((p: RobotPersonalityPreset) => {
     setSelectedPreset(p.id);
@@ -1713,9 +1755,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         );
       } else if (message.type === "trace") {
         setAdmission(message.admission);
+        setTask(message.admission.config.task);
         if (message.family === "stabilizer") {
           setStabilizerTrace(message.trace);
-          setStatus("Standing prior received; loading the walking curriculum mean…");
+          setStatus(`Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`);
           // The stabilizer trace is a one-shot at init; release the gate.
           inFlightRef.current = false;
           return;
@@ -1729,7 +1772,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         inFlightRef.current = false;
         setStatus(
           message.family === "curriculum"
-            ? "Walking curriculum mean replayed from Frankensim WASM."
+            ? `${G1_TASK_COPY[message.admission.config.task].label} policy seed replayed from Frankensim WASM.`
             : `Best ${FAMILY_COPY[message.family].title} policy replayed through the full experiment.`
         );
       } else if (message.type === "comparison") {
@@ -1759,7 +1802,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({ type: "preview", challenge: "terrain-and-push" });
+    optimizerWorker.postMessage({ type: "preview", task: "walking", challenge: "terrain-and-push" } satisfies G1OptimizationRequest);
     return () => {
       active = false;
       optimizerWorker.terminate();
@@ -1800,7 +1843,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // match the kernel's v068 shaping intent (mean forward speed + survival
   // positive; slip / impact / contact-schedule / work-per-meter negative).
   const multiFactor = trace
-    ? computeMultiFactorObjective(trace, DEFAULT_G1_WALKING_CONFIG)
+    ? computeMultiFactorObjective(trace, admission?.config ?? DEFAULT_G1_WALKING_CONFIG)
     : null;
   const receiptCards = trace
     ? [
@@ -2292,7 +2335,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Frankensim G1 flagship</p>
-              <h3 className="mt-1 text-xl font-bold text-white">Optimize a 5,040-D walking policy</h3>
+              <h3 className="mt-1 text-xl font-bold text-white">Optimize a 5,040-D {G1_TASK_COPY[task].action} policy</h3>
             </div>
           </div>
 
@@ -2304,7 +2347,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <p className="mt-3 text-xs leading-5 text-slate-500">
             A disclosed full-CMA curriculum learned 105 meaningful owner coordinates: standing bias,
             periodic foot unloading, then pelvis feedback. Live search expands that curriculum to all
-            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step terrain-and-push experiment you watch.
+            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step task and challenge you watch.
           </p>
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[0.65rem] leading-4 text-slate-400">
@@ -2322,7 +2365,34 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
           </div>
 
-          <label className="mt-6 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-family">
+          <div className="mt-6">
+            <span id="g1-task-label" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+              Physical objective
+            </span>
+            <div role="radiogroup" aria-labelledby="g1-task-label" className="mt-2 grid grid-cols-3 gap-2">
+              {(["balance", "stepping", "walking"] as const).map((candidateTask) => (
+                <button
+                  key={candidateTask}
+                  type="button"
+                  role="radio"
+                  aria-checked={task === candidateTask}
+                  disabled={busy !== null || !workerAvailable}
+                  onClick={() => {
+                    if (task !== candidateTask) requestPreview(candidateTask, challenge);
+                  }}
+                  className={`min-h-11 rounded-xl px-3 text-xs font-semibold transition-colors ${task === candidateTask ? "bg-cyan-500/30 text-cyan-100" : "bg-white/5 text-slate-400 hover:text-slate-200"}`}
+                >
+                  {G1_TASK_COPY[candidateTask].label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              {G1_TASK_COPY[task].detail}
+              {admission ? ` Owner admission: ${admission.config.task}.` : " Awaiting owner admission."}
+            </p>
+          </div>
+
+          <label className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-family">
             Scalable covariance representation
           </label>
           <select
@@ -2371,9 +2441,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 disabled={busy !== null || !workerAvailable}
                 onClick={() => {
                   if (challenge !== "flat") {
-                    setChallenge("flat");
-                    setGeneration(0);
-                    post({ type: "preview", challenge: "flat" }, "preview");
+                    requestPreview(task, "flat");
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${challenge === "flat" ? "bg-cyan-500/30 text-cyan-100" : "bg-white/5 text-slate-400 hover:text-slate-200"}`}
@@ -2387,9 +2455,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 disabled={busy !== null || !workerAvailable}
                 onClick={() => {
                   if (challenge !== "terrain-and-push") {
-                    setChallenge("terrain-and-push");
-                    setGeneration(0);
-                    post({ type: "preview", challenge: "terrain-and-push" }, "preview");
+                    requestPreview(task, "terrain-and-push");
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${challenge === "terrain-and-push" ? "bg-cyan-500/30 text-cyan-100" : "bg-white/5 text-slate-400 hover:text-slate-200"}`}
@@ -2439,7 +2505,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               disabled={busy !== null || !workerAvailable}
               onClick={() =>
                 post(
-                  { type: "optimize", family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
+                  { type: "optimize", task, family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
                   "optimize"
                 )
               }
@@ -2453,19 +2519,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               disabled={busy !== null || !workerAvailable}
               onClick={() => {
                 if (!curriculumTrace) {
-                  post({ type: "preview", challenge }, "preview");
+                  post({ type: "preview", task, challenge }, "preview");
                   return;
                 }
                 setTrace(curriculumTrace);
                 setActiveTrace("curriculum");
                 setGeneration(0);
                 setBestObjective(curriculumTrace.objective);
-                setStatus("Walking curriculum mean replayed from Frankensim WASM.");
+                setStatus(`${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`);
               }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
-              Walking mean
+              Policy seed
             </button>
             <button
               type="button"
@@ -2476,7 +2542,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 setActiveTrace("stabilizer");
                 setGeneration(0);
                 setBestObjective(stabilizerTrace.objective);
-                setStatus("Standing-only prior replayed; compare its contacts with the walking mean.");
+                setStatus(`Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`);
               }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -2655,7 +2721,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">Scalable variants, one physical budget</p>
-              <h3 className="mt-1 text-xl font-bold text-white">A live 5,040-D terrain-and-push race</h3>
+              <h3 className="mt-1 text-xl font-bold text-white">A live 5,040-D {task}, {challenge} race</h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                 Same curriculum mean, Philox seed, population of 16, physical evaluator, and evaluation budget. Full CMA is absent only because the owner correctly refuses dense covariance above 256 dimensions; all four families race on the 128-D arm.
               </p>
@@ -2663,7 +2729,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", generations: 4, challenge }, "compare")}
+              onClick={() => post({ type: "compare", task, generations: 4, challenge }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />
