@@ -26,6 +26,7 @@ import {
 } from "../lib/frankensimCmaes";
 import type { G1OptimizationRequest } from "../lib/g1OptimizationProtocol";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
+import { resolveG1PushVisualization } from "../lib/g1PushVisualization";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
 import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
 import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
@@ -532,7 +533,17 @@ function Segment({
 }
 
 
-function RobotPose({ sample, pushFraction }: { sample: G1TraceSample; pushFraction: number }) {
+function RobotPose({
+  sample,
+  pushFraction,
+  pushAngleDeg,
+  pushImpulseNs,
+}: {
+  sample: G1TraceSample;
+  pushFraction: number;
+  pushAngleDeg: number;
+  pushImpulseNs: number;
+}) {
   const pelvis = sample.linkPoses[0].position;
   const torso = sample.linkPoses[15].position;
   const torsoThree = ownerToThree(torso);
@@ -642,7 +653,12 @@ function RobotPose({ sample, pushFraction }: { sample: G1TraceSample; pushFracti
 
       <FootContact position={leftFootPoint} active={sample.leftContact} side="left" />
       <FootContact position={rightFootPoint} active={sample.rightContact} side="right" />
-      <PushArrow pelvis={pelvis} fraction={pushFraction} />
+      <PushArrow
+        pelvis={pelvis}
+        fraction={pushFraction}
+        pushAngleDeg={pushAngleDeg}
+        pushImpulseNs={pushImpulseNs}
+      />
     </group>
   );
 }
@@ -789,16 +805,16 @@ function RobotPlayback({
     prevContactsRef.current = { left: sample.leftContact, right: sample.rightContact };
   }, [sample]);
 
-  const pushFraction = (shoveActive ? 0.95 : 0) || (sample
-    && admission?.config.challenge === "terrain-and-push"
-    && sample.timeSeconds > admission.pushStartSeconds
-    && sample.timeSeconds < admission.pushEndSeconds
-    ? Math.sin(
-        Math.PI
-          * (sample.timeSeconds - admission.pushStartSeconds)
-          / (admission.pushEndSeconds - admission.pushStartSeconds)
-      )
-    : 0);
+  const pushVisualization = resolveG1PushVisualization({
+    manualPreviewActive: shoveActive,
+    manualAngleDegrees: pushAngleDeg,
+    manualImpulseNewtonSeconds: pushImpulseNs,
+    ownerChallengeActive: admission?.config.challenge === "terrain-and-push",
+    sampleTimeSeconds: sample?.timeSeconds ?? null,
+    ownerPushStartSeconds: admission?.pushStartSeconds ?? null,
+    ownerPushEndSeconds: admission?.pushEndSeconds ?? null,
+    ownerImpulseNewtonSeconds: trace.pushImpulseNewtonSeconds,
+  });
   const pelvisThree = renderSample ? ownerToThree(renderSample.linkPoses[0].position) : [0, 0.75, 0] as [number, number, number];
   const leftFootThree = renderSample ? ownerLocalPointToThree(
     renderSample.linkPoses[6].position,
@@ -817,12 +833,17 @@ function RobotPlayback({
         <RobotPoseMeshes
           sample={renderSample}
           meshes={meshState}
-          pushFraction={pushFraction}
-          pushAngleDeg={pushAngleDeg}
-          pushImpulseNs={pushImpulseNs}
+          pushFraction={pushVisualization.fraction}
+          pushAngleDeg={pushVisualization.angleDegrees}
+          pushImpulseNs={pushVisualization.impulseNewtonSeconds}
         />
       ) : (
-        <RobotPose sample={renderSample} pushFraction={pushFraction} />
+        <RobotPose
+          sample={renderSample}
+          pushFraction={pushVisualization.fraction}
+          pushAngleDeg={pushVisualization.angleDegrees}
+          pushImpulseNs={pushVisualization.impulseNewtonSeconds}
+        />
       )}
       <G1BiomechanicsOverlay
         sample={renderSample}
@@ -1573,7 +1594,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const handleApplyShove = useCallback(() => {
     setShoveActive(true);
     setTimeout(() => setShoveActive(false), 800);
-  }, []);
+    setStatus(
+      `Previewing a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. The owner rollout, controller, HOCBF result, and receipt are unchanged.`,
+    );
+  }, [pushAngleDeg, pushImpulseNs]);
   // Spawn-safe: enclose every owner link center plus a conservative 12 cm
   // body shell in one pelvis-centered sphere, then seed the display offset at
   // a house position where that entire sphere clears every rigid obstacle.
@@ -1993,10 +2017,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   type="button"
                   onClick={handleApplyShove}
                   className="flex items-center gap-1.5 rounded-l-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors shadow-[0_0_10px_rgba(244,63,94,0.25)]"
-                  title={`Apply a ${pushImpulseNs} N·s impulse at ${pushAngleDeg}° to test HOCBF balance recovery`}
+                  title={`Preview a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. This does not change the owner rollout.`}
+                  aria-label={`Preview display-only push vector: ${pushImpulseNs} newton-seconds at ${pushAngleDeg} degrees`}
                 >
                   <Zap className="h-3.5 w-3.5 text-rose-300" />
-                  <span>🥊 Push {pushImpulseNs} N·s ({pushAngleDeg}°)</span>
+                  <span>🥊 Preview {pushImpulseNs} N·s ({pushAngleDeg}°)</span>
                 </button>
                 <button
                   type="button"
@@ -2004,7 +2029,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   className={`rounded-r-full border-y border-r border-rose-400/40 px-2 py-1 text-[0.68rem] font-bold text-rose-200 backdrop-blur-md transition-colors ${
                     showPushOptions ? "bg-rose-500/40 text-white" : "bg-rose-500/20 hover:bg-rose-500/30"
                   }`}
-                  title="Configure Push Angle and Impulse Magnitude"
+                  title="Configure the display-only push-vector preview"
+                  aria-label="Configure display-only push-vector preview"
                 >
                   <Sliders className="h-3 w-3" />
                 </button>
@@ -2012,13 +2038,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 {showPushOptions && (
                   <div className="absolute top-full left-0 mt-2 z-50 w-64 rounded-xl border border-rose-500/30 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
                     <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-2">
-                      <span className="text-[0.7rem] font-bold uppercase tracking-wider text-rose-300">🥊 3D Push Gizmo</span>
+                      <span className="text-[0.7rem] font-bold uppercase tracking-wider text-rose-300">🥊 Display-only vector</span>
                       <span className="text-[0.65rem] text-slate-400">{pushAngleDeg}° · {pushImpulseNs} N·s</span>
                     </div>
 
+                    <p className="mb-2.5 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-2 py-1.5 text-[0.62rem] leading-4 text-amber-100">
+                      Visualization preview only. The owner experiment keeps its admitted lateral pulse
+                      {admission ? ` (${number(admission.pushPeakForceNewtons, 1)} N peak)` : ""}; no controller,
+                      HOCBF result, trajectory, or receipt is recomputed.
+                    </p>
+
                     {/* Quick Direction Selector */}
                     <div className="mb-2.5">
-                      <div className="text-[0.62rem] text-slate-400 mb-1">Direction Angle:</div>
+                      <label htmlFor="g1-push-preview-angle" className="text-[0.62rem] text-slate-400 mb-1 block">Preview direction:</label>
                       <div className="grid grid-cols-4 gap-1">
                         {[
                           { label: "⬅️ Left", angle: 90 },
@@ -2041,6 +2073,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                         ))}
                       </div>
                       <input
+                        id="g1-push-preview-angle"
                         type="range"
                         min={0}
                         max={360}
@@ -2053,7 +2086,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
                     {/* Impulse Magnitude Selector */}
                     <div className="mb-3">
-                      <div className="text-[0.62rem] text-slate-400 mb-1">Impulse Magnitude:</div>
+                      <div className="text-[0.62rem] text-slate-400 mb-1">Preview magnitude:</div>
                       <div className="grid grid-cols-4 gap-1">
                         {[10, 15, 25, 45].map((ns) => (
                           <button
@@ -2081,7 +2114,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                       className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 py-1.5 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:brightness-110 active:scale-[0.98] transition-all"
                     >
                       <Zap className="h-3.5 w-3.5" />
-                      Apply 3D Shove
+                      Preview vector only
                     </button>
                   </div>
                 )}
@@ -2259,7 +2292,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </span>
               {!embedded ? (
                 <span className="max-sm:hidden rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-                  Rose arrow: disclosed lateral push · arm joints are kernel-posed with real mass (head/hands: display-only)
+                  Rose arrow: owner lateral pulse during playback; manual vector preview is display-only · arm joints are kernel-posed with real mass (head/hands: display-only)
                 </span>
               ) : null}
             </div>
