@@ -123,4 +123,41 @@ final class FrankenRobotsUITests: XCTestCase {
         restartButton.tap()
         XCTAssertEqual(String(describing: positionSlider.value), startPosition)
     }
+
+    func testArmModeSwitchExposesWorkingKMRRoute() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let arm = app.segmentedControls.buttons["Robot Arm"]
+        XCTAssertTrue(arm.waitForExistence(timeout: 12))
+        arm.tap()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+
+        let kmrMode = app.buttons["KMR Mobile Base"]
+        XCTAssertTrue(kmrMode.waitForExistence(timeout: 20), app.debugDescription)
+        kmrMode.tap()
+
+        let kitchen = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Kitchen'")
+        ).firstMatch
+        XCTAssertTrue(kitchen.waitForExistence(timeout: 15), app.debugDescription)
+        kitchen.tap()
+
+        let pathReceipt = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Value path:'")
+        ).firstMatch
+        XCTAssertTrue(pathReceipt.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'does not clear'")
+        ).firstMatch.exists)
+    }
 }
