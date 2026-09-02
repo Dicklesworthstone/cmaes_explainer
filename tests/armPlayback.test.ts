@@ -64,4 +64,12 @@ describe("arm trace playback", () => {
       wrapped: false,
     });
   });
+
+  test("keeps a single-sample trace stable while playback is enabled", () => {
+    expect(advanceArmPlayback([0], 7, 4, 0.1, 2, true)).toEqual({
+      sampleIndex: 0,
+      elapsedSeconds: 0,
+      wrapped: false,
+    });
+  });
 });
