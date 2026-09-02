@@ -6,7 +6,6 @@ struct FrankenRobotsApp: App {
     var body: some Scene {
         WindowGroup {
             FrankenRobotsView()
-                .preferredColorScheme(.dark)
                 .background(CatalystWindowFreedom())
 #if targetEnvironment(macCatalyst)
                 .frame(minWidth: 620, minHeight: 500)

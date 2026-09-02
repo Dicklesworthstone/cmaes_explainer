@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FrankenRobotsView: View {
+    @AppStorage(RobotAppearance.storageKey) private var appearance = RobotAppearance.dark.rawValue
     @StateObject private var engine = RobotEngineHost()
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
@@ -57,6 +58,7 @@ struct FrankenRobotsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .reloadRobotEngine)) { _ in
             engine.reload()
         }
+        .preferredColorScheme((RobotAppearance(rawValue: appearance) ?? .dark).colorScheme)
         .sheet(isPresented: $showingDetails) {
             NavigationStack {
                 inspector
@@ -98,6 +100,7 @@ struct FrankenRobotsView: View {
                 }
             }
             Spacer(minLength: 8)
+            RobotAppearanceButton(selection: $appearance)
             engineStatus
         }
     }
@@ -115,7 +118,7 @@ struct FrankenRobotsView: View {
         .foregroundStyle(statusColor)
         .padding(.horizontal, 11)
         .frame(minHeight: 38)
-        .background(Color.black.opacity(0.38), in: Capsule())
+        .background(RobotTheme.statusBackground, in: Capsule())
         .overlay(Capsule().stroke(statusColor.opacity(0.30)))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("robot-engine-status")

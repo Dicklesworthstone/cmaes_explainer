@@ -5,6 +5,29 @@ final class FrankenRobotsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testAppearanceTogglePersistsLightModeAcrossLaunches() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let toggle = app.buttons["appearance-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 12))
+
+        if toggle.label == "Switch to dark mode" {
+            toggle.tap()
+            XCTAssertEqual(toggle.label, "Switch to light mode")
+        }
+
+        toggle.tap()
+        XCTAssertEqual(toggle.label, "Switch to dark mode")
+
+        app.terminate()
+        app.launch()
+
+        let relaunchedToggle = app.buttons["appearance-toggle"]
+        XCTAssertTrue(relaunchedToggle.waitForExistence(timeout: 12))
+        XCTAssertEqual(relaunchedToggle.label, "Switch to dark mode")
+    }
+
     func testSwitchesBetweenFocusedLabs() throws {
         let app = XCUIApplication()
         app.launch()

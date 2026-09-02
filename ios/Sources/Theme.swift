@@ -1,16 +1,68 @@
 import SwiftUI
 import UIKit
 
+enum RobotAppearance: String {
+    static let storageKey = "frankenrobots.appearance"
+
+    case dark
+    case light
+
+    var colorScheme: ColorScheme {
+        self == .dark ? .dark : .light
+    }
+}
+
 enum RobotTheme {
-    static let background = Color(red: 0.004, green: 0.018, blue: 0.027)
-    static let panel = Color(red: 0.018, green: 0.043, blue: 0.057)
-    static let panelRaised = Color(red: 0.026, green: 0.066, blue: 0.080)
-    static let stroke = Color.white.opacity(0.10)
-    static let cyan = Color(red: 0.25, green: 0.84, blue: 0.94)
-    static let emerald = Color(red: 0.24, green: 0.82, blue: 0.60)
-    static let amber = Color(red: 0.96, green: 0.67, blue: 0.25)
-    static let text = Color(red: 0.93, green: 0.96, blue: 0.98)
-    static let secondary = Color(red: 0.60, green: 0.68, blue: 0.76)
+    static let background = adaptive(
+        dark: UIColor(red: 0.004, green: 0.018, blue: 0.027, alpha: 1),
+        light: UIColor(red: 0.925, green: 0.961, blue: 0.969, alpha: 1)
+    )
+    static let panel = adaptive(
+        dark: UIColor(red: 0.018, green: 0.043, blue: 0.057, alpha: 1),
+        light: UIColor(red: 0.985, green: 0.996, blue: 0.997, alpha: 1)
+    )
+    static let panelRaised = adaptive(
+        dark: UIColor(red: 0.026, green: 0.066, blue: 0.080, alpha: 1),
+        light: UIColor(red: 0.865, green: 0.931, blue: 0.942, alpha: 1)
+    )
+    static let stroke = adaptive(
+        dark: UIColor(white: 1, alpha: 0.10),
+        light: UIColor(red: 0.055, green: 0.230, blue: 0.275, alpha: 0.18)
+    )
+    static let cyan = adaptive(
+        dark: UIColor(red: 0.25, green: 0.84, blue: 0.94, alpha: 1),
+        light: UIColor(red: 0.025, green: 0.425, blue: 0.525, alpha: 1)
+    )
+    static let emerald = adaptive(
+        dark: UIColor(red: 0.24, green: 0.82, blue: 0.60, alpha: 1),
+        light: UIColor(red: 0.015, green: 0.405, blue: 0.255, alpha: 1)
+    )
+    static let amber = adaptive(
+        dark: UIColor(red: 0.96, green: 0.67, blue: 0.25, alpha: 1),
+        light: UIColor(red: 0.665, green: 0.345, blue: 0.005, alpha: 1)
+    )
+    static let text = adaptive(
+        dark: UIColor(red: 0.93, green: 0.96, blue: 0.98, alpha: 1),
+        light: UIColor(red: 0.035, green: 0.105, blue: 0.135, alpha: 1)
+    )
+    static let secondary = adaptive(
+        dark: UIColor(red: 0.60, green: 0.68, blue: 0.76, alpha: 1),
+        light: UIColor(red: 0.255, green: 0.345, blue: 0.375, alpha: 1)
+    )
+    static let statusBackground = adaptive(
+        dark: UIColor(white: 0, alpha: 0.38),
+        light: UIColor(red: 0.82, green: 0.905, blue: 0.92, alpha: 0.96)
+    )
+    static let shadow = adaptive(
+        dark: UIColor(white: 0, alpha: 0.34),
+        light: UIColor(red: 0.055, green: 0.18, blue: 0.21, alpha: 0.16)
+    )
+
+    private static func adaptive(dark: UIColor, light: UIColor) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        })
+    }
 
     static func size(_ base: CGFloat) -> CGFloat {
 #if targetEnvironment(macCatalyst)
@@ -18,6 +70,34 @@ enum RobotTheme {
 #else
         UIFontMetrics(forTextStyle: .body).scaledValue(for: base)
 #endif
+    }
+}
+
+struct RobotAppearanceButton: View {
+    @Binding var selection: String
+
+    private var appearance: RobotAppearance {
+        RobotAppearance(rawValue: selection) ?? .dark
+    }
+
+    var body: some View {
+        Button {
+            selection = appearance == .dark
+                ? RobotAppearance.light.rawValue
+                : RobotAppearance.dark.rawValue
+        } label: {
+            Image(systemName: appearance == .dark ? "sun.max.fill" : "moon.stars.fill")
+                .font(.system(size: RobotTheme.size(15), weight: .bold))
+                .foregroundStyle(appearance == .dark ? RobotTheme.amber : RobotTheme.cyan)
+                .frame(width: 44, height: 44)
+                .background(RobotTheme.statusBackground, in: Circle())
+                .overlay(Circle().stroke(RobotTheme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("appearance-toggle")
+        .accessibilityLabel(appearance == .dark ? "Switch to light mode" : "Switch to dark mode")
+        .accessibilityValue(appearance == .dark ? "Dark mode" : "Light mode")
+        .accessibilityHint("Remembers this choice for future launches")
     }
 }
 
@@ -100,6 +180,6 @@ struct RobotPanel<Content: View>: View {
                         lineWidth: 1
                     )
             }
-            .shadow(color: .black.opacity(0.34), radius: 22, y: 10)
+            .shadow(color: RobotTheme.shadow, radius: 22, y: 10)
     }
 }
