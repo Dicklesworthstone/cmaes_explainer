@@ -190,13 +190,20 @@ function KmrThreeScene({
   );
 }
 
-const ROOM_DESTINATIONS = [
+/**
+ * Collision-cleared, owner-planner-reachable poses within the named rooms.
+ * Room centers are presentation geometry, not necessarily navigable floor:
+ * several centers overlap catalog furniture and the porch is disconnected
+ * from the current physical wall aperture graph. Keep this roster covered by
+ * kmrRoomDestinations.test.ts whenever the house corpus changes.
+ */
+export const KMR_ROOM_DESTINATIONS = [
   { name: "🛋️ Living Room", x: -1.4, y: 2.6 },
-  { name: "🍽️ Dining Room", x: 1.6, y: 2.4 },
-  { name: "🍳 Kitchen", x: 1.9, y: -0.6 },
-  { name: "🛏️ Bedroom", x: -1.8, y: -1.9 },
-  { name: "🌿 Porch", x: 0.0, y: 4.8 },
-];
+  { name: "🍽️ Dining Room", x: 0.55, y: 2.65 },
+  { name: "🍳 Kitchen", x: 1.2, y: -0.8 },
+  { name: "🛏️ Bedroom", x: -1.6, y: -1.7 },
+  { name: "🚪 Central Hall", x: 0.2, y: 0.2 },
+] as const;
 
 export function KmrScene({ initialPose }: KmrSceneProps) {
   const navigationStart = CRAFTSMAN_BUNGALOW_1928.goals[0].center;
@@ -239,11 +246,17 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       const worldDy = dx * sinT + dy * cosT;
       const nextX = Math.max(
         CRAFTSMAN_BUNGALOW_1928.bounds.min[0] + 0.35,
-        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[0] - 0.35, pose.x + worldDx)
+        Math.min(
+          CRAFTSMAN_BUNGALOW_1928.bounds.max[0] - 0.35,
+          pose.x + worldDx,
+        ),
       );
       const nextY = Math.max(
         CRAFTSMAN_BUNGALOW_1928.bounds.min[1] + 0.35,
-        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[1] - 0.35, pose.y + worldDy)
+        Math.min(
+          CRAFTSMAN_BUNGALOW_1928.bounds.max[1] - 0.35,
+          pose.y + worldDy,
+        ),
       );
       const nextTheta = (pose.theta + dTheta + Math.PI * 2) % (Math.PI * 2);
 
@@ -268,10 +281,12 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       if (!collision) {
         setPose({ x: nextX, y: nextY, theta: nextTheta });
       } else {
-        setPlanningError("Manual drive stopped: obstacle clearance envelope reached.");
+        setPlanningError(
+          "Manual drive stopped: obstacle clearance envelope reached.",
+        );
       }
     },
-    [pose, obstacles]
+    [pose, obstacles],
   );
 
   useEffect(() => {
@@ -315,13 +330,10 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       const driveDy = firstDrivePoint[1] - pose.y;
       const driveLength = Math.hypot(driveDx, driveDy) || 1;
       const chairDistance = Math.min(0.75, driveLength * 0.6);
-      householdCouplingRef.current = createKmrHouseholdPhysicsCoupling(
-        pose,
-        [
-          pose.x + (driveDx / driveLength) * chairDistance,
-          pose.y + (driveDy / driveLength) * chairDistance,
-        ],
-      );
+      householdCouplingRef.current = createKmrHouseholdPhysicsCoupling(pose, [
+        pose.x + (driveDx / driveLength) * chairDistance,
+        pose.y + (driveDy / driveLength) * chairDistance,
+      ]);
       ownerRef.current = owner;
       setPath(newPath.path);
       setReceipt(owner.receipt());
@@ -343,7 +355,10 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       if (!activeOwner) return;
       const previousFrame = lastFrameMsRef.current ?? now;
       lastFrameMsRef.current = now;
-      accumulatedSecondsRef.current += Math.min(0.1, (now - previousFrame) / 1000);
+      accumulatedSecondsRef.current += Math.min(
+        0.1,
+        (now - previousFrame) / 1000,
+      );
       let nextReceipt = activeOwner.receipt();
       let nextDynamicReceipt: KmrHouseholdPhysicsReceipt | null = null;
       let substeps = 0;
@@ -386,12 +401,15 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
             KMR base: collision-aware household navigation
           </h3>
           <p className="text-xs text-slate-400">
-            Click a floor point, select a room preset, or use the D-Pad / WASD / Arrow keys to drive the 4-mecanum mobile base in real-time with 2D LiDAR raycasting.
+            Click a floor point, select a room preset, or use the D-Pad / WASD /
+            Arrow keys to drive the 4-mecanum mobile base in real-time with 2D
+            LiDAR raycasting.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-white/10 bg-slate-900 px-3 py-1 font-mono text-xs text-orange-200">
-            X: {pose.x.toFixed(2)}m · Y: {pose.y.toFixed(2)}m · θ: {((pose.theta * 180) / Math.PI).toFixed(0)}°
+            X: {pose.x.toFixed(2)}m · Y: {pose.y.toFixed(2)}m · θ:{" "}
+            {((pose.theta * 180) / Math.PI).toFixed(0)}°
           </span>
         </div>
       </div>
@@ -401,7 +419,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
         <span className="text-[0.68rem] font-bold uppercase tracking-wider text-slate-400 mr-1">
           Route To:
         </span>
-        {ROOM_DESTINATIONS.map((dest) => (
+        {KMR_ROOM_DESTINATIONS.map((dest) => (
           <button
             key={dest.name}
             type="button"
@@ -418,7 +436,11 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
           camera={{ position: [0, 12, 8], fov: 50, near: 0.1, far: 40 }}
           shadows
           dpr={[1, 1.5]}
-          gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+          gl={{
+            antialias: true,
+            alpha: false,
+            powerPreference: "high-performance",
+          }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.1;
@@ -515,16 +537,20 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       ) : null}
       <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
         <span>
-          Official whole-vehicle envelope: {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.lengthMeters * 1000)}×
-          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.widthMeters * 1000)}×
-          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters * 1000)} mm,
-          {" "}{KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg} kg. Inner chassis and wheelbase are disclosed procedural assumptions.
+          Official whole-vehicle envelope:{" "}
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.lengthMeters * 1000)}
+          ×{Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.widthMeters * 1000)}
+          ×
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters * 1000)}{" "}
+          mm, {KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg} kg. Inner chassis
+          and wheelbase are disclosed procedural assumptions.
         </span>
         <span className="sm:text-right">
           {path ? (
             <>
-              Value path: {path.points.length} waypoints, {path.totalDistanceMeters.toFixed(2)} m,
-              {" "}planned clearance {path.minimumClearanceMeters.toFixed(3)} m
+              Value path: {path.points.length} waypoints,{" "}
+              {path.totalDistanceMeters.toFixed(2)} m, planned clearance{" "}
+              {path.minimumClearanceMeters.toFixed(3)} m
             </>
           ) : (
             "No path yet"
@@ -538,9 +564,15 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
           <span>clearance: {receipt.minimumClearanceMeters.toFixed(3)} m</span>
           <span>refusals: {receipt.collisionRefusals}</span>
           <span>time: {receipt.elapsedSeconds.toFixed(2)} s</span>
-          <span>gate: {receipt.waypointIndex + 1}/{receipt.totalWaypoints}</span>
           <span>
-            wheels: {receipt.wheelSpeeds.speeds.map((speed) => speed.toFixed(1)).join(" / ")} rad/s
+            gate: {receipt.waypointIndex + 1}/{receipt.totalWaypoints}
+          </span>
+          <span>
+            wheels:{" "}
+            {receipt.wheelSpeeds.speeds
+              .map((speed) => speed.toFixed(1))
+              .join(" / ")}{" "}
+            rad/s
           </span>
           <span>{receipt.completed ? "goal reached" : "integrating"}</span>
         </div>
@@ -548,11 +580,16 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       {dynamicReceipt ? (
         <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-amber-500/20 bg-amber-950/10 p-3 font-mono text-[11px] text-amber-100 sm:grid-cols-4">
           <span>matter owner: household contact/LCP TS</span>
-          <span>base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}</span>
           <span>
-            chair speed: {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s
+            base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}
           </span>
-          <span>LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}</span>
+          <span>
+            chair speed:{" "}
+            {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s
+          </span>
+          <span>
+            LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}
+          </span>
         </div>
       ) : null}
     </div>
