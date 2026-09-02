@@ -27,6 +27,7 @@ const FLAGSHIP_MODULES = [
   "../app/components/G1BiomechanicsOverlay",
   "../app/components/ArmGraspMicroscope",
   "../app/components/ArmPageClient",
+  "../app/components/FrankenRobotsArmRoute",
   "../app/components/KmrScene",
   "../app/components/KmrBase3D",
   // Story / scrubber / objective
