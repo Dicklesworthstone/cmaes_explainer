@@ -1,8 +1,44 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const scriptPath = new URL("../ios/prepare-engine.sh", import.meta.url);
+const scriptFilePath = fileURLToPath(scriptPath);
 const script = readFileSync(scriptPath, "utf8");
+
+function manifestFixture(): { directory: string; digest: string } {
+  const directory = mkdtempSync(join(tmpdir(), "frankenrobots-manifest-test-"));
+  const payload = "reviewed engine bytes\n";
+  writeFileSync(join(directory, "payload.txt"), payload);
+  const payloadDigest = createHash("sha256").update(payload).digest("hex");
+  const manifest = `${payloadDigest}  ./payload.txt\n`;
+  writeFileSync(join(directory, "engine-content-sha256.txt"), manifest);
+  return {
+    directory,
+    digest: createHash("sha256").update(manifest).digest("hex"),
+  };
+}
+
+async function runManifestVerification(directory: string, digest: string) {
+  const process = Bun.spawn({
+    cmd: [
+      "zsh",
+      "-c",
+      'source "$1"; verify_content_manifest "$2" "test engine" "$3"',
+      "verify-manifest",
+      scriptFilePath,
+      directory,
+      digest,
+    ],
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  return process.exited;
+}
 
 describe("FrankenRobots engine exporter safety boundary", () => {
   test("defaults to a staging-only mode", () => {
@@ -18,8 +54,12 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   });
 
   test("requires clean source receipts and validates the shipped capability payload", () => {
-    expect(script).toContain("SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)");
-    expect(script).toContain("FRANKENSIM_DIRTY=$(git -C \"$FRANKENSIM_ROOT\" status --porcelain --untracked-files=normal)");
+    expect(script).toContain(
+      "SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)",
+    );
+    expect(script).toContain(
+      'FRANKENSIM_DIRTY=$(git -C "$FRANKENSIM_ROOT" status --porcelain --untracked-files=normal)',
+    );
     expect(script).toContain("verify_source_fences");
     expect(script).toContain("HEAD moved during export");
     expect(script).toContain("frankenrobots/humanoid/index.html");
@@ -31,9 +71,58 @@ describe("FrankenRobots engine exporter safety boundary", () => {
 
   test("preserves an existing engine at a printed rollback path during explicit activation", () => {
     expect(script).toContain('if [[ "$MODE" == "stage" ]]');
-    expect(script).toContain('ROLLBACK_ENGINE="$STAGE_PARENT/previous-Engine"');
-    expect(script).toContain('mv "$CURRENT_ENGINE" "$ROLLBACK_ENGINE"');
+    expect(script).toContain("--activate-stage PATH");
+    expect(script).toContain("--expect-manifest-sha256");
+    expect(script).toContain(
+      'local rollback_engine="$STAGE_PARENT/previous-Engine"',
+    );
+    expect(script).toContain('mv "$current_engine" "$rollback_engine"');
     expect(script).toContain("Previous engine preserved for rollback");
     expect(script).toContain("--allow-unverified-existing");
+  });
+
+  test("accepts an unchanged stage only with its reviewed manifest digest", async () => {
+    const fixture = manifestFixture();
+    const exitCode = await runManifestVerification(
+      fixture.directory,
+      fixture.digest,
+    );
+    expect(exitCode).toBe(0);
+  });
+
+  test("rejects payload tampering after review", async () => {
+    const fixture = manifestFixture();
+    writeFileSync(
+      join(fixture.directory, "payload.txt"),
+      "changed after review\n",
+    );
+    const exitCode = await runManifestVerification(
+      fixture.directory,
+      fixture.digest,
+    );
+    expect(exitCode).toBe(1);
+  });
+
+  test("rejects a manifest replacement after review", async () => {
+    const fixture = manifestFixture();
+    writeFileSync(
+      join(fixture.directory, "unlisted.txt"),
+      "new unreviewed bytes\n",
+    );
+    const updatedManifest =
+      readFileSync(
+        join(fixture.directory, "engine-content-sha256.txt"),
+        "utf8",
+      ) +
+      `${createHash("sha256").update("new unreviewed bytes\n").digest("hex")}  ./unlisted.txt\n`;
+    writeFileSync(
+      join(fixture.directory, "engine-content-sha256.txt"),
+      updatedManifest,
+    );
+    const exitCode = await runManifestVerification(
+      fixture.directory,
+      fixture.digest,
+    );
+    expect(exitCode).toBe(1);
   });
 });

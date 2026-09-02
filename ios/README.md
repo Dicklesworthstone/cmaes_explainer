@@ -7,7 +7,9 @@ Universal iPhone, iPad, and Mac Catalyst laboratory for the Humanoid and Arm fla
 ```bash
 cd /Users/jemanuel/projects/cmaes_explainer
 ./ios/prepare-engine.sh
-./ios/prepare-engine.sh --activate
+# Copy the printed stage path and manifest digest after review:
+./ios/prepare-engine.sh --activate-stage '/absolute/path/to/Engine' \
+  --expect-manifest-sha256 'printed-64-character-digest'
 cd ios
 xcodegen generate
 open FrankenRobots.xcodeproj
@@ -15,8 +17,12 @@ open FrankenRobots.xcodeproj
 
 The first command is deliberately stage-only: it builds and validates a
 candidate under a printed temporary path without changing `ios/Engine`. Review
-that stage, then run the explicit activation command. The first migration from
-a legacy engine without a content manifest also requires
+that stage, then use the exact printed `--activate-stage` command. Activation
+requires the printed SHA-256 digest of the reviewed manifest, rechecks every
+file and source receipt, and refuses modified, missing, or newly added bytes.
+The shorthand `--activate` builds and immediately activates a fresh stage; use
+it only when a separate review interval is unnecessary. The first migration
+from a legacy engine without a content manifest also requires
 `--allow-unverified-existing`. Activation moves the previous engine to the
 printed rollback path before moving the validated stage into place; it never
 silently discards the previous bundle.
