@@ -13,8 +13,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   computeMultiFactorObjective,
+  DEFAULT_MULTI_FACTOR_WEIGHTS,
   type MultiFactorConfig,
 } from "./g1MultiFactor";
+import { RECEIPT_ANALYSIS_PRESETS } from "../components/G1ObjectiveEqualizer";
 import type { G1TraceReceipt } from "./frankensimCmaes";
 
 const DEFAULT_CONFIG: MultiFactorConfig = {
@@ -108,7 +110,73 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
     expect(byLabel["lateral error ∫"]).toBeCloseTo(0.2, 10);
     expect(byLabel["heading error ∫"]).toBeCloseTo(0.2, 10);
     expect(byLabel["speed error ∫"]).toBeCloseTo(0.2, 10);
-    expect(byLabel["work per meter (efficiency)"]).toBeCloseTo(0.05, 10);
+    expect(byLabel["work per meter (efficiency)"]).toBeCloseTo(0.00005, 10);
+  });
+
+  test("every receipt-analysis preset causally reweights its declared channels", () => {
+    const receipt = buildReceipt({
+      samples: makeSamples(1.5),
+      distanceMeters: 0.45,
+      completedSteps: 600,
+      slipIntegral: 0.2,
+      postureIntegral: 0.1,
+      impactIntegral: 0.15,
+      actuatorWorkJoules: 10,
+    });
+    const weightedByPreset = RECEIPT_ANALYSIS_PRESETS.map((preset) => {
+      const result = computeMultiFactorObjective(receipt, DEFAULT_CONFIG, preset.weights);
+      const byLabel = Object.fromEntries(
+        result.channels.map((channel) => [channel.label, channel.weight]),
+      );
+      expect(byLabel["mean fwd speed ≥ target"]).toBe(preset.weights.meanForwardSpeed);
+      expect(byLabel["posture integral"]).toBe(preset.weights.postureIntegral);
+      expect(byLabel["work per meter (efficiency)"]).toBe(preset.weights.workPerMeter);
+      expect(byLabel["slip integral"]).toBe(preset.weights.slipIntegral);
+      expect(byLabel["impact integral"]).toBe(preset.weights.impactIntegral);
+      expect(byLabel["survival (steps/horizon)"]).toBe(
+        DEFAULT_MULTI_FACTOR_WEIGHTS.survival,
+      );
+      return result.weighted.toFixed(8);
+    });
+
+    expect(new Set(weightedByPreset).size).toBe(RECEIPT_ANALYSIS_PRESETS.length);
+  });
+
+  test("the default preset agrees with the documented default receipt lens", () => {
+    const baseline = RECEIPT_ANALYSIS_PRESETS.find(
+      (preset) => preset.id === "owner-receipt",
+    );
+    expect(baseline).toBeDefined();
+    expect(baseline?.weights).toEqual({
+      meanForwardSpeed: DEFAULT_MULTI_FACTOR_WEIGHTS.meanForwardSpeed,
+      postureIntegral: DEFAULT_MULTI_FACTOR_WEIGHTS.postureIntegral,
+      workPerMeter: DEFAULT_MULTI_FACTOR_WEIGHTS.workPerMeter,
+      slipIntegral: DEFAULT_MULTI_FACTOR_WEIGHTS.slipIntegral,
+      impactIntegral: DEFAULT_MULTI_FACTOR_WEIGHTS.impactIntegral,
+    });
+  });
+
+  test("non-finite analysis overrides fail closed to documented defaults", () => {
+    const result = computeMultiFactorObjective(
+      buildReceipt({
+        samples: makeSamples(1.5),
+        distanceMeters: 1.2,
+        completedSteps: 720,
+        postureIntegral: 0.25,
+      }),
+      DEFAULT_CONFIG,
+      { meanForwardSpeed: Number.NaN, postureIntegral: Number.POSITIVE_INFINITY },
+    );
+    const byLabel = Object.fromEntries(
+      result.channels.map((channel) => [channel.label, channel]),
+    );
+    expect(byLabel["mean fwd speed ≥ target"].weight).toBe(
+      DEFAULT_MULTI_FACTOR_WEIGHTS.meanForwardSpeed,
+    );
+    expect(byLabel["mean fwd speed ≥ target"].contribution).toBeLessThan(0);
+    expect(byLabel["posture integral"].weight).toBe(
+      DEFAULT_MULTI_FACTOR_WEIGHTS.postureIntegral,
+    );
   });
 
   test("survival normalizes by horizon (720 steps)", () => {
@@ -155,7 +223,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
 
   test("work per meter: floor at 0.05 m prevents divide-by-zero", () => {
     // distance = 0; uses floor 0.05 -> workPerMeter = 100 / 0.05 = 2000
-    // contribution = 0.05 * 2000 = 100
+    // contribution = 0.00005 * 2000 = 0.1
     const r = computeMultiFactorObjective(
       buildReceipt({
         samples: makeSamples(1.0),
@@ -166,7 +234,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
     );
     const w = r.channels.find((c) => c.label === "work per meter (efficiency)")!;
     expect(w.value).toBeCloseTo(2000, 10);
-    expect(w.contribution).toBeCloseTo(100, 10);
+    expect(w.contribution).toBeCloseTo(0.1, 10);
   });
 
   test("slip / posture / impact contributions scale with their integrals", () => {
@@ -255,8 +323,8 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
       DEFAULT_CONFIG,
     );
     // survival = -1.0 (negative weight = reward), speed gap ~ 0
-    // work per meter = 5 / 0.975 = ~5.13, contribution = 0.05 * 5.13 ~ 0.256
-    // everything else 0. So weighted ~ -1.0 + 0.256 ~ -0.744.
+    // work per meter = 5 / 0.975 = ~5.13, contribution = 0.00005 * 5.13 ~ 0.000256
+    // everything else 0. So weighted remains approximately -1.0.
     // The curriculum walking policy scores BETTER (lower) than a standing
     // prior (which has 0 speed gap penalty but 0 work too, so ~ -1.0).
     expect(r.weighted).toBeLessThan(0.0);

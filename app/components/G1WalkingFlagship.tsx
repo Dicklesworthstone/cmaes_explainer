@@ -34,7 +34,11 @@ import { G1PhysicsDebugOverlay } from "./G1PhysicsDebugOverlay";
 import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
 import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
-import { G1ObjectiveEqualizer, PERSONALITY_PRESETS, type RobotPersonalityPreset } from "./G1ObjectiveEqualizer";
+import {
+  G1ObjectiveEqualizer,
+  RECEIPT_ANALYSIS_PRESETS,
+  type ReceiptAnalysisPreset,
+} from "./G1ObjectiveEqualizer";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { WalkQualityComparison } from "./WalkQualityComparison";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
@@ -1526,7 +1530,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [sampleIndex, setSampleIndex] = useState(0);
   const [currentChapter, setCurrentChapter] = useState(1);
-  const [selectedPreset, setSelectedPreset] = useState("cautious-monk");
+  const [selectedPreset, setSelectedPreset] = useState("owner-receipt");
   const [shoveActive, setShoveActive] = useState(false);
   const [pushAngleDeg, setPushAngleDeg] = useState(90);
   const [pushImpulseNs, setPushImpulseNs] = useState(15);
@@ -1675,9 +1679,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setIsPlaying(true);
   }, [task, challenge, stabilizerTrace, curriculumTrace, requestPreview, setCurrentChapter, setSampleIndex]);
 
-  const handleSelectPreset = useCallback((p: RobotPersonalityPreset) => {
+  const handleSelectPreset = useCallback((p: ReceiptAnalysisPreset) => {
     setSelectedPreset(p.id);
-    setStatus(`Applied ${p.name} reward weights (${p.gaitStyle}).`);
+    setStatus(
+      `Viewing ${p.name} receipt lens (${p.lensStyle}). Owner task and optimization objective are unchanged.`,
+    );
   }, []);
 
   useEffect(() => {
@@ -1845,11 +1851,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // lateralErrorIntegral, headingErrorIntegral, speedErrorIntegral,
   // backwardDistanceMeters) and a transparent weighted-sum channel card so
   // a small stabilizing correction is visible, not collapsed into one
-  // scalar. The channel weights are owned by app/lib/g1MultiFactor.ts and
-  // match the kernel's v068 shaping intent (mean forward speed + survival
-  // positive; slip / impact / contact-schedule / work-per-meter negative).
+  // scalar. The post-hoc channel weights are owned by
+  // app/lib/g1MultiFactor.ts and never alter the fixed owner objective.
+  const selectedAnalysisPreset =
+    RECEIPT_ANALYSIS_PRESETS.find((preset) => preset.id === selectedPreset) ??
+    RECEIPT_ANALYSIS_PRESETS[0];
   const multiFactor = trace
-    ? computeMultiFactorObjective(trace, admission?.config ?? DEFAULT_G1_WALKING_CONFIG)
+    ? computeMultiFactorObjective(
+        trace,
+        admission?.config ?? DEFAULT_G1_WALKING_CONFIG,
+        selectedAnalysisPreset.weights,
+      )
     : null;
   const receiptCards = trace
     ? [
@@ -2709,12 +2721,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <p className="mt-2 text-xs leading-5 text-slate-300">
             The kernel scalar <span className="font-mono text-slate-100">objective ↓</span> collapses
             many signals into one number and so can punish small stabilizing corrections. The
-            weighted sum above re-exposes the same v068-shaping intent as a transparent sum of
-            eleven per-step / per-trajectory channels. A small corrective slip, posture, or
-            joint-limit term is no longer collapsed; the optimizer can reward it. The defaults
-            here match the kernel&apos;s v068 weights; future versions surface the weights as a slider
-            so the user can rebias the trade-off between forward speed, stability, and
-            efficiency without changing the kernel binary.
+            weighted sum above re-exposes an owner-inspired receipt decomposition as a transparent
+            sum of eleven per-step / per-trajectory channels. A selected lens can rebias the
+            post-hoc comparison between speed, stability, and efficiency. It does not change the
+            kernel scalar that CMA-ES minimized, mutate the trace, or claim the rendered gait
+            changed.
           </p>
           <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
             {multiFactor.channels.map((c: MultiFactorChannel) => (
@@ -2723,7 +2734,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span className="shrink-0 text-slate-500">
                   {c.value >= 0 ? "+" : ""}
                   {number(c.contribution, 3)} (w {c.weight >= 0 ? "+" : ""}
-                  {number(c.weight, 2)})
+                  {Math.abs(c.weight) < 0.01 && c.weight !== 0
+                    ? c.weight.toExponential(1)
+                    : number(c.weight, 2)}
+                  )
                 </span>
               </div>
             ))}
@@ -2731,7 +2745,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         </div>
       ) : null}
 
-      {/* 3. Live Objective Equalizer & Personality Sculptor */}
+      {/* 3. Causal post-hoc receipt equalizer; the owner objective remains fixed. */}
       <G1ObjectiveEqualizer
         multiFactor={multiFactor}
         selectedPreset={selectedPreset}

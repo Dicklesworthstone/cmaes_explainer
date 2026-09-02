@@ -1,73 +1,98 @@
 "use client";
 
 import React from "react";
-import { Sliders, Zap, Shield, Activity } from "lucide-react";
-import type { MultiFactorResult, MultiFactorChannel } from "../lib/g1MultiFactor";
+import { Sliders, Zap, Shield, Activity, Gauge } from "lucide-react";
+import type {
+  MultiFactorResult,
+  MultiFactorChannel,
+  MultiFactorWeights,
+} from "../lib/g1MultiFactor";
 
-export interface RobotPersonalityPreset {
+export interface ReceiptAnalysisPreset {
   id: string;
   name: string;
   badge: string;
   description: string;
-  gaitStyle: string;
+  lensStyle: string;
   accent: string;
   icon: typeof Zap;
-  weights: {
-    speedWeight: number;
-    uprightWeight: number;
-    energyWeight: number;
-    slipWeight: number;
-    impactWeight: number;
-  };
+  weights: Pick<
+    MultiFactorWeights,
+    | "meanForwardSpeed"
+    | "postureIntegral"
+    | "workPerMeter"
+    | "slipIntegral"
+    | "impactIntegral"
+  >;
 }
 
-export const PERSONALITY_PRESETS: RobotPersonalityPreset[] = [
+export const RECEIPT_ANALYSIS_PRESETS: ReceiptAnalysisPreset[] = [
+  {
+    id: "owner-receipt",
+    name: "Documented Baseline",
+    badge: "Default Lens",
+    description:
+      "Shows the documented receipt decomposition without changing the owner kernel scalar.",
+    lensStyle: "Balanced receipt audit",
+    accent: "text-slate-200 border-slate-300/30 bg-slate-400/10",
+    icon: Gauge,
+    weights: {
+      meanForwardSpeed: -3.0,
+      postureIntegral: 0.3,
+      workPerMeter: 0.00005,
+      slipIntegral: 0.4,
+      impactIntegral: 0.6,
+    },
+  },
   {
     id: "cautious-monk",
     name: "The Cautious Monk",
     badge: "Maximum Balance",
-    description: "Prioritizes posture stability and minimal energy expenditure. Takes deliberate, grounded strides.",
-    gaitStyle: "Slow, upright, low-torque",
+    description:
+      "Prioritizes posture stability and minimal energy expenditure in the receipt comparison.",
+    lensStyle: "Stability and efficiency emphasis",
     accent: "text-emerald-300 border-emerald-400/30 bg-emerald-500/10",
     icon: Shield,
     weights: {
-      speedWeight: 1.0,
-      uprightWeight: 4.0,
-      energyWeight: 3.0,
-      slipWeight: 2.0,
-      impactWeight: 1.5,
+      meanForwardSpeed: -1.0,
+      postureIntegral: 4.0,
+      workPerMeter: 0.0001,
+      slipIntegral: 2.0,
+      impactIntegral: 1.5,
     },
   },
   {
     id: "olympic-sprinter",
     name: "The Olympic Sprinter",
     badge: "Dynamic Forward",
-    description: "Maximizes forward displacement velocity with aggressive pelvic forward lean.",
-    gaitStyle: "High cadence, dynamic thrust",
+    description:
+      "Emphasizes forward displacement velocity without claiming the recorded policy changed.",
+    lensStyle: "Forward-speed emphasis",
     accent: "text-cyan-300 border-cyan-400/30 bg-cyan-500/10",
     icon: Zap,
     weights: {
-      speedWeight: 4.5,
-      uprightWeight: 1.0,
-      energyWeight: 0.5,
-      slipWeight: 1.0,
-      impactWeight: 0.8,
+      meanForwardSpeed: -4.5,
+      postureIntegral: 1.0,
+      workPerMeter: 0.00001,
+      slipIntegral: 1.0,
+      impactIntegral: 0.8,
     },
   },
   {
     id: "glass-floor",
     name: "The Glass-Floor Walker",
     badge: "Zero Impact",
-    description: "Penalizes foot impact spikes and ground slip to traverse delicate, slick surfaces safely.",
-    gaitStyle: "Soft landing, zero slip",
+    description:
+      "Emphasizes reported foot-impact spikes and ground slip in the post-hoc comparison.",
+    lensStyle: "Slip and impact emphasis",
     accent: "text-violet-300 border-violet-400/30 bg-violet-500/10",
     icon: Activity,
     weights: {
-      speedWeight: 1.5,
-      uprightWeight: 2.0,
-      energyWeight: 1.0,
-      slipWeight: 5.0,
-      impactWeight: 5.0,
+      meanForwardSpeed: -1.5,
+      postureIntegral: 2.0,
+      workPerMeter: 0.00002,
+      slipIntegral: 5.0,
+      impactIntegral: 5.0,
     },
   },
 ];
@@ -75,7 +100,7 @@ export const PERSONALITY_PRESETS: RobotPersonalityPreset[] = [
 interface G1ObjectiveEqualizerProps {
   multiFactor: MultiFactorResult | null;
   selectedPreset: string;
-  onSelectPreset: (preset: RobotPersonalityPreset) => void;
+  onSelectPreset: (preset: ReceiptAnalysisPreset) => void;
 }
 
 export function G1ObjectiveEqualizer({
@@ -83,6 +108,9 @@ export function G1ObjectiveEqualizer({
   selectedPreset,
   onSelectPreset,
 }: G1ObjectiveEqualizerProps) {
+  const formatWeight = (weight: number): string =>
+    Math.abs(weight) < 0.01 && weight !== 0 ? weight.toExponential(1) : weight.toFixed(1);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-5 backdrop-blur-md">
       {/* 1. Header */}
@@ -90,17 +118,17 @@ export function G1ObjectiveEqualizer({
         <div className="flex items-center gap-2">
           <Sliders className="h-4 w-4 text-cyan-400" />
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-            Multi-Factor Objective Equalizer & Personality Sculptor
+            Receipt Objective Equalizer
           </span>
         </div>
         <span className="text-[0.68rem] text-slate-400">
-          How the 11 reward channels sculpt robot behavior
+          Reweight the same 11 reported channels; owner optimization is unchanged
         </span>
       </div>
 
-      {/* 2. Personality Archetypes */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {PERSONALITY_PRESETS.map((p) => {
+      {/* 2. Receipt-analysis presets */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {RECEIPT_ANALYSIS_PRESETS.map((p) => {
           const isSelected = selectedPreset === p.id;
           const Icon = p.icon;
           return (
@@ -109,7 +137,7 @@ export function G1ObjectiveEqualizer({
               type="button"
               onClick={() => onSelectPreset(p)}
               aria-pressed={isSelected}
-              aria-label={`Select ${p.name} personality archetype (${p.badge})`}
+              aria-label={`Analyze this receipt with ${p.name} (${p.badge})`}
               className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all min-h-[44px] ${
                 isSelected
                   ? "border-cyan-400/60 bg-cyan-950/40 ring-1 ring-cyan-400/50 shadow-[0_0_15px_rgba(6,182,212,0.12)]"
@@ -118,7 +146,9 @@ export function G1ObjectiveEqualizer({
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider ${p.accent}`}>
+                  <span
+                    className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider ${p.accent}`}
+                  >
                     {p.badge}
                   </span>
                   <Icon className="h-4 w-4 text-slate-300" />
@@ -131,7 +161,7 @@ export function G1ObjectiveEqualizer({
 
               <div className="mt-3 border-t border-white/5 pt-2">
                 <span className="text-[0.65rem] text-slate-300 font-mono">
-                  Gait: {p.gaitStyle}
+                  Lens: {p.lensStyle}
                 </span>
               </div>
             </button>
@@ -139,12 +169,17 @@ export function G1ObjectiveEqualizer({
         })}
       </div>
 
+      <p className="mt-3 text-[0.7rem] leading-5 text-slate-400">
+        These presets recompute the visible receipt analysis only. They do not alter the owner&apos;s
+        fixed task objective, rerun CMA-ES, or claim that the rendered gait changed.
+      </p>
+
       {/* 3. Live 11-Channel Equalizer Bar Display */}
       {multiFactor && (
         <div className="mt-6 border-t border-white/10 pt-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Live Channel Contributions (Weighted Sum: {multiFactor.weighted.toFixed(2)})
+              Selected-Lens Contributions (Weighted Sum: {multiFactor.weighted.toFixed(2)})
             </span>
             <span className="text-[0.68rem] font-mono text-cyan-300">
               Target Speed Gap: {multiFactor.channels[0]?.value.toFixed(2)} m/s
@@ -184,7 +219,7 @@ export function G1ObjectiveEqualizer({
                   </div>
 
                   <div className="mt-1.5 flex items-center justify-between text-[0.62rem] text-slate-500 font-mono">
-                    <span>w={ch.weight.toFixed(1)}</span>
+                    <span>w={formatWeight(ch.weight)}</span>
                     <span className={isPositivePenalty ? "text-rose-300" : "text-emerald-300"}>
                       {ch.contribution > 0 ? `+${ch.contribution.toFixed(2)}` : ch.contribution.toFixed(2)}
                     </span>

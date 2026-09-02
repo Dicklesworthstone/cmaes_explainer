@@ -9,14 +9,14 @@
 // per-channel weights inside the kernel, but the EXPLAINER still only
 // shows the collapsed scalar on the UI.
 //
-// This module re-exposes the same v068-shaping intent as a transparent
-// weighted sum of eleven per-step / per-trajectory channels, with weights
-// that match the kernel's v068 intent. The result is the new
-// "multi-factor ↓" card on the G1 flagship page. The output is for
-// display and explanation only — the kernel admission / receipt contract
-// is unchanged, and the CMA-ES still optimizes the kernel scalar (or
-// would, on the kernel side); the multi-factor is a UI lens on the same
-// data.
+// This module re-exposes the historical v068 shaping intent as a
+// transparent weighted sum of eleven reported channels. Its default
+// weights preserve that documented receipt decomposition; optional
+// analysis presets may reweight a declared subset after the rollout.
+// The result is the "multi-factor ↓" card on the G1 flagship page. It is
+// display and explanation only: the current owner task may use later
+// shaping, its admission / receipt contract is unchanged, and CMA-ES
+// still optimizes the kernel scalar.
 //
 // Channel weights and sign convention (chosen so a standing prior and a
 // walking curriculum mean produce finite, comparable weighted values;
@@ -35,7 +35,7 @@
 //   - slip, posture, joint-limit, impact, contact-schedule, lateral,
 //     heading, speed error: positive weight on the non-negative error
 //     integral. Positive contribution = penalty.
-//   - work per meter: small positive weight 0.05; positive contribution
+//   - work per meter: small positive weight 0.00005; positive contribution
 //     = penalty for wasted work.
 // Sign convention (uniform across all channels): larger (more positive)
 // contribution = worse. The display "multi-factor ↓" means minimize.
@@ -75,6 +75,34 @@ export interface MultiFactorResult {
   channels: MultiFactorChannel[];
 }
 
+export interface MultiFactorWeights {
+  meanForwardSpeed: number;
+  survival: number;
+  slipIntegral: number;
+  postureIntegral: number;
+  jointLimitIntegral: number;
+  impactIntegral: number;
+  contactScheduleMismatch: number;
+  lateralErrorIntegral: number;
+  headingErrorIntegral: number;
+  speedErrorIntegral: number;
+  workPerMeter: number;
+}
+
+export const DEFAULT_MULTI_FACTOR_WEIGHTS: Readonly<MultiFactorWeights> = Object.freeze({
+  meanForwardSpeed: -3.0,
+  survival: -1.0,
+  slipIntegral: 0.4,
+  postureIntegral: 0.3,
+  jointLimitIntegral: 0.5,
+  impactIntegral: 0.6,
+  contactScheduleMismatch: 0.4,
+  lateralErrorIntegral: 0.2,
+  headingErrorIntegral: 0.2,
+  speedErrorIntegral: 0.2,
+  workPerMeter: 0.00005,
+});
+
 /**
  * Compute the multi-factor objective as a transparent weighted sum of
  * per-channel integrals from the G1 trace receipt.
@@ -86,10 +114,14 @@ export interface MultiFactorResult {
  * @param receipt The G1 trace receipt from the kernel.
  * @param config The G1 walking config (stepSeconds, durationSeconds,
  *               targetSpeed). Same config the kernel admission uses.
+ * @param weightOverrides Optional post-hoc analysis weights. These reweight
+ *               receipt channels only; they do not change the owner kernel's
+ *               optimization objective.
  */
 export function computeMultiFactorObjective(
   receipt: G1TraceReceipt,
   config: MultiFactorConfig,
+  weightOverrides: Partial<MultiFactorWeights> = {},
 ): MultiFactorResult {
   // Weights and sign convention (see header docstring):
   //   - mean forward speed: weight -3.0; contribution inverts the sign of
@@ -104,6 +136,24 @@ export function computeMultiFactorObjective(
    // the *ratio* between channels is the new "is it doing what we want" signal.
   const safe = (x: number, fallback: number): number =>
     Number.isFinite(x) ? x : fallback;
+  const resolvedWeight = (key: keyof MultiFactorWeights): number =>
+    safe(
+      weightOverrides[key] ?? DEFAULT_MULTI_FACTOR_WEIGHTS[key],
+      DEFAULT_MULTI_FACTOR_WEIGHTS[key],
+    );
+  const weights: MultiFactorWeights = {
+    meanForwardSpeed: resolvedWeight("meanForwardSpeed"),
+    survival: resolvedWeight("survival"),
+    slipIntegral: resolvedWeight("slipIntegral"),
+    postureIntegral: resolvedWeight("postureIntegral"),
+    jointLimitIntegral: resolvedWeight("jointLimitIntegral"),
+    impactIntegral: resolvedWeight("impactIntegral"),
+    contactScheduleMismatch: resolvedWeight("contactScheduleMismatch"),
+    lateralErrorIntegral: resolvedWeight("lateralErrorIntegral"),
+    headingErrorIntegral: resolvedWeight("headingErrorIntegral"),
+    speedErrorIntegral: resolvedWeight("speedErrorIntegral"),
+    workPerMeter: resolvedWeight("workPerMeter"),
+  };
   // durationSeconds is not on the receipt; derive from samples or fall back
   // to the config. Both are equivalent in the standard G1 experiment.
   const lastSample = receipt.samples[receipt.samples.length - 1];
@@ -130,17 +180,72 @@ export function computeMultiFactorObjective(
   // Channels: each has a label, the raw value, the weight, and the
   // contribution (value * weight, with sign-flip on the speed gap).
   const channels: MultiFactorChannel[] = [
-    { label: "mean fwd speed ≥ target", value: meanFwdSpeed, weight: -3.0, contribution: -3.0 * (meanFwdSpeed - targetSpeed) },
-    { label: "survival (steps/horizon)", value: survival, weight: -1.0, contribution: -1.0 * survival },
-    { label: "slip integral", value: slip, weight: 0.4, contribution: 0.4 * slip },
-    { label: "posture integral", value: posture, weight: 0.3, contribution: 0.3 * posture },
-    { label: "joint-limit integral", value: jointLimit, weight: 0.5, contribution: 0.5 * jointLimit },
-    { label: "impact integral", value: impact, weight: 0.6, contribution: 0.6 * impact },
-    { label: "contact-schedule mismatch", value: contactSched, weight: 0.4, contribution: 0.4 * contactSched },
-    { label: "lateral error ∫", value: lateral, weight: 0.2, contribution: 0.2 * lateral },
-    { label: "heading error ∫", value: heading, weight: 0.2, contribution: 0.2 * heading },
-    { label: "speed error ∫", value: speedErr, weight: 0.2, contribution: 0.2 * speedErr },
-    { label: "work per meter (efficiency)", value: workPerMeter, weight: 0.05, contribution: 0.05 * workPerMeter },
+    {
+      label: "mean fwd speed ≥ target",
+      value: meanFwdSpeed,
+      weight: weights.meanForwardSpeed,
+      contribution: weights.meanForwardSpeed * (meanFwdSpeed - targetSpeed),
+    },
+    {
+      label: "survival (steps/horizon)",
+      value: survival,
+      weight: weights.survival,
+      contribution: weights.survival * survival,
+    },
+    {
+      label: "slip integral",
+      value: slip,
+      weight: weights.slipIntegral,
+      contribution: weights.slipIntegral * slip,
+    },
+    {
+      label: "posture integral",
+      value: posture,
+      weight: weights.postureIntegral,
+      contribution: weights.postureIntegral * posture,
+    },
+    {
+      label: "joint-limit integral",
+      value: jointLimit,
+      weight: weights.jointLimitIntegral,
+      contribution: weights.jointLimitIntegral * jointLimit,
+    },
+    {
+      label: "impact integral",
+      value: impact,
+      weight: weights.impactIntegral,
+      contribution: weights.impactIntegral * impact,
+    },
+    {
+      label: "contact-schedule mismatch",
+      value: contactSched,
+      weight: weights.contactScheduleMismatch,
+      contribution: weights.contactScheduleMismatch * contactSched,
+    },
+    {
+      label: "lateral error ∫",
+      value: lateral,
+      weight: weights.lateralErrorIntegral,
+      contribution: weights.lateralErrorIntegral * lateral,
+    },
+    {
+      label: "heading error ∫",
+      value: heading,
+      weight: weights.headingErrorIntegral,
+      contribution: weights.headingErrorIntegral * heading,
+    },
+    {
+      label: "speed error ∫",
+      value: speedErr,
+      weight: weights.speedErrorIntegral,
+      contribution: weights.speedErrorIntegral * speedErr,
+    },
+    {
+      label: "work per meter (efficiency)",
+      value: workPerMeter,
+      weight: weights.workPerMeter,
+      contribution: weights.workPerMeter * workPerMeter,
+    },
   ];
   const weighted = channels.reduce((acc, c) => acc + c.contribution, 0);
   return { weighted, channels };
