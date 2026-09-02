@@ -7,19 +7,36 @@ Universal iPhone, iPad, and Mac Catalyst laboratory for the Humanoid and Arm fla
 ```bash
 cd /Users/jemanuel/projects/cmaes_explainer
 ./ios/prepare-engine.sh
+./ios/prepare-engine.sh --activate
 cd ios
 xcodegen generate
 open FrankenRobots.xcodeproj
 ```
 
+The first command is deliberately stage-only: it builds and validates a
+candidate under a printed temporary path without changing `ios/Engine`. Review
+that stage, then run the explicit activation command. The first migration from
+a legacy engine without a content manifest also requires
+`--allow-unverified-existing`. Activation moves the previous engine to the
+printed rollback path before moving the validated stage into place; it never
+silently discards the previous bundle.
+
 The production export is bundled under `Engine/` and served only over an ephemeral `127.0.0.1` port. The local response supplies the cross-origin isolation headers required by the worker/WASM pipeline. The app rejects non-loopback WebView navigation; explicit external documentation links open through the system.
 
-`prepare-engine.sh` deliberately refuses a dirty source tree. A successful
-export records three distinct receipts under `Engine/`:
+`prepare-engine.sh` deliberately refuses a dirty source tree in either this
+repository or the configured `FRANKENSIM_ROOT`. A successful export records
+five provenance receipts plus a content manifest under `Engine/`:
 
 - `source-commit.txt` — the exact `cmaes_explainer` revision that produced the bundle.
+- `source-tree-state.txt` — must say `clean`.
 - `frankensim-workspace-commit.txt` — the upstream FrankenSim source revision inspected for the build.
+- `frankensim-workspace-state.txt` — must say `clean`.
 - `owner-kernel-version.txt` — the versioned robotics-owner artifact that actually executes the rollouts.
+- `engine-content-sha256.txt` — the sorted SHA-256 inventory of every other bundled file.
+
+Before a stage is accepted, the script also requires both embedded routes, the
+version-matched owner JS/WASM/type package, the runtime G1 mesh parser, and the
+exact STL corpus referenced by `G1WalkingFlagship.tsx`.
 
 The FrankenSim workspace and robot owner are related provenance surfaces, not
 interchangeable claims. If the app shows **Engine bundle needs attention**,
