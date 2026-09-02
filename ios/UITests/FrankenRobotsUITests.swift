@@ -216,7 +216,7 @@ final class FrankenRobotsUITests: XCTestCase {
         ]
 
         for lens in lenses {
-            let button = app.buttons[lens.button]
+            let button = app.switches[lens.button]
             XCTAssertTrue(button.waitForExistence(timeout: 10), app.debugDescription)
             for _ in 0..<12 where !button.isHittable {
                 app.swipeUp()
