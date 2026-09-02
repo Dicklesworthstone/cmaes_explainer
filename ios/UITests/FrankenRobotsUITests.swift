@@ -165,4 +165,75 @@ final class FrankenRobotsUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    func testG1ReceiptLensesReweightAnalysisWithoutChangingOwnerKernel() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let humanoid = app.segmentedControls.buttons["Humanoid"]
+        XCTAssertTrue(humanoid.waitForExistence(timeout: 12))
+        if !humanoid.isSelected {
+            humanoid.tap()
+        }
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+
+        let equalizer = app.staticTexts["Receipt Objective Equalizer"]
+        XCTAssertTrue(equalizer.waitForExistence(timeout: 30), app.debugDescription)
+
+        let kernelReceipt = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS[c] 'kernel scalar'")
+        ).firstMatch
+        XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 10), app.debugDescription)
+        let originalKernelLabel = kernelReceipt.label
+
+        let lenses = [
+            (
+                button: "Analyze this receipt with The Cautious Monk (Maximum Balance)",
+                status: "Viewing The Cautious Monk receipt lens",
+                sum: "WEIGHTED SUM: 27.16"
+            ),
+            (
+                button: "Analyze this receipt with The Olympic Sprinter (Dynamic Forward)",
+                status: "Viewing The Olympic Sprinter receipt lens",
+                sum: "WEIGHTED SUM: 12.70"
+            ),
+            (
+                button: "Analyze this receipt with The Glass-Floor Walker (Zero Impact)",
+                status: "Viewing The Glass-Floor Walker receipt lens",
+                sum: "WEIGHTED SUM: 50.36"
+            ),
+        ]
+
+        for lens in lenses {
+            let button = app.buttons[lens.button]
+            XCTAssertTrue(button.waitForExistence(timeout: 10), app.debugDescription)
+            for _ in 0..<12 where !button.isHittable {
+                app.swipeUp()
+            }
+            XCTAssertTrue(button.isHittable, "Lens control never became hittable: \(lens.button)")
+            button.tap()
+
+            XCTAssertTrue(app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", lens.status)
+            ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertTrue(app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", lens.sum)
+            ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertEqual(kernelReceipt.label, originalKernelLabel)
+        }
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "G1 receipt lens in native container"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
 }
