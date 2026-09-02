@@ -159,5 +159,10 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] 'does not clear'")
         ).firstMatch.exists)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "KMR Kitchen route in native container"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 }
