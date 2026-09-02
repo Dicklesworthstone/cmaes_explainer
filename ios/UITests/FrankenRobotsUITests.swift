@@ -176,6 +176,9 @@ final class FrankenRobotsUITests: XCTestCase {
             humanoid.tap()
         }
 
+        let stage = app.webViews["robot-stage"].firstMatch
+        XCTAssertTrue(stage.waitForExistence(timeout: 12))
+
         let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
         XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
         let settled = XCTNSPredicateExpectation(
@@ -218,8 +221,8 @@ final class FrankenRobotsUITests: XCTestCase {
         for lens in lenses {
             let button = app.switches[lens.button]
             XCTAssertTrue(button.waitForExistence(timeout: 10), app.debugDescription)
-            for _ in 0..<12 where !button.isHittable {
-                app.swipeUp()
+            for _ in 0..<24 where !button.isHittable {
+                stage.swipeUp(velocity: .fast)
             }
             XCTAssertTrue(button.isHittable, "Lens control never became hittable: \(lens.button)")
             button.tap()
