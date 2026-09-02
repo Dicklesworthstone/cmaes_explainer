@@ -46,7 +46,14 @@ import {
   Download,
 } from "lucide-react";
 import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
 import {
@@ -558,13 +565,13 @@ function ArmRig({
     () => trace.samples.map((sample) => sample.timeSeconds),
     [trace],
   );
-  useEffect(() => {
+  useLayoutEffect(() => {
     playbackSeconds.current = 0;
     sampleIndex.current = 0;
     publishedSampleIndex.current = -1;
     previousProjectedPositions.current = [];
   }, [trace, playbackResetToken]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const nextIndex = clampArmPlaybackIndex(
       trace.samples.length,
       requestedSampleIndex,
@@ -1382,7 +1389,17 @@ function ArmStage({
 export function HouseholdArmFlagship({
   embedded = false,
 }: { embedded?: boolean } = {}) {
-  const reduceMotion = useReducedMotion() ?? false;
+  const requestedReducedMotion = useReducedMotion() ?? false;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setReduceMotion(requestedReducedMotion);
+    });
+    return () => {
+      active = false;
+    };
+  }, [requestedReducedMotion]);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, {
     rootMargin: "600px 0px 600px 0px",
@@ -2055,6 +2072,7 @@ export function HouseholdArmFlagship({
                         Number(event.target.value),
                       ),
                     );
+                    setPlaybackResetToken((token) => token + 1);
                   }}
                   className="min-w-0 flex-1 accent-orange-400 disabled:opacity-35 sm:w-32 sm:flex-none"
                 />
