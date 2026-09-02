@@ -938,8 +938,14 @@ type G1MeshState =
   | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
   | { phase: "failed"; error: string };
 
-function useG1Meshes(active: boolean): G1MeshState {
+function useG1Meshes(active: boolean): [G1MeshState, () => void] {
   const [state, setState] = useState<G1MeshState>({ phase: "idle" });
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => {
+    if (!active) return;
+    setState({ phase: "loading" });
+    setAttempt((current) => current + 1);
+  }, [active]);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -967,9 +973,9 @@ function useG1Meshes(active: boolean): G1MeshState {
     return () => {
       cancelled = true;
     };
-  }, [active]);
-  if (state.phase === "ready" || state.phase === "failed") return state;
-  return { phase: active ? "loading" : "idle" };
+  }, [active, attempt]);
+  if (state.phase === "ready" || state.phase === "failed") return [state, retry];
+  return [{ phase: active ? "loading" : "idle" }, retry];
 }
 
 const cameraScratchVec = new THREE.Vector3();
@@ -1468,7 +1474,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     rootMargin: "600px 0px 600px 0px",
     once: true,
   });
-  const meshState = useG1Meshes(shouldLoadMeshes);
+  const [meshState, retryMeshes] = useG1Meshes(shouldLoadMeshes);
   const workerActivated = shouldLoadMeshes;
   const workerRef = useRef<Worker | null>(null);
   // Synchronous in-flight gate. React state (busy) updates
@@ -2195,17 +2201,32 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
 
             {meshState.phase === "loading" ? (
-              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" role="status" aria-live="polite">
                 <span className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2 text-xs text-slate-300 backdrop-blur-md">
                   Loading the real Unitree G1 mesh rig…
                 </span>
               </div>
             ) : null}
-            {meshState.phase === "failed" ? (
-              <div className="absolute bottom-20 left-5 right-5 z-10 flex justify-center pointer-events-none">
-                <span className="rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-                  Mesh assets unavailable — showing the kinematic skeleton fallback.
+            {meshState.phase === "ready" ? (
+              <div className="pointer-events-none absolute left-5 top-16 z-10" role="status" aria-live="polite">
+                <span className="rounded-xl border border-emerald-300/20 bg-emerald-950/70 px-3 py-2 text-[0.7rem] text-emerald-100 backdrop-blur-md">
+                  Real Unitree G1 rig ready · {Object.keys(meshState.geometries).length} mesh parts decoded
                 </span>
+              </div>
+            ) : null}
+            {meshState.phase === "failed" ? (
+              <div className="absolute bottom-20 left-5 right-5 z-20 flex justify-center" role="alert">
+                <div className="max-w-xl rounded-xl border border-amber-300/20 bg-amber-950/80 px-3 py-2 text-[0.7rem] text-amber-100 shadow-lg backdrop-blur-md">
+                  <p>Real mesh assets could not load. The owner-driven kinematic skeleton remains active.</p>
+                  <p className="mt-1 break-words font-mono text-[0.62rem] text-amber-200/80">{meshState.error}</p>
+                  <button
+                    type="button"
+                    onClick={retryMeshes}
+                    className="mt-2 min-h-9 rounded-lg border border-amber-200/30 bg-amber-100/10 px-3 font-semibold text-amber-50 hover:bg-amber-100/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                  >
+                    Retry real mesh loading
+                  </button>
+                </div>
               </div>
             ) : null}
             <div
