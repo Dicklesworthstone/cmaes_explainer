@@ -247,7 +247,9 @@ export function resolveCameraBoom(
         hit.entryPoint[1] - lookAt[1],
         hit.entryPoint[2] - lookAt[2],
       );
-      const fraction = Math.max(0, (reach - pullback) / length);
+      // Floored: a fully blocked boom would otherwise park the camera exactly
+      // on the subject, which renders as a view from inside it.
+      const fraction = Math.max(0.12, (reach - pullback) / length);
       if (fraction < bestFraction) {
         bestFraction = fraction;
         blockedBy = obb.name;
@@ -1332,40 +1334,75 @@ export function clampPositionAgainstHouseCollisions(
  };
 }
 
+/** Work-surface placement shared by the renderer and these colliders. */
+export const ARM_TABLE_CENTER_X = -0.85;
+export const ARM_TABLE_WIDTH = 1.4;
+
 /**
- * Workbench volumes around the household arm's counter, in the three.js
- * stage frame at the default 0.78 m support height. The counter slab is
- * deliberately absent: the arm's base link rests on it, and a hard
- * link-vs-box constraint against the slab would refuse every rollout. The
- * owner kernel clamps the object to the support plane on its own.
+ * Workbench volumes around the household arm, built to match exactly what
+ * `ArmEnvironment` draws for the given task.
+ *
+ * These MUST be derived from the owner's `supportHeightMeters`, never from a
+ * constant. The three tasks report 0.237, 0.277 and 0.265 m; an earlier
+ * version of this file hardcoded 0.78 m, which put the backsplash and cabinet
+ * half a metre above the geometry the viewer sees and declared both of them
+ * for every task even though the stage draws the backsplash only for the mug
+ * and the cabinet only for the remote.
+ *
+ * The counter slab is deliberately excluded: the arm's own links pass through
+ * that volume by construction (its base stands on the floor at the stage
+ * origin and the chain rises through the counter plane), so declaring it as a
+ * hard constraint would refuse every rollout. The owner clamps the object to
+ * the support plane itself.
  */
-export const ARM_WORKBENCH_OBSTACLES: OrientedBoundingBox[] = [
-  {
-    id: "arm-backsplash",
-    name: "backsplash",
-    center: [0, 0.78 + 0.5, -0.82],
-    halfExtents: [1.15, 0.525, 0.035],
+export function armWorkbenchObstacles(
+  supportHeightMeters: number,
+  task: "kitchen-mug" | "living-room-remote" | "backyard-trowel",
+): OrientedBoundingBox[] {
+  if (task === "kitchen-mug") {
+    return [
+      {
+        id: "arm-backsplash",
+        name: "backsplash",
+        center: [ARM_TABLE_CENTER_X, supportHeightMeters + 0.5, -0.82],
+        halfExtents: [ARM_TABLE_WIDTH / 2, 0.525, 0.035],
+        rotationYawRad: 0,
+      },
+    ];
+  }
+  if (task === "living-room-remote") {
+    return [
+      {
+        id: "arm-cabinet",
+        name: "side cabinet",
+        center: [0.72, supportHeightMeters + 0.25, -0.58],
+        halfExtents: [0.31, 0.22, 0.15],
+        rotationYawRad: 0,
+      },
+    ];
+  }
+  // The trowel stage draws a lawn plane and four fence posts.
+  return [-1.1, -0.85, 0.85, 1.1].map((x, index) => ({
+    id: `arm-fence-post-${index}`,
+    name: "fence post",
+    center: [x, 0.48, -0.85] as [number, number, number],
+    halfExtents: [0.0175, 0.475, 0.0175] as [number, number, number],
     rotationYawRad: 0,
-  },
-  {
-    id: "arm-cabinet",
-    name: "upper cabinet",
-    center: [0.72, 0.78 + 0.25, -0.58],
-    halfExtents: [0.31, 0.22, 0.15],
+  }));
+}
+
+/** Counter slab, for camera occlusion only — never a kernel obstacle. */
+export function armCounterSlabObstacle(supportHeightMeters: number): OrientedBoundingBox {
+  return {
+    id: "arm-counter-slab",
+    name: "counter slab",
+    center: [ARM_TABLE_CENTER_X, supportHeightMeters - 0.045, 0],
+    halfExtents: [ARM_TABLE_WIDTH / 2, 0.045, 0.825],
     rotationYawRad: 0,
-  },
-];
+  };
+}
 
-/** Counter slab used only by the camera sweep (never a kernel obstacle). */
-export const ARM_COUNTER_SLAB_OBSTACLE: OrientedBoundingBox = {
-  id: "arm-counter-slab",
-  name: "counter slab",
-  center: [0, 0.78 - 0.045, 0],
-  halfExtents: [1.15, 0.045, 0.825],
-  rotationYawRad: 0,
-};
-
-/** One extra obstacle box for the manipulation owner kernel, owner frame. */
+/** One keep-out box for a frankensim owner kernel, in its owner frame. */
 export interface HouseholdKernelObstacle {
   /** Owner frame (x, y, z-up), metres. */
   centerMeters: [number, number, number];
@@ -1376,11 +1413,12 @@ export interface HouseholdKernelObstacle {
 }
 
 /**
- * Convert a stage-frame OBB into the manipulation kernel's owner frame.
+ * Convert a stage-frame OBB into an owner-frame keep-out box.
+ *
  * The stage maps owner (x, y, z) to three (x, z, -y), so the inverse is
- * owner = (three.x, -three.z, three.y). That map is a reflection of the
- * horizontal plane, so a yaw about three +Y becomes the opposite yaw about
- * owner +Z, and the half extents swap their y and z components.
+ * owner = (three.x, -three.z, three.y). That map reflects the horizontal
+ * plane, so a yaw about three +Y becomes the opposite yaw about owner +Z and
+ * the half extents swap their y and z components.
  */
 export function stageObbToKernelObstacle(obb: OrientedBoundingBox): HouseholdKernelObstacle {
   return {
@@ -1399,11 +1437,10 @@ export function stageObbToKernelObstacle(obb: OrientedBoundingBox): HouseholdKer
 export const ARM_STAGE_ROOMS: readonly string[] = ["kitchen", "living room"];
 
 /**
- * The obstacle roster the browser hands the manipulation kernel: the
- * workbench backsplash and cabinet, plus the rigid furniture from the rooms
- * the arm stage renders, capped at `limit` so the per-step convex queries
- * stay cheap. Ordered nearest-first so a tighter cap keeps the most relevant
- * boxes.
+ * The obstacle roster the browser hands the manipulation kernel: the task's
+ * own workbench structures, plus the rigid furniture from the rooms the arm
+ * stage renders, capped at `limit` so the per-step convex queries stay cheap.
+ * Ordered nearest-first so a tighter cap keeps the most relevant boxes.
  *
  * The roster is deliberately NOT the whole-house scene. House furniture is
  * authored in whole-house coordinates while the arm workbench sits at the
@@ -1411,25 +1448,55 @@ export const ARM_STAGE_ROOMS: readonly string[] = ["kitchen", "living room"];
  * the arm's workspace without ever being drawn. Feeding those to the owner
  * would refuse the default rollout over an obstacle the viewer cannot see.
  * What the kernel is told to avoid is exactly what the stage draws.
+ *
+ * `supportHeightMeters` must come from the owner's admission: the workbench
+ * structures are drawn relative to it and differ per task.
  */
-export function householdKernelObstacleRoster(
+/**
+ * Every rigid body the arm stage actually draws, in the stage frame: the
+ * task's workbench structures plus the furniture from the rooms the stage
+ * renders, ordered nearest-first from the arm's base at the stage origin.
+ *
+ * This is the single source of truth for the arm scene. The renderer projects
+ * links and the manipulated object out of exactly these boxes, the drag clamp
+ * uses them, and `householdKernelObstacleRoster` converts the same list into
+ * the owner's frame. Using the whole-house scene instead was a bug: house
+ * furniture is authored in whole-house coordinates while the workbench sits at
+ * the scene origin, so a hall coat rack lands inside the arm's workspace
+ * without ever being drawn and was shoving the mug up to 8.9 cm (and the
+ * trowel 22 cm) off its owner pose.
+ */
+export function armStageObstacles(
+  supportHeightMeters: number,
+  task: "kitchen-mug" | "living-room-remote" | "backyard-trowel",
   limit = 24,
-  base: [number, number, number] = [0, 0.78, 0],
   house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
   rooms: readonly string[] = ARM_STAGE_ROOMS,
-): HouseholdKernelObstacle[] {
+): OrientedBoundingBox[] {
+  const workbench = armWorkbenchObstacles(supportHeightMeters, task);
+  const base: [number, number, number] = [0, 0, 0];
   const staged = new Set(
     house.furniture.filter((piece) => rooms.includes(piece.room)).map((piece) => piece.name),
   );
-  const rigid = createSceneFromHouseFurniture(house.furniture).obstacles.filter(
-    (obb) => !obb.exemptFromPenalty && staged.has(obb.name),
-  );
-  const nearest = rigid
+  const nearest = createSceneFromHouseFurniture(house.furniture)
+    .obstacles.filter((obb) => !obb.exemptFromPenalty && staged.has(obb.name))
     .map((obb) => ({ obb, d: distanceToOBB(base, obb) }))
     .sort((a, b) => a.d - b.d)
-    .slice(0, Math.max(0, limit - ARM_WORKBENCH_OBSTACLES.length))
+    .slice(0, Math.max(0, limit - workbench.length))
     .map((entry) => entry.obb);
-  return [...ARM_WORKBENCH_OBSTACLES, ...nearest].map(stageObbToKernelObstacle);
+  return [...workbench, ...nearest];
+}
+
+export function householdKernelObstacleRoster(
+  supportHeightMeters: number,
+  task: "kitchen-mug" | "living-room-remote" | "backyard-trowel",
+  limit = 24,
+  house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+  rooms: readonly string[] = ARM_STAGE_ROOMS,
+): HouseholdKernelObstacle[] {
+  return armStageObstacles(supportHeightMeters, task, limit, house, rooms).map(
+    stageObbToKernelObstacle,
+  );
 }
 
 /**
@@ -1449,17 +1516,23 @@ export function nominalG1WalkFootprint(): [number, number, number][] {
   // first pelvis: x in [-0.31, 0.67], y in [0.03, 1.08], z in [-0.58, 0.65].
   //
   // The lateral extreme is the SWUNG ARMS, not the body: shoulders are only
-  // 0.36 m across. Seating on the full arm span needs a 1.3 x 1.6 m clear
-  // rectangle, which the furnished 1928 living room simply does not have, so
-  // the robot would get pushed out into the hall. The seat therefore covers
-  // the torso-and-legs column plus a hand's margin, and the swung arms are
-  // left to the owner's own body-vs-obstacle guard, which now runs on every
-  // rollout and terminates on real penetration. Placement is a heuristic;
-  // the kernel is the safety net.
+  // 0.36 m across. Seating on the torso column instead was a mistake. It put
+  // the robot in the middle of the living room with a hand passing 3.9 cm
+  // from the library table, which the owner's old 20-sphere collider set did
+  // not cover and the renderer's projection quietly hid. The owner now
+  // guards all 30 links, so that placement correctly terminates the rollout.
+  //
+  // A 1.3 x 1.6 m clear rectangle does not exist inside the furnished 1928
+  // living room, so the robot stands at its open south edge instead. That is
+  // the honest answer: the room is full of furniture.
+  //
+  // A live optimized policy can still swing wider than this envelope, which
+  // is why the seat is only a placement heuristic and the owner's
+  // body-vs-obstacle guard is the actual safety net.
   const points: [number, number, number][] = [];
   for (let x = -0.45; x <= 0.85 + 1e-9; x += 0.15) {
     for (const y of [0.05, 0.35, 0.7, 1.05]) {
-      for (let z = -0.42; z <= 0.42 + 1e-9; z += 0.14) {
+      for (let z = -0.72; z <= 0.78 + 1e-9; z += 0.15) {
         points.push([x, y, z]);
       }
     }

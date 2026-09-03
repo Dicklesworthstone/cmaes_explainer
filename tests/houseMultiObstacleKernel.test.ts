@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  ARM_WORKBENCH_OBSTACLES,
+  armWorkbenchObstacles,
   findClearSpawnPosition,
   findClearTrajectorySpawnOffset,
   householdKernelObstacleRoster,
@@ -429,24 +429,48 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     }
   });
 
-  test("roster starts with the workbench boxes, never the counter slab, and is nearest-first", () => {
-    const roster = householdKernelObstacleRoster(10);
-    expect(roster.length).toBe(10);
-    expect(roster[0].name).toBe("backsplash");
-    expect(roster[1].name).toBe("upper cabinet");
-    expect(roster.some((o) => o.name === "counter slab")).toBe(false);
-    const base: [number, number, number] = [0, 0, 0.78];
+  test("the roster carries the task's own workbench structures, anchored to the owner support height", () => {
+    // The stage draws a backsplash only for the mug, a side cabinet only for
+    // the remote, and fence posts only for the trowel. An earlier version
+    // declared the backsplash and cabinet for every task at a hardcoded
+    // 0.78 m support height; no task has that height (they are 0.237, 0.277
+    // and 0.265 m), so the boxes sat half a metre above the geometry the
+    // viewer sees.
+    const mug = householdKernelObstacleRoster(0.2369, "kitchen-mug", 10);
+    expect(mug.length).toBe(10);
+    expect(mug[0].name).toBe("backsplash");
+    expect(mug.some((o) => o.name === "side cabinet")).toBe(false);
+    expect(mug.some((o) => o.name === "counter slab")).toBe(false);
+
+    const remote = householdKernelObstacleRoster(0.2769, "living-room-remote", 10);
+    expect(remote[0].name).toBe("side cabinet");
+    expect(remote.some((o) => o.name === "backsplash")).toBe(false);
+
+    const trowel = householdKernelObstacleRoster(0.2649, "backyard-trowel", 10);
+    expect(trowel.filter((o) => o.name === "fence post")).toHaveLength(4);
+
+    // Workbench boxes track the support height exactly as ArmEnvironment
+    // draws them: the backsplash centre sits 0.5 m above the surface.
+    for (const support of [0.2369, 0.5, 0.9]) {
+      const [backsplash] = armWorkbenchObstacles(support, "kitchen-mug");
+      expect(backsplash.center[1]).toBeCloseTo(support + 0.5, 12);
+    }
+  });
+
+  test("roster furniture is ordered by distance from the arm base at the stage origin", () => {
+    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 12);
+    const furniture = roster.slice(1); // after the single workbench box
     const d = (o: HouseholdKernelObstacle) =>
-      Math.hypot(o.centerMeters[0] - base[0], o.centerMeters[1] - base[1], o.centerMeters[2] - base[2]);
-    for (let i = 3; i < roster.length; i++) {
-      // Furniture entries (after the two workbench boxes) are sorted by OBB
-      // distance; centre distance is a looser proxy, so allow small inversions.
-      expect(d(roster[i])).toBeGreaterThanOrEqual(d(roster[i - 1]) - 1.0);
+      Math.hypot(o.centerMeters[0], o.centerMeters[1], o.centerMeters[2]);
+    for (let i = 1; i < furniture.length; i++) {
+      // Centre distance is a looser proxy than the OBB distance the roster
+      // sorts on, so allow modest inversions.
+      expect(d(furniture[i])).toBeGreaterThanOrEqual(d(furniture[i - 1]) - 1.0);
     }
   });
 
   test("schema-3 config packet is self-describing: 12 fixed words plus 7 per obstacle", () => {
-    const roster = householdKernelObstacleRoster(5);
+    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 5);
     const packet = buildHouseholdManipulationConfig({
       ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
       objectMassKilograms: 0.5,

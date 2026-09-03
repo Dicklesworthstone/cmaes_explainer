@@ -1,6 +1,9 @@
 /// <reference lib="webworker" />
 
-import { householdKernelObstacleRoster } from "../lib/houseMultiObstacleKernel";
+import {
+  householdKernelObstacleRoster,
+  type HouseholdKernelObstacle,
+} from "../lib/houseMultiObstacleKernel";
 import {
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
   createFrankenSimCmaFamilySession,
@@ -112,13 +115,48 @@ function requireOk<T>(
   throw new Error(`${label}: ${result.refusal.name}${suffix}`);
 }
 
-// Every owner call (preview, optimize, compare) carries the same house
-// obstacle roster, so the kernel's link-vs-box constraint sees the
-// backsplash, cabinet, and nearest furniture the stage draws.
-const KERNEL_OBSTACLES = householdKernelObstacleRoster();
+// Every owner call (preview, optimize, compare) carries the house obstacle
+// roster, so the kernel's link-vs-box constraint sees the same workbench
+// structures and furniture the stage draws.
+//
+// The roster depends on the owner's own support height, which is only
+// readable from an admission, so it is resolved once per task by admitting a
+// bare evaluator first and cached. The extra admission is a packet decode,
+// not a rollout.
+const kernelObstaclesByTask = new Map<HouseholdManipulationTask, readonly HouseholdKernelObstacle[]>();
 
-function taskConfig(task: HouseholdManipulationTask): HouseholdManipulationConfig {
-  return { ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task, obstacles: KERNEL_OBSTACLES };
+async function kernelObstaclesFor(
+  task: HouseholdManipulationTask,
+): Promise<readonly HouseholdKernelObstacle[]> {
+  const cached = kernelObstaclesByTask.get(task);
+  if (cached) return cached;
+  const probe = requireOk(
+    await createFrankenSimHouseholdManipulationEvaluator({
+      ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+      task,
+    }),
+    "household-arm support-height probe",
+  );
+  try {
+    const roster = householdKernelObstacleRoster(
+      probe.admission.scene.supportHeightMeters,
+      task,
+    );
+    kernelObstaclesByTask.set(task, roster);
+    return roster;
+  } finally {
+    probe.free();
+  }
+}
+
+async function taskConfig(
+  task: HouseholdManipulationTask,
+): Promise<HouseholdManipulationConfig> {
+  return {
+    ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+    task,
+    obstacles: await kernelObstaclesFor(task),
+  };
 }
 
 function memoryFor(family: CmaFamily): number | undefined {
@@ -153,7 +191,7 @@ async function preview(task: HouseholdManipulationTask): Promise<void> {
     detail: "Loading the pinned iiwa model and owner-composed manipulation evaluator…",
   });
   const evaluator = requireOk(
-    await createFrankenSimHouseholdManipulationEvaluator(taskConfig(task)),
+    await createFrankenSimHouseholdManipulationEvaluator(await taskConfig(task)),
     "household-arm admission"
   );
   try {
@@ -203,7 +241,7 @@ async function optimize(
       detail: `${family} is evaluating ${POPULATION} complete 6 s articulated pick-and-place rollouts per generation…`,
     });
 
-    const config = taskConfig(task);
+    const config = await taskConfig(task);
     const evaluator = requireOk(
       await createFrankenSimHouseholdManipulationEvaluator(config),
       "household-arm admission"
@@ -301,7 +339,7 @@ async function compareFamilies(
     detail: "Running all four CMA representations on the same 128-D physical objective and seed…",
   });
 
-  const config = taskConfig(task);
+  const config = await taskConfig(task);
   const evaluator = requireOk(
     await createFrankenSimHouseholdManipulationEvaluator(config),
     "household-arm admission"

@@ -538,8 +538,16 @@ export function SearsCraftsmanEstate({
         <primitive object={materials.flagStone} attach="material" />
       </mesh>
 
-      {/* Foundation Riverstone Skirting Base */}
-      <mesh position={[0, 0.15, -0.8]} castShadow receiveShadow>
+      {/* Foundation Riverstone Skirting Base.
+
+          It sits BELOW the floor line, spanning y in [-0.3, 0]. It used to be
+          centred at y = +0.15, i.e. a solid 8.4 x 10.4 m block filling y in
+          [0, 0.3] across the whole footprint and covering every room floor
+          plane. The walking owner puts the robot's feet at y = 0.03, so the
+          robot stood inside that block, buried to mid-shin, and the surface
+          the viewer read as "the floor" was actually the top of the
+          foundation. Skirting belongs under the floor it supports. */}
+      <mesh position={[0, -0.15, -0.8]} castShadow receiveShadow>
         <boxGeometry args={[8.4, 0.3, 10.4]} />
         <primitive object={materials.riverStone} attach="material" />
       </mesh>

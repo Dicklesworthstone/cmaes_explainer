@@ -10,8 +10,11 @@ import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import {
-  ARM_COUNTER_SLAB_OBSTACLE,
-  ARM_WORKBENCH_OBSTACLES,
+  ARM_TABLE_CENTER_X,
+  ARM_TABLE_WIDTH,
+  armCounterSlabObstacle,
+  armStageObstacles,
+  armWorkbenchObstacles,
   createHouseNavigationScene,
   conservativeSegmentClearanceToOBB,
   distanceToOBB,
@@ -437,8 +440,14 @@ function ArmEnvironment({
 
   return (
     <group>
-      <mesh position={[0, supportY - 0.045, 0]} receiveShadow castShadow>
-        <boxGeometry args={[2.3, 0.09, 1.65]} />
+      {/* Work surface. It is offset in -x so it does NOT cover the robot's
+          own base: the owner puts link 0 at the stage origin on the floor and
+          its work stations 0.24 m up at x ~ -0.53, i.e. a floor-standing arm
+          reaching over a low table. Drawn centred on the origin (as it was),
+          the slab swallowed the base drum and the first two links, so the arm
+          appeared to grow out of the tabletop. */}
+      <mesh position={[ARM_TABLE_CENTER_X, supportY - 0.045, 0]} receiveShadow castShadow>
+        <boxGeometry args={[ARM_TABLE_WIDTH, 0.09, 1.65]} />
         <meshStandardMaterial
           color={
             task === "backyard-trowel"
@@ -454,8 +463,8 @@ function ArmEnvironment({
 
       {task === "kitchen-mug" ? (
         <>
-          <mesh position={[0, supportY + 0.5, -0.82]} receiveShadow>
-            <boxGeometry args={[2.3, 1.05, 0.07]} />
+          <mesh position={[ARM_TABLE_CENTER_X, supportY + 0.5, -0.82]} receiveShadow>
+            <boxGeometry args={[ARM_TABLE_WIDTH, 1.05, 0.07]} />
             <meshStandardMaterial color="#1d2a40" roughness={0.82} />
           </mesh>
         </>
@@ -582,6 +591,7 @@ function ArmRig({
     Array<[number, number, number]>
   >([]);
   const selfContactKeyRef = useRef("");
+  const selfHotLinksRef = useRef<Set<number>>(new Set());
   const publishedProjectedIndex = useRef(-1);
   const sampleTimes = useMemo(
     () => trace.samples.map((sample) => sample.timeSeconds),
@@ -648,9 +658,20 @@ function ArmRig({
   // SOTA multi-obstacle kernel: every furniture piece as an oriented
   // bounding box with proper rotation-aware signed-distance queries.
   // Supplements the Box3 counter/wall check for per-link boundary detection.
+  // Exactly the bodies this stage draws for this task, in the stage frame:
+  // the task's workbench structures plus the furniture from the rooms the
+  // stage renders. The whole-house scene was wrong here — it contains hall
+  // furniture that is never drawn beside the workbench yet lands inside the
+  // arm's workspace, and it was shoving links and the manipulated object off
+  // their owner poses. The owner kernel is handed this same list.
   const multiObstacleScene = useMemo(
-    () => createHouseNavigationScene(),
-    [], // static catalog
+    () => ({
+      obstacles: armStageObstacles(
+        admission.scene.supportHeightMeters,
+        admission.config.task,
+      ),
+    }),
+    [admission],
   );
   const adaptiveMargin = 0.05; // base margin; scales by velocity in production
   const boundaryStateRef = useRef({ key: "", lastTick: 0 });
@@ -805,28 +826,25 @@ function ArmRig({
       setProjectedForOverlay(projectedPositions.map((p) => [p[0], p[1], p[2]]));
     }
     // Self-collision diagnostic on the corrected chain: non-adjacent link
-    // spheres that overlap are tinted red on both links and reported to the
-    // HUD. The kernel receipt has no per-pair self-contact term, so this is
-    // the only place a folded elbow driven through the base becomes visible.
+    // spheres that overlap are reported to the HUD and folded into the single
+    // link-tint pass below. The kernel receipt has no per-pair self-contact
+    // term, so this is the only place a folded elbow driven through the base
+    // becomes visible.
+    //
+    // The tint itself is deliberately NOT written here. There is exactly one
+    // writer of link emissive colour (the boundary pass at the end of this
+    // frame); a second writer on a different cadence left links stuck red,
+    // because whichever ran last won and neither reset the other's links.
     const selfContacts = detectArmSelfCollisions(projectedPositions, ARM_LINK_RADII);
     const selfKey = selfContacts.map((c) => `${c.linkA}-${c.linkB}`).join(",");
     if (selfKey !== selfContactKeyRef.current) {
       selfContactKeyRef.current = selfKey;
-      const hotLinks = new Set<number>();
-      for (const c of selfContacts) {
-        hotLinks.add(c.linkA);
-        hotLinks.add(c.linkB);
+      const hot = new Set<number>();
+      for (const contact of selfContacts) {
+        hot.add(contact.linkA);
+        hot.add(contact.linkB);
       }
-      for (let link = 0; link < sample.linkPoses.length; link++) {
-        const group = linkRefs.current[link];
-        if (!group) continue;
-        const hot = hotLinks.has(link);
-        group.traverse((child) => {
-          const mesh = child as THREE.Mesh;
-          const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
-          if (mat && "emissive" in mat && hot) mat.emissive.setHex(0xdc2626);
-        });
-      }
+      selfHotLinksRef.current = hot;
       onSelfCollisionChange?.(selfContacts);
     }
     if (objectRef.current) {
@@ -942,8 +960,10 @@ function ArmRig({
         }
       }
     }
-    const violationKey =
-      violatingLink < 0 ? "" : `${violatingLink}:${violatingVolume}`;
+    // The single writer of link emissive colour. A link is hot when it either
+    // penetrates a declared boundary volume or takes part in a self-contact
+    // pair; every other link is explicitly reset, so nothing stays red.
+    const violationKey = `${violatingLink < 0 ? "" : `${violatingLink}:${violatingVolume}`}|${selfContactKeyRef.current}`;
     if (
       violationKey !== boundaryStateRef.current.key &&
       frameTick.current % 6 === 0
@@ -952,7 +972,7 @@ function ArmRig({
       for (let link = 0; link < sample.linkPoses.length; link++) {
         const group = linkRefs.current[link];
         if (!group) continue;
-        const hot = link === violatingLink;
+        const hot = link === violatingLink || selfHotLinksRef.current.has(link);
         group.traverse((child) => {
           const mesh = child as THREE.Mesh;
           const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
@@ -1123,19 +1143,33 @@ const armCameraScratchVec = new THREE.Vector3();
 // workbench backsplash and cabinet shared with the kernel obstacle roster,
 // and the house walls and furniture so the studio backdrop cannot swallow
 // the lens either.
-const ARM_CAMERA_OBSTACLES: OrientedBoundingBox[] = [
-  ARM_COUNTER_SLAB_OBSTACLE,
-  ...ARM_WORKBENCH_OBSTACLES,
-  ...createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928).obstacles,
-];
+/**
+ * Volumes the camera must stay out of, for the task actually on screen: the
+ * counter slab, that task's workbench structures, and the house bodies the
+ * stage draws behind them. Built per task because the workbench geometry is
+ * anchored to the owner's support height, which differs per task.
+ */
+function armCameraObstacles(
+  supportHeightMeters: number,
+  task: HouseholdManipulationTask,
+): OrientedBoundingBox[] {
+  return [
+    armCounterSlabObstacle(supportHeightMeters),
+    ...armWorkbenchObstacles(supportHeightMeters, task),
+    ...createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928).obstacles,
+  ];
+}
 const ARM_FLY_BOUNDS = { minX: -2.6, maxX: 2.6, minY: 0.2, maxY: 3.6, minZ: -0.75, maxZ: 3.2 };
 
 function ArmCameraRig({
   cameraMode,
   objectPos,
+  obstacles,
 }: {
   cameraMode: ArmCameraMode;
   objectPos: [number, number, number];
+  /** Volumes the lens must not enter, for the task on screen. */
+  obstacles: OrientedBoundingBox[];
 }) {
   const lookAtRef = useRef(new THREE.Vector3(0, 0.45, 0));
   const controlsRef = useRef<any>(null);
@@ -1176,9 +1210,9 @@ function ArmCameraRig({
         [objectPos[0] + 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
         [objectPos[0] - 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
       ];
-      let best = resolveCameraBoom(lookAt, candidates[0], ARM_CAMERA_OBSTACLES, 0.06);
+      let best = resolveCameraBoom(lookAt, candidates[0], obstacles, 0.06);
       for (let i = 1; i < candidates.length && best.fraction < 0.999; i++) {
-        const alt = resolveCameraBoom(lookAt, candidates[i], ARM_CAMERA_OBSTACLES, 0.06);
+        const alt = resolveCameraBoom(lookAt, candidates[i], obstacles, 0.06);
         if (alt.fraction > best.fraction) best = alt;
       }
       armCameraScratchVec.set(...best.position);
@@ -1235,12 +1269,13 @@ function ArmCameraRig({
   ) : null;
 }
 
-const armHouseScene = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function ArmTargetDragger({
   targetPos,
   pinLift = 0.06,
-  supportHeight = 0.78,
+  supportHeight = 0.24,
+  basePos = [0, 0, 0],
+  obstacles,
   onTargetChange,
   onCollisionChange,
   onUnreachableChange = () => {},
@@ -1250,6 +1285,10 @@ function ArmTargetDragger({
   pinLift?: number;
   /** Owner support plane (counter top) in metres; the drag plane and ring sit on it. */
   supportHeight?: number;
+  /** The arm's own base link, for the reachability probe. */
+  basePos?: [number, number, number];
+  /** The stage bodies the target must stay clear of. */
+  obstacles: OrientedBoundingBox[];
   onTargetChange: (pos: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; clearance: number }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
@@ -1282,7 +1321,7 @@ function ArmTargetDragger({
     // CONTINUOUS COLLISION DETECTION (CCD) & SURFACE CLAMPING (Y >= support)
     const { clampedTarget, isColliding, minClearance } = clampArmTargetPosition(
       proposed,
-      armHouseScene.obstacles,
+      obstacles,
       supportHeight,
       0.04,
     );
@@ -1291,7 +1330,7 @@ function ArmTargetDragger({
     // with a short DLS attempt; if it fails, the proposed position is
     // unreachable in the arm's workspace and the dragger must not
     // propagate it (the previous good armDragTarget stays).
-    if (!isTargetKukaReachable(clampedTarget)) {
+    if (!isTargetKukaReachable(clampedTarget, basePos)) {
       if (!unreachable) {
         setUnreachable(true);
         onUnreachableChange?.(true);
@@ -1377,13 +1416,18 @@ function ArmTargetDragger({
  */
 function ArmReachPreview({
   target,
-  supportHeight = 0.78,
+  basePos = [0, 0, 0],
 }: {
   target: [number, number, number];
-  supportHeight?: number;
+  /**
+   * The arm's own base link in stage coordinates. The owner reports link 0 at
+   * the stage origin for all three tasks; this is NOT the support height (the
+   * arm stands on the floor and reaches up over the counter).
+   */
+  basePos?: [number, number, number];
 }) {
   const preview = useMemo(() => {
-    const base: [number, number, number] = [0, supportHeight, 0];
+    const base: [number, number, number] = basePos;
     const angles = solveKukaIK(target, [0, 0.4, 0, -1.2, 0, 0.8, 0], base, 60);
     const { linkPositions, endEffector } = computeKukaFK(angles, base);
     const residual = Math.hypot(
@@ -1392,7 +1436,7 @@ function ArmReachPreview({
       target[2] - endEffector[2],
     );
     return { linkPositions, endEffector, reachable: residual < 0.02, residual };
-  }, [target, supportHeight]);
+  }, [target, basePos]);
   const color = preview.reachable ? "#22d3ee" : "#f43f5e";
   const segments = preview.linkPositions.slice(1).map((end, index) => {
     const start = preview.linkPositions[index];
@@ -1495,6 +1539,35 @@ function ArmStage({
     : [0.4, 0.82, 0.2];
 
   const objectPos: [number, number, number] = dragTarget ?? rawObjectPos;
+  // The arm's own base link, straight from the owner trace, so the reach
+  // ghost and the reachability probe share the real robot's origin.
+  const armBasePos = useMemo<[number, number, number]>(
+    () =>
+      currentSample
+        ? ownerPositionToThree(currentSample.linkPoses[0].position)
+        : [0, 0, 0],
+    [currentSample],
+  );
+  const stageObstacles = useMemo(
+    () =>
+      admission
+        ? armStageObstacles(
+            admission.scene.supportHeightMeters,
+            admission.config.task,
+          )
+        : [],
+    [admission],
+  );
+  const cameraObstacles = useMemo(
+    () =>
+      admission
+        ? armCameraObstacles(
+            admission.scene.supportHeightMeters,
+            admission.config.task,
+          )
+        : [],
+    [admission],
+  );
 
   return (
     <Canvas
@@ -1622,15 +1695,23 @@ function ArmStage({
       <ArmTargetDragger
         targetPos={objectPos}
         pinLift={admission ? admission.scene.objectDimensionsMeters[2] * 0.5 : 0.06}
-        supportHeight={admission ? admission.scene.supportHeightMeters : 0.78}
+        supportHeight={admission ? admission.scene.supportHeightMeters : 0.24}
+        basePos={armBasePos}
+        obstacles={stageObstacles}
         onTargetChange={onDragTargetChange ?? (() => {})}
         onCollisionChange={onCollisionChange ?? (() => {})}
         onUnreachableChange={onUnreachableChange}
       />
 
-      {dragTarget ? <ArmReachPreview target={dragTarget} /> : null}
+      {dragTarget ? (
+        <ArmReachPreview target={dragTarget} basePos={armBasePos} />
+      ) : null}
 
-      <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
+      <ArmCameraRig
+        cameraMode={cameraMode}
+        objectPos={objectPos}
+        obstacles={cameraObstacles}
+      />
     </Canvas>
   );
 }

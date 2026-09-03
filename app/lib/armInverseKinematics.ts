@@ -100,7 +100,12 @@ export interface KukaArmPose {
  */
 export function computeKukaFK(
   angles: number[],
-  basePos: [number, number, number] = [0, 0.78, 0] // tabletop base anchor
+  // The owner's link-0 origin, measured at the stage origin for all three
+  // tasks. The old [0, 0.78, 0] default was a fiction: no task has a 0.78 m
+  // support height (they are 0.237, 0.277 and 0.265 m) and the arm stands on
+  // the floor, not on the counter. With this base the surrogate converges on
+  // the real object position to within 0.5 mm.
+  basePos: [number, number, number] = [0, 0, 0]
 ): { linkPositions: [number, number, number][]; endEffector: [number, number, number] } {
   const q = angles.length >= 7 ? angles : [0, 0.4, 0, -1.2, 0, 0.8, 0];
   const links: [number, number, number][] = [];
@@ -167,7 +172,8 @@ export function computeKukaFK(
 export function solveKukaIK(
   targetPos: [number, number, number],
   initialAngles: number[] = [0, 0.4, 0, -1.2, 0, 0.8, 0],
-  basePos: [number, number, number] = [0, 0.78, 0],
+  /** Owner link-0 origin; see computeKukaFK. */
+  basePos: [number, number, number] = [0, 0, 0],
   maxIterations: number = 60
 ): number[] {
   const bX = basePos[0];
@@ -270,7 +276,8 @@ export function solveKukaIK(
  */
 export function isTargetKukaReachable(
   targetPos: [number, number, number],
-  basePos: [number, number, number] = [0, 0.78, 0],
+  /** Owner link-0 origin; see computeKukaFK. */
+  basePos: [number, number, number] = [0, 0, 0],
 ): boolean {
   // 30 iterations is enough for a cheap reachability check; the
   // convergence criterion of solveKukaIK is 2 mm. We use 2 cm here so
@@ -289,7 +296,12 @@ export function isTargetKukaReachable(
 export function clampArmTargetPosition(
  target: [number, number, number],
  obstacles: OrientedBoundingBox[],
- tableHeight: number = 0.78,
+ /**
+  * Support surface the target may not sink below. Pass the owner's
+  * `supportHeightMeters` (0.237-0.277 m depending on task); the default is
+  * only a fallback for callers without an admission.
+  */
+ tableHeight: number = 0.24,
  margin: number = 0.04
 ): {
  clampedTarget: [number, number, number];
