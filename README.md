@@ -71,14 +71,21 @@ This is the SOTA penetration-depth / contact-manifold math from
 *Geometry-Aware Control Barrier Functions*), deployed as four primitives
 that compose into a single floor the policy can never fall through:
 
-- **Spawn-safe** (`findClearSpawnPosition` in
-  `app/lib/houseMultiObstacleKernel.ts`): on first trace load, a coarse
-  grid sweep over the house bounds returns the first interior point at
-  which `clampPositionAgainstHouseCollisions` reports `isColliding = false`
-  with a 0.35 m safety radius (larger than any body collider sphere). The
-  arm flagship mirrors this with `clampArmTargetPosition` for the KUKA
-  target marker — its first frame is provably collision-free, the user
-  can never load a page and see the humanoid spawn inside a wall.
+- **Owner-side keep-out boxes** (packet schema 8): the walking config
+  declares the rigid house bodies nearest the robot, and the owner tests its
+  20 body colliders against them every step, terminating the rollout on real
+  penetration and reporting the depth in the receipt. This is the floor: a
+  policy that walks into the sofa loses its rollout, so the optimizer is
+  charged for it rather than the renderer hiding it.
+- **Spawn-safe** (`g1SeatForHouse` in
+  `app/lib/houseMultiObstacleKernel.ts`): the robot's seat is chosen before
+  the first rollout, because the owner needs its boxes expressed relative to
+  wherever the robot starts. A grid sweep ordered by distance from the living
+  room returns the nearest placement whose whole measured walking envelope
+  clears every rigid body. The arm flagship mirrors this with
+  `clampArmTargetPosition` for the KUKA target marker — the first frame is
+  provably collision-free, so the user can never load a page and see the
+  humanoid spawn inside a wall.
 - **Per-drag OBB clamp** (`clampPositionAgainstHouseCollisions`,
   `clampArmTargetPosition`): the OBB Signed Distance Function
   $\mathbf{d} = |\mathbf{R}^T(\mathbf{x} - \mathbf{c})| - \mathbf{h}$ from
@@ -110,8 +117,8 @@ sphere. The user can verify the chain is operating as advertised.
 Disabled by default (zero JSX output, regression-bounded by
 `tests/physicsDebugOverlayDisabled.test.ts`).
 
-**Regression coverage**: 39 tests across 5 files bound the chain at
-every layer — from the OBB SDF math (`tests/houseMultiObstacleKernel.test.ts`),
+**Regression coverage**: the chain is bound at every layer — from the OBB SDF
+math and the owner-frame box conversion (`tests/houseMultiObstacleKernel.test.ts`),
 through the clamp primitives and spawn-safe algorithm
 (`tests/flagshipSpawnSafeAlgorithm.test.ts`, `tests/armReachabilityAndSpawn.test.ts`),
 to the G1 spawn safety (`tests/g1CollisionSafety.test.ts`).
@@ -127,7 +134,7 @@ case; the geometric guard bounds the worst case. See
 
 
 The G1 demo is deliberately an explainer model, not a hardware controller or a
-sim-to-real claim. The current schema-7 owner integrates the 29-actuated-joint,
+sim-to-real claim. The current schema-8 owner integrates the 29-actuated-joint,
 30-link whole-body model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
 is part of the physical rollout rather than display-only dressing. Full CMA-ES
 is exercised on the 128-D arm but intentionally refused at 5,040 dimensions
@@ -174,6 +181,16 @@ Two audited surfaces coexist intentionally:
   display-side guards), an object-mass override, and Coulomb friction
   coefficients. The admission echoes the effective friction and obstacle
   count. Zero overrides and an empty roster reproduce the v0613 receipts.
+
+- `public/wasm/fs-cmaes/v0615/` opens the G1 walking owner to keep-out boxes
+  (packet schema 8). The body-vs-obstacle guard was always implemented but
+  unreachable: no packet could declare a box, so the humanoid's collision
+  story was entirely display-side. The browser now sends the 48 rigid
+  Craftsman bodies and walls nearest the robot, expressed relative to its
+  seat, and the owner terminates a rollout that drives its body into them.
+  The receipt reports the deepest penetration the guard measured. Seated at
+  the living-room placement the curriculum is unchanged; seated inside the
+  sofa it terminates at step 1.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.
