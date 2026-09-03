@@ -79,6 +79,12 @@ final class RobotEngineBridgeTests: XCTestCase {
         malformed = payload
         malformed["command"] = "eval"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
+        malformed = payload
+        malformed["sequence"] = 0
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
+        malformed = payload
+        malformed["detail"] = String(repeating: "x", count: 301)
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
     }
 
     private func statusPayload(

@@ -36,6 +36,17 @@ const nextSequenceByLab: Record<FrankenRobotsLab, number> = {
   arm: 0,
 };
 
+// React reinstalls the focused route's command closure whenever one of its
+// owner settings changes. Keep receipts outside that closure so a WebKit retry
+// of an already-accepted command cannot start a second optimization run.
+const commandOutcomesByLab: Record<
+  FrankenRobotsLab,
+  Map<string, FrankenRobotsCommandResult>
+> = {
+  humanoid: new Map(),
+  arm: new Map(),
+};
+
 function postNativeMessage(
   lab: FrankenRobotsLab,
   payload: Record<string, unknown>,
@@ -81,7 +92,7 @@ export function installFrankenRobotsNativeCommandHandler(
   if (typeof window === "undefined") return () => {};
   const bridgeWindow = window as NativeBridgeWindow;
   const previous = bridgeWindow.__frankenrobotsReceiveNativeCommand;
-  const outcomes = new Map<string, FrankenRobotsCommandResult>();
+  const outcomes = commandOutcomesByLab[lab];
 
   const receive = (payload: unknown): boolean => {
     const command = decodeFrankenRobotsNativeCommand(payload, lab);

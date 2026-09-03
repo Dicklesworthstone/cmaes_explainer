@@ -204,6 +204,7 @@ struct FrankenRobotsView: View {
                     .foregroundStyle(RobotTheme.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    .accessibilityIdentifier("robot-native-command-detail")
             }
             Button {
                 engine.optimize()

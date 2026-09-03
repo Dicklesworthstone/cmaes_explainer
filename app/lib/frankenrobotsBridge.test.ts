@@ -25,7 +25,7 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand(null, "humanoid")).toBeNull();
   });
 
-  test("acknowledges a retry without invoking the owner twice", () => {
+  test("acknowledges a retry without invoking the owner twice across handler reinstalls", () => {
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     const messages: Record<string, unknown>[] = [];
     const fakeWindow = {
@@ -54,6 +54,24 @@ describe("FrankenRobots native command contract", () => {
         "engine.command.ack",
       ]);
       cleanup();
+
+      let replacementInvocations = 0;
+      const cleanupReplacement = installFrankenRobotsNativeCommandHandler("humanoid", () => {
+        replacementInvocations += 1;
+        return { accepted: true, detail: "This must not replace the first receipt." };
+      });
+      const receiveReplacement = (fakeWindow as typeof fakeWindow & {
+        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+      }).__frankenrobotsReceiveNativeCommand;
+      expect(receiveReplacement(valid)).toBe(true);
+      expect(replacementInvocations).toBe(0);
+      expect(messages).toHaveLength(3);
+      expect(messages.map((message) => message.detail)).toEqual([
+        "Owner run accepted.",
+        "Owner run accepted.",
+        "Owner run accepted.",
+      ]);
+      cleanupReplacement();
     } finally {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");

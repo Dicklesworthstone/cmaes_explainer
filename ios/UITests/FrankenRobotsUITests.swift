@@ -70,6 +70,38 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testNativeOptimizeCommandIsAcknowledgedByTheEmbeddedOwner() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 12))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
+
+        let optimize = app.buttons["robot-native-optimize"]
+        XCTAssertTrue(optimize.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(optimize.isEnabled)
+        XCTAssertTrue(optimize.isHittable)
+        optimize.tap()
+
+        let receipt = app.descendants(matching: .any)["robot-native-command-detail"]
+        XCTAssertTrue(receipt.waitForExistence(timeout: 5), app.debugDescription)
+        let accepted = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'accepted'"),
+            object: receipt
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 8), .completed)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Native optimization command acknowledged by owner"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testArmTracePlaybackControlsReachEmbeddedOwnerTrace() throws {
         let app = XCUIApplication()
         app.launch()

@@ -279,15 +279,24 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.webView.callAsyncJavaScript(
+                let result = try await self.webView.callAsyncJavaScript(
                     "return window.__frankenrobotsReceiveNativeCommand?.(command) ?? false;",
                     arguments: ["command": payload],
                     in: nil,
                     contentWorld: .page
                 )
+                guard self.pendingCommandID == commandID else { return }
+                guard result as? Bool == true else {
+                    self.commandTimeoutTask?.cancel()
+                    self.commandTimeoutTask = nil
+                    self.pendingCommandID = nil
+                    self.commandDetail = "The embedded owner is not ready to receive native commands."
+                    return
+                }
             } catch {
                 guard self.pendingCommandID == commandID else { return }
                 self.commandTimeoutTask?.cancel()
+                self.commandTimeoutTask = nil
                 self.pendingCommandID = nil
                 self.commandDetail = "Native command delivery failed: \(error.localizedDescription)"
             }
@@ -467,6 +476,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   acknowledgement.commandID == pendingCommandID else { return }
             lastBridgeSequence = acknowledgement.sequence
             commandTimeoutTask?.cancel()
+            commandTimeoutTask = nil
             pendingCommandID = nil
             commandDetail = acknowledgement.detail
             return
