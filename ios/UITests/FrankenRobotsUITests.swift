@@ -199,6 +199,9 @@ final class FrankenRobotsUITests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 10), app.debugDescription)
         let originalKernelLabel = kernelReceipt.label
+        let kernelValue = app.staticTexts["1.32"].firstMatch
+        XCTAssertTrue(kernelValue.waitForExistence(timeout: 10), app.debugDescription)
+        let originalKernelValueLabel = kernelValue.label
 
         let lenses = [
             (
@@ -234,10 +237,91 @@ final class FrankenRobotsUITests: XCTestCase {
                 NSPredicate(format: "label CONTAINS[c] 'weighted sum' AND label CONTAINS[c] %@", lens.sum)
             ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
             XCTAssertEqual(kernelReceipt.label, originalKernelLabel)
+            XCTAssertEqual(kernelValue.label, originalKernelValueLabel)
         }
 
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "G1 receipt lens in native container"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    func testG1ManualPushIsDisclosedAsPreviewWithoutChangingOwnerReceipt() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let humanoid = app.segmentedControls.buttons["Humanoid"]
+        XCTAssertTrue(humanoid.waitForExistence(timeout: 12))
+        if !humanoid.isSelected {
+            humanoid.tap()
+        }
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+
+        let kernelReceipt = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS[c] 'kernel scalar'")
+        ).firstMatch
+        XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 20), app.debugDescription)
+        let originalKernelLabel = kernelReceipt.label
+        let kernelValue = app.staticTexts["1.32"].firstMatch
+        XCTAssertTrue(kernelValue.waitForExistence(timeout: 10), app.debugDescription)
+        let originalKernelValueLabel = kernelValue.label
+
+        let configure = app.buttons["Configure display-only push-vector preview"]
+        XCTAssertTrue(configure.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(configure.isHittable)
+        configure.tap()
+
+        let disclosure = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Visualization preview only'")
+        ).firstMatch
+        let admittedPeak = app.staticTexts["(24.0 N peak)"].firstMatch
+        let unchangedBoundary = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'no controller'")
+        ).firstMatch
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(admittedPeak.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(unchangedBoundary.waitForExistence(timeout: 5), app.debugDescription)
+
+        let right = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Right'")
+        ).firstMatch
+        let magnitude = app.buttons["45 N·s"]
+        XCTAssertTrue(right.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(magnitude.waitForExistence(timeout: 5), app.debugDescription)
+        right.tap()
+        magnitude.tap()
+
+        let disclosureScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        disclosureScreenshot.name = "G1 display-only push configuration disclosure"
+        disclosureScreenshot.lifetime = .keepAlways
+        add(disclosureScreenshot)
+
+        let preview = app.buttons[
+            "Preview display-only push vector: 45 newton-seconds at 270 degrees"
+        ]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
+        preview.tap()
+
+        let status = app.descendants(matching: .any).matching(
+            NSPredicate(
+                format: "label CONTAINS[c] 'display-only 45 N·s vector at 270°' AND label CONTAINS[c] 'owner rollout' AND label CONTAINS[c] 'unchanged'"
+            )
+        ).firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(kernelReceipt.label, originalKernelLabel)
+        XCTAssertEqual(kernelValue.label, originalKernelValueLabel)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "G1 display-only push preview in native container"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
