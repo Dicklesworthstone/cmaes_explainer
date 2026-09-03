@@ -287,6 +287,7 @@ export function resolveCameraBoom(
 
 import {
   CRAFTSMAN_BUNGALOW_1928,
+  CRAFTSMAN_FOUNDATION_SLAB,
   type HouseFurniture,
   type HouseSceneConfig,
   type HouseWall,
@@ -1628,9 +1629,10 @@ export const HOUSE_STRUCTURAL_SURFACES: OrientedBoundingBox[] = [
   {
     id: "house-floor",
     name: "house floor",
-    // A slab whose TOP face is the y = 0 walking plane the estate draws.
-    center: [0, -0.15, -0.8],
-    halfExtents: [4.2, 0.15, 5.2],
+    // The same slab the estate draws, from the shared constant, so the two
+    // cannot drift apart again.
+    center: [...CRAFTSMAN_FOUNDATION_SLAB.center],
+    halfExtents: [...CRAFTSMAN_FOUNDATION_SLAB.halfExtents],
     rotationYawRad: 0,
   },
 ];

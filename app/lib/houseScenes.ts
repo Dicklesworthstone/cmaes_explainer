@@ -87,6 +87,23 @@ const base = {
 
 /** Craftsman bungalow: porch -> living (fireplace) -> dining -> kitchen;
  *  bedroom/bath wing across a central hall. */
+/**
+ * The stone foundation the estate draws under the house, in stage
+ * coordinates (y up). Its TOP face is the y = 0 walking plane the room floor
+ * planes are drawn on.
+ *
+ * This is shared deliberately. The renderer draws this box and the robot
+ * owners are handed it as a support body; when those two drifted apart the
+ * slab was authored from y = 0 up to 0.3 and the humanoid stood inside it,
+ * buried to mid-shin, with nothing in the physics able to see it.
+ */
+export const CRAFTSMAN_FOUNDATION_SLAB = {
+  /** Centre in stage coordinates [x, y, z]. */
+  center: [0, -0.15, -0.8] as [number, number, number],
+  /** Half extents [x, y, z]; the box spans y in [-0.3, 0]. */
+  halfExtents: [4.2, 0.15, 5.2] as [number, number, number],
+} as const;
+
 export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {
   model: "Sears Craftsman Bungalow (Ashmore class)",
   ...base,

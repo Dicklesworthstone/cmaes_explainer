@@ -3,6 +3,7 @@ import {
   armWorkbenchObstacles,
   findClearSpawnPosition,
   findClearTrajectorySpawnOffset,
+  HOUSE_STRUCTURAL_SURFACES,
   g1KernelObstacleRoster,
   householdKernelObstacleRoster,
   resolveCameraBoom,
@@ -18,6 +19,7 @@ import {
   queryMultiObstacleScene,
   simulateG1HouseNavigationChallenge,
 } from "../app/lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_FOUNDATION_SLAB } from "../app/lib/houseScenes";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -525,6 +527,17 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
 });
 
 describe("declared structural surfaces (the robot-inside-the-floor regression)", () => {
+  test("the declared floor is the same box the estate draws", () => {
+    // One constant, two consumers. When these were separate literals the
+    // renderer's slab was authored above the floor line and the robot stood
+    // inside it with nothing in the physics able to see it.
+    const declared = HOUSE_STRUCTURAL_SURFACES.find((b) => b.id === "house-floor")!;
+    expect(declared.center).toEqual([...CRAFTSMAN_FOUNDATION_SLAB.center]);
+    expect(declared.halfExtents).toEqual([...CRAFTSMAN_FOUNDATION_SLAB.halfExtents]);
+    // Its top face is the walking plane the room floors are drawn on.
+    expect(declared.center[1] + declared.halfExtents[1]).toBeCloseTo(0, 12);
+  });
+
   test("the G1 roster declares the house floor as a support surface, not a keep-out", () => {
     const roster = g1KernelObstacleRoster([0, 0, 0]);
     const floor = roster.find((body) => body.name === "house floor");

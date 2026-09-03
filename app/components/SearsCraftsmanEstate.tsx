@@ -1,3 +1,4 @@
+import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 "use client";
 
 import React, { useMemo, useEffect } from "react";
@@ -547,8 +548,14 @@ export function SearsCraftsmanEstate({
           robot stood inside that block, buried to mid-shin, and the surface
           the viewer read as "the floor" was actually the top of the
           foundation. Skirting belongs under the floor it supports. */}
-      <mesh position={[0, -0.15, -0.8]} castShadow receiveShadow>
-        <boxGeometry args={[8.4, 0.3, 10.4]} />
+      <mesh position={CRAFTSMAN_FOUNDATION_SLAB.center} castShadow receiveShadow>
+        <boxGeometry
+          args={[
+            CRAFTSMAN_FOUNDATION_SLAB.halfExtents[0] * 2,
+            CRAFTSMAN_FOUNDATION_SLAB.halfExtents[1] * 2,
+            CRAFTSMAN_FOUNDATION_SLAB.halfExtents[2] * 2,
+          ]}
+        />
         <primitive object={materials.riverStone} attach="material" />
       </mesh>
 
