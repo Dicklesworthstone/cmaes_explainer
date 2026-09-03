@@ -15,6 +15,7 @@ import {
   clampSphereAgainstHouse,
   clampSphereAgainstLinks,
   limbPinRestPosition,
+  solveFullBodyG1IK,
   type InteractiveLimbPinId,
 } from "../lib/humanoidRagdollIk";
 import {
@@ -1513,6 +1514,90 @@ function LimbPinHandle({
   );
 }
 
+/**
+ * IK ghost for the six-pin mode: the browser-side full-body solver
+ * (solveFullBodyG1IK: two-bone limbs, joint clamps, house-aware sphere
+ * clamps) posed at the dragged pin targets and drawn as a translucent stick
+ * figure beside the owner-posed mesh. It shows what a kinematic solution
+ * for the dragged extremities looks like and where it would touch the
+ * house, without pretending the kernel re-ran.
+ */
+function G1IkGhost({
+  anchors,
+  limbOffsets,
+}: {
+  anchors: RobotAnchors;
+  limbOffsets: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
+}) {
+  const result = useMemo(() => {
+    const shifted = (
+      anchor: [number, number, number],
+      offset: [number, number, number] | undefined,
+    ): [number, number, number] | undefined =>
+      offset ? [anchor[0] + offset[0], anchor[1] + offset[1], anchor[2] + offset[2]] : undefined;
+    const headCenter: [number, number, number] = [
+      anchors.headCrown[0],
+      anchors.headCrown[1] - 0.105,
+      anchors.headCrown[2],
+    ];
+    return solveFullBodyG1IK(
+      {
+        pelvis: shifted(anchors.pelvis, limbOffsets.pelvis),
+        head: shifted(headCenter, limbOffsets.head),
+        leftHand: shifted(anchors.leftHand, limbOffsets.leftHand),
+        rightHand: shifted(anchors.rightHand, limbOffsets.rightHand),
+        leftFoot: shifted(anchors.leftFoot, limbOffsets.leftFoot),
+        rightFoot: shifted(anchors.rightFoot, limbOffsets.rightFoot),
+      },
+      anchors.pelvis,
+      houseSceneData.obstacles,
+    );
+  }, [anchors, limbOffsets]);
+  const bones: Array<[[number, number, number], [number, number, number]]> = [
+    [result.pelvisPosition, result.torsoPosition],
+    [result.torsoPosition, result.headPosition],
+    [result.torsoPosition, result.leftElbowPosition],
+    [result.leftElbowPosition, result.leftHandPosition],
+    [result.torsoPosition, result.rightElbowPosition],
+    [result.rightElbowPosition, result.rightHandPosition],
+    [result.pelvisPosition, result.leftKneePosition],
+    [result.leftKneePosition, result.leftFootPosition],
+    [result.pelvisPosition, result.rightKneePosition],
+    [result.rightKneePosition, result.rightFootPosition],
+  ];
+  const color = result.isColliding ? "#f43f5e" : "#38bdf8";
+  return (
+    <group>
+      {bones.map(([from, to], index) => {
+        const a = new THREE.Vector3(...from);
+        const b = new THREE.Vector3(...to);
+        const length = Math.max(0.01, a.distanceTo(b));
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          b.clone().sub(a).normalize(),
+        );
+        return (
+          <mesh key={index} position={mid} quaternion={quaternion}>
+            <cylinderGeometry args={[0.018, 0.018, length, 8]} />
+            <meshBasicMaterial color={color} transparent opacity={0.45} depthWrite={false} />
+          </mesh>
+        );
+      })}
+      <mesh position={result.headPosition}>
+        <sphereGeometry args={[0.09, 14, 10]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
+      </mesh>
+      {result.contacts.map((contact, index) => (
+        <mesh key={`contact-${index}`} position={contact.point}>
+          <sphereGeometry args={[0.025, 10, 8]} />
+          <meshBasicMaterial color="#f43f5e" transparent opacity={0.9} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function RagdollDragger({
   pelvisThree,
   anchors,
@@ -1649,6 +1734,9 @@ function RagdollDragger({
               onDrag={onLimbDragChange}
             />
           ))}
+          {Object.values(limbOffsets).some(Boolean) ? (
+            <G1IkGhost anchors={anchors} limbOffsets={limbOffsets} />
+          ) : null}
         </group>
       )}
     </group>
