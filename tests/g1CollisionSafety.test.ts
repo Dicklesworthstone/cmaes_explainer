@@ -34,11 +34,11 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();

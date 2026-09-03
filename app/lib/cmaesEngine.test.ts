@@ -1466,16 +1466,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.13");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.14");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1735,7 +1735,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
 
   for (const task of [0, 1, 2]) {
     const arm = new wasm.HouseholdManipulationVizEvaluator(
-      new Float64Array([0x41524d31, 2, 0, 8, 1 / 90, 6, 3, task]),
+      // Schema-3 config: twelve fixed words, zero overrides, no declared
+      // keep-out boxes — the packet the browser sends for a preset task.
+      new Float64Array([0x41524d31, 3, 0, 12, 1 / 90, 6, 3, task, 0, 0, 0, 0]),
     );
     const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
     if (!("ok" in armAdmission)) {

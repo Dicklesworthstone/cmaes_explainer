@@ -1331,3 +1331,103 @@ export function clampPositionAgainstHouseCollisions(
  minClearance: Math.max(0, minClearance),
  };
 }
+
+/**
+ * Workbench volumes around the household arm's counter, in the three.js
+ * stage frame at the default 0.78 m support height. The counter slab is
+ * deliberately absent: the arm's base link rests on it, and a hard
+ * link-vs-box constraint against the slab would refuse every rollout. The
+ * owner kernel clamps the object to the support plane on its own.
+ */
+export const ARM_WORKBENCH_OBSTACLES: OrientedBoundingBox[] = [
+  {
+    id: "arm-backsplash",
+    name: "backsplash",
+    center: [0, 0.78 + 0.5, -0.82],
+    halfExtents: [1.15, 0.525, 0.035],
+    rotationYawRad: 0,
+  },
+  {
+    id: "arm-cabinet",
+    name: "upper cabinet",
+    center: [0.72, 0.78 + 0.25, -0.58],
+    halfExtents: [0.31, 0.22, 0.15],
+    rotationYawRad: 0,
+  },
+];
+
+/** Counter slab used only by the camera sweep (never a kernel obstacle). */
+export const ARM_COUNTER_SLAB_OBSTACLE: OrientedBoundingBox = {
+  id: "arm-counter-slab",
+  name: "counter slab",
+  center: [0, 0.78 - 0.045, 0],
+  halfExtents: [1.15, 0.045, 0.825],
+  rotationYawRad: 0,
+};
+
+/** One extra obstacle box for the manipulation owner kernel, owner frame. */
+export interface HouseholdKernelObstacle {
+  /** Owner frame (x, y, z-up), metres. */
+  centerMeters: [number, number, number];
+  halfExtentsMeters: [number, number, number];
+  /** Rotation about the owner +Z axis, radians. */
+  yawRad: number;
+  name: string;
+}
+
+/**
+ * Convert a stage-frame OBB into the manipulation kernel's owner frame.
+ * The stage maps owner (x, y, z) to three (x, z, -y), so the inverse is
+ * owner = (three.x, -three.z, three.y). That map is a reflection of the
+ * horizontal plane, so a yaw about three +Y becomes the opposite yaw about
+ * owner +Z, and the half extents swap their y and z components.
+ */
+export function stageObbToKernelObstacle(obb: OrientedBoundingBox): HouseholdKernelObstacle {
+  return {
+    centerMeters: [obb.center[0], -obb.center[2], obb.center[1]],
+    halfExtentsMeters: [obb.halfExtents[0], obb.halfExtents[2], obb.halfExtents[1]],
+    yawRad: -obb.rotationYawRad,
+    name: obb.name,
+  };
+}
+
+/**
+ * Rooms the arm stage actually draws around the workbench. The stage is a
+ * counter at the scene origin, not the whole bungalow, so only these pieces
+ * appear on screen beside the arm.
+ */
+export const ARM_STAGE_ROOMS: readonly string[] = ["kitchen", "living room"];
+
+/**
+ * The obstacle roster the browser hands the manipulation kernel: the
+ * workbench backsplash and cabinet, plus the rigid furniture from the rooms
+ * the arm stage renders, capped at `limit` so the per-step convex queries
+ * stay cheap. Ordered nearest-first so a tighter cap keeps the most relevant
+ * boxes.
+ *
+ * The roster is deliberately NOT the whole-house scene. House furniture is
+ * authored in whole-house coordinates while the arm workbench sits at the
+ * scene origin, so distant pieces (a hall coat rack, for one) can land inside
+ * the arm's workspace without ever being drawn. Feeding those to the owner
+ * would refuse the default rollout over an obstacle the viewer cannot see.
+ * What the kernel is told to avoid is exactly what the stage draws.
+ */
+export function householdKernelObstacleRoster(
+  limit = 24,
+  base: [number, number, number] = [0, 0.78, 0],
+  house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+  rooms: readonly string[] = ARM_STAGE_ROOMS,
+): HouseholdKernelObstacle[] {
+  const staged = new Set(
+    house.furniture.filter((piece) => rooms.includes(piece.room)).map((piece) => piece.name),
+  );
+  const rigid = createSceneFromHouseFurniture(house.furniture).obstacles.filter(
+    (obb) => !obb.exemptFromPenalty && staged.has(obb.name),
+  );
+  const nearest = rigid
+    .map((obb) => ({ obb, d: distanceToOBB(base, obb) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, Math.max(0, limit - ARM_WORKBENCH_OBSTACLES.length))
+    .map((entry) => entry.obb);
+  return [...ARM_WORKBENCH_OBSTACLES, ...nearest].map(stageObbToKernelObstacle);
+}

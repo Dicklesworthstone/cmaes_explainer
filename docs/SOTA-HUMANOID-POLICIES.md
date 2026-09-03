@@ -110,7 +110,7 @@ This is the load-bearing section. CMA-ES appears in the literature and in this r
 
 ### 5.1 What the repo already does right (verified)
 
-- Physics is **Rust→wasm-pack, committed per-version, fail-closed version-gated** (`AUDITED_CMAES_KERNEL_VERSION` 0.4.1; current G1/arm owner package 0.6.13; refusal envelopes, never silent TS fallback) — this is the mega-kernel doctrine's parity-first culture already in miniature.
+- Physics is **Rust→wasm-pack, committed per-version, fail-closed version-gated** (`AUDITED_CMAES_KERNEL_VERSION` 0.4.1; current G1/arm owner package 0.6.14; refusal envelopes, never silent TS fallback) — this is the mega-kernel doctrine's parity-first culture already in miniature.
 - Evaluation fan-out with a **bit-exact first-batch sequential-parity check** (`roboticsEvaluationPool.ts`, `Object.is`) with permanent honest fallback: exactly the "parallelize independence dimensions only, prove identity" rule.
 - All cross-boundary data is **packed little-endian typed arrays with zero-copy transfer** (Float64Array words, transferable buffers, schema-8 zero-copy ABI).
 - Determinism from keyed Philox RNG + fixed eigendecomposition cadence (`fs-dfo/cma.rs`) — cross-run reproducibility without float-order luck.

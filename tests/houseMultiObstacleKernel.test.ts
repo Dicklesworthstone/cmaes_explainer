@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ARM_WORKBENCH_OBSTACLES,
   findClearSpawnPosition,
   findClearTrajectorySpawnOffset,
+  householdKernelObstacleRoster,
   resolveCameraBoom,
+  stageObbToKernelObstacle,
+  type HouseholdKernelObstacle,
   createHouseNavigationScene,
   createHouseWallObstacles,
   createSceneFromHouseFurniture,
@@ -13,6 +17,10 @@ import {
   queryMultiObstacleScene,
   simulateG1HouseNavigationChallenge,
 } from "../app/lib/houseMultiObstacleKernel";
+import {
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  buildHouseholdManipulationConfig,
+} from "../app/lib/frankensimCmaes";
 
 describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
   test("distanceToOBB computes exact Euclidean signed distance for unrotated and rotated OBBs", () => {
@@ -368,5 +376,122 @@ describe("findClearTrajectorySpawnOffset / resolveCameraBoom (spawn-inside-sofa 
     expect(boom.fraction).toBe(1);
     expect(boom.blockedBy).toBeNull();
     expect(boom.position).toEqual(desired);
+  });
+});
+
+describe("household kernel obstacle roster and schema-3 config packet", () => {
+  test("stage OBB to owner box: a point inside the stage box is inside the owner box", () => {
+    const obb: OrientedBoundingBox = {
+      id: "t",
+      name: "yawed table",
+      center: [0.6, 0.4, -0.3],
+      halfExtents: [0.5, 0.4, 0.2],
+      rotationYawRad: 0.7,
+    };
+    const owner = stageObbToKernelObstacle(obb);
+    expect(owner.centerMeters).toEqual([0.6, 0.3, 0.4]);
+    expect(owner.halfExtentsMeters).toEqual([0.5, 0.2, 0.4]);
+    expect(owner.yawRad).toBeCloseTo(-0.7, 12);
+    // Sample stage points on the box's local axes and check them against the
+    // owner box using an owner-frame SDF (rotation about +Z by yaw).
+    const insideOwner = (p: [number, number, number]) => {
+      const c = Math.cos(-owner.yawRad);
+      const s = Math.sin(-owner.yawRad);
+      const dx = p[0] - owner.centerMeters[0];
+      const dy = p[1] - owner.centerMeters[1];
+      const lx = c * dx - s * dy;
+      const ly = s * dx + c * dy;
+      const lz = p[2] - owner.centerMeters[2];
+      return (
+        Math.abs(lx) <= owner.halfExtentsMeters[0] + 1e-9 &&
+        Math.abs(ly) <= owner.halfExtentsMeters[1] + 1e-9 &&
+        Math.abs(lz) <= owner.halfExtentsMeters[2] + 1e-9
+      );
+    };
+    for (const [u, v] of [
+      [0.45, 0],
+      [-0.45, 0],
+      [0, 0.18],
+      [0, -0.18],
+      [0.3, 0.1],
+    ] as const) {
+      // Stage local axes: x rotated by yaw about +Y; z likewise.
+      const cy = Math.cos(obb.rotationYawRad);
+      const sy = Math.sin(obb.rotationYawRad);
+      const stage: [number, number, number] = [
+        obb.center[0] + cy * u - sy * v,
+        obb.center[1],
+        obb.center[2] + sy * u + cy * v,
+      ];
+      expect(distanceToOBB(stage, obb)).toBeLessThanOrEqual(1e-9);
+      const ownerPoint: [number, number, number] = [stage[0], -stage[2], stage[1]];
+      expect(insideOwner(ownerPoint), JSON.stringify(stage)).toBe(true);
+    }
+  });
+
+  test("roster starts with the workbench boxes, never the counter slab, and is nearest-first", () => {
+    const roster = householdKernelObstacleRoster(10);
+    expect(roster.length).toBe(10);
+    expect(roster[0].name).toBe("backsplash");
+    expect(roster[1].name).toBe("upper cabinet");
+    expect(roster.some((o) => o.name === "counter slab")).toBe(false);
+    const base: [number, number, number] = [0, 0, 0.78];
+    const d = (o: HouseholdKernelObstacle) =>
+      Math.hypot(o.centerMeters[0] - base[0], o.centerMeters[1] - base[1], o.centerMeters[2] - base[2]);
+    for (let i = 3; i < roster.length; i++) {
+      // Furniture entries (after the two workbench boxes) are sorted by OBB
+      // distance; centre distance is a looser proxy, so allow small inversions.
+      expect(d(roster[i])).toBeGreaterThanOrEqual(d(roster[i - 1]) - 1.0);
+    }
+  });
+
+  test("schema-3 config packet is self-describing: 12 fixed words plus 7 per obstacle", () => {
+    const roster = householdKernelObstacleRoster(5);
+    const packet = buildHouseholdManipulationConfig({
+      ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+      objectMassKilograms: 0.5,
+      staticFrictionMu: 0.9,
+      kineticFrictionMu: 0.7,
+      obstacles: roster,
+    });
+    expect(packet.length).toBe(12 + 7 * roster.length);
+    expect(packet[1]).toBe(3);
+    expect(packet[3]).toBe(packet.length);
+    expect(packet[8]).toBe(0.5);
+    expect(packet[9]).toBe(0.9);
+    expect(packet[10]).toBe(0.7);
+    expect(packet[11]).toBe(roster.length);
+    expect(Array.from(packet.slice(12, 19))).toEqual([
+      ...roster[0].centerMeters,
+      ...roster[0].halfExtentsMeters,
+      roster[0].yawRad,
+    ]);
+  });
+
+  test("schema-3 config packet refuses the envelope the owner refuses", () => {
+    const base = DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG;
+    expect(() => buildHouseholdManipulationConfig({ ...base, objectMassKilograms: -1 })).toThrow();
+    expect(() => buildHouseholdManipulationConfig({ ...base, staticFrictionMu: 0.5, kineticFrictionMu: 0.6 })).toThrow();
+    expect(() =>
+      buildHouseholdManipulationConfig({
+        ...base,
+        obstacles: Array.from({ length: 33 }, (_, i) => ({
+          name: `o${i}`,
+          centerMeters: [0, 0, 0],
+          halfExtentsMeters: [0.1, 0.1, 0.1],
+          yawRad: 0,
+        })),
+      }),
+    ).toThrow();
+    expect(() =>
+      buildHouseholdManipulationConfig({
+        ...base,
+        obstacles: [{ name: "bad", centerMeters: [0, 0, 0], halfExtentsMeters: [0, 0.1, 0.1], yawRad: 0 }],
+      }),
+    ).toThrow();
+    // Zero overrides and no roster: the 12-word packet with preset semantics.
+    const plain = buildHouseholdManipulationConfig(base);
+    expect(plain.length).toBe(12);
+    expect(Array.from(plain.slice(8, 12))).toEqual([0, 0, 0, 0]);
   });
 });

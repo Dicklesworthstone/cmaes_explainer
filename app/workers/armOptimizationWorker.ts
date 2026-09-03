@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { householdKernelObstacleRoster } from "../lib/houseMultiObstacleKernel";
 import {
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
   createFrankenSimCmaFamilySession,
@@ -111,8 +112,13 @@ function requireOk<T>(
   throw new Error(`${label}: ${result.refusal.name}${suffix}`);
 }
 
+// Every owner call (preview, optimize, compare) carries the same house
+// obstacle roster, so the kernel's link-vs-box constraint sees the
+// backsplash, cabinet, and nearest furniture the stage draws.
+const KERNEL_OBSTACLES = householdKernelObstacleRoster();
+
 function taskConfig(task: HouseholdManipulationTask): HouseholdManipulationConfig {
-  return { ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task };
+  return { ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task, obstacles: KERNEL_OBSTACLES };
 }
 
 function memoryFor(family: CmaFamily): number | undefined {

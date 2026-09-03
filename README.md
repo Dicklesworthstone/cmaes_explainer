@@ -167,6 +167,13 @@ Two audited surfaces coexist intentionally:
   updates are deterministically backtracked, while intentional gripper/object
   proximity remains outside the hard obstacle and self-collision barrier. It
   preserves the bit-identical v0612 G1 receipts above.
+- `public/wasm/fs-cmaes/v0614/` opens the household-arm owner to browser
+  inputs (packet schema 3): a variable-length roster of up to 32 extra
+  obstacle boxes with yaw (link-vs-box hard constraints, so the backsplash,
+  cabinet, and nearest Craftsman furniture are now owner obstacles rather than
+  display-side guards), an object-mass override, and Coulomb friction
+  coefficients. The admission echoes the effective friction and obstacle
+  count. Zero overrides and an empty roster reproduce the v0613 receipts.
 
 The browser adapters fail closed on an unexpected kernel identity or malformed
 packet. They do not silently label a TypeScript fallback as WebAssembly.

@@ -1,3 +1,5 @@
+import type { HouseholdKernelObstacle } from "./houseMultiObstacleKernel";
+
 /**
  * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
  *
@@ -985,7 +987,14 @@ const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 213;
 
 const ARM_MAGIC = 0x41524d31;
-const ARM_SCHEMA = 2;
+// Schema 3 (owner 0.6.14): the config packet carries an object-mass
+// override, Coulomb friction coefficients, and a variable-length roster of
+// extra obstacle boxes; the admission echoes the effective friction and the
+// extra-obstacle count in three trailing words.
+const ARM_SCHEMA = 3;
+const ARM_CONFIG_FIXED_WORDS = 12;
+const ARM_OBSTACLE_WORDS = 7;
+export const ARM_MAX_EXTRA_OBSTACLES = 32;
 const ARM_KIND_CONFIG = 0;
 const ARM_KIND_ADMISSION = 1;
 const ARM_KIND_EVALUATION = 2;
@@ -997,10 +1006,10 @@ const ARM_POLICY_KNOTS = 16;
 const ARM_LINK_COUNT = 8;
 const ARM_POSE_WORDS = 7;
 const ARM_TRACE_SAMPLE_WORDS = 67;
-const ARM_ADMISSION_WORDS = 37;
+const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.13";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.14";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1207,8 +1216,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0613/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -2234,6 +2243,12 @@ export interface HouseholdManipulationConfig {
   stepSeconds: number;
   durationSeconds: number;
   traceStride: number;
+  /** Optional owner inputs (schema 3). Omitted or 0 means "use the task preset". */
+  objectMassKilograms?: number;
+  staticFrictionMu?: number;
+  kineticFrictionMu?: number;
+  /** Extra link-vs-box hard constraints in the owner frame, at most ARM_MAX_EXTRA_OBSTACLES. */
+  obstacles?: readonly HouseholdKernelObstacle[];
 }
 
 const ARM_TASK_IDS: Record<HouseholdManipulationTask, number> = {
@@ -2271,6 +2286,11 @@ export interface HouseholdManipulationScene {
   supportHeightMeters: number;
   obstacleCenterMeters: [number, number, number];
   obstacleHalfExtentsMeters: [number, number, number];
+  /** Effective Coulomb coefficients the owner ran with (schema 3). */
+  staticFrictionMu: number;
+  kineticFrictionMu: number;
+  /** Extra obstacle boxes the owner accepted from the config packet. */
+  extraObstacleCount: number;
 }
 
 export interface HouseholdManipulationAdmission {
@@ -2331,19 +2351,75 @@ export interface HouseholdManipulationTraceReceipt extends HouseholdManipulation
   samples: HouseholdManipulationTraceSample[];
 }
 
+/**
+ * Schema-3 config packet:
+ *   [0..3]  magic, schema, kind, wordCount = 12 + 7n
+ *   [4..7]  stepSeconds, durationSeconds, traceStride, task
+ *   [8]     object mass override (0 = task preset)
+ *   [9,10]  static / kinetic Coulomb mu (0 = owner defaults 0.82 / 0.68)
+ *   [11]    n = extra obstacle count (0..32)
+ *   then n × [cx, cy, cz, hx, hy, hz, yaw] in the owner frame (z-up, yaw about +Z)
+ * The browser validates the same envelope the owner refuses on, so a bad
+ * roster fails here with a readable message instead of an owner refusal code.
+ */
 export function buildHouseholdManipulationConfig(
   config: HouseholdManipulationConfig,
 ): Float64Array {
-  return new Float64Array([
+  const obstacles = config.obstacles ?? [];
+  if (obstacles.length > ARM_MAX_EXTRA_OBSTACLES) {
+    throw new Error(
+      `household-arm config: ${obstacles.length} obstacles exceeds the owner cap of ${ARM_MAX_EXTRA_OBSTACLES}`,
+    );
+  }
+  const mass = config.objectMassKilograms ?? 0;
+  const staticMu = config.staticFrictionMu ?? 0;
+  const kineticMu = config.kineticFrictionMu ?? 0;
+  if (!Number.isFinite(mass) || mass < 0 || (mass !== 0 && (mass < 0.02 || mass > 20))) {
+    throw new Error("household-arm config: object mass override must be 0 or within [0.02, 20] kg");
+  }
+  for (const [label, mu] of [
+    ["static", staticMu],
+    ["kinetic", kineticMu],
+  ] as const) {
+    if (!Number.isFinite(mu) || mu < 0 || (mu !== 0 && (mu <= 0.05 || mu > 2.5))) {
+      throw new Error(`household-arm config: ${label} friction must be 0 or within (0.05, 2.5]`);
+    }
+  }
+  const effectiveStatic = staticMu === 0 ? 0.82 : staticMu;
+  const effectiveKinetic = kineticMu === 0 ? 0.68 : kineticMu;
+  if (effectiveKinetic > effectiveStatic) {
+    throw new Error("household-arm config: kinetic friction must not exceed static friction");
+  }
+  const words = new Float64Array(ARM_CONFIG_FIXED_WORDS + ARM_OBSTACLE_WORDS * obstacles.length);
+  words.set([
     ARM_MAGIC,
     ARM_SCHEMA,
     ARM_KIND_CONFIG,
-    8,
+    words.length,
     config.stepSeconds,
     config.durationSeconds,
     config.traceStride,
     ARM_TASK_IDS[config.task],
+    mass,
+    staticMu,
+    kineticMu,
+    obstacles.length,
   ]);
+  obstacles.forEach((obstacle, index) => {
+    const base = ARM_CONFIG_FIXED_WORDS + ARM_OBSTACLE_WORDS * index;
+    const { centerMeters: c, halfExtentsMeters: h, yawRad } = obstacle;
+    if (
+      !c.every(Number.isFinite) ||
+      !h.every(Number.isFinite) ||
+      !Number.isFinite(yawRad) ||
+      c.some((value) => Math.abs(value) > 10) ||
+      h.some((value) => value <= 0.001 || value > 5)
+    ) {
+      throw new Error(`household-arm config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`);
+    }
+    words.set([c[0], c[1], c[2], h[0], h[1], h[2], yawRad], base);
+  });
+  return words;
 }
 
 function decodeArmHeader(
@@ -2460,7 +2536,19 @@ export function decodeHouseholdManipulationAdmission(
     34,
     "obstacle half extents",
   );
+  const staticFrictionMu = finitePacketNumber(packet, 37, "static friction");
+  const kineticFrictionMu = finitePacketNumber(packet, 38, "kinetic friction");
+  const extraObstacleCount = exactPacketInteger(
+    packet,
+    39,
+    "extra obstacle count",
+    0,
+    ARM_MAX_EXTRA_OBSTACLES,
+  );
   if (
+    staticFrictionMu <= 0 ||
+    kineticFrictionMu <= 0 ||
+    kineticFrictionMu > staticFrictionMu ||
     stepSeconds < 1 / 240 ||
     stepSeconds > 1 / 45 ||
     durationSeconds < 3 ||
@@ -2502,6 +2590,9 @@ export function decodeHouseholdManipulationAdmission(
         supportHeightMeters,
         obstacleCenterMeters,
         obstacleHalfExtentsMeters,
+        staticFrictionMu,
+        kineticFrictionMu,
+        extraObstacleCount,
       },
     },
   };
