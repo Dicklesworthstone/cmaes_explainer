@@ -20,9 +20,10 @@ import {
 import {
   createHouseNavigationScene,
   distanceToOBB,
-  enclosingSpawnRadius,
   findClearSpawnPosition,
+  findClearTrajectorySpawnOffset,
 } from "../app/lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 function unwrap<T>(
   result: { ok: T } | { refusal: PackedOwnerRefusal },
@@ -143,47 +144,71 @@ describe("G1 v0613 owner trace safety envelope", () => {
     expect(receiptWithoutSamples(curriculumTrace)).toEqual(curriculumEvaluation);
   });
 
-  test("places a conservative whole-body envelope clear of every rigid house obstacle", () => {
-    const firstSample = curriculumTrace.samples[0];
+  test("seats the WHOLE rendered trajectory clear of every rigid house obstacle at the real pelvis height", () => {
+    // Mirrors the browser's spawn effect exactly: the footprint is every
+    // link of every sub-sampled trace sample, relative to the first pelvis
+    // in x/z with the true rendered height in y. The seat must keep every
+    // one of those points at least link-radius-plus-margin (0.18 m) from
+    // every rigid OBB, walls included, WITHOUT lifting the robot: the
+    // returned offset has no Y component and the proof is evaluated at the
+    // heights the kernel actually produced.
     const ownerToThree = (position: readonly number[]): [number, number, number] => [
       position[0],
       position[2],
       -position[1],
     ];
-    const pelvis = ownerToThree(firstSample.linkPoses[0].position);
-    const linkPositions = firstSample.linkPoses.map((linkPose) =>
-      ownerToThree(linkPose.position),
-    );
-    const spawnRadius = enclosingSpawnRadius(
-      [pelvis[0], 0.75, pelvis[2]],
-      linkPositions,
-      0.12,
-      0.35,
-    );
+    const pelvis = ownerToThree(curriculumTrace.samples[0].linkPoses[0].position);
+    const stride = Math.max(1, Math.ceil(curriculumTrace.samples.length / 48));
+    const footprint: [number, number, number][] = [];
+    for (let index = 0; index < curriculumTrace.samples.length; index += stride) {
+      for (const linkPose of curriculumTrace.samples[index].linkPoses) {
+        const p = ownerToThree(linkPose.position);
+        footprint.push([p[0] - pelvis[0], p[1], p[2] - pelvis[2]]);
+      }
+    }
     const scene = createHouseNavigationScene();
-    const spawn = findClearSpawnPosition(scene.obstacles, spawnRadius);
-    const offset: [number, number, number] = [
-      spawn[0] - pelvis[0],
-      0,
-      spawn[2] - pelvis[2],
-    ];
+    const living = CRAFTSMAN_BUNGALOW_1928.rooms.find((room) => room.name === "living room")!;
+    const clearance = 0.18;
+    const seat = findClearTrajectorySpawnOffset(scene.obstacles, {
+      footprint,
+      clearance,
+      anchor: [living.center[0], living.center[1]],
+      step: 0.25,
+    });
 
+    expect(seat.offset[1]).toBe(0);
+    expect(seat.minClearance).toBeGreaterThanOrEqual(clearance);
+    // The robot lands in the living room, not on the porch edge.
+    expect(Math.abs(seat.pelvis[0] - living.center[0])).toBeLessThanOrEqual(living.size[0] / 2);
+    expect(Math.abs(seat.pelvis[1] - living.center[1])).toBeLessThanOrEqual(living.size[1] / 2);
+
+    // Independent re-check of every trace sample (not just the sub-sampled
+    // footprint) at the seated offset.
+    for (const sample of curriculumTrace.samples) {
+      for (const linkPose of sample.linkPoses) {
+        const link = ownerToThree(linkPose.position);
+        const world: [number, number, number] = [
+          link[0] - pelvis[0] + seat.offset[0],
+          link[1],
+          link[2] - pelvis[2] + seat.offset[2],
+        ];
+        for (const obstacle of scene.obstacles) {
+          if (obstacle.exemptFromPenalty) continue;
+          expect(distanceToOBB(world, obstacle), obstacle.name).toBeGreaterThanOrEqual(
+            clearance - 0.03,
+          );
+        }
+      }
+    }
+  });
+
+  test("the legacy single-point spawn search never lifts the robot onto furniture", () => {
+    const scene = createHouseNavigationScene();
+    const spawn = findClearSpawnPosition(scene.obstacles, 0.85);
+    expect(spawn[1]).toBe(0.75);
     for (const obstacle of scene.obstacles) {
       if (obstacle.exemptFromPenalty) continue;
-      expect(distanceToOBB(spawn, obstacle), obstacle.name).toBeGreaterThanOrEqual(
-        spawnRadius,
-      );
-      for (const linkPose of firstSample.linkPoses) {
-        const link = ownerToThree(linkPose.position);
-        const translated: [number, number, number] = [
-          link[0] + offset[0],
-          link[1],
-          link[2] + offset[2],
-        ];
-        expect(distanceToOBB(translated, obstacle), obstacle.name).toBeGreaterThanOrEqual(
-          0.12,
-        );
-      }
+      expect(distanceToOBB(spawn, obstacle), obstacle.name).toBeGreaterThanOrEqual(0.85);
     }
   });
 });

@@ -10,9 +10,11 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
+  G1_BODY_LINK_RADIUS_METERS,
   G1_INTERACTIVE_PINS,
   clampSphereAgainstHouse,
-  solveFullBodyG1IK,
+  clampSphereAgainstLinks,
+  limbPinRestPosition,
   type InteractiveLimbPinId,
 } from "../lib/humanoidRagdollIk";
 import {
@@ -46,10 +48,11 @@ import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import {
   clampPositionAgainstHouseCollisions,
   createHouseNavigationScene,
-  enclosingSpawnRadius,
-  findClearSpawnPosition,
+  findClearTrajectorySpawnOffset,
   projectPointOutOfOBB,
+  resolveCameraBoom,
   sweptSphereOBBEntryPoint,
+  type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 type ScalableFamily = Exclude<CmaFamily, "full">;
@@ -663,6 +666,143 @@ function RobotPose({
   );
 }
 
+// Owner link indices used by the interaction layer (pelvis + 29 joints).
+const G1_LINK_PELVIS = 0;
+const G1_LINK_LEFT_FOOT = 6;
+const G1_LINK_RIGHT_FOOT = 12;
+const G1_LINK_TORSO = 15;
+const G1_LINK_LEFT_WRIST = 22;
+const G1_LINK_RIGHT_WRIST = 29;
+// The head mesh hangs off the torso link; its crown sits about 0.45 m above
+// the torso link origin (0.34 m sphere centre + 0.105 m radius in the
+// fallback rig, matching the STL silhouette).
+const G1_HEAD_CROWN_ABOVE_TORSO_METERS = 0.45;
+
+/**
+ * PENETRATION PROJECTION (visualization layer). The G1 kernel's IK is
+ * obstacle-blind, so a foot or knee can land inside a chair, table, or
+ * wall OBB during the rendered trajectory. For every link we push the
+ * link centre out of any OBB it entered, then run a swept-sphere CCD pass
+ * from the previous frame so a link never teleports to a deep-interior
+ * closest point (Redon, Lin, Benichou 2002; Ericson 2005 §5.5.7). The
+ * kernel trace stays untouched; the projection is applied per frame to a
+ * derived sample that RobotPoseMeshes / RobotPose consume.
+ *
+ * Everything is evaluated in WORLD space: the spawn/drag offset is added
+ * before testing and removed again afterwards, because the mesh is drawn
+ * inside a group translated by that offset. Projecting in the raw kernel
+ * frame (the previous behaviour) tested the robot against furniture
+ * several metres away from where it was actually standing.
+ */
+function projectSampleAgainstHouse(
+  sample: G1TraceSample,
+  previousSample: G1TraceSample | null,
+  offset: readonly [number, number, number] | null,
+  obstacles: readonly OrientedBoundingBox[] = houseSceneData.obstacles,
+): G1TraceSample {
+  const ox = offset ? offset[0] : 0;
+  const oy = offset ? offset[1] : 0;
+  const oz = offset ? offset[2] : 0;
+  const prevPositions = previousSample
+    ? previousSample.linkPoses.map((pose) => ownerToThree(pose.position))
+    : null;
+  const linkPoses = sample.linkPoses.map((pose, link) => {
+    const p = ownerToThree(pose.position);
+    let qx = p[0] + ox;
+    let qy = p[1] + oy;
+    let qz = p[2] + oz;
+    for (const obb of obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      const projected = projectPointOutOfOBB([qx, qy, qz], obb, G1_LINK_CLEARANCE_METERS);
+      if (projected.wasInside) {
+        qx = projected.point[0];
+        qy = projected.point[1];
+        qz = projected.point[2];
+      }
+    }
+    if (prevPositions && prevPositions[link]) {
+      const prev = prevPositions[link];
+      for (const obb of obstacles) {
+        if (obb.exemptFromPenalty) continue;
+        const ccd = sweptSphereOBBEntryPoint(
+          [prev[0] + ox, prev[1] + oy, prev[2] + oz],
+          [qx, qy, qz],
+          G1_LINK_CLEARANCE_METERS,
+          obb,
+        );
+        if (ccd.wasHit && ccd.entryPoint) {
+          qx = ccd.entryPoint[0];
+          qy = ccd.entryPoint[1];
+          qz = ccd.entryPoint[2];
+        }
+      }
+    }
+    // Back to the un-offset owner frame: three (x, y, z) -> owner (x, -z, y).
+    const wx = qx - ox;
+    const wy = qy - oy;
+    const wz = qz - oz;
+    return {
+      ...pose,
+      position: [wx, -wz, wy] as [number, number, number],
+      quaternionWxyz: [...pose.quaternionWxyz] as [number, number, number, number],
+    };
+  });
+  return { ...sample, linkPoses };
+}
+
+type RobotAnchors = {
+  pelvis: [number, number, number];
+  headCrown: [number, number, number];
+  leftHand: [number, number, number];
+  rightHand: [number, number, number];
+  leftFoot: [number, number, number];
+  rightFoot: [number, number, number];
+  /** Every link centre in world space, for pin-versus-body clamping. */
+  links: [number, number, number][];
+};
+
+/** World-space anchor points on the rendered (projected, offset) robot. */
+function computeRobotAnchors(
+  sample: G1TraceSample,
+  offset: readonly [number, number, number] | null,
+): RobotAnchors {
+  const ox = offset ? offset[0] : 0;
+  const oy = offset ? offset[1] : 0;
+  const oz = offset ? offset[2] : 0;
+  const shift = (p: [number, number, number]): [number, number, number] => [p[0] + ox, p[1] + oy, p[2] + oz];
+  const linkWorld = (index: number) => shift(ownerToThree(sample.linkPoses[index].position));
+  const localWorld = (index: number, local: [number, number, number]) =>
+    shift(ownerLocalPointToThree(sample.linkPoses[index].position, sample.linkPoses[index].quaternionWxyz, local));
+  const torso = linkWorld(G1_LINK_TORSO);
+  return {
+    pelvis: linkWorld(G1_LINK_PELVIS),
+    headCrown: [torso[0], torso[1] + G1_HEAD_CROWN_ABOVE_TORSO_METERS, torso[2]],
+    leftHand: localWorld(G1_LINK_LEFT_WRIST, G1_LEFT_HAND_CENTER_OWNER),
+    rightHand: localWorld(G1_LINK_RIGHT_WRIST, G1_RIGHT_HAND_CENTER_OWNER),
+    leftFoot: localWorld(G1_LINK_LEFT_FOOT, [0.04, 0, -0.03]),
+    rightFoot: localWorld(G1_LINK_RIGHT_FOOT, [0.04, 0, -0.03]),
+    links: sample.linkPoses.map((_, index) => linkWorld(index)),
+  };
+}
+
+/**
+ * Horizontal unit heading of the robot at a sample: the pelvis link's own
+ * forward axis (owner +X, the kernel's walking axis) rotated by the pelvis
+ * world quaternion and flattened onto the floor. Facing is far steadier
+ * than pelvis displacement, which is noise while the robot stands or
+ * wobbles and flips at every playback loop boundary. Falls back to +X when
+ * the pelvis points straight up or down.
+ */
+function robotHeading(trace: G1TraceReceipt, sampleIndex: number): [number, number] {
+  const n = trace.samples.length;
+  if (n === 0) return [1, 0];
+  const pose = trace.samples[Math.max(0, Math.min(n - 1, sampleIndex))].linkPoses[G1_LINK_PELVIS];
+  const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(ownerQuaternionToThree(pose.quaternionWxyz));
+  const len = Math.hypot(forward.x, forward.z);
+  if (len < 0.05) return [1, 0];
+  return [forward.x / len, forward.z / len];
+}
+
 function RobotPlayback({
   trace,
   admission,
@@ -711,87 +851,15 @@ function RobotPlayback({
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
-  // SOTA PENETRATION PROJECTION (visualization-layer): the G1 kernel's IK
-  // is obstacle-blind, so a foot or knee can land inside a chair, table,
-  // or wall OBB during the rendered trajectory. We compute, for every
-  // link, the closest point on the OBB surface and snap the link mesh
-  // there. The kernel trace stays untouched; the projection is applied
-  // per-frame to a derived sample that RobotPoseMeshes / RobotPose
-  // consume. Matches the arm's SOTA pipeline (see
-  // tests/armLinkCollisionResponse.test.ts for the regression guard;
-  // G1 has the same guard via tests/householdArmCollision.test.ts).
-  // Without this fix, the humanoid visibly tunnels through furniture
-  // and the user reads that as a broken simulation (cmaes-u76s).
-  const projectedSample: typeof sample | null = sample
-    ? (() => {
-        const next: typeof sample = {
-          ...sample,
-          linkPoses: sample.linkPoses.map((pose) => ({
-            ...pose,
-            position: [...pose.position] as [number, number, number],
-            quaternionWxyz: [...pose.quaternionWxyz] as [number, number, number, number],
-          })),
-        };
-        const previousSample = sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null;
-        const prevPositions = previousSample
-          ? previousSample.linkPoses.map((pose) => ownerToThree(pose.position))
-          : null;
-        for (let link = 0; link < next.linkPoses.length; link++) {
-          const pose = next.linkPoses[link];
-          const p = ownerToThree(pose.position);
-          let qx = p[0];
-          let qy = p[1];
-          let qz = p[2];
-          // First, per-position projection (the existing pipeline).
-          for (const obb of houseSceneData.obstacles) {
-            const projected = projectPointOutOfOBB(
-              [qx, qy, qz],
-              obb,
-              G1_LINK_CLEARANCE_METERS,
-            );
-            if (projected.wasInside) {
-              qx = projected.point[0];
-              qy = projected.point[1];
-              qz = projected.point[2];
-            }
-          }
-          // Then, swept-volume CCD: if we have a previous projected
-          // position for this link, check the swept segment from that
-          // point to the kernel position against every OBB. On a hit,
-          // override with the swept entry point so the link does not
-          // visibly teleport to a deep-interior closest point. The
-          // kernel trace stays untouched - this is a renderer-only
-          // conservative-advancement pass (Redon, Lin, Benichou 2002;
-          // Ericson 2005 §5.5.7). On the first frame prevPositions is
-          // null and we skip the CCD; the per-position projection is
-          // already a safe starting point.
-          if (prevPositions && prevPositions[link]) {
-            const prevThree = prevPositions[link];
-            for (const obb of houseSceneData.obstacles) {
-              const ccd = sweptSphereOBBEntryPoint(
-                [prevThree[0], prevThree[1], prevThree[2]],
-                [qx, qy, qz],
-                G1_LINK_CLEARANCE_METERS,
-                obb,
-              );
-              if (ccd.wasHit && ccd.entryPoint) {
-                qx = ccd.entryPoint[0];
-                qy = ccd.entryPoint[1];
-                qz = ccd.entryPoint[2];
-              }
-            }
-          }
-          // Three.js uses (x, z, -y) world from owner (x, y, z) - reverse
-          // the conversion to store the projected value back in owner frame.
-          next.linkPoses[link] = {
-            ...pose,
-            position: [qx, -qz, qy],
-          };
-        }
-        return next;
-      })()
-    : null;
-  const renderSample = projectedSample ?? sample;
+  const renderSample = useMemo(
+    () =>
+      projectSampleAgainstHouse(
+        sample,
+        sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
+        positionOffset ?? null,
+      ),
+    [sample, sampleIndex, trace, positionOffset],
+  );
   // Procedural synthesized footstep acoustics on contact state changes
   const prevContactsRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
   useEffect(() => {
@@ -1016,62 +1084,292 @@ const ROOM_VIEWPOINTS: Record<string, { pos: [number, number, number]; target: [
   all: { pos: [6.5, 9.2, 8.5], target: [0, 0.5, 0] },
 };
 
+type CameraView = "orbit" | "follow" | "pov" | "blueprint" | "fly";
+type ActiveRoom = "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+
+// Camera may roam the bungalow interior plus the porch, and rise above the
+// 2.5 m walls for overviews, but never leave the lot or sink into the floor.
+const HOUSE_CAMERA_BOUNDS = { minX: -3.85, maxX: 3.85, minZ: -5.35, maxZ: 6.4 };
+const HOUSE_CAMERA_MIN_Y = 0.25;
+const HOUSE_CAMERA_MAX_Y = 9.5;
+// Wider than the near plane needs: keeps the lens off wall-hung decor whose
+// colliders are authored at floor level (picture frames, sconces).
+const CAMERA_PROBE_RADIUS = 0.3;
+// Candidate boom azimuths relative to "directly behind the robot", tried in
+// preference order. Positive is to the robot's left.
+const FOLLOW_AZIMUTHS_DEG = [35, -35, 0, 70, -70, 110, -110, 180];
+const FOLLOW_BOOM_LENGTH = 2.6;
+const FOLLOW_BOOM_HEIGHT = 1.0;
+const ORBIT_FRAME_BOOM_LENGTH = 2.9;
+const ORBIT_FRAME_BOOM_HEIGHT = 1.25;
+
+const ROOM_NAME_TO_ACTIVE_ROOM: Record<string, ActiveRoom> = {
+  "entry porch": "porch",
+  "living room": "living",
+  "dining room": "dining",
+  kitchen: "kitchen",
+  bedroom: "bedroom",
+  "second bedroom": "bedroom",
+  bath: "bathroom",
+};
+
+/** Which selectable room contains a world-space point (x, z), if any. */
+function activeRoomForPoint(x: number, z: number): ActiveRoom | null {
+  for (const room of CRAFTSMAN_BUNGALOW_1928.rooms) {
+    const [cx, cz] = room.center;
+    const [sx, sz] = room.size;
+    if (Math.abs(x - cx) <= sx / 2 && Math.abs(z - cz) <= sz / 2) {
+      return ROOM_NAME_TO_ACTIVE_ROOM[room.name] ?? null;
+    }
+  }
+  return null;
+}
+
+function clampCameraToHouse(v: THREE.Vector3) {
+  v.x = Math.min(HOUSE_CAMERA_BOUNDS.maxX, Math.max(HOUSE_CAMERA_BOUNDS.minX, v.x));
+  v.z = Math.min(HOUSE_CAMERA_BOUNDS.maxZ, Math.max(HOUSE_CAMERA_BOUNDS.minZ, v.z));
+  v.y = Math.min(HOUSE_CAMERA_MAX_Y, Math.max(HOUSE_CAMERA_MIN_Y, v.y));
+}
+
+/**
+ * Choose the boom azimuth (relative to the robot's heading) whose swept
+ * sphere from the look-at point reaches the farthest before a wall or
+ * furniture blocks it. `preferred` gets a hysteresis bonus so the camera
+ * does not flip sides every time two candidates trade places.
+ */
+function chooseBoom(
+  lookAt: [number, number, number],
+  heading: [number, number],
+  boomLength: number,
+  boomHeight: number,
+  obstacles: readonly OrientedBoundingBox[],
+  preferred: number | null,
+): { azimuthDeg: number; position: [number, number, number]; fraction: number } {
+  const baseAngle = Math.atan2(heading[1], heading[0]) + Math.PI; // behind the robot
+  let best: { azimuthDeg: number; position: [number, number, number]; fraction: number } | null = null;
+  let bestScore = -Infinity;
+  for (const azimuthDeg of FOLLOW_AZIMUTHS_DEG) {
+    // Positive azimuth swings toward the robot's left: rotate the "behind"
+    // vector by -azimuth about +Y (Y-up right-handed frame).
+    const angle = baseAngle - (azimuthDeg * Math.PI) / 180;
+    const desired: [number, number, number] = [
+      lookAt[0] + Math.cos(angle) * boomLength,
+      lookAt[1] + boomHeight,
+      lookAt[2] + Math.sin(angle) * boomLength,
+    ];
+    const clamped = new THREE.Vector3(...desired);
+    clampCameraToHouse(clamped);
+    const resolved = resolveCameraBoom(lookAt, [clamped.x, clamped.y, clamped.z], obstacles, CAMERA_PROBE_RADIUS);
+    const score = resolved.fraction + (preferred === azimuthDeg ? 0.25 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = { azimuthDeg, position: resolved.position, fraction: resolved.fraction };
+    }
+  }
+  return best!;
+}
+
 function CameraRig({
   cameraView,
   activeRoom,
   pelvisThree,
+  heading,
+  obstacles,
+  hasRobot,
 }: {
-  cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly";
-  activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+  cameraView: CameraView;
+  activeRoom: ActiveRoom;
   pelvisThree: [number, number, number];
+  heading: [number, number];
+  obstacles: readonly OrientedBoundingBox[];
+  hasRobot: boolean;
 }) {
   const controlsRef = useRef<any>(null);
-  const prevRoomRef = useRef<string | null>(null);
   const targetCamPos = useRef<THREE.Vector3 | null>(null);
   const targetLookAt = useRef<THREE.Vector3 | null>(null);
-
+  // Smoothed look-at shared by every mode so a mode switch glides instead
+  // of cutting.
+  const lookAtRef = useRef(new THREE.Vector3(pelvisThree[0], pelvisThree[1] + 0.15, pelvisThree[2]));
+  const smoothedHeading = useRef(new THREE.Vector2(heading[0], heading[1]));
+  const followAzimuth = useRef<number | null>(null);
+  const lastFramedPelvis = useRef<THREE.Vector3 | null>(null);
+  const lastRoomRef = useRef<ActiveRoom | null>(null);
+  const pelvisRef = useRef(pelvisThree);
+  const headingRef = useRef(heading);
+  // Declared before every effect that reads these refs so React runs the
+  // sync first within the same commit.
   useEffect(() => {
-    if (cameraView === "orbit" && controlsRef.current) {
-      if (prevRoomRef.current !== activeRoom) {
-        const vp = ROOM_VIEWPOINTS[activeRoom] || ROOM_VIEWPOINTS.living;
-        targetCamPos.current = new THREE.Vector3(vp.pos[0], vp.pos[1], vp.pos[2]);
-        targetLookAt.current = new THREE.Vector3(vp.target[0], vp.target[1], vp.target[2]);
-        prevRoomRef.current = activeRoom;
-      }
-    }
-  }, [activeRoom, cameraView]);
+    pelvisRef.current = pelvisThree;
+    headingRef.current = heading;
+  }, [pelvisThree, heading]);
 
-  useFrame(({ camera }) => {
+  const frameRobot = useCallback(() => {
+    const pelvis = pelvisRef.current;
+    const lookAt: [number, number, number] = [pelvis[0], pelvis[1] + 0.1, pelvis[2]];
+    const boom = chooseBoom(
+      lookAt,
+      headingRef.current,
+      ORBIT_FRAME_BOOM_LENGTH,
+      ORBIT_FRAME_BOOM_HEIGHT,
+      obstacles,
+      null,
+    );
+    targetCamPos.current = new THREE.Vector3(...boom.position);
+    targetLookAt.current = new THREE.Vector3(...lookAt);
+    lastFramedPelvis.current = new THREE.Vector3(...pelvis);
+  }, [obstacles]);
+
+  const frameRoomViewpoint = useCallback(
+    (room: ActiveRoom) => {
+      const vp = ROOM_VIEWPOINTS[room] || ROOM_VIEWPOINTS.living;
+      const resolved = resolveCameraBoom(vp.target, vp.pos, obstacles, CAMERA_PROBE_RADIUS);
+      targetCamPos.current = new THREE.Vector3(...resolved.position);
+      targetLookAt.current = new THREE.Vector3(...vp.target);
+    },
+    [obstacles],
+  );
+
+  // Room chips: fly to the room's viewpoint, unless that room is where the
+  // robot is standing, in which case frame the robot itself. Overviews
+  // (all / cutaway) always use their authored viewpoint.
+  useEffect(() => {
+    if (cameraView !== "orbit") return;
+    if (lastRoomRef.current === activeRoom) return;
+    lastRoomRef.current = activeRoom;
+    const robotRoom = hasRobot ? activeRoomForPoint(pelvisRef.current[0], pelvisRef.current[2]) : null;
+    if (hasRobot && (activeRoom === robotRoom || (robotRoom === null && activeRoom === "living"))) {
+      frameRobot();
+    } else {
+      frameRoomViewpoint(activeRoom);
+    }
+  }, [activeRoom, cameraView, hasRobot, frameRobot, frameRoomViewpoint]);
+
+  // The robot arrived (first trace + spawn seat) or jumped (drag/reset):
+  // re-frame it so the operator never stares at an empty room.
+  useEffect(() => {
+    if (cameraView !== "orbit" || !hasRobot) return;
+    const last = lastFramedPelvis.current;
+    const moved = last
+      ? Math.hypot(last.x - pelvisThree[0], last.z - pelvisThree[2])
+      : Number.POSITIVE_INFINITY;
+    if (moved > 0.9) frameRobot();
+  }, [cameraView, hasRobot, pelvisThree, frameRobot]);
+
+  // Entering orbit: seed OrbitControls' target from the shared look-at so a
+  // switch from follow/POV does not snap the view to the origin, then
+  // re-frame the robot from a clear boom (a top-down map camera or a
+  // free-fly position is rarely a useful orbit start).
+  useEffect(() => {
+    if (cameraView !== "orbit") return;
+    if (controlsRef.current) {
+      controlsRef.current.target.copy(lookAtRef.current);
+      controlsRef.current.update();
+    }
+    if (hasRobot) frameRobot();
+  }, [cameraView, hasRobot, frameRobot]);
+
+  useFrame(({ camera, scene }, rawDelta) => {
+    const dt = Math.min(Math.max(rawDelta, 0), 0.1);
+    const pelvis = pelvisRef.current;
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      (window as unknown as { __g1Three?: unknown }).__g1Three = { scene, camera, THREE };
+    }
+    // Frame-rate independent damping: k = 1 - exp(-rate * dt).
+    const ease = (rate: number) => 1 - Math.exp(-rate * dt);
+    smoothedHeading.current.lerp(new THREE.Vector2(headingRef.current[0], headingRef.current[1]), ease(3));
+    if (smoothedHeading.current.lengthSq() < 1e-6) smoothedHeading.current.set(1, 0);
+    smoothedHeading.current.normalize();
+    const h: [number, number] = [smoothedHeading.current.x, smoothedHeading.current.y];
+
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      // Dev-only readout for the browser smoke harness (tmp/ui-smoke).
+      (window as unknown as { __g1Camera?: unknown }).__g1Camera = {
+        mode: cameraView,
+        position: camera.position.toArray(),
+        target: controlsRef.current
+          ? controlsRef.current.target.toArray()
+          : lookAtRef.current.toArray(),
+        pelvis: [...pelvis],
+        heading: h,
+        pending: Boolean(targetCamPos.current),
+      };
+    }
+
     if (cameraView === "orbit" && controlsRef.current) {
+      const controls = controlsRef.current;
       if (targetCamPos.current && targetLookAt.current) {
-        controlsRef.current.object.position.lerp(targetCamPos.current, 0.08);
-        controlsRef.current.target.lerp(targetLookAt.current, 0.08);
-        controlsRef.current.update();
+        controls.object.position.lerp(targetCamPos.current, ease(4.5));
+        controls.target.lerp(targetLookAt.current, ease(4.5));
         if (
-          controlsRef.current.object.position.distanceTo(targetCamPos.current) < 0.02 &&
-          controlsRef.current.target.distanceTo(targetLookAt.current) < 0.02
+          controls.object.position.distanceTo(targetCamPos.current) < 0.02 &&
+          controls.target.distanceTo(targetLookAt.current) < 0.02
         ) {
           targetCamPos.current = null;
           targetLookAt.current = null;
         }
+      } else if (hasRobot) {
+        // Soft follow while the robot walks: keep the operator's chosen
+        // orbit offset, but carry target and camera along together once
+        // the subject drifts out of the framed spot.
+        cameraScratchVec.set(pelvis[0], pelvis[1] + 0.1, pelvis[2]);
+        const drift = cameraScratchVec.distanceTo(controls.target);
+        if (drift > 0.45) {
+          const delta = cameraScratchVec.clone().sub(controls.target).multiplyScalar(ease(2.5));
+          controls.target.add(delta);
+          controls.object.position.add(delta);
+        }
+        // Keep walls out of the line of sight even while the operator orbits.
+        const resolved = resolveCameraBoom(
+          [controls.target.x, controls.target.y, controls.target.z],
+          [controls.object.position.x, controls.object.position.y, controls.object.position.z],
+          obstacles,
+          CAMERA_PROBE_RADIUS,
+        );
+        if (resolved.fraction < 0.999) {
+          controls.object.position.lerp(new THREE.Vector3(...resolved.position), ease(8));
+        }
       }
-    } else if (cameraView === "follow") {
-      cameraScratchVec.set(
-        pelvisThree[0] - 2.6,
-        pelvisThree[1] + 1.05,
-        pelvisThree[2] + 2.35,
-      );
-      camera.position.lerp(cameraScratchVec, 0.08);
-      camera.lookAt(pelvisThree[0], pelvisThree[1] + 0.12, pelvisThree[2]);
-    } else if (cameraView === "pov") {
-      cameraScratchVec.set(pelvisThree[0] + 0.05, pelvisThree[1] + 0.45, pelvisThree[2]);
-      camera.position.copy(cameraScratchVec);
-      camera.lookAt(pelvisThree[0] + 2.0, pelvisThree[1] + 0.35, pelvisThree[2]);
-    } else if (cameraView === "blueprint") {
-      cameraScratchVec.set(pelvisThree[0] + 0.3, 5.5, pelvisThree[2]);
-      camera.position.lerp(cameraScratchVec, 0.08);
-      camera.lookAt(pelvisThree[0] + 0.3, 0, pelvisThree[2]);
+      clampCameraToHouse(controls.object.position);
+      controls.update();
+      lookAtRef.current.copy(controls.target);
+      return;
     }
+
+    if (cameraView === "follow") {
+      const lookAt: [number, number, number] = [pelvis[0], pelvis[1] + 0.15, pelvis[2]];
+      const boom = chooseBoom(lookAt, h, FOLLOW_BOOM_LENGTH, FOLLOW_BOOM_HEIGHT, obstacles, followAzimuth.current);
+      followAzimuth.current = boom.azimuthDeg;
+      cameraScratchVec.set(...boom.position);
+      camera.position.lerp(cameraScratchVec, ease(3.5));
+      lookAtRef.current.lerp(new THREE.Vector3(...lookAt), ease(6));
+    } else if (cameraView === "pov") {
+      // Eye level at the head, a touch forward so the visor never clips.
+      cameraScratchVec.set(pelvis[0] + h[0] * 0.08, pelvis[1] + 0.62, pelvis[2] + h[1] * 0.08);
+      camera.position.lerp(cameraScratchVec, ease(10));
+      lookAtRef.current.lerp(
+        new THREE.Vector3(pelvis[0] + h[0] * 2.5, pelvis[1] + 0.45, pelvis[2] + h[1] * 2.5),
+        ease(5),
+      );
+    } else if (cameraView === "blueprint") {
+      cameraScratchVec.set(pelvis[0] + 0.3, 5.5, pelvis[2] + 0.01);
+      camera.position.lerp(cameraScratchVec, ease(4));
+      lookAtRef.current.lerp(new THREE.Vector3(pelvis[0] + 0.3, 0, pelvis[2]), ease(4));
+    } else if (cameraView === "fly") {
+      // FlyControls already moved the camera this frame: keep it inside
+      // the lot and out of the walls and furniture so the operator cannot
+      // fly through a sofa or lose the house entirely.
+      const { clamped } = clampSphereAgainstHouse(
+        [camera.position.x, camera.position.y, camera.position.z],
+        CAMERA_PROBE_RADIUS,
+        obstacles as OrientedBoundingBox[],
+        HOUSE_CAMERA_MIN_Y - CAMERA_PROBE_RADIUS,
+        HOUSE_CAMERA_BOUNDS,
+      );
+      camera.position.set(clamped[0], Math.min(HOUSE_CAMERA_MAX_Y, clamped[1]), clamped[2]);
+      return;
+    }
+    clampCameraToHouse(camera.position);
+    camera.lookAt(lookAtRef.current);
   });
 
   return cameraView === "orbit" ? (
@@ -1087,8 +1385,8 @@ function CameraRig({
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   ) : cameraView === "fly" ? (
-    // Free-fly 6-DOF: W/A/S/D + Q/E or RMB drag. Bounded to the
-    // house footprint so the operator can't lose the robot off-camera.
+    // Free-fly 6-DOF: W/A/S/D + Q/E or RMB drag. The useFrame pass above
+    // clamps the result to the house footprint and out of every OBB.
     <FlyControls
       movementSpeed={1.4}
       rollSpeed={0.6}
@@ -1102,12 +1400,14 @@ const houseSceneData = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function LimbPinHandle({
   pin,
-  pelvisThree,
+  anchors,
+  heading,
   offset,
   onDrag,
 }: {
   pin: (typeof G1_INTERACTIVE_PINS)[number];
-  pelvisThree: [number, number, number];
+  anchors: RobotAnchors;
+  heading: [number, number];
   offset: [number, number, number] | null;
   onDrag: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
 }) {
@@ -1115,15 +1415,37 @@ function LimbPinHandle({
   const startPointerRef = useRef<[number, number]>([0, 0]);
   const startOffsetRef = useRef<[number, number, number]>([0, 0, 0]);
 
-  const basePos: [number, number, number] = [
-    pelvisThree[0] + pin.nominalOffset[0],
-    pelvisThree[1] + pin.nominalOffset[1],
-    pelvisThree[2] + pin.nominalOffset[2],
-  ];
+  const anchor =
+    pin.id === "head"
+      ? anchors.headCrown
+      : pin.id === "pelvis"
+        ? anchors.pelvis
+        : pin.id === "leftHand"
+          ? anchors.leftHand
+          : pin.id === "rightHand"
+            ? anchors.rightHand
+            : pin.id === "leftFoot"
+              ? anchors.leftFoot
+              : anchors.rightFoot;
+  // Rest pose: on the live link, pushed outward along the standoff so the
+  // pin floats beside the shell. A second clamp against every body link
+  // guarantees the sphere is outside the robot even when a limb swings
+  // through the standoff direction mid-stride.
+  const restPos = clampSphereAgainstLinks(
+    limbPinRestPosition(anchor, heading, pin.standoff),
+    pin.radius,
+    anchors.links,
+    G1_BODY_LINK_RADIUS_METERS,
+  ).clamped;
 
   const currentPos: [number, number, number] = offset
-    ? [basePos[0] + offset[0], basePos[1] + offset[1], basePos[2] + offset[2]]
-    : basePos;
+    ? clampSphereAgainstLinks(
+        [restPos[0] + offset[0], restPos[1] + offset[1], restPos[2] + offset[2]],
+        pin.radius,
+        anchors.links,
+        G1_BODY_LINK_RADIUS_METERS,
+      ).clamped
+    : restPos;
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
@@ -1138,26 +1460,22 @@ function LimbPinHandle({
     const dx = e.point.x - startPointerRef.current[0];
     const dz = e.point.z - startPointerRef.current[1];
     const proposed: [number, number, number] = [
-      basePos[0] + startOffsetRef.current[0] + dx,
-      basePos[1],
-      basePos[2] + startOffsetRef.current[2] + dz,
+      restPos[0] + startOffsetRef.current[0] + dx,
+      restPos[1],
+      restPos[2] + startOffsetRef.current[2] + dz,
     ];
 
-    const { clamped, contact } = clampSphereAgainstHouse(
-      proposed,
-      pin.radius,
-      houseSceneData.obstacles,
-      0.02
-    );
+    const house = clampSphereAgainstHouse(proposed, pin.radius, houseSceneData.obstacles, 0.02);
+    const body = clampSphereAgainstLinks(house.clamped, pin.radius, anchors.links, G1_BODY_LINK_RADIUS_METERS);
 
-    if (contact) {
+    if (house.contact || body.overlapped) {
       robotAudio.playCollisionBump(0.03);
     }
 
     onDrag(pin.id, [
-      clamped[0] - basePos[0],
-      clamped[1] - basePos[1],
-      clamped[2] - basePos[2],
+      body.clamped[0] - restPos[0],
+      body.clamped[1] - restPos[1],
+      body.clamped[2] - restPos[2],
     ]);
   };
 
@@ -1179,8 +1497,8 @@ function LimbPinHandle({
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
       )}
-      <mesh onPointerDown={handlePointerDown} castShadow>
-        <sphereGeometry args={[pin.radius, 16, 16]} />
+      <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[pin.radius * 0.75, 0.008, 8, 20]} />
         <meshStandardMaterial
           color={isDragging ? "#f59e0b" : pin.color}
           emissive={isDragging ? "#d97706" : pin.color}
@@ -1195,6 +1513,8 @@ function LimbPinHandle({
 
 function RagdollDragger({
   pelvisThree,
+  anchors,
+  heading,
   dragOffset,
   dragMode = "pelvis",
   limbOffsets = {},
@@ -1203,6 +1523,9 @@ function RagdollDragger({
   onCollisionChange,
 }: {
   pelvisThree: [number, number, number];
+  /** Live world-space anchors of the rendered robot; null before a trace exists. */
+  anchors: RobotAnchors | null;
+  heading: [number, number];
   dragOffset: [number, number, number] | null;
   dragMode?: "pelvis" | "limbs";
   limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
@@ -1270,10 +1593,19 @@ function RagdollDragger({
         </mesh>
       )}
 
-      {/* Holographic Ragdoll Grab Pin / Handle above Robot */}
-      <group position={[currentPos[0], currentPos[1] + 0.38, currentPos[2]]}>
-        <mesh onPointerDown={handlePointerDown} castShadow>
-          <sphereGeometry args={[0.075, 16, 16]} />
+      {/* Holographic Ragdoll Grab Pin / Handle floating above the head.
+          The handle centre sits one sphere radius plus a visible gap above
+          the head crown, so it never intersects the robot; the stalk drops
+          from the handle to the crown. */}
+      <group
+        position={
+          anchors
+            ? [anchors.headCrown[0], anchors.headCrown[1] + 0.2, anchors.headCrown[2]]
+            : [currentPos[0], currentPos[1] + 1.05, currentPos[2]]
+        }
+      >
+        <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.075, 0.012, 12, 28]} />
           <meshStandardMaterial
             color={lastColliding ? "#f43f5e" : isDragging ? "#f59e0b" : "#38bdf8"}
             emissive={lastColliding ? "#be123c" : isDragging ? "#d97706" : "#0284c7"}
@@ -1282,8 +1614,8 @@ function RagdollDragger({
             metalness={0.8}
           />
         </mesh>
-        <mesh position={[0, -0.16, 0]}>
-          <cylinderGeometry args={[0.008, 0.008, 0.3, 8]} />
+        <mesh position={[0, -0.1, 0]}>
+          <cylinderGeometry args={[0.008, 0.008, 0.16, 8]} />
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
         </mesh>
       </group>
@@ -1303,13 +1635,14 @@ function RagdollDragger({
       </mesh>
 
       {/* Multi-Limb Ragdoll IK Interactive Pins */}
-      {dragMode === "limbs" && onLimbDragChange && (
+      {dragMode === "limbs" && onLimbDragChange && anchors && (
         <group>
           {G1_INTERACTIVE_PINS.map((pin) => (
             <LimbPinHandle
               key={pin.id}
               pin={pin}
-              pelvisThree={currentPos}
+              anchors={anchors}
+              heading={heading}
               offset={limbOffsets[pin.id] || null}
               onDrag={onLimbDragChange}
             />
@@ -1373,13 +1706,35 @@ function RobotStage({
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.0, 0.75, 0.0] as [number, number, number]);
-  const displayedPelvisThree: [number, number, number] = robotDragOffset
-    ? [
-        pelvisThree[0] + robotDragOffset[0],
-        pelvisThree[1] + robotDragOffset[1],
-        pelvisThree[2] + robotDragOffset[2],
-      ]
-    : pelvisThree;
+  // The same world-space projection RobotPlayback draws, so handles, pins,
+  // the debug ring, and the camera all track the mesh the viewer sees.
+  const anchors = useMemo(
+    () =>
+      sample
+        ? computeRobotAnchors(
+            projectSampleAgainstHouse(
+              sample,
+              trace && sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
+              robotDragOffset ?? null,
+            ),
+            robotDragOffset ?? null,
+          )
+        : null,
+    [sample, trace, sampleIndex, robotDragOffset],
+  );
+  const heading = useMemo<[number, number]>(
+    () => (trace ? robotHeading(trace, sampleIndex) : [1, 0]),
+    [trace, sampleIndex],
+  );
+  const displayedPelvisThree: [number, number, number] = anchors
+    ? anchors.pelvis
+    : robotDragOffset
+      ? [
+          pelvisThree[0] + robotDragOffset[0],
+          pelvisThree[1] + robotDragOffset[1],
+          pelvisThree[2] + robotDragOffset[2],
+        ]
+      : pelvisThree;
 
   const bgColor = timeOfDay === "golden-hour" ? "#1e1308" : timeOfDay === "evening-glow" ? "#070b14" : "#0f172a";
 
@@ -1438,6 +1793,8 @@ function RobotStage({
 
       <RagdollDragger
         pelvisThree={pelvisThree}
+        anchors={anchors}
+        heading={heading}
         dragOffset={robotDragOffset ?? null}
         dragMode={dragMode}
         limbOffsets={limbOffsets}
@@ -1446,7 +1803,14 @@ function RobotStage({
         onCollisionChange={onDragCollisionChange ?? (() => {})}
       />
 
-      <CameraRig cameraView={cameraView} activeRoom={activeRoom} pelvisThree={displayedPelvisThree} />
+      <CameraRig
+        cameraView={cameraView}
+        activeRoom={activeRoom}
+        pelvisThree={displayedPelvisThree}
+        heading={heading}
+        obstacles={houseSceneData.obstacles}
+        hasRobot={Boolean(trace && robotDragOffset)}
+      />
 
       <G1PhysicsDebugOverlay
         enabled={physicsDebug}
@@ -1598,11 +1962,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       `Previewing a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. The owner rollout, controller, HOCBF result, and receipt are unchanged.`,
     );
   }, [pushAngleDeg, pushImpulseNs]);
-  // Spawn-safe: enclose every owner link center plus a conservative 12 cm
-  // body shell in one pelvis-centered sphere, then seed the display offset at
-  // a house position where that entire sphere clears every rigid obstacle.
-  // This is deliberately stronger than checking only the 32 cm interactive
-  // drag proxy.
+  // Spawn-safe: the robot walks about two metres after it appears, so the
+  // seat is chosen for the WHOLE rendered trajectory, not just the first
+  // frame. Every link centre of every (sub-sampled) trace sample must keep
+  // link-radius-plus-margin clearance from every rigid OBB, walls
+  // included, at the candidate offset. Candidates are tried nearest the
+  // living room first so the robot appears where the default camera and
+  // room chip expect it.
   // Async-defer the setState so the effect body does not fire a
   // synchronous setState inside another effect (react-hooks).
   useEffect(() => {
@@ -1613,22 +1979,31 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     if (!pelvisPose) return;
     let cancelled = false;
     const pelvis = ownerToThree(pelvisPose.position);
-    const linkPositions = firstSample.linkPoses.map((linkPose) =>
-      ownerToThree(linkPose.position),
-    );
-    // findClearSpawnPosition evaluates at its declared 0.75 m pelvis height,
-    // so center the enclosing sphere at that exact search height.
-    const spawnRadius = enclosingSpawnRadius(
-      [pelvis[0], 0.75, pelvis[2]],
-      linkPositions,
-      0.12,
-      0.35,
-    );
-    const safe = findClearSpawnPosition(houseSceneData.obstacles, spawnRadius);
+    const stride = Math.max(1, Math.ceil(trace.samples.length / 48));
+    const footprint: [number, number, number][] = [];
+    for (let index = 0; index < trace.samples.length; index += stride) {
+      for (const linkPose of trace.samples[index].linkPoses) {
+        const p = ownerToThree(linkPose.position);
+        footprint.push([p[0] - pelvis[0], p[1], p[2] - pelvis[2]]);
+      }
+    }
+    const lastPelvis = ownerToThree(trace.samples[trace.samples.length - 1].linkPoses[0].position);
+    const walkX = lastPelvis[0] - pelvis[0];
+    const walkZ = lastPelvis[2] - pelvis[2];
+    const livingRoom = CRAFTSMAN_BUNGALOW_1928.rooms.find((room) => room.name === "living room");
+    const anchor: [number, number] = livingRoom
+      ? [livingRoom.center[0] - walkX / 2, livingRoom.center[1] - walkZ / 2]
+      : [-walkX / 2, -walkZ / 2];
+    const seat = findClearTrajectorySpawnOffset(houseSceneData.obstacles, {
+      footprint,
+      clearance: G1_LINK_CLEARANCE_METERS + 0.06,
+      anchor,
+      step: 0.25,
+    });
     const safeOffset: [number, number, number] = [
-      safe[0] - pelvis[0],
+      seat.offset[0] - pelvis[0],
       0,
-      safe[2] - pelvis[2],
+      seat.offset[2] - pelvis[2],
     ];
     Promise.resolve().then(() => {
       if (cancelled) return;
@@ -1643,8 +2018,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     obstacleName: string | null;
     clearance: number;
   }>({ isColliding: false, obstacleName: null, clearance: 1.0 });
+  const [userHasDragged, setUserHasDragged] = useState(false);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
+
+  const handleRobotDragChange = useCallback((offset: [number, number, number] | null) => {
+    setRobotDragOffset(offset);
+    if (offset !== null) setUserHasDragged(true);
+  }, []);
 
   const handleLimbDrag = useCallback((pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => {
     setLimbOffsets((prev) => ({
@@ -2150,7 +2531,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </button>
 
               {/* Drag Status & Contact Safety Readout */}
-              {robotDragOffset || Object.keys(limbOffsets).length > 0 ? (
+              {(userHasDragged && robotDragOffset) || Object.keys(limbOffsets).length > 0 ? (
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                   <span
                     className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
@@ -2168,6 +2549,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                     onClick={() => {
                       setRobotDragOffset(null);
                       setLimbOffsets({});
+                      setUserHasDragged(false);
                     }}
                     className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
                     title="Reset robot and limbs to nominal position"
@@ -2320,7 +2702,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   robotDragOffset={robotDragOffset}
                   dragMode={dragMode}
                   limbOffsets={limbOffsets}
-                  onRobotDragChange={setRobotDragOffset}
+                  onRobotDragChange={handleRobotDragChange}
                   onLimbDragChange={handleLimbDrag}
                   onDragCollisionChange={setDragCollisionState}
                 />

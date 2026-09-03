@@ -6,6 +6,9 @@ import {
   computeImpulseResponse,
   G1_KINEMATICS,
   G1_INTERACTIVE_PINS,
+  G1_BODY_LINK_RADIUS_METERS,
+  clampSphereAgainstLinks,
+  limbPinRestPosition,
 } from "../../app/lib/humanoidRagdollIk";
 import { createSceneFromHouseFurniture } from "../../app/lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../../app/lib/houseScenes";
@@ -107,5 +110,53 @@ describe("clampSphereAgainstHouse — yawed OBB regression (cmaes-pvz followup)"
     // The Y coordinate must have been updated (the chair is tall enough
     // to push the sphere above the original Y).
     expect(clamped[1]).toBeGreaterThan(sphere[1]);
+  });
+});
+
+describe("interactive pins never overlap the humanoid (sphere-inside-robot regression)", () => {
+  const heading: [number, number] = [1, 0];
+  const links: [number, number, number][] = [
+    [0, 0.77, 0],
+    [0, 1.0, 0],
+    [0, 0.45, 0.1],
+    [0, 0.45, -0.1],
+    [0.02, 0.05, 0.1],
+    [0.02, 0.05, -0.1],
+  ];
+
+  test("every rest standoff places the pin at least one link radius plus one pin radius from every link", () => {
+    for (const pin of G1_INTERACTIVE_PINS) {
+      const anchor = links[0];
+      const rest = limbPinRestPosition(anchor, heading, pin.standoff);
+      const { clamped, overlapped } = clampSphereAgainstLinks(rest, pin.radius, links, G1_BODY_LINK_RADIUS_METERS);
+      for (const link of links) {
+        const d = Math.hypot(clamped[0] - link[0], clamped[1] - link[1], clamped[2] - link[2]);
+        expect(d, `${pin.id} vs link ${JSON.stringify(link)}`).toBeGreaterThanOrEqual(
+          pin.radius + G1_BODY_LINK_RADIUS_METERS,
+        );
+      }
+      // Standoffs are authored so that the pelvis-anchored rest pose is already
+      // clear; only the lateral hand pins need a nudge from the clamp.
+      if (pin.id === "pelvis" || pin.id === "head") expect(overlapped).toBe(false);
+    }
+  });
+
+  test("a pin dragged into the torso is pushed back out along the shortest exit", () => {
+    const inside: [number, number, number] = [0.02, 0.8, 0.01];
+    const { clamped, overlapped } = clampSphereAgainstLinks(inside, 0.05, links, G1_BODY_LINK_RADIUS_METERS);
+    expect(overlapped).toBe(true);
+    for (const link of links) {
+      const d = Math.hypot(clamped[0] - link[0], clamped[1] - link[1], clamped[2] - link[2]);
+      expect(d).toBeGreaterThanOrEqual(0.05 + G1_BODY_LINK_RADIUS_METERS);
+    }
+  });
+
+  test("heading-frame standoff rotates with the robot", () => {
+    const behind = limbPinRestPosition([0, 0.77, 0], [0, 1], [-0.3, 0, 0]);
+    expect(behind[0]).toBeCloseTo(0, 6);
+    expect(behind[2]).toBeCloseTo(-0.3, 6);
+    const left = limbPinRestPosition([0, 0.77, 0], [1, 0], [0, 0, 0.2]);
+    // Lateral-left of +X heading in a Y-up right-handed frame is -Z.
+    expect(left[2]).toBeCloseTo(-0.2, 6);
   });
 });

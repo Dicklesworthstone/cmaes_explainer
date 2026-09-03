@@ -60,20 +60,205 @@ export function findClearSpawnPosition(
   }
   // Coarse grid search: the room interior is only a few square meters; a
   // 0.3 m step is plenty. The first cleared point wins.
-  for (let z = bounds.maxZ; z >= bounds.minZ; z -= 0.3) {
-    for (let x = bounds.minX; x <= bounds.maxX; x += 0.3) {
-      const { clampedPosition, isColliding } = clampPositionAgainstHouseCollisions(
-        [x, 0.75, z],
-        obstacles,
-        safeRadius,
-        bounds,
-      );
-      if (!isColliding) {
-        return clampedPosition;
+  //
+  // The sample itself is what gets returned, never a clamped/projected
+  // variant of it. The previous implementation returned the push-out
+  // result of clampPositionAgainstHouseCollisions, whose OBB projection is
+  // fully 3D and escapes short furniture through its +Y face; callers
+  // then dropped Y and placed the robot on top of (and therefore inside)
+  // the sofa. Verifying the raw sample keeps the clearance proof honest.
+  for (let z = bounds.maxZ - safeRadius; z >= bounds.minZ + safeRadius; z -= 0.3) {
+    for (let x = bounds.minX + safeRadius; x <= bounds.maxX - safeRadius; x += 0.3) {
+      const candidate: [number, number, number] = [x, 0.75, z];
+      if (isSphereClearOfRigidObstacles(candidate, safeRadius, obstacles)) {
+        return candidate;
       }
     }
   }
   throw new Error("no collision-free robot spawn exists inside the declared bounds");
+}
+
+/** True when a sphere at `center` keeps `radius` clearance from every rigid OBB. */
+export function isSphereClearOfRigidObstacles(
+  center: [number, number, number],
+  radius: number,
+  obstacles: readonly OrientedBoundingBox[],
+): boolean {
+  for (const obb of obstacles) {
+    if (obb.exemptFromPenalty) continue;
+    if (distanceToOBB(center, obb) < radius) return false;
+  }
+  return true;
+}
+
+export interface TrajectorySpawnSearch {
+  /**
+   * Every point the robot occupies over the whole rendered trajectory,
+   * expressed relative to the reference pelvis in the horizontal plane
+   * (x, z) with absolute height y. Translating the robot by an offset
+   * translates every one of these points by the same (dx, 0, dz).
+   */
+  footprint: readonly [number, number, number][];
+  /** Required clearance from every rigid OBB surface for every point. */
+  clearance: number;
+  /** Preferred horizontal location (x, z) for the reference pelvis. */
+  anchor: [number, number];
+  bounds?: { minX: number; maxX: number; minZ: number; maxZ: number };
+  /** Horizontal grid resolution in meters. */
+  step?: number;
+}
+
+export interface TrajectorySpawnResult {
+  /** Horizontal translation to apply to the reference pelvis. */
+  offset: [number, number, number];
+  /** Reference pelvis position after translation. */
+  pelvis: [number, number];
+  /** Smallest clearance any footprint point keeps from any rigid OBB. */
+  minClearance: number;
+  candidatesTested: number;
+}
+
+/**
+ * Find a horizontal translation that keeps the ENTIRE walking trajectory
+ * clear of every rigid house obstacle, preferring the candidate nearest
+ * the anchor. A first-frame envelope is not sufficient for a walking
+ * robot: the G1 covers about two meters after spawn, so every sampled
+ * link position along the trace participates in the proof.
+ *
+ * Search order is by anchor distance, so the first feasible candidate is
+ * the closest one. Each candidate rejects on the first violating point,
+ * which keeps the search cheap even with ~1000 footprint points.
+ */
+export function findClearTrajectorySpawnOffset(
+  obstacles: readonly OrientedBoundingBox[],
+  search: TrajectorySpawnSearch,
+): TrajectorySpawnResult {
+  const { footprint, clearance, anchor } = search;
+  const step = search.step ?? 0.25;
+  const bounds = search.bounds ?? {
+    minX: CRAFTSMAN_BUNGALOW_1928.bounds.min[0],
+    maxX: CRAFTSMAN_BUNGALOW_1928.bounds.max[0],
+    minZ: CRAFTSMAN_BUNGALOW_1928.bounds.min[1],
+    maxZ: CRAFTSMAN_BUNGALOW_1928.bounds.max[1],
+  };
+  if (footprint.length === 0 || footprint.some((p) => !p.every(Number.isFinite))) {
+    throw new Error("trajectory spawn search requires a finite, non-empty footprint");
+  }
+  if (!Number.isFinite(clearance) || clearance < 0) {
+    throw new Error("trajectory spawn clearance must be finite and non-negative");
+  }
+  if (!Number.isFinite(step) || step <= 0) {
+    throw new Error("trajectory spawn step must be finite and positive");
+  }
+  if (!anchor.every(Number.isFinite)) {
+    throw new Error("trajectory spawn anchor must be finite");
+  }
+  const rigid = obstacles.filter((obb) => !obb.exemptFromPenalty);
+  const candidates: Array<{ x: number; z: number; d: number }> = [];
+  for (let z = bounds.minZ; z <= bounds.maxZ + 1e-9; z += step) {
+    for (let x = bounds.minX; x <= bounds.maxX + 1e-9; x += step) {
+      candidates.push({ x, z, d: Math.hypot(x - anchor[0], z - anchor[1]) });
+    }
+  }
+  candidates.sort((a, b) => a.d - b.d);
+
+  let tested = 0;
+  for (const candidate of candidates) {
+    tested += 1;
+    let minClearance = Number.POSITIVE_INFINITY;
+    let feasible = true;
+    for (const point of footprint) {
+      const px = point[0] + candidate.x;
+      const pz = point[2] + candidate.z;
+      if (
+        px - clearance < bounds.minX ||
+        px + clearance > bounds.maxX ||
+        pz - clearance < bounds.minZ ||
+        pz + clearance > bounds.maxZ
+      ) {
+        feasible = false;
+        break;
+      }
+      const world: [number, number, number] = [px, point[1], pz];
+      for (const obb of rigid) {
+        const d = distanceToOBB(world, obb);
+        if (d < clearance) {
+          feasible = false;
+          break;
+        }
+        if (d < minClearance) minClearance = d;
+      }
+      if (!feasible) break;
+    }
+    if (feasible) {
+      return {
+        offset: [candidate.x, 0, candidate.z],
+        pelvis: [candidate.x, candidate.z],
+        minClearance,
+        candidatesTested: tested,
+      };
+    }
+  }
+  throw new Error(
+    `no spawn offset keeps the full trajectory ${clearance.toFixed(3)} m clear of every rigid obstacle`,
+  );
+}
+
+export interface CameraBoomResult {
+  /** Farthest point along the boom that a `radius` sphere reaches unblocked. */
+  position: [number, number, number];
+  /** Fraction of the requested boom length that was achievable, in [0, 1]. */
+  fraction: number;
+  blockedBy: string | null;
+}
+
+/**
+ * Sweep a sphere of `radius` from `lookAt` toward `desired` against every
+ * rigid OBB (walls included) and return the farthest reachable point. A
+ * camera placed there sees the subject without a wall or a sofa between
+ * them. The boom is shortened by `pullback` from the entry point so the
+ * near plane does not clip the blocking surface.
+ */
+export function resolveCameraBoom(
+  lookAt: [number, number, number],
+  desired: [number, number, number],
+  obstacles: readonly OrientedBoundingBox[],
+  radius = 0.12,
+  pullback = 0.08,
+): CameraBoomResult {
+  const dx = desired[0] - lookAt[0];
+  const dy = desired[1] - lookAt[1];
+  const dz = desired[2] - lookAt[2];
+  const length = Math.hypot(dx, dy, dz);
+  if (!(length > 1e-6)) {
+    return { position: [...desired], fraction: 1, blockedBy: null };
+  }
+  let bestFraction = 1;
+  let blockedBy: string | null = null;
+  for (const obb of obstacles) {
+    if (obb.exemptFromPenalty) continue;
+    // Skip OBBs that already contain the look-at point (the subject is
+    // inside them); sweeping out of a containing box is meaningless.
+    if (distanceToOBB(lookAt, obb) < 0) continue;
+    const hit = sweptSphereOBBEntryPoint(lookAt, desired, radius, obb, 0.02);
+    if (hit.wasHit && hit.entryPoint) {
+      const reach = Math.hypot(
+        hit.entryPoint[0] - lookAt[0],
+        hit.entryPoint[1] - lookAt[1],
+        hit.entryPoint[2] - lookAt[2],
+      );
+      const fraction = Math.max(0, (reach - pullback) / length);
+      if (fraction < bestFraction) {
+        bestFraction = fraction;
+        blockedBy = obb.name;
+      }
+    }
+  }
+  return {
+    position: [lookAt[0] + dx * bestFraction, lookAt[1] + dy * bestFraction, lookAt[2] + dz * bestFraction],
+    fraction: bestFraction,
+    blockedBy,
+  };
 }
 // Multi-Obstacle Household Scene & Furniture Collision Kernel (cmaes-u53 / cmaes-4vs / cmaes-1yu).
 //
