@@ -204,7 +204,9 @@ struct FrankenRobotsView: View {
         VStack(spacing: 10) {
             stage
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if showFactStrip {
+            if !engine.metrics.isEmpty {
+                liveMetricStrip
+            } else if showFactStrip {
                 HStack(spacing: 8) {
                     ForEach(Array(lab.facts.prefix(3).enumerated()), id: \.offset) { _, fact in
                         VStack(alignment: .leading, spacing: 2) {
@@ -315,6 +317,8 @@ struct FrankenRobotsView: View {
 
                     guideContent
 
+                    liveRunMonitor
+
                     Divider().overlay(RobotTheme.stroke)
                     engineBoundary
                 }
@@ -322,6 +326,106 @@ struct FrankenRobotsView: View {
             }
             .scrollIndicators(.hidden)
         }
+    }
+
+    private var liveMetricStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(liveMetricItems.prefix(3)) { item in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.label.uppercased())
+                        .font(.system(size: RobotTheme.size(7.5), weight: .bold, design: .monospaced))
+                        .foregroundStyle(RobotTheme.secondary)
+                    Text(item.value)
+                        .font(.system(size: RobotTheme.size(11), weight: .bold, design: .rounded))
+                        .foregroundStyle(item.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(RobotTheme.panel.opacity(0.92), in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("robot-live-\(item.id)")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("robot-live-run-compact")
+    }
+
+    private var liveRunMonitor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("LIVE OWNER RUN", systemImage: "waveform.path.ecg")
+                    .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+                    .kerning(1.0)
+                    .foregroundStyle(lab.accent)
+                Spacer()
+                Text(statusLabel.uppercased())
+                    .font(.system(size: RobotTheme.size(7.5), weight: .bold, design: .monospaced))
+                    .foregroundStyle(statusColor)
+            }
+
+            if liveMetricItems.isEmpty {
+                Text("Waiting for a versioned owner status receipt…")
+                    .font(.system(size: RobotTheme.size(9.5), design: .rounded))
+                    .foregroundStyle(RobotTheme.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(liveMetricItems) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.label.uppercased())
+                                .font(.system(size: RobotTheme.size(7.2), weight: .bold, design: .monospaced))
+                                .foregroundStyle(RobotTheme.secondary)
+                            Text(item.value)
+                                .font(.system(size: RobotTheme.size(13), weight: .bold, design: .rounded))
+                                .foregroundStyle(item.accent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(RobotTheme.panelRaised.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("robot-live-\(item.id)")
+                    }
+                }
+            }
+
+            Text(engine.detail)
+                .font(.system(size: RobotTheme.size(8.8), design: .rounded))
+                .foregroundStyle(RobotTheme.secondary)
+                .lineSpacing(2)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("robot-live-run")
+    }
+
+    private var liveMetricItems: [LiveMetricItem] {
+        var items: [LiveMetricItem] = []
+        if let generation = engine.metrics.generation {
+            items.append(.init(id: "generation", label: "Generation", value: generation.formatted(), accent: lab.accent))
+        }
+        if let objective = engine.metrics.bestObjective {
+            items.append(.init(
+                id: "objective",
+                label: "Best objective ↓",
+                value: objective.formatted(.number.precision(.fractionLength(2))),
+                accent: RobotTheme.emerald
+            ))
+        }
+        if let steps = engine.metrics.completedSteps {
+            items.append(.init(id: "steps", label: "Owner steps", value: steps.formatted(), accent: RobotTheme.cyan))
+        }
+        if let placed = engine.metrics.placed {
+            items.append(.init(
+                id: "placed",
+                label: "Placed",
+                value: placed ? "Yes" : "Not yet",
+                accent: placed ? RobotTheme.emerald : RobotTheme.amber
+            ))
+        }
+        return items
     }
 
     @ViewBuilder
@@ -484,6 +588,13 @@ struct FrankenRobotsView: View {
         }
         .font(.system(size: RobotTheme.size(8.5), design: .monospaced))
     }
+}
+
+private struct LiveMetricItem: Identifiable {
+    let id: String
+    let label: String
+    let value: String
+    let accent: Color
 }
 
 private struct ProofLabelStyle: LabelStyle {

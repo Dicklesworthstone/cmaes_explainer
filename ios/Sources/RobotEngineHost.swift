@@ -1,6 +1,125 @@
 import SwiftUI
 import UIKit
 import WebKit
+import CoreFoundation
+
+struct RobotEngineMetrics: Equatable {
+    static let empty = RobotEngineMetrics()
+
+    var generation: Int?
+    var bestObjective: Double?
+    var completedSteps: Int?
+    var placed: Bool?
+
+    var isEmpty: Bool {
+        generation == nil && bestObjective == nil && completedSteps == nil && placed == nil
+    }
+
+    init(
+        generation: Int? = nil,
+        bestObjective: Double? = nil,
+        completedSteps: Int? = nil,
+        placed: Bool? = nil
+    ) {
+        self.generation = generation
+        self.bestObjective = bestObjective
+        self.completedSteps = completedSteps
+        self.placed = placed
+    }
+
+    init?(payload: [String: Any]) {
+        guard Self.hasValidOptionalNumber(payload, key: "generation"),
+              Self.hasValidOptionalNumber(payload, key: "bestObjective"),
+              Self.hasValidOptionalNumber(payload, key: "completedSteps"),
+              Self.hasValidOptionalBool(payload, key: "placed") else {
+            return nil
+        }
+
+        generation = Self.integer(payload["generation"])
+        bestObjective = Self.finiteDouble(payload["bestObjective"])
+        completedSteps = Self.integer(payload["completedSteps"])
+        placed = payload["placed"] as? Bool
+        guard generation.map({ $0 >= 0 }) ?? true,
+              completedSteps.map({ $0 >= 0 }) ?? true else {
+            return nil
+        }
+    }
+
+    private static func hasValidOptionalNumber(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        return finiteDouble(value) != nil
+    }
+
+    private static func hasValidOptionalBool(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        return value is Bool
+    }
+
+    private static func finiteDouble(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
+        let value = number.doubleValue
+        return value.isFinite ? value : nil
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let value = finiteDouble(value),
+              value.rounded(.towardZero) == value,
+              value >= Double(Int.min),
+              value <= Double(Int.max) else {
+            return nil
+        }
+        return Int(value)
+    }
+}
+
+struct RobotEngineStatusMessage {
+    static let schemaVersion = 1
+
+    let sequence: Int
+    let lab: RobotLab
+    let state: String
+    let detail: String
+    let metrics: RobotEngineMetrics
+
+    init?(payload: [String: Any]) {
+        guard payload["type"] as? String == "engine.status",
+              let schemaVersion = Self.integer(payload["schemaVersion"]),
+              schemaVersion == Self.schemaVersion,
+              let sequence = Self.integer(payload["sequence"]), sequence > 0,
+              let rawLab = payload["lab"] as? String,
+              let lab = RobotLab(rawValue: rawLab),
+              let state = payload["state"] as? String,
+              ["loading", "ready", "running", "failed"].contains(state),
+              let detail = payload["detail"] as? String, !detail.isEmpty,
+              let rawMetrics = payload["metrics"] as? [String: Any],
+              let metrics = RobotEngineMetrics(payload: rawMetrics) else {
+            return nil
+        }
+        self.sequence = sequence
+        self.lab = lab
+        self.state = state
+        self.detail = detail
+        self.metrics = metrics
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
+        let value = number.doubleValue
+        guard value.isFinite,
+              value.rounded(.towardZero) == value,
+              value >= Double(Int.min),
+              value <= Double(Int.max) else {
+            return nil
+        }
+        return Int(value)
+    }
+}
 
 enum RobotEnginePhase: Equatable {
     case starting
@@ -29,6 +148,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var frankenSimCommit = "not bundled"
     @Published private(set) var ownerKernelVersion = "not bundled"
     @Published private(set) var crossOriginIsolated = false
+    @Published private(set) var metrics = RobotEngineMetrics.empty
 
     let webView: WKWebView
 
@@ -37,6 +157,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var selectedLab: RobotLab = .humanoid
     private var activeNavigation: WKNavigation?
     private var readinessTimeoutTask: Task<Void, Never>?
+    private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
     override init() {
@@ -67,6 +188,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     func reload() {
+        resetBridgeState()
         if webView.url == nil {
             loadSelectedLab()
         } else {
@@ -101,6 +223,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
               let url = URL(string: selectedLab.route, relativeTo: baseURL)?.absoluteURL else {
             return
         }
+        resetBridgeState()
         phase = .loading
         detail = "Loading the \(selectedLab.title.lowercased()) lab…"
         activeNavigation = webView.load(
@@ -204,6 +327,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         // lab's loading or ready state.
         guard owns(navigation) else { return }
         readinessTimeoutTask?.cancel()
+        metrics = .empty
         phase = .failed(error.localizedDescription)
         detail = "The bundled engine did not load: \(error.localizedDescription)"
     }
@@ -229,32 +353,63 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "frankenrobots",
-              let payload = message.body as? [String: Any],
-              let type = payload["type"] as? String else {
+              let payload = message.body as? [String: Any] else {
             return
         }
-        if type == "engine.status",
-           let status = payload["detail"] as? String,
-           let state = payload["state"] as? String,
-           let reportedLab = payload["lab"] as? String,
-           reportedLab == selectedLab.rawValue {
-            detail = status
-            switch state {
-            case "loading":
-                phase = .loading
-            case "ready":
-                readinessTimeoutTask?.cancel()
-                phase = .ready
-            case "running":
-                readinessTimeoutTask?.cancel()
-                phase = .running
-            case "failed":
-                readinessTimeoutTask?.cancel()
-                phase = .failed(status)
-            default:
-                break
-            }
+
+        // Keep an already-installed pre-v1 Engine usable until the exact
+        // source-bound export is activated. Legacy events may move the coarse
+        // phase only; native metrics remain empty because they have no schema
+        // or ordering receipt.
+        if payload["schemaVersion"] == nil {
+            receiveLegacyStatus(payload)
+            return
         }
+
+        guard let event = RobotEngineStatusMessage(payload: payload),
+              event.lab == selectedLab,
+              event.sequence > lastBridgeSequence else { return }
+        lastBridgeSequence = event.sequence
+        detail = event.detail
+        metrics = event.metrics
+        apply(state: event.state, detail: event.detail)
+    }
+
+    private func receiveLegacyStatus(_ payload: [String: Any]) {
+        guard payload["type"] as? String == "engine.status",
+              payload["lab"] as? String == selectedLab.rawValue,
+              let state = payload["state"] as? String,
+              ["loading", "ready", "running", "failed"].contains(state),
+              let detail = payload["detail"] as? String, !detail.isEmpty else {
+            return
+        }
+        metrics = .empty
+        self.detail = detail
+        apply(state: state, detail: detail)
+    }
+
+    private func apply(state: String, detail: String) {
+        switch state {
+        case "loading":
+            phase = .loading
+        case "ready":
+            readinessTimeoutTask?.cancel()
+            phase = .ready
+        case "running":
+            readinessTimeoutTask?.cancel()
+            phase = .running
+        case "failed":
+            readinessTimeoutTask?.cancel()
+            metrics = .empty
+            phase = .failed(detail)
+        default:
+            break
+        }
+    }
+
+    private func resetBridgeState() {
+        lastBridgeSequence = 0
+        metrics = .empty
     }
 }
 

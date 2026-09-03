@@ -19,9 +19,11 @@ schemes:
     build:
       targets:
         FrankenRobots: all
+        FrankenRobotsTests: [test]
         FrankenRobotsUITests: [test]
     test:
       targets:
+        - FrankenRobotsTests
         - FrankenRobotsUITests
 
 targets:
@@ -74,5 +76,15 @@ targets:
         TEST_TARGET_NAME: FrankenRobots
     sources:
       - UITests
+    dependencies:
+      - target: FrankenRobots
+  FrankenRobotsTests:
+    type: bundle.unit-test
+    platform: iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+    sources:
+      - Tests
     dependencies:
       - target: FrankenRobots

@@ -1643,7 +1643,7 @@ export function HouseholdArmFlagship({
     reportFrankenRobotsEngineState("arm", bridgeState, status, {
       generation,
       bestObjective,
-      placed: trace?.placed ? "yes" : "no",
+      placed: trace?.placed ?? null,
     });
   }, [
     embedded,

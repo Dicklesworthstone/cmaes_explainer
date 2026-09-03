@@ -60,6 +60,10 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
+        let liveMetrics = app.descendants(matching: .any)["robot-live-run-compact"]
+        XCTAssertTrue(liveMetrics.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(app.descendants(matching: .any)["robot-live-objective"].exists)
+
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Robot Arm lab after native route switch"
         screenshot.lifetime = .keepAlways

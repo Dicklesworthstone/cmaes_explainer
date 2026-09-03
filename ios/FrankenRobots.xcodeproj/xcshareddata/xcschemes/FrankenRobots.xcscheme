@@ -29,6 +29,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "893B315081DD9CF79E2FC37C"
+               BuildableName = "FrankenRobotsTests.xctest"
+               BlueprintName = "FrankenRobotsTests"
+               ReferencedContainer = "container:FrankenRobots.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "26B7118BE7470E1999B61879"
                BuildableName = "FrankenRobotsUITests.xctest"
                BlueprintName = "FrankenRobotsUITests"
@@ -53,6 +67,17 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "893B315081DD9CF79E2FC37C"
+               BuildableName = "FrankenRobotsTests.xctest"
+               BlueprintName = "FrankenRobotsTests"
+               ReferencedContainer = "container:FrankenRobots.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">

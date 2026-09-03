@@ -15,11 +15,19 @@
 		58AE89D9C6ED9DDD76775FF7 /* Engine in Resources */ = {isa = PBXBuildFile; fileRef = 8D193AB01F83E76EBDF81D59 /* Engine */; };
 		605C245435339D236E9FAAC0 /* FrankenRobotsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB9E73BA2708172AED444FE /* FrankenRobotsView.swift */; };
 		78AD13B1BFAB4D05DA837431 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 55F760105392CAD6A6A0ABF9 /* Assets.xcassets */; };
+		9C7E329C09A71E7661D50329 /* RobotEngineBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4524F0EB89C817A72A4A76B8 /* RobotEngineBridgeTests.swift */; };
 		C249F6A786D388EBCBFB3102 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF49184D60282B71C87B7C1 /* Theme.swift */; };
 		D01BF10BBBFF7521941DB65B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		30823B3CD8C61483A4B71DEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D7D0167FB604D6EC9804356F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0FD63185EB5AE17F09A1D4D4;
+			remoteInfo = FrankenRobots;
+		};
 		BD3E149B33EA9B79AA86CCE8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = D7D0167FB604D6EC9804356F /* Project object */;
@@ -33,6 +41,8 @@
 		0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		35482C39F7D2C483B1894ADF /* FrankenRobotsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsApp.swift; sourceTree = "<group>"; };
 		3F2286162C1E78BE8600189E /* RobotLab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotLab.swift; sourceTree = "<group>"; };
+		4524F0EB89C817A72A4A76B8 /* RobotEngineBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotEngineBridgeTests.swift; sourceTree = "<group>"; };
+		4B4A8963D299AC8FB8D07C58 /* FrankenRobotsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FrankenRobotsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		55F760105392CAD6A6A0ABF9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		601522E0A57AE58C6133BB68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		668374A46370069A62881E62 /* FrankenRobotsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsUITests.swift; sourceTree = "<group>"; };
@@ -65,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				C2380CFF3A19BC339A6C1A78 /* FrankenRobots.app */,
+				4B4A8963D299AC8FB8D07C58 /* FrankenRobotsTests.xctest */,
 				C9F7D23C7D0EED3E8A43281C /* FrankenRobotsUITests.xctest */,
 			);
 			name = Products;
@@ -76,6 +87,7 @@
 				55F760105392CAD6A6A0ABF9 /* Assets.xcassets */,
 				8D193AB01F83E76EBDF81D59 /* Engine */,
 				30865DC116D4206761C8E568 /* Sources */,
+				E15063E4AD73099BFCB4EDBF /* Tests */,
 				BA4478E5A97FDFB6D2B123F1 /* UITests */,
 				33FF0C221A6CC3276A7E16E6 /* Products */,
 			);
@@ -87,6 +99,14 @@
 				668374A46370069A62881E62 /* FrankenRobotsUITests.swift */,
 			);
 			path = UITests;
+			sourceTree = "<group>";
+		};
+		E15063E4AD73099BFCB4EDBF /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				4524F0EB89C817A72A4A76B8 /* RobotEngineBridgeTests.swift */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -128,6 +148,24 @@
 			productReference = C9F7D23C7D0EED3E8A43281C /* FrankenRobotsUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		893B315081DD9CF79E2FC37C /* FrankenRobotsTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1A3376241887733D601946A /* Build configuration list for PBXNativeTarget "FrankenRobotsTests" */;
+			buildPhases = (
+				8FD01F8B110AF237F3BE2A2B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6B6B887717A5D3A10CA33430 /* PBXTargetDependency */,
+			);
+			name = FrankenRobotsTests;
+			packageProductDependencies = (
+			);
+			productName = FrankenRobotsTests;
+			productReference = 4B4A8963D299AC8FB8D07C58 /* FrankenRobotsTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -145,6 +183,10 @@
 						DevelopmentTeam = AU8V2Z6NKY;
 						ProvisioningStyle = Automatic;
 						TestTargetID = 0FD63185EB5AE17F09A1D4D4;
+					};
+					893B315081DD9CF79E2FC37C = {
+						DevelopmentTeam = AU8V2Z6NKY;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -164,6 +206,7 @@
 			targets = (
 				0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */,
 				26B7118BE7470E1999B61879 /* FrankenRobotsUITests */,
+				893B315081DD9CF79E2FC37C /* FrankenRobotsTests */,
 			);
 		};
 /* End PBXProject section */
@@ -182,6 +225,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		8FD01F8B110AF237F3BE2A2B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9C7E329C09A71E7661D50329 /* RobotEngineBridgeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B5DB1DC52B317D72423D825E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -210,6 +261,11 @@
 			isa = PBXTargetDependency;
 			target = 0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */;
 			targetProxy = BD3E149B33EA9B79AA86CCE8 /* PBXContainerItemProxy */;
+		};
+		6B6B887717A5D3A10CA33430 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0FD63185EB5AE17F09A1D4D4 /* FrankenRobots */;
+			targetProxy = 30823B3CD8C61483A4B71DEA /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -312,6 +368,40 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		9DE8B0C0BEB35D50AD66A37D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/FrankenRobots";
+			};
+			name = Debug;
+		};
+		A7E9AFD1D269D334C60A2FFC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/FrankenRobots";
+			};
+			name = Release;
 		};
 		D36B3BFB7880C0E69CE09A9B /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -427,6 +517,15 @@
 			buildConfigurations = (
 				DFF609C6BAF512DC5E4722ED /* Debug */,
 				096C3E77508D36076AD13725 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A1A3376241887733D601946A /* Build configuration list for PBXNativeTarget "FrankenRobotsTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9DE8B0C0BEB35D50AD66A37D /* Debug */,
+				A7E9AFD1D269D334C60A2FFC /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
