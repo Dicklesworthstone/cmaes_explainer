@@ -94,9 +94,10 @@ enum RobotLab: String, CaseIterable, Identifiable {
         case .humanoid:
             [
                 RobotGuideCard(
-                    title: "Whole-house challenge",
-                    metric: "7 rooms · 74 objects",
-                    detail: "Explore the complete 1928 Sears Craftsman estate, switch lighting, and inspect every room before returning to the live walk.",
+                    title: "Owner-guarded house",
+                    metric: "48 rigid keep-outs",
+                    detail: "The schema-8 owner receives nearby walls and furniture, terminates body penetration, " +
+                        "and reports the deepest intrusion in the native live receipt.",
                     symbol: "house.lodge.fill"
                 ),
                 RobotGuideCard(
@@ -155,6 +156,11 @@ enum RobotLab: String, CaseIterable, Identifiable {
                 ("Policy", "15 locomotion rows read 42 physical signals through eight gait-phase basis terms; all 5,040 weights remain searchable."),
                 ("Dynamics", "Frankensim integrates a free-floating whole-body model at a fixed 1/480 s step with real upper-body inertia and a disclosed arm reflex."),
                 ("Contact", "Four compliant patches per foot produce force, moment, support polygon, slip, impact, and contact-schedule telemetry."),
+                (
+                    "House guard",
+                    "The schema-8 owner scores 20 body colliders against 48 declared rigid keep-out boxes " +
+                        "and reports the deepest measured penetration."
+                ),
                 ("Objective", "Survival is lexicographically primary; work, slip, posture, impact, heading, lateral, speed, and terrain channels remain inspectable."),
                 ("Rendering", "The scene consumes the owner’s 30 world-frame link poses. It does not recompute the winning motion in Swift or JavaScript."),
             ]
@@ -177,6 +183,7 @@ enum RobotLab: String, CaseIterable, Identifiable {
                 "Distance, speed, work, slip, posture, and impact",
                 "Support time, contacts, terrain, push, and censored recovery",
                 "Joint-limit, heading, lateral, and contact-schedule integrals",
+                "Owner-measured maximum body penetration against declared house geometry",
                 "Live generation, sigma, objective, and owner-family comparison",
             ]
         case .arm:

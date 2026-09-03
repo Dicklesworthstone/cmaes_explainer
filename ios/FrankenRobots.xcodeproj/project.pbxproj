@@ -15,6 +15,7 @@
 		58AE89D9C6ED9DDD76775FF7 /* Engine in Resources */ = {isa = PBXBuildFile; fileRef = 8D193AB01F83E76EBDF81D59 /* Engine */; };
 		605C245435339D236E9FAAC0 /* FrankenRobotsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB9E73BA2708172AED444FE /* FrankenRobotsView.swift */; };
 		78AD13B1BFAB4D05DA837431 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 55F760105392CAD6A6A0ABF9 /* Assets.xcassets */; };
+		99869F5D7DAAD88BE6A8E1AB /* RobotReceiptDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576AB8A3BF5465383FDA30A0 /* RobotReceiptDocument.swift */; };
 		9C7E329C09A71E7661D50329 /* RobotEngineBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4524F0EB89C817A72A4A76B8 /* RobotEngineBridgeTests.swift */; };
 		C249F6A786D388EBCBFB3102 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF49184D60282B71C87B7C1 /* Theme.swift */; };
 		D01BF10BBBFF7521941DB65B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */; };
@@ -44,6 +45,7 @@
 		4524F0EB89C817A72A4A76B8 /* RobotEngineBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotEngineBridgeTests.swift; sourceTree = "<group>"; };
 		4B4A8963D299AC8FB8D07C58 /* FrankenRobotsTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = FrankenRobotsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		55F760105392CAD6A6A0ABF9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		576AB8A3BF5465383FDA30A0 /* RobotReceiptDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RobotReceiptDocument.swift; sourceTree = "<group>"; };
 		601522E0A57AE58C6133BB68 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		668374A46370069A62881E62 /* FrankenRobotsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrankenRobotsUITests.swift; sourceTree = "<group>"; };
 		6BF49184D60282B71C87B7C1 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -66,6 +68,7 @@
 				0208D53B86D67092184450D6 /* PrivacyInfo.xcprivacy */,
 				834FE83E0F30E47620B6440C /* RobotEngineHost.swift */,
 				3F2286162C1E78BE8600189E /* RobotLab.swift */,
+				576AB8A3BF5465383FDA30A0 /* RobotReceiptDocument.swift */,
 				6BF49184D60282B71C87B7C1 /* Theme.swift */,
 			);
 			path = Sources;
@@ -242,6 +245,7 @@
 				2705A20834A4E6CDF5858F1F /* LoopbackEngineServer.swift in Sources */,
 				18E4BEC3C20EC7BAFDC93650 /* RobotEngineHost.swift in Sources */,
 				2B605AE7E672C067B6EC92B9 /* RobotLab.swift in Sources */,
+				99869F5D7DAAD88BE6A8E1AB /* RobotReceiptDocument.swift in Sources */,
 				C249F6A786D388EBCBFB3102 /* Theme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

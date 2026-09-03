@@ -3,35 +3,53 @@ import UIKit
 import WebKit
 import CoreFoundation
 
-struct RobotEngineMetrics: Equatable {
+struct RobotEngineMetrics: Codable, Equatable {
     static let empty = RobotEngineMetrics()
 
     var generation: Int?
     var bestObjective: Double?
     var completedSteps: Int?
     var placed: Bool?
+    var bodyPenetrationMeters: Double?
+    var certifiedClearanceMeters: Double?
+    var collisionRiskIntegral: Double?
+    var possibleCollisionTimeSeconds: Double?
 
     var isEmpty: Bool {
-        generation == nil && bestObjective == nil && completedSteps == nil && placed == nil
+        generation == nil && bestObjective == nil && completedSteps == nil && placed == nil &&
+            bodyPenetrationMeters == nil && certifiedClearanceMeters == nil &&
+            collisionRiskIntegral == nil && possibleCollisionTimeSeconds == nil
     }
 
     init(
         generation: Int? = nil,
         bestObjective: Double? = nil,
         completedSteps: Int? = nil,
-        placed: Bool? = nil
+        placed: Bool? = nil,
+        bodyPenetrationMeters: Double? = nil,
+        certifiedClearanceMeters: Double? = nil,
+        collisionRiskIntegral: Double? = nil,
+        possibleCollisionTimeSeconds: Double? = nil
     ) {
         self.generation = generation
         self.bestObjective = bestObjective
         self.completedSteps = completedSteps
         self.placed = placed
+        self.bodyPenetrationMeters = bodyPenetrationMeters
+        self.certifiedClearanceMeters = certifiedClearanceMeters
+        self.collisionRiskIntegral = collisionRiskIntegral
+        self.possibleCollisionTimeSeconds = possibleCollisionTimeSeconds
     }
 
     init?(payload: [String: Any]) {
         guard Self.hasValidOptionalInteger(payload, key: "generation"),
               Self.hasValidOptionalNumber(payload, key: "bestObjective"),
               Self.hasValidOptionalInteger(payload, key: "completedSteps"),
-              Self.hasValidOptionalBool(payload, key: "placed") else {
+              Self.hasValidOptionalBool(payload, key: "placed"),
+              Self.hasValidOptionalNonnegativeNumber(payload, key: "bodyPenetrationMeters"),
+              Self.hasValidOptionalNonnegativeNumber(payload, key: "certifiedClearanceMeters"),
+              Self.hasValidOptionalNonnegativeNumber(payload, key: "collisionRiskIntegral"),
+              Self.hasValidOptionalNonnegativeNumber(payload, key: "possibleCollisionTimeSeconds") else {
             return nil
         }
 
@@ -39,6 +57,10 @@ struct RobotEngineMetrics: Equatable {
         bestObjective = Self.finiteDouble(payload["bestObjective"])
         completedSteps = Self.integer(payload["completedSteps"])
         placed = payload["placed"] as? Bool
+        bodyPenetrationMeters = Self.finiteDouble(payload["bodyPenetrationMeters"])
+        certifiedClearanceMeters = Self.finiteDouble(payload["certifiedClearanceMeters"])
+        collisionRiskIntegral = Self.finiteDouble(payload["collisionRiskIntegral"])
+        possibleCollisionTimeSeconds = Self.finiteDouble(payload["possibleCollisionTimeSeconds"])
         guard generation.map({ $0 >= 0 }) ?? true,
               completedSteps.map({ $0 >= 0 }) ?? true else {
             return nil
@@ -54,6 +76,12 @@ struct RobotEngineMetrics: Equatable {
     private static func hasValidOptionalNumber(_ payload: [String: Any], key: String) -> Bool {
         guard let value = payload[key], !(value is NSNull) else { return true }
         return finiteDouble(value) != nil
+    }
+
+    private static func hasValidOptionalNonnegativeNumber(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = finiteDouble(value) else { return false }
+        return value >= 0
     }
 
     private static func hasValidOptionalBool(_ payload: [String: Any], key: String) -> Bool {
@@ -317,6 +345,32 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
     }
 
+    func makeReceiptDocument() throws -> RobotReceiptDocument {
+        guard lastBridgeSequence > 0, !metrics.isEmpty else {
+            throw RobotReceiptExportError.noVersionedReceipt
+        }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        let receipt = RobotRunReceipt(
+            schemaVersion: RobotRunReceipt.schemaVersion,
+            exportedAt: Date(),
+            lab: selectedLab.rawValue,
+            engineState: phase.receiptState,
+            detail: detail,
+            bridgeSequence: lastBridgeSequence,
+            capabilities: supportsOptimize ? ["optimize"] : [],
+            metrics: metrics,
+            provenance: RobotReceiptProvenance(
+                appSourceCommit: readBundleText(named: "source-commit"),
+                frankenSimWorkspaceCommit: readBundleText(named: "frankensim-workspace-commit"),
+                ownerKernelVersion: ownerKernelVersion,
+                appVersion: version ?? "unrecorded",
+                appBuild: build ?? "unrecorded"
+            )
+        )
+        return try RobotReceiptDocument(receipt: receipt)
+    }
+
     private func start() async {
         phase = .starting
         detail = "Starting the private simulation engine…"
@@ -546,6 +600,18 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         commandTimeoutTask?.cancel()
         pendingCommandID = nil
         commandDetail = nil
+    }
+}
+
+private extension RobotEnginePhase {
+    var receiptState: String {
+        switch self {
+        case .starting: "starting"
+        case .loading: "loading"
+        case .running: "running"
+        case .ready: "ready"
+        case .failed: "failed"
+        }
     }
 }
 

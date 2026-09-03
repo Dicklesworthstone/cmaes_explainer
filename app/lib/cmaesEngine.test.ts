@@ -1235,6 +1235,12 @@ describe("G1 walking packet adapter", () => {
       "negative integral",
     );
 
+    const negativeBodyPenetration = evaluation.slice();
+    negativeBodyPenetration[28] = -0.001;
+    expect(() => decodeG1Evaluation(negativeBodyPenetration)).toThrow(
+      "negative integral",
+    );
+
     const population = decodeG1Population(
       new Float64Array([0x47315737, 8, 0, 4, 9, 3, 4, 3, 2]),
     );
@@ -1278,8 +1284,8 @@ describe("G1 walking packet adapter", () => {
       1,
       ...sample,
     ]);
-    // schema 8 added one receipt word, so the first sample's first
-            // quaternion component moved one slot later.
+    // Schema 8 added one receipt word, so the first sample's first
+    // quaternion component moved one slot later.
     nonUnitQuaternion[36] = 0.5;
     expect(() => decodeG1Trace(nonUnitQuaternion)).toThrow("link quaternion");
   });

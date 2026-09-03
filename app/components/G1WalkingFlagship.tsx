@@ -2442,6 +2442,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         generation,
         bestObjective,
         completedSteps: trace?.completedSteps ?? null,
+        bodyPenetrationMeters: trace?.maximumBodyPenetrationMeters ?? null,
       },
     );
   }, [embedded, workerAvailable, busy, trace, status, generation, bestObjective]);

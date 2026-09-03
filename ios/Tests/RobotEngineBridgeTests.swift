@@ -2,18 +2,53 @@ import XCTest
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testReceiptDocumentExportsVersionedOwnerFactsAndProvenance() throws {
+        let exportedAt = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-03T22:00:00Z"))
+        let receipt = RobotRunReceipt(
+            schemaVersion: RobotRunReceipt.schemaVersion,
+            exportedAt: exportedAt,
+            lab: "humanoid",
+            engineState: "ready",
+            detail: "Owner trace ready",
+            bridgeSequence: 9,
+            capabilities: ["optimize"],
+            metrics: RobotEngineMetrics(generation: 12, bodyPenetrationMeters: 0),
+            provenance: RobotReceiptProvenance(
+                appSourceCommit: "abc123",
+                frankenSimWorkspaceCommit: "def456",
+                ownerKernelVersion: "fs-cmaes-viz-wasm 0.6.15",
+                appVersion: "0.1.0",
+                appBuild: "1"
+            )
+        )
+
+        let document = try RobotReceiptDocument(receipt: receipt)
+        let decoded = try JSONDecoder.receiptDecoder.decode(RobotRunReceipt.self, from: document.data)
+
+        XCTAssertEqual(decoded, receipt)
+        XCTAssertTrue(try XCTUnwrap(String(data: document.data, encoding: .utf8)).hasSuffix("\n"))
+    }
+
     func testMetricsDecodeOwnerFacts() throws {
         let metrics = try XCTUnwrap(RobotEngineMetrics(payload: [
             "generation": 12,
             "bestObjective": 1.32,
             "completedSteps": 720,
             "placed": true,
+            "bodyPenetrationMeters": 0.0,
+            "certifiedClearanceMeters": 0.052,
+            "collisionRiskIntegral": 0.0,
+            "possibleCollisionTimeSeconds": 0.0
         ]))
 
         XCTAssertEqual(metrics.generation, 12)
         XCTAssertEqual(metrics.bestObjective, 1.32)
         XCTAssertEqual(metrics.completedSteps, 720)
         XCTAssertEqual(metrics.placed, true)
+        XCTAssertEqual(metrics.bodyPenetrationMeters, 0.0)
+        XCTAssertEqual(metrics.certifiedClearanceMeters, 0.052)
+        XCTAssertEqual(metrics.collisionRiskIntegral, 0.0)
+        XCTAssertEqual(metrics.possibleCollisionTimeSeconds, 0.0)
         XCTAssertFalse(metrics.isEmpty)
     }
 
@@ -23,6 +58,10 @@ final class RobotEngineBridgeTests: XCTestCase {
             "bestObjective": NSNull(),
             "completedSteps": NSNull(),
             "placed": NSNull(),
+            "bodyPenetrationMeters": NSNull(),
+            "certifiedClearanceMeters": NSNull(),
+            "collisionRiskIntegral": NSNull(),
+            "possibleCollisionTimeSeconds": NSNull()
         ]))
 
         XCTAssertEqual(metrics, .empty)
@@ -36,6 +75,10 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineMetrics(payload: ["completedSteps": -1]))
         XCTAssertNil(RobotEngineMetrics(payload: ["completedSteps": true]))
         XCTAssertNil(RobotEngineMetrics(payload: ["placed": "yes"]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["bodyPenetrationMeters": -0.001]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["certifiedClearanceMeters": Double.infinity]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["collisionRiskIntegral": true]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["possibleCollisionTimeSeconds": -1]))
     }
 
     func testStatusMessageRequiresCurrentSchemaAndPositiveSequence() throws {
@@ -111,8 +154,20 @@ final class RobotEngineBridgeTests: XCTestCase {
                 "bestObjective": 1.32,
                 "completedSteps": 720,
                 "placed": NSNull(),
+                "bodyPenetrationMeters": 0.0,
+                "certifiedClearanceMeters": NSNull(),
+                "collisionRiskIntegral": NSNull(),
+                "possibleCollisionTimeSeconds": NSNull()
             ],
             "capabilities": ["optimize"],
         ]
+    }
+}
+
+private extension JSONDecoder {
+    static var receiptDecoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
     }
 }

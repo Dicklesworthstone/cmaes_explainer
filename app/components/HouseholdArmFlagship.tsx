@@ -1864,6 +1864,9 @@ export function HouseholdArmFlagship({
       generation,
       bestObjective,
       placed: trace?.placed ?? null,
+      certifiedClearanceMeters: trace?.minimumCertifiedClearanceMeters ?? null,
+      collisionRiskIntegral: trace?.collisionRiskIntegral ?? null,
+      possibleCollisionTimeSeconds: trace?.possibleCollisionTimeSeconds ?? null,
     });
   }, [
     embedded,

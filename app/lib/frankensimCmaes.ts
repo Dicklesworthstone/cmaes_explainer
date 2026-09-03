@@ -2149,7 +2149,8 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     receipt.minimumBaseHeightMeters < 0 ||
     receipt.maximumTiltSine < 0 ||
     receipt.maximumTiltSine > 1 ||
-    receipt.maximumAbsoluteTerrainHeightMeters < 0
+    receipt.maximumAbsoluteTerrainHeightMeters < 0 ||
+    receipt.maximumBodyPenetrationMeters < 0
   ) {
     throw new Error("malformed G1 packet: negative integral");
   }

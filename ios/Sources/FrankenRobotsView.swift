@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct FrankenRobotsView: View {
     @AppStorage(RobotAppearance.storageKey) private var appearance = RobotAppearance.dark.rawValue
@@ -6,6 +7,9 @@ struct FrankenRobotsView: View {
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
     @State private var guidePage: RobotGuidePage = .lab
+    @State private var receiptDocument: RobotReceiptDocument?
+    @State private var showingReceiptExporter = false
+    @State private var receiptExportError: String?
 
     init() {
 #if DEBUG
@@ -60,6 +64,21 @@ struct FrankenRobotsView: View {
             engine.reload()
         }
         .preferredColorScheme((RobotAppearance(rawValue: appearance) ?? .dark).colorScheme)
+        .fileExporter(
+            isPresented: $showingReceiptExporter,
+            document: receiptDocument,
+            contentType: .json,
+            defaultFilename: "FrankenRobots-\(lab.rawValue)-receipt"
+        ) { result in
+            if case let .failure(error) = result {
+                receiptExportError = error.localizedDescription
+            }
+        }
+        .alert("Receipt export failed", isPresented: receiptExportErrorIsPresented) {
+            Button("OK") { receiptExportError = nil }
+        } message: {
+            Text(receiptExportError ?? "The receipt could not be exported.")
+        }
         .sheet(isPresented: $showingDetails) {
             NavigationStack {
                 inspector
@@ -121,7 +140,10 @@ struct FrankenRobotsView: View {
         .frame(minHeight: 38)
         .background(RobotTheme.statusBackground, in: Capsule())
         .overlay(Capsule().stroke(statusColor.opacity(0.30)))
-        .accessibilityElement(children: .combine)
+        // The animated ProgressView can remain in SwiftUI's accessibility
+        // cache after readiness changes. Expose one stable status element so
+        // Voice Control and UI automation never resolve a stale loading child.
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("robot-engine-status")
         .accessibilityLabel("Engine status: \(statusLabel)")
     }
@@ -193,39 +215,73 @@ struct FrankenRobotsView: View {
     }
 
     private var nativeCommandBar: some View {
-        HStack(spacing: 10) {
-            Label("NATIVE OWNER CONTROL", systemImage: "link.badge.plus")
-                .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
-                .foregroundStyle(RobotTheme.secondary)
-            Spacer(minLength: 8)
-            if let commandDetail = engine.commandDetail {
-                Text(commandDetail)
-                    .font(.system(size: RobotTheme.size(8.5), design: .rounded))
-                    .foregroundStyle(RobotTheme.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .accessibilityIdentifier("robot-native-command-detail")
+        Group {
+            if horizontalStatusHasRoom {
+                HStack(spacing: 10) {
+                    nativeCommandLabel(title: "NATIVE OWNER CONTROL")
+                    Spacer(minLength: 8)
+                    nativeCommandReceipt
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    nativeOptimizeButton
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 10) {
+                        nativeCommandLabel(title: "OWNER CONTROL")
+                        Spacer(minLength: 8)
+                        nativeOptimizeButton
+                    }
+                    nativeCommandReceipt
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Button {
-                engine.optimize()
-            } label: {
-                Label(
-                    engine.pendingCommandID == nil
-                        ? (engine.supportsOptimize ? "Optimize" : "Controls pending")
-                        : "Requesting…",
-                    systemImage: "sparkles"
-                )
-                    .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(lab.accent)
-            .disabled(engine.phase != .ready || !engine.supportsOptimize || engine.pendingCommandID != nil)
-            .accessibilityIdentifier("robot-native-optimize")
-            .accessibilityHint("Starts one acknowledged optimization request in the embedded owner engine")
         }
         .padding(.horizontal, 12)
+        .padding(.vertical, horizontalStatusHasRoom ? 0 : 8)
         .frame(minHeight: 44)
         .background(RobotTheme.panel.opacity(0.82), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func nativeCommandLabel(title: String) -> some View {
+        Label(title, systemImage: "link.badge.plus")
+            .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+            .foregroundStyle(RobotTheme.secondary)
+            .lineLimit(1)
+    }
+
+    private var nativeCommandReceipt: some View {
+        Text(
+            engine.commandDetail
+                ?? (engine.supportsOptimize
+                    ? "Ready to start an owner optimization run."
+                    : "Waiting for the embedded owner controls…")
+        )
+        .font(.system(size: RobotTheme.size(8.5), design: .rounded))
+        .foregroundStyle(RobotTheme.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("robot-native-command-detail")
+    }
+
+    private var nativeOptimizeButton: some View {
+        Button {
+            engine.optimize()
+        } label: {
+            Label(
+                engine.pendingCommandID == nil
+                    ? (engine.supportsOptimize ? "Optimize" : "Loading…")
+                    : "Sending…",
+                systemImage: "sparkles"
+            )
+                .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(lab.accent)
+        .disabled(engine.phase != .ready || !engine.supportsOptimize || engine.pendingCommandID != nil)
+        .accessibilityIdentifier("robot-native-optimize")
+        .accessibilityHint("Starts one acknowledged optimization request in the embedded owner engine")
     }
 
     private var wideLayout: some View {
@@ -398,6 +454,18 @@ struct FrankenRobotsView: View {
                     .kerning(1.0)
                     .foregroundStyle(lab.accent)
                 Spacer()
+                Button {
+                    exportReceipt()
+                } label: {
+                    Label("Export JSON", systemImage: "square.and.arrow.up")
+                        .font(.system(size: RobotTheme.size(7.5), weight: .bold, design: .monospaced))
+                }
+                .buttonStyle(.borderless)
+                .disabled(engine.metrics.isEmpty)
+                .accessibilityIdentifier("robot-export-receipt")
+                .accessibilityLabel("Export owner receipt as JSON")
+                .accessibilityHint("Includes the current live metrics and bundled engine provenance")
+                .help("Export the current versioned owner receipt as JSON")
                 Text(statusLabel.uppercased())
                     .font(.system(size: RobotTheme.size(7.5), weight: .bold, design: .monospaced))
                     .foregroundStyle(statusColor)
@@ -438,10 +506,31 @@ struct FrankenRobotsView: View {
         .accessibilityIdentifier("robot-live-run")
     }
 
+    private var receiptExportErrorIsPresented: Binding<Bool> {
+        Binding(
+            get: { receiptExportError != nil },
+            set: { if !$0 { receiptExportError = nil } }
+        )
+    }
+
+    private func exportReceipt() {
+        do {
+            receiptDocument = try engine.makeReceiptDocument()
+            showingReceiptExporter = true
+        } catch {
+            receiptExportError = error.localizedDescription
+        }
+    }
+
     private var liveMetricItems: [LiveMetricItem] {
         var items: [LiveMetricItem] = []
         if let generation = engine.metrics.generation {
-            items.append(.init(id: "generation", label: "Generation", value: generation.formatted(), accent: lab.accent))
+            items.append(.init(
+                id: "generation",
+                label: "Generation",
+                value: generation.formatted(),
+                accent: lab.accent
+            ))
         }
         if let objective = engine.metrics.bestObjective {
             items.append(.init(
@@ -449,6 +538,22 @@ struct FrankenRobotsView: View {
                 label: "Best objective ↓",
                 value: objective.formatted(.number.precision(.fractionLength(2))),
                 accent: RobotTheme.emerald
+            ))
+        }
+        if lab == .humanoid, let penetration = engine.metrics.bodyPenetrationMeters {
+            items.append(.init(
+                id: "body-penetration",
+                label: "Body intrusion",
+                value: (penetration * 100).formatted(.number.precision(.fractionLength(2))) + " cm",
+                accent: penetration == 0 ? RobotTheme.emerald : .red
+            ))
+        }
+        if lab == .arm, let clearance = engine.metrics.certifiedClearanceMeters {
+            items.append(.init(
+                id: "certified-clearance",
+                label: "Clearance",
+                value: (clearance * 100).formatted(.number.precision(.fractionLength(2))) + " cm",
+                accent: RobotTheme.cyan
             ))
         }
         if let steps = engine.metrics.completedSteps {
@@ -460,6 +565,22 @@ struct FrankenRobotsView: View {
                 label: "Placed",
                 value: placed ? "Yes" : "Not yet",
                 accent: placed ? RobotTheme.emerald : RobotTheme.amber
+            ))
+        }
+        if lab == .arm, let risk = engine.metrics.collisionRiskIntegral {
+            items.append(.init(
+                id: "collision-risk",
+                label: "Collision risk",
+                value: risk.formatted(.number.precision(.fractionLength(4))) + " m·s",
+                accent: risk == 0 ? RobotTheme.emerald : .red
+            ))
+        }
+        if lab == .arm, let possibleTime = engine.metrics.possibleCollisionTimeSeconds {
+            items.append(.init(
+                id: "possible-collision",
+                label: "Possible contact",
+                value: possibleTime.formatted(.number.precision(.fractionLength(3))) + " s",
+                accent: possibleTime == 0 ? RobotTheme.emerald : RobotTheme.amber
             ))
         }
         return items
