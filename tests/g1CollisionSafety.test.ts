@@ -34,30 +34,34 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();
 await ownerModule.default({ module_or_path: ownerBytes });
 
 const Evaluator = ownerModule.G1WalkingVizEvaluator;
-if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from v0613 WASM");
+if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from the shipped WASM");
 const evaluator = new Evaluator(
+  // Schema-8 walking config: eleven fixed words plus a keep-out box count.
+  // This suite pins the owner's own coordinate and safety envelope, so it
+  // declares no boxes; the browser's roster is covered separately.
   new Float64Array([
     0x47315737,
-    7,
+    8,
     0,
-    11,
+    12,
     1 / 480,
     1.5,
     0.65,
     1.55,
     12,
     2,
+    0,
     0,
   ]),
 );

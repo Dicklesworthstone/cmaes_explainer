@@ -1431,3 +1431,86 @@ export function householdKernelObstacleRoster(
     .map((entry) => entry.obb);
   return [...ARM_WORKBENCH_OBSTACLES, ...nearest].map(stageObbToKernelObstacle);
 }
+
+/**
+ * Conservative, policy-independent envelope of the G1 while it walks: a
+ * standing body column swept forward along the owner's +x walking axis.
+ *
+ * The seat has to be chosen BEFORE the first kernel call, because the walking
+ * owner now needs its keep-out boxes expressed relative to wherever the robot
+ * starts, and it cannot be told that after the fact. Deriving the seat from a
+ * returned trace would be circular. The sweep is generous against the
+ * measured curriculum displacement (~0.31 m over the full horizon), so a seat
+ * that clears this envelope clears any policy the browser can run.
+ */
+export function nominalG1WalkFootprint(): [number, number, number][] {
+  // Measured envelope of all 30 link origins, over every task/challenge
+  // combination and both canned policies, in the stage frame relative to the
+  // first pelvis: x in [-0.31, 0.67], y in [0.03, 1.08], z in [-0.58, 0.65].
+  //
+  // The lateral extreme is the SWUNG ARMS, not the body: shoulders are only
+  // 0.36 m across. Seating on the full arm span needs a 1.3 x 1.6 m clear
+  // rectangle, which the furnished 1928 living room simply does not have, so
+  // the robot would get pushed out into the hall. The seat therefore covers
+  // the torso-and-legs column plus a hand's margin, and the swung arms are
+  // left to the owner's own body-vs-obstacle guard, which now runs on every
+  // rollout and terminates on real penetration. Placement is a heuristic;
+  // the kernel is the safety net.
+  const points: [number, number, number][] = [];
+  for (let x = -0.45; x <= 0.85 + 1e-9; x += 0.15) {
+    for (const y of [0.05, 0.35, 0.7, 1.05]) {
+      for (let z = -0.42; z <= 0.42 + 1e-9; z += 0.14) {
+        points.push([x, y, z]);
+      }
+    }
+  }
+  return points;
+}
+
+/**
+ * The stage position where the rendered G1 stands, chosen once from the
+ * nominal walking envelope so it is known before any kernel rollout.
+ */
+export function g1SeatForHouse(
+  house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+  clearance = 0.16,
+): { offset: [number, number, number]; minClearance: number } {
+  const living = house.rooms.find((room) => room.name === "living room");
+  const anchor: [number, number] = living ? [living.center[0], living.center[1]] : [0, 0];
+  const seat = findClearTrajectorySpawnOffset(createHouseNavigationScene(house).obstacles, {
+    footprint: nominalG1WalkFootprint(),
+    clearance,
+    anchor,
+    step: 0.25,
+  });
+  return { offset: seat.offset, minClearance: seat.minClearance };
+}
+
+/**
+ * The keep-out roster handed to the walking owner: every rigid house body
+ * (walls included) expressed in the owner frame RELATIVE to the robot's seat,
+ * nearest-first and capped so the per-step sphere-box sweep stays cheap.
+ *
+ * The owner always starts its rollout at the origin, so an obstacle standing
+ * at stage position Q must be declared at Q minus the seat. Sending absolute
+ * house coordinates would place the whole bungalow one seat-offset away from
+ * the robot and the guard would never fire.
+ */
+export function g1KernelObstacleRoster(
+  seat: readonly [number, number, number],
+  limit = 48,
+  house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+): HouseholdKernelObstacle[] {
+  const pelvis: [number, number, number] = [seat[0], 0.75, seat[2]];
+  return createHouseNavigationScene(house)
+    .obstacles.filter((obb) => !obb.exemptFromPenalty)
+    .map((obb) => ({ obb, d: distanceToOBB(pelvis, obb) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, limit)
+    .map(({ obb }) =>
+      stageObbToKernelObstacle({
+        ...obb,
+        center: [obb.center[0] - seat[0], obb.center[1] - seat[1], obb.center[2] - seat[2]],
+      }),
+    );
+}

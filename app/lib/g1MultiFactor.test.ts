@@ -52,6 +52,7 @@ function buildReceipt(
     maximumAbsoluteTerrainHeightMeters: 0.05,
     completedSteps: 0,
     terminationReason: "horizon",
+    maximumBodyPenetrationMeters: 0,
     ...partial,
   };
 }

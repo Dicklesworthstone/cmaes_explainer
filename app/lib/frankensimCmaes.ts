@@ -975,7 +975,13 @@ const OWNER_CMA_KIND_SNAPSHOT = 4;
 const OWNER_CMA_SNAPSHOT_WORDS = 31;
 
 const G1_MAGIC = 0x47315737;
-const G1_SCHEMA = 7;
+// Schema 8 (owner 0.6.15): the walking config carries a variable-length
+// roster of keep-out boxes, and the receipt reports the deepest body
+// penetration the owner's obstacle guard measured.
+const G1_SCHEMA = 8;
+const G1_CONFIG_FIXED_WORDS = 12;
+const G1_OBSTACLE_WORDS = 7;
+export const G1_MAX_OBSTACLES = 64;
 const G1_KIND_CONFIG = 0;
 const G1_KIND_ADMISSION = 1;
 const G1_KIND_EVALUATION = 2;
@@ -1009,7 +1015,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.14";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.15";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1216,8 +1222,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -1775,6 +1781,11 @@ export interface G1WalkingConfig {
   targetSpeed: number;
   gaitFrequency: number;
   traceStride: number;
+  /**
+   * Solid keep-out boxes the body may not pass through, in the owner frame
+   * relative to the robot's start. At most G1_MAX_OBSTACLES.
+   */
+  obstacles?: readonly HouseholdKernelObstacle[];
 }
 
 export type G1Task = "balance" | "stepping" | "walking";
@@ -1840,6 +1851,8 @@ export interface G1ObjectiveReceipt {
   maximumAbsoluteTerrainHeightMeters: number;
   completedSteps: number;
   terminationReason: G1TerminationReason;
+  /** Deepest body-sphere penetration the owner's obstacle guard measured [m]. */
+  maximumBodyPenetrationMeters: number;
 }
 
 export type G1TerminationReason =
@@ -1849,7 +1862,9 @@ export type G1TerminationReason =
   | "contact indentation"
   | "contact speed"
   | "contact model"
-  | "joint position limit";
+  | "joint position limit"
+  // Schema 8: the body-vs-obstacle guard fired on a declared keep-out box.
+  | "body obstacle";
 
 const G1_TERMINATION_REASONS: readonly G1TerminationReason[] = [
   "horizon",
@@ -1859,6 +1874,7 @@ const G1_TERMINATION_REASONS: readonly G1TerminationReason[] = [
   "contact speed",
   "contact model",
   "joint position limit",
+  "body obstacle",
 ];
 
 export interface G1LinkPose {
@@ -1878,12 +1894,32 @@ export interface G1TraceReceipt extends G1ObjectiveReceipt {
   samples: G1TraceSample[];
 }
 
+/**
+ * Schema-8 walking config packet:
+ *   [0..3]  magic, schema, kind, wordCount = 12 + 7n
+ *   [4..10] stepSeconds, durationSeconds, targetSpeed, gaitFrequency,
+ *           traceStride, task, challenge
+ *   [11]    n = keep-out box count (0..64)
+ *   then n x [cx, cy, cz, hx, hy, hz, yaw] in the owner frame (z up),
+ *   expressed RELATIVE TO THE ROBOT'S START, because the owner always
+ *   begins its rollout at the origin while the browser seats the rendered
+ *   robot elsewhere in the house.
+ */
 function buildG1Config(config: G1WalkingConfig): Float64Array {
-  return new Float64Array([
+  const obstacles = config.obstacles ?? [];
+  if (obstacles.length > G1_MAX_OBSTACLES) {
+    throw new Error(
+      `G1 config: ${obstacles.length} obstacles exceeds the owner cap of ${G1_MAX_OBSTACLES}`,
+    );
+  }
+  const words = new Float64Array(
+    G1_CONFIG_FIXED_WORDS + G1_OBSTACLE_WORDS * obstacles.length,
+  );
+  words.set([
     G1_MAGIC,
     G1_SCHEMA,
     G1_KIND_CONFIG,
-    11,
+    words.length,
     config.stepSeconds,
     config.durationSeconds,
     config.targetSpeed,
@@ -1891,7 +1927,24 @@ function buildG1Config(config: G1WalkingConfig): Float64Array {
     config.traceStride,
     G1_TASK_IDS[config.task],
     G1_CHALLENGE_IDS[config.challenge],
+    obstacles.length,
   ]);
+  obstacles.forEach((obstacle, index) => {
+    const base = G1_CONFIG_FIXED_WORDS + G1_OBSTACLE_WORDS * index;
+    const { centerMeters: c, halfExtentsMeters: h, yawRad } = obstacle;
+    if (
+      !c.every(Number.isFinite) ||
+      !h.every(Number.isFinite) ||
+      !Number.isFinite(yawRad) ||
+      h.some((value) => value <= 0)
+    ) {
+      throw new Error(
+        `G1 config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`,
+      );
+    }
+    words.set([c[0], c[1], c[2], h[0], h[1], h[2], yawRad], base);
+  });
+  return words;
 }
 
 function decodeG1Header(
@@ -2068,6 +2121,13 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
       10_000,
     ),
     terminationReason,
+    // Schema 8: the deepest body-sphere penetration the owner's obstacle
+    // guard measured over the rollout. Zero when no boxes were declared.
+    maximumBodyPenetrationMeters: finitePacketNumber(
+      packet,
+      28,
+      "maximum body penetration",
+    ),
   };
   if (
     receipt.speedErrorIntegral < 0 ||
@@ -2101,7 +2161,9 @@ export function decodeG1Evaluation(
 ): PackedResult<G1ObjectiveReceipt> {
   const header = decodeG1Header(packet, G1_KIND_EVALUATION);
   if ("refusal" in header) return header;
-  if (packet.length !== 28)
+  // Schema 8: 5 header words + 24 receipt words (the last is the obstacle
+  // guard's deepest measured body penetration).
+  if (packet.length !== 29)
     throw new Error("malformed G1 packet: evaluation length");
   return { ok: decodeG1ReceiptPayload(packet) };
 }
@@ -2127,12 +2189,12 @@ export function decodeG1Trace(
   const header = decodeG1Header(packet, G1_KIND_TRACE);
   if ("refusal" in header) return header;
   const receipt = decodeG1ReceiptPayload(packet);
-  const sampleCount = exactPacketInteger(packet, 28, "trace sample count");
-  if (packet.length !== 29 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
+  const sampleCount = exactPacketInteger(packet, 29, "trace sample count");
+  if (packet.length !== 30 + sampleCount * G1_TRACE_SAMPLE_WORDS) {
     throw new Error("malformed G1 packet: trace shape");
   }
   const samples: G1TraceSample[] = [];
-  let cursor = 29;
+  let cursor = 30;
   let previousTime = -Infinity;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
     const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
