@@ -36,7 +36,7 @@ import type {
   HouseholdManipulationAdmission,
   HouseholdManipulationTraceSample,
 } from "../lib/frankensimCmaes";
-import { resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
+import { ARM_LINK_RADII, resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
 
 // Module-level cache of the reachable workspace point cloud. Computing
 // it on every render would be wasteful; the joint limits are constants
@@ -112,6 +112,12 @@ export interface ArmPhysicsDebugOverlayProps {
   obstacles: OrientedBoundingBox[];
   targetPosition: [number, number, number] | null;
   safeRadius?: number;
+  /**
+   * World-space link origins AFTER the rig's obstacle projection, so the
+   * spheres sit where the rendered links actually are. Falls back to the
+   * raw owner poses when absent.
+   */
+  projectedLinkPositions?: readonly (readonly [number, number, number])[];
 }
 
 export function ArmPhysicsDebugOverlay({
@@ -121,6 +127,7 @@ export function ArmPhysicsDebugOverlay({
   obstacles,
   targetPosition,
   safeRadius = 0.04,
+  projectedLinkPositions,
 }: ArmPhysicsDebugOverlayProps) {
   // Pre-build the OBB wireframe geometry once per overlay mount.
   // Hooks remain unconditional so toggling the overlay cannot change
@@ -201,8 +208,11 @@ export function ArmPhysicsDebugOverlay({
       {/* 1. 8 KUKA link wireframe spheres — cyan */}
       {sample
         ? sample.linkPoses.map((pose, idx) => {
-            const r = LINK_RADIUS[idx] ?? 0.05;
-            const pos = ownerToThree(pose.position);
+            const r = ARM_LINK_RADII[idx] ?? LINK_RADIUS[idx] ?? 0.05;
+            const projected = projectedLinkPositions?.[idx];
+            const pos: [number, number, number] = projected
+              ? [projected[0], projected[1], projected[2]]
+              : ownerToThree(pose.position);
             return (
               <mesh key={`col-${idx}`} position={pos}>
                 <sphereGeometry args={[r, 8, 6]} />

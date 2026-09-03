@@ -10,6 +10,8 @@ import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import {
+  ARM_COUNTER_SLAB_OBSTACLE,
+  ARM_WORKBENCH_OBSTACLES,
   createHouseNavigationScene,
   conservativeSegmentClearanceToOBB,
   distanceToOBB,
@@ -73,7 +75,12 @@ import {
   clampArmTargetPosition,
   isTargetKukaReachable,
 } from "../lib/armInverseKinematics";
-import { resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
+import {
+  ARM_LINK_RADII,
+  detectArmSelfCollisions,
+  resolveRenderedGripperContactGeometry,
+  type ArmSelfContact,
+} from "../lib/armContactPhysics";
 import {
   HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
   type CmaFamily,
@@ -529,6 +536,7 @@ function ArmRig({
   playbackSpeed,
   playbackResetToken,
   onSampleIndexChange,
+  onSelfCollisionChange,
 }: {
   trace: HouseholdManipulationTraceReceipt;
   admission: HouseholdManipulationAdmission;
@@ -541,6 +549,7 @@ function ArmRig({
   playbackSpeed: number;
   playbackResetToken: number;
   onSampleIndexChange: (sampleIndex: number) => void;
+  onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
 }) {
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
   const segmentRefs = useRef<Array<THREE.Mesh | null>>([]);
@@ -564,6 +573,13 @@ function ArmRig({
     useState<HouseholdManipulationTraceSample | null>(
       () => trace.samples[0] ?? null,
     );
+  // Projected link origins published once per sample so the debug overlay
+  // draws its spheres where the rendered links are, not at the raw poses.
+  const [projectedForOverlay, setProjectedForOverlay] = useState<
+    Array<[number, number, number]>
+  >([]);
+  const selfContactKeyRef = useRef("");
+  const publishedProjectedIndex = useRef(-1);
   const sampleTimes = useMemo(
     () => trace.samples.map((sample) => sample.timeSeconds),
     [trace],
@@ -781,6 +797,35 @@ function ArmRig({
       segment.scale.set(1, length, 1);
     }
     previousProjectedPositions.current = projectedPositions;
+    if (publishedProjectedIndex.current !== sampleIndex.current) {
+      publishedProjectedIndex.current = sampleIndex.current;
+      setProjectedForOverlay(projectedPositions.map((p) => [p[0], p[1], p[2]]));
+    }
+    // Self-collision diagnostic on the corrected chain: non-adjacent link
+    // spheres that overlap are tinted red on both links and reported to the
+    // HUD. The kernel receipt has no per-pair self-contact term, so this is
+    // the only place a folded elbow driven through the base becomes visible.
+    const selfContacts = detectArmSelfCollisions(projectedPositions, ARM_LINK_RADII);
+    const selfKey = selfContacts.map((c) => `${c.linkA}-${c.linkB}`).join(",");
+    if (selfKey !== selfContactKeyRef.current) {
+      selfContactKeyRef.current = selfKey;
+      const hotLinks = new Set<number>();
+      for (const c of selfContacts) {
+        hotLinks.add(c.linkA);
+        hotLinks.add(c.linkB);
+      }
+      for (let link = 0; link < sample.linkPoses.length; link++) {
+        const group = linkRefs.current[link];
+        if (!group) continue;
+        const hot = hotLinks.has(link);
+        group.traverse((child) => {
+          const mesh = child as THREE.Mesh;
+          const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
+          if (mat && "emissive" in mat && hot) mat.emissive.setHex(0xdc2626);
+        });
+      }
+      onSelfCollisionChange?.(selfContacts);
+    }
     if (objectRef.current) {
       applyOwnerPose(objectRef.current, sample.objectPose);
       // The object must live in the same corrected world as the links.
@@ -1060,6 +1105,7 @@ function ArmRig({
         obstacles={multiObstacleScene.obstacles}
         targetPosition={targetPosition ?? null}
         safeRadius={0.04}
+        projectedLinkPositions={projectedForOverlay}
       />
     </group>
   );
@@ -1070,34 +1116,12 @@ export type ArmCameraMode =
 
 const armCameraScratchVec = new THREE.Vector3();
 
-// Workbench volumes the camera must stay out of. The counter slab and
-// backsplash mirror ArmEnvironment's meshes at the default 0.78 m support
-// height; the house roster (walls + furniture) is appended so the studio
-// backdrop cannot swallow the lens either.
-const ARM_WORKBENCH_OBSTACLES: OrientedBoundingBox[] = [
-  {
-    id: "arm-counter-slab",
-    name: "counter slab",
-    center: [0, 0.78 - 0.045, 0],
-    halfExtents: [1.15, 0.045, 0.825],
-    rotationYawRad: 0,
-  },
-  {
-    id: "arm-backsplash",
-    name: "backsplash",
-    center: [0, 0.78 + 0.5, -0.82],
-    halfExtents: [1.15, 0.525, 0.035],
-    rotationYawRad: 0,
-  },
-  {
-    id: "arm-cabinet",
-    name: "upper cabinet",
-    center: [0.72, 0.78 + 0.25, -0.58],
-    halfExtents: [0.31, 0.22, 0.15],
-    rotationYawRad: 0,
-  },
-];
+// Volumes the camera must stay out of: the counter slab (camera-only), the
+// workbench backsplash and cabinet shared with the kernel obstacle roster,
+// and the house walls and furniture so the studio backdrop cannot swallow
+// the lens either.
 const ARM_CAMERA_OBSTACLES: OrientedBoundingBox[] = [
+  ARM_COUNTER_SLAB_OBSTACLE,
   ...ARM_WORKBENCH_OBSTACLES,
   ...createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928).obstacles,
 ];
@@ -1213,6 +1237,7 @@ const armHouseScene = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 function ArmTargetDragger({
   targetPos,
   pinLift = 0.06,
+  supportHeight = 0.78,
   onTargetChange,
   onCollisionChange,
   onUnreachableChange = () => {},
@@ -1220,6 +1245,8 @@ function ArmTargetDragger({
   targetPos: [number, number, number];
   /** Half-height of the marked object, so the pin clears its top. */
   pinLift?: number;
+  /** Owner support plane (counter top) in metres; the drag plane and ring sit on it. */
+  supportHeight?: number;
   onTargetChange: (pos: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; clearance: number }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
@@ -1249,11 +1276,11 @@ function ArmTargetDragger({
       startPosRef.current[2] + dz,
     ];
 
-    // CONTINUOUS COLLISION DETECTION (CCD) & SURFACE CLAMPING (Y >= 0.78)
+    // CONTINUOUS COLLISION DETECTION (CCD) & SURFACE CLAMPING (Y >= support)
     const { clampedTarget, isColliding, minClearance } = clampArmTargetPosition(
       proposed,
       armHouseScene.obstacles,
-      0.78,
+      supportHeight,
       0.04,
     );
     // Reachability: even if the collision clamp moves the target to a
@@ -1322,7 +1349,7 @@ function ArmTargetDragger({
 
       {/* Floor/Counter Contact Ring */}
       <mesh
-        position={[targetPos[0], 0.782, targetPos[2]]}
+        position={[targetPos[0], supportHeight + 0.002, targetPos[2]]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <ringGeometry args={[0.06, 0.09, 24]} />
@@ -1345,17 +1372,24 @@ function ArmTargetDragger({
  * the owner trace keeps playing on the solid rig, and is labelled as the
  * auxiliary chain, not the owner kinematics.
  */
-function ArmReachPreview({ target }: { target: [number, number, number] }) {
+function ArmReachPreview({
+  target,
+  supportHeight = 0.78,
+}: {
+  target: [number, number, number];
+  supportHeight?: number;
+}) {
   const preview = useMemo(() => {
-    const angles = solveKukaIK(target, [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0.78, 0], 60);
-    const { linkPositions, endEffector } = computeKukaFK(angles, [0, 0.78, 0]);
+    const base: [number, number, number] = [0, supportHeight, 0];
+    const angles = solveKukaIK(target, [0, 0.4, 0, -1.2, 0, 0.8, 0], base, 60);
+    const { linkPositions, endEffector } = computeKukaFK(angles, base);
     const residual = Math.hypot(
       target[0] - endEffector[0],
       target[1] - endEffector[1],
       target[2] - endEffector[2],
     );
     return { linkPositions, endEffector, reachable: residual < 0.02, residual };
-  }, [target]);
+  }, [target, supportHeight]);
   const color = preview.reachable ? "#22d3ee" : "#f43f5e";
   const segments = preview.linkPositions.slice(1).map((end, index) => {
     const start = preview.linkPositions[index];
@@ -1423,6 +1457,7 @@ function ArmStage({
   onDragTargetChange,
   onCollisionChange,
   onUnreachableChange,
+  onSelfCollisionChange,
   physicsDebug,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
@@ -1435,6 +1470,7 @@ function ArmStage({
   playbackSpeed: number;
   playbackResetToken: number;
   onSampleIndexChange: (sampleIndex: number) => void;
+  onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
   dragTarget?: [number, number, number] | null;
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
   onCollisionChange?: (col: {
@@ -1576,12 +1612,14 @@ function ArmStage({
           playbackSpeed={playbackSpeed}
           playbackResetToken={playbackResetToken}
           onSampleIndexChange={onSampleIndexChange}
+          onSelfCollisionChange={onSelfCollisionChange}
         />
       ) : null}
 
       <ArmTargetDragger
         targetPos={objectPos}
         pinLift={admission ? admission.scene.objectDimensionsMeters[2] * 0.5 : 0.06}
+        supportHeight={admission ? admission.scene.supportHeightMeters : 0.78}
         onTargetChange={onDragTargetChange ?? (() => {})}
         onCollisionChange={onCollisionChange ?? (() => {})}
         onUnreachableChange={onUnreachableChange}
@@ -1669,6 +1707,7 @@ export function HouseholdArmFlagship({
     clearance: number;
   }>({ isColliding: false, clearance: 1.0 });
   const [armUnreachable, setArmUnreachable] = useState(false);
+  const [armSelfContacts, setArmSelfContacts] = useState<ArmSelfContact[]>([]);
   const [physicsDebug, setPhysicsDebug] = useState(false);
 
   const handleExportTelemetry = useCallback(() => {
@@ -2112,6 +2151,21 @@ export function HouseholdArmFlagship({
                   </button>
                 )}
 
+                {/* Self-collision diagnostic on the corrected chain */}
+                {armSelfContacts.length > 0 ? (
+                  <span
+                    className="rounded-full border border-rose-400/80 bg-rose-950/85 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md"
+                    title="Non-adjacent link spheres overlapping on the rendered chain (browser diagnostic; the owner receipt has no per-pair self-contact term)"
+                  >
+                    ⚠️ Self-contact{" "}
+                    {armSelfContacts
+                      .slice(0, 2)
+                      .map((c) => `L${c.linkA}–L${c.linkB} ${(c.penetration * 100).toFixed(1)} cm`)
+                      .join(" · ")}
+                    {armSelfContacts.length > 2 ? ` +${armSelfContacts.length - 2}` : ""}
+                  </span>
+                ) : null}
+
                 {/* Drag Status & Contact Safety Readout */}
                 {armDragTarget ? (
                   <div className="flex items-center gap-1.5 pointer-events-auto">
@@ -2388,6 +2442,7 @@ export function HouseholdArmFlagship({
                   onDragTargetChange={setArmDragTarget}
                   onCollisionChange={setArmCollisionState}
                   onUnreachableChange={setArmUnreachable}
+                  onSelfCollisionChange={setArmSelfContacts}
                   physicsDebug={physicsDebug}
                 />
               ) : null}

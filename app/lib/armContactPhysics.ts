@@ -269,3 +269,55 @@ export function resolveArmObjectContact({
     isCollidingWithEnvironment,
   };
 }
+
+/**
+ * One radius table for the eight iiwa links, shared by the rendered rig,
+ * the physics debug overlay, and self-collision detection so the three can
+ * no longer disagree. Values follow the drawn cross-sections: 0.10 m base
+ * drum and shoulder turret, tapering to the 0.04 m flange.
+ */
+export const ARM_LINK_RADII: readonly number[] = [
+  0.1, // iiwa_link_0 (base)
+  0.1, // iiwa_link_1 (shoulder turret)
+  0.07, // iiwa_link_2 (upper arm)
+  0.07, // iiwa_link_3 (elbow)
+  0.06, // iiwa_link_4 (forearm)
+  0.06, // iiwa_link_5 (wrist roll)
+  0.05, // iiwa_link_6 (wrist pitch)
+  0.04, // iiwa_link_7 (flange)
+];
+
+export interface ArmSelfContact {
+  linkA: number;
+  linkB: number;
+  /** Positive: overlap depth in metres between the two link spheres. */
+  penetration: number;
+}
+
+/**
+ * Sphere-vs-sphere self-collision over the link origins. Adjacent links
+ * share a joint and always overlap by construction, so only pairs at least
+ * `minimumSeparation` indices apart are tested. Display-side diagnostic: the
+ * kernel receipt exposes no per-pair self-collision term, so this is the
+ * only place a folded elbow driven through the base becomes visible.
+ */
+export function detectArmSelfCollisions(
+  linkPositions: readonly (readonly [number, number, number])[],
+  radii: readonly number[] = ARM_LINK_RADII,
+  minimumSeparation = 2,
+  margin = 0,
+): ArmSelfContact[] {
+  const contacts: ArmSelfContact[] = [];
+  for (let a = 0; a < linkPositions.length; a++) {
+    for (let b = a + minimumSeparation; b < linkPositions.length; b++) {
+      const pa = linkPositions[a];
+      const pb = linkPositions[b];
+      const d = Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]);
+      const allowed = (radii[a] ?? 0.05) + (radii[b] ?? 0.05) + margin;
+      if (d < allowed) {
+        contacts.push({ linkA: a, linkB: b, penetration: allowed - d });
+      }
+    }
+  }
+  return contacts;
+}

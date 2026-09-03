@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  ARM_LINK_RADII,
   OBJECT_CONTACT_HULLS,
+  detectArmSelfCollisions,
   resolveArmObjectContact,
   resolveRenderedGripperContactGeometry,
 } from "../../app/lib/armContactPhysics";
@@ -149,5 +151,42 @@ describe("experimental arm contact display approximation", () => {
         isGraspedIntent: false,
       }),
     ).toThrow("must be finite");
+  });
+});
+
+describe("arm self-collision diagnostic", () => {
+  test("a straight chain with generous spacing reports no self contact", () => {
+    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [0, 0.78 + i * 0.25, 0]);
+    expect(detectArmSelfCollisions(chain, ARM_LINK_RADII)).toEqual([]);
+  });
+
+  test("adjacent links are never reported even though they touch", () => {
+    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [0, 0.78 + i * 0.05, 0]);
+    const contacts = detectArmSelfCollisions(chain, ARM_LINK_RADII);
+    expect(contacts.every((c) => c.linkB - c.linkA >= 2)).toBe(true);
+  });
+
+  test("a flange folded back into the base is reported with its overlap depth", () => {
+    const chain: [number, number, number][] = [
+      [0, 0.78, 0],
+      [0, 1.14, 0],
+      [0.3, 1.4, 0],
+      [0.55, 1.1, 0],
+      [0.3, 0.9, 0],
+      [0.15, 0.85, 0],
+      [0.08, 0.82, 0],
+      [0.02, 0.8, 0], // flange 2 cm from the base origin
+    ];
+    const contacts = detectArmSelfCollisions(chain, ARM_LINK_RADII);
+    const baseFlange = contacts.find((c) => c.linkA === 0 && c.linkB === 7);
+    expect(baseFlange).toBeDefined();
+    expect(baseFlange!.penetration).toBeCloseTo(0.1 + 0.04 - Math.hypot(0.02, 0.02), 6);
+  });
+
+  test("the shared radius table has one entry per iiwa link and tapers toward the flange", () => {
+    expect(ARM_LINK_RADII.length).toBe(8);
+    for (let i = 1; i < ARM_LINK_RADII.length; i++) {
+      expect(ARM_LINK_RADII[i]).toBeLessThanOrEqual(ARM_LINK_RADII[i - 1]);
+    }
   });
 });
