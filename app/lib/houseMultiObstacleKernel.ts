@@ -1402,13 +1402,23 @@ export function armCounterSlabObstacle(supportHeightMeters: number): OrientedBou
   };
 }
 
-/** One keep-out box for a frankensim owner kernel, in its owner frame. */
+/** What a declared body means to the owner kernel. */
+export type KernelBodyRole = "keep-out" | "support";
+
+/** One body for a frankensim owner kernel, in its owner frame. */
 export interface HouseholdKernelObstacle {
   /** Owner frame (x, y, z-up), metres. */
   centerMeters: [number, number, number];
   halfExtentsMeters: [number, number, number];
   /** Rotation about the owner +Z axis, radians. */
   yawRad: number;
+  /**
+   * Keep-out bodies may not be entered at all. Support bodies are surfaces
+   * the robot rests on: contact is expected, sinking through them is not.
+   * Declaring the floors and work surfaces the renderer draws is what turns
+   * "the robot is inside the floor" from a screenshot into a refusal.
+   */
+  role: KernelBodyRole;
   name: string;
 }
 
@@ -1420,11 +1430,15 @@ export interface HouseholdKernelObstacle {
  * plane, so a yaw about three +Y becomes the opposite yaw about owner +Z and
  * the half extents swap their y and z components.
  */
-export function stageObbToKernelObstacle(obb: OrientedBoundingBox): HouseholdKernelObstacle {
+export function stageObbToKernelObstacle(
+  obb: OrientedBoundingBox,
+  role: KernelBodyRole = "keep-out",
+): HouseholdKernelObstacle {
   return {
     centerMeters: [obb.center[0], -obb.center[2], obb.center[1]],
     halfExtentsMeters: [obb.halfExtents[0], obb.halfExtents[2], obb.halfExtents[1]],
     yawRad: -obb.rotationYawRad,
+    role,
     name: obb.name,
   };
 }
@@ -1494,8 +1508,13 @@ export function householdKernelObstacleRoster(
   house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
   rooms: readonly string[] = ARM_STAGE_ROOMS,
 ): HouseholdKernelObstacle[] {
-  return armStageObstacles(supportHeightMeters, task, limit, house, rooms).map(
-    stageObbToKernelObstacle,
+  // Every arm-stage body is a keep-out: the backsplash, cabinet, fence posts
+  // and furniture are all things the arm works AROUND. The one surface it
+  // works over is the table, and that is deliberately not in this list
+  // (armStageObstacles omits it) because the arm's own chain rises through
+  // that plane from a base on the floor.
+  return armStageObstacles(supportHeightMeters, task, limit, house, rooms).map((obb) =>
+    stageObbToKernelObstacle(obb, "keep-out"),
   );
 }
 
@@ -1575,15 +1594,43 @@ export function g1KernelObstacleRoster(
   house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
 ): HouseholdKernelObstacle[] {
   const pelvis: [number, number, number] = [seat[0], 0.75, seat[2]];
-  return createHouseNavigationScene(house)
+  const relative = (obb: OrientedBoundingBox, role: KernelBodyRole) =>
+    stageObbToKernelObstacle(
+      {
+        ...obb,
+        center: [obb.center[0] - seat[0], obb.center[1] - seat[1], obb.center[2] - seat[2]],
+      },
+      role,
+    );
+  const keepOut = createHouseNavigationScene(house)
     .obstacles.filter((obb) => !obb.exemptFromPenalty)
     .map((obb) => ({ obb, d: distanceToOBB(pelvis, obb) }))
     .sort((a, b) => a.d - b.d)
-    .slice(0, limit)
-    .map(({ obb }) =>
-      stageObbToKernelObstacle({
-        ...obb,
-        center: [obb.center[0] - seat[0], obb.center[1] - seat[1], obb.center[2] - seat[2]],
-      }),
-    );
+    .slice(0, Math.max(0, limit - HOUSE_STRUCTURAL_SURFACES.length))
+    .map(({ obb }) => relative(obb, "keep-out"));
+  return [
+    ...HOUSE_STRUCTURAL_SURFACES.map((obb) => relative(obb, "support")),
+    ...keepOut,
+  ];
 }
+
+/**
+ * The structural surfaces the house stage draws, declared to the owner so a
+ * mis-placed one is a refusal instead of a robot rendered inside the floor.
+ *
+ * SearsCraftsmanEstate draws its room floors as planes at y = 0 and a stone
+ * foundation beneath them. A foundation authored ABOVE the floor line is
+ * exactly the bug this list exists to catch: the humanoid stood inside it,
+ * buried to mid-shin, and nothing in the physics could see it because a
+ * rendered mesh is not a body.
+ */
+export const HOUSE_STRUCTURAL_SURFACES: OrientedBoundingBox[] = [
+  {
+    id: "house-floor",
+    name: "house floor",
+    // A slab whose TOP face is the y = 0 walking plane the estate draws.
+    center: [0, -0.15, -0.8],
+    halfExtents: [4.2, 0.15, 5.2],
+    rotationYawRad: 0,
+  },
+];

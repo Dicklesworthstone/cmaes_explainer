@@ -3,6 +3,7 @@ import {
   armWorkbenchObstacles,
   findClearSpawnPosition,
   findClearTrajectorySpawnOffset,
+  g1KernelObstacleRoster,
   householdKernelObstacleRoster,
   resolveCameraBoom,
   stageObbToKernelObstacle,
@@ -18,7 +19,9 @@ import {
   simulateG1HouseNavigationChallenge,
 } from "../app/lib/houseMultiObstacleKernel";
 import {
+  DEFAULT_G1_WALKING_CONFIG,
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  buildG1Config,
   buildHouseholdManipulationConfig,
 } from "../app/lib/frankensimCmaes";
 
@@ -504,18 +507,61 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
           centerMeters: [0, 0, 0],
           halfExtentsMeters: [0.1, 0.1, 0.1],
           yawRad: 0,
+          role: "keep-out" as const,
         })),
       }),
     ).toThrow();
     expect(() =>
       buildHouseholdManipulationConfig({
         ...base,
-        obstacles: [{ name: "bad", centerMeters: [0, 0, 0], halfExtentsMeters: [0, 0.1, 0.1], yawRad: 0 }],
+        obstacles: [{ name: "bad", centerMeters: [0, 0, 0], halfExtentsMeters: [0, 0.1, 0.1], yawRad: 0, role: "keep-out" as const }],
       }),
     ).toThrow();
     // Zero overrides and no roster: the 12-word packet with preset semantics.
     const plain = buildHouseholdManipulationConfig(base);
     expect(plain.length).toBe(12);
     expect(Array.from(plain.slice(8, 12))).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe("declared structural surfaces (the robot-inside-the-floor regression)", () => {
+  test("the G1 roster declares the house floor as a support surface, not a keep-out", () => {
+    const roster = g1KernelObstacleRoster([0, 0, 0]);
+    const floor = roster.find((body) => body.name === "house floor");
+    expect(floor, "the drawn floor must be declared to the owner").toBeDefined();
+    expect(floor!.role).toBe("support");
+    // Its top face is the walking plane: owner z is up, so centre + half.
+    expect(floor!.centerMeters[2] + floor!.halfExtentsMeters[2]).toBeCloseTo(0, 12);
+    expect(roster.filter((body) => body.role === "support")).toHaveLength(1);
+    expect(roster.every((body) => body.halfExtentsMeters.every((h) => h > 0))).toBe(true);
+  });
+
+  test("the roster is expressed relative to the seat, so the house moves with the robot", () => {
+    const atOrigin = g1KernelObstacleRoster([0, 0, 0]);
+    const seated = g1KernelObstacleRoster([-1.75, 0, 0.25]);
+    const floorA = atOrigin.find((b) => b.name === "house floor")!;
+    const floorB = seated.find((b) => b.name === "house floor")!;
+    // Owner x is stage x; owner y is -stage z.
+    expect(floorB.centerMeters[0]).toBeCloseTo(floorA.centerMeters[0] + 1.75, 12);
+    expect(floorB.centerMeters[1]).toBeCloseTo(floorA.centerMeters[1] + 0.25, 12);
+    // Height is untouched by a horizontal seat.
+    expect(floorB.centerMeters[2]).toBeCloseTo(floorA.centerMeters[2], 12);
+  });
+
+  test("the schema-8 packet carries eight words per body including the role", () => {
+    const roster = g1KernelObstacleRoster([0, 0, 0], 6);
+    const packet = buildG1Config({
+      ...DEFAULT_G1_WALKING_CONFIG,
+      task: "walking",
+      challenge: "flat",
+      obstacles: roster,
+    });
+    expect(packet.length).toBe(12 + 8 * roster.length);
+    expect(packet[3]).toBe(packet.length);
+    expect(packet[11]).toBe(roster.length);
+    // First body is the floor: role word is 1 (support).
+    expect(packet[19]).toBe(1);
+    // Second body is furniture: role word is 0 (keep-out).
+    expect(packet[27]).toBe(0);
   });
 });

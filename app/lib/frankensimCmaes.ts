@@ -980,7 +980,7 @@ const G1_MAGIC = 0x47315737;
 // penetration the owner's obstacle guard measured.
 const G1_SCHEMA = 8;
 const G1_CONFIG_FIXED_WORDS = 12;
-const G1_OBSTACLE_WORDS = 7;
+const G1_OBSTACLE_WORDS = 8;
 export const G1_MAX_OBSTACLES = 64;
 const G1_KIND_CONFIG = 0;
 const G1_KIND_ADMISSION = 1;
@@ -1015,7 +1015,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.16";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.17";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1222,8 +1222,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0617/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0617/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -1905,7 +1905,7 @@ export interface G1TraceReceipt extends G1ObjectiveReceipt {
  *   begins its rollout at the origin while the browser seats the rendered
  *   robot elsewhere in the house.
  */
-function buildG1Config(config: G1WalkingConfig): Float64Array {
+export function buildG1Config(config: G1WalkingConfig): Float64Array {
   const obstacles = config.obstacles ?? [];
   if (obstacles.length > G1_MAX_OBSTACLES) {
     throw new Error(
@@ -1942,7 +1942,10 @@ function buildG1Config(config: G1WalkingConfig): Float64Array {
         `G1 config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`,
       );
     }
-    words.set([c[0], c[1], c[2], h[0], h[1], h[2], yawRad], base);
+    words.set(
+      [c[0], c[1], c[2], h[0], h[1], h[2], yawRad, obstacle.role === "support" ? 1 : 0],
+      base,
+    );
   });
   return words;
 }
