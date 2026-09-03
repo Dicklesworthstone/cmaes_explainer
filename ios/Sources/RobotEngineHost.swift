@@ -28,9 +28,9 @@ struct RobotEngineMetrics: Equatable {
     }
 
     init?(payload: [String: Any]) {
-        guard Self.hasValidOptionalNumber(payload, key: "generation"),
+        guard Self.hasValidOptionalInteger(payload, key: "generation"),
               Self.hasValidOptionalNumber(payload, key: "bestObjective"),
-              Self.hasValidOptionalNumber(payload, key: "completedSteps"),
+              Self.hasValidOptionalInteger(payload, key: "completedSteps"),
               Self.hasValidOptionalBool(payload, key: "placed") else {
             return nil
         }
@@ -43,6 +43,12 @@ struct RobotEngineMetrics: Equatable {
               completedSteps.map({ $0 >= 0 }) ?? true else {
             return nil
         }
+    }
+
+    private static func hasValidOptionalInteger(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = integer(value) else { return false }
+        return value >= 0
     }
 
     private static func hasValidOptionalNumber(_ payload: [String: Any], key: String) -> Bool {
@@ -86,7 +92,13 @@ struct RobotEngineStatusMessage {
     let capabilities: Set<String>
 
     init?(payload: [String: Any]) {
-        let rawCapabilities = payload["capabilities"] as? [String] ?? []
+        let rawCapabilities: [String]
+        if let candidate = payload["capabilities"] {
+            guard let capabilities = candidate as? [String] else { return nil }
+            rawCapabilities = capabilities
+        } else {
+            rawCapabilities = []
+        }
         guard payload["type"] as? String == "engine.status",
               let schemaVersion = Self.integer(payload["schemaVersion"]),
               schemaVersion == Self.schemaVersion,
@@ -95,7 +107,9 @@ struct RobotEngineStatusMessage {
               let lab = RobotLab(rawValue: rawLab),
               let state = payload["state"] as? String,
               ["loading", "ready", "running", "failed"].contains(state),
-              let detail = payload["detail"] as? String, !detail.isEmpty,
+              let detail = payload["detail"] as? String,
+              !detail.isEmpty,
+              detail.count <= 300,
               let rawMetrics = payload["metrics"] as? [String: Any],
               let metrics = RobotEngineMetrics(payload: rawMetrics),
               rawCapabilities.allSatisfy({ $0 == "optimize" }) else {

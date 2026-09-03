@@ -51,6 +51,12 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(sequence: 0)))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(lab: "foreign")))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(state: "invented")))
+        var malformedCapabilities = statusPayload()
+        malformedCapabilities["capabilities"] = ["optimize", 1]
+        XCTAssertNil(RobotEngineStatusMessage(payload: malformedCapabilities))
+        var oversizedDetail = statusPayload()
+        oversizedDetail["detail"] = String(repeating: "x", count: 301)
+        XCTAssertNil(RobotEngineStatusMessage(payload: oversizedDetail))
     }
 
     func testCommandAcknowledgementRequiresMatchingBoundedContract() throws {
