@@ -47,7 +47,9 @@ import { WalkQualityComparison } from "./WalkQualityComparison";
 import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
 import {
   clampPositionAgainstHouseCollisions,
+  closestPointOnOBB,
   createHouseNavigationScene,
+  distanceToOBB,
   findClearTrajectorySpawnOffset,
   projectPointOutOfOBB,
   resolveCameraBoom,
@@ -1653,6 +1655,85 @@ function RagdollDragger({
   );
 }
 
+type NearestObstacleReadout = {
+  distance: number;
+  obstacleName: string;
+  linkIndex: number;
+  linkPoint: [number, number, number];
+  surfacePoint: [number, number, number];
+};
+
+/**
+ * The closest rigid house surface to any rendered link: the live value of
+ * the clearance term the multi-factor objective and the HOCBF safety
+ * barrier both consume. Returned in world space so it can be drawn.
+ */
+function nearestRigidObstacle(
+  links: readonly [number, number, number][],
+  obstacles: readonly OrientedBoundingBox[],
+): NearestObstacleReadout | null {
+  let best: NearestObstacleReadout | null = null;
+  for (let index = 0; index < links.length; index++) {
+    const link = links[index];
+    for (const obb of obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      const d = distanceToOBB(link, obb);
+      if (!best || d < best.distance) {
+        best = {
+          distance: d,
+          obstacleName: obb.name,
+          linkIndex: index,
+          linkPoint: link,
+          surfacePoint: closestPointOnOBB(link, obb),
+        };
+      }
+    }
+  }
+  return best;
+}
+
+function clearanceColor(distance: number): string {
+  if (distance < G1_LINK_CLEARANCE_METERS) return "#f43f5e";
+  if (distance < 0.3) return "#f59e0b";
+  return "#34d399";
+}
+
+/**
+ * Clearance beam: a thin bar from the nearest link to the nearest rigid
+ * surface, plus a floor disc under that link. Colour encodes the margin
+ * (green: comfortable, amber: inside 30 cm, red: below the link radius).
+ * This is the same distance the collision penalty channel integrates, so
+ * the viewer can watch the number the optimizer is trading against.
+ */
+function G1ClearanceBeam({ readout }: { readout: NearestObstacleReadout | null }) {
+  if (!readout) return null;
+  const a = new THREE.Vector3(...readout.linkPoint);
+  const b = new THREE.Vector3(...readout.surfacePoint);
+  const length = Math.max(0.005, a.distanceTo(b));
+  const mid = a.clone().add(b).multiplyScalar(0.5);
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    b.clone().sub(a).normalize(),
+  );
+  const color = clearanceColor(readout.distance);
+  return (
+    <group>
+      <mesh position={mid} quaternion={quaternion}>
+        <cylinderGeometry args={[0.006, 0.006, length, 6]} />
+        <meshBasicMaterial color={color} transparent opacity={0.85} depthWrite={false} />
+      </mesh>
+      <mesh position={b}>
+        <sphereGeometry args={[0.02, 10, 8]} />
+        <meshBasicMaterial color={color} transparent opacity={0.9} depthWrite={false} />
+      </mesh>
+      <mesh position={[readout.linkPoint[0], 0.012, readout.linkPoint[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[Math.max(0.02, readout.distance - 0.01), Math.max(0.03, readout.distance), 40]} />
+        <meshBasicMaterial color={color} transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
 function RobotStage({
   trace,
   admission,
@@ -1810,6 +1891,10 @@ function RobotStage({
         heading={heading}
         obstacles={houseSceneData.obstacles}
         hasRobot={Boolean(trace && robotDragOffset)}
+      />
+
+      <G1ClearanceBeam
+        readout={anchors ? nearestRigidObstacle(anchors.links, houseSceneData.obstacles) : null}
       />
 
       <G1PhysicsDebugOverlay
@@ -2013,6 +2098,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       cancelled = true;
     };
   }, [trace, robotDragOffset]);
+  // Live nearest-surface clearance of the rendered robot (same number the
+  // on-canvas beam draws), for the toolbar readout.
+  const liveClearance = useMemo(() => {
+    if (!trace || !robotDragOffset) return null;
+    const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
+    if (!sample) return null;
+    const anchors = computeRobotAnchors(
+      projectSampleAgainstHouse(
+        sample,
+        sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
+        robotDragOffset,
+      ),
+      robotDragOffset,
+    );
+    return nearestRigidObstacle(anchors.links, houseSceneData.obstacles);
+  }, [trace, sampleIndex, robotDragOffset]);
   const [dragCollisionState, setDragCollisionState] = useState<{
     isColliding: boolean;
     obstacleName: string | null;
@@ -2558,6 +2659,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                     Reset
                   </button>
                 </div>
+              ) : null}
+
+              {/* Live clearance readout: nearest rigid surface to any link. */}
+              {liveClearance ? (
+                <span
+                  className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                    liveClearance.distance < G1_LINK_CLEARANCE_METERS
+                      ? "border-rose-400/70 bg-rose-950/85 text-rose-200"
+                      : liveClearance.distance < 0.3
+                        ? "border-amber-400/70 bg-amber-950/85 text-amber-200"
+                        : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
+                  }`}
+                  title="Distance from the nearest rendered link to the nearest rigid house surface: the clearance term the collision penalty and HOCBF barrier consume"
+                >
+                  📏 {liveClearance.distance.toFixed(2)} m · {liveClearance.obstacleName}
+                </span>
               ) : null}
             </div>
 
