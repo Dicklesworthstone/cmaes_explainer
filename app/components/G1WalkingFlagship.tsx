@@ -27,7 +27,11 @@ import {
   type G1TraceReceipt,
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
-import type { G1OptimizationRequest } from "../lib/g1OptimizationProtocol";
+import {
+  G1_HOUSE_SEAT,
+  G1_KERNEL_OBSTACLES,
+  type G1OptimizationRequest,
+} from "../lib/g1OptimizationProtocol";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 import { resolveG1PushVisualization } from "../lib/g1PushVisualization";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
@@ -1783,8 +1787,13 @@ function nearestRigidObstacle(
   return best;
 }
 
+// The per-frame projection pushes every link to exactly the clearance floor,
+// so a reading AT the floor is the guard working, not a violation. Only a
+// genuine breach of the floor is red.
+const G1_CLEARANCE_BREACH_METERS = G1_LINK_CLEARANCE_METERS - 0.005;
+
 function clearanceColor(distance: number): string {
-  if (distance < G1_LINK_CLEARANCE_METERS) return "#f43f5e";
+  if (distance < G1_CLEARANCE_BREACH_METERS) return "#f43f5e";
   if (distance < 0.3) return "#f59e0b";
   return "#34d399";
 }
@@ -2138,52 +2147,30 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       `Previewing a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. The owner rollout, controller, HOCBF result, and receipt are unchanged.`,
     );
   }, [pushAngleDeg, pushImpulseNs]);
-  // Spawn-safe: the robot walks about two metres after it appears, so the
-  // seat is chosen for the WHOLE rendered trajectory, not just the first
-  // frame. Every link centre of every (sub-sampled) trace sample must keep
-  // link-radius-plus-margin clearance from every rigid OBB, walls
-  // included, at the candidate offset. Candidates are tried nearest the
-  // living room first so the robot appears where the default camera and
-  // room chip expect it.
+  // Spawn-safe seat. This is now decided BEFORE any rollout, from a
+  // conservative policy-independent walking envelope, because the walking
+  // owner needs its keep-out boxes declared relative to wherever the robot
+  // starts and cannot be told that after the fact. Deriving the seat from a
+  // returned trace, as this did, would be circular now that the trace itself
+  // depends on the roster. g1SeatForHouse picks the candidate nearest the
+  // living room whose whole swept envelope clears every rigid obstacle.
   // Async-defer the setState so the effect body does not fire a
   // synchronous setState inside another effect (react-hooks).
   useEffect(() => {
     if (robotDragOffset !== null) return;
     if (!trace) return;
-    const firstSample = trace.samples[0];
-    const pelvisPose = firstSample?.linkPoses[0];
+    const pelvisPose = trace.samples[0]?.linkPoses[0];
     if (!pelvisPose) return;
     let cancelled = false;
     const pelvis = ownerToThree(pelvisPose.position);
-    const stride = Math.max(1, Math.ceil(trace.samples.length / 48));
-    const footprint: [number, number, number][] = [];
-    for (let index = 0; index < trace.samples.length; index += stride) {
-      for (const linkPose of trace.samples[index].linkPoses) {
-        const p = ownerToThree(linkPose.position);
-        footprint.push([p[0] - pelvis[0], p[1], p[2] - pelvis[2]]);
-      }
-    }
-    const lastPelvis = ownerToThree(trace.samples[trace.samples.length - 1].linkPoses[0].position);
-    const walkX = lastPelvis[0] - pelvis[0];
-    const walkZ = lastPelvis[2] - pelvis[2];
-    const livingRoom = CRAFTSMAN_BUNGALOW_1928.rooms.find((room) => room.name === "living room");
-    const anchor: [number, number] = livingRoom
-      ? [livingRoom.center[0] - walkX / 2, livingRoom.center[1] - walkZ / 2]
-      : [-walkX / 2, -walkZ / 2];
-    const seat = findClearTrajectorySpawnOffset(houseSceneData.obstacles, {
-      footprint,
-      clearance: G1_LINK_CLEARANCE_METERS + 0.06,
-      anchor,
-      step: 0.25,
-    });
-    const safeOffset: [number, number, number] = [
-      seat.offset[0] - pelvis[0],
+    const seated: [number, number, number] = [
+      G1_HOUSE_SEAT.offset[0] - pelvis[0],
       0,
-      seat.offset[2] - pelvis[2],
+      G1_HOUSE_SEAT.offset[2] - pelvis[2],
     ];
     Promise.resolve().then(() => {
       if (cancelled) return;
-      setRobotDragOffset((current) => current ?? safeOffset);
+      setRobotDragOffset((current) => current ?? seated);
     });
     return () => {
       cancelled = true;
@@ -2772,11 +2759,29 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 </div>
               ) : null}
 
+              {/* Owner obstacle verdict: the kernel now scores the walking
+                  policy against the house itself, so this reports the
+                  kernel's own measurement, not a browser re-derivation. */}
+              {trace ? (
+                <span
+                  className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                    trace.terminationReason === "body obstacle"
+                      ? "border-rose-400/80 bg-rose-950/85 text-rose-200"
+                      : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
+                  }`}
+                  title={`Every step, the walking owner tested its 20 declared body colliders (pelvis, hips, knees, waist, torso, shoulders, elbows — not hands or feet) against ${G1_KERNEL_OBSTACLES.length} house boxes sent in the config packet. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m. The separate clearance readout measures all 30 rendered links.`}
+                >
+                  {trace.terminationReason === "body obstacle"
+                    ? `🧱 Owner stopped on contact · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm into geometry`
+                    : `🧱 Owner body vs ${G1_KERNEL_OBSTACLES.length} house boxes · 0 penetration`}
+                </span>
+              ) : null}
+
               {/* Live clearance readout: nearest rigid surface to any link. */}
               {liveClearance ? (
                 <span
                   className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
-                    liveClearance.distance < G1_LINK_CLEARANCE_METERS
+                    liveClearance.distance < G1_CLEARANCE_BREACH_METERS
                       ? "border-rose-400/70 bg-rose-950/85 text-rose-200"
                       : liveClearance.distance < 0.3
                         ? "border-amber-400/70 bg-amber-950/85 text-amber-200"

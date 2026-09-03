@@ -1160,7 +1160,7 @@ describe("schema-2 owner CMA packet adapter", () => {
 describe("G1 walking packet adapter", () => {
   const admission = new Float64Array([
     0x47315737,
-    7,
+    8,
     0,
     1,
     21,
@@ -1184,6 +1184,8 @@ describe("G1 walking packet adapter", () => {
   const objectiveWords = [
     12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6,
     0.88, 0.02, 8.4, 0.31, 0.54, 0.18, 0.024, 720, 0,
+    // schema 8: maximum body penetration measured by the obstacle guard
+    0,
   ];
 
   test("admits only the exact owner policy and pose layout", () => {
@@ -1214,10 +1216,10 @@ describe("G1 walking packet adapter", () => {
   test("decodes decomposed objectives, population rows, and owner poses", () => {
     const evaluation = new Float64Array([
       0x47315737,
-      7,
+      8,
       0,
       2,
-      28,
+      29,
       ...objectiveWords,
     ]);
     const decodedEvaluation = decodeG1Evaluation(evaluation);
@@ -1234,7 +1236,7 @@ describe("G1 walking packet adapter", () => {
     );
 
     const population = decodeG1Population(
-      new Float64Array([0x47315737, 7, 0, 4, 9, 3, 4, 3, 2]),
+      new Float64Array([0x47315737, 8, 0, 4, 9, 3, 4, 3, 2]),
     );
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
@@ -1252,10 +1254,10 @@ describe("G1 walking packet adapter", () => {
     const trace = decodeG1Trace(
       new Float64Array([
         0x47315737,
-        7,
+        8,
         0,
         3,
-        242,
+        243,
         ...objectiveWords,
         1,
         ...sample,
@@ -1268,34 +1270,38 @@ describe("G1 walking packet adapter", () => {
 
     const nonUnitQuaternion = new Float64Array([
       0x47315737,
-      7,
+      8,
       0,
       3,
-      242,
+      243,
       ...objectiveWords,
       1,
       ...sample,
     ]);
-    nonUnitQuaternion[35] = 0.5;
+    // schema 8 added one receipt word, so the first sample's first
+            // quaternion component moved one slot later.
+    nonUnitQuaternion[36] = 0.5;
     expect(() => decodeG1Trace(nonUnitQuaternion)).toThrow("link quaternion");
   });
 
   test("decodes exact termination reasons and rejects unknown reason IDs", () => {
     const baseTilt = new Float64Array([
       0x47315737,
-      7,
+      8,
       0,
       2,
-      28,
-      ...objectiveWords.slice(0, -1),
+      29,
+      ...objectiveWords.slice(0, -2),
       2,
+      0,
     ]);
     const decoded = decodeG1Evaluation(baseTilt);
     if (!("ok" in decoded)) throw new Error("unexpected evaluation refusal");
     expect(decoded.ok.terminationReason).toBe("base tilt");
 
     const unknownReason = baseTilt.slice();
-    unknownReason[27] = 7;
+    // 7 is now the valid "body obstacle" reason; 8 is still unknown.
+    unknownReason[27] = 8;
     expect(() => decodeG1Evaluation(unknownReason)).toThrow(
       "termination reason",
     );
@@ -1304,7 +1310,7 @@ describe("G1 walking packet adapter", () => {
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
     expect(() =>
       decodeG1Trace(
-        new Float64Array([0x47315737, 7, 0, 3, 29, ...objectiveWords, 1]),
+        new Float64Array([0x47315737, 8, 0, 3, 30, ...objectiveWords, 1]),
       ),
     ).toThrow("trace shape");
   });
@@ -1466,16 +1472,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0614/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.14");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.15");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1571,9 +1577,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   const evaluator = new wasm.G1WalkingVizEvaluator(
     new Float64Array([
       0x47315737,
-      7,
+      8,
       0,
-      11,
+      12,
       1 / 480,
       1.5,
       0.65,
@@ -1581,6 +1587,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
       12,
       2,
       1,
+      0,
     ]),
   );
   const admission = decodeG1Admission(evaluator.receipt());
@@ -1654,15 +1661,16 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   const flatEvaluator = new wasm.G1WalkingVizEvaluator(
     new Float64Array([
       0x47315737,
-      7,
+      8,
       0,
-      11,
+      12,
       1 / 480,
       1.5,
       0.65,
       1.55,
       12,
       2,
+      0,
       0,
     ]),
   );
