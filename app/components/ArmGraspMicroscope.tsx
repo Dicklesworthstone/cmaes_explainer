@@ -123,7 +123,7 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
             }`}
           >
             {isGrasped ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
-            {isGrasped ? "Grasp Verified (μ=0.65)" : "Free-Space Approach"}
+            {isGrasped ? "Grasp Verified (assumed μ=0.65)" : "Free-Space Approach"}
           </span>
         </div>
       </div>
@@ -216,7 +216,7 @@ export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKin
         <div className="flex items-center gap-2">
           {dragActive && (
             <span className="rounded-full border border-cyan-400/30 bg-cyan-500/20 px-2 py-0.5 text-[0.62rem] font-bold uppercase text-cyan-200">
-              Interactive IK Active
+              Reach probe · auxiliary 4-joint chain
             </span>
           )}
           <button

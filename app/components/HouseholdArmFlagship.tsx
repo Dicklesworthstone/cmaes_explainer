@@ -14,8 +14,10 @@ import {
   conservativeSegmentClearanceToOBB,
   distanceToOBB,
   projectPointOutOfOBB,
+  resolveCameraBoom,
   sweptSphereOBBEntryPoint,
   type MultiObstacleSceneConfig,
+  type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
 import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
@@ -67,6 +69,7 @@ import {
   MANIPULABLE_OBJECT_PRESETS,
   computeFerrariCannyGWS,
   solveKukaIK,
+  computeKukaFK,
   clampArmTargetPosition,
   isTargetKukaReachable,
 } from "../lib/armInverseKinematics";
@@ -742,7 +745,12 @@ function ArmRig({
       const requiredClearance =
         segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS;
       const segmentLength = scratch.start.distanceTo(scratch.end);
-      segment.visible = multiObstacleScene.obstacles.every((obb) => {
+      // A housing whose swept segment cannot be certified clear of an OBB
+      // is flagged, not hidden: the previous behaviour deleted the cylinder
+      // and left the arm rendered with gaps, which reads as a broken mesh
+      // rather than a contact. The endpoints are already projected, so the
+      // flag marks a mid-segment graze that the point projection cannot fix.
+      const segmentCertified = multiObstacleScene.obstacles.every((obb) => {
         if (obb.exemptFromPenalty) return true;
         const endpointLowerBound =
           Math.min(distanceToOBB(parent, obb), distanceToOBB(child, obb)) -
@@ -753,6 +761,12 @@ function ArmRig({
             requiredClearance
         );
       });
+      segment.visible = true;
+      const segmentMaterial = segment.material as THREE.MeshPhysicalMaterial;
+      if (segmentMaterial.emissive) {
+        segmentMaterial.emissive.setHex(segmentCertified ? 0x000000 : 0xb91c1c);
+        segmentMaterial.emissiveIntensity = segmentCertified ? 0 : 0.9;
+      }
       scratch.direction.subVectors(scratch.end, scratch.start);
       const length = Math.max(0.025, scratch.direction.length());
       scratch.midpoint
@@ -767,7 +781,39 @@ function ArmRig({
       segment.scale.set(1, length, 1);
     }
     previousProjectedPositions.current = projectedPositions;
-    if (objectRef.current) applyOwnerPose(objectRef.current, sample.objectPose);
+    if (objectRef.current) {
+      applyOwnerPose(objectRef.current, sample.objectPose);
+      // The object must live in the same corrected world as the links.
+      // While grasped it rides with the flange: apply exactly the
+      // displacement the wrist link received from the OBB/CCD pass, so the
+      // fingers and the mug never part. Whether grasped or not, the object
+      // itself is then pushed out of any rigid OBB it entered, using half
+      // its footprint as the clearance radius.
+      const wristIndex = sample.linkPoses.length - 1;
+      if (sample.grasped && wristIndex >= 0 && projectedPositions[wristIndex]) {
+        const rawWrist = ownerPositionToThree(sample.linkPoses[wristIndex].position);
+        const wrist = projectedPositions[wristIndex];
+        objectRef.current.position.x += wrist[0] - rawWrist[0];
+        objectRef.current.position.y += wrist[1] - rawWrist[1];
+        objectRef.current.position.z += wrist[2] - rawWrist[2];
+      }
+      const objectRadius =
+        Math.max(
+          admission.scene.objectDimensionsMeters[0],
+          admission.scene.objectDimensionsMeters[1],
+        ) * 0.5;
+      for (const obb of multiObstacleScene.obstacles) {
+        if (obb.exemptFromPenalty) continue;
+        const projected = projectPointOutOfOBB(
+          [objectRef.current.position.x, objectRef.current.position.y, objectRef.current.position.z],
+          obb,
+          objectRadius,
+        );
+        if (projected.wasInside) {
+          objectRef.current.position.set(projected.point[0], projected.point[1], projected.point[2]);
+        }
+      }
+    }
     const gripperGeometry = resolveRenderedGripperContactGeometry({
       commandedGripperWidthM: sample.gripperWidthMeters,
       graspHalfWidthM: admission.scene.graspHalfWidthMeters,
@@ -1024,6 +1070,39 @@ export type ArmCameraMode =
 
 const armCameraScratchVec = new THREE.Vector3();
 
+// Workbench volumes the camera must stay out of. The counter slab and
+// backsplash mirror ArmEnvironment's meshes at the default 0.78 m support
+// height; the house roster (walls + furniture) is appended so the studio
+// backdrop cannot swallow the lens either.
+const ARM_WORKBENCH_OBSTACLES: OrientedBoundingBox[] = [
+  {
+    id: "arm-counter-slab",
+    name: "counter slab",
+    center: [0, 0.78 - 0.045, 0],
+    halfExtents: [1.15, 0.045, 0.825],
+    rotationYawRad: 0,
+  },
+  {
+    id: "arm-backsplash",
+    name: "backsplash",
+    center: [0, 0.78 + 0.5, -0.82],
+    halfExtents: [1.15, 0.525, 0.035],
+    rotationYawRad: 0,
+  },
+  {
+    id: "arm-cabinet",
+    name: "upper cabinet",
+    center: [0.72, 0.78 + 0.25, -0.58],
+    halfExtents: [0.31, 0.22, 0.15],
+    rotationYawRad: 0,
+  },
+];
+const ARM_CAMERA_OBSTACLES: OrientedBoundingBox[] = [
+  ...ARM_WORKBENCH_OBSTACLES,
+  ...createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928).obstacles,
+];
+const ARM_FLY_BOUNDS = { minX: -2.6, maxX: 2.6, minY: 0.2, maxY: 3.6, minZ: -0.75, maxZ: 3.2 };
+
 function ArmCameraRig({
   cameraMode,
   objectPos,
@@ -1031,32 +1110,82 @@ function ArmCameraRig({
   cameraMode: ArmCameraMode;
   objectPos: [number, number, number];
 }) {
-  useFrame(({ camera }) => {
+  const lookAtRef = useRef(new THREE.Vector3(0, 0.45, 0));
+  const controlsRef = useRef<any>(null);
+  const studioTarget = useRef<THREE.Vector3 | null>(null);
+  // Re-entering the studio orbit from a top-down or free-fly camera would
+  // otherwise leave the orbit parked wherever that camera ended; glide
+  // back to the authored studio corner instead.
+  useEffect(() => {
+    if (cameraMode === "studio") {
+      studioTarget.current = new THREE.Vector3(1.55, 1.25, 1.8);
+    } else {
+      studioTarget.current = null;
+    }
+  }, [cameraMode]);
+  useFrame(({ camera }, rawDelta) => {
+    const dt = Math.min(Math.max(rawDelta, 0), 0.1);
+    const ease = (rate: number) => 1 - Math.exp(-rate * dt);
+    if (cameraMode === "studio") {
+      const controls = controlsRef.current;
+      if (studioTarget.current && controls) {
+        controls.object.position.lerp(studioTarget.current, ease(4));
+        controls.update();
+        if (controls.object.position.distanceTo(studioTarget.current) < 0.02) {
+          studioTarget.current = null;
+        }
+      }
+      if (controls) lookAtRef.current.copy(controls.target);
+      return;
+    }
     if (cameraMode === "microscope") {
-      armCameraScratchVec.set(
-        objectPos[0] + 0.32,
-        objectPos[1] + 0.22,
-        objectPos[2] + 0.32,
-      );
-      camera.position.lerp(armCameraScratchVec, 0.08);
-      camera.lookAt(objectPos[0], objectPos[1], objectPos[2]);
+      // Boom from the object toward the studio corner, shortened by the
+      // swept-sphere sweep so the lens never enters the backsplash, the
+      // cabinet, or a house wall when the object sits at the counter's back.
+      const lookAt: [number, number, number] = [objectPos[0], objectPos[1], objectPos[2]];
+      const candidates: [number, number, number][] = [
+        [objectPos[0] + 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32],
+        [objectPos[0] - 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32],
+        [objectPos[0] + 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
+        [objectPos[0] - 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
+      ];
+      let best = resolveCameraBoom(lookAt, candidates[0], ARM_CAMERA_OBSTACLES, 0.06);
+      for (let i = 1; i < candidates.length && best.fraction < 0.999; i++) {
+        const alt = resolveCameraBoom(lookAt, candidates[i], ARM_CAMERA_OBSTACLES, 0.06);
+        if (alt.fraction > best.fraction) best = alt;
+      }
+      armCameraScratchVec.set(...best.position);
+      camera.position.lerp(armCameraScratchVec, ease(4));
+      lookAtRef.current.lerp(new THREE.Vector3(...lookAt), ease(6));
+      camera.lookAt(lookAtRef.current);
     } else if (cameraMode === "overhead") {
-      armCameraScratchVec.set(0, 3.2, 0);
-      camera.position.lerp(armCameraScratchVec, 0.08);
-      camera.lookAt(0, 0.4, 0);
+      armCameraScratchVec.set(objectPos[0] * 0.5, 3.2, objectPos[2] * 0.5 + 0.01);
+      camera.position.lerp(armCameraScratchVec, ease(4));
+      lookAtRef.current.lerp(new THREE.Vector3(objectPos[0] * 0.5, 0.4, objectPos[2] * 0.5), ease(4));
+      camera.lookAt(lookAtRef.current);
     } else if (cameraMode === "side") {
       armCameraScratchVec.set(0, 0.85, 1.75);
-      camera.position.lerp(armCameraScratchVec, 0.08);
-      camera.lookAt(0, 0.45, 0);
+      camera.position.lerp(armCameraScratchVec, ease(4));
+      lookAtRef.current.lerp(new THREE.Vector3(0, 0.45, 0), ease(4));
+      camera.lookAt(lookAtRef.current);
     } else if (cameraMode === "front") {
       armCameraScratchVec.set(1.75, 0.85, 0);
-      camera.position.lerp(armCameraScratchVec, 0.08);
-      camera.lookAt(0, 0.45, 0);
+      camera.position.lerp(armCameraScratchVec, ease(4));
+      lookAtRef.current.lerp(new THREE.Vector3(0, 0.45, 0), ease(4));
+      camera.lookAt(lookAtRef.current);
+    } else if (cameraMode === "fly") {
+      // FlyControls already moved the camera: keep it inside the workbench
+      // envelope and above the floor so the operator cannot fly under the
+      // hardwood or lose the arm behind the fog.
+      camera.position.x = Math.min(ARM_FLY_BOUNDS.maxX, Math.max(ARM_FLY_BOUNDS.minX, camera.position.x));
+      camera.position.y = Math.min(ARM_FLY_BOUNDS.maxY, Math.max(ARM_FLY_BOUNDS.minY, camera.position.y));
+      camera.position.z = Math.min(ARM_FLY_BOUNDS.maxZ, Math.max(ARM_FLY_BOUNDS.minZ, camera.position.z));
     }
   });
 
   return cameraMode === "studio" ? (
     <OrbitControls
+      ref={controlsRef}
       makeDefault
       target={[-0.05, 0.48, 0]}
       enableDamping
@@ -1083,11 +1212,14 @@ const armHouseScene = createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928);
 
 function ArmTargetDragger({
   targetPos,
+  pinLift = 0.06,
   onTargetChange,
   onCollisionChange,
   onUnreachableChange = () => {},
 }: {
   targetPos: [number, number, number];
+  /** Half-height of the marked object, so the pin clears its top. */
+  pinLift?: number;
   onTargetChange: (pos: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; clearance: number }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
@@ -1168,8 +1300,10 @@ function ArmTargetDragger({
         </mesh>
       )}
 
-      {/* Holographic Interactive Target Grab Pin above Object */}
-      <group position={[targetPos[0], targetPos[1] + 0.22, targetPos[2]]}>
+      {/* Holographic Interactive Target Grab Pin above Object: lifted by the
+          object's half-height plus the stalk so neither pin nor stalk
+          enters the object it marks. */}
+      <group position={[targetPos[0], targetPos[1] + pinLift + 0.16, targetPos[2]]}>
         <mesh onPointerDown={handlePointerDown} castShadow>
           <sphereGeometry args={[0.045, 16, 16]} />
           <meshStandardMaterial
@@ -1199,6 +1333,77 @@ function ArmTargetDragger({
           side={THREE.DoubleSide}
         />
       </mesh>
+    </group>
+  );
+}
+
+/**
+ * Ghost reach preview for a dragged target: the browser-side 7-DoF
+ * surrogate chain (computeKukaFK / solveKukaIK, the same probe the dragger
+ * uses for reachability) drawn as a translucent stick chain from the base
+ * to the dragged pin. It answers "could the iiwa get there?" live while
+ * the owner trace keeps playing on the solid rig, and is labelled as the
+ * auxiliary chain, not the owner kinematics.
+ */
+function ArmReachPreview({ target }: { target: [number, number, number] }) {
+  const preview = useMemo(() => {
+    const angles = solveKukaIK(target, [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0.78, 0], 60);
+    const { linkPositions, endEffector } = computeKukaFK(angles, [0, 0.78, 0]);
+    const residual = Math.hypot(
+      target[0] - endEffector[0],
+      target[1] - endEffector[1],
+      target[2] - endEffector[2],
+    );
+    return { linkPositions, endEffector, reachable: residual < 0.02, residual };
+  }, [target]);
+  const color = preview.reachable ? "#22d3ee" : "#f43f5e";
+  const segments = preview.linkPositions.slice(1).map((end, index) => {
+    const start = preview.linkPositions[index];
+    const s = new THREE.Vector3(...start);
+    const e = new THREE.Vector3(...end);
+    const length = Math.max(0.01, s.distanceTo(e));
+    const mid = s.clone().add(e).multiplyScalar(0.5);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      e.clone().sub(s).normalize(),
+    );
+    return { key: index, mid, quaternion, length };
+  });
+  return (
+    <group>
+      {segments.map((segment) => (
+        <mesh key={segment.key} position={segment.mid} quaternion={segment.quaternion}>
+          <cylinderGeometry args={[0.014, 0.014, segment.length, 8]} />
+          <meshBasicMaterial color={color} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+      ))}
+      {preview.linkPositions.map((p, index) => (
+        <mesh key={`joint-${index}`} position={p}>
+          <sphereGeometry args={[0.022, 12, 10]} />
+          <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} />
+        </mesh>
+      ))}
+      {/* Residual: from where the surrogate can reach to where the pin is. */}
+      {preview.residual > 0.004 ? (
+        <mesh
+          position={[
+            (preview.endEffector[0] + target[0]) / 2,
+            (preview.endEffector[1] + target[1]) / 2,
+            (preview.endEffector[2] + target[2]) / 2,
+          ]}
+          quaternion={new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),
+            new THREE.Vector3(
+              target[0] - preview.endEffector[0],
+              target[1] - preview.endEffector[1],
+              target[2] - preview.endEffector[2],
+            ).normalize(),
+          )}
+        >
+          <cylinderGeometry args={[0.005, 0.005, preview.residual, 6]} />
+          <meshBasicMaterial color="#f43f5e" transparent opacity={0.9} depthWrite={false} />
+        </mesh>
+      ) : null}
     </group>
   );
 }
@@ -1376,10 +1581,13 @@ function ArmStage({
 
       <ArmTargetDragger
         targetPos={objectPos}
+        pinLift={admission ? admission.scene.objectDimensionsMeters[2] * 0.5 : 0.06}
         onTargetChange={onDragTargetChange ?? (() => {})}
         onCollisionChange={onCollisionChange ?? (() => {})}
         onUnreachableChange={onUnreachableChange}
       />
+
+      {dragTarget ? <ArmReachPreview target={dragTarget} /> : null}
 
       <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} />
     </Canvas>
@@ -1449,42 +1657,12 @@ export function HouseholdArmFlagship({
   const [armDragTarget, setArmDragTarget] = useState<
     [number, number, number] | null
   >(null);
-  // Arm spawn-safe: on first trace load, if the user has not yet
-  // dragged the target, seed armDragTarget with a clamped+reachable
-  // position so the orange drag marker is NEVER rendered inside the
-  // table or a wall. The clamp uses the same primitive the dragger
-  // uses on every pointerMove (clampArmTargetPosition); if the
-  // clamped result is outside the arm's reachable workspace, fall
-  // back to the canonical home-pose target above the workbench.
-  // Async-defer the setState (react-hooks/set-state-in-effect).
-  useEffect(() => {
-    if (armDragTarget !== null) return;
-    if (!trace) return;
-    const firstSample = trace.samples[0];
-    if (!firstSample) return;
-    let cancelled = false;
-    const raw: [number, number, number] = [
-      firstSample.objectPose.position[0],
-      firstSample.objectPose.position[2],
-      -firstSample.objectPose.position[1],
-    ];
-    const { clampedTarget } = clampArmTargetPosition(
-      raw,
-      armHouseScene.obstacles,
-      0.78,
-      0.04,
-    );
-    const safe: [number, number, number] = isTargetKukaReachable(clampedTarget)
-      ? clampedTarget
-      : [0, 0.82, 0.4];
-    Promise.resolve().then(() => {
-      if (cancelled) return;
-      setArmDragTarget((current) => current ?? safe);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [trace, armDragTarget]);
+  // armDragTarget stays null until the operator actually drags the pin.
+  // While null the pin rides on the live owner object pose (which is
+  // already on or above the counter), so nothing is seeded on mount and
+  // the "Target Moved" chip cannot appear before a real drag. The earlier
+  // mount-time seed froze the pin at the first-frame object position while
+  // the mug moved on without it.
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [armCollisionState, setArmCollisionState] = useState<{
     isColliding: boolean;
@@ -1732,7 +1910,10 @@ export function HouseholdArmFlagship({
     ) {
       const p7 = currentSampleForHUD.linkPoses[7].position;
       return solveKukaIK(
-        [p7[0], p7[2], p7[1]],
+        // owner (x, y, z) -> three (x, z, -y), the same map every other
+        // conversion on this page uses; the missing negation mirrored the
+        // joint strip about Z whenever no drag target was set.
+        [p7[0], p7[2], -p7[1]],
         [0, 0.4, 0, -1.2, 0, 0.8, 0],
         [0, 0.78, 0],
         30,
@@ -2637,9 +2818,13 @@ export function HouseholdArmFlagship({
               convex separation.
             </li>
             <li>
-              <strong className="text-slate-200">Rendered verbatim:</strong> the
-              browser receives object plus eight world poses. It never solves
-              forward kinematics.
+              <strong className="text-slate-200">Owner poses, browser guard:</strong>{" "}
+              the browser receives the object plus eight world poses from the
+              kernel and draws them; it then pushes any link or object that
+              entered a house obstacle box back to that box&apos;s surface
+              (a display-side guard the kernel does not know about). The
+              joint dials and the cyan reach ghost come from a reduced
+              4-joint browser chain, not from the owner kinematics.
             </li>
             <li>
               <strong className="text-slate-200">Grasp test:</strong> both
