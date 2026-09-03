@@ -45,11 +45,40 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(event.state, "ready")
         XCTAssertEqual(event.detail, "Owner trace ready")
         XCTAssertEqual(event.metrics.completedSteps, 720)
+        XCTAssertEqual(event.capabilities, ["optimize"])
 
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(schemaVersion: 2)))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(sequence: 0)))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(lab: "foreign")))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(state: "invented")))
+    }
+
+    func testCommandAcknowledgementRequiresMatchingBoundedContract() throws {
+        let payload: [String: Any] = [
+            "type": "engine.command.ack",
+            "schemaVersion": 1,
+            "sequence": 7,
+            "commandId": "9B84A8A2-1",
+            "lab": "arm",
+            "command": "optimize",
+            "accepted": true,
+            "detail": "Accepted 20 generations.",
+        ]
+        let acknowledgement = try XCTUnwrap(RobotEngineCommandAcknowledgement(payload: payload))
+        XCTAssertEqual(acknowledgement.sequence, 7)
+        XCTAssertEqual(acknowledgement.commandID, "9B84A8A2-1")
+        XCTAssertEqual(acknowledgement.lab, .arm)
+        XCTAssertTrue(acknowledgement.accepted)
+
+        var malformed = payload
+        malformed["accepted"] = "yes"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
+        malformed = payload
+        malformed["commandId"] = "unsafe id"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
+        malformed = payload
+        malformed["command"] = "eval"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
     }
 
     private func statusPayload(
@@ -71,6 +100,7 @@ final class RobotEngineBridgeTests: XCTestCase {
                 "completedSteps": 720,
                 "placed": NSNull(),
             ],
+            "capabilities": ["optimize"],
         ]
     }
 }

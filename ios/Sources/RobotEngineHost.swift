@@ -83,8 +83,10 @@ struct RobotEngineStatusMessage {
     let state: String
     let detail: String
     let metrics: RobotEngineMetrics
+    let capabilities: Set<String>
 
     init?(payload: [String: Any]) {
+        let rawCapabilities = payload["capabilities"] as? [String] ?? []
         guard payload["type"] as? String == "engine.status",
               let schemaVersion = Self.integer(payload["schemaVersion"]),
               schemaVersion == Self.schemaVersion,
@@ -95,7 +97,8 @@ struct RobotEngineStatusMessage {
               ["loading", "ready", "running", "failed"].contains(state),
               let detail = payload["detail"] as? String, !detail.isEmpty,
               let rawMetrics = payload["metrics"] as? [String: Any],
-              let metrics = RobotEngineMetrics(payload: rawMetrics) else {
+              let metrics = RobotEngineMetrics(payload: rawMetrics),
+              rawCapabilities.allSatisfy({ $0 == "optimize" }) else {
             return nil
         }
         self.sequence = sequence
@@ -103,6 +106,7 @@ struct RobotEngineStatusMessage {
         self.state = state
         self.detail = detail
         self.metrics = metrics
+        capabilities = Set(rawCapabilities)
     }
 
     private static func integer(_ value: Any?) -> Int? {
@@ -117,6 +121,52 @@ struct RobotEngineStatusMessage {
               value <= Double(Int.max) else {
             return nil
         }
+        return Int(value)
+    }
+}
+
+struct RobotEngineCommandAcknowledgement {
+    static let schemaVersion = 1
+
+    let sequence: Int
+    let commandID: String
+    let lab: RobotLab
+    let command: String
+    let accepted: Bool
+    let detail: String
+
+    init?(payload: [String: Any]) {
+        guard payload["type"] as? String == "engine.command.ack",
+              let schemaVersion = Self.integer(payload["schemaVersion"]),
+              schemaVersion == Self.schemaVersion,
+              let sequence = Self.integer(payload["sequence"]), sequence > 0,
+              let commandID = payload["commandId"] as? String,
+              commandID.range(of: #"^[A-Za-z0-9._-]{1,80}$"#, options: .regularExpression) != nil,
+              let rawLab = payload["lab"] as? String,
+              let lab = RobotLab(rawValue: rawLab),
+              payload["command"] as? String == "optimize",
+              let accepted = payload["accepted"] as? Bool,
+              let detail = payload["detail"] as? String,
+              !detail.isEmpty,
+              detail.count <= 300 else {
+            return nil
+        }
+        self.sequence = sequence
+        self.commandID = commandID
+        self.lab = lab
+        command = "optimize"
+        self.accepted = accepted
+        self.detail = detail
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        guard value.isFinite,
+              value.rounded(.towardZero) == value,
+              value >= Double(Int.min),
+              value <= Double(Int.max) else { return nil }
         return Int(value)
     }
 }
@@ -149,6 +199,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var ownerKernelVersion = "not bundled"
     @Published private(set) var crossOriginIsolated = false
     @Published private(set) var metrics = RobotEngineMetrics.empty
+    @Published private(set) var supportsOptimize = false
+    @Published private(set) var pendingCommandID: String?
+    @Published private(set) var commandDetail: String?
 
     let webView: WKWebView
 
@@ -157,6 +210,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var selectedLab: RobotLab = .humanoid
     private var activeNavigation: WKNavigation?
     private var readinessTimeoutTask: Task<Void, Never>?
+    private var commandTimeoutTask: Task<Void, Never>?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
@@ -196,6 +250,47 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             detail = "Reloading the \(selectedLab.title.lowercased()) engine…"
             activeNavigation = webView.reloadFromOrigin()
             armReadinessTimeout(for: selectedLab)
+        }
+    }
+
+    func optimize() {
+        guard phase == .ready, pendingCommandID == nil else { return }
+        let commandID = UUID().uuidString
+        pendingCommandID = commandID
+        commandDetail = "Requesting an owner optimization run…"
+        commandTimeoutTask?.cancel()
+        commandTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+            guard let self, self.pendingCommandID == commandID else { return }
+            self.pendingCommandID = nil
+            self.commandDetail = "The embedded owner did not acknowledge the command within five seconds."
+        }
+        let payload: [String: Any] = [
+            "type": "engine.command",
+            "schemaVersion": 1,
+            "commandId": commandID,
+            "lab": selectedLab.rawValue,
+            "command": "optimize",
+        ]
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.webView.callAsyncJavaScript(
+                    "return window.__frankenrobotsReceiveNativeCommand?.(command) ?? false;",
+                    arguments: ["command": payload],
+                    in: nil,
+                    contentWorld: .page
+                )
+            } catch {
+                guard self.pendingCommandID == commandID else { return }
+                self.commandTimeoutTask?.cancel()
+                self.pendingCommandID = nil
+                self.commandDetail = "Native command delivery failed: \(error.localizedDescription)"
+            }
         }
     }
 
@@ -366,12 +461,24 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             return
         }
 
+        if let acknowledgement = RobotEngineCommandAcknowledgement(payload: payload) {
+            guard acknowledgement.lab == selectedLab,
+                  acknowledgement.sequence > lastBridgeSequence,
+                  acknowledgement.commandID == pendingCommandID else { return }
+            lastBridgeSequence = acknowledgement.sequence
+            commandTimeoutTask?.cancel()
+            pendingCommandID = nil
+            commandDetail = acknowledgement.detail
+            return
+        }
+
         guard let event = RobotEngineStatusMessage(payload: payload),
               event.lab == selectedLab,
               event.sequence > lastBridgeSequence else { return }
         lastBridgeSequence = event.sequence
         detail = event.detail
         metrics = event.metrics
+        supportsOptimize = event.capabilities.contains("optimize")
         apply(state: event.state, detail: event.detail)
     }
 
@@ -384,6 +491,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             return
         }
         metrics = .empty
+        supportsOptimize = false
         self.detail = detail
         apply(state: state, detail: detail)
     }
@@ -410,6 +518,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private func resetBridgeState() {
         lastBridgeSequence = 0
         metrics = .empty
+        supportsOptimize = false
+        commandTimeoutTask?.cancel()
+        pendingCommandID = nil
+        commandDetail = nil
     }
 }
 

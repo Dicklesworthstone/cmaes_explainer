@@ -45,7 +45,10 @@ import {
 } from "./G1ObjectiveEqualizer";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { WalkQualityComparison } from "./WalkQualityComparison";
-import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
+import {
+  installFrankenRobotsNativeCommandHandler,
+  reportFrankenRobotsEngineState,
+} from "../lib/frankenrobotsBridge";
 import {
   clampPositionAgainstHouseCollisions,
   closestPointOnOBB,
@@ -2233,6 +2236,26 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setBusy(mode);
     workerRef.current.postMessage(message);
   }, []);
+
+  useEffect(() => {
+    if (!embedded) return;
+    return installFrankenRobotsNativeCommandHandler("humanoid", () => {
+      if (!workerAvailable || !workerRef.current) {
+        return { accepted: false, detail: "The humanoid owner worker is not ready." };
+      }
+      if (inFlightRef.current) {
+        return { accepted: false, detail: "An owner request is already running." };
+      }
+      post(
+        { type: "optimize", task, family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
+        "optimize",
+      );
+      return {
+        accepted: true,
+        detail: `Accepted ${generations} ${family} generations for the ${task} owner experiment.`,
+      };
+    });
+  }, [embedded, workerAvailable, post, task, family, generations, seedIndex, challenge, searchSigma]);
 
   const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
     setTask(nextTask);

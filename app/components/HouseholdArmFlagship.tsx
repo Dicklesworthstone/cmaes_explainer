@@ -65,7 +65,10 @@ import {
   ArmGraspMicroscopeHUD,
   ArmJointKinematicsStrip,
 } from "./ArmGraspMicroscope";
-import { reportFrankenRobotsEngineState } from "../lib/frankenrobotsBridge";
+import {
+  installFrankenRobotsNativeCommandHandler,
+  reportFrankenRobotsEngineState,
+} from "../lib/frankenrobotsBridge";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
   MANIPULABLE_OBJECT_PRESETS,
@@ -1887,6 +1890,26 @@ export function HouseholdArmFlagship({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!embedded) return;
+    return installFrankenRobotsNativeCommandHandler("arm", () => {
+      if (!workerAvailable || !workerRef.current) {
+        return { accepted: false, detail: "The arm owner worker is not ready." };
+      }
+      if (inFlightRef.current) {
+        return { accepted: false, detail: "An owner request is already running." };
+      }
+      post(
+        { type: "optimize", task, family, generations, seedIndex, mode: "continue" },
+        "optimize",
+      );
+      return {
+        accepted: true,
+        detail: `Accepted ${generations} ${family} generations for the ${task} owner experiment.`,
+      };
+    });
+  }, [embedded, workerAvailable, post, task, family, generations, seedIndex]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {

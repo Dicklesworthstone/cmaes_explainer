@@ -35,6 +35,7 @@ struct FrankenRobotsView: View {
                 VStack(spacing: geometry.size.height < 650 ? 8 : 12) {
                     masthead(compact: geometry.size.height < 650)
                     labSelector
+                    nativeCommandBar
                     if geometry.size.width >= 920 {
                         wideLayout
                     } else {
@@ -189,6 +190,41 @@ struct FrankenRobotsView: View {
             .tint(lab.accent)
             .accessibilityHint("Shows the current lab facts and engine diagnostics")
         }
+    }
+
+    private var nativeCommandBar: some View {
+        HStack(spacing: 10) {
+            Label("NATIVE OWNER CONTROL", systemImage: "link.badge.plus")
+                .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+                .foregroundStyle(RobotTheme.secondary)
+            Spacer(minLength: 8)
+            if let commandDetail = engine.commandDetail {
+                Text(commandDetail)
+                    .font(.system(size: RobotTheme.size(8.5), design: .rounded))
+                    .foregroundStyle(RobotTheme.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Button {
+                engine.optimize()
+            } label: {
+                Label(
+                    engine.pendingCommandID == nil
+                        ? (engine.supportsOptimize ? "Optimize" : "Controls pending")
+                        : "Requesting…",
+                    systemImage: "sparkles"
+                )
+                    .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(lab.accent)
+            .disabled(engine.phase != .ready || !engine.supportsOptimize || engine.pendingCommandID != nil)
+            .accessibilityIdentifier("robot-native-optimize")
+            .accessibilityHint("Starts one acknowledged optimization request in the embedded owner engine")
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 44)
+        .background(RobotTheme.panel.opacity(0.82), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var wideLayout: some View {
