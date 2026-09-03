@@ -1478,16 +1478,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0615/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.15");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.16");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {

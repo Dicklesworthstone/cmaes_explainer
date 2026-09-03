@@ -1170,7 +1170,9 @@ function chooseBoom(
     const clamped = new THREE.Vector3(...desired);
     clampCameraToHouse(clamped);
     const resolved = resolveCameraBoom(lookAt, [clamped.x, clamped.y, clamped.z], obstacles, CAMERA_PROBE_RADIUS);
-    const score = resolved.fraction + (preferred === azimuthDeg ? 0.25 : 0);
+    // Small enough that a preferred boom only wins a near-tie; 0.25 let a
+    // badly blocked previous choice beat a clear new one.
+    const score = resolved.fraction + (preferred === azimuthDeg ? 0.08 : 0);
     if (score > bestScore) {
       bestScore = score;
       best = { azimuthDeg, position: resolved.position, fraction: resolved.fraction };
@@ -1907,6 +1909,12 @@ function RobotStage({
     () => (trace ? robotHeading(trace, sampleIndex) : [1, 0]),
     [trace, sampleIndex],
   );
+  // Memoized: this scans 30 links against every rigid house body, and the
+  // stage re-renders for unrelated prop changes (camera mode, room, toggles).
+  const clearanceReadout = useMemo(
+    () => (anchors ? nearestRigidObstacle(anchors.links, houseSceneData.obstacles) : null),
+    [anchors],
+  );
   const displayedPelvisThree: [number, number, number] = anchors
     ? anchors.pelvis
     : robotDragOffset
@@ -1993,9 +2001,7 @@ function RobotStage({
         hasRobot={Boolean(trace && robotDragOffset)}
       />
 
-      <G1ClearanceBeam
-        readout={anchors ? nearestRigidObstacle(anchors.links, houseSceneData.obstacles) : null}
-      />
+      <G1ClearanceBeam readout={clearanceReadout} />
 
       <G1PhysicsDebugOverlay
         enabled={physicsDebug}
@@ -2770,11 +2776,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                       ? "border-rose-400/80 bg-rose-950/85 text-rose-200"
                       : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
                   }`}
-                  title={`Every step, the walking owner tested its 20 declared body colliders (pelvis, hips, knees, waist, torso, shoulders, elbows — not hands or feet) against ${G1_KERNEL_OBSTACLES.length} house boxes sent in the config packet. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m. The separate clearance readout measures all 30 rendered links.`}
+                  title={`Every step, the walking owner tested a collider sphere on each of its 30 links — hands and feet included — against ${G1_KERNEL_OBSTACLES.length} house boxes sent in the config packet. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m. A rollout that drives any link into the geometry is terminated and charged, not projected away.`}
                 >
                   {trace.terminationReason === "body obstacle"
                     ? `🧱 Owner stopped on contact · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm into geometry`
-                    : `🧱 Owner body vs ${G1_KERNEL_OBSTACLES.length} house boxes · 0 penetration`}
+                    : `🧱 All 30 links vs ${G1_KERNEL_OBSTACLES.length} house boxes · 0 penetration`}
                 </span>
               ) : null}
 

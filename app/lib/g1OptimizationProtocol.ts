@@ -32,6 +32,16 @@ export type G1OptimizationRequest =
     };
 
 /**
+ * Seat the rendered robot stands at, and the keep-out roster expressed
+ * relative to it. Declared before the function that uses them as a default
+ * argument: a default is evaluated at call time, so a later declaration works
+ * today, but only because nothing calls it during module evaluation. Ordering
+ * them first removes that trap.
+ */
+export const G1_HOUSE_SEAT = g1SeatForHouse();
+export const G1_KERNEL_OBSTACLES = g1KernelObstacleRoster(G1_HOUSE_SEAT.offset);
+
+/**
  * The walking config every worker call uses, including the keep-out roster.
  *
  * The owner starts each rollout at its own origin, so the boxes are declared
@@ -46,10 +56,6 @@ export function g1OptimizationConfig(
 ): G1WalkingConfig {
   return { ...DEFAULT_G1_WALKING_CONFIG, task, challenge, obstacles };
 }
-
-/** Seat the rendered robot stands at, and the roster relative to it. */
-export const G1_HOUSE_SEAT = g1SeatForHouse();
-export const G1_KERNEL_OBSTACLES = g1KernelObstacleRoster(G1_HOUSE_SEAT.offset);
 
 export function g1OptimizationRunKey(
   task: G1Task,
