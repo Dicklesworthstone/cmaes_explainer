@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   findClearSpawnPosition,
+  findClearTrajectorySpawnOffset,
+  resolveCameraBoom,
   createHouseNavigationScene,
   createHouseWallObstacles,
   createSceneFromHouseFurniture,
@@ -289,5 +291,82 @@ describe("findClearSpawnPosition — the robot never spawns inside a wall (cmaes
         maxZ: 0.2,
       }),
     ).toThrow(/no collision-free robot spawn/);
+  });
+});
+
+describe("findClearTrajectorySpawnOffset / resolveCameraBoom (spawn-inside-sofa and camera-in-wall regressions)", () => {
+  const scene = createHouseNavigationScene();
+
+  test("findClearSpawnPosition returns the verified grid sample, never a Y-lifted push-out", () => {
+    const spawn = findClearSpawnPosition(scene.obstacles, 0.85);
+    expect(spawn[1]).toBe(0.75);
+    for (const obb of scene.obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      expect(distanceToOBB(spawn, obb), obb.name).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+
+  test("trajectory seat keeps a two-metre walking footprint clear of walls and furniture", () => {
+    // A synthetic 30-point footprint: a pelvis-height line two metres long
+    // in +X plus a low foot line, exactly the shape of a walking trace.
+    const footprint: [number, number, number][] = [];
+    for (let i = 0; i <= 20; i++) {
+      footprint.push([i * 0.1, 0.77, 0]);
+      footprint.push([i * 0.1, 0.05, 0.1]);
+      footprint.push([i * 0.1, 0.05, -0.1]);
+    }
+    const seat = findClearTrajectorySpawnOffset(scene.obstacles, {
+      footprint,
+      clearance: 0.18,
+      anchor: [-1.4, 2.6],
+      step: 0.25,
+    });
+    expect(seat.offset[1]).toBe(0);
+    expect(seat.minClearance).toBeGreaterThanOrEqual(0.18);
+    for (const point of footprint) {
+      const world: [number, number, number] = [point[0] + seat.offset[0], point[1], point[2] + seat.offset[2]];
+      for (const obb of scene.obstacles) {
+        if (obb.exemptFromPenalty) continue;
+        expect(distanceToOBB(world, obb), obb.name).toBeGreaterThanOrEqual(0.18);
+      }
+    }
+    // Nearest-to-anchor ordering: nothing closer to the anchor is feasible.
+    const d = Math.hypot(seat.pelvis[0] + 1.4, seat.pelvis[1] - 2.6);
+    expect(d).toBeLessThan(1.5);
+  });
+
+  test("trajectory seat refuses when no offset can fit the footprint", () => {
+    const hugeFootprint: [number, number, number][] = [];
+    for (let x = -6; x <= 6; x += 0.5) hugeFootprint.push([x, 0.77, 0]);
+    expect(() =>
+      findClearTrajectorySpawnOffset(scene.obstacles, {
+        footprint: hugeFootprint,
+        clearance: 0.18,
+        anchor: [0, 0],
+      }),
+    ).toThrow();
+  });
+
+  test("camera boom stops short of a wall between the subject and the desired position", () => {
+    // Subject in hall; desired camera beyond the bedroom divider wall at z = -1.3.
+    const lookAt: [number, number, number] = [-2.0, 0.85, 0.0];
+    const desired: [number, number, number] = [-2.0, 1.6, -2.5];
+    const boom = resolveCameraBoom(lookAt, desired, scene.obstacles, 0.12);
+    expect(boom.fraction).toBeLessThan(1);
+    expect(boom.blockedBy).toMatch(/wall/);
+    expect(boom.position[2]).toBeGreaterThan(-1.3);
+    for (const obb of scene.obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      expect(distanceToOBB(boom.position, obb), obb.name).toBeGreaterThanOrEqual(0.05);
+    }
+  });
+
+  test("camera boom is untouched when the line of sight is clear", () => {
+    const lookAt: [number, number, number] = [-1.5, 0.85, 2.6];
+    const desired: [number, number, number] = [-1.5, 1.8, 2.9];
+    const boom = resolveCameraBoom(lookAt, desired, scene.obstacles, 0.12);
+    expect(boom.fraction).toBe(1);
+    expect(boom.blockedBy).toBeNull();
+    expect(boom.position).toEqual(desired);
   });
 });

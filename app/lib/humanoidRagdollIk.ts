@@ -19,19 +19,92 @@ export type InteractiveLimbPinId =
 export interface InteractiveLimbPin {
   id: InteractiveLimbPinId;
   label: string;
-  nominalOffset: [number, number, number];
+  /**
+   * Where the pin sits relative to the live link it controls, in the
+   * robot's heading frame: [forward, up, lateral-left] meters. Every
+   * standoff is at least one link radius plus one pin radius long so the
+   * pin sphere floats just outside the body shell instead of inside it.
+   */
+  standoff: [number, number, number];
   color: string;
   radius: number;
 }
 
+/** Radius of the largest rendered body link; pins must stay outside it. */
+export const G1_BODY_LINK_RADIUS_METERS = 0.105;
+
 export const G1_INTERACTIVE_PINS: InteractiveLimbPin[] = [
-  { id: "head", label: "Head", nominalOffset: [0, 0.58, 0], color: "#38bdf8", radius: 0.05 },
-  { id: "pelvis", label: "Pelvis / Root", nominalOffset: [0, 0, 0], color: "#f59e0b", radius: 0.06 },
-  { id: "leftHand", label: "Left Hand", nominalOffset: [0.15, 0.15, -0.22], color: "#22d3ee", radius: 0.045 },
-  { id: "rightHand", label: "Right Hand", nominalOffset: [0.15, 0.15, 0.22], color: "#a855f7", radius: 0.045 },
-  { id: "leftFoot", label: "Left Foot", nominalOffset: [0, -0.72, -0.12], color: "#10b981", radius: 0.05 },
-  { id: "rightFoot", label: "Right Foot", nominalOffset: [0, -0.72, 0.12], color: "#ec4899", radius: 0.05 },
+  // In front of the face: the root grab handle already floats above the crown.
+  { id: "head", label: "Head", standoff: [0.22, -0.12, 0], color: "#38bdf8", radius: 0.05 },
+  { id: "pelvis", label: "Pelvis / Root", standoff: [-0.3, 0, 0], color: "#f59e0b", radius: 0.06 },
+  { id: "leftHand", label: "Left Hand", standoff: [0.05, 0, 0.17], color: "#22d3ee", radius: 0.045 },
+  { id: "rightHand", label: "Right Hand", standoff: [0.05, 0, -0.17], color: "#a855f7", radius: 0.045 },
+  { id: "leftFoot", label: "Left Foot", standoff: [0.2, 0.02, 0.05], color: "#10b981", radius: 0.05 },
+  { id: "rightFoot", label: "Right Foot", standoff: [0.2, 0.02, -0.05], color: "#ec4899", radius: 0.05 },
 ];
+
+/**
+ * Compose a pin's world position from its live link anchor and the
+ * robot's horizontal heading (unit vector in the x/z plane).
+ */
+export function limbPinRestPosition(
+  anchor: readonly [number, number, number],
+  heading: readonly [number, number],
+  standoff: readonly [number, number, number],
+): [number, number, number] {
+  const [fx, fz] = heading;
+  // Lateral-left of heading in a Y-up right-handed frame is (fz, -fx).
+  const lx = fz;
+  const lz = -fx;
+  return [
+    anchor[0] + fx * standoff[0] + lx * standoff[2],
+    anchor[1] + standoff[1],
+    anchor[2] + fz * standoff[0] + lz * standoff[2],
+  ];
+}
+
+/**
+ * Push a sphere out of every body-link sphere it overlaps. Used for the
+ * interactive pins so that a dragged pin never enters the humanoid's own
+ * shell. Gauss-Seidel relaxation handles the case where pushing out of one
+ * link lands the sphere inside a neighbour.
+ */
+export function clampSphereAgainstLinks(
+  pos: [number, number, number],
+  radius: number,
+  links: readonly (readonly [number, number, number])[],
+  linkRadius: number = G1_BODY_LINK_RADIUS_METERS,
+  margin = 0.01,
+): { clamped: [number, number, number]; overlapped: boolean } {
+  let [cx, cy, cz] = pos;
+  const separation = radius + linkRadius + margin;
+  let overlapped = false;
+  for (let pass = 0; pass < 4; pass++) {
+    let moved = false;
+    for (const link of links) {
+      let dx = cx - link[0];
+      let dy = cy - link[1];
+      let dz = cz - link[2];
+      let d = Math.hypot(dx, dy, dz);
+      if (d >= separation) continue;
+      overlapped = true;
+      moved = true;
+      if (d < 1e-6) {
+        // Degenerate: sphere centred on the link. Push straight up.
+        dx = 0;
+        dy = 1;
+        dz = 0;
+        d = 1;
+      }
+      const scale = separation / d;
+      cx = link[0] + dx * scale;
+      cy = link[1] + dy * scale;
+      cz = link[2] + dz * scale;
+    }
+    if (!moved) break;
+  }
+  return { clamped: [cx, cy, cz], overlapped };
+}
 
 export interface G1LimbIKTarget {
   leftFoot?: [number, number, number];

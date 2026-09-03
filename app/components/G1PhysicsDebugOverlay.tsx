@@ -113,31 +113,6 @@ export function G1PhysicsDebugOverlay({
 
   return (
     <group>
-      {/* 1. Body-link pose envelopes — orientation aids, not guard geometry */}
-      {sample
-        ? sample.linkPoses.map((pose, idx) => {
-            const name = G1_LINK_NAMES[idx] ?? `link-${idx}`;
-            const r = LINK_RADIUS[name] ?? 0.042;
-            const raw = ownerToThree(pose.position);
-            const pos: [number, number, number] = [
-              raw[0] + bodyOffset[0],
-              raw[1] + bodyOffset[1],
-              raw[2] + bodyOffset[2],
-            ];
-            return (
-              <mesh key={`col-${idx}`} position={pos}>
-                <sphereGeometry args={[r, 8, 6]} />
-                <meshBasicMaterial
-                  color="#22d3ee"
-                  wireframe
-                  transparent
-                  opacity={0.45}
-                />
-              </mesh>
-            );
-          })
-        : null}
-
       {/* 2. House OBB obstacles — red wireframe boxes with yaw */}
       {obstacleEdges.map(({ edges, obb }, idx) => (
         <lineSegments
@@ -158,18 +133,6 @@ export function G1PhysicsDebugOverlay({
           />
         </lineSegments>
       ))}
-
-      {/* 3. Pelvis safety sphere — yellow wireframe */}
-      <mesh position={pelvisPosition}>
-        <sphereGeometry args={[safeRadius, 12, 8]} />
-        <meshBasicMaterial
-          color="#facc15"
-          wireframe
-          transparent
-          opacity={0.75}
-          depthWrite={false}
-        />
-      </mesh>
 
       {/* 4. Ground projection of the safety sphere */}
       <mesh
