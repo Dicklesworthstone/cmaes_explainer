@@ -2275,29 +2275,54 @@ export function HouseholdArmFlagship({
                     <Play className="h-3.5 w-3.5" />
                   )}
                 </button>
-                <input
-                  aria-label="Arm trace position"
-                  type="range"
-                  min={0}
-                  max={traceLastIndex}
-                  step={1}
-                  value={clampArmPlaybackIndex(
-                    trace?.samples.length ?? 0,
-                    sampleIndex,
-                  )}
-                  disabled={!trace}
-                  onChange={(event) => {
-                    setIsPlaying(false);
-                    setSampleIndex(
-                      clampArmPlaybackIndex(
-                        trace?.samples.length ?? 0,
-                        Number(event.target.value),
-                      ),
-                    );
-                    setPlaybackResetToken((token) => token + 1);
-                  }}
-                  className="min-w-0 flex-1 accent-orange-400 disabled:opacity-35 sm:w-32 sm:flex-none"
-                />
+                <div className="relative min-w-0 flex-1 sm:w-32 sm:flex-none">
+                  {/* Grasp phase band: the owner receipt's first-grasp time and
+                      grasp duration, drawn under the scrubber so the viewer
+                      can see when the pads were engaged along the 6 s trace. */}
+                  {trace && traceDuration > 0 && trace.graspDurationSeconds > 0 ? (
+                    <div
+                      className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-slate-700/40"
+                      aria-hidden="true"
+                    >
+                      <div
+                        className="absolute h-full rounded-full bg-emerald-400/60"
+                        style={{
+                          left: `${Math.max(0, Math.min(100, (trace.firstGraspTimeSeconds / traceDuration) * 100))}%`,
+                          width: `${Math.max(1, Math.min(100, (trace.graspDurationSeconds / traceDuration) * 100))}%`,
+                        }}
+                        title={`Pads engaged ${number(trace.firstGraspTimeSeconds, 2)} s → ${number(trace.firstGraspTimeSeconds + trace.graspDurationSeconds, 2)} s (owner receipt)`}
+                      />
+                    </div>
+                  ) : null}
+                  <input
+                    aria-label="Arm trace position"
+                    type="range"
+                    min={0}
+                    max={traceLastIndex}
+                    step={1}
+                    value={clampArmPlaybackIndex(
+                      trace?.samples.length ?? 0,
+                      sampleIndex,
+                    )}
+                    disabled={!trace}
+                    onChange={(event) => {
+                      setIsPlaying(false);
+                      setSampleIndex(
+                        clampArmPlaybackIndex(
+                          trace?.samples.length ?? 0,
+                          Number(event.target.value),
+                        ),
+                      );
+                      setPlaybackResetToken((token) => token + 1);
+                    }}
+                    className="relative w-full min-w-0 accent-orange-400 disabled:opacity-35"
+                    title={
+                      trace && trace.graspDurationSeconds > 0
+                        ? `Green band: pads engaged ${number(trace.firstGraspTimeSeconds, 2)}–${number(trace.firstGraspTimeSeconds + trace.graspDurationSeconds, 2)} s`
+                        : undefined
+                    }
+                  />
+                </div>
                 <span className="shrink-0 font-mono text-[0.62rem] tabular-nums text-slate-300">
                   {currentPlaybackTime.toFixed(2)} / {traceDuration.toFixed(2)}{" "}
                   s
