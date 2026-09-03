@@ -7,12 +7,19 @@ final class RobotEngineBridgeTests: XCTestCase {
         let receipt = RobotRunReceipt(
             schemaVersion: RobotRunReceipt.schemaVersion,
             exportedAt: exportedAt,
-            lab: "humanoid",
+            lab: "arm",
             engineState: "ready",
             detail: "Owner trace ready",
             bridgeSequence: 9,
             capabilities: ["optimize"],
-            metrics: RobotEngineMetrics(generation: 12, bodyPenetrationMeters: 0),
+            metrics: RobotEngineMetrics(
+                generation: 12,
+                bestObjective: -177.95,
+                placed: true,
+                certifiedClearanceMeters: 0.0471,
+                collisionRiskIntegral: 0,
+                possibleCollisionTimeSeconds: 0
+            ),
             provenance: RobotReceiptProvenance(
                 appSourceCommit: "abc123",
                 frankenSimWorkspaceCommit: "def456",

@@ -102,6 +102,74 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations() throws {
+        let device = XCUIDevice.shared
+        device.orientation = .portrait
+        addTeardownBlock { device.orientation = .portrait }
+
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = "arm"
+        app.launch()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 12))
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
+
+        let inspector = app.scrollViews["robot-inspector-scroll"]
+        XCTAssertTrue(inspector.waitForExistence(timeout: 8), app.debugDescription)
+        let clearance = app.descendants(matching: .any)["robot-live-certified-clearance"]
+        let risk = app.descendants(matching: .any)["robot-live-collision-risk"]
+        let possibleContact = app.descendants(matching: .any)["robot-live-possible-collision"]
+        for _ in 0..<5 where !(clearance.exists && risk.exists && possibleContact.exists) {
+            inspector.swipeUp()
+        }
+        XCTAssertTrue(clearance.exists, app.debugDescription)
+        XCTAssertTrue(risk.exists, app.debugDescription)
+        XCTAssertTrue(possibleContact.exists, app.debugDescription)
+
+        let portrait = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        portrait.name = "Arm safety receipts on iPad portrait"
+        portrait.lifetime = .keepAlways
+        add(portrait)
+
+        device.orientation = .landscapeLeft
+        let stage = app.descendants(matching: .any)["robot-stage"]
+        XCTAssertTrue(stage.waitForExistence(timeout: 8))
+        let rotated = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "frame.size.width > frame.size.height"),
+            object: app
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 8), .completed)
+
+        let landscape = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        landscape.name = "Arm safety receipts on iPad landscape"
+        landscape.lifetime = .keepAlways
+        add(landscape)
+
+        let exportButton = app.buttons["robot-export-receipt"]
+        XCTAssertTrue(exportButton.waitForExistence(timeout: 5), app.debugDescription)
+        for _ in 0..<4 where !exportButton.isHittable {
+            inspector.swipeDown()
+        }
+        XCTAssertTrue(exportButton.isEnabled)
+        XCTAssertTrue(exportButton.isHittable, app.debugDescription)
+        exportButton.tap()
+
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), app.debugDescription)
+        let exporter = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        exporter.name = "Versioned owner receipt JSON exporter"
+        exporter.lifetime = .keepAlways
+        add(exporter)
+        cancel.tap()
+    }
+
     func testArmTracePlaybackControlsReachEmbeddedOwnerTrace() throws {
         let app = XCUIApplication()
         app.launch()

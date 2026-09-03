@@ -408,15 +408,16 @@ struct FrankenRobotsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    guideContent
-
                     liveRunMonitor
+
+                    guideContent
 
                     Divider().overlay(RobotTheme.stroke)
                     engineBoundary
                 }
                 .padding(18)
             }
+            .accessibilityIdentifier("robot-inspector-scroll")
             .scrollIndicators(.hidden)
         }
     }
