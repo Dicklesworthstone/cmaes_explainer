@@ -58,7 +58,7 @@ final class FrankenRobotsUITests: XCTestCase {
             ),
             object: engineStatus
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Robot Arm lab after native route switch"
@@ -87,7 +87,7 @@ final class FrankenRobotsUITests: XCTestCase {
             ),
             object: engineStatus
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let playbackButton = app.buttons.matching(
             NSPredicate(format: "label == 'Play arm trace' OR label == 'Pause arm trace'")
@@ -140,7 +140,7 @@ final class FrankenRobotsUITests: XCTestCase {
             ),
             object: engineStatus
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let kmrMode = app.buttons["KMR Mobile Base"]
         XCTAssertTrue(kmrMode.waitForExistence(timeout: 20), app.debugDescription)
@@ -187,7 +187,7 @@ final class FrankenRobotsUITests: XCTestCase {
             ),
             object: engineStatus
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let equalizer = app.descendants(matching: .any).matching(
             NSPredicate(format: "label CONTAINS[c] 'receipt objective equalizer'")
@@ -264,7 +264,7 @@ final class FrankenRobotsUITests: XCTestCase {
             ),
             object: engineStatus
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 25), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let kernelReceipt = app.descendants(matching: .any).matching(
             NSPredicate(format: "label CONTAINS[c] 'kernel scalar'")

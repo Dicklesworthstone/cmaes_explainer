@@ -21,6 +21,8 @@ private final class WeakRobotScriptMessageHandler: NSObject, WKScriptMessageHand
 
 @MainActor
 final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler {
+    private static let ownerReadyTimeout: Duration = .seconds(45)
+
     @Published private(set) var phase: RobotEnginePhase = .starting
     @Published private(set) var detail = "Starting the private simulation engine…"
     @Published private(set) var sourceCommit = "not bundled"
@@ -34,6 +36,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var baseURL: URL?
     private var selectedLab: RobotLab = .humanoid
     private var activeNavigation: WKNavigation?
+    private var readinessTimeoutTask: Task<Void, Never>?
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
     override init() {
@@ -70,6 +73,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             phase = .loading
             detail = "Reloading the \(selectedLab.title.lowercased()) engine…"
             activeNavigation = webView.reloadFromOrigin()
+            armReadinessTimeout(for: selectedLab)
         }
     }
 
@@ -86,6 +90,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             ownerKernelVersion = readBundleText(named: "owner-kernel-version")
             loadSelectedLab()
         } catch {
+            readinessTimeoutTask?.cancel()
             phase = .failed(error.localizedDescription)
             detail = error.localizedDescription
         }
@@ -101,6 +106,27 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         activeNavigation = webView.load(
             URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
         )
+        armReadinessTimeout(for: selectedLab)
+    }
+
+    private func armReadinessTimeout(for lab: RobotLab) {
+        readinessTimeoutTask?.cancel()
+        readinessTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.ownerReadyTimeout)
+            } catch {
+                return
+            }
+            guard let self, self.selectedLab == lab else { return }
+            switch self.phase {
+            case .starting, .loading:
+                let message = "The bundled \(lab.title.lowercased()) engine did not become ready within 45 seconds. Check available memory, then try again."
+                self.phase = .failed(message)
+                self.detail = message
+            case .running, .ready, .failed:
+                break
+            }
+        }
     }
 
     private func readBundleText(named name: String, abbreviated: Bool = false) -> String {
@@ -177,6 +203,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         // started. Its delayed cancellation/failure must not replace the new
         // lab's loading or ready state.
         guard owns(navigation) else { return }
+        readinessTimeoutTask?.cancel()
         phase = .failed(error.localizedDescription)
         detail = "The bundled engine did not load: \(error.localizedDescription)"
     }
@@ -216,10 +243,13 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             case "loading":
                 phase = .loading
             case "ready":
+                readinessTimeoutTask?.cancel()
                 phase = .ready
             case "running":
+                readinessTimeoutTask?.cancel()
                 phase = .running
             case "failed":
+                readinessTimeoutTask?.cancel()
                 phase = .failed(status)
             default:
                 break
