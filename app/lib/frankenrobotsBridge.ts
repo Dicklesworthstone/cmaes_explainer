@@ -3,7 +3,8 @@ export type FrankenRobotsEngineState = "loading" | "ready" | "running" | "failed
 export const FRANKENROBOTS_BRIDGE_SCHEMA_VERSION = 1;
 
 export type FrankenRobotsLab = "humanoid" | "arm";
-export type FrankenRobotsCommandKind = "optimize" | "stop";
+export type FrankenRobotsLocomotionTask = "balance" | "stepping" | "walking";
+export type FrankenRobotsCommandKind = "optimize" | "stop" | "select-task";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -11,6 +12,7 @@ export type FrankenRobotsNativeCommand = {
   commandId: string;
   lab: FrankenRobotsLab;
   command: FrankenRobotsCommandKind;
+  task?: FrankenRobotsLocomotionTask;
 };
 
 export type FrankenRobotsCommandResult = {
@@ -71,10 +73,24 @@ export function decodeFrankenRobotsNativeCommand(
     candidate.type !== "engine.command" ||
     candidate.schemaVersion !== FRANKENROBOTS_BRIDGE_SCHEMA_VERSION ||
     candidate.lab !== expectedLab ||
-    (candidate.command !== "optimize" && candidate.command !== "stop") ||
+    (candidate.command !== "optimize" &&
+      candidate.command !== "stop" &&
+      candidate.command !== "select-task") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
   ) {
+    return null;
+  }
+  if (candidate.command === "select-task") {
+    if (
+      expectedLab !== "humanoid" ||
+      (candidate.task !== "balance" &&
+        candidate.task !== "stepping" &&
+        candidate.task !== "walking")
+    ) {
+      return null;
+    }
+  } else if (candidate.task !== undefined) {
     return null;
   }
   return candidate as FrankenRobotsNativeCommand;
@@ -119,10 +135,15 @@ export function installFrankenRobotsNativeCommandHandler(
       type: "engine.command.ack",
       commandId: command.commandId,
       command: command.command,
+      ...(command.task ? { task: command.task } : {}),
       accepted: result.accepted,
       detail: result.detail.slice(0, 300),
     });
-    return result.accepted;
+    // `true` means the typed command reached the page-owned handler. Owner
+    // acceptance or refusal is carried only by the acknowledgement above;
+    // conflating the two made native replace useful refusal details with a
+    // generic "not ready" delivery error.
+    return true;
   };
 
   bridgeWindow.__frankenrobotsReceiveNativeCommand = receive;
@@ -149,6 +170,6 @@ export function reportFrankenRobotsEngineState(
     state,
     detail,
     metrics,
-    capabilities: ["optimize"],
+    capabilities: lab === "humanoid" ? ["optimize", "select-task"] : ["optimize"],
   });
 }

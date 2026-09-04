@@ -19,6 +19,23 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand(stop, "humanoid")).toEqual(stop);
   });
 
+  test("accepts only typed Humanoid locomotion-task selection", () => {
+    const selection = {
+      ...valid,
+      commandId: "9B84A8A2-walk",
+      command: "select-task",
+      task: "walking",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(selection, "humanoid")).toEqual(selection);
+    expect(decodeFrankenRobotsNativeCommand(selection, "arm")).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...selection, task: "dancing" }, "humanoid"),
+    ).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...valid, task: "walking" }, "humanoid"),
+    ).toBeNull();
+  });
+
   test("rejects foreign schema, lab, command, and unsafe IDs", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...valid, schemaVersion: 2 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(valid, "arm")).toBeNull();
@@ -74,6 +91,40 @@ describe("FrankenRobots native command contract", () => {
         "Owner run accepted.",
       ]);
       cleanupReplacement();
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("reports an owner refusal as delivered and preserves its typed receipt", () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const messages: Record<string, unknown>[] = [];
+    const fakeWindow = {
+      webkit: {
+        messageHandlers: {
+          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+        },
+      },
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    try {
+      const cleanup = installFrankenRobotsNativeCommandHandler("humanoid", () => ({
+        accepted: false,
+        detail: "An owner request is already running.",
+      }));
+      const receive = (fakeWindow as typeof fakeWindow & {
+        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+      }).__frankenrobotsReceiveNativeCommand;
+      const refused = { ...valid, commandId: "9B84A8A2-refused" } as const;
+      expect(receive(refused)).toBe(true);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        type: "engine.command.ack",
+        accepted: false,
+        detail: "An owner request is already running.",
+      });
+      cleanup();
     } finally {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");

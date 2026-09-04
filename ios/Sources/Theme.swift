@@ -13,6 +13,12 @@ enum RobotAppearance: String {
 }
 
 enum RobotTheme {
+    static let textScaleStorageKey = "frankenrobots.textScale"
+    static let defaultTextScale = 1.0
+    static let minimumTextScale = 0.8
+    static let maximumTextScale = 1.5
+    private static let textScaleStep = 0.1
+
     static let background = adaptive(
         dark: UIColor(red: 0.004, green: 0.018, blue: 0.027, alpha: 1),
         light: UIColor(red: 0.925, green: 0.961, blue: 0.969, alpha: 1)
@@ -65,11 +71,22 @@ enum RobotTheme {
     }
 
     static func size(_ base: CGFloat) -> CGFloat {
+        let stored = UserDefaults.standard.object(forKey: textScaleStorageKey) as? Double
+        let textScale = clampedTextScale(stored ?? defaultTextScale)
 #if targetEnvironment(macCatalyst)
-        base * 1.22
+        return base * 1.22 * textScale
 #else
-        UIFontMetrics(forTextStyle: .body).scaledValue(for: base)
+        return UIFontMetrics(forTextStyle: .body).scaledValue(for: base) * textScale
 #endif
+    }
+
+    static func clampedTextScale(_ value: Double) -> Double {
+        min(max(value, minimumTextScale), maximumTextScale)
+    }
+
+    static func steppedTextScale(from value: Double, direction: Int) -> Double {
+        let stepped = (value * 10).rounded() / 10 + Double(direction) * textScaleStep
+        return clampedTextScale(stepped)
     }
 }
 

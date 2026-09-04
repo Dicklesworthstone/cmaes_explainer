@@ -3,6 +3,8 @@ import UIKit
 
 @main
 struct FrankenRobotsApp: App {
+    @AppStorage(RobotTheme.textScaleStorageKey) private var textScale = RobotTheme.defaultTextScale
+
     var body: some Scene {
         WindowGroup {
             FrankenRobotsView()
@@ -16,6 +18,26 @@ struct FrankenRobotsApp: App {
         .windowResizability(.contentMinSize)
 #endif
         .commands {
+            CommandMenu("Text Size") {
+                Button("Make Text Bigger") {
+                    textScale = RobotTheme.steppedTextScale(from: textScale, direction: 1)
+                }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(textScale >= RobotTheme.maximumTextScale)
+
+                Button("Make Text Smaller") {
+                    textScale = RobotTheme.steppedTextScale(from: textScale, direction: -1)
+                }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(textScale <= RobotTheme.minimumTextScale)
+
+                Button("Actual Text Size") {
+                    textScale = RobotTheme.defaultTextScale
+                }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(textScale == RobotTheme.defaultTextScale)
+            }
+
             CommandMenu("Robot Lab") {
                 Button("Humanoid Lab") {
                     NotificationCenter.default.post(name: .selectRobotLab, object: RobotLab.humanoid)

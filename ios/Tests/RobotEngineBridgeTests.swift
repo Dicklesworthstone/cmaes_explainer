@@ -2,6 +2,21 @@ import XCTest
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testTextScaleUsesBrowserStyleBoundedSteps() {
+        XCTAssertEqual(
+            RobotTheme.steppedTextScale(from: RobotTheme.defaultTextScale, direction: 1),
+            1.1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            RobotTheme.steppedTextScale(from: RobotTheme.defaultTextScale, direction: -1),
+            0.9,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(RobotTheme.clampedTextScale(99), RobotTheme.maximumTextScale)
+        XCTAssertEqual(RobotTheme.clampedTextScale(-99), RobotTheme.minimumTextScale)
+    }
+
     func testReceiptDocumentExportsVersionedOwnerFactsAndProvenance() throws {
         let exportedAt = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-09-03T22:00:00Z"))
         let receipt = RobotRunReceipt(
@@ -45,7 +60,8 @@ final class RobotEngineBridgeTests: XCTestCase {
             "bodyPenetrationMeters": 0.0,
             "certifiedClearanceMeters": 0.052,
             "collisionRiskIntegral": 0.0,
-            "possibleCollisionTimeSeconds": 0.0
+            "possibleCollisionTimeSeconds": 0.0,
+            "activeTask": "walking"
         ]))
 
         XCTAssertEqual(metrics.generation, 12)
@@ -56,6 +72,7 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(metrics.certifiedClearanceMeters, 0.052)
         XCTAssertEqual(metrics.collisionRiskIntegral, 0.0)
         XCTAssertEqual(metrics.possibleCollisionTimeSeconds, 0.0)
+        XCTAssertEqual(metrics.activeTask, .walking)
         XCTAssertFalse(metrics.isEmpty)
     }
 
@@ -68,7 +85,8 @@ final class RobotEngineBridgeTests: XCTestCase {
             "bodyPenetrationMeters": NSNull(),
             "certifiedClearanceMeters": NSNull(),
             "collisionRiskIntegral": NSNull(),
-            "possibleCollisionTimeSeconds": NSNull()
+            "possibleCollisionTimeSeconds": NSNull(),
+            "activeTask": NSNull()
         ]))
 
         XCTAssertEqual(metrics, .empty)
@@ -86,6 +104,7 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineMetrics(payload: ["certifiedClearanceMeters": Double.infinity]))
         XCTAssertNil(RobotEngineMetrics(payload: ["collisionRiskIntegral": true]))
         XCTAssertNil(RobotEngineMetrics(payload: ["possibleCollisionTimeSeconds": -1]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["activeTask": "dancing"]))
     }
 
     func testStatusMessageRequiresCurrentSchemaAndPositiveSequence() throws {
@@ -101,6 +120,15 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(sequence: 0)))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(lab: "foreign")))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(state: "invented")))
+        var taskCapability = statusPayload()
+        taskCapability["capabilities"] = ["optimize", "select-task"]
+        taskCapability["metrics"] = ["activeTask": "walking"]
+        XCTAssertEqual(
+            RobotEngineStatusMessage(payload: taskCapability)?.metrics.activeTask,
+            .walking
+        )
+        taskCapability["lab"] = "arm"
+        XCTAssertNil(RobotEngineStatusMessage(payload: taskCapability))
         var malformedCapabilities = statusPayload()
         malformedCapabilities["capabilities"] = ["optimize", 1]
         XCTAssertNil(RobotEngineStatusMessage(payload: malformedCapabilities))
@@ -134,6 +162,20 @@ final class RobotEngineBridgeTests: XCTestCase {
             RobotEngineCommandAcknowledgement(payload: stopPayload)
         )
         XCTAssertEqual(stopAcknowledgement.command, "stop")
+
+        var taskPayload = payload
+        taskPayload["commandId"] = "9B84A8A2-task"
+        taskPayload["lab"] = "humanoid"
+        taskPayload["command"] = "select-task"
+        taskPayload["task"] = "stepping"
+        let taskAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: taskPayload)
+        )
+        XCTAssertEqual(taskAcknowledgement.command, "select-task")
+        XCTAssertEqual(taskAcknowledgement.task, .stepping)
+
+        taskPayload["lab"] = "arm"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: taskPayload))
 
         var malformed = payload
         malformed["accepted"] = "yes"

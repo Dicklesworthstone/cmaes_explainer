@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct FrankenRobotsView: View {
     @AppStorage(RobotAppearance.storageKey) private var appearance = RobotAppearance.dark.rawValue
+    @AppStorage(RobotTheme.textScaleStorageKey) private var textScale = RobotTheme.defaultTextScale
     @StateObject private var engine = RobotEngineHost()
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
@@ -33,6 +34,7 @@ struct FrankenRobotsView: View {
     }
 
     var body: some View {
+        let _ = textScale
         GeometryReader { geometry in
             ZStack {
                 RobotLabBackground()
@@ -215,33 +217,66 @@ struct FrankenRobotsView: View {
     }
 
     private var nativeCommandBar: some View {
-        Group {
-            if horizontalStatusHasRoom {
-                HStack(spacing: 10) {
-                    nativeCommandLabel(title: "NATIVE OWNER CONTROL")
-                    Spacer(minLength: 8)
-                    nativeCommandReceipt
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    nativeOptimizeButton
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 7) {
+        VStack(spacing: lab == .humanoid ? 7 : 0) {
+            if lab == .humanoid {
+                nativeTaskPicker
+            }
+            Group {
+                if horizontalStatusHasRoom {
                     HStack(spacing: 10) {
-                        nativeCommandLabel(title: "OWNER CONTROL")
+                        nativeCommandLabel(title: "NATIVE OWNER CONTROL")
                         Spacer(minLength: 8)
+                        nativeCommandReceipt
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                         nativeOptimizeButton
                     }
-                    nativeCommandReceipt
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(spacing: 10) {
+                            nativeCommandLabel(title: "OWNER CONTROL")
+                            Spacer(minLength: 8)
+                            nativeOptimizeButton
+                        }
+                        nativeCommandReceipt
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, horizontalStatusHasRoom ? 0 : 8)
+        .padding(.vertical, horizontalStatusHasRoom && lab != .humanoid ? 0 : 8)
         .frame(minHeight: 44)
         .background(RobotTheme.panel.opacity(0.82), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var nativeTaskPicker: some View {
+        HStack(spacing: 10) {
+            Label("PHYSICAL OBJECTIVE", systemImage: "figure.walk.motion")
+                .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+                .foregroundStyle(RobotTheme.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+            Picker(
+                "Physical objective",
+                selection: Binding(
+                    get: { engine.activeHumanoidTask },
+                    set: { engine.selectHumanoidTask($0) }
+                )
+            ) {
+                ForEach(RobotLocomotionTask.allCases) { task in
+                    Text(task.title).tag(task)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 310)
+            .disabled(
+                !engine.supportsTaskSelection || engine.phase != .ready || engine.pendingCommandID != nil
+            )
+            .accessibilityIdentifier("robot-native-task-picker")
+            .accessibilityHint("Changes the owner-composed physical objective before learning starts")
+        }
     }
 
     private func nativeCommandLabel(title: String) -> some View {

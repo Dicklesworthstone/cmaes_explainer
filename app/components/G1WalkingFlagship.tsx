@@ -2308,6 +2308,23 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     } satisfies G1OptimizationRequest);
   }, [busy, stopRequested, task, family, seedIndex, challenge]);
 
+  const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
+    setTask(nextTask);
+    setChallenge(nextChallenge);
+    setTrace(null);
+    setAdmission(null);
+    setStabilizerTrace(null);
+    setCurriculumTrace(null);
+    setGeneration(0);
+    setBestObjective(null);
+    setComparison(null);
+    setActiveTrace("curriculum");
+    progressHistoryRef.current = [];
+    setProgressHistory([]);
+    setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
+    post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
+  }, [post]);
+
   // Releasing the robot re-certifies it where it now stands.
   //
   // The owner always starts its rollout at its own origin, so a receipt is
@@ -2336,6 +2353,25 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The humanoid owner worker is not ready." };
       }
+      if (command.command === "select-task") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        if (!command.task) {
+          return { accepted: false, detail: "The locomotion task was not provided." };
+        }
+        if (command.task === task) {
+          return {
+            accepted: true,
+            detail: `${G1_TASK_COPY[task].label} is already the active physical objective.`,
+          };
+        }
+        requestPreview(command.task, challenge);
+        return {
+          accepted: true,
+          detail: `Accepted ${G1_TASK_COPY[command.task].label}; loading its owner-composed policy seed.`,
+        };
+      }
       if (command.command === "stop") {
         if (busy !== "optimize") {
           return { accepted: false, detail: "No humanoid learning run is active." };
@@ -2355,24 +2391,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         detail: `Accepted continuous ${family} learning for the ${task} owner; it will run until Stop.`,
       };
     });
-  }, [embedded, workerAvailable, busy, startContinuousOptimization, stopContinuousOptimization, task, family]);
-
-  const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
-    setTask(nextTask);
-    setChallenge(nextChallenge);
-    setTrace(null);
-    setAdmission(null);
-    setStabilizerTrace(null);
-    setCurriculumTrace(null);
-    setGeneration(0);
-    setBestObjective(null);
-    setComparison(null);
-    setActiveTrace("curriculum");
-    progressHistoryRef.current = [];
-    setProgressHistory([]);
-    setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
-    post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
-  }, [post]);
+  }, [
+    embedded,
+    workerAvailable,
+    busy,
+    startContinuousOptimization,
+    stopContinuousOptimization,
+    requestPreview,
+    challenge,
+    task,
+    family,
+  ]);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
     setCurrentChapter(ch.id);
@@ -2565,9 +2594,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         bestObjective,
         completedSteps: trace?.completedSteps ?? null,
         bodyPenetrationMeters: trace?.maximumBodyPenetrationMeters ?? null,
+        activeTask: task,
       },
     );
-  }, [embedded, workerAvailable, busy, trace, status, generation, bestObjective]);
+  }, [embedded, workerAvailable, busy, trace, status, generation, bestObjective, task]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective

@@ -3,6 +3,22 @@ import UIKit
 import WebKit
 import CoreFoundation
 
+enum RobotLocomotionTask: String, Codable, CaseIterable, Identifiable {
+    case balance
+    case stepping
+    case walking
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .balance: "Balance"
+        case .stepping: "Step"
+        case .walking: "Walk"
+        }
+    }
+}
+
 struct RobotEngineMetrics: Codable, Equatable {
     static let empty = RobotEngineMetrics()
 
@@ -14,11 +30,12 @@ struct RobotEngineMetrics: Codable, Equatable {
     var certifiedClearanceMeters: Double?
     var collisionRiskIntegral: Double?
     var possibleCollisionTimeSeconds: Double?
+    var activeTask: RobotLocomotionTask?
 
     var isEmpty: Bool {
         generation == nil && bestObjective == nil && completedSteps == nil && placed == nil &&
             bodyPenetrationMeters == nil && certifiedClearanceMeters == nil &&
-            collisionRiskIntegral == nil && possibleCollisionTimeSeconds == nil
+            collisionRiskIntegral == nil && possibleCollisionTimeSeconds == nil && activeTask == nil
     }
 
     init(
@@ -29,7 +46,8 @@ struct RobotEngineMetrics: Codable, Equatable {
         bodyPenetrationMeters: Double? = nil,
         certifiedClearanceMeters: Double? = nil,
         collisionRiskIntegral: Double? = nil,
-        possibleCollisionTimeSeconds: Double? = nil
+        possibleCollisionTimeSeconds: Double? = nil,
+        activeTask: RobotLocomotionTask? = nil
     ) {
         self.generation = generation
         self.bestObjective = bestObjective
@@ -39,6 +57,7 @@ struct RobotEngineMetrics: Codable, Equatable {
         self.certifiedClearanceMeters = certifiedClearanceMeters
         self.collisionRiskIntegral = collisionRiskIntegral
         self.possibleCollisionTimeSeconds = possibleCollisionTimeSeconds
+        self.activeTask = activeTask
     }
 
     init?(payload: [String: Any]) {
@@ -49,7 +68,8 @@ struct RobotEngineMetrics: Codable, Equatable {
               Self.hasValidOptionalNonnegativeNumber(payload, key: "bodyPenetrationMeters"),
               Self.hasValidOptionalNonnegativeNumber(payload, key: "certifiedClearanceMeters"),
               Self.hasValidOptionalNonnegativeNumber(payload, key: "collisionRiskIntegral"),
-              Self.hasValidOptionalNonnegativeNumber(payload, key: "possibleCollisionTimeSeconds") else {
+              Self.hasValidOptionalNonnegativeNumber(payload, key: "possibleCollisionTimeSeconds"),
+              Self.hasValidOptionalTask(payload, key: "activeTask") else {
             return nil
         }
 
@@ -61,6 +81,7 @@ struct RobotEngineMetrics: Codable, Equatable {
         certifiedClearanceMeters = Self.finiteDouble(payload["certifiedClearanceMeters"])
         collisionRiskIntegral = Self.finiteDouble(payload["collisionRiskIntegral"])
         possibleCollisionTimeSeconds = Self.finiteDouble(payload["possibleCollisionTimeSeconds"])
+        activeTask = (payload["activeTask"] as? String).flatMap(RobotLocomotionTask.init(rawValue:))
         guard generation.map({ $0 >= 0 }) ?? true,
               completedSteps.map({ $0 >= 0 }) ?? true else {
             return nil
@@ -87,6 +108,12 @@ struct RobotEngineMetrics: Codable, Equatable {
     private static func hasValidOptionalBool(_ payload: [String: Any], key: String) -> Bool {
         guard let value = payload[key], !(value is NSNull) else { return true }
         return value is Bool
+    }
+
+    private static func hasValidOptionalTask(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = value as? String else { return false }
+        return RobotLocomotionTask(rawValue: value) != nil
     }
 
     private static func finiteDouble(_ value: Any?) -> Double? {
@@ -139,10 +166,14 @@ struct RobotEngineStatusMessage {
               !detail.isEmpty,
               detail.count <= 300,
               let rawMetrics = payload["metrics"] as? [String: Any],
-              let metrics = RobotEngineMetrics(payload: rawMetrics),
-              rawCapabilities.allSatisfy({ $0 == "optimize" }) else {
+              let metrics = RobotEngineMetrics(payload: rawMetrics) else {
             return nil
         }
+        let allowedCapabilities: Set<String> = lab == .humanoid
+            ? ["optimize", "select-task"]
+            : ["optimize"]
+        guard Set(rawCapabilities).isSubset(of: allowedCapabilities),
+              lab == .humanoid || metrics.activeTask == nil else { return nil }
         self.sequence = sequence
         self.lab = lab
         self.state = state
@@ -176,6 +207,7 @@ struct RobotEngineCommandAcknowledgement {
     let command: String
     let accepted: Bool
     let detail: String
+    let task: RobotLocomotionTask?
 
     init?(payload: [String: Any]) {
         guard payload["type"] as? String == "engine.command.ack",
@@ -187,11 +219,17 @@ struct RobotEngineCommandAcknowledgement {
               let rawLab = payload["lab"] as? String,
               let lab = RobotLab(rawValue: rawLab),
               let command = payload["command"] as? String,
-              ["optimize", "stop"].contains(command),
+              ["optimize", "stop", "select-task"].contains(command),
               let accepted = payload["accepted"] as? Bool,
               let detail = payload["detail"] as? String,
               !detail.isEmpty,
               detail.count <= 300 else {
+            return nil
+        }
+        let task = (payload["task"] as? String).flatMap(RobotLocomotionTask.init(rawValue:))
+        if command == "select-task" {
+            guard lab == .humanoid, task != nil else { return nil }
+        } else if payload["task"] != nil {
             return nil
         }
         self.sequence = sequence
@@ -200,6 +238,7 @@ struct RobotEngineCommandAcknowledgement {
         self.command = command
         self.accepted = accepted
         self.detail = detail
+        self.task = task
     }
 
     private static func integer(_ value: Any?) -> Int? {
@@ -243,6 +282,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var crossOriginIsolated = false
     @Published private(set) var metrics = RobotEngineMetrics.empty
     @Published private(set) var supportsOptimize = false
+    @Published private(set) var supportsTaskSelection = false
+    @Published private(set) var activeHumanoidTask = RobotLocomotionTask.walking
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
 
@@ -254,6 +295,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var activeNavigation: WKNavigation?
     private var readinessTimeoutTask: Task<Void, Never>?
     private var commandTimeoutTask: Task<Void, Never>?
+    private var pendingRequestedTask: RobotLocomotionTask?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 
@@ -310,15 +352,36 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         )
     }
 
-    private func sendOwnerCommand(_ command: String, pendingDetail: String) {
+    func selectHumanoidTask(_ task: RobotLocomotionTask) {
+        guard selectedLab == .humanoid,
+              supportsTaskSelection,
+              task != activeHumanoidTask else { return }
+        sendOwnerCommand(
+            "select-task",
+            pendingDetail: "Loading the \(task.title.lowercased()) physical objective…",
+            task: task
+        )
+    }
+
+    private func sendOwnerCommand(
+        _ command: String,
+        pendingDetail: String,
+        task: RobotLocomotionTask? = nil
+    ) {
         guard pendingCommandID == nil else { return }
-        if command == "optimize" {
+        if command == "optimize" || command == "select-task" {
             guard phase == .ready else { return }
         } else {
             guard command == "stop", phase == .running else { return }
         }
+        if command == "select-task" {
+            guard selectedLab == .humanoid, supportsTaskSelection, task != nil else { return }
+        } else {
+            guard task == nil else { return }
+        }
         let commandID = UUID().uuidString
         pendingCommandID = commandID
+        pendingRequestedTask = task
         commandDetail = pendingDetail
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
@@ -329,15 +392,19 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             }
             guard let self, self.pendingCommandID == commandID else { return }
             self.pendingCommandID = nil
+            self.pendingRequestedTask = nil
             self.commandDetail = "The embedded owner did not acknowledge the command within five seconds."
         }
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "type": "engine.command",
             "schemaVersion": 1,
             "commandId": commandID,
             "lab": selectedLab.rawValue,
             "command": command,
         ]
+        if let task {
+            payload["task"] = task.rawValue
+        }
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -352,6 +419,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     self.commandTimeoutTask?.cancel()
                     self.commandTimeoutTask = nil
                     self.pendingCommandID = nil
+                    self.pendingRequestedTask = nil
                     self.commandDetail = "The embedded owner is not ready to receive native commands."
                     return
                 }
@@ -360,6 +428,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 self.commandTimeoutTask?.cancel()
                 self.commandTimeoutTask = nil
                 self.pendingCommandID = nil
+                self.pendingRequestedTask = nil
                 self.commandDetail = "Native command delivery failed: \(error.localizedDescription)"
             }
         }
@@ -378,7 +447,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             engineState: phase.receiptState,
             detail: detail,
             bridgeSequence: lastBridgeSequence,
-            capabilities: supportsOptimize ? ["optimize"] : [],
+            capabilities: [
+                supportsOptimize ? "optimize" : nil,
+                supportsTaskSelection ? "select-task" : nil,
+            ].compactMap { $0 },
             metrics: metrics,
             provenance: RobotReceiptProvenance(
                 appSourceCommit: readBundleText(named: "source-commit"),
@@ -566,6 +638,13 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             commandTimeoutTask?.cancel()
             commandTimeoutTask = nil
             pendingCommandID = nil
+            if acknowledgement.accepted,
+               acknowledgement.command == "select-task",
+               let task = acknowledgement.task,
+               task == pendingRequestedTask {
+                activeHumanoidTask = task
+            }
+            pendingRequestedTask = nil
             commandDetail = acknowledgement.detail
             return
         }
@@ -577,6 +656,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         detail = event.detail
         metrics = event.metrics
         supportsOptimize = event.capabilities.contains("optimize")
+        supportsTaskSelection = event.capabilities.contains("select-task")
+        if event.lab == .humanoid, let task = event.metrics.activeTask {
+            activeHumanoidTask = task
+        }
         apply(state: event.state, detail: event.detail)
     }
 
@@ -590,6 +673,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
         metrics = .empty
         supportsOptimize = false
+        supportsTaskSelection = false
         self.detail = detail
         apply(state: state, detail: detail)
     }
@@ -617,8 +701,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         lastBridgeSequence = 0
         metrics = .empty
         supportsOptimize = false
+        supportsTaskSelection = false
         commandTimeoutTask?.cancel()
         pendingCommandID = nil
+        pendingRequestedTask = nil
         commandDetail = nil
     }
 }
