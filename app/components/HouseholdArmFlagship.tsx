@@ -38,6 +38,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Sparkles,
+  Square,
   TreePine,
   Eye,
   Camera,
@@ -116,6 +117,8 @@ type WorkerResponse =
       admission: HouseholdManipulationAdmission;
       generation: number;
       family: ArmTraceOrigin;
+      continuing?: boolean;
+      stopped?: boolean;
     }
   | {
       type: "progress";
@@ -124,6 +127,7 @@ type WorkerResponse =
       maxGenerations: number;
       bestObjective: number;
       sigma: number;
+      continuous?: boolean;
     }
   | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
@@ -269,6 +273,7 @@ const LINK_SOURCE_ROWS = [
 ] as const;
 
 const ARM_POPULATION = 12;
+const ARM_LIVE_REPLAY_INTERVAL = 16;
 // SOTA per-link clearance: must be >= the link cylinder radius (which
 // tapers from 0.07 m at the base to 0.05 m at the wrist) plus a small
 // margin so the visible link surface does not penetrate OBBs. The
@@ -1759,7 +1764,6 @@ export function HouseholdArmFlagship({
     useState<HouseholdManipulationAdmission | null>(null);
   const [task, setTask] = useState<HouseholdManipulationTask>("kitchen-mug");
   const [family, setFamily] = useState<CmaFamily>("lm-cma");
-  const [generations, setGenerations] = useState(8);
   const [seedIndex, setSeedIndex] = useState(0);
   const [generation, setGeneration] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
@@ -1768,6 +1772,7 @@ export function HouseholdArmFlagship({
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>(
     "preview",
   );
+  const [stopRequested, setStopRequested] = useState(false);
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [status, setStatus] = useState(
     "Loading the pinned KUKA model and physical curriculum…",
@@ -1883,8 +1888,9 @@ export function HouseholdArmFlagship({
       } else if (message.type === "progress") {
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
-        setStatus(
-          `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
+        setStatus(message.continuous
+          ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
+          : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
         );
       } else if (message.type === "trace") {
         setTrace(message.trace);
@@ -1896,10 +1902,17 @@ export function HouseholdArmFlagship({
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
+        if (message.continuing) {
+          setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
+          return;
+        }
         setBusy(null);
         inFlightRef.current = false;
+        setStopRequested(false);
         setStatus(
-          message.family === "curriculum"
+          message.stopped
+            ? `Stopped at generation ${message.generation}; replaying the best policy found.`
+            : message.family === "curriculum"
             ? `${TASK_COPY[message.admission.config.task].title} curriculum replayed from Frankensim WASM.`
             : `Best ${FAMILY_COPY[message.family].title} policy replayed through the identical physical experiment.`,
         );
@@ -1913,6 +1926,7 @@ export function HouseholdArmFlagship({
       } else {
         setError(message.message);
         setBusy(null);
+        setStopRequested(false);
         inFlightRef.current = false;
         setStatus(
           "The owner kernel refused or could not complete this request.",
@@ -1981,25 +1995,55 @@ export function HouseholdArmFlagship({
     [],
   );
 
+  const startContinuousOptimization = useCallback(() => {
+    setStopRequested(false);
+    post(
+      {
+        type: "optimize",
+        task,
+        family,
+        generations: ARM_LIVE_REPLAY_INTERVAL,
+        seedIndex,
+        mode: "continue",
+        continuous: true,
+      },
+      "optimize",
+    );
+  }, [post, task, family, seedIndex]);
+
+  const stopContinuousOptimization = useCallback(() => {
+    if (!workerRef.current || busy !== "optimize" || stopRequested) return;
+    setStopRequested(true);
+    setStatus("Stopping after the current physical generation…");
+    workerRef.current.postMessage({ type: "stop", task, family, seedIndex });
+  }, [busy, stopRequested, task, family, seedIndex]);
+
   useEffect(() => {
     if (!embedded) return;
-    return installFrankenRobotsNativeCommandHandler("arm", () => {
+    return installFrankenRobotsNativeCommandHandler("arm", (command) => {
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The arm owner worker is not ready." };
+      }
+      if (command.command === "stop") {
+        if (busy !== "optimize") {
+          return { accepted: false, detail: "No arm learning run is active." };
+        }
+        stopContinuousOptimization();
+        return {
+          accepted: true,
+          detail: "Accepted Stop; finishing the current physical generation safely.",
+        };
       }
       if (inFlightRef.current) {
         return { accepted: false, detail: "An owner request is already running." };
       }
-      post(
-        { type: "optimize", task, family, generations, seedIndex, mode: "continue" },
-        "optimize",
-      );
+      startContinuousOptimization();
       return {
         accepted: true,
-        detail: `Accepted ${generations} ${family} generations for the ${task} owner experiment.`,
+        detail: `Accepted continuous ${family} learning for the ${task} owner; it will run until Stop.`,
       };
     });
-  }, [embedded, workerAvailable, post, task, family, generations, seedIndex]);
+  }, [embedded, workerAvailable, busy, startContinuousOptimization, stopContinuousOptimization, task, family]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {
@@ -2650,55 +2694,30 @@ export function HouseholdArmFlagship({
             <option value={2}>Seed 3 · 0x41524d33</option>
           </select>
 
-          <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="arm-generations">Search budget (generations)</label>
-            <span className="font-mono text-orange-200">
-              {generations} × {ARM_POPULATION} = {generations * ARM_POPULATION}{" "}
-              rollouts
-            </span>
-          </div>
-          <input
-            id="arm-generations"
-            type="range"
-            min={2}
-            max={5000}
-            step={2}
-            value={generations}
-            disabled={busy !== null || !workerAvailable}
-            onChange={(event) => setGenerations(Number(event.target.value))}
-            aria-valuetext={`${generations} generations, ${generations * ARM_POPULATION} complete physical rollouts`}
-            style={{ touchAction: "pan-y pinch-zoom" }}
-            suppressHydrationWarning
-          />
-          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-400">
-            <span>2</span>
-            <span>1.25k</span>
-            <span>2.5k</span>
-            <span>3.75k</span>
-            <span>5k</span>
+          <div className="mt-5 rounded-xl border border-orange-400/20 bg-orange-400/[0.06] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-semibold text-orange-100">Continuous learning</span>
+              <span className="font-mono text-orange-200">
+                {ARM_POPULATION} physical rollouts / generation
+              </span>
+            </div>
+            <p className="mt-1 text-[0.68rem] leading-5 text-slate-400">
+              The owner keeps the CMA state hot until you press Stop. The best manipulation policy
+              is replayed every {ARM_LIVE_REPLAY_INTERVAL} generations.
+            </p>
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
             <button
               type="button"
-              disabled={busy !== null || !workerAvailable}
-              onClick={() =>
-                post(
-                  {
-                    type: "optimize",
-                    task,
-                    family,
-                    generations,
-                    seedIndex,
-                    mode: "continue",
-                  },
-                  "optimize",
-                )
-              }
+              disabled={!workerAvailable || (busy !== null && busy !== "optimize") || stopRequested}
+              onClick={busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-3 text-sm font-bold text-white shadow-lg shadow-orange-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <Sparkles className="h-4 w-4" />
-              {generation > 0 ? `Continue · gen ${generation}` : "Optimize"}
+              {busy === "optimize" ? <Square className="h-4 w-4 fill-current" /> : <Sparkles className="h-4 w-4" />}
+              {busy === "optimize"
+                ? (stopRequested ? "Stopping…" : `Stop · gen ${generation}`)
+                : (generation > 0 ? `Keep learning · gen ${generation}` : "Start learning")}
             </button>
             <button
               type="button"
