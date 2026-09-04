@@ -41,6 +41,22 @@ function formatEconomy(value: number | null): string {
   return `${value.toFixed(2)} m/kJ`;
 }
 
+/**
+ * Axis labels for a range that can span decades.
+ *
+ * Economy on this objective sits near 0.03 m/kJ, where a fixed single decimal
+ * prints every tick as "0.0" and the axis says nothing. Scale the precision to
+ * the magnitude instead.
+ */
+function formatAxisValue(value: number): string {
+  const magnitude = Math.abs(value);
+  if (magnitude === 0) return "0";
+  if (magnitude < 0.01) return value.toFixed(4);
+  if (magnitude < 0.1) return value.toFixed(3);
+  if (magnitude < 10) return value.toFixed(2);
+  return value.toFixed(0);
+}
+
 function formatSpeed(value: number | null): string {
   if (value === null) return "—";
   return `${value.toFixed(2)} m/s`;
@@ -180,7 +196,10 @@ export function LearningLedger({ points, width = 600, height = 132 }: LearningLe
         </span>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Two columns at every width: this panel lives in the narrow control
+          column, where a viewport-keyed 4-up breakpoint puts "Reach per
+          energy" on three lines. */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <Stat
           label="Reach per energy"
           value={formatEconomy(latest.metersPerKilojoule)}
@@ -257,7 +276,7 @@ export function LearningLedger({ points, width = 600, height = 132 }: LearningLe
               ))
             : null}
           <text x="4" y={chart.margin.top + 4} className="fill-slate-500" fontSize="8">
-            {chart.ecoMax.toFixed(1)}
+            {formatAxisValue(chart.ecoMax)}
           </text>
           <text
             x="4"
@@ -265,7 +284,7 @@ export function LearningLedger({ points, width = 600, height = 132 }: LearningLe
             className="fill-slate-500"
             fontSize="8"
           >
-            {chart.ecoMin.toFixed(1)}
+            {formatAxisValue(chart.ecoMin)}
           </text>
           <text
             x={chart.margin.left}
