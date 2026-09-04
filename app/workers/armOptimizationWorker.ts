@@ -83,7 +83,11 @@ type ArmActiveRun = {
   completedGeneration: number;
   maxTotalGenerations: number;
 };
-const ARM_MAX_TOTAL_GENERATIONS = 500_000;
+// Same operator-bounded contract as G1. The owner intentionally admits the
+// evaluation budget as an exact u32. At population 12, 250 million generations
+// stays safely inside that packet boundary and still spans about 7.9 years at
+// an unrealistically fast one generation/second.
+const ARM_MAX_TOTAL_GENERATIONS = 250_000_000;
 const ARM_LIVE_REPLAY_INTERVAL = 16;
 const armActiveRuns = new Map<string, ArmActiveRun>();
 const armOptimizationRequests = new Set<string>();

@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  G1_DEFAULT_SEARCH_SIGMA,
   g1OptimizationConfig,
   g1OptimizationRunKey,
 } from "../app/lib/g1OptimizationProtocol";
 
 describe("G1 optimization task protocol", () => {
+  test("uses the owner-calibrated fast-learning launch radius", () => {
+    expect(G1_DEFAULT_SEARCH_SIGMA).toBe(0.001);
+  });
+
   test("builds an owner config for every task without mutating the other inputs", () => {
     for (const task of ["balance", "stepping", "walking"] as const) {
       const config = g1OptimizationConfig(task, "flat");

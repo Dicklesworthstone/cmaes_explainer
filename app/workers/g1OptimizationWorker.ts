@@ -12,6 +12,7 @@ import {
   type G1TraceReceipt,
 } from "../lib/frankensimCmaes";
 import {
+  G1_DEFAULT_SEARCH_SIGMA,
   g1ObstaclesForSeat,
   g1OptimizationConfig,
   g1OptimizationRunKey,
@@ -148,10 +149,13 @@ type G1ActiveRun = {
   completedGeneration: number;
   maxTotalGenerations: number;
 };
-// A continuous run is operator-bounded, not button-budget-bounded. One million
-// generations is only a numerical session ceiling (multiple days on current
-// hardware), not a user-facing stop condition.
-const G1_MAX_TOTAL_GENERATIONS = 1_000_000;
+// A continuous run is operator-bounded, not button-budget-bounded. The owner
+// intentionally admits maxEvaluations as an exact u32, so population 16 caps
+// the representable horizon just below 268,435,456 generations. Keep margin
+// below that packet boundary: 250 million generations is still about 7.9
+// years even at an unrealistically fast one generation/second, making Stop the
+// only practical terminal action.
+const G1_MAX_TOTAL_GENERATIONS = 250_000_000;
 const G1_LIVE_REPLAY_INTERVAL = 32;
 const G1_POPULATION = 16;
 const g1ActiveRuns = new Map<string, G1ActiveRun>();
@@ -235,7 +239,7 @@ async function optimize(
       await createFrankenSimCmaFamilySession({
         family,
         mean: evaluator.walkingCurriculumMean(),
-        sigma: requestedSigma ?? 0.005,
+        sigma: requestedSigma ?? G1_DEFAULT_SEARCH_SIGMA,
         population,
         memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
         maxEvaluations: population * G1_MAX_TOTAL_GENERATIONS,
@@ -369,7 +373,7 @@ async function compareFamilies(
         await createFrankenSimCmaFamilySession({
           family,
           mean,
-          sigma: 0.005,
+          sigma: G1_DEFAULT_SEARCH_SIGMA,
           population,
           memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
           maxEvaluations: population * generations,

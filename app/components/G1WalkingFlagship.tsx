@@ -28,6 +28,7 @@ import {
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
 import {
+  G1_DEFAULT_SEARCH_SIGMA,
   G1_HOUSE_SEAT,
   G1_KERNEL_OBSTACLES,
   type G1OptimizationRequest,
@@ -2105,7 +2106,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // Learn the basic walking policy first. Terrain + push remains one tap away,
   // but making it the cold-start objective needlessly delays visible walking.
   const [challenge, setChallenge] = useState<G1Challenge>("flat");
-  const [searchSigma, setSearchSigma] = useState(0.005);
+  const [searchSigma, setSearchSigma] = useState(G1_DEFAULT_SEARCH_SIGMA);
   const [seedIndex, setSeedIndex] = useState(0);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [stopRequested, setStopRequested] = useState(false);
@@ -3084,16 +3085,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           />
           <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-600">
             <span>0.0002 (refine)</span>
-            <span>0.005 (explore)</span>
+            <span>0.001 (calibrated)</span>
             <span>0.01 (aggressive)</span>
           </div>
           <p className="mt-1 text-[0.6rem] leading-4 text-slate-500" data-testid="g1-sigma-hint">
-            {searchSigma <= 0.0008
+            {searchSigma <= 0.0004
               ? "Tight radius: each candidate is a small perturbation of the current mean — best for refining a known good policy."
-              : searchSigma <= 0.003
-                ? "Refine-to-explore crossover: most candidates stay near the mean, but a few venture out — the safe default for early optimization."
+              : searchSigma <= 0.0015
+                ? "Calibrated launch radius: the owner improved on every declared seed in the 16-generation flat-walking sweep."
                 : searchSigma <= 0.006
-                  ? "Balanced exploration (default): roughly half the population diverges meaningfully from the mean — the recommended starting point."
+                  ? "Broad exploration: useful after a plateau, but slower and less reliable from the walking curriculum."
                   : "Wide exploration: large perturbations dominate the population — the search may find a better optimum but takes more generations to converge."}
           </p>
           {/* 2. Interactive Timeline & Milestone Scrubber */}

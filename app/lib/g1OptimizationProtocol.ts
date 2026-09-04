@@ -52,6 +52,15 @@ export type G1OptimizationRequest =
     };
 
 /**
+ * Measured launch radius for the 5,040-D flat-walking LM-CMA owner.
+ *
+ * A fixed-seed sweep on owner 0.6.18 found that 0.005 made no progress in
+ * 16 generations, while 0.001 improved the objective on all three declared
+ * seeds (7.9155 -> -2.4051, -2.2149, and -3.6346 respectively).
+ */
+export const G1_DEFAULT_SEARCH_SIGMA = 0.001;
+
+/**
  * Seat the rendered robot stands at, and the keep-out roster expressed
  * relative to it. Declared before the function that uses them as a default
  * argument: a default is evaluated at call time, so a later declaration works
