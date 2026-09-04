@@ -35,6 +35,15 @@ export type G1OptimizationRequest =
       sigma?: number;
       /** Keep extending the same owner session until an explicit stop arrives. */
       continuous?: boolean;
+      /**
+       * Start a NEW session from these coefficients instead of the curriculum
+       * mean — how a run recovered from storage continues after a reload.
+       *
+       * The CMA state itself (sigma, evolution paths, covariance) lives in WASM
+       * and is not serialisable, so this is a warm restart from the policy, not
+       * a resumed search. Ignored when continuing a session already in memory.
+       */
+      resumeFrom?: Float64Array;
     }
   | {
       type: "stop";

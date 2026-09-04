@@ -449,7 +449,10 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     // The counter leads every roster as the one SUPPORT body: the surface the
     // arm works on rather than around. Everything after it is keep-out.
     const mug = householdKernelObstacleRoster(0.2369, "kitchen-mug", 10);
-    expect(mug.length).toBe(10);
+    // The surface is declared IN ADDITION to the keep-out budget, so a limit of
+    // 10 yields 10 keep-out bodies plus the counter. Declaring a table must not
+    // silently stop guarding something else.
+    expect(mug.length).toBe(11);
     expect(mug[0].name).toBe("counter slab");
     expect(mug[0].role).toBe("support");
     expect(mug.slice(1).every((o) => o.role === "keep-out")).toBe(true);

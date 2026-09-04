@@ -236,6 +236,7 @@ async function optimize(
   challenge: G1Challenge = "terrain-and-push",
   requestedSigma?: number,
   continuous = false,
+  resumeFrom?: Float64Array
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -276,16 +277,22 @@ async function optimize(
       config: g1OptimizationConfig(task, challenge),
       dimension: 5_040,
     });
-    let bestPolicy = evaluator.walkingCurriculumMean();
+    // A run recovered from storage starts from the policy it reached; a fresh
+    // one starts from the curriculum mean.
+    const startingMean =
+      resumeFrom && resumeFrom.length === evaluator.walkingCurriculumMean().length
+        ? Float64Array.from(resumeFrom)
+        : evaluator.walkingCurriculumMean();
+    let bestPolicy = startingMean;
     let bestObjective = requireOk(
-      evaluator.evaluate(evaluator.walkingCurriculumMean()),
+      evaluator.evaluate(startingMean),
       "G1 curriculum evaluation"
     ).objective;
     // Budget spans the whole continuation lifetime, not one request.
     const session = requireOk(
       await createFrankenSimCmaFamilySession({
         family,
-        mean: evaluator.walkingCurriculumMean(),
+        mean: startingMean,
         sigma: requestedSigma ?? G1_DEFAULT_SEARCH_SIGMA,
         population,
         memory: family === "lm-cma" || family === "lm-ma" ? 12 : undefined,
@@ -531,6 +538,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.challenge,
             request.sigma,
             request.continuous,
+            request.resumeFrom,
           );
   const scheduled = g1Gate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

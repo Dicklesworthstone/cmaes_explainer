@@ -17,6 +17,12 @@ import {
   type SharedPolicy,
 } from "../lib/g1PolicyShare";
 import {
+  describeAge,
+  isResumable,
+  loadTrainingSession,
+  saveTrainingSession,
+} from "../lib/g1TrainingSession";
+import {
   appendLedgerPoint,
   learningLedgerPoint,
   type LearningLedgerPoint,
@@ -2163,6 +2169,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const trainingStartedAtRef = useRef<number | null>(null);
   const trainingSecondsRef = useRef(0);
   const [trainingSeconds, setTrainingSeconds] = useState(0);
+  // Policy recovered from storage, used as the mean when training restarts
+  // after a reload. Cleared once the worker owns a live session.
+  const resumedPolicyRef = useRef<Float64Array | null>(null);
+  const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
   const progressHistoryRef = useRef<ConvergencePoint[]>([]);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
@@ -2286,11 +2296,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const robotDragOffsetRef = useRef<[number, number, number] | null>(null);
   const taskRef = useRef<G1Task>(task);
   const challengeRef = useRef<G1Challenge>(challenge);
+  // Read inside the worker message handler, which must not re-subscribe every
+  // time a control moves.
+  const familyRef = useRef<ScalableFamily>(family);
+  const sigmaRef = useRef<number>(searchSigma);
   useEffect(() => {
     robotDragOffsetRef.current = robotDragOffset;
     taskRef.current = task;
     challengeRef.current = challenge;
-  }, [robotDragOffset, task, challenge]);
+    familyRef.current = family;
+    sigmaRef.current = searchSigma;
+  }, [robotDragOffset, task, challenge, family, searchSigma]);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
 
@@ -2331,6 +2347,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         challenge,
         sigma: searchSigma,
         continuous: true,
+        // Only meaningful for a session the worker does not already hold: after
+        // a reload there is none, so training picks up from the recovered
+        // policy instead of restarting at the curriculum seed.
+        resumeFrom: resumedPolicyRef.current ?? undefined,
       },
       "optimize",
     );
@@ -2413,6 +2433,39 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     pendingShareRef.current = policyFragmentFromHash(window.location.hash);
   }, []);
+
+  // Recover a run the tab was in the middle of. A share link in the URL is an
+  // explicit request and outranks whatever was left in storage.
+  useEffect(() => {
+    if (!policyBaseline || pendingShareRef.current) return;
+    if (resumedPolicyRef.current) return;
+    const saved = loadTrainingSession(policyBaseline.length);
+    if (!saved) return;
+    if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, challengeRef.current)) {
+      return;
+    }
+    resumedPolicyRef.current = saved.policy;
+    trainingSecondsRef.current = saved.trainingSeconds;
+    // Deferred: setting state synchronously inside an effect cascades renders,
+    // and nothing here needs to land before the browser paints.
+    queueMicrotask(() => {
+      setTrainingSeconds(saved.trainingSeconds);
+      setLedger(saved.ledger.slice());
+      setRestoredNotice(
+        `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Learning continues from it.`,
+      );
+    });
+    post(
+      {
+        type: "replay",
+        task: taskRef.current,
+        challenge: challengeRef.current,
+        policy: saved.policy,
+        generation: saved.generation,
+      },
+      "preview",
+    );
+  }, [policyBaseline, post]);
 
   useEffect(() => {
     const fragment = pendingShareRef.current;
@@ -2640,6 +2693,31 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         // point — it is a different policy, not an earlier version of this one.
         if (message.policy) setStagePolicy(message.policy);
         if (message.baseline) setPolicyBaseline(message.baseline);
+        // Persist the run so a reload, a crash, or a closed tab does not throw
+        // away hours of search. Only real search is worth restoring; the
+        // curriculum replay at generation 0 is what the page loads anyway.
+        if (message.policy && message.generation > 0) {
+          const policy = message.policy;
+          const generation = message.generation;
+          setLedger((current) => {
+            saveTrainingSession({
+              kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+              task: message.admission.config.task,
+              challenge: message.admission.config.challenge,
+              family: familyRef.current,
+              sigma: sigmaRef.current,
+              generation,
+              trainingSeconds:
+                trainingSecondsRef.current +
+                (trainingStartedAtRef.current === null
+                  ? 0
+                  : (Date.now() - trainingStartedAtRef.current) / 1000),
+              policy,
+              ledger: current,
+            });
+            return current;
+          });
+        }
         setLedger((previous) =>
           appendLedgerPoint(
             previous,
@@ -3508,6 +3586,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <span>generation {generation}</span>
                 <span>best objective {bestObjective === null ? "—" : number(bestObjective, 4)}</span>
               </div>
+            ) : null}
+            {restoredNotice ? (
+              <p className="mt-2 rounded-xl border border-cyan-300/20 bg-cyan-950/30 px-3 py-2 text-[0.66rem] leading-4 text-cyan-100">
+                {restoredNotice} The search itself restarts from this policy —
+                its covariance was not saved, so this is a warm restart rather
+                than a resumed run.
+              </p>
             ) : null}
             {ledger.length > 0 ? (
               <div className="mt-3">
