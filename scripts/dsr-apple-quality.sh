@@ -61,11 +61,22 @@ fi
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
+  -resultBundlePath "$build_root/frankenrobots-iphone-recovery.xcresult" \
+  -parallel-testing-enabled NO \
+  CODE_SIGNING_ALLOWED=NO test \
+  -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testWebContentTerminationFailsClosedThenRetryRecovers
+
+# A WebContent lifecycle failure is destructive by definition. Run the rest of
+# the long-lived UI journeys in a fresh test invocation so accumulated WebKit
+# pressure cannot consume the shipping readiness deadline before fault injection.
+/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+  -destination "platform=iOS Simulator,id=$iphone_id" \
+  -derivedDataPath "$build_root/derived-data" \
   -resultBundlePath "$build_root/frankenrobots-iphone-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testReadinessWatchdogFailsClosedThenRetryRecovers \
-  -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testWebContentTerminationFailsClosedThenRetryRecovers \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testAppearanceTogglePersistsLightModeAcrossLaunches \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testSwitchesBetweenFocusedLabs \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testNativeContinuousLearningStartsAndStopsThroughEmbeddedOwner \
