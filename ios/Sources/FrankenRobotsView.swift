@@ -236,12 +236,19 @@ struct FrankenRobotsView: View {
                         nativeCommandReceipt
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
+                        if lab == .humanoid {
+                            receiptLensMenu
+                        }
                         nativeOptimizeButton
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack(spacing: 10) {
-                            nativeCommandLabel(title: "OWNER CONTROL")
+                            if lab == .humanoid {
+                                receiptLensMenu
+                            } else {
+                                nativeCommandLabel(title: "OWNER CONTROL")
+                            }
                             Spacer(minLength: 8)
                             nativeOptimizeButton
                         }
@@ -343,6 +350,34 @@ struct FrankenRobotsView: View {
                 ? "Stops continuous learning after the current physical generation"
                 : "Starts continuous owner learning and keeps going until stopped"
         )
+    }
+
+    private var receiptLensMenu: some View {
+        Menu {
+            ForEach(RobotReceiptLens.allCases) { lens in
+                Button {
+                    engine.selectReceiptLens(lens)
+                } label: {
+                    if engine.selectedReceiptLens == lens {
+                        Label(lens.title, systemImage: "checkmark")
+                    } else {
+                        Text(lens.title)
+                    }
+                }
+                .accessibilityIdentifier("robot-receipt-lens-\(lens.rawValue)")
+            }
+        } label: {
+            Label("Receipt lenses", systemImage: "slider.horizontal.3")
+                .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .buttonStyle(.bordered)
+        .tint(lab.accent)
+        .disabled(engine.phase != .ready && engine.phase != .running)
+        .accessibilityIdentifier("robot-native-receipt-lenses")
+        .accessibilityLabel("Receipt analysis lenses")
+        .accessibilityValue(engine.selectedReceiptLens.title)
+        .accessibilityHint("Reweights the visible receipt analysis without changing the owner objective or gait")
     }
 
     private var wideLayout: some View {

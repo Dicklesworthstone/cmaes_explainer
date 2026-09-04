@@ -19,6 +19,24 @@ enum RobotLocomotionTask: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum RobotReceiptLens: String, CaseIterable, Identifiable {
+    case baseline = "owner-receipt"
+    case cautious = "cautious-monk"
+    case sprinter = "olympic-sprinter"
+    case glassFloor = "glass-floor"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .baseline: "Documented Baseline"
+        case .cautious: "Cautious Monk"
+        case .sprinter: "Olympic Sprinter"
+        case .glassFloor: "Glass-Floor Walker"
+        }
+    }
+}
+
 struct RobotEngineMetrics: Codable, Equatable {
     static let empty = RobotEngineMetrics()
 
@@ -284,6 +302,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var supportsOptimize = false
     @Published private(set) var supportsTaskSelection = false
     @Published private(set) var activeHumanoidTask = RobotLocomotionTask.walking
+    @Published private(set) var selectedReceiptLens = RobotReceiptLens.baseline
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
 
@@ -361,6 +380,35 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             pendingDetail: "Loading the \(task.title.lowercased()) physical objective…",
             task: task
         )
+    }
+
+    func selectReceiptLens(_ lens: RobotReceiptLens) {
+        guard selectedLab == .humanoid,
+              phase == .ready || phase == .running else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let selected = try await self.webView.callAsyncJavaScript(
+                    """
+                    const control = Array.from(document.querySelectorAll('[data-receipt-lens-id]'))
+                      .find((candidate) => candidate.getAttribute('data-receipt-lens-id') === lensID);
+                    if (!(control instanceof HTMLButtonElement)) return false;
+                    control.click();
+                    control.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+                    return true;
+                    """,
+                    arguments: ["lensID": lens.rawValue],
+                    in: nil,
+                    contentWorld: .page
+                )
+                if selected as? Bool == true {
+                    self.selectedReceiptLens = lens
+                }
+            } catch {
+                // Keep the prior native selection when the exact embedded
+                // analysis control is absent or refuses navigation.
+            }
+        }
     }
 
     private func sendOwnerCommand(
@@ -702,6 +750,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         metrics = .empty
         supportsOptimize = false
         supportsTaskSelection = false
+        selectedReceiptLens = .baseline
         commandTimeoutTask?.cancel()
         pendingCommandID = nil
         pendingRequestedTask = nil

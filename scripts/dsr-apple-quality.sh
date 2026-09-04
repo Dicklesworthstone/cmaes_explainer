@@ -69,6 +69,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testNativeContinuousLearningStartsAndStopsThroughEmbeddedOwner \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testArmTracePlaybackControlsReachEmbeddedOwnerTrace \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testArmModeSwitchExposesWorkingKMRRoute \
+  -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ReceiptLensesReweightAnalysisWithoutChangingOwnerKernel \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ManualPushIsDisclosedAsPreviewWithoutChangingOwnerReceipt
 
 /Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare

@@ -112,7 +112,11 @@ export function G1ObjectiveEqualizer({
     Math.abs(weight) < 0.01 && weight !== 0 ? weight.toExponential(1) : weight.toFixed(1);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-5 backdrop-blur-md">
+    <div
+      id="g1-receipt-objective-equalizer"
+      aria-label="G1 receipt objective equalizer"
+      className="rounded-2xl border border-white/10 bg-slate-950/80 p-5 backdrop-blur-md"
+    >
       {/* 1. Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div className="flex items-center gap-2">
@@ -136,6 +140,7 @@ export function G1ObjectiveEqualizer({
               key={p.id}
               type="button"
               onClick={() => onSelectPreset(p)}
+              data-receipt-lens-id={p.id}
               aria-pressed={isSelected}
               aria-label={`Analyze this receipt with ${p.name} (${p.badge})`}
               className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all min-h-[44px] ${

@@ -344,30 +344,32 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 10), app.debugDescription)
         let originalKernelLabel = kernelReceipt.label
 
+        let nativeLensMenu = app.buttons["robot-native-receipt-lenses"]
+        XCTAssertTrue(nativeLensMenu.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(nativeLensMenu.isHittable)
+
         let lenses = [
             (
-                button: "Analyze this receipt with The Cautious Monk (Maximum Balance)",
+                menuItem: "robot-receipt-lens-cautious-monk",
                 status: "Viewing The Cautious Monk receipt lens"
             ),
             (
-                button: "Analyze this receipt with The Olympic Sprinter (Dynamic Forward)",
+                menuItem: "robot-receipt-lens-olympic-sprinter",
                 status: "Viewing The Olympic Sprinter receipt lens"
             ),
             (
-                button: "Analyze this receipt with The Glass-Floor Walker (Zero Impact)",
+                menuItem: "robot-receipt-lens-glass-floor",
                 status: "Viewing The Glass-Floor Walker receipt lens"
             ),
         ]
 
         var weightedSumLabels = Set<String>()
         for lens in lenses {
-            let button = app.switches[lens.button]
-            XCTAssertTrue(button.waitForExistence(timeout: 10), app.debugDescription)
-            for _ in 0..<24 where !button.isHittable {
-                stage.swipeUp(velocity: .fast)
-            }
-            XCTAssertTrue(button.isHittable, "Lens control never became hittable: \(lens.button)")
-            button.tap()
+            nativeLensMenu.tap()
+            let menuItem = app.buttons[lens.menuItem]
+            XCTAssertTrue(menuItem.waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertTrue(menuItem.isHittable)
+            menuItem.tap()
 
             XCTAssertTrue(app.descendants(matching: .any).matching(
                 NSPredicate(format: "label CONTAINS[c] %@", lens.status)

@@ -2,6 +2,15 @@ import XCTest
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testReceiptLensIdentifiersMatchEmbeddedAnalysisControls() {
+        XCTAssertEqual(
+            RobotReceiptLens.allCases.map(\.rawValue),
+            ["owner-receipt", "cautious-monk", "olympic-sprinter", "glass-floor"]
+        )
+        XCTAssertEqual(RobotReceiptLens.baseline.title, "Documented Baseline")
+        XCTAssertEqual(RobotReceiptLens.glassFloor.title, "Glass-Floor Walker")
+    }
+
     func testTextScaleUsesBrowserStyleBoundedSteps() {
         XCTAssertEqual(
             RobotTheme.steppedTextScale(from: RobotTheme.defaultTextScale, direction: 1),
