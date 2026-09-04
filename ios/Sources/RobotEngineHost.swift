@@ -296,10 +296,29 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     func optimize() {
-        guard phase == .ready, pendingCommandID == nil else { return }
+        sendOwnerCommand(
+            "optimize",
+            pendingDetail: "Starting continuous owner learning…"
+        )
+    }
+
+    func stopOptimization() {
+        sendOwnerCommand(
+            "stop",
+            pendingDetail: "Stopping after the current physical generation…"
+        )
+    }
+
+    private func sendOwnerCommand(_ command: String, pendingDetail: String) {
+        guard pendingCommandID == nil else { return }
+        if command == "optimize" {
+            guard phase == .ready else { return }
+        } else {
+            guard command == "stop", phase == .running else { return }
+        }
         let commandID = UUID().uuidString
         pendingCommandID = commandID
-        commandDetail = "Requesting an owner optimization run…"
+        commandDetail = pendingDetail
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
             do {
@@ -316,7 +335,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             "schemaVersion": 1,
             "commandId": commandID,
             "lab": selectedLab.rawValue,
-            "command": "optimize",
+            "command": command,
         ]
         Task { [weak self] in
             guard let self else { return }

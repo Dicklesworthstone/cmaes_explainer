@@ -266,22 +266,33 @@ struct FrankenRobotsView: View {
 
     private var nativeOptimizeButton: some View {
         Button {
-            engine.optimize()
+            if engine.phase == .running {
+                engine.stopOptimization()
+            } else {
+                engine.optimize()
+            }
         } label: {
             Label(
                 engine.pendingCommandID == nil
-                    ? (engine.supportsOptimize ? "Optimize" : "Loading…")
+                    ? (engine.phase == .running ? "Stop" : (engine.supportsOptimize ? "Start learning" : "Loading…"))
                     : "Sending…",
-                systemImage: "sparkles"
+                systemImage: engine.phase == .running ? "stop.fill" : "sparkles"
             )
                 .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
                 .lineLimit(1)
         }
         .buttonStyle(.borderedProminent)
         .tint(lab.accent)
-        .disabled(engine.phase != .ready || !engine.supportsOptimize || engine.pendingCommandID != nil)
+        .disabled(
+            (!engine.supportsOptimize || (engine.phase != .ready && engine.phase != .running))
+                || engine.pendingCommandID != nil
+        )
         .accessibilityIdentifier("robot-native-optimize")
-        .accessibilityHint("Starts one acknowledged optimization request in the embedded owner engine")
+        .accessibilityHint(
+            engine.phase == .running
+                ? "Stops continuous learning after the current physical generation"
+                : "Starts continuous owner learning and keeps going until stopped"
+        )
     }
 
     private var wideLayout: some View {

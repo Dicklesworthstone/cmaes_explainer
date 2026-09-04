@@ -31,6 +31,8 @@ type WorkerResponse =
       admission: G1Admission;
       generation: number;
       family: G1TraceOrigin;
+      continuing?: boolean;
+      stopped?: boolean;
     }
   | {
       type: "progress";
@@ -39,6 +41,7 @@ type WorkerResponse =
       maxGenerations: number;
       bestObjective: number;
       sigma: number;
+      continuous?: boolean;
     }
   | {
       type: "comparison";
@@ -145,9 +148,15 @@ type G1ActiveRun = {
   completedGeneration: number;
   maxTotalGenerations: number;
 };
-const G1_MAX_TOTAL_GENERATIONS = 30_000;
+// A continuous run is operator-bounded, not button-budget-bounded. One million
+// generations is only a numerical session ceiling (multiple days on current
+// hardware), not a user-facing stop condition.
+const G1_MAX_TOTAL_GENERATIONS = 1_000_000;
+const G1_LIVE_REPLAY_INTERVAL = 32;
 const G1_POPULATION = 16;
 const g1ActiveRuns = new Map<string, G1ActiveRun>();
+const g1OptimizationRequests = new Set<string>();
+const g1StopRequests = new Set<string>();
 
 // Single-flight gate. The worker is single-threaded but optimize() is
 // async and yields at every await; two requests (rapid click, compare +
@@ -174,7 +183,8 @@ async function optimize(
   mode: "continue" | "fresh" = "continue",
   task: G1Task = "walking",
   challenge: G1Challenge = "terrain-and-push",
-  requestedSigma?: number
+  requestedSigma?: number,
+  continuous = false,
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -186,7 +196,9 @@ async function optimize(
     post({
       type: "status",
       phase: "optimizing",
-      detail: `${family}, seed ${seedIndex + 1}: continuing from generation ${run.completedGeneration} (${generations} more generations)…`,
+      detail: continuous
+        ? `${family}, seed ${seedIndex + 1}: learning continuously from generation ${run.completedGeneration} — press Stop whenever you are ready.`
+        : `${family}, seed ${seedIndex + 1}: continuing from generation ${run.completedGeneration} (${generations} more generations)…`,
     });
   } else {
     // Replace any stale run for this key when a fresh start is requested.
@@ -239,7 +251,15 @@ async function optimize(
   try {
     let completedGeneration = run.completedGeneration;
     let parallelAnnounced = false;
-    for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
+    const targetGeneration = continuous
+      ? G1_MAX_TOTAL_GENERATIONS
+      : Math.min(G1_MAX_TOTAL_GENERATIONS, completedGeneration + generations);
+    let stopped = false;
+    while (completedGeneration < targetGeneration) {
+      if (g1StopRequests.has(runKey)) {
+        stopped = true;
+        break;
+      }
       const ask = requireOk(run.session.ask(), "CMA ask");
       const evaluation = await run.pool.evaluate(
         ask.candidates,
@@ -254,6 +274,7 @@ async function optimize(
         "CMA tell"
       );
       completedGeneration = snapshot.generation;
+      run.completedGeneration = completedGeneration;
       if (snapshot.best && snapshot.best.objective < run.bestObjective) {
         run.bestObjective = snapshot.best.objective;
         run.bestPolicy = snapshot.best.point.slice();
@@ -261,7 +282,7 @@ async function optimize(
       // At hundreds of generations, posting every generation floods the
       // main thread with setState work; every other generation plus the
       // final one keeps the HUD live without the flood.
-      if (snapshot.generation % 2 === 0 || generationIndex === generations - 1) {
+      if (snapshot.generation % 2 === 0 || completedGeneration === targetGeneration) {
         post({
           type: "progress",
           family,
@@ -269,6 +290,21 @@ async function optimize(
           maxGenerations: Math.max(snapshot.maxGenerations, run.maxTotalGenerations),
           bestObjective: run.bestObjective,
           sigma: snapshot.sigma,
+          continuous,
+        });
+      }
+      if (continuous && snapshot.generation % G1_LIVE_REPLAY_INTERVAL === 0) {
+        const checkpoint = requireOk(
+          run.evaluator.trace(run.bestPolicy),
+          "continuous optimized trace",
+        );
+        post({
+          type: "trace",
+          trace: checkpoint,
+          admission: run.evaluator.admission,
+          generation: completedGeneration,
+          family,
+          continuing: true,
         });
       }
     }
@@ -276,7 +312,9 @@ async function optimize(
     post({
       type: "status",
       phase: "replaying",
-      detail: `Rendering the generation-${completedGeneration} best policy on the identical full-horizon experiment…`,
+      detail: stopped
+        ? `Stopped at generation ${completedGeneration}; replaying the best policy found so far…`
+        : `Rendering the generation-${completedGeneration} best policy on the identical full-horizon experiment…`,
     });
     const trace = requireOk(run.evaluator.trace(run.bestPolicy), "optimized trace");
     post({
@@ -285,6 +323,7 @@ async function optimize(
       admission: run.evaluator.admission,
       generation: completedGeneration,
       family,
+      stopped,
     });
   } catch (error) {
     // A refused/failing session is dead state: drop it so the next Optimize
@@ -385,6 +424,29 @@ async function compareFamilies(
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
+  if (request.type === "stop") {
+    const runKey = g1OptimizationRunKey(
+      request.task,
+      request.challenge,
+      request.family,
+      request.seedIndex,
+    );
+    if (g1OptimizationRequests.has(runKey)) {
+      g1StopRequests.add(runKey);
+      post({
+        type: "status",
+        phase: "stopping",
+        detail: "Stop requested; finishing the current physical generation safely…",
+      });
+    } else {
+      post({ type: "status", phase: "ready", detail: "No owner learning run is active." });
+    }
+    return;
+  }
+  const optimizationRunKey = request.type === "optimize"
+    ? g1OptimizationRunKey(request.task, request.challenge, request.family, request.seedIndex)
+    : null;
+  if (optimizationRunKey) g1OptimizationRequests.add(optimizationRunKey);
   // The work factory is invoked ONLY inside the gate's .then callback,
   // so the async IIFE cannot start until the previous task resolves.
   // Calling optimize()/compareFamilies() eagerly would start the IIFE
@@ -400,10 +462,24 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
         )
       : request.type === "compare"
         ? compareFamilies(request.generations, request.task ?? "walking", request.challenge)
-        : optimize(request.family, request.generations, request.seedIndex, request.mode, request.task ?? "walking", request.challenge, request.sigma);
-  g1Gate = g1Gate.then(() => work(), () => work());
-  void g1Gate.catch((error: unknown) => {
+        : optimize(
+            request.family,
+            request.generations,
+            request.seedIndex,
+            request.mode,
+            request.task ?? "walking",
+            request.challenge,
+            request.sigma,
+            request.continuous,
+          );
+  const scheduled = g1Gate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
+  });
+  g1Gate = scheduled;
+  void scheduled.finally(() => {
+    if (!optimizationRunKey) return;
+    g1OptimizationRequests.delete(optimizationRunKey);
+    g1StopRequests.delete(optimizationRunKey);
   });
 };
 

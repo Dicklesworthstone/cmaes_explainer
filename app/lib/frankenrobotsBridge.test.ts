@@ -13,8 +13,10 @@ describe("FrankenRobots native command contract", () => {
     command: "optimize",
   } as const;
 
-  test("accepts the bounded current-schema optimize command", () => {
+  test("accepts current-schema start and stop commands", () => {
     expect(decodeFrankenRobotsNativeCommand(valid, "humanoid")).toEqual(valid);
+    const stop = { ...valid, commandId: "9B84A8A2-stop", command: "stop" } as const;
+    expect(decodeFrankenRobotsNativeCommand(stop, "humanoid")).toEqual(stop);
   });
 
   test("rejects foreign schema, lab, command, and unsafe IDs", () => {

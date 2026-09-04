@@ -27,7 +27,9 @@ type WorkerRequest =
       generations: number;
       seedIndex: number;
       mode?: "continue" | "fresh";
+      continuous?: boolean;
     }
+  | { type: "stop"; task: HouseholdManipulationTask; family: CmaFamily; seedIndex: number }
   | { type: "compare"; task: HouseholdManipulationTask; generations: number };
 
 type ArmTraceOrigin = CmaFamily | "curriculum";
@@ -50,6 +52,8 @@ type WorkerResponse =
       admission: HouseholdManipulationAdmission;
       generation: number;
       family: ArmTraceOrigin;
+      continuing?: boolean;
+      stopped?: boolean;
     }
   | {
       type: "progress";
@@ -58,6 +62,7 @@ type WorkerResponse =
       maxGenerations: number;
       bestObjective: number;
       sigma: number;
+      continuous?: boolean;
     }
   | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
@@ -78,8 +83,11 @@ type ArmActiveRun = {
   completedGeneration: number;
   maxTotalGenerations: number;
 };
-const ARM_MAX_TOTAL_GENERATIONS = 5_000;
+const ARM_MAX_TOTAL_GENERATIONS = 500_000;
+const ARM_LIVE_REPLAY_INTERVAL = 16;
 const armActiveRuns = new Map<string, ArmActiveRun>();
+const armOptimizationRequests = new Set<string>();
+const armStopRequests = new Set<string>();
 
 function armFreeRun(run: ArmActiveRun): void {
   try {
@@ -216,7 +224,8 @@ async function optimize(
   family: CmaFamily,
   requestedGenerations: number,
   requestedSeedIndex: number,
-  mode: "continue" | "fresh" = "continue"
+  mode: "continue" | "fresh" = "continue",
+  continuous = false,
 ): Promise<void> {
   const generations = Math.max(2, Math.min(ARM_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -227,7 +236,9 @@ async function optimize(
     post({
       type: "status",
       phase: "optimizing",
-      detail: `${family}, seed ${seedIndex + 1}: continuing from generation ${run.completedGeneration} (${generations} more generations)…`,
+      detail: continuous
+        ? `${family}, seed ${seedIndex + 1}: learning continuously from generation ${run.completedGeneration} — press Stop whenever you are ready.`
+        : `${family}, seed ${seedIndex + 1}: continuing from generation ${run.completedGeneration} (${generations} more generations)…`,
     });
   } else {
     const stale = armActiveRuns.get(runKey);
@@ -273,7 +284,15 @@ async function optimize(
   try {
     let completedGeneration = run.completedGeneration;
     let parallelAnnounced = false;
-    for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
+    const targetGeneration = continuous
+      ? ARM_MAX_TOTAL_GENERATIONS
+      : Math.min(ARM_MAX_TOTAL_GENERATIONS, completedGeneration + generations);
+    let stopped = false;
+    while (completedGeneration < targetGeneration) {
+      if (armStopRequests.has(runKey)) {
+        stopped = true;
+        break;
+      }
       const ask = requireOk(run.session.ask(), "CMA ask");
       const evaluation = await run.pool.evaluate(
         ask.candidates,
@@ -288,13 +307,14 @@ async function optimize(
         "CMA tell"
       );
       completedGeneration = snapshot.generation;
+      run.completedGeneration = completedGeneration;
       if (snapshot.best && snapshot.best.objective < run.bestObjective) {
         run.bestObjective = snapshot.best.objective;
         run.bestPolicy = snapshot.best.point.slice();
       }
       // Throttle: every other generation plus the final one keeps the HUD
       // live without flooding the main thread over long runs.
-      if (snapshot.generation % 2 === 0 || generationIndex === generations - 1) {
+      if (snapshot.generation % 2 === 0 || completedGeneration === targetGeneration) {
         post({
           type: "progress",
           family,
@@ -302,6 +322,21 @@ async function optimize(
           maxGenerations: Math.max(snapshot.maxGenerations, run.maxTotalGenerations),
           bestObjective: run.bestObjective,
           sigma: snapshot.sigma,
+          continuous,
+        });
+      }
+      if (continuous && snapshot.generation % ARM_LIVE_REPLAY_INTERVAL === 0) {
+        const checkpoint = requireOk(
+          run.evaluator.trace(run.bestPolicy),
+          "continuous optimized household-arm trace",
+        );
+        post({
+          type: "trace",
+          trace: checkpoint,
+          admission: run.evaluator.admission,
+          generation: completedGeneration,
+          family,
+          continuing: true,
         });
       }
     }
@@ -309,7 +344,9 @@ async function optimize(
     post({
       type: "status",
       phase: "replaying",
-      detail: "Replaying the best policy through the identical owner physics and success test…",
+      detail: stopped
+        ? `Stopped at generation ${completedGeneration}; replaying the best policy found so far…`
+        : "Replaying the best policy through the identical owner physics and success test…",
     });
     const trace = requireOk(run.evaluator.trace(run.bestPolicy), "optimized household-arm trace");
     post({
@@ -318,6 +355,7 @@ async function optimize(
       admission: run.evaluator.admission,
       generation: completedGeneration,
       family,
+      stopped,
     });
   } catch (error) {
     // Dead session: drop the run so the next Optimize starts clean.
@@ -417,6 +455,24 @@ async function compareFamilies(
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
+  if (request.type === "stop") {
+    const runKey = `${request.task}:${request.family}:${request.seedIndex}`;
+    if (armOptimizationRequests.has(runKey)) {
+      armStopRequests.add(runKey);
+      post({
+        type: "status",
+        phase: "stopping",
+        detail: "Stop requested; finishing the current physical generation safely…",
+      });
+    } else {
+      post({ type: "status", phase: "ready", detail: "No arm learning run is active." });
+    }
+    return;
+  }
+  const optimizationRunKey = request.type === "optimize"
+    ? `${request.task}:${request.family}:${request.seedIndex}`
+    : null;
+  if (optimizationRunKey) armOptimizationRequests.add(optimizationRunKey);
   // See g1OptimizationWorker for the work-factory rationale: invoking
   // the work inside .then() is what actually serializes, because the
   // IIFE cannot start until the previous task resolves.
@@ -425,10 +481,22 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
       ? preview(request.task)
       : request.type === "compare"
         ? compareFamilies(request.task, request.generations)
-        : optimize(request.task, request.family, request.generations, request.seedIndex, request.mode);
-  armGate = armGate.then(() => work(), () => work());
-  void armGate.catch((error: unknown) => {
+        : optimize(
+            request.task,
+            request.family,
+            request.generations,
+            request.seedIndex,
+            request.mode,
+            request.continuous,
+          );
+  const scheduled = armGate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });
+  });
+  armGate = scheduled;
+  void scheduled.finally(() => {
+    if (!optimizationRunKey) return;
+    armOptimizationRequests.delete(optimizationRunKey);
+    armStopRequests.delete(optimizationRunKey);
   });
 };
 

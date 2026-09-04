@@ -3,7 +3,7 @@
 import React, { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -86,6 +86,8 @@ type WorkerResponse =
       admission: G1Admission;
       generation: number;
       family: G1TraceOrigin;
+      continuing?: boolean;
+      stopped?: boolean;
     }
   | {
       type: "progress";
@@ -94,6 +96,7 @@ type WorkerResponse =
       maxGenerations: number;
       bestObjective: number;
       sigma: number;
+      continuous?: boolean;
     }
   | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
@@ -197,6 +200,7 @@ const JOINT_COLOR = "#111820";
 // Head is a fixed child of torso_link: URDF head_joint origin (0.004, 0, -0.054).
 const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 const G1_POPULATION = 16;
+const G1_LIVE_REPLAY_INTERVAL = 32;
 // SOTA per-link clearance: must be >= the largest link sphere radius
 // (0.105 m at the pelvis, 0.075 m at mid-links) plus a small margin so
 // the visible link surface does not penetrate OBBs. The previous
@@ -2098,11 +2102,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [workerAvailable, setWorkerAvailable] = useState(true);
   const [family, setFamily] = useState<ScalableFamily>("lm-cma");
   const [task, setTask] = useState<G1Task>("walking");
-  const [challenge, setChallenge] = useState<G1Challenge>("terrain-and-push");
-  const [generations, setGenerations] = useState(16);
+  // Learn the basic walking policy first. Terrain + push remains one tap away,
+  // but making it the cold-start objective needlessly delays visible walking.
+  const [challenge, setChallenge] = useState<G1Challenge>("flat");
   const [searchSigma, setSearchSigma] = useState(0.005);
   const [seedIndex, setSeedIndex] = useState(0);
   const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
+  const [stopRequested, setStopRequested] = useState(false);
   const [status, setStatus] = useState("Loading the owner-composed G1 experiment…");
   const [error, setError] = useState<string | null>(null);
   // Mobile: show the 4 most consequential receipt cards by default; user can
@@ -2270,6 +2276,37 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     workerRef.current.postMessage(message);
   }, []);
 
+  const startContinuousOptimization = useCallback(() => {
+    setStopRequested(false);
+    post(
+      {
+        type: "optimize",
+        task,
+        family,
+        generations: G1_LIVE_REPLAY_INTERVAL,
+        seedIndex,
+        mode: "continue",
+        challenge,
+        sigma: searchSigma,
+        continuous: true,
+      },
+      "optimize",
+    );
+  }, [post, task, family, seedIndex, challenge, searchSigma]);
+
+  const stopContinuousOptimization = useCallback(() => {
+    if (!workerRef.current || busy !== "optimize" || stopRequested) return;
+    setStopRequested(true);
+    setStatus("Stopping after the current physical generation…");
+    workerRef.current.postMessage({
+      type: "stop",
+      task,
+      family,
+      seedIndex,
+      challenge,
+    } satisfies G1OptimizationRequest);
+  }, [busy, stopRequested, task, family, seedIndex, challenge]);
+
   // Releasing the robot re-certifies it where it now stands.
   //
   // The owner always starts its rollout at its own origin, so a receipt is
@@ -2294,23 +2331,30 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
   useEffect(() => {
     if (!embedded) return;
-    return installFrankenRobotsNativeCommandHandler("humanoid", () => {
+    return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The humanoid owner worker is not ready." };
+      }
+      if (command.command === "stop") {
+        if (busy !== "optimize") {
+          return { accepted: false, detail: "No humanoid learning run is active." };
+        }
+        stopContinuousOptimization();
+        return {
+          accepted: true,
+          detail: "Accepted Stop; finishing the current physical generation safely.",
+        };
       }
       if (inFlightRef.current) {
         return { accepted: false, detail: "An owner request is already running." };
       }
-      post(
-        { type: "optimize", task, family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
-        "optimize",
-      );
+      startContinuousOptimization();
       return {
         accepted: true,
-        detail: `Accepted ${generations} ${family} generations for the ${task} owner experiment.`,
+        detail: `Accepted continuous ${family} learning for the ${task} owner; it will run until Stop.`,
       };
     });
-  }, [embedded, workerAvailable, post, task, family, generations, seedIndex, challenge, searchSigma]);
+  }, [embedded, workerAvailable, busy, startContinuousOptimization, stopContinuousOptimization, task, family]);
 
   const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
     setTask(nextTask);
@@ -2434,8 +2478,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           for (let k = 0; k < TAIL; k++) kept.push(full[n - TAIL + k]);
           return kept;
         });
-        setStatus(
-          `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
+        setStatus(message.continuous
+          ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
+          : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
       } else if (message.type === "trace") {
         setAdmission(message.admission);
@@ -2452,10 +2497,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
+        if (message.continuing) {
+          setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
+          return;
+        }
         setBusy(null);
         inFlightRef.current = false;
+        setStopRequested(false);
         setStatus(
-          message.family === "curriculum"
+          message.stopped
+            ? `Stopped at generation ${message.generation}; replaying the best policy found.`
+            : message.family === "curriculum"
             ? `${G1_TASK_COPY[message.admission.config.task].label} policy seed replayed from Frankensim WASM.`
             : `Best ${FAMILY_COPY[message.family].title} policy replayed through the full experiment.`
         );
@@ -2473,6 +2525,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else {
         setError(message.message);
         setBusy(null);
+        setStopRequested(false);
         inFlightRef.current = false;
         setStatus("The owner kernel refused or could not complete this request.");
       }
@@ -2486,7 +2539,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({ type: "preview", task: "walking", challenge: "terrain-and-push" } satisfies G1OptimizationRequest);
+    optimizerWorker.postMessage({ type: "preview", task: "walking", challenge: "flat" } satisfies G1OptimizationRequest);
     return () => {
       active = false;
       optimizerWorker.terminate();
@@ -3215,55 +3268,30 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </button>
             </div>
           </div>
-          <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="g1-generations">Search budget (generations)</label>
-            <span className="font-mono text-cyan-200">
-              {generations} × {G1_POPULATION} = {generations * G1_POPULATION} candidates
-            </span>
+          <div className="mt-5 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-semibold text-cyan-100">Continuous learning</span>
+              <span className="font-mono text-cyan-200">
+                {G1_POPULATION} physical rollouts / generation
+              </span>
+            </div>
+            <p className="mt-1 text-[0.68rem] leading-5 text-slate-400">
+              LM-CMA keeps its mean, search radius, and direction history hot until you press Stop.
+              The best policy is replayed on stage every {G1_LIVE_REPLAY_INTERVAL} generations.
+            </p>
           </div>
-          <input
-            id="g1-generations"
-            type="range"
-            min={8}
-            max={30000}
-            step={4}
-            value={generations}
-            disabled={busy !== null || !workerAvailable}
-            onChange={(event) => setGenerations(Number(event.target.value))}
-            aria-valuetext={`${generations} generations, ${generations * G1_POPULATION} full-horizon candidate rollouts`}
-            style={{ touchAction: "pan-y pinch-zoom" }}
-            suppressHydrationWarning
-          />
-          <div className="mt-1 flex justify-between text-[0.6rem] font-mono text-slate-400">
-            <span>8</span>
-            <span>7.5k</span>
-            <span>15k</span>
-            <span>22.5k</span>
-            <span>30k</span>
-          </div>
-          <p className="mt-2 text-[0.68rem] leading-5 text-slate-400">
-            16 gens is a refinement pass; the curriculum mean itself was
-            learned over hundreds. Every press CONTINUES the same CMA run —
-            mean, sigma, and covariance path preserved — so presses stack:
-            16 + 2000 + 2000 … up to 30k generations of real search. Wall
-            time scales with your hardware; the HUD shows the live generation.
-            A flat objective stays flat — the run is honest about that too.
-          </p>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <button
               type="button"
-              disabled={busy !== null || !workerAvailable}
-              onClick={() =>
-                post(
-                  { type: "optimize", task, family, generations, seedIndex, mode: "continue", challenge, sigma: searchSigma },
-                  "optimize"
-                )
-              }
+              disabled={!workerAvailable || (busy !== null && busy !== "optimize") || stopRequested}
+              onClick={busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <Sparkles className="h-4 w-4" />
-              {generation > 0 ? `Continue · gen ${generation}` : "Optimize"}
+              {busy === "optimize" ? <Square className="h-4 w-4 fill-current" /> : <Sparkles className="h-4 w-4" />}
+              {busy === "optimize"
+                ? (stopRequested ? "Stopping…" : `Stop · gen ${generation}`)
+                : (generation > 0 ? `Keep learning · gen ${generation}` : "Start learning")}
             </button>
             <button
               type="button"

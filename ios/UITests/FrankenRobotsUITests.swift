@@ -70,7 +70,7 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
-    func testNativeOptimizeCommandIsAcknowledgedByTheEmbeddedOwner() throws {
+    func testNativeContinuousLearningStartsAndStopsThroughEmbeddedOwner() throws {
         let app = XCUIApplication()
         app.launch()
 
@@ -96,8 +96,34 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 8), .completed)
 
+        let running = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'optimizing'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [running], timeout: 12), .completed)
+        let stop = app.buttons["robot-native-optimize"]
+        let stopLabel = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label BEGINSWITH[c] 'stop'"),
+            object: stop
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [stopLabel], timeout: 8), .completed)
+        XCTAssertTrue(stop.isHittable)
+        stop.tap()
+
+        let stopAccepted = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'accepted stop'"),
+            object: receipt
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [stopAccepted], timeout: 8), .completed)
+
+        let readyAgain = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [readyAgain], timeout: 25), .completed)
+
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        screenshot.name = "Native optimization command acknowledged by owner"
+        screenshot.name = "Continuous owner learning stopped with best policy preserved"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }

@@ -3,7 +3,7 @@ export type FrankenRobotsEngineState = "loading" | "ready" | "running" | "failed
 export const FRANKENROBOTS_BRIDGE_SCHEMA_VERSION = 1;
 
 export type FrankenRobotsLab = "humanoid" | "arm";
-export type FrankenRobotsCommandKind = "optimize";
+export type FrankenRobotsCommandKind = "optimize" | "stop";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -71,7 +71,7 @@ export function decodeFrankenRobotsNativeCommand(
     candidate.type !== "engine.command" ||
     candidate.schemaVersion !== FRANKENROBOTS_BRIDGE_SCHEMA_VERSION ||
     candidate.lab !== expectedLab ||
-    candidate.command !== "optimize" ||
+    (candidate.command !== "optimize" && candidate.command !== "stop") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
   ) {

@@ -33,6 +33,15 @@ export type G1OptimizationRequest =
       mode?: "continue" | "fresh";
       challenge: G1Challenge;
       sigma?: number;
+      /** Keep extending the same owner session until an explicit stop arrives. */
+      continuous?: boolean;
+    }
+  | {
+      type: "stop";
+      task: G1Task;
+      family: Exclude<CmaFamily, "full">;
+      seedIndex: number;
+      challenge: G1Challenge;
     }
   | {
       type: "compare";
