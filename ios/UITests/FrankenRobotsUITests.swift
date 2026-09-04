@@ -44,6 +44,52 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testWebContentTerminationFailsClosedThenRetryRecovers() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_FORCE_WEBCONTENT_TERMINATION_ONCE"] = "1"
+        app.launch()
+
+        let terminated = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'local Web content process'")
+        ).firstMatch
+        XCTAssertTrue(terminated.waitForExistence(timeout: 55), app.debugDescription)
+
+        let retry = app.buttons["Try Again"]
+        XCTAssertTrue(retry.isHittable, app.debugDescription)
+        let commandDetail = app.descendants(matching: .any)["robot-native-command-detail"]
+        XCTAssertTrue(commandDetail.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(commandDetail.label.contains("unavailable until Try Again succeeds"))
+        XCTAssertFalse(app.descendants(matching: .any)["robot-live-objective"].exists)
+        XCTAssertTrue(app.buttons["robot-native-optimize"].label.contains("Unavailable"))
+
+        let failedScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        failedScreenshot.name = "WebContent callback failed closed with Try Again"
+        failedScreenshot.lifetime = .keepAlways
+        add(failedScreenshot)
+
+        retry.tap()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5), app.debugDescription)
+        let recovered = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [recovered], timeout: 55), .completed)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["robot-live-objective"]
+                .waitForExistence(timeout: 12),
+            app.debugDescription
+        )
+
+        let recoveredScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        recoveredScreenshot.name = "WebContent callback recovered through Try Again"
+        recoveredScreenshot.lifetime = .keepAlways
+        add(recoveredScreenshot)
+    }
+
     private func settledLandscapeScreenshot(on device: XCUIDevice) -> XCUIScreenshot {
         // A pre-existing XCUI element is not evidence that rotation settled,
         // and Simulator occasionally drops an orientation request. Retry both

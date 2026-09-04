@@ -354,6 +354,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 #if DEBUG
     private var forceReadinessTimeoutOnce =
         ProcessInfo.processInfo.environment["FROBOTS_FORCE_READINESS_TIMEOUT_ONCE"] == "1"
+    private var forceWebContentTerminationOnce =
+        ProcessInfo.processInfo.environment["FROBOTS_FORCE_WEBCONTENT_TERMINATION_ONCE"] == "1"
 #endif
 
     override init() {
@@ -668,6 +670,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         failNavigation(error, navigation: navigation)
     }
 
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard webView === self.webView else { return }
+        let message = "The private \(selectedLab.title.lowercased()) engine stopped unexpectedly. Try Again reloads its local Web content process."
+        cancelReadinessTimeout()
+        resetBridgeState()
+        phase = .failed(message)
+        detail = message
+    }
+
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationResponse: WKNavigationResponse,
@@ -795,9 +806,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         case "ready":
             cancelReadinessTimeout()
             phase = .ready
+            scheduleInjectedWebContentTerminationIfNeeded()
         case "running":
             cancelReadinessTimeout()
             phase = .running
+            scheduleInjectedWebContentTerminationIfNeeded()
         case "failed":
             cancelReadinessTimeout()
             metrics = .empty
@@ -805,6 +818,18 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         default:
             break
         }
+    }
+
+    private func scheduleInjectedWebContentTerminationIfNeeded() {
+#if DEBUG
+        guard forceWebContentTerminationOnce, lastBridgeSequence > 0 else { return }
+        forceWebContentTerminationOnce = false
+        Task { [weak self] in
+            await Task.yield()
+            guard let self, self.phase == .ready || self.phase == .running else { return }
+            self.webViewWebContentProcessDidTerminate(self.webView)
+        }
+#endif
     }
 
     private func resetBridgeState() {
