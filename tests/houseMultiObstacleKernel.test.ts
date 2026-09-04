@@ -479,7 +479,7 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     }
   });
 
-  test("schema-3 config packet is self-describing: 12 fixed words plus 7 per obstacle", () => {
+  test("schema-4 config packet is self-describing: 12 fixed words plus 8 per obstacle", () => {
     const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 5);
     const packet = buildHouseholdManipulationConfig({
       ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -488,21 +488,23 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
       kineticFrictionMu: 0.7,
       obstacles: roster,
     });
-    expect(packet.length).toBe(12 + 7 * roster.length);
-    expect(packet[1]).toBe(3);
+    expect(packet.length).toBe(12 + 8 * roster.length);
+    expect(packet[1]).toBe(4);
     expect(packet[3]).toBe(packet.length);
     expect(packet[8]).toBe(0.5);
     expect(packet[9]).toBe(0.9);
     expect(packet[10]).toBe(0.7);
     expect(packet[11]).toBe(roster.length);
-    expect(Array.from(packet.slice(12, 19))).toEqual([
+    expect(Array.from(packet.slice(12, 20))).toEqual([
       ...roster[0].centerMeters,
       ...roster[0].halfExtentsMeters,
       roster[0].yawRad,
+      // Schema 4's role word: 0 keep-out, 1 support.
+      roster[0].role === "support" ? 1 : 0,
     ]);
   });
 
-  test("schema-3 config packet refuses the envelope the owner refuses", () => {
+  test("schema-4 config packet refuses the envelope the owner refuses", () => {
     const base = DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG;
     expect(() => buildHouseholdManipulationConfig({ ...base, objectMassKilograms: -1 })).toThrow();
     expect(() => buildHouseholdManipulationConfig({ ...base, staticFrictionMu: 0.5, kineticFrictionMu: 0.6 })).toThrow();

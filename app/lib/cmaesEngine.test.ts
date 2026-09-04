@@ -1478,16 +1478,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0619/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0619/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.16");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.19");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1641,7 +1641,11 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   );
   expect(curriculum.ok.completedSteps).toBe(720);
   expect(curriculum.ok.terminationReason).toBe("horizon");
-  expect(curriculum.ok.objective).toBeCloseTo(1.3168446135481418, 11);
+  // v069 rebalanced the walking shaping score to pay for forward progress, so
+  // the seed's objective moved from 1.3168446135481418 to here. Every physical
+  // quantity below is unchanged, which is the point: the rollout is identical,
+  // only what we ask of it moved.
+  expect(curriculum.ok.objective).toBeCloseTo(-67.5144205651753, 10);
   expect(curriculum.ok.distanceMeters).toBeCloseTo(0.32916830547315423, 12);
   expect(curriculum.ok.actuatorWorkJoules).toBeCloseTo(11796.419770004608, 7);
   expect(curriculum.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
@@ -1686,7 +1690,8 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
   expect(flat.ok.completedSteps).toBe(720);
   expect(flat.ok.terminationReason).toBe("horizon");
-  expect(flat.ok.objective).toBeCloseTo(7.915509184194548, 11);
+  // Also moved by the v069 walking rebalance (was 7.915509184194548).
+  expect(flat.ok.objective).toBeCloseTo(-59.41344499020653, 10);
   expect(flat.ok.distanceMeters).toBeCloseTo(0.30837211553531235, 12);
   expect(flat.ok.actuatorWorkJoules).toBeCloseTo(11930.205416265955, 7);
   expect(flat.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
@@ -1749,9 +1754,11 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
 
   for (const task of [0, 1, 2]) {
     const arm = new wasm.HouseholdManipulationVizEvaluator(
-      // Schema-3 config: twelve fixed words, zero overrides, no declared
-      // keep-out boxes — the packet the browser sends for a preset task.
-      new Float64Array([0x41524d31, 3, 0, 12, 1 / 90, 6, 3, task, 0, 0, 0, 0]),
+      // Schema-4 config: twelve fixed words, zero overrides, no declared
+      // bodies — the packet the browser sends for a preset task. Schema 4
+      // added a role word per declared body; with none declared the fixed
+      // header is unchanged.
+      new Float64Array([0x41524d31, 4, 0, 12, 1 / 90, 6, 3, task, 0, 0, 0, 0]),
     );
     const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
     if (!("ok" in armAdmission)) {
