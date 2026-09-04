@@ -997,9 +997,9 @@ const ARM_MAGIC = 0x41524d31;
 // override, Coulomb friction coefficients, and a variable-length roster of
 // extra obstacle boxes; the admission echoes the effective friction and the
 // extra-obstacle count in three trailing words.
-const ARM_SCHEMA = 3;
+const ARM_SCHEMA = 4;
 const ARM_CONFIG_FIXED_WORDS = 12;
-const ARM_OBSTACLE_WORDS = 7;
+const ARM_OBSTACLE_WORDS = 8;
 export const ARM_MAX_EXTRA_OBSTACLES = 32;
 const ARM_KIND_CONFIG = 0;
 const ARM_KIND_ADMISSION = 1;
@@ -1015,7 +1015,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.18";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.19";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1222,8 +1222,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0618/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0618/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0619/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0619/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -2483,7 +2483,12 @@ export function buildHouseholdManipulationConfig(
     ) {
       throw new Error(`household-arm config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`);
     }
-    words.set([c[0], c[1], c[2], h[0], h[1], h[2], yawRad], base);
+    // Schema 4 appends the body role: a keep-out volume the arm must avoid, or
+    // a work surface it may touch but not sink through.
+    words.set(
+      [c[0], c[1], c[2], h[0], h[1], h[2], yawRad, obstacle.role === "support" ? 1 : 0],
+      base,
+    );
   });
   return words;
 }

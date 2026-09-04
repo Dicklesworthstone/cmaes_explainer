@@ -20,8 +20,18 @@ import {
 export interface LearningLedgerProps {
   /** Measurements taken from replayed best policies, oldest first. */
   points: readonly LearningLedgerPoint[];
+  /** Wall-clock seconds actually spent searching, across all start/stop cycles. */
+  trainingSeconds?: number;
   width?: number;
   height?: number;
+}
+
+/** "2h 14m" — what someone returning to an overnight run wants to read. */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function formatMeters(value: number): string {
@@ -100,7 +110,12 @@ function Stat({
   );
 }
 
-export function LearningLedger({ points, width = 600, height = 132 }: LearningLedgerProps) {
+export function LearningLedger({
+  points,
+  trainingSeconds = 0,
+  width = 600,
+  height = 132,
+}: LearningLedgerProps) {
   const seed = points.length > 0 ? points[0] : null;
   const latest = points.length > 0 ? points[points.length - 1] : null;
 
@@ -192,7 +207,7 @@ export function LearningLedger({ points, width = 600, height = 132 }: LearningLe
         <span className="font-mono text-[0.6rem] text-slate-500">
           {latest.generation === 0
             ? "policy seed"
-            : `best policy · gen ${latest.generation.toLocaleString()}`}
+            : `gen ${latest.generation.toLocaleString()}${trainingSeconds >= 1 ? ` · ${formatDuration(trainingSeconds)} trained` : ""}`}
         </span>
       </div>
 
@@ -320,6 +335,23 @@ export function LearningLedger({ points, width = 600, height = 132 }: LearningLe
             {(chart.trackMax * 100).toFixed(0)}%)
           </span>
         </div>
+      ) : null}
+      {latest.generation > 0 && seed.generation !== latest.generation ? (
+        <p className="mt-2 text-[0.66rem] leading-4 text-slate-300">
+          {trainingSeconds >= 1 ? `In ${formatDuration(trainingSeconds)} and ` : "In "}
+          {latest.generation.toLocaleString()} generations, the robot went from{" "}
+          <span className="font-mono text-slate-100">
+            {formatMeters(seed.distanceMeters)}
+          </span>{" "}
+          to{" "}
+          <span className="font-mono text-emerald-200">
+            {formatMeters(latest.distanceMeters)}
+          </span>
+          {seed.speedTrackingFraction !== null && latest.speedTrackingFraction !== null
+            ? `, and from ${(seed.speedTrackingFraction * 100).toFixed(0)}% to ${(latest.speedTrackingFraction * 100).toFixed(0)}% of the speed it was asked for`
+            : ""}
+          .
+        </p>
       ) : null}
       <p className="mt-1 text-[0.6rem] leading-4 text-slate-500">
         Read from the same owner receipt as the objective, so these cannot
