@@ -19,7 +19,12 @@ import {
   queryMultiObstacleScene,
   simulateG1HouseNavigationChallenge,
 } from "../app/lib/houseMultiObstacleKernel";
-import { CRAFTSMAN_FOUNDATION_SLAB } from "../app/lib/houseScenes";
+import {
+  CRAFTSMAN_FLOOR_SUPPORT,
+  CRAFTSMAN_FLOOR_Y,
+  CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR,
+  CRAFTSMAN_FOUNDATION_SLAB,
+} from "../app/lib/houseScenes";
 import {
   DEFAULT_G1_WALKING_CONFIG,
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -527,15 +532,29 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
 });
 
 describe("declared structural surfaces (the robot-inside-the-floor regression)", () => {
-  test("the declared floor is the same box the estate draws", () => {
-    // One constant, two consumers. When these were separate literals the
-    // renderer's slab was authored above the floor line and the robot stood
-    // inside it with nothing in the physics able to see it.
+  test("the declared floor's top face is the walking plane the rooms are drawn on", () => {
     const declared = HOUSE_STRUCTURAL_SURFACES.find((b) => b.id === "house-floor")!;
-    expect(declared.center).toEqual([...CRAFTSMAN_FOUNDATION_SLAB.center]);
-    expect(declared.halfExtents).toEqual([...CRAFTSMAN_FOUNDATION_SLAB.halfExtents]);
-    // Its top face is the walking plane the room floors are drawn on.
-    expect(declared.center[1] + declared.halfExtents[1]).toBeCloseTo(0, 12);
+    expect(declared.center).toEqual([...CRAFTSMAN_FLOOR_SUPPORT.center]);
+    expect(declared.halfExtents).toEqual([...CRAFTSMAN_FLOOR_SUPPORT.halfExtents]);
+    expect(declared.center[1] + declared.halfExtents[1]).toBeCloseTo(CRAFTSMAN_FLOOR_Y, 12);
+  });
+
+  test("the rendered foundation sits strictly below the floor planes, never coplanar", () => {
+    // Coplanar surfaces z-fight: with the foundation's top face at exactly the
+    // walking plane the wood floor flickered in and out as the depth test
+    // picked a winner per pixel per frame. It must be below, and close enough
+    // that no gap is visible from outside the house.
+    const renderedTop =
+      CRAFTSMAN_FOUNDATION_SLAB.center[1] + CRAFTSMAN_FOUNDATION_SLAB.halfExtents[1];
+    const supportTop = CRAFTSMAN_FLOOR_SUPPORT.center[1] + CRAFTSMAN_FLOOR_SUPPORT.halfExtents[1];
+    expect(renderedTop).toBeLessThan(supportTop);
+    expect(supportTop - renderedTop).toBeCloseTo(CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR, 12);
+    expect(supportTop - renderedTop).toBeGreaterThan(0.002);
+    expect(supportTop - renderedTop).toBeLessThan(0.05);
+    // Same footprint, so the masonry still reads as the house's base.
+    expect(CRAFTSMAN_FOUNDATION_SLAB.halfExtents).toEqual([
+      ...CRAFTSMAN_FLOOR_SUPPORT.halfExtents,
+    ]);
   });
 
   test("the G1 roster declares the house floor as a support surface, not a keep-out", () => {

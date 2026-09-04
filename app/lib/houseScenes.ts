@@ -88,20 +88,57 @@ const base = {
 /** Craftsman bungalow: porch -> living (fireplace) -> dining -> kitchen;
  *  bedroom/bath wing across a central hall. */
 /**
- * The stone foundation the estate draws under the house, in stage
- * coordinates (y up). Its TOP face is the y = 0 walking plane the room floor
- * planes are drawn on.
+ * Height of the walking plane in stage coordinates. Every room floor plane is
+ * drawn here, the robot's feet rest here, and the support body handed to the
+ * owner kernels has its top face here. One number, so the three cannot drift.
+ */
+export const CRAFTSMAN_FLOOR_Y = 0;
+
+/** Footprint shared by the floor support body and the rendered foundation. */
+const CRAFTSMAN_SLAB_HALF_EXTENTS: [number, number, number] = [4.2, 0.15, 5.2];
+const CRAFTSMAN_SLAB_CENTER_XZ: [number, number] = [0, -0.8];
+
+/**
+ * The floor as a physics body: a slab whose TOP face is the walking plane.
  *
- * This is shared deliberately. The renderer draws this box and the robot
- * owners are handed it as a support body; when those two drifted apart the
- * slab was authored from y = 0 up to 0.3 and the humanoid stood inside it,
- * buried to mid-shin, with nothing in the physics able to see it.
+ * The owners are handed this as a support surface, which is what makes a
+ * mis-placed floor a refusal. It is deliberately not the same box as the
+ * rendered foundation below, because two coplanar surfaces z-fight.
+ */
+export const CRAFTSMAN_FLOOR_SUPPORT = {
+  center: [
+    CRAFTSMAN_SLAB_CENTER_XZ[0],
+    CRAFTSMAN_FLOOR_Y - CRAFTSMAN_SLAB_HALF_EXTENTS[1],
+    CRAFTSMAN_SLAB_CENTER_XZ[1],
+  ] as [number, number, number],
+  halfExtents: [...CRAFTSMAN_SLAB_HALF_EXTENTS] as [number, number, number],
+} as const;
+
+/**
+ * Gap between the rendered masonry and the floor planes above it [m].
+ *
+ * It must clear BOTH neighbours: the lawn plane sits at -0.01 and the room
+ * floors at 0, so the foundation's top face goes between them. Landing it on
+ * either one makes those two surfaces coplanar and they z-fight.
+ */
+export const CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR = 0.005;
+
+/**
+ * The stone foundation the estate draws under the house.
+ *
+ * Its top face sits a centimetre BELOW the floor planes. Placing it exactly at
+ * the walking plane makes it coplanar with every room floor and the wood floor
+ * flickers as the depth test picks a winner per pixel per frame. (Before that
+ * it was authored from the floor UP to 0.3 m, which buried the robot to
+ * mid-shin — the bug that motivated declaring surfaces at all.)
  */
 export const CRAFTSMAN_FOUNDATION_SLAB = {
-  /** Centre in stage coordinates [x, y, z]. */
-  center: [0, -0.15, -0.8] as [number, number, number],
-  /** Half extents [x, y, z]; the box spans y in [-0.3, 0]. */
-  halfExtents: [4.2, 0.15, 5.2] as [number, number, number],
+  center: [
+    CRAFTSMAN_SLAB_CENTER_XZ[0],
+    CRAFTSMAN_FLOOR_Y - CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR - CRAFTSMAN_SLAB_HALF_EXTENTS[1],
+    CRAFTSMAN_SLAB_CENTER_XZ[1],
+  ] as [number, number, number],
+  halfExtents: [...CRAFTSMAN_SLAB_HALF_EXTENTS] as [number, number, number],
 } as const;
 
 export const CRAFTSMAN_BUNGALOW_1928: HouseSceneConfig = {

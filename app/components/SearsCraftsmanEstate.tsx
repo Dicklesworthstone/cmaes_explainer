@@ -1,5 +1,6 @@
-import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 "use client";
+
+import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 
 import React, { useMemo, useEffect } from "react";
 import * as THREE from "three";

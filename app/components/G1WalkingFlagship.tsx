@@ -202,6 +202,11 @@ const G1_POPULATION = 16;
 // the visible link surface does not penetrate OBBs. The previous
 // constant 0.05 m was less than the link radius, so the link mesh still
 // visibly tunneled through furniture (verified cmaes-u76s followup).
+/** Height of the rendered terrain above the wood floor planes at y = 0 [m]. */
+const TERRAIN_ABOVE_FLOOR_M = 0.006;
+/** Wireframe overlay offset above the terrain solid [m]. */
+const TERRAIN_WIREFRAME_OFFSET_M = 0.003;
+
 const G1_LINK_RADIUS_METERS = 0.105;
 const G1_LINK_CLEARANCE_MARGIN_METERS = 0.015;
 const G1_LINK_CLEARANCE_METERS = G1_LINK_RADIUS_METERS + G1_LINK_CLEARANCE_MARGIN_METERS;
@@ -398,11 +403,16 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
   if (!geometry || amplitude <= 0) return null;
 
   return (
-    <group position={[0, 0.001, 0]}>
+    // Lifted clear of the wood floor planes at y = 0. The displacement field
+    // is non-negative and touches zero, so at 1 mm the terrain was effectively
+    // coplanar with the floor across whole troughs and the two flickered.
+    <group position={[0, TERRAIN_ABOVE_FLOOR_M, 0]}>
       <mesh geometry={geometry} receiveShadow>
         <meshStandardMaterial color="#6e421f" roughness={0.65} metalness={0.08} />
       </mesh>
-      <mesh geometry={geometry} position={[0, 0.001, 0]}>
+      {/* Wireframe overlay, offset far enough above the solid that the two
+          copies of the same geometry cannot z-fight. */}
+      <mesh geometry={geometry} position={[0, TERRAIN_WIREFRAME_OFFSET_M, 0]}>
         <meshBasicMaterial color="#d97706" wireframe transparent opacity={0.18} />
       </mesh>
     </group>
@@ -1828,10 +1838,10 @@ function G1ClearanceBeam({ readout }: { readout: NearestObstacleReadout | null }
         <sphereGeometry args={[0.02, 10, 8]} />
         <meshBasicMaterial color={color} transparent opacity={0.9} depthWrite={false} />
       </mesh>
-      <mesh position={[readout.linkPoint[0], 0.012, readout.linkPoint[2]]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[Math.max(0.02, readout.distance - 0.01), Math.max(0.03, readout.distance), 40]} />
-        <meshBasicMaterial color={color} transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} />
-      </mesh>
+      {/* No floor disc. Sized to the clearance distance it drew a ring more
+          than a metre across, and lying flat it z-fought the terrain overlay.
+          The bar and its surface marker carry the same information, and the
+          toolbar chip carries the number. */}
     </group>
   );
 }

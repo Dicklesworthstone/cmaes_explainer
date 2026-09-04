@@ -287,7 +287,7 @@ export function resolveCameraBoom(
 
 import {
   CRAFTSMAN_BUNGALOW_1928,
-  CRAFTSMAN_FOUNDATION_SLAB,
+  CRAFTSMAN_FLOOR_SUPPORT,
   type HouseFurniture,
   type HouseSceneConfig,
   type HouseWall,
@@ -1629,10 +1629,11 @@ export const HOUSE_STRUCTURAL_SURFACES: OrientedBoundingBox[] = [
   {
     id: "house-floor",
     name: "house floor",
-    // The same slab the estate draws, from the shared constant, so the two
-    // cannot drift apart again.
-    center: [...CRAFTSMAN_FOUNDATION_SLAB.center],
-    halfExtents: [...CRAFTSMAN_FOUNDATION_SLAB.halfExtents],
+    // The walking plane as a body: its top face is CRAFTSMAN_FLOOR_Y, the
+    // same height every room floor plane is drawn at. The rendered foundation
+    // masonry sits a centimetre lower so the two never z-fight.
+    center: [...CRAFTSMAN_FLOOR_SUPPORT.center],
+    halfExtents: [...CRAFTSMAN_FLOOR_SUPPORT.halfExtents],
     rotationYawRad: 0,
   },
 ];
