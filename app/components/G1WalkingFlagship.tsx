@@ -1519,7 +1519,12 @@ function LimbPinHandle({
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
       )}
-      <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+      {/* Hit target covering the ring and its interior; see the root handle. */}
+      <mesh onPointerDown={handlePointerDown}>
+        <sphereGeometry args={[pin.radius * 1.4, 10, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[pin.radius * 0.75, 0.008, 8, 20]} />
         <meshStandardMaterial
           color={isDragging ? "#f59e0b" : pin.color}
@@ -1625,6 +1630,7 @@ function RagdollDragger({
   dragMode = "pelvis",
   limbOffsets = {},
   onDragChange,
+  onDragCommit,
   onLimbDragChange,
   onCollisionChange,
 }: {
@@ -1636,6 +1642,8 @@ function RagdollDragger({
   dragMode?: "pelvis" | "limbs";
   limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
   onDragChange: (offset: [number, number, number] | null) => void;
+  /** Fired once when the operator releases the robot, not on every move. */
+  onDragCommit?: () => void;
   onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
   onCollisionChange: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
@@ -1679,6 +1687,7 @@ function RagdollDragger({
     setLastColliding(isColliding);
   };
   const handlePointerUp = () => {
+    if (isDragging) onDragCommit?.();
     setIsDragging(false);
     setLastColliding(false);
   };
@@ -1710,7 +1719,14 @@ function RagdollDragger({
             : [currentPos[0], currentPos[1] + 1.05, currentPos[2]]
         }
       >
-        <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+        {/* Hit target. The visible affordance is a ring, so the obvious place
+            to aim — its centre — is a hole and a click there grabs nothing.
+            This invisible sphere covers the ring and its interior. */}
+        <mesh onPointerDown={handlePointerDown}>
+          <sphereGeometry args={[0.1, 12, 10]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+        <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.075, 0.012, 12, 28]} />
           <meshStandardMaterial
             color={lastColliding ? "#f43f5e" : isDragging ? "#f59e0b" : "#38bdf8"}
@@ -1869,6 +1885,7 @@ function RobotStage({
   dragMode = "pelvis",
   limbOffsets = {},
   onRobotDragChange,
+  onRobotDragCommit,
   onLimbDragChange,
   onDragCollisionChange,
 }: {
@@ -1894,6 +1911,7 @@ function RobotStage({
   dragMode?: "pelvis" | "limbs";
   limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
   onRobotDragChange?: (offset: [number, number, number] | null) => void;
+  onRobotDragCommit?: () => void;
   onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
   onDragCollisionChange?: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
 }) {
@@ -1998,6 +2016,7 @@ function RobotStage({
         dragMode={dragMode}
         limbOffsets={limbOffsets}
         onDragChange={onRobotDragChange ?? (() => {})}
+        onDragCommit={onRobotDragCommit}
         onLimbDragChange={onLimbDragChange}
         onCollisionChange={onDragCollisionChange ?? (() => {})}
       />
@@ -2214,6 +2233,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     clearance: number;
   }>({ isColliding: false, obstacleName: null, clearance: 1.0 });
   const [userHasDragged, setUserHasDragged] = useState(false);
+  // Read inside the drag-release callback, which must not re-subscribe the
+  // pointer handlers every time the seat, task or challenge changes.
+  const robotDragOffsetRef = useRef<[number, number, number] | null>(null);
+  const taskRef = useRef<G1Task>(task);
+  const challengeRef = useRef<G1Challenge>(challenge);
+  useEffect(() => {
+    robotDragOffsetRef.current = robotDragOffset;
+    taskRef.current = task;
+    challengeRef.current = challenge;
+  }, [robotDragOffset, task, challenge]);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
 
@@ -2221,6 +2250,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setRobotDragOffset(offset);
     if (offset !== null) setUserHasDragged(true);
   }, []);
+
 
   const handleLimbDrag = useCallback((pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => {
     setLimbOffsets((prev) => ({
@@ -2239,6 +2269,28 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setBusy(mode);
     workerRef.current.postMessage(message);
   }, []);
+
+  // Releasing the robot re-certifies it where it now stands.
+  //
+  // The owner always starts its rollout at its own origin, so a receipt is
+  // only about the seat whose keep-out roster produced it. Without this the
+  // page kept displaying the original seat's verdict after a drag: put the
+  // robot in the sofa and it still read "0 penetration". Now the boxes are
+  // re-expressed around the new seat and the owner answers again — including
+  // refusing, which is the honest answer for a robot stood inside furniture.
+  const handleRobotDragCommit = useCallback(() => {
+    const offset = robotDragOffsetRef.current;
+    if (!offset) return;
+    post(
+      {
+        type: "preview",
+        task: taskRef.current,
+        challenge: challengeRef.current,
+        seat: [offset[0], 0, offset[2]],
+      },
+      "preview",
+    );
+  }, [post]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2953,6 +3005,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   dragMode={dragMode}
                   limbOffsets={limbOffsets}
                   onRobotDragChange={handleRobotDragChange}
+                  onRobotDragCommit={handleRobotDragCommit}
                   onLimbDragChange={handleLimbDrag}
                   onDragCollisionChange={setDragCollisionState}
                 />

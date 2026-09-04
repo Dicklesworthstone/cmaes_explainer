@@ -12,7 +12,18 @@ import {
 } from "./houseMultiObstacleKernel";
 
 export type G1OptimizationRequest =
-  | { type: "preview"; task: G1Task; challenge: G1Challenge }
+  | {
+      type: "preview";
+      task: G1Task;
+      challenge: G1Challenge;
+      /**
+       * Stage position the browser will render the robot at, as a horizontal
+       * offset from the owner's origin. The keep-out roster is declared
+       * relative to it, so moving the robot re-certifies it against the house
+       * it is actually standing in. Omitted means the default seat.
+       */
+      seat?: [number, number, number];
+    }
   | {
       type: "optimize";
       task: G1Task;
@@ -55,6 +66,21 @@ export function g1OptimizationConfig(
   obstacles: readonly HouseholdKernelObstacle[] = G1_KERNEL_OBSTACLES,
 ): G1WalkingConfig {
   return { ...DEFAULT_G1_WALKING_CONFIG, task, challenge, obstacles };
+}
+
+/**
+ * The roster for a robot standing at `seat`, or the default seat's roster.
+ *
+ * The owner always begins at its own origin, so a robot the operator has
+ * dragged across the room needs its boxes re-expressed before the receipt
+ * means anything. Without this the page kept showing the old seat's verdict:
+ * drag the robot into the sofa and it still claimed zero penetration.
+ */
+export function g1ObstaclesForSeat(
+  seat?: readonly [number, number, number],
+): readonly HouseholdKernelObstacle[] {
+  if (!seat) return G1_KERNEL_OBSTACLES;
+  return g1KernelObstacleRoster(seat);
 }
 
 export function g1OptimizationRunKey(

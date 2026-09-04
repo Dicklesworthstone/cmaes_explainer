@@ -12,6 +12,7 @@ import {
   type G1TraceReceipt,
 } from "../lib/frankensimCmaes";
 import {
+  g1ObstaclesForSeat,
   g1OptimizationConfig,
   g1OptimizationRunKey,
   type G1OptimizationRequest,
@@ -87,10 +88,16 @@ function reportParallelEvaluation(
   return true;
 }
 
-async function preview(task: G1Task, challenge: G1Challenge): Promise<void> {
+async function preview(
+  task: G1Task,
+  challenge: G1Challenge,
+  seat?: [number, number, number]
+): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
+    await createFrankenSimG1WalkingEvaluator(
+      g1OptimizationConfig(task, challenge, g1ObstaclesForSeat(seat))
+    ),
     "G1 admission"
   );
   try {
@@ -386,7 +393,11 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // first await (createFrankenSimG1WalkingEvaluator).
   const work = () =>
     request.type === "preview"
-      ? preview(request.task ?? "walking", request.challenge ?? "terrain-and-push")
+      ? preview(
+          request.task ?? "walking",
+          request.challenge ?? "terrain-and-push",
+          request.seat
+        )
       : request.type === "compare"
         ? compareFamilies(request.generations, request.task ?? "walking", request.challenge)
         : optimize(request.family, request.generations, request.seedIndex, request.mode, request.task ?? "walking", request.challenge, request.sigma);
