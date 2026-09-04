@@ -141,13 +141,13 @@ final class FrankenRobotsUITests: XCTestCase {
         device.orientation = .landscapeLeft
         let stage = app.descendants(matching: .any)["robot-stage"]
         XCTAssertTrue(stage.waitForExistence(timeout: 8))
-        let rotated = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "frame.size.width > frame.size.height"),
-            object: app
-        )
-        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 8), .completed)
+        // XCUIApplication.frame can remain in portrait coordinates after a
+        // real interface rotation. Assert against the rendered framebuffer so
+        // this gate measures the pixels the user actually sees.
+        let landscapeFrame = XCUIScreen.main.screenshot()
+        XCTAssertGreaterThan(landscapeFrame.image.size.width, landscapeFrame.image.size.height)
 
-        let landscape = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let landscape = XCTAttachment(screenshot: landscapeFrame)
         landscape.name = "Arm safety receipts on iPad landscape"
         landscape.lifetime = .keepAlways
         add(landscape)
