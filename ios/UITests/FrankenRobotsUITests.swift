@@ -375,7 +375,7 @@ final class FrankenRobotsUITests: XCTestCase {
                 NSPredicate(format: "label CONTAINS[c] %@", lens.status)
             ).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
             let weightedSum = app.descendants(matching: .any).matching(
-                NSPredicate(format: "label CONTAINS[c] 'weighted sum'")
+                NSPredicate(format: "label BEGINSWITH[c] 'Selected-lens contributions, weighted sum'")
             ).firstMatch
             XCTAssertTrue(weightedSum.waitForExistence(timeout: 5), app.debugDescription)
             weightedSumLabels.insert(weightedSum.label)
