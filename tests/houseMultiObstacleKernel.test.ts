@@ -446,17 +446,23 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     // 0.78 m support height; no task has that height (they are 0.237, 0.277
     // and 0.265 m), so the boxes sat half a metre above the geometry the
     // viewer sees.
+    // The counter leads every roster as the one SUPPORT body: the surface the
+    // arm works on rather than around. Everything after it is keep-out.
     const mug = householdKernelObstacleRoster(0.2369, "kitchen-mug", 10);
     expect(mug.length).toBe(10);
-    expect(mug[0].name).toBe("backsplash");
+    expect(mug[0].name).toBe("counter slab");
+    expect(mug[0].role).toBe("support");
+    expect(mug.slice(1).every((o) => o.role === "keep-out")).toBe(true);
+    expect(mug[1].name).toBe("backsplash");
     expect(mug.some((o) => o.name === "side cabinet")).toBe(false);
-    expect(mug.some((o) => o.name === "counter slab")).toBe(false);
 
     const remote = householdKernelObstacleRoster(0.2769, "living-room-remote", 10);
-    expect(remote[0].name).toBe("side cabinet");
+    expect(remote[0].name).toBe("counter slab");
+    expect(remote[1].name).toBe("side cabinet");
     expect(remote.some((o) => o.name === "backsplash")).toBe(false);
 
     const trowel = householdKernelObstacleRoster(0.2649, "backyard-trowel", 10);
+    expect(trowel[0].name).toBe("counter slab");
     expect(trowel.filter((o) => o.name === "fence post")).toHaveLength(4);
 
     // Workbench boxes track the support height exactly as ArmEnvironment
@@ -469,7 +475,7 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
 
   test("roster furniture is ordered by distance from the arm base at the stage origin", () => {
     const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 12);
-    const furniture = roster.slice(1); // after the single workbench box
+    const furniture = roster.slice(2); // after the counter surface and workbench box
     const d = (o: HouseholdKernelObstacle) =>
       Math.hypot(o.centerMeters[0], o.centerMeters[1], o.centerMeters[2]);
     for (let i = 1; i < furniture.length; i++) {

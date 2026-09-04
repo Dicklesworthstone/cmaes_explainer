@@ -1335,9 +1335,21 @@ export function clampPositionAgainstHouseCollisions(
  };
 }
 
-/** Work-surface placement shared by the renderer and these colliders. */
-export const ARM_TABLE_CENTER_X = -0.85;
-export const ARM_TABLE_WIDTH = 1.4;
+/**
+ * Work-surface placement shared by the renderer and these colliders.
+ *
+ * Sized so the arm can actually work at it. The original top was 1.40 x 1.65 m
+ * with its near edge 150 mm from a floor-mounted arm's base axis, which is not
+ * a workcell anyone would build — and declaring it to the owner refused all
+ * three tasks, because the arm's own link envelopes have to sweep through
+ * where it was drawn. Measured against the owner, a 0.90 x 0.90 m top whose
+ * near edge is 350 mm out holds every object station with margin and leaves
+ * every task's verdict exactly as it is undeclared.
+ */
+export const ARM_TABLE_CENTER_X = -0.8;
+export const ARM_TABLE_WIDTH = 0.9;
+export const ARM_TABLE_DEPTH = 0.9;
+export const ARM_TABLE_THICKNESS = 0.09;
 
 /**
  * Workbench volumes around the household arm, built to match exactly what
@@ -1365,6 +1377,9 @@ export function armWorkbenchObstacles(
       {
         id: "arm-backsplash",
         name: "backsplash",
+        // A wall behind the bench, not flush to it: pulling the panel forward
+        // onto the (now much smaller) counter's back edge puts it 400 mm inside
+        // the arm's working volume, and measured, that refuses the mug task.
         center: [ARM_TABLE_CENTER_X, supportHeightMeters + 0.5, -0.82],
         halfExtents: [ARM_TABLE_WIDTH / 2, 0.525, 0.035],
         rotationYawRad: 0,
@@ -1397,8 +1412,8 @@ export function armCounterSlabObstacle(supportHeightMeters: number): OrientedBou
   return {
     id: "arm-counter-slab",
     name: "counter slab",
-    center: [ARM_TABLE_CENTER_X, supportHeightMeters - 0.045, 0],
-    halfExtents: [ARM_TABLE_WIDTH / 2, 0.045, 0.825],
+    center: [ARM_TABLE_CENTER_X, supportHeightMeters - ARM_TABLE_THICKNESS / 2, 0],
+    halfExtents: [ARM_TABLE_WIDTH / 2, ARM_TABLE_THICKNESS / 2, ARM_TABLE_DEPTH / 2],
     rotationYawRad: 0,
   };
 }
@@ -1509,14 +1524,23 @@ export function householdKernelObstacleRoster(
   house: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
   rooms: readonly string[] = ARM_STAGE_ROOMS,
 ): HouseholdKernelObstacle[] {
-  // Every arm-stage body is a keep-out: the backsplash, cabinet, fence posts
-  // and furniture are all things the arm works AROUND. The one surface it
-  // works over is the table, and that is deliberately not in this list
-  // (armStageObstacles omits it) because the arm's own chain rises through
-  // that plane from a base on the floor.
-  return armStageObstacles(supportHeightMeters, task, limit, house, rooms).map((obb) =>
-    stageObbToKernelObstacle(obb, "keep-out"),
-  );
+  // The backsplash, cabinet, fence posts and furniture are keep-out volumes:
+  // things the arm works AROUND. The counter is the one body it works ON, so it
+  // goes in as a support surface — contact is expected, sinking through it is
+  // not. Declaring it is what turns "the gripper is inside the table" from a
+  // screenshot into a refusal.
+  const surfaces = [
+    stageObbToKernelObstacle(armCounterSlabObstacle(supportHeightMeters), "support"),
+  ];
+  return [
+    ...surfaces,
+    // The surface is declared IN ADDITION to the keep-out budget rather than
+    // out of it: silently dropping a body to make room would change what the
+    // arm is guarded against, which is not what declaring a table should do.
+    ...armStageObstacles(supportHeightMeters, task, limit, house, rooms).map((obb) =>
+      stageObbToKernelObstacle(obb, "keep-out"),
+    ),
+  ];
 }
 
 /**

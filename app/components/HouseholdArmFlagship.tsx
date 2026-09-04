@@ -11,6 +11,8 @@ import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import {
   ARM_TABLE_CENTER_X,
+  ARM_TABLE_DEPTH,
+  ARM_TABLE_THICKNESS,
   ARM_TABLE_WIDTH,
   armCounterSlabObstacle,
   armStageObstacles,
@@ -451,8 +453,10 @@ function ArmEnvironment({
           reaching over a low table. Drawn centred on the origin (as it was),
           the slab swallowed the base drum and the first two links, so the arm
           appeared to grow out of the tabletop. */}
-      <mesh position={[ARM_TABLE_CENTER_X, supportY - 0.045, 0]} receiveShadow castShadow>
-        <boxGeometry args={[ARM_TABLE_WIDTH, 0.09, 1.65]} />
+      <mesh position={[ARM_TABLE_CENTER_X, supportY - ARM_TABLE_THICKNESS / 2, 0]} receiveShadow castShadow>
+        {/* Drawn from the same constants the owner is told about, so the
+            surface on screen and the surface in the physics cannot drift. */}
+        <boxGeometry args={[ARM_TABLE_WIDTH, ARM_TABLE_THICKNESS, ARM_TABLE_DEPTH]} />
         <meshStandardMaterial
           color={
             task === "backyard-trowel"
@@ -468,7 +472,7 @@ function ArmEnvironment({
 
       {task === "kitchen-mug" ? (
         <>
-          <mesh position={[ARM_TABLE_CENTER_X, supportY + 0.5, -0.82]} receiveShadow>
+          <mesh position={[ARM_TABLE_CENTER_X, supportY + 0.5, -ARM_TABLE_DEPTH / 2 + 0.035]} receiveShadow>
             <boxGeometry args={[ARM_TABLE_WIDTH, 1.05, 0.07]} />
             <meshStandardMaterial color="#1d2a40" roughness={0.82} />
           </mesh>
