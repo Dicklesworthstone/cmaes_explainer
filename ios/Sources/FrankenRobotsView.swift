@@ -113,18 +113,25 @@ struct FrankenRobotsView: View {
             VStack(alignment: .leading, spacing: compact ? 0 : 2) {
                 FrankenRobotsWordmark()
                 if !compact {
-                    Text("ROBOT_FORGE // private · physical · gradient-free")
-                        .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
-                        .kerning(0.8)
-                        .foregroundStyle(RobotTheme.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                    ViewThatFits(in: .horizontal) {
+                        mastheadSubtitle("ROBOT_FORGE // private · physical · gradient-free")
+                        mastheadSubtitle("PRIVATE · PHYSICAL · CMA-ES")
+                    }
                 }
             }
             Spacer(minLength: 8)
             RobotAppearanceButton(selection: $appearance)
             engineStatus
         }
+    }
+
+    private func mastheadSubtitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+            .kerning(0.8)
+            .foregroundStyle(RobotTheme.secondary)
+            .lineLimit(1)
+            .accessibilityLabel("Robot Forge, private, physical, gradient-free")
     }
 
     private var engineStatus: some View {
