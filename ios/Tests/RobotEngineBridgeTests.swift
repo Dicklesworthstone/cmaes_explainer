@@ -124,7 +124,16 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(acknowledgement.sequence, 7)
         XCTAssertEqual(acknowledgement.commandID, "9B84A8A2-1")
         XCTAssertEqual(acknowledgement.lab, .arm)
+        XCTAssertEqual(acknowledgement.command, "optimize")
         XCTAssertTrue(acknowledgement.accepted)
+
+        var stopPayload = payload
+        stopPayload["commandId"] = "9B84A8A2-stop"
+        stopPayload["command"] = "stop"
+        let stopAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: stopPayload)
+        )
+        XCTAssertEqual(stopAcknowledgement.command, "stop")
 
         var malformed = payload
         malformed["accepted"] = "yes"

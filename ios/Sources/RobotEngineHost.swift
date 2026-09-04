@@ -186,7 +186,8 @@ struct RobotEngineCommandAcknowledgement {
               commandID.range(of: #"^[A-Za-z0-9._-]{1,80}$"#, options: .regularExpression) != nil,
               let rawLab = payload["lab"] as? String,
               let lab = RobotLab(rawValue: rawLab),
-              payload["command"] as? String == "optimize",
+              let command = payload["command"] as? String,
+              ["optimize", "stop"].contains(command),
               let accepted = payload["accepted"] as? Bool,
               let detail = payload["detail"] as? String,
               !detail.isEmpty,
@@ -196,7 +197,7 @@ struct RobotEngineCommandAcknowledgement {
         self.sequence = sequence
         self.commandID = commandID
         self.lab = lab
-        command = "optimize"
+        self.command = command
         self.accepted = accepted
         self.detail = detail
     }
