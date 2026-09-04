@@ -9,6 +9,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
+import { LearningLedger } from "./LearningLedger";
+import {
+  appendLedgerPoint,
+  learningLedgerPoint,
+  type LearningLedgerPoint,
+} from "../lib/g1LearningLedger";
 import {
   G1_BODY_LINK_RADIUS_METERS,
   G1_INTERACTIVE_PINS,
@@ -2127,6 +2133,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // can see every generation from gen 0 to the current one. The state holds
   // only the downsampled window (200 points max) so React re-renders are
   // bounded and the convergence chart only sees what it can display.
+  // Physical measurements of each replayed best policy, so the viewer can see
+  // what improved rather than only that the objective fell. Points arrive at
+  // the replay cadence, not every generation, because each one costs a real
+  // rollout.
+  const [ledger, setLedger] = useState<LearningLedgerPoint[]>([]);
   const progressHistoryRef = useRef<ConvergencePoint[]>([]);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
@@ -2325,6 +2336,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setComparison(null);
     setActiveTrace("curriculum");
     progressHistoryRef.current = [];
+    setLedger([]);
     setProgressHistory([]);
     setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
     post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
@@ -2544,6 +2556,21 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
+        // The curriculum replay is generation 0, the ledger's baseline; every
+        // optimized replay after it is measured against that. The standing
+        // prior is not recorded, because the branch above returns before this
+        // point — it is a different policy, not an earlier version of this one.
+        setLedger((previous) =>
+          appendLedgerPoint(
+            previous,
+            learningLedgerPoint(
+              message.trace,
+              message.generation,
+              message.admission.config.stepSeconds,
+              message.admission.config.targetSpeed,
+            ),
+          ),
+        );
         if (message.continuing) {
           setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
           return;
@@ -3393,6 +3420,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <div className="mt-3 flex justify-between font-mono text-[0.7rem] text-slate-400">
                 <span>generation {generation}</span>
                 <span>best objective {bestObjective === null ? "—" : number(bestObjective, 4)}</span>
+              </div>
+            ) : null}
+            {ledger.length > 0 ? (
+              <div className="mt-3">
+                <LearningLedger points={ledger} />
               </div>
             ) : null}
             {progressHistory.length >= 2 ? (
