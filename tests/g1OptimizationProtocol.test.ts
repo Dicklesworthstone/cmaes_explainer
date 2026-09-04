@@ -7,7 +7,10 @@ import {
 
 describe("G1 optimization task protocol", () => {
   test("uses the owner-calibrated fast-learning launch radius", () => {
-    expect(G1_DEFAULT_SEARCH_SIGMA).toBe(0.001);
+    // Re-measured against wall time once runs became operator-bounded: 5e-4
+    // beat 1e-3 for both memory families over equal wall time from the same
+    // curriculum mean. See the constant's own note for the numbers.
+    expect(G1_DEFAULT_SEARCH_SIGMA).toBe(0.0005);
   });
 
   test("builds an owner config for every task without mutating the other inputs", () => {

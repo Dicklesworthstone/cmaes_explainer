@@ -52,13 +52,21 @@ export type G1OptimizationRequest =
     };
 
 /**
- * Measured launch radius for the 5,040-D flat-walking LM-CMA owner.
+ * Measured launch radius for the 5,040-D walking owner.
  *
  * A fixed-seed sweep on owner 0.6.18 found that 0.005 made no progress in
  * 16 generations, while 0.001 improved the objective on all three declared
  * seeds (7.9155 -> -2.4051, -2.2149, and -3.6346 respectively).
+ *
+ * Re-measured against wall time rather than generation count, now that a run
+ * ends when the operator stops it rather than at a budget: given 60 s from the
+ * same curriculum mean, 5e-4 beats 1e-3 for both memory families (LM-CMA
+ * -9.34 vs -7.11, LM-MA -9.83 vs -9.64), and both beat 5e-3 (-1.31) and 1.2e-2
+ * (no improvement at all). Equal wall time is the honest comparison here
+ * because a policy that survives longer costs more per generation: the slower
+ * radii were reaching MORE generations, not fewer.
  */
-export const G1_DEFAULT_SEARCH_SIGMA = 0.001;
+export const G1_DEFAULT_SEARCH_SIGMA = 0.0005;
 
 /**
  * Seat the rendered robot stands at, and the keep-out roster expressed

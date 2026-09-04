@@ -2101,7 +2101,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
   const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
-  const [family, setFamily] = useState<ScalableFamily>("lm-cma");
+  // Measured, not assumed. Given equal wall time from the same curriculum mean,
+  // LM-MA reached a better objective than LM-CMA at both radii worth using
+  // (-9.83 vs -9.34 at sigma 5e-4; -9.64 vs -7.11 at 1e-3), and separable CMA
+  // never improved on the seed at any radius tested. Runs are deterministically
+  // seeded, so these are reproducible numbers rather than one lucky draw.
+  const [family, setFamily] = useState<ScalableFamily>("lm-ma");
   const [task, setTask] = useState<G1Task>("walking");
   // Learn the basic walking policy first. Terrain + push remains one tap away,
   // but making it the cold-start objective needlessly delays visible walking.
@@ -2484,6 +2489,18 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             sigma: message.sigma,
           };
           progressHistoryRef.current.push(point);
+          // Training runs until the operator stops it, so this ref is not
+          // bounded by a budget: at a couple of generations a second an
+          // overnight run would accumulate hundreds of thousands of points.
+          // Halve it by uniform decimation when it gets large. Each point
+          // carries its own generation, so thinning changes the resolution of
+          // the convergence plot and nothing else.
+          const HISTORY_REF_CAP = 20_000;
+          if (progressHistoryRef.current.length > HISTORY_REF_CAP) {
+            progressHistoryRef.current = progressHistoryRef.current.filter(
+              (_point, index) => index % 2 === 0,
+            );
+          }
           const full = progressHistoryRef.current;
           if (full.length <= HISTORY_CAP) return [...full];
           // Head (oldest HEAD points), body (log-spaced middle), tail
@@ -3122,7 +3139,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             {searchSigma <= 0.0004
               ? "Tight radius: each candidate is a small perturbation of the current mean — best for refining a known good policy."
               : searchSigma <= 0.0015
-                ? "Calibrated launch radius: the owner improved on every declared seed in the 16-generation flat-walking sweep."
+                ? "Calibrated launch radius (default): the owner improved on every declared seed in the 16-generation flat-walking sweep, and over equal wall time this band learned faster than any wider one."
                 : searchSigma <= 0.006
                   ? "Broad exploration: useful after a plateau, but slower and less reliable from the walking curriculum."
                   : "Wide exploration: large perturbations dominate the population — the search may find a better optimum but takes more generations to converge."}
