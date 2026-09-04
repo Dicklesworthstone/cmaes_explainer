@@ -1519,7 +1519,12 @@ function LimbPinHandle({
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
       )}
-      <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+      {/* Hit target covering the ring and its interior; see the root handle. */}
+      <mesh onPointerDown={handlePointerDown}>
+        <sphereGeometry args={[pin.radius * 1.4, 10, 8]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[pin.radius * 0.75, 0.008, 8, 20]} />
         <meshStandardMaterial
           color={isDragging ? "#f59e0b" : pin.color}
@@ -1714,7 +1719,14 @@ function RagdollDragger({
             : [currentPos[0], currentPos[1] + 1.05, currentPos[2]]
         }
       >
-        <mesh onPointerDown={handlePointerDown} castShadow rotation={[Math.PI / 2, 0, 0]}>
+        {/* Hit target. The visible affordance is a ring, so the obvious place
+            to aim — its centre — is a hole and a click there grabs nothing.
+            This invisible sphere covers the ring and its interior. */}
+        <mesh onPointerDown={handlePointerDown}>
+          <sphereGeometry args={[0.1, 12, 10]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+        <mesh castShadow rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.075, 0.012, 12, 28]} />
           <meshStandardMaterial
             color={lastColliding ? "#f43f5e" : isDragging ? "#f59e0b" : "#38bdf8"}

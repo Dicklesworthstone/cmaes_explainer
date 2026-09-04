@@ -1373,7 +1373,13 @@ function ArmTargetDragger({
           object's half-height plus the stalk so neither pin nor stalk
           enters the object it marks. */}
       <group position={[targetPos[0], targetPos[1] + pinLift + 0.16, targetPos[2]]}>
-        <mesh onPointerDown={handlePointerDown} castShadow>
+        {/* Hit target: the visible pin is a 4.5 cm bead, which is a small
+            thing to hit on a touch screen. */}
+        <mesh onPointerDown={handlePointerDown}>
+          <sphereGeometry args={[0.08, 10, 8]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+        <mesh castShadow>
           <sphereGeometry args={[0.045, 16, 16]} />
           <meshStandardMaterial
             color={isDragging ? "#fb923c" : "#f59e0b"}
