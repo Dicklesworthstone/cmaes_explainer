@@ -44,6 +44,15 @@ export type G1OptimizationRequest =
       challenge: G1Challenge;
     }
   | {
+      /** Render a policy the operator imported from a file or a share link. */
+      type: "replay";
+      task: G1Task;
+      challenge: G1Challenge;
+      policy: Float64Array;
+      /** Generation the imported policy came from, so it is not filed as the seed. */
+      generation: number;
+    }
+  | {
       type: "compare";
       task: G1Task;
       challenge: G1Challenge;

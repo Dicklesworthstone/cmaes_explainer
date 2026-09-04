@@ -10,6 +10,12 @@ import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import { LearningLedger } from "./LearningLedger";
+import { PolicyExchange } from "./PolicyExchange";
+import {
+  decodePolicyFragment,
+  policyFragmentFromHash,
+  type SharedPolicy,
+} from "../lib/g1PolicyShare";
 import {
   appendLedgerPoint,
   learningLedgerPoint,
@@ -26,6 +32,7 @@ import {
 } from "../lib/humanoidRagdollIk";
 import {
   DEFAULT_G1_WALKING_CONFIG,
+  FRANKENSIM_OWNER_KERNEL_VERSION,
   type CmaFamily,
   type G1Admission,
   type G1Challenge,
@@ -95,6 +102,10 @@ type WorkerResponse =
       family: G1TraceOrigin;
       continuing?: boolean;
       stopped?: boolean;
+      /** Coefficients behind this trace, when the worker replayed a policy. */
+      policy?: Float64Array;
+      /** Curriculum mean of this owner build, for encoding share links. */
+      baseline?: Float64Array;
     }
   | {
       type: "progress";
@@ -2138,6 +2149,20 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // the replay cadence, not every generation, because each one costs a real
   // rollout.
   const [ledger, setLedger] = useState<LearningLedgerPoint[]>([]);
+  // The coefficients behind whatever is on stage, and the curriculum mean a
+  // share link measures its delta against. Both arrive from the worker with
+  // the traces it replays.
+  const [stagePolicy, setStagePolicy] = useState<Float64Array | null>(null);
+  const [policyBaseline, setPolicyBaseline] = useState<Float64Array | null>(null);
+  // A policy arriving in the URL cannot be decoded until the owner has handed
+  // over its baseline, so the fragment waits here until it can be read.
+  const pendingShareRef = useRef<string | null>(null);
+  // Wall-clock time actually spent searching, accumulated across start/stop so
+  // a run left going overnight can say what it cost. Kept in a ref and mirrored
+  // into state on progress messages, which already arrive at a sane cadence.
+  const trainingStartedAtRef = useRef<number | null>(null);
+  const trainingSecondsRef = useRef(0);
+  const [trainingSeconds, setTrainingSeconds] = useState(0);
   const progressHistoryRef = useRef<ConvergencePoint[]>([]);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
@@ -2364,6 +2389,53 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     );
   }, [post]);
 
+  /** Replay a policy the operator brought in, from a file or a share link. */
+  const handlePolicyImport = useCallback(
+    (imported: SharedPolicy) => {
+      setStagePolicy(imported.policy);
+      post(
+        {
+          type: "replay",
+          task: taskRef.current,
+          challenge: challengeRef.current,
+          policy: imported.policy,
+          generation: imported.generation,
+        },
+        "preview",
+      );
+    },
+    [post],
+  );
+
+  // A policy can arrive in the URL before the owner has loaded. Stash the
+  // fragment on mount and decode it once the baseline it is measured against
+  // is available, which is when the curriculum trace lands.
+  useEffect(() => {
+    pendingShareRef.current = policyFragmentFromHash(window.location.hash);
+  }, []);
+
+  useEffect(() => {
+    const fragment = pendingShareRef.current;
+    if (!fragment || !policyBaseline) return;
+    pendingShareRef.current = null;
+    let active = true;
+    void decodePolicyFragment(fragment, policyBaseline)
+      .then((imported) => {
+        if (!active) return;
+        setStatus(
+          `Loaded a shared generation-${imported.generation} policy from this link. Replaying it…`,
+        );
+        handlePolicyImport(imported);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setError(error instanceof Error ? error.message : "This share link could not be read.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [policyBaseline, handlePolicyImport]);
+
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
@@ -2486,6 +2558,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (message.type === "status") {
         setStatus(message.detail);
       } else if (message.type === "progress") {
+        if (trainingStartedAtRef.current === null) {
+          trainingStartedAtRef.current = Date.now();
+        }
+        setTrainingSeconds(
+          trainingSecondsRef.current + (Date.now() - trainingStartedAtRef.current) / 1000,
+        );
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
         setProgressHistory((_prev) => {
@@ -2560,6 +2638,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         // optimized replay after it is measured against that. The standing
         // prior is not recorded, because the branch above returns before this
         // point — it is a different policy, not an earlier version of this one.
+        if (message.policy) setStagePolicy(message.policy);
+        if (message.baseline) setPolicyBaseline(message.baseline);
         setLedger((previous) =>
           appendLedgerPoint(
             previous,
@@ -2574,6 +2654,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (message.continuing) {
           setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
           return;
+        }
+        // Bank the elapsed search time: the run has ended, so the clock stops
+        // until the next generation arrives.
+        if (trainingStartedAtRef.current !== null) {
+          trainingSecondsRef.current += (Date.now() - trainingStartedAtRef.current) / 1000;
+          trainingStartedAtRef.current = null;
+          setTrainingSeconds(trainingSecondsRef.current);
         }
         setBusy(null);
         inFlightRef.current = false;
@@ -3424,9 +3511,25 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             ) : null}
             {ledger.length > 0 ? (
               <div className="mt-3">
-                <LearningLedger points={ledger} />
+                <LearningLedger points={ledger} trainingSeconds={trainingSeconds} />
               </div>
             ) : null}
+            <div className="mt-3">
+              <PolicyExchange
+                policy={stagePolicy}
+                baseline={policyBaseline}
+                meta={{
+                  kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+                  task,
+                  challenge,
+                  family,
+                  generation,
+                  sigma: searchSigma,
+                }}
+                measured={ledger.length > 0 ? ledger[ledger.length - 1] : null}
+                onImport={handlePolicyImport}
+              />
+            </div>
             {progressHistory.length >= 2 ? (
               <div className="mt-3">
                 <ConvergenceChart

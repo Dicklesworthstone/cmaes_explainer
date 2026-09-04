@@ -34,6 +34,16 @@ type WorkerResponse =
       family: G1TraceOrigin;
       continuing?: boolean;
       stopped?: boolean;
+      /**
+       * The coefficients that produced this trace, so the page can export or
+       * share the gait it is showing. Sent with replayed policies only.
+       */
+      policy?: Float64Array;
+      /**
+       * The curriculum mean this owner build starts from. A share link stores
+       * the delta against it, so the page needs it before it can encode one.
+       */
+      baseline?: Float64Array;
     }
   | {
       type: "progress";
@@ -116,8 +126,9 @@ async function preview(
       generation: 0,
       family: "stabilizer",
     });
+    const curriculumMean = evaluator.walkingCurriculumMean();
     const curriculumTrace = requireOk(
-      evaluator.trace(evaluator.walkingCurriculumMean()),
+      evaluator.trace(curriculumMean),
       "walking curriculum trace"
     );
     post({
@@ -126,6 +137,42 @@ async function preview(
       admission: evaluator.admission,
       generation: 0,
       family: "curriculum",
+      policy: curriculumMean.slice(),
+      baseline: curriculumMean.slice(),
+    });
+  } finally {
+    evaluator.free();
+  }
+}
+
+/**
+ * Render a policy the operator brought with them — from a file or a link.
+ *
+ * Traced on the same admitted evaluator the search uses, so an imported gait is
+ * measured by exactly the owner that would have trained it, and a policy from a
+ * different kernel cannot be quietly rendered as if it were native.
+ */
+async function replayPolicy(
+  task: G1Task,
+  challenge: G1Challenge,
+  policy: Float64Array,
+  generation: number,
+): Promise<void> {
+  post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
+  const evaluator = requireOk(
+    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
+    "G1 admission"
+  );
+  try {
+    const trace = requireOk(evaluator.trace(policy), "imported policy trace");
+    post({
+      type: "trace",
+      trace,
+      admission: evaluator.admission,
+      generation,
+      family: "lm-ma",
+      policy: policy.slice(),
+      baseline: evaluator.walkingCurriculumMean().slice(),
     });
   } finally {
     evaluator.free();
@@ -309,6 +356,7 @@ async function optimize(
           generation: completedGeneration,
           family,
           continuing: true,
+          policy: run.bestPolicy.slice(),
         });
       }
     }
@@ -328,6 +376,7 @@ async function optimize(
       generation: completedGeneration,
       family,
       stopped,
+      policy: run.bestPolicy.slice(),
     });
   } catch (error) {
     // A refused/failing session is dead state: drop it so the next Optimize
@@ -464,6 +513,13 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
           request.challenge ?? "terrain-and-push",
           request.seat
         )
+      : request.type === "replay"
+        ? replayPolicy(
+            request.task ?? "walking",
+            request.challenge ?? "terrain-and-push",
+            request.policy,
+            request.generation
+          )
       : request.type === "compare"
         ? compareFamilies(request.generations, request.task ?? "walking", request.challenge)
         : optimize(
