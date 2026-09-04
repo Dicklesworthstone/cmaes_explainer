@@ -252,16 +252,24 @@ struct FrankenRobotsView: View {
     }
 
     private var nativeCommandReceipt: some View {
-        Text(
-            engine.commandDetail
-                ?? (engine.supportsOptimize
-                    ? "Ready to start an owner optimization run."
-                    : "Waiting for the embedded owner controls…")
-        )
+        Text(nativeCommandReceiptText)
         .font(.system(size: RobotTheme.size(8.5), design: .rounded))
         .foregroundStyle(RobotTheme.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Give assistive technologies one stable element whose label changes
+        // with the visible receipt. Without the explicit label, SwiftUI can
+        // leave XCTest and Voice Control holding the pre-command Text value
+        // even while the rendered string has already changed to Accepted.
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("robot-native-command-detail")
+        .accessibilityLabel(nativeCommandReceiptText)
+    }
+
+    private var nativeCommandReceiptText: String {
+        engine.commandDetail
+            ?? (engine.supportsOptimize
+                ? "Ready to start an owner optimization run."
+                : "Waiting for the embedded owner controls…")
     }
 
     private var nativeOptimizeButton: some View {
