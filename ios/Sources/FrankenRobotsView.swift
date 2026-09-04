@@ -315,7 +315,10 @@ struct FrankenRobotsView: View {
     }
 
     private var nativeCommandReceiptText: String {
-        engine.commandDetail
+        if case .failed = engine.phase {
+            return "Owner controls are unavailable until Try Again succeeds."
+        }
+        return engine.commandDetail
             ?? (engine.supportsOptimize
                 ? "Ready to start an owner optimization run."
                 : "Waiting for the embedded owner controls…")
@@ -330,9 +333,7 @@ struct FrankenRobotsView: View {
             }
         } label: {
             Label(
-                engine.pendingCommandID == nil
-                    ? (engine.phase == .running ? "Stop" : (engine.supportsOptimize ? "Start learning" : "Loading…"))
-                    : "Sending…",
+                nativeOptimizeTitle,
                 systemImage: engine.phase == .running ? "stop.fill" : "sparkles"
             )
                 .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
@@ -350,6 +351,13 @@ struct FrankenRobotsView: View {
                 ? "Stops continuous learning after the current physical generation"
                 : "Starts continuous owner learning and keeps going until stopped"
         )
+    }
+
+    private var nativeOptimizeTitle: String {
+        guard engine.pendingCommandID == nil else { return "Sending…" }
+        if case .failed = engine.phase { return "Unavailable" }
+        if engine.phase == .running { return "Stop" }
+        return engine.supportsOptimize ? "Start learning" : "Loading…"
     }
 
     private var receiptLensMenu: some View {

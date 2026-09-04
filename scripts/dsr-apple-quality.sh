@@ -64,6 +64,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -resultBundlePath "$build_root/frankenrobots-iphone-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test \
+  -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testReadinessWatchdogFailsClosedThenRetryRecovers \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testAppearanceTogglePersistsLightModeAcrossLaunches \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testSwitchesBetweenFocusedLabs \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testNativeContinuousLearningStartsAndStopsThroughEmbeddedOwner \

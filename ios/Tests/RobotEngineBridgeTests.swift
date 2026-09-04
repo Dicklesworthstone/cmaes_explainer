@@ -2,6 +2,50 @@ import XCTest
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testReadinessDeadlineRejectsStaleAndTerminalLoads() {
+        var deadline = RobotReadinessDeadline()
+        let firstHumanoidLoad = deadline.arm(for: .humanoid)
+        let retriedHumanoidLoad = deadline.arm(for: .humanoid)
+
+        XCTAssertFalse(deadline.shouldFail(
+            generation: firstHumanoidLoad,
+            lab: .humanoid,
+            phase: .loading
+        ))
+        XCTAssertTrue(deadline.shouldFail(
+            generation: retriedHumanoidLoad,
+            lab: .humanoid,
+            phase: .loading
+        ))
+        XCTAssertFalse(deadline.shouldFail(
+            generation: retriedHumanoidLoad,
+            lab: .humanoid,
+            phase: .ready
+        ))
+
+        let armLoad = deadline.arm(for: .arm)
+        XCTAssertFalse(deadline.shouldFail(
+            generation: retriedHumanoidLoad,
+            lab: .humanoid,
+            phase: .loading
+        ))
+        XCTAssertTrue(deadline.shouldFail(
+            generation: armLoad,
+            lab: .arm,
+            phase: .starting
+        ))
+
+        deadline.cancel()
+        XCTAssertFalse(deadline.shouldFail(
+            generation: armLoad,
+            lab: .arm,
+            phase: .loading
+        ))
+
+        XCTAssertFalse(RobotEnginePhase.failed("timeout").acceptsOwnerStatus)
+        XCTAssertTrue(RobotEnginePhase.loading.acceptsOwnerStatus)
+    }
+
     func testReceiptLensIdentifiersMatchEmbeddedAnalysisControls() {
         XCTAssertEqual(
             RobotReceiptLens.allCases.map(\.rawValue),

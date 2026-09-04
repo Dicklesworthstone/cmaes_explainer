@@ -277,6 +277,39 @@ enum RobotEnginePhase: Equatable {
     case running
     case ready
     case failed(String)
+
+    var acceptsOwnerStatus: Bool {
+        if case .failed = self {
+            return false
+        }
+        return true
+    }
+}
+
+struct RobotReadinessDeadline {
+    private(set) var generation = 0
+    private(set) var lab: RobotLab?
+
+    mutating func arm(for lab: RobotLab) -> Int {
+        generation &+= 1
+        self.lab = lab
+        return generation
+    }
+
+    mutating func cancel() {
+        generation &+= 1
+        lab = nil
+    }
+
+    func shouldFail(generation: Int, lab: RobotLab, phase: RobotEnginePhase) -> Bool {
+        guard generation == self.generation, lab == self.lab else { return false }
+        switch phase {
+        case .starting, .loading:
+            return true
+        case .running, .ready, .failed:
+            return false
+        }
+    }
 }
 
 @MainActor
@@ -313,10 +346,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var selectedLab: RobotLab = .humanoid
     private var activeNavigation: WKNavigation?
     private var readinessTimeoutTask: Task<Void, Never>?
+    private var readinessDeadline = RobotReadinessDeadline()
     private var commandTimeoutTask: Task<Void, Never>?
     private var pendingRequestedTask: RobotLocomotionTask?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
+#if DEBUG
+    private var forceReadinessTimeoutOnce =
+        ProcessInfo.processInfo.environment["FROBOTS_FORCE_READINESS_TIMEOUT_ONCE"] == "1"
+#endif
 
     override init() {
         let configuration = WKWebViewConfiguration()
@@ -524,7 +562,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             ownerKernelVersion = readBundleText(named: "owner-kernel-version")
             loadSelectedLab()
         } catch {
-            readinessTimeoutTask?.cancel()
+            cancelReadinessTimeout()
             phase = .failed(error.localizedDescription)
             detail = error.localizedDescription
         }
@@ -546,22 +584,43 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     private func armReadinessTimeout(for lab: RobotLab) {
         readinessTimeoutTask?.cancel()
+        let generation = readinessDeadline.arm(for: lab)
+        let timeout = nextReadinessTimeout()
         readinessTimeoutTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: Self.ownerReadyTimeout)
+                try await Task.sleep(for: timeout)
             } catch {
                 return
             }
-            guard let self, self.selectedLab == lab else { return }
-            switch self.phase {
-            case .starting, .loading:
-                let message = "The bundled \(lab.title.lowercased()) engine did not become ready within 45 seconds. Check available memory, then try again."
-                self.phase = .failed(message)
-                self.detail = message
-            case .running, .ready, .failed:
-                break
-            }
+            guard let self,
+                  self.readinessDeadline.shouldFail(
+                      generation: generation,
+                      lab: lab,
+                      phase: self.phase
+                  ) else { return }
+            let message = "The bundled \(lab.title.lowercased()) engine did not become ready within 45 seconds. Check available memory, then try again."
+            self.readinessDeadline.cancel()
+            self.readinessTimeoutTask = nil
+            self.resetBridgeState()
+            self.phase = .failed(message)
+            self.detail = message
         }
+    }
+
+    private func nextReadinessTimeout() -> Duration {
+#if DEBUG
+        if forceReadinessTimeoutOnce {
+            forceReadinessTimeoutOnce = false
+            return .milliseconds(50)
+        }
+#endif
+        return Self.ownerReadyTimeout
+    }
+
+    private func cancelReadinessTimeout() {
+        readinessTimeoutTask?.cancel()
+        readinessTimeoutTask = nil
+        readinessDeadline.cancel()
     }
 
     private func readBundleText(named name: String, abbreviated: Bool = false) -> String {
@@ -638,7 +697,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         // started. Its delayed cancellation/failure must not replace the new
         // lab's loading or ready state.
         guard owns(navigation) else { return }
-        readinessTimeoutTask?.cancel()
+        cancelReadinessTimeout()
         metrics = .empty
         phase = .failed(error.localizedDescription)
         detail = "The bundled engine did not load: \(error.localizedDescription)"
@@ -699,7 +758,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
         guard let event = RobotEngineStatusMessage(payload: payload),
               event.lab == selectedLab,
-              event.sequence > lastBridgeSequence else { return }
+              event.sequence > lastBridgeSequence,
+              phase.acceptsOwnerStatus else { return }
         lastBridgeSequence = event.sequence
         detail = event.detail
         metrics = event.metrics
@@ -712,7 +772,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     private func receiveLegacyStatus(_ payload: [String: Any]) {
-        guard payload["type"] as? String == "engine.status",
+        guard phase.acceptsOwnerStatus,
+              payload["type"] as? String == "engine.status",
               payload["lab"] as? String == selectedLab.rawValue,
               let state = payload["state"] as? String,
               ["loading", "ready", "running", "failed"].contains(state),
@@ -727,17 +788,18 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     private func apply(state: String, detail: String) {
+        guard phase.acceptsOwnerStatus else { return }
         switch state {
         case "loading":
             phase = .loading
         case "ready":
-            readinessTimeoutTask?.cancel()
+            cancelReadinessTimeout()
             phase = .ready
         case "running":
-            readinessTimeoutTask?.cancel()
+            cancelReadinessTimeout()
             phase = .running
         case "failed":
-            readinessTimeoutTask?.cancel()
+            cancelReadinessTimeout()
             metrics = .empty
             phase = .failed(detail)
         default:
