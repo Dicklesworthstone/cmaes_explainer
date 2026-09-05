@@ -44,6 +44,17 @@ const EVAL_STEPS = 720;
 /** Perturbation scale, relative to the distilled head's own magnitude. */
 const SIGMA_REL = 0.06;
 const LEARNING_RATE = 0.35;
+/** Momentum on the search direction; ES gradient estimates are noisy. */
+const MOMENTUM = 0.9;
+/**
+ * Step-size adaptation. A fixed sigma either crawls once the policy is good or
+ * thrashes while it is bad; this grows the perturbation while iterations keep
+ * improving the held-out score and shrinks it when they stop.
+ */
+const SIGMA_GROW = 1.06;
+const SIGMA_SHRINK = 0.94;
+const SIGMA_MIN_REL = 0.15;
+const SIGMA_MAX_REL = 4.0;
 
 interface Artifact {
   raw: Uint8Array;
@@ -162,6 +173,10 @@ async function main(): Promise<void> {
 
   const rng = makeRng(20260905);
   const theta = Float64Array.from(head);
+  const velocity = new Float64Array(SEARCH_DIM);
+  let sigmaScale = 1.0;
+  let bestHeld = baseline.distance;
+  const bestTheta = Float64Array.from(head);
   const noise = new Float64Array(SEARCH_DIM);
   const grad = new Float64Array(SEARCH_DIM);
   const plus = Float64Array.from(head);
@@ -175,10 +190,11 @@ async function main(): Promise<void> {
     const seed = 5_000 + iter * 13;
     const scored: { f: number; sign: number; draw: Float64Array }[] = [];
     for (let p = 0; p < PAIRS; p++) {
+      const scale = sigma * sigmaScale;
       for (let i = 0; i < SEARCH_DIM; i++) noise[i] = rng();
       for (let i = 0; i < SEARCH_DIM; i++) {
-        plus[i] = theta[i] + sigma * noise[i];
-        minus[i] = theta[i] - sigma * noise[i];
+        plus[i] = theta[i] + scale * noise[i];
+        minus[i] = theta[i] - scale * noise[i];
       }
       const fPlus = evaluate(plus, seed, TRAIN_STEPS).reward;
       const fMinus = evaluate(minus, seed, TRAIN_STEPS).reward;
@@ -200,17 +216,30 @@ async function main(): Promise<void> {
     // the gradient estimate is already scale-free, so this keeps the step
     // proportionate to the perturbation that produced it and stays stable when
     // sigma is small relative to the head.
-    const step = (LEARNING_RATE * sigma) / n;
-    for (let i = 0; i < SEARCH_DIM; i++) theta[i] += step * grad[i];
+    const step = (LEARNING_RATE * sigma * sigmaScale) / n;
+    for (let i = 0; i < SEARCH_DIM; i++) {
+      velocity[i] = MOMENTUM * velocity[i] + step * grad[i];
+      theta[i] += velocity[i];
+    }
 
     if (iter % 10 === 0 || iter === ITERATIONS) {
       const held = heldOut(theta);
+      // Keep the best held-out policy, not merely the last one: ES wanders, and
+      // the final iteration is not reliably the best it found.
+      if (held.distance > bestHeld) {
+        bestHeld = held.distance;
+        bestTheta.set(theta);
+        sigmaScale = Math.min(SIGMA_MAX_REL, sigmaScale * SIGMA_GROW);
+      } else {
+        sigmaScale = Math.max(SIGMA_MIN_REL, sigmaScale * SIGMA_SHRINK);
+      }
       console.log(
-        `  iter ${String(iter).padStart(3)}  held-out ${held.distance.toFixed(3)} m  reward ${held.reward.toFixed(1)}  (${episodes} episodes)`,
+        `  iter ${String(iter).padStart(3)}  held-out ${held.distance.toFixed(3)} m  best ${bestHeld.toFixed(3)}  sigma x${sigmaScale.toFixed(2)}  (${episodes} eps)`,
       );
     }
   }
 
+  theta.set(bestTheta);
   const final = heldOut(theta);
   console.log("");
   console.log(`distilled head : ${baseline.distance.toFixed(3)} m`);

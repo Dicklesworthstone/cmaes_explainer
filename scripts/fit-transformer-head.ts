@@ -34,6 +34,15 @@ import { runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
 const WEIGHTS_IN = "public/robots/g1/transformer/g1-ablation-weights-v1.bin";
 const WEIGHTS_OUT = "public/robots/g1/transformer/g1-ablation-weights-v2.bin";
 
+/**
+ * Floor on per-channel variance.
+ *
+ * Several observation channels are constant (sd 0.000). Dividing by their true
+ * variance would amplify float noise by 1e8; flooring maps them to ~0, which is
+ * what a constant input should contribute.
+ */
+const MIN_VARIANCE = 1e-4;
+
 /** Actuators the environment actually drives; the rest stay at zero. */
 const ACTUATOR_COUNT = 15;
 const FEATURE_COUNT = 7;
@@ -130,12 +139,64 @@ async function main(): Promise<void> {
   );
   console.log(`   reference gait walks ${referenceDistance.toFixed(3)} m`);
 
-  console.log("2. Collecting trunk features along that gait…");
   const raw = new Uint8Array(readFileSync(WEIGHTS_IN));
-  const weights = loadGaitTransformerWeights(raw.buffer as ArrayBuffer);
-  const policy = new GaitTransformerPolicy(weights);
+  console.log("2. Fitting observation normalisation on that gait…");
+  // The artifact shipped with mean 0 and variance 1 — i.e. normalisation
+  // switched off — while the observations it reads are wildly unequal: joint
+  // velocities have sd 2.36 against 0.20 for positions, and one channel is a
+  // constant -9.81 gravity term. Random projections of that are dominated by
+  // scale rather than content, which crippled every feature downstream. These
+  // statistics come from the same gait the head is fitted to.
+  {
+    const env = new G1TrainEnv();
+    let obs = env.reset(4242);
+    const n = obs.rawVector.length;
+    const mean = new Float64Array(n);
+    const m2 = new Float64Array(n);
+    let count = 0;
+    for (let episode = 0; episode < 6; episode++) {
+      obs = env.reset(4242 + episode);
+      for (let t = 0; t < episodeSteps; t++) {
+        const v = obs.rawVector;
+        count++;
+        for (let i = 0; i < n; i++) {
+          const delta = v[i] - mean[i];
+          mean[i] += delta / count;
+          m2[i] += delta * (v[i] - mean[i]);
+        }
+        const result = env.step(applyPhasePolicy(genotype, buildFeatures(obs)));
+        obs = result.observation;
+        if (result.done) break;
+      }
+    }
+    const view = new DataView(raw.buffer);
+    let off = 8 + 10 * 4;
+    const arrayCount = view.getUint32(off, true);
+    off += 4;
+    const meanIndex = arrayCount - 2;
+    const varIndex = arrayCount - 1;
+    for (let i = 0; i < arrayCount; i++) {
+      const len = view.getUint32(off, true);
+      off += 4;
+      if (i === meanIndex) {
+        for (let k = 0; k < len; k++) view.setFloat32(off + k * 4, mean[k], true);
+      } else if (i === varIndex) {
+        for (let k = 0; k < len; k++) {
+          const variance = Math.max(MIN_VARIANCE, m2[k] / Math.max(1, count - 1));
+          view.setFloat32(off + k * 4, variance, true);
+        }
+      }
+      off += len * 4;
+    }
+    console.log(`   ${count.toLocaleString()} samples; normalisation written`);
+  }
+
+  console.log("3. Collecting trunk features along that gait…");
 
   // Normal equations, accumulated so nothing large is held in memory.
+  const policy = new GaitTransformerPolicy(
+    loadGaitTransformerWeights(raw.buffer as ArrayBuffer),
+  );
   const gram = new Float64Array(dModel * dModel);
   const rhs = new Float64Array(ACTUATOR_COUNT * dModel);
   let samples = 0;
@@ -171,14 +232,14 @@ async function main(): Promise<void> {
   }
   console.log(`   ${samples.toLocaleString()} samples`);
 
-  console.log("3. Solving the head by ridge regression…");
+  console.log("4. Solving the head by ridge regression…");
   const head = new Float32Array(nOutputs * dModel);
   for (let o = 0; o < ACTUATOR_COUNT; o++) {
     const w = solveSpd(gram, rhs.subarray(o * dModel, (o + 1) * dModel), dModel);
     for (let i = 0; i < dModel; i++) head[o * dModel + i] = w[i];
   }
 
-  console.log("4. Writing the artifact with the trunk untouched…");
+  console.log("5. Writing the artifact with the trunk untouched…");
   // The head is one length-prefixed f32 array inside the file. Locate it by
   // walking the same array order the loader uses, then overwrite in place so
   // every other byte is preserved exactly.
@@ -202,7 +263,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < head.length; i++) view.setFloat32(headOffset + i * 4, head[i], true);
   writeFileSync(WEIGHTS_OUT, raw);
 
-  console.log("5. Measuring the fitted transformer driving the environment…");
+  console.log("6. Measuring the fitted transformer driving the environment…");
   const fitted = new GaitTransformerPolicy(
     loadGaitTransformerWeights(raw.buffer as ArrayBuffer),
   );
