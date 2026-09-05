@@ -1847,6 +1847,7 @@ export function HouseholdArmFlagship({
       if (message.type === "status") {
         setStatus(message.detail);
       } else if (message.type === "progress") {
+        resumedPolicyRef.current = null;
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
         setSearchSigma(message.sigma);
@@ -2017,12 +2018,13 @@ export function HouseholdArmFlagship({
         // instead of restarting at the curriculum seed.
         resumeFrom: resumedPolicyRef.current ?? undefined,
         seedIndex,
-        mode: "continue",
+        mode: resumedPolicyRef.current ? "fresh" : "continue",
+        sigma: searchSigma,
         continuous: true,
       },
       "optimize",
     );
-  }, [post, task, family, seedIndex]);
+  }, [post, task, family, seedIndex, searchSigma]);
 
   useEffect(() => {
     pendingShareRef.current = policyFragmentFromHash(window.location.hash);
@@ -2046,11 +2048,6 @@ export function HouseholdArmFlagship({
           .find((task) => task === imported.task);
         if (!importedTask || imported.challenge !== "household") {
           throw new Error("This shared policy is not for a supported household task.");
-        }
-        if (importedTask !== taskRef.current) {
-          // Switch first; this effect runs again once that task's owner is up.
-          selectTaskRef.current?.(importedTask);
-          return;
         }
         pendingShareRef.current = null;
         setStatus(
@@ -2092,21 +2089,25 @@ export function HouseholdArmFlagship({
     if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, "household")) {
       return;
     }
-    resumedPolicyRef.current = saved.policy;
-    trainingSecondsRef.current = saved.trainingSeconds;
+    let active = true;
     // Deferred: setting state synchronously inside an effect cascades renders.
     queueMicrotask(() => {
+      if (!active) return;
+      try {
+        handlePolicyImportRef.current?.(saved);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
+        return;
+      }
+      trainingSecondsRef.current = saved.trainingSeconds;
       setTrainingSeconds(saved.trainingSeconds);
       setLedger(saved.ledger.slice());
       setRestoredNotice(
-        `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}.`,
+        `Recovered your policy from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Further learning starts from these coefficients with Seed 1; optimizer state is not saved.`,
       );
     });
-    post(
-      { type: "replay", task: taskRef.current, policy: saved.policy, generation: saved.generation },
-      "preview",
-    );
-  }, [stagePolicy, post]);
+    return () => { active = false; };
+  }, [stagePolicy]);
 
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
@@ -2119,10 +2120,47 @@ export function HouseholdArmFlagship({
       if (!workerRef.current || inFlightRef.current) {
         throw new Error("Finish or stop the current run before loading a policy.");
       }
+      const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[])
+        .find((candidate) => candidate === imported.task);
+      const importedFamily = (["full", "separable", "lm-cma", "lm-ma"] as const)
+        .find((candidate) => candidate === imported.family);
+      if (!importedTask || imported.challenge !== "household" || !importedFamily || imported.experiment) {
+        throw new Error("This policy is not for a supported household task and optimizer.");
+      }
+      // Both transports use this transaction. File imports previously ran on
+      // whichever task happened to be selected and left learning's mean intact.
+      recoveryAttemptedRef.current = true;
+      taskRef.current = importedTask;
+      familyRef.current = importedFamily;
+      sigmaRef.current = imported.sigma;
+      setTask(importedTask);
+      setFamily(importedFamily);
+      setSeedIndex(0);
+      setSearchSigma(imported.sigma);
+      resumedPolicyRef.current = imported.policy;
+      setTrace(null);
+      setAdmission(null);
+      if (importedTask !== task) setCurriculumTrace(null);
+      setComparison(null);
+      setArmDragTarget(null);
+      setArmUnreachable(false);
+      setArmCollisionState({ isColliding: false, clearance: 1.0 });
+      seekPlayback(0);
+      setLedger([]);
+      trainingSecondsRef.current = 0;
+      trainingStartedAtRef.current = null;
+      setTrainingSeconds(0);
+      setRestoredNotice("Imported policy loaded on its saved task. Further learning starts from these coefficients with Seed 1; this archive has no saved seed or optimizer state.");
       setStagePolicy(imported.policy);
-      post({ type: "replay", task, policy: imported.policy, generation: imported.generation }, "preview");
+      post({
+        type: "replay",
+        task: importedTask,
+        family: importedFamily,
+        policy: imported.policy,
+        generation: imported.generation,
+      }, "preview");
     },
-    [post, task],
+    [post, task, seekPlayback],
   );
 
   const stopContinuousOptimization = useCallback(() => {

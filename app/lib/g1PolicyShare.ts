@@ -28,11 +28,9 @@
  * inside base64url, in the hash so the payload never reaches a server.
  */
 
-import type { CmaFamily, G1Challenge, G1Task } from "./frankensimCmaes";
-
 /** Magic word identifying a G1 policy payload: "G1P\0" as little-endian u32. */
 const POLICY_MAGIC = 0x00503147;
-const POLICY_FORMAT_VERSION = 4;
+const POLICY_FORMAT_VERSION = 5;
 
 /**
  * File formats this page can still open.
@@ -50,13 +48,28 @@ const POLICY_FORMAT_VERSION = 4;
  * stored a delta against the curriculum mean where v4 stores absolute
  * coefficients, so reading one as the other would silently produce a different
  * policy. Files are compatible; links are not.
+ * v5 adds a bounded exact-experiment record ahead of the absolute coefficients.
+ * Older files remain coefficient archives; they do not acquire missing scene data.
  */
-const READABLE_FILE_FORMAT_VERSIONS = new Set([3, 4]);
+const READABLE_FILE_FORMAT_VERSIONS = new Set([3, 4, 5]);
 /** Header words before metadata and absolute coefficients, in bytes. */
 const HEADER_BYTES = 32;
 const MAX_COEFFICIENTS = 65_535;
-const MAX_PAYLOAD_BYTES = HEADER_BYTES + 4 * 255 + MAX_COEFFICIENTS * 8;
+const MAX_EXPERIMENT_BYTES = 16_384;
+const MAX_PAYLOAD_BYTES =
+  HEADER_BYTES + 4 * 255 + MAX_EXPERIMENT_BYTES + MAX_COEFFICIENTS * 8;
 export const MAX_POLICY_FILE_BYTES = 2_000_000;
+
+export interface SharedG1Experiment {
+  version: 1;
+  kind: "g1";
+  ownerSourceRevision: string;
+  ownerWasmSha256: string;
+  /** Hex-encoded little-endian f64 seat (three words), then owner config. */
+  inputBytes: string;
+  /** Selects the declared Philox seeds 0x47315050 through 0x47315052. */
+  seedIndex: number;
+}
 
 export interface SharedPolicyMeta {
   /** Owner kernel the policy was trained against, e.g. "fs-cmaes-viz-wasm 0.6.19". */
@@ -74,6 +87,8 @@ export interface SharedPolicyMeta {
   generation: number;
   /** Search radius the run used. */
   sigma: number;
+  /** Present for exact experiment replay; absent on archival coefficient-only policies. */
+  experiment?: SharedG1Experiment;
 }
 
 export interface SharedPolicy extends SharedPolicyMeta {
@@ -129,7 +144,11 @@ export function validatePolicyMetadata(
     ["challenge", meta.challenge],
     ["optimizer family", meta.family],
   ] as const) {
-    if (typeof value !== "string" || !value.trim() || textBytes(value).length > 255) {
+    if (
+      typeof value !== "string" ||
+      !value.trim() ||
+      textBytes(value).length > 255
+    ) {
       throw new Error(`policy share: invalid ${field}`);
     }
   }
@@ -142,6 +161,29 @@ export function validatePolicyMetadata(
   }
   if (!Number.isFinite(meta.sigma) || meta.sigma <= 0) {
     throw new Error("policy share: invalid search radius");
+  }
+  if (meta.experiment !== undefined) {
+    const experiment = meta.experiment;
+    if (
+      !experiment ||
+      typeof experiment !== "object" ||
+      experiment.version !== 1 ||
+      experiment.kind !== "g1" ||
+      typeof experiment.ownerSourceRevision !== "string" ||
+      !/^[0-9a-f]{40}$/.test(experiment.ownerSourceRevision) ||
+      typeof experiment.ownerWasmSha256 !== "string" ||
+      !/^[0-9a-f]{64}$/.test(experiment.ownerWasmSha256) ||
+      typeof experiment.inputBytes !== "string" ||
+      experiment.inputBytes.length < 64 ||
+      experiment.inputBytes.length > 12_288 ||
+      experiment.inputBytes.length % 16 !== 0 ||
+      !/^[0-9a-f]+$/.test(experiment.inputBytes) ||
+      !Number.isInteger(experiment.seedIndex) ||
+      experiment.seedIndex < 0 ||
+      experiment.seedIndex > 2
+    ) {
+      throw new Error("policy share: invalid G1 experiment");
+    }
   }
 }
 
@@ -166,6 +208,12 @@ export function encodeSharedPolicy(
   const taskBytes = textBytes(meta.task);
   const challengeBytes = textBytes(meta.challenge);
   const familyBytes = textBytes(meta.family);
+  const experimentBytes = meta.experiment
+    ? textBytes(JSON.stringify(meta.experiment))
+    : new Uint8Array();
+  if (experimentBytes.length > MAX_EXPERIMENT_BYTES) {
+    throw new Error("policy share: experiment is too large");
+  }
   // Lengths live in the header, so the strings themselves carry no prefix.
   const stringBytes =
     kernelBytes.length +
@@ -173,13 +221,16 @@ export function encodeSharedPolicy(
     challengeBytes.length +
     familyBytes.length;
 
-  const bytes = new Uint8Array(HEADER_BYTES + stringBytes + policy.length * 8);
+  const bytes = new Uint8Array(
+    HEADER_BYTES + stringBytes + experimentBytes.length + policy.length * 8,
+  );
   const view = new DataView(bytes.buffer);
   view.setUint32(0, POLICY_MAGIC, true);
   view.setUint16(4, POLICY_FORMAT_VERSION, true);
   view.setUint16(6, policy.length, true);
   view.setUint32(8, meta.generation, true);
   view.setFloat64(12, meta.sigma, true);
+  view.setUint32(20, experimentBytes.length, true);
   view.setUint8(24, kernelBytes.length);
   view.setUint8(25, taskBytes.length);
   view.setUint8(26, challengeBytes.length);
@@ -191,6 +242,8 @@ export function encodeSharedPolicy(
     bytes.set(part, cursor);
     cursor += part.length;
   }
+  bytes.set(experimentBytes, cursor);
+  cursor += experimentBytes.length;
   for (let index = 0; index < policy.length; index++) {
     view.setFloat64(cursor + index * 8, policy[index], true);
   }
@@ -226,7 +279,11 @@ export function decodeSharedPolicy(
   }
   const generation = view.getUint32(8, true);
   const sigma = view.getFloat64(12, true);
-  if (view.getUint32(20, true) !== 0 || view.getUint32(28, true) !== 0) {
+  const experimentLength = view.getUint32(20, true);
+  if (
+    experimentLength > MAX_EXPERIMENT_BYTES ||
+    view.getUint32(28, true) !== 0
+  ) {
     throw new Error("policy share: unsupported header flags");
   }
   const lengths = [
@@ -236,7 +293,10 @@ export function decodeSharedPolicy(
     view.getUint8(27),
   ];
   const stringTotal = lengths.reduce((sum, value) => sum + value, 0);
-  if (bytes.length !== HEADER_BYTES + stringTotal + count * 8) {
+  if (
+    bytes.length !==
+    HEADER_BYTES + stringTotal + experimentLength + count * 8
+  ) {
     throw new Error("policy share: payload length does not match its header");
   }
 
@@ -247,6 +307,12 @@ export function decodeSharedPolicy(
     cursor += length;
     return value;
   });
+  const experiment: unknown = experimentLength
+    ? JSON.parse(
+        decoder.decode(bytes.subarray(cursor, cursor + experimentLength)),
+      )
+    : undefined;
+  cursor += experimentLength;
 
   const policy = new Float64Array(count);
   for (let index = 0; index < count; index++) {
@@ -254,11 +320,12 @@ export function decodeSharedPolicy(
   }
   const decoded = {
     kernelVersion: parts[0],
-    task: parts[1] as G1Task,
-    challenge: parts[2] as G1Challenge,
-    family: parts[3] as SharedPolicyMeta["family"],
+    task: parts[1],
+    challenge: parts[2],
+    family: parts[3],
     generation,
     sigma,
+    ...(experiment !== undefined ? { experiment } : {}),
     policy,
   };
   validatePolicyMetadata(decoded);

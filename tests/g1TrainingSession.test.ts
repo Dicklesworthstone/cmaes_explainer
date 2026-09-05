@@ -10,6 +10,12 @@ import {
   type TrainingSessionSnapshot,
 } from "../app/lib/g1TrainingSession";
 import type { LearningLedgerPoint } from "../app/lib/g1LearningLedger";
+import {
+  g1ExperimentForSeat,
+  g1SharedExperiment,
+  g1RestoreSharedExperiment,
+} from "../app/lib/g1OptimizationProtocol";
+import { FRANKENSIM_OWNER_KERNEL_VERSION } from "../app/lib/frankensimCmaes";
 
 function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingSessionSnapshot {
   return {
@@ -38,6 +44,38 @@ function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingS
 }
 
 describe("G1 training session persistence", () => {
+  test("keeps the exact moved experiment and seed alongside recovered policy bits", async () => {
+    const { scene } = await g1ExperimentForSeat(
+      "walking",
+      "terrain-and-push",
+      [-2, 0, 1],
+    );
+    const snapshot = snapshotOf({
+      kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+      experiment: g1SharedExperiment(scene, 2),
+      policy: Float64Array.of(-0, 1e-20, Number.MIN_VALUE),
+    });
+    const saved = encodeTrainingSession(snapshot);
+    const restored = decodeTrainingSession(JSON.stringify(saved), 3)!;
+    expect(restored.experiment).toEqual(snapshot.experiment);
+    expect(new Uint8Array(restored.policy.buffer)).toEqual(
+      new Uint8Array(snapshot.policy.buffer),
+    );
+    expect(g1RestoreSharedExperiment(restored)).toEqual({
+      seat: [-2, 0, 1],
+      seedIndex: 2,
+    });
+    expect(
+      decodeTrainingSession(
+        JSON.stringify({
+          ...saved,
+          experiment: { ...snapshot.experiment, seedIndex: 99 },
+        }),
+        3,
+      ),
+    ).toBeNull();
+  });
+
   test("round-trips a run through storage", () => {
     const snapshot = snapshotOf();
     const restored = decodeTrainingSession(

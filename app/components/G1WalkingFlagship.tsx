@@ -15,6 +15,7 @@ import {
   decodePolicyFragment,
   policyFragmentFromHash,
   type SharedPolicy,
+  type SharedPolicyMeta,
 } from "../lib/g1PolicyShare";
 import {
   describeAge,
@@ -49,6 +50,8 @@ import {
 import {
   G1_DEFAULT_SEARCH_SIGMA,
   G1_HOUSE_SEAT,
+  g1SharedExperiment,
+  g1RestoreSharedExperiment,
   type G1OptimizationRequest,
   type G1SceneReceipt,
 } from "../lib/g1OptimizationProtocol";
@@ -2094,6 +2097,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // Stage coefficients and the admitted curriculum identify the loaded owner
   // and policy length. Shares carry absolute values without a baseline.
   const [stagePolicy, setStagePolicy] = useState<Float64Array | null>(null);
+  // Search controls describe the NEXT run. Exports describe the policy whose
+  // receipt actually returned, even if those controls have since changed.
+  const [stagePolicyMeta, setStagePolicyMeta] = useState<SharedPolicyMeta | null>(null);
   const [policyBaseline, setPolicyBaseline] = useState<Float64Array | null>(null);
   // Wait for owner readiness before replaying a policy from the URL.
   const pendingShareRef = useRef<string | null>(null);
@@ -2148,9 +2154,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       ownerConfig: admission?.config,
       task,
       challenge,
-      family,
-      generation,
-      bestObjective,
+      family: stagePolicyMeta?.family ?? family,
+      generation: stagePolicyMeta?.generation ?? generation,
+      bestObjective: trace.objective,
       distanceMeters: trace.distanceMeters,
       completedSteps: trace.completedSteps,
       actuatorWorkJoules: trace.actuatorWorkJoules,
@@ -2172,7 +2178,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported trajectory telemetry JSON receipt.");
-  }, [trace, scene, admission, task, challenge, family, generation, bestObjective]);
+  }, [trace, scene, admission, task, challenge, family, generation, stagePolicyMeta]);
 
   const handleApplyShove = useCallback(() => {
     setShoveActive(true);
@@ -2207,6 +2213,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // Read inside the worker message handler, which must not re-subscribe every
   // time a control moves.
   const familyRef = useRef<ScalableFamily>(family);
+  const seedIndexRef = useRef(seedIndex);
   const sigmaRef = useRef<number>(searchSigma);
   useEffect(() => {
     // Placement writers update their ref synchronously. An older rendered
@@ -2214,8 +2221,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     taskRef.current = task;
     challengeRef.current = challenge;
     familyRef.current = family;
+    seedIndexRef.current = seedIndex;
     sigmaRef.current = searchSigma;
-  }, [task, challenge, family, searchSigma]);
+  }, [task, challenge, family, seedIndex, searchSigma]);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
 
@@ -2342,13 +2350,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (!workerRef.current || inFlightRef.current) {
         throw new Error("Finish or stop the current experiment before loading a policy.");
       }
-      // A policy from another kernel build is replayed, not refused. What makes
-      // a policy unusable is the wrong NUMBER of coefficients, and that is
-      // checked when the file is read. Refusing on the version string instead
-      // killed every shared gait the moment the owner was rebuilt — which
-      // happens often — and the honest alternative is to run it and say where
-      // it came from. PolicyExchange shows that caveat; the receipt on screen
-      // is this owner's, measured here.
+      // Coefficient-only archives can be re-evaluated with a visible caveat.
+      // An exact experiment also binds owner bytes and physical inputs; it
+      // must pass g1RestoreSharedExperiment before any state changes.
       // A policy file carries its provenance as plain strings, because the two
       // robots share this format. Narrow them before they reach typed state:
       // a file naming a task this owner does not have must be refused, not
@@ -2361,6 +2365,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           `This policy is for "${imported.task}" / "${imported.challenge}", which this owner does not run.`,
         );
       }
+      // Exact exports must validate every physical input before any state changes.
+      // Coefficient-only archives use the explicitly disclosed current default.
+      const restored = g1RestoreSharedExperiment(imported);
       recoveryAttemptedRef.current = true;
       taskRef.current = importedTask;
       challengeRef.current = importedChallenge;
@@ -2368,6 +2375,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setTask(importedTask);
       setChallenge(importedChallenge);
       setSearchSigma(imported.sigma);
+      seedIndexRef.current = restored.seedIndex;
+      setSeedIndex(restored.seedIndex);
       // An unrecognised family is not worth refusing the policy over: the
       // coefficients are what matter, and the page keeps its current search.
       if (importedFamily) {
@@ -2375,11 +2384,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setFamily(importedFamily);
       }
       resumedPolicyRef.current = imported.policy;
-      // Replay uses the canonical owner scene. Clear a dragged preview seat
-      // so that its different geometry cannot be shown with this receipt.
-      robotDragOffsetRef.current = null;
-      setRobotDragOffset(null);
-      setUserHasDragged(false);
+      robotDragOffsetRef.current = restored.seat;
+      setRobotDragOffset(restored.seat);
+      setUserHasDragged(Boolean(imported.experiment));
       setLimbOffsets({});
       setTrace(null);
       setAdmission(null);
@@ -2391,7 +2398,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setLedger([]);
       trainingSecondsRef.current = 0;
       setTrainingSeconds(0);
-      setRestoredNotice("Imported policy loaded. Learning starts from these coefficients.");
+      setRestoredNotice(imported.experiment
+        ? "Restored the saved owner, placement, configuration and seed. Learning starts from these coefficients."
+        : "This archive has no saved scene or seed. Re-evaluating its coefficients in this owner's default scene with Seed 1.");
       setStagePolicy(imported.policy);
       post(
         {
@@ -2401,6 +2410,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           family: importedFamily ?? familyRef.current,
           policy: imported.policy,
           generation: imported.generation,
+          seat: restored.seat,
         },
         "preview",
       );
@@ -2849,7 +2859,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         // optimized replay after it is measured against that. The standing
         // prior is not recorded, because the branch above returns before this
         // point — it is a different policy, not an earlier version of this one.
-        if (message.policy) setStagePolicy(message.policy);
+        const policyMeta: SharedPolicyMeta = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task: message.admission.config.task,
+          challenge: message.admission.config.challenge,
+          family: message.family === "curriculum" ? familyRef.current : message.family,
+          sigma: sigmaRef.current,
+          generation: message.generation,
+          experiment: g1SharedExperiment(message.scene, seedIndexRef.current),
+        };
+        if (message.policy) {
+          setStagePolicy(message.policy);
+          setStagePolicyMeta(policyMeta);
+        }
         if (message.baseline) setPolicyBaseline(message.baseline);
         // Persist the run so a reload, a crash, or a closed tab does not throw
         // away hours of search. Only real search is worth restoring; the
@@ -2859,11 +2881,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           const generation = message.generation;
           setLedger((current) => {
             saveTrainingSession({
-              kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-              task: message.admission.config.task,
-              challenge: message.admission.config.challenge,
-              family: familyRef.current,
-              sigma: sigmaRef.current,
+              ...policyMeta,
               generation,
               trainingSeconds:
                 trainingSecondsRef.current +
@@ -3822,7 +3840,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <PolicyExchange
                 policy={stagePolicy}
                 disabled={busy !== null || !workerAvailable}
-                meta={{
+                meta={stagePolicyMeta ?? {
                   kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
                   task,
                   challenge,

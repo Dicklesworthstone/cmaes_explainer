@@ -24,6 +24,7 @@ type WorkerRequest =
       /** Render a policy the operator imported from a file or a share link. */
       type: "replay";
       task: HouseholdManipulationTask;
+      family: CmaFamily;
       policy: Float64Array;
       generation: number;
     }
@@ -35,6 +36,7 @@ type WorkerRequest =
       seedIndex: number;
       mode?: "continue" | "fresh";
       continuous?: boolean;
+      sigma?: number;
       /**
        * Start a NEW session from these coefficients instead of the curriculum
        * mean — how a run recovered from storage continues after a reload. The
@@ -223,6 +225,7 @@ function reportParallelEvaluation(
  */
 async function replayArmPolicy(
   task: HouseholdManipulationTask,
+  family: CmaFamily,
   policy: Float64Array,
   generation: number,
 ): Promise<void> {
@@ -238,7 +241,7 @@ async function replayArmPolicy(
       trace,
       admission: evaluator.admission,
       generation,
-      family: "lm-ma",
+      family,
       policy: policy.slice(),
     });
   } finally {
@@ -283,6 +286,7 @@ async function optimize(
   mode: "continue" | "fresh" = "continue",
   continuous = false,
   resumeFrom?: Float64Array,
+  sigma = 0.001,
 ): Promise<void> {
   const generations = Math.max(2, Math.min(ARM_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -330,7 +334,7 @@ async function optimize(
       await createFrankenSimCmaFamilySession({
         family,
         mean: bestPolicy,
-        sigma: 0.001,
+        sigma,
         population: POPULATION,
         memory: memoryFor(family),
         maxEvaluations: POPULATION * ARM_MAX_TOTAL_GENERATIONS,
@@ -542,7 +546,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // IIFE cannot start until the previous task resolves.
   const work = () =>
     request.type === "replay"
-      ? replayArmPolicy(request.task, request.policy, request.generation)
+      ? replayArmPolicy(request.task, request.family, request.policy, request.generation)
       : request.type === "preview"
       ? preview(request.task)
       : request.type === "compare"
@@ -555,6 +559,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.mode,
             request.continuous,
             request.resumeFrom,
+            request.sigma,
           );
   const scheduled = armGate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

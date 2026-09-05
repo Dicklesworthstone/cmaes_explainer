@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium, type Browser, type Page } from "playwright";
 import {
@@ -18,7 +18,10 @@ import type {
 } from "../app/lib/g1OptimizationProtocol";
 import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
 import type { HouseholdRobotPose } from "../app/lib/frankensimCmaes";
-import { encodePolicyFragment } from "../app/lib/g1PolicyShare";
+import {
+  encodePolicyFragment,
+  policyFromFileContents,
+} from "../app/lib/g1PolicyShare";
 
 type G1BrowserObservation = {
   requests: G1OptimizationRequest[];
@@ -471,6 +474,10 @@ async function run() {
           ),
         );
         await summary.click();
+        await ownerPage
+          .getByRole("radio", { name: "Terrain + push", exact: true })
+          .click();
+        await ownerPage.locator("#g1-seed").selectOption("2");
         await ownerPage.setViewportSize({ width: 1440, height: 1000 });
         await ownerPage
           .getByRole("button", {
@@ -595,9 +602,10 @@ async function run() {
             (window as unknown as { __g1Observation: G1BrowserObservation })
               .__g1Observation,
         );
-        const moved = observed.requests.find(
-          (request) => request.type === "preview" && request.seat,
-        );
+        const moved = observed.requests
+          .slice()
+          .reverse()
+          .find((request) => request.type === "preview" && request.seat);
         assert(moved?.seat, "No owner request followed the visible drag");
         for (const type of ["optimize", "stop", "compare"]) {
           const request = observed.requests.find(
@@ -627,6 +635,158 @@ async function run() {
         await (
           await downloadPromise
         ).saveAs(join(out, "g1-moved-seat-telemetry.json"));
+        const originalTelemetry = JSON.parse(
+          await readFile(join(out, "g1-moved-seat-telemetry.json"), "utf8"),
+        );
+        // Controls for the next search must not rewrite the measured policy's seed.
+        await ownerPage.locator("#g1-seed").selectOption("0");
+        const policyDownload = ownerPage.waitForEvent("download");
+        await ownerPage
+          .getByRole("button", { name: "Download", exact: true })
+          .click();
+        const policyPath = join(out, "g1-moved-experiment.policy.json");
+        await (await policyDownload).saveAs(policyPath);
+        const originalFile = await readFile(policyPath, "utf8");
+        const originalPolicy = policyFromFileContents(originalFile, 5_040);
+        assert(
+          originalPolicy.experiment,
+          "Export omitted the exact experiment",
+        );
+        assert.equal(originalPolicy.challenge, "terrain-and-push");
+        assert.equal(originalPolicy.experiment.seedIndex, 2);
+        await ownerPage
+          .getByRole("button", { name: "Share link", exact: true })
+          .click();
+        await ownerPage.waitForFunction(() =>
+          window.location.hash.startsWith("#zpolicy="),
+        );
+        const shareUrl = ownerPage.url();
+        // Fresh storage/context for each transport: defaults cannot hide missing metadata.
+        for (const transport of ["file", "fragment", "recovery"] as const) {
+          const replayContext = await browser.newContext({
+            viewport: { width: 1440, height: 1000 },
+            userAgent: USER_AGENT,
+          });
+          const replayPage = await replayContext.newPage();
+          observe(replayPage);
+          await replayPage.goto(
+            transport === "fragment"
+              ? shareUrl
+              : new URL("/frankenrobots/humanoid", base).href,
+          );
+          await replayPage
+            .getByText("Owner controller and source", { exact: true })
+            .waitFor({ timeout: 60_000 });
+          if (transport !== "fragment") {
+            assert.equal(
+              await replayPage
+                .getByRole("radio", { name: "Flat ground", exact: true })
+                .getAttribute("aria-checked"),
+              "true",
+            );
+            await replayPage
+              .locator('input[type="file"]')
+              .setInputFiles(policyPath);
+          }
+          if (transport === "recovery") {
+            await replayPage.waitForFunction(
+              (digest) =>
+                document
+                  .querySelector("[data-g1-scene-digest]")
+                  ?.getAttribute("data-g1-scene-digest") === digest,
+              stopped.scene.digest,
+              { timeout: 30_000 },
+            );
+            await replayPage.reload();
+            await replayPage
+              .getByText("Owner controller and source", { exact: true })
+              .waitFor({ timeout: 60_000 });
+            await replayPage
+              .getByRole("radio", { name: "Terrain + push", exact: true })
+              .click();
+            await replayPage.getByText(/Recovered your run from/).waitFor();
+          }
+          await replayPage.waitForFunction(
+            (digest) =>
+              document
+                .querySelector("[data-g1-scene-digest]")
+                ?.getAttribute("data-g1-scene-digest") === digest,
+            stopped.scene.digest,
+            { timeout: 30_000 },
+          );
+          assert.equal(await replayPage.locator("#g1-seed").inputValue(), "2");
+          assert.equal(
+            await replayPage
+              .getByRole("radio", { name: "Terrain + push", exact: true })
+              .getAttribute("aria-checked"),
+            "true",
+          );
+          const replayDownload = replayPage.waitForEvent("download");
+          await replayPage
+            .getByRole("button", { name: "Download", exact: true })
+            .click();
+          const replayPath = join(out, `g1-${transport}-restored.policy.json`);
+          await (await replayDownload).saveAs(replayPath);
+          const replayed = policyFromFileContents(
+            await readFile(replayPath, "utf8"),
+            5_040,
+          );
+          assert.deepEqual(
+            new Uint8Array(replayed.policy.buffer),
+            new Uint8Array(originalPolicy.policy.buffer),
+          );
+          assert.deepEqual(replayed.experiment, originalPolicy.experiment);
+          const replayTelemetryDownload = replayPage.waitForEvent("download");
+          await replayPage
+            .getByRole("button", { name: "Export Telemetry", exact: true })
+            .click();
+          const telemetryPath = join(
+            out,
+            `g1-${transport}-restored-telemetry.json`,
+          );
+          await (await replayTelemetryDownload).saveAs(telemetryPath);
+          const replayTelemetry = JSON.parse(
+            await readFile(telemetryPath, "utf8"),
+          );
+          const { exportTimestamp: originalTime, ...originalMeasurement } =
+            originalTelemetry;
+          const { exportTimestamp: replayTime, ...replayMeasurement } =
+            replayTelemetry;
+          assert(originalTime && replayTime);
+          assert.deepEqual(
+            replayMeasurement,
+            originalMeasurement,
+            "Restored owner trajectory or configuration changed",
+          );
+          // An incompatible exact experiment must leave the current receipt/settings intact.
+          const incompatible = JSON.parse(originalFile);
+          incompatible.experiment.ownerWasmSha256 = "0".repeat(64);
+          await replayPage.locator('input[type="file"]').setInputFiles({
+            name: "foreign-experiment.policy.json",
+            mimeType: "application/json",
+            buffer: Buffer.from(JSON.stringify(incompatible)),
+          });
+          await replayPage
+            .getByText(
+              "This exact experiment requires a different owner artifact.",
+              { exact: true },
+            )
+            .waitFor();
+          assert.equal(
+            await replayPage
+              .locator("[data-g1-scene-digest]")
+              .getAttribute("data-g1-scene-digest"),
+            stopped.scene.digest,
+          );
+          assert.equal(await replayPage.locator("#g1-seed").inputValue(), "2");
+          recordResult({
+            journey: "g1-exact-experiment-replay",
+            transport,
+            scene: replayTelemetry.scene,
+            coefficients: replayed.policy.length,
+          });
+          await replayContext.close();
+        }
         recordResult({
           journey: "g1-drag-start-stop-compare",
           before,
@@ -768,7 +928,277 @@ async function run() {
         telemetryPath,
       });
     }
+    // Keep a real learned trowel policy, then open it from a mug-default tab.
+    await armPage
+      .getByRole("button", { name: "Start learning", exact: true })
+      .click();
+    await armPage.waitForFunction(
+      () => {
+        const label = Array.from(document.querySelectorAll("button"))
+          .map((button) => button.textContent ?? "")
+          .find((text) => text.includes("Stop · gen "));
+        return label && Number(label.match(/Stop · gen (\d+)/)?.[1]) >= 2;
+      },
+      null,
+      { timeout: 30_000 },
+    );
+    await armPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
+    await armPage
+      .getByRole("button", { name: /^Keep learning · gen / })
+      .waitFor();
+    const armPolicyDownload = armPage.waitForEvent("download");
+    await armPage
+      .getByRole("button", { name: "Download", exact: true })
+      .click();
+    const armPolicyPath = join(out, "arm-learned-trowel.policy.json");
+    await (await armPolicyDownload).saveAs(armPolicyPath);
+    const armPolicyFile = await readFile(armPolicyPath, "utf8");
+    const armPolicy = policyFromFileContents(armPolicyFile, 128);
+    assert(armPolicy.generation >= 2);
+    const armTelemetryDownload = armPage.waitForEvent("download");
+    await armPage
+      .getByRole("button", { name: "Export Telemetry", exact: true })
+      .click();
+    const armTelemetryPath = join(out, "arm-learned-trowel-telemetry.json");
+    await (await armTelemetryDownload).saveAs(armTelemetryPath);
+    const armTelemetry = JSON.parse(await readFile(armTelemetryPath, "utf8"));
+    await armPage
+      .getByRole("button", { name: "Share link", exact: true })
+      .click();
+    await armPage.waitForFunction(() =>
+      window.location.hash.startsWith("#zpolicy="),
+    );
+    const armShareUrl = armPage.url();
     await armContext.close();
+    for (const transport of ["file", "fragment"] as const) {
+      const replayContext = await browser.newContext({
+        viewport: { width: 1440, height: 1000 },
+        userAgent: USER_AGENT,
+      });
+      type ArmObservation = {
+        requests: {
+          type: string;
+          mode?: string;
+          task?: string;
+          family?: string;
+          seedIndex?: number;
+          sigma?: number;
+          resumeFrom?: number[];
+        }[];
+        traces: { family: string; generation: number; stopped?: boolean }[];
+        progress: number[];
+      };
+      await replayContext.addInitScript(() => {
+        const host = window as unknown as { __armObservation: ArmObservation };
+        host.__armObservation = { requests: [], traces: [], progress: [] };
+        const NativeWorker = window.Worker;
+        window.Worker = class extends NativeWorker {
+          constructor(url: string | URL, options?: WorkerOptions) {
+            super(url, options);
+            if (options?.name !== "frankensim-household-arm-optimizer") return;
+            const nativePost = this.postMessage.bind(this);
+            this.postMessage = (
+              message: ArmObservation["requests"][number],
+            ) => {
+              host.__armObservation.requests.push({
+                ...message,
+                ...(message.resumeFrom
+                  ? { resumeFrom: Array.from(message.resumeFrom) }
+                  : {}),
+              });
+              nativePost(message);
+            };
+            this.addEventListener("message", (event) => {
+              const message = event.data;
+              if (message.type === "trace") {
+                host.__armObservation.traces.push({
+                  family: message.family,
+                  generation: message.generation,
+                  stopped: message.stopped,
+                });
+              }
+              if (message.type === "progress") {
+                host.__armObservation.progress.push(message.generation);
+              }
+            });
+          }
+        };
+      });
+      const replayPage = await replayContext.newPage();
+      observe(replayPage);
+      await replayPage.goto(
+        transport === "fragment"
+          ? armShareUrl
+          : new URL("/frankenrobots/arm", base).href,
+      );
+      await replayPage
+        .getByRole("button", { name: "Download", exact: true })
+        .waitFor();
+      if (transport === "file") {
+        await replayPage.locator("#arm-family").selectOption("full");
+        await replayPage.locator("#arm-seed").selectOption("2");
+        await replayPage
+          .locator('input[type="file"]')
+          .setInputFiles(armPolicyPath);
+      }
+      await replayPage.waitForFunction(
+        (generation) => {
+          const observation = (
+            window as unknown as { __armObservation: ArmObservation }
+          ).__armObservation;
+          return observation.traces.some(
+            (trace) => trace.generation === generation,
+          );
+        },
+        armPolicy.generation,
+        { timeout: 30_000 },
+      );
+      assert.equal(
+        await replayPage
+          .getByRole("tab", { name: /^Trowel/ })
+          .getAttribute("aria-selected"),
+        "true",
+      );
+      assert.equal(
+        await replayPage.locator("#arm-family").inputValue(),
+        armPolicy.family,
+      );
+      assert.equal(await replayPage.locator("#arm-seed").inputValue(), "0");
+      const restoredDownload = replayPage.waitForEvent("download");
+      await replayPage
+        .getByRole("button", { name: "Download", exact: true })
+        .click();
+      const restoredPath = join(out, `arm-${transport}-restored.policy.json`);
+      await (await restoredDownload).saveAs(restoredPath);
+      const restored = policyFromFileContents(
+        await readFile(restoredPath, "utf8"),
+        128,
+      );
+      assert.deepEqual(
+        new Uint8Array(restored.policy.buffer),
+        new Uint8Array(armPolicy.policy.buffer),
+      );
+      const restoredTelemetryDownload = replayPage.waitForEvent("download");
+      await replayPage
+        .getByRole("button", { name: "Export Telemetry", exact: true })
+        .click();
+      const restoredTelemetryPath = join(
+        out,
+        `arm-${transport}-restored-telemetry.json`,
+      );
+      await (await restoredTelemetryDownload).saveAs(restoredTelemetryPath);
+      const restoredTelemetry = JSON.parse(
+        await readFile(restoredTelemetryPath, "utf8"),
+      );
+      const { exportTimestamp: originalTime, ...originalMeasurement } =
+        armTelemetry;
+      const { exportTimestamp: restoredTime, ...restoredMeasurement } =
+        restoredTelemetry;
+      assert(originalTime && restoredTime);
+      assert.deepEqual(restoredMeasurement, originalMeasurement);
+      if (transport === "file") {
+        // Two imports in the SAME worker catch accidental continuation of its old CMA state.
+        for (let cycle = 0; cycle < 2; cycle++) {
+          if (cycle > 0) {
+            const traceCount = await replayPage.evaluate(
+              () =>
+                (window as unknown as { __armObservation: ArmObservation })
+                  .__armObservation.traces.length,
+            );
+            await replayPage
+              .locator('input[type="file"]')
+              .setInputFiles(armPolicyPath);
+            await replayPage.waitForFunction(
+              (count) =>
+                (window as unknown as { __armObservation: ArmObservation })
+                  .__armObservation.traces.length > count,
+              traceCount,
+            );
+          }
+          const before = await replayPage.evaluate(
+            () =>
+              (window as unknown as { __armObservation: ArmObservation })
+                .__armObservation.progress.length,
+          );
+          await replayPage
+            .getByRole("button", { name: /^Keep learning · gen / })
+            .click();
+          await replayPage.waitForFunction(
+            (count) =>
+              (window as unknown as { __armObservation: ArmObservation })
+                .__armObservation.progress.length > count,
+            before,
+            { timeout: 30_000 },
+          );
+          await replayPage
+            .getByRole("button", { name: /^Stop · gen / })
+            .press("Enter");
+          await replayPage
+            .getByRole("button", { name: /^Keep learning · gen / })
+            .waitFor();
+          const observation = await replayPage.evaluate(
+            () =>
+              (window as unknown as { __armObservation: ArmObservation })
+                .__armObservation,
+          );
+          const request = observation.requests
+            .filter((request) => request.type === "optimize")
+            .at(-1);
+          assert.equal(request?.mode, "fresh");
+          assert.equal(request?.task, armPolicy.task);
+          assert.equal(request?.family, armPolicy.family);
+          assert.equal(request?.seedIndex, 0);
+          assert.equal(request?.sigma, armPolicy.sigma);
+          assert.deepEqual(request?.resumeFrom, Array.from(armPolicy.policy));
+          assert.equal(
+            observation.progress[before],
+            // The worker publishes every second generation; a continued
+            // session would first report an even generation above two.
+            2,
+            "Imported learning continued a previous optimizer session",
+          );
+        }
+      }
+      const observation = await replayPage.evaluate(
+        () =>
+          (window as unknown as { __armObservation: ArmObservation })
+            .__armObservation,
+      );
+      assert(
+        observation.traces.some(
+          (trace) =>
+            trace.family === armPolicy.family &&
+            trace.generation === armPolicy.generation,
+        ),
+      );
+      const unsupported = JSON.parse(armPolicyFile);
+      unsupported.task = "unsupported-task";
+      await replayPage.locator('input[type="file"]').setInputFiles({
+        name: "unsupported-arm.policy.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(unsupported)),
+      });
+      await replayPage
+        .getByText(
+          "This policy is not for a supported household task and optimizer.",
+          { exact: true },
+        )
+        .waitFor();
+      assert.equal(
+        await replayPage
+          .getByRole("tab", { name: /^Trowel/ })
+          .getAttribute("aria-selected"),
+        "true",
+      );
+      recordResult({
+        journey: "arm-policy-replay",
+        transport,
+        generation: armPolicy.generation,
+        coefficients: restored.policy.length,
+        observation,
+      });
+      await replayContext.close();
+    }
     const invalidArmContext = await browser.newContext({
       userAgent: USER_AGENT,
     });

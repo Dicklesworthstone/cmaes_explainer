@@ -137,11 +137,14 @@ export function PolicyExchange({
         // on screen is measured by THIS owner and may not match what the sender
         // saw. Silently replaying it would present their gait as ours.
         const foreign = imported.kernelVersion !== meta.kernelVersion;
+        const missingExperiment = subject === "g1" && !imported.experiment;
         setNotice({
-          tone: foreign ? "warn" : "ok",
+          tone: foreign || missingExperiment ? "warn" : "ok",
           text: foreign
             ? `Loaded a generation-${imported.generation} ${imported.task} policy trained on ${imported.kernelVersion}; this page runs ${meta.kernelVersion}. Replaying it here, so these numbers are this owner's and may differ from the sender's.`
-            : `Loaded a generation-${imported.generation} ${imported.task} policy. Replaying it now.`,
+            : missingExperiment
+              ? `Loaded a generation-${imported.generation} policy without a saved scene or seed. Re-evaluating it in this owner's default scene with Seed 1.`
+              : `Loaded a generation-${imported.generation} ${imported.task} policy. ${imported.experiment ? "Replaying its saved experiment now." : "Replaying it now."}`,
         });
       } catch (error) {
         setNotice({
@@ -152,7 +155,7 @@ export function PolicyExchange({
         setBusy(false);
       }
     },
-    [policy, onImport, meta.kernelVersion],
+    [policy, onImport, meta.kernelVersion, subject],
   );
 
   const ready = policy !== null && !disabled;

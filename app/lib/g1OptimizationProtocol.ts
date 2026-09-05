@@ -1,6 +1,7 @@
 import {
   DEFAULT_G1_WALKING_CONFIG,
   FRANKENSIM_OWNER_ARTIFACT,
+  FRANKENSIM_OWNER_KERNEL_VERSION,
   buildG1Config,
   type CmaFamily,
   type G1Challenge,
@@ -14,6 +15,11 @@ import {
   HOUSE_STRUCTURAL_SURFACES,
   type HouseholdKernelObstacle,
 } from "./houseMultiObstacleKernel";
+import {
+  validatePolicyMetadata,
+  type SharedG1Experiment,
+  type SharedPolicyMeta,
+} from "./g1PolicyShare";
 
 export type G1OptimizationRequest = {
   /** Stage translation of the owner origin; shared by every operation. */
@@ -147,6 +153,86 @@ export type G1SceneReceipt = {
   /** Hash of the exact owner config packet, stage translation and WASM digest. */
   digest: string;
 };
+
+function g1InputBytes(
+  seat: readonly number[],
+  configWords: readonly number[],
+): Uint8Array {
+  const values = [...seat, ...configWords];
+  const bytes = new Uint8Array(values.length * 8);
+  const view = new DataView(bytes.buffer);
+  values.forEach((value, index) => view.setFloat64(index * 8, value, true));
+  return bytes;
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
+/** Preserve the exact experiment that produced the displayed receipt. */
+export function g1SharedExperiment(
+  scene: G1SceneReceipt,
+  seedIndex: number,
+): SharedG1Experiment {
+  return {
+    version: 1,
+    kind: "g1",
+    ownerSourceRevision: FRANKENSIM_OWNER_ARTIFACT.sourceRevision,
+    ownerWasmSha256: FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256,
+    inputBytes: hex(g1InputBytes(scene.seat, scene.configWords)),
+    seedIndex,
+  };
+}
+
+/** Validate before mutating UI state or posting any owner request. */
+export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
+  seat: [number, number, number];
+  seedIndex: number;
+} {
+  validatePolicyMetadata(meta);
+  const experiment = meta.experiment;
+  if (!experiment) return { seat: g1ResolveSeat(), seedIndex: 0 };
+  if (
+    meta.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
+    experiment.ownerSourceRevision !==
+      FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
+    experiment.ownerWasmSha256 !== FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256
+  ) {
+    throw new Error(
+      "This exact experiment requires a different owner artifact.",
+    );
+  }
+  if (
+    !["balance", "stepping", "walking"].includes(meta.task) ||
+    !["flat", "terrain-and-push"].includes(meta.challenge) ||
+    !["separable", "lm-cma", "lm-ma"].includes(meta.family)
+  ) {
+    throw new Error("This exact G1 experiment has unsupported settings.");
+  }
+  const bytes = Uint8Array.from(experiment.inputBytes.match(/../g)!, (pair) =>
+    parseInt(pair, 16),
+  );
+  const view = new DataView(bytes.buffer);
+  const seat = g1ResolveSeat([
+    view.getFloat64(0, true),
+    view.getFloat64(8, true),
+    view.getFloat64(16, true),
+  ]);
+  const config = g1OptimizationConfig(
+    meta.task as G1Task,
+    meta.challenge as G1Challenge,
+    g1ObstaclesForSeat(seat),
+  );
+  const expected = g1InputBytes(seat, Array.from(buildG1Config(config)));
+  if (hex(expected) !== experiment.inputBytes) {
+    throw new Error(
+      "This exact experiment has a different scene or owner configuration.",
+    );
+  }
+  return { seat, seedIndex: experiment.seedIndex };
+}
 
 export async function g1ExperimentForSeat(
   task: G1Task,

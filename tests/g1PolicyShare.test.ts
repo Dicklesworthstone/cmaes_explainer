@@ -9,6 +9,7 @@ import {
   policyFromFileContents,
   policyShareUrl,
   type SharedPolicyMeta,
+  type SharedG1Experiment,
 } from "../app/lib/g1PolicyShare";
 
 const META: SharedPolicyMeta = {
@@ -18,6 +19,14 @@ const META: SharedPolicyMeta = {
   family: "lm-ma",
   generation: 352,
   sigma: 0.0005,
+};
+const EXPERIMENT: SharedG1Experiment = {
+  version: 1,
+  kind: "g1",
+  ownerSourceRevision: "a".repeat(40),
+  ownerWasmSha256: "b".repeat(64),
+  inputBytes: "0000000000000080".repeat(8),
+  seedIndex: 2,
 };
 
 /** A baseline shaped like the real curriculum mean: 5,040 small coefficients. */
@@ -39,6 +48,66 @@ function learnedOf(baseline: Float64Array, amplitude = 0.004): Float64Array {
 }
 
 describe("G1 policy share codec", () => {
+  test("preserves exact experiment bytes through binary, file and compressed fragment", async () => {
+    const policy = Float64Array.of(
+      -0,
+      Number.MIN_VALUE,
+      1e-20,
+      Number.MAX_VALUE,
+    );
+    const meta = { ...META, experiment: EXPERIMENT };
+    const copies = [
+      decodeSharedPolicy(encodeSharedPolicy(policy, meta), policy.length),
+      policyFromFileContents(
+        JSON.stringify(policyFileContents(policy, meta)),
+        policy.length,
+      ),
+      await decodePolicyFragment(
+        await encodePolicyFragment(policy, meta),
+        policy.length,
+      ),
+    ];
+    for (const copy of copies) {
+      expect(copy.experiment).toEqual(EXPERIMENT);
+      expect(new Uint8Array(copy.policy.buffer)).toEqual(
+        new Uint8Array(policy.buffer),
+      );
+    }
+  });
+
+  test("refuses malformed and oversized exact experiment metadata", () => {
+    const policy = Float64Array.of(1);
+    for (const bad of [
+      null,
+      { ...EXPERIMENT, version: 2 },
+      { ...EXPERIMENT, kind: "arm" },
+      { ...EXPERIMENT, seedIndex: 3 },
+      { ...EXPERIMENT, seedIndex: 0.5 },
+      { ...EXPERIMENT, ownerSourceRevision: "foreign" },
+      { ...EXPERIMENT, ownerWasmSha256: "" },
+      { ...EXPERIMENT, inputBytes: "0".repeat(12_304) },
+      { ...EXPERIMENT, inputBytes: "z".repeat(64) },
+      { ...EXPERIMENT, inputBytes: "0".repeat(65) },
+    ]) {
+      const meta = { ...META, experiment: bad } as SharedPolicyMeta;
+      expect(() => encodeSharedPolicy(policy, meta)).toThrow(
+        "invalid G1 experiment",
+      );
+      const file = { ...policyFileContents(policy, META), experiment: bad };
+      expect(() => policyFromFileContents(JSON.stringify(file), 1)).toThrow(
+        "invalid G1 experiment",
+      );
+    }
+    const bytes = encodeSharedPolicy(policy, {
+      ...META,
+      experiment: EXPERIMENT,
+    });
+    new DataView(bytes.buffer).setUint32(20, 16_385, true);
+    expect(() => decodeSharedPolicy(bytes, 1)).toThrow(
+      "unsupported header flags",
+    );
+  });
+
   test("round-trips a learned policy exactly", () => {
     const baseline = baselineOf();
     const learned = learnedOf(baseline);
@@ -245,9 +314,10 @@ describe("G1 policy share codec", () => {
     ).not.toThrow();
     const payload = encodeSharedPolicy(policy, META);
     const view = new DataView(payload.buffer);
+    const version = view.getUint16(4, true);
     view.setUint16(4, 3, true);
     expect(() => decodeSharedPolicy(payload, 1)).toThrow("unsupported policy format");
-    view.setUint16(4, 4, true);
+    view.setUint16(4, version, true);
     view.setFloat64(payload.length - 8, Infinity, true);
     expect(() => decodeSharedPolicy(payload, 1)).toThrow("non-finite");
   });

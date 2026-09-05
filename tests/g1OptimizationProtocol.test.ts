@@ -6,10 +6,79 @@ import {
   g1OptimizationConfig,
   g1OptimizationRunKey,
   g1ResolveSeat,
+  g1SharedExperiment,
+  g1RestoreSharedExperiment,
 } from "../app/lib/g1OptimizationProtocol";
-import { buildG1Config, decodeG1Trace } from "../app/lib/frankensimCmaes";
+import {
+  buildG1Config,
+  decodeG1Trace,
+  FRANKENSIM_OWNER_KERNEL_VERSION,
+} from "../app/lib/frankensimCmaes";
+import {
+  policyFileContents,
+  policyFromFileContents,
+} from "../app/lib/g1PolicyShare";
 
 describe("G1 optimization task protocol", () => {
+  test("restores the moved terrain experiment and refuses altered owner or physical inputs", async () => {
+    const original = await g1ExperimentForSeat("walking", "terrain-and-push", [
+      -2.125, -0, 1.375,
+    ]);
+    const meta = {
+      kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+      task: "walking",
+      challenge: "terrain-and-push",
+      family: "lm-ma",
+      generation: 12,
+      sigma: 0.0005,
+      experiment: g1SharedExperiment(original.scene, 2),
+    };
+    const imported = policyFromFileContents(
+      JSON.stringify(policyFileContents(Float64Array.of(-0, 1e-20), meta)),
+      2,
+    );
+    const restored = g1RestoreSharedExperiment(imported);
+    expect(restored.seedIndex).toBe(2);
+    expect(Object.is(restored.seat[1], -0)).toBe(true);
+    const replay = await g1ExperimentForSeat(
+      "walking",
+      "terrain-and-push",
+      restored.seat,
+    );
+    expect(replay.scene).toEqual(original.scene);
+    for (const changed of [
+      { ...meta, kernelVersion: "foreign" },
+      { ...meta, challenge: "flat" },
+      { ...meta, family: "full" },
+      {
+        ...meta,
+        experiment: { ...meta.experiment, ownerSourceRevision: "0".repeat(40) },
+      },
+      {
+        ...meta,
+        experiment: { ...meta.experiment, ownerWasmSha256: "0".repeat(64) },
+      },
+      {
+        ...meta,
+        experiment: {
+          ...meta.experiment,
+          inputBytes: meta.experiment.inputBytes.slice(0, -16),
+        },
+      },
+      {
+        ...meta,
+        experiment: {
+          ...meta.experiment,
+          inputBytes:
+            meta.experiment.inputBytes.slice(0, 48) +
+            "0".repeat(meta.experiment.inputBytes.length - 48),
+        },
+      },
+    ]) {
+      expect(() => g1RestoreSharedExperiment(changed)).toThrow();
+    }
+  });
+
   test("uses the owner-calibrated fast-learning launch radius", () => {
     // Re-measured against wall time once runs became operator-bounded: 5e-4
     // beat 1e-3 for both memory families over equal wall time from the same

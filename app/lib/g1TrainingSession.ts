@@ -80,6 +80,7 @@ export interface SavedTrainingSession {
   challenge: SharedPolicyMeta["challenge"];
   family: SharedPolicyMeta["family"];
   sigma: number;
+  experiment?: SharedPolicyMeta["experiment"];
   generation: number;
   /** Wall-clock seconds of search behind this policy. */
   trainingSeconds: number;
@@ -95,6 +96,7 @@ export interface TrainingSessionSnapshot<TPoint = LearningLedgerPoint> {
   challenge: SharedPolicyMeta["challenge"];
   family: SharedPolicyMeta["family"];
   sigma: number;
+  experiment?: SharedPolicyMeta["experiment"];
   generation: number;
   trainingSeconds: number;
   policy: Float64Array;
@@ -122,6 +124,7 @@ export function encodeTrainingSession<TPoint>(
     challenge: snapshot.challenge,
     family: snapshot.family,
     sigma: snapshot.sigma,
+    experiment: snapshot.experiment,
     generation: snapshot.generation,
     trainingSeconds: snapshot.trainingSeconds,
     savedAt: Date.now(),
@@ -167,6 +170,7 @@ export function decodeTrainingSession<TPoint = LearningLedgerPoint>(
     challenge: parsed.challenge,
     family: parsed.family,
     sigma: parsed.sigma,
+    experiment: parsed.experiment,
     generation: saved.generation,
     trainingSeconds:
       typeof saved.trainingSeconds === "number" && Number.isFinite(saved.trainingSeconds) && saved.trainingSeconds >= 0
