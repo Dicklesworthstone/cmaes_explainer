@@ -164,7 +164,12 @@ export function PolicyExchange({
           {title}
         </span>
         <span className="font-mono text-[0.6rem] text-slate-500">
-          {ready ? `${policy.length.toLocaleString()} coefficients · gen ${meta.generation.toLocaleString()}` : "no policy yet"}
+          {/* Keyed off the policy itself, not off `ready`: during a run the
+              buttons are disabled but a policy plainly exists, and saying "no
+              policy yet" then is simply false. */}
+          {policy
+            ? `${policy.length.toLocaleString()} coefficients · gen ${meta.generation.toLocaleString()}`
+            : "no policy yet"}
         </span>
       </div>
 

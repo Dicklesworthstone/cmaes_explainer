@@ -2138,6 +2138,10 @@ export function HouseholdArmFlagship({
   useEffect(() => {
     const fragment = pendingShareRef.current;
     if (!fragment || !stagePolicy) return;
+    // The import handler refuses while the owner is busy. Leave the fragment
+    // pending and let the next stage policy re-run this, rather than reporting
+    // a broken link because the page happened to still be loading.
+    if (inFlightRef.current) return;
     let active = true;
     void decodePolicyFragment(fragment, stagePolicy.length)
       .then((imported) => {
@@ -2206,6 +2210,14 @@ export function HouseholdArmFlagship({
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
     (imported: SharedPolicy) => {
+      // Refuse loudly while the owner is busy. `post` drops a request silently
+      // when one is in flight, so without this the panel would start describing
+      // the imported policy while the stage kept replaying the old one — a
+      // receipt attached to coefficients that never ran. The walking page
+      // already refuses this way.
+      if (!workerRef.current || inFlightRef.current) {
+        throw new Error("Finish or stop the current run before loading a policy.");
+      }
       setStagePolicy(imported.policy);
       post({ type: "replay", task, policy: imported.policy, generation: imported.generation }, "preview");
     },
