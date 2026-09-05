@@ -2,7 +2,7 @@
  * tests/parity/featherstone.test.ts
  *
  * Slice C parity task: Featherstone articulated-body dynamics conformance.
- * Closes: cmaes-phr3m-parity-feath-0b2.
+ * Kernel conformance remains open: cmaes-phr3m-parity-feath-0b2.
  *
  * Why this task exists
  * --------------------
@@ -18,7 +18,7 @@
  * - bun test parity:featherstone passes in CI.
  *
  * Status: kernel not yet implemented. TS reference below; tests are
- * structure-only until the kernel lands.
+ * missing-answer tests prove refusal only, not articulated dynamics.
  *
  * Honesty floor: a Featherstone test that checks the joint angles but not
  * the center-of-mass or the momentum is missing the dynamics half. The
@@ -186,14 +186,10 @@ describe("parity: Featherstone articulated-body dynamics (kernel vs analytical o
     );
   });
 
-  test("3 oracle cases pass (or skip with loud message while kernel is pending)", () => {
-    const result = parityHarness("featherstone", featherstoneCases, {
-      defaultTolerance: 1e-9,
-      structureOnly: true,
-    });
-    expect(result.skipped).toBe(3);
-    expect(result.failed).toBe(0);
-    expect(result.passed).toBe(0);
+  test("missing dynamics kernel answers cannot certify conformance", () => {
+    for (const testCase of featherstoneCases) {
+      expect(() => parityHarness("featherstone", [testCase])).toThrow("missing required kernel answer");
+    }
   });
 
   test("analytical oracle: 2-link planar FK end-effector pose", () => {

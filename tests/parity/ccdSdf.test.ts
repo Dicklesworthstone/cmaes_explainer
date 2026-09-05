@@ -2,7 +2,7 @@
  * tests/parity/ccdSdf.test.ts
  *
  * Slice C parity task: CCD-on-SDF conformance (kernel vs analytical oracle).
- * Closes: cmaes-phr3m-parity-ccd-voi.
+ * Kernel conformance remains open: cmaes-phr3m-parity-ccd-voi.
  *
  * This file is the per-owner test that consumes the uniform `parityHarness`
  * from tests/parity/parityHarness.ts. The three oracle cases are the floor
@@ -218,19 +218,12 @@ describe("parity: CCD-on-SDF (kernel vs analytical oracle)", () => {
     );
   });
 
-  test("3 oracle cases pass (or skip with loud message while kernel is pending)", () => {
-    const result = parityHarness("ccd-sdf", ccdSdfCases, {
-      defaultTolerance: 1e-9,
-      structureOnly: true, // flip to false when kernel lands
-    });
-    // While structureOnly is true, all 3 cases are SKIPPED (kernel pending).
-    // The acceptance is "test runs, prints loud skip, and exits 0." When the
-    // kernel lands, this same test re-runs and asserts the diff is inside
-    // tolerance. The number of skipped cases is reported in the result so
-    // a future audit can see "3 skipped, kernel pending cmaes-phr7."
-    expect(result.skipped).toBe(3);
-    expect(result.failed).toBe(0);
-    expect(result.passed).toBe(0);
+  test("missing CCD kernel answers cannot certify conformance", () => {
+    // This tests the refusal boundary, not CCD kernel correctness. Keep the
+    // owner conformance bead open until all three actual answers execute.
+    for (const testCase of ccdSdfCases) {
+      expect(() => parityHarness("ccd-sdf", [testCase])).toThrow("missing required kernel answer");
+    }
   });
 
   test("analytical oracle: sphere-sphere distance = center-distance - 2r", () => {

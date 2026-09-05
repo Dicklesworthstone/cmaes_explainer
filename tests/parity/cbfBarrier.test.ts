@@ -2,7 +2,7 @@
  * tests/parity/cbfBarrier.test.ts
  *
  * Slice C parity task: CBF safety-barrier gradient conformance.
- * Closes: cmaes-phr3m-parity-cbf-gn2.
+ * Kernel conformance remains open: cmaes-phr3m-parity-cbf-gn2.
  *
  * Why this task exists
  * --------------------
@@ -18,7 +18,7 @@
  * - bun test parity:cbf passes in CI.
  *
  * Status: kernel not yet implemented. The TS reference for each case is below;
- * the test is structure-only until the kernel lands.
+ * the missing-answer tests prove refusal only, not CBF kernel conformance.
  *
  * Honesty floor: a CBF test that checks the barrier value but not the gradient
  * is half a test. The barrier's job is to be DIFFERENTIABLE so the controller
@@ -199,14 +199,10 @@ describe("parity: CBF safety-barrier gradient (kernel vs analytical oracle)", ()
     );
   });
 
-  test("3 oracle cases pass (or skip with loud message while kernel is pending)", () => {
-    const result = parityHarness("cbf-barrier", cbfCases, {
-      defaultTolerance: 1e-9,
-      structureOnly: true,
-    });
-    expect(result.skipped).toBe(3);
-    expect(result.failed).toBe(0);
-    expect(result.passed).toBe(0);
+  test("missing CBF kernel answers cannot certify conformance", () => {
+    for (const testCase of cbfCases) {
+      expect(() => parityHarness("cbf-barrier", [testCase])).toThrow("missing required kernel answer");
+    }
   });
 
   test("analytical oracle: point-vs-circle CBF value AND gradient", () => {

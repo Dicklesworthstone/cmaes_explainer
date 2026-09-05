@@ -2,7 +2,6 @@
  * tests/parity/parityHarness.ts
  *
  * Slice C parity harness for the new physics owners (cmaes-phr-env-2026).
- * Closes: cmaes-phr3m-parity-ow9 (and its per-owner task children).
  *
  * Why this exists
  * ----------------
@@ -10,7 +9,7 @@
  * gradient, Featherstone articulated body, etc.) must ship with a kernel-vs-
  * TypeScript-reference parity test. The TS reference is the slow-but-correct
  * oracle; the kernel is the fast production path. A parity diff outside the
- * agreed tolerance is a bug in the kernel, not in the reference.
+ * agreed tolerance requires investigating both implementations and the oracle.
  *
  * This file is the uniform harness: a `parityHarness(ownerName, opts)` helper
  * that every per-owner test file consumes. It enforces:
@@ -32,9 +31,6 @@
  *   tests/parity/ccdSdf.test.ts follow this pattern.
  * - Bridson, Computational Aspects of Dynamic Contact, SIGGRAPH 2006 course
  *   notes: the contact-manifold oracle shapes.
- * - Schmerling et al., A Unifying Perspective on Obstacle-Avoidance and
- *   Value-Iteration for Quadrupeds, ICRA 2024 (arXiv:2404.05609): the
- *   value-iteration-on-SDF perf workload.
  *
  * Honesty floor (per /just-say-no-to-process-porn-and-ceremony)
  * -------------------------------------------------------------
@@ -43,11 +39,8 @@
  * within tolerance on an analytically known case." A test with no analytical
  * case is not a parity test.
  *
- * When the kernel does not yet exist (e.g., during early bead work), the
- * parityHarness accepts a `kernelFn: undefined` mode where the test is marked
- * as "structure-only" and skipped. The skip is loud: a comment in the test
- * output names the bead ID that gates the kernel landing. This is the
- * "framework is here, swap in the kernel when it ships" pattern.
+ * Missing kernels and empty comparisons fail. This harness compares supplied
+ * results; the caller must actually execute the named independent backends.
  */
 
 export interface ParityCase<TInput, TOutput> {
@@ -59,20 +52,17 @@ export interface ParityCase<TInput, TOutput> {
   oracle?: TOutput;
   /** TS reference answer. */
   ts: TOutput;
-  /** Kernel answer. If undefined, the case is a structure-only placeholder. */
+  /** Actual kernel answer. Missing answers fail conformance. */
   kernel?: TOutput;
   /** Max abs diff allowed. Defaults to 1e-9 for numeric outputs. */
   tolerance?: number;
+  relativeTolerance?: number;
 }
 
 export interface ParityHarnessOptions {
   /** Max abs diff tolerance, applied to cases that don't specify their own. */
   defaultTolerance?: number;
-  /** When true, the test is structure-only (no kernel answer). The test
-   *  prints "SKIPPED: kernel not yet implemented" and exits 0. The skip
-   *  is loud so a future contributor cannot silently turn a parity test
-   *  into a "always green" stub. */
-  structureOnly?: boolean;
+  defaultRelativeTolerance?: number;
 }
 
 export interface ParityResult {
@@ -85,15 +75,18 @@ export interface ParityResult {
     tolerance: number;
     within: boolean;
     skipped: boolean;
+    comparedScalars: number;
   }>;
 }
 
 /**
  * Compute the max abs diff between two numeric arrays of equal length.
- * Returns 0 if both are undefined.
+ * Missing, empty and nonfinite arrays are invalid comparisons.
  */
 export function maxAbsDiff(a: number[] | undefined, b: number[] | undefined): number {
-  if (a === undefined || b === undefined) return 0;
+  if (a === undefined || b === undefined || a.length === 0 || b.length === 0) {
+    throw new Error("parityHarness: missing or empty numeric answer");
+  }
   if (a.length !== b.length) {
     throw new Error(
       `parityHarness: kernel and TS answers have different lengths (${a.length} vs ${b.length})`,
@@ -101,6 +94,9 @@ export function maxAbsDiff(a: number[] | undefined, b: number[] | undefined): nu
   }
   let max = 0;
   for (let index = 0; index < a.length; index++) {
+    if (!Number.isFinite(a[index]) || !Number.isFinite(b[index])) {
+      throw new Error(`parityHarness: nonfinite answer at $[${index}]`);
+    }
     const value = Math.abs(a[index] - b[index]);
     if (value > max) max = value;
   }
@@ -108,25 +104,98 @@ export function maxAbsDiff(a: number[] | undefined, b: number[] | undefined): nu
 }
 
 /**
- * Flatten a structured output (numbers, tuples, nested arrays) into a flat
- * numeric array. Used so the parity diff is shape-agnostic.
+ * Extract numbers for diagnostics only. Parity itself preserves structure.
  */
 export function flattenNumeric(value: unknown, out: number[] = []): number[] {
-  if (typeof value === "number") {
-    if (Number.isFinite(value)) out.push(value);
-    return out;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) flattenNumeric(item, out);
-    return out;
-  }
+  compareAnswers(value, value, 0, 0, (a) => out.push(a));
   return out;
+}
+
+/** Compare exact shapes and metadata, with tolerances only on finite numbers. */
+function compareAnswers(
+  actual: unknown,
+  expected: unknown,
+  absoluteTolerance: number,
+  relativeTolerance: number,
+  onNumber: (actual: number, expected: number) => void,
+  path = "$",
+  ancestors = new Set<object>(),
+): void {
+  const fail = (reason: string): never => {
+    throw new Error(`${path}: ${reason}`);
+  };
+  if (typeof actual === "number" && typeof expected === "number") {
+    if (!Number.isFinite(actual) || !Number.isFinite(expected)) fail("nonfinite numeric value");
+    const difference = Math.abs(actual - expected);
+    const scale = Math.max(Math.abs(actual), Math.abs(expected));
+    // Normalize rather than multiplying the scale: finite opposite extremes
+    // can overflow both the subtraction and a relative error budget.
+    const relativeDifference = scale === 0 ? 0 : Math.abs(actual / scale - expected / scale);
+    if (difference > absoluteTolerance && relativeDifference > relativeTolerance) {
+      fail(`numeric mismatch: actual=${actual}, expected=${expected}, absolute=${absoluteTolerance}, relative=${relativeTolerance}`);
+    }
+    onNumber(actual, expected);
+    return;
+  }
+  if (actual === null || expected === null || typeof actual !== "object" || typeof expected !== "object") {
+    if (actual === undefined || expected === undefined) fail("missing value");
+    if (!["string", "boolean"].includes(typeof actual) && actual !== null) fail("unsupported value");
+    if (!Object.is(actual, expected)) fail("type or metadata mismatch");
+    return;
+  }
+  if (ancestors.has(actual) || ancestors.has(expected)) fail("cyclic output");
+  ancestors.add(actual);
+  ancestors.add(expected);
+  try {
+    if (ArrayBuffer.isView(actual) || ArrayBuffer.isView(expected)) {
+      if (!ArrayBuffer.isView(actual) || !ArrayBuffer.isView(expected) ||
+        actual instanceof DataView || expected instanceof DataView ||
+        actual.constructor !== expected.constructor) fail("typed-array type mismatch");
+      const a = actual as unknown as ArrayLike<number>;
+      const b = expected as unknown as ArrayLike<number>;
+      if (a.length !== b.length) fail("typed-array length mismatch");
+      for (let index = 0; index < a.length; index++) {
+        compareAnswers(a[index], b[index], absoluteTolerance, relativeTolerance, onNumber, `${path}[${index}]`, ancestors);
+      }
+      return;
+    }
+    if (Array.isArray(actual) !== Array.isArray(expected)) fail("array/object shape mismatch");
+    if (Array.isArray(actual) && Array.isArray(expected)) {
+      if (actual.length !== expected.length) fail("array length mismatch");
+      for (let index = 0; index < actual.length; index++) {
+        compareAnswers(actual[index], expected[index], absoluteTolerance, relativeTolerance, onNumber, `${path}[${index}]`, ancestors);
+      }
+      return;
+    }
+    for (const value of [actual, expected]) {
+      const prototype = Object.getPrototypeOf(value);
+      if (prototype !== Object.prototype && prototype !== null) fail("unsupported object type");
+      if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) fail("symbol field is unsupported");
+    }
+    const a = actual as Record<string, unknown>;
+    const b = expected as Record<string, unknown>;
+    const keys = Object.getOwnPropertyNames(a).sort();
+    const otherKeys = Object.getOwnPropertyNames(b).sort();
+    if (keys.length !== otherKeys.length || keys.some((key, index) => key !== otherKeys[index])) fail("object keys differ");
+    for (const key of keys) {
+      if (!Object.hasOwn(Object.getOwnPropertyDescriptor(a, key)!, "value") ||
+        !Object.hasOwn(Object.getOwnPropertyDescriptor(b, key)!, "value")) fail("accessor output is unsupported");
+      compareAnswers(a[key], b[key], absoluteTolerance, relativeTolerance, onNumber, `${path}[${JSON.stringify(key)}]`, ancestors);
+    }
+  } finally {
+    ancestors.delete(actual);
+    ancestors.delete(expected);
+  }
+}
+
+function validateTolerance(value: number): void {
+  if (!Number.isFinite(value) || value < 0) throw new Error("parityHarness: tolerance must be finite and nonnegative");
 }
 
 /**
  * Run a parity test. The kernel and TS reference see the same inputs; the
- * diff is asserted against `tolerance`. When `opts.structureOnly` is true
- * (default false), the test skips when no kernel answer is present.
+ * diff is asserted against absolute/relative tolerances. Missing required
+ * answers, zero comparisons, or disagreement with an oracle are failures.
  *
  * Returns a `ParityResult` so the caller can aggregate or assert. The
  * helper also throws on failure (so a plain `test(...)` block in bun:test
@@ -138,6 +207,10 @@ export function parityHarness<TInput, TOutput>(
   opts: ParityHarnessOptions = {},
 ): ParityResult {
   const defaultTolerance = opts.defaultTolerance ?? 1e-9;
+  const defaultRelativeTolerance = opts.defaultRelativeTolerance ?? 0;
+  validateTolerance(defaultTolerance);
+  validateTolerance(defaultRelativeTolerance);
+  if (cases.length === 0) throw new Error(`parityHarness[${ownerName}]: no cases`);
   const result: ParityResult = {
     passed: 0,
     failed: 0,
@@ -146,49 +219,34 @@ export function parityHarness<TInput, TOutput>(
   };
   for (const testCase of cases) {
     const tolerance = testCase.tolerance ?? defaultTolerance;
-    if (testCase.kernel === undefined || opts.structureOnly) {
-      // Loud skip. Future-you will see this in the bun test output and
-      // remember that the kernel owner is the gate, not the harness.
-      console.warn(
-        `parity[${ownerName}] case '${testCase.id}': SKIPPED (kernel not yet implemented; ts=${JSON.stringify(testCase.ts)})`,
-      );
-      result.skipped += 1;
-      result.cases.push({
-        id: testCase.id,
-        maxAbsDiff: 0,
-        tolerance,
-        within: true,
-        skipped: true,
+    const relativeTolerance = testCase.relativeTolerance ?? defaultRelativeTolerance;
+    validateTolerance(tolerance);
+    validateTolerance(relativeTolerance);
+    let diff = 0;
+    let comparedScalars = 0;
+    try {
+      if (testCase.kernel === undefined) throw new Error("missing required kernel answer");
+      compareAnswers(testCase.kernel, testCase.ts, tolerance, relativeTolerance, (a, b) => {
+        diff = Math.max(diff, Math.abs(a - b));
+        comparedScalars++;
       });
-      continue;
+      if (comparedScalars === 0) throw new Error("zero numeric values compared");
+      if (Object.hasOwn(testCase, "oracle")) {
+        compareAnswers(testCase.ts, testCase.oracle, tolerance, relativeTolerance, () => {});
+        compareAnswers(testCase.kernel, testCase.oracle, tolerance, relativeTolerance, () => {});
+      }
+    } catch (error) {
+      throw new Error(`parityHarness[${ownerName}] case '${testCase.id}': ${error instanceof Error ? error.message : String(error)}`);
     }
-    const tsFlat = flattenNumeric(testCase.ts);
-    const kernelFlat = flattenNumeric(testCase.kernel);
-    const diff = maxAbsDiff(tsFlat, kernelFlat);
-    const within = diff <= tolerance;
     result.cases.push({
       id: testCase.id,
       maxAbsDiff: diff,
       tolerance,
-      within,
+      within: true,
       skipped: false,
+      comparedScalars,
     });
-    if (within) {
-      result.passed += 1;
-      console.log(
-        `parity[${ownerName}] case '${testCase.id}': OK (maxAbsDiff=${diff.toExponential(2)}, tol=${tolerance.toExponential(2)})`,
-      );
-    } else {
-      result.failed += 1;
-      console.error(
-        `parity[${ownerName}] case '${testCase.id}': FAIL (maxAbsDiff=${diff.toExponential(2)} > tol=${tolerance.toExponential(2)})`,
-      );
-    }
-  }
-  if (result.failed > 0) {
-    throw new Error(
-      `parityHarness[${ownerName}]: ${result.failed} case(s) exceeded tolerance. See output above.`,
-    );
+    result.passed++;
   }
   return result;
 }
@@ -205,18 +263,18 @@ export function assertDeterministic<TInput, TOutput>(
   input: TInput,
   trials = 4,
 ): void {
+  if (!Number.isInteger(trials) || trials < 2) throw new Error("assertDeterministic: at least two trials are required");
   const answers: TOutput[] = [];
   for (let trial = 0; trial < trials; trial++) {
-    answers.push(fn(input));
+    answers.push(structuredClone(fn(structuredClone(input))));
   }
   for (let trial = 1; trial < trials; trial++) {
-    const a = flattenNumeric(answers[0]);
-    const b = flattenNumeric(answers[trial]);
-    const diff = maxAbsDiff(a, b);
-    if (diff !== 0) {
-      throw new Error(
-        `assertDeterministic[${ownerName}]: trial ${trial} produced different output (maxAbsDiff=${diff}). TS reference is not deterministic; parity tests would be meaningless.`,
-      );
-    }
+    parityHarness(`determinism:${ownerName}:trial-${trial}`, [{
+      id: "same-input",
+      input,
+      ts: answers[0],
+      kernel: answers[trial],
+      tolerance: 0,
+    }]);
   }
 }
