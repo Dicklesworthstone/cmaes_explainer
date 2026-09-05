@@ -120,14 +120,15 @@ export function PolicyAblationComparison() {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
             <h2 className="text-base font-bold text-neutral-100">
-              Action-Causal Transfer Check: Phase Prior vs Legacy Transformer
+              Two policy architectures walking the same contract
             </h2>
           </div>
           <p className="text-xs text-neutral-400">
             Both sides execute for the same 720-step horizon on the current
-            action-causal stand-in. CMA-ES searches that contract live; the
-            committed transformer is a historical artifact trained on the
-            superseded self-propelling environment.
+            action-causal stand-in, where forward motion requires real actuator
+            work. CMA-ES searches that contract live. The transformer runs the
+            committed 2.9M-parameter trunk with a policy head fitted offline to
+            the gait CMA-ES found, which is why it moves at all — see below.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -213,8 +214,8 @@ export function PolicyAblationComparison() {
         />
         <PolicyCard
           accent="indigo"
-          title="Legacy Zero-Head Transformer Artifact"
-          badge={`${tf.parameterCount.toLocaleString()} Parameters • Transfer Failed`}
+          title="Transformer (committed trunk, fitted head)"
+          badge={`${tf.parameterCount.toLocaleString()} Parameters • Distilled Head`}
           receipt={tf}
         />
       </div>
@@ -222,13 +223,29 @@ export function PolicyAblationComparison() {
       <div className="p-2.5 rounded bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-400 space-y-1">
         <div className="text-neutral-300 font-bold text-[10px] uppercase">Provenance</div>
         <p className="leading-relaxed">
-          Transformer: trained by{" "}
+          Transformer: the trunk comes from{" "}
           <code className="text-neutral-200">fs-g1-train/examples/train_ablation.rs</code> —
-          PPO (clipped) + GAE and Muon/Adam; {tf.trainingSamplesRequired.toLocaleString()} env
-          steps were recorded. Weights and the historical receipt live under
-          public/robots/g1/transformer/. Both cards are evaluated here on the
-          current action-causal kinematic stand-in, which still has no
-          push/joint-limit/slip telemetry. It is not the full G1 owner.
+          PPO (clipped) + GAE with Muon/Adam over{" "}
+          {tf.trainingSamplesRequired.toLocaleString()} env steps. That run did not
+          learn: its mean reward was flat across all 60 iterations, the shipped
+          checkpoint is iteration 0, and its policy head was exported entirely
+          zero — so tanh(0·h) = 0 for every actuator and the robot could not
+          move. The 7.8 m in its own receipt came from a superseded stand-in
+          that granted target speed regardless of action.
+        </p>
+        <p className="leading-relaxed">
+          What is shipped now (v2) keeps that trunk byte-for-byte and replaces
+          only the 29×256 output layer, fitted by ridge regression to the gait
+          CMA-ES discovers on this same contract
+          (<code className="text-neutral-200">scripts/fit-transformer-head.ts</code>).
+          It therefore walks — measured above, with real actuator work rather
+          than free motion. It is emphatically NOT evidence that a transformer
+          beats CMA-ES: the gait it executes is one CMA-ES found, and the trunk
+          it runs on is an untrained initialisation. What it does show is that
+          the earlier zero distance was a missing output layer, not a fact about
+          transformers. Both cards are evaluated on the action-causal kinematic
+          stand-in, which still has no push/joint-limit/slip telemetry; it is not
+          the full G1 owner.
         </p>
         <p className="leading-relaxed">
           The exported policy head contains no nonzero values. The legacy
