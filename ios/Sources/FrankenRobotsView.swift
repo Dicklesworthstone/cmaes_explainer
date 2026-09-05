@@ -7,6 +7,7 @@ struct FrankenRobotsView: View {
     @StateObject private var engine = RobotEngineHost()
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
+    @State private var showingFullLab = false
     @State private var guidePage: RobotGuidePage = .lab
     @State private var receiptDocument: RobotReceiptDocument?
     @State private var showingReceiptExporter = false
@@ -38,19 +39,23 @@ struct FrankenRobotsView: View {
         GeometryReader { geometry in
             ZStack {
                 RobotLabBackground()
-                VStack(spacing: geometry.size.height < 650 ? 8 : 12) {
-                    masthead(compact: geometry.size.height < 650)
-                    labSelector
-                    nativeCommandBar
-                    if geometry.size.width >= 920 {
-                        wideLayout
-                    } else {
-                        compactLayout(showFactStrip: geometry.size.width >= 680)
+                if showingFullLab {
+                    fullLabWorkspace(compact: geometry.size.width < 680)
+                } else {
+                    VStack(spacing: geometry.size.height < 650 ? 8 : 12) {
+                        masthead(compact: geometry.size.height < 650)
+                        labSelector
+                        nativeCommandBar
+                        if geometry.size.width >= 920 {
+                            wideLayout
+                        } else {
+                            compactLayout(showFactStrip: geometry.size.width >= 680)
+                        }
                     }
+                    .padding(.horizontal, geometry.size.width >= 680 ? 18 : 12)
+                    .padding(.top, geometry.size.height < 650 ? 8 : 12)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 4 : 10)
                 }
-                .padding(.horizontal, geometry.size.width >= 680 ? 18 : 12)
-                .padding(.top, geometry.size.height < 650 ? 8 : 12)
-                .padding(.bottom, geometry.safeAreaInsets.bottom > 0 ? 4 : 10)
             }
         }
         .onChange(of: lab) { _, value in
@@ -205,22 +210,108 @@ struct FrankenRobotsView: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 420)
+            .layoutPriority(1)
 
             Spacer(minLength: 0)
 
             Button {
+                showingFullLab = true
+            } label: {
+                Label("All controls", systemImage: "square.grid.3x3.fill")
+                    .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .padding(.horizontal, 3)
+                    .frame(minHeight: 42)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(lab.accent)
+            .accessibilityIdentifier("robot-open-full-lab")
+            .accessibilityHint("Opens the complete embedded lab with every scene, replay, optimizer, policy, and evidence control")
+
+            Button {
                 showingDetails = true
             } label: {
-                Label("Lab guide", systemImage: "slider.horizontal.3")
-                    .font(.system(size: RobotTheme.size(10), weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .padding(.horizontal, 5)
-                    .frame(minHeight: 42)
+                ViewThatFits(in: .horizontal) {
+                    Label("Lab guide", systemImage: "book.pages")
+                    Image(systemName: "book.pages")
+                }
+                .font(.system(size: RobotTheme.size(10), weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .padding(.horizontal, 3)
+                .frame(minHeight: 42)
             }
             .buttonStyle(.bordered)
             .tint(lab.accent)
+            .accessibilityLabel("Lab guide")
             .accessibilityHint("Shows the current lab facts and engine diagnostics")
         }
+    }
+
+    private func fullLabWorkspace(compact: Bool) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: compact ? 8 : 12) {
+                Button {
+                    showingFullLab = false
+                } label: {
+                    Label("Stage", systemImage: "chevron.backward")
+                        .font(.system(size: RobotTheme.size(10), weight: .bold, design: .rounded))
+                        .frame(minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+                .tint(lab.accent)
+                .accessibilityIdentifier("robot-close-full-lab")
+                .accessibilityHint("Returns to the focused native stage without changing the running owner")
+
+                Picker("Robot laboratory", selection: $lab) {
+                    ForEach(RobotLab.allCases) { item in
+                        Text(item.shortTitle).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: compact ? 190 : 320)
+                .layoutPriority(1)
+
+                Spacer(minLength: 0)
+                RobotAppearanceButton(selection: $appearance)
+                engineStatus
+            }
+
+            HStack(spacing: 8) {
+                Label("COMPLETE LAB", systemImage: "square.grid.3x3.fill")
+                    .font(.system(size: RobotTheme.size(8), weight: .black, design: .monospaced))
+                    .kerning(0.8)
+                    .foregroundStyle(lab.accent)
+                Text("SCENE · CAMERAS · PHYSICS · TIMELINE · RUN · REPLAY · POLICIES · RECEIPTS")
+                    .font(.system(size: RobotTheme.size(7.2), weight: .bold, design: .monospaced))
+                    .foregroundStyle(RobotTheme.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.58)
+                Spacer(minLength: 0)
+                Text("SCROLL")
+                    .font(.system(size: RobotTheme.size(7.5), weight: .black, design: .monospaced))
+                    .foregroundStyle(RobotTheme.text)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 30)
+            .background(RobotTheme.panel.opacity(0.92), in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("robot-full-lab-capability-map")
+
+            RobotPanel(accent: lab.accent) {
+                ZStack {
+                    RobotEngineWebView(webView: engine.webView)
+                        .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+
+                    if case let .failed(message) = engine.phase {
+                        engineFailure(message)
+                    }
+                }
+            }
+            .accessibilityIdentifier("robot-full-lab-workspace")
+        }
+        .padding(.horizontal, compact ? 8 : 14)
+        .padding(.top, compact ? 6 : 10)
+        .padding(.bottom, 4)
     }
 
     private var nativeCommandBar: some View {

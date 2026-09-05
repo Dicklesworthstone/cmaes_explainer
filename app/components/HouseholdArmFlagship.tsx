@@ -2657,19 +2657,19 @@ export function HouseholdArmFlagship({
             </div>
           </div>
 
-          {/* Tactile Grasp Microscope HUD & Joint Kinematics Strip */}
-          {!embedded ? (
-            <div className="mt-3 flex flex-col gap-3">
-              <ArmGraspMicroscopeHUD
-                sample={currentSampleForHUD}
-                enabled={microscopeMode}
-              />
-              <ArmJointKinematicsStrip
-                jointAngles={activeJointAngles}
-                dragActive={Boolean(armDragTarget)}
-              />
-            </div>
-          ) : null}
+          {/* These diagnostics are part of the arm lab, including the native
+              embedded route. Compact hosting may change spacing, but must not
+              remove the grasp or joint-limit controls. */}
+          <div className={`mt-3 flex flex-col gap-3 ${embedded ? "px-1 pb-1" : ""}`}>
+            <ArmGraspMicroscopeHUD
+              sample={currentSampleForHUD}
+              enabled={microscopeMode}
+            />
+            <ArmJointKinematicsStrip
+              jointAngles={activeJointAngles}
+              dragActive={Boolean(armDragTarget)}
+            />
+          </div>
         </div>
 
         <div className="glass-card p-5 sm:p-6">

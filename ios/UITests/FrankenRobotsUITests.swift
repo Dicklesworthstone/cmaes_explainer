@@ -129,6 +129,115 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(relaunchedToggle.label, "Switch to dark mode")
     }
 
+    func testFullLabWorkspaceExposesCompleteHumanoidAndArmControls() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let openFullLab = app.buttons["robot-open-full-lab"]
+        XCTAssertTrue(openFullLab.waitForExistence(timeout: 12), app.debugDescription)
+        XCTAssertTrue(openFullLab.isHittable, app.debugDescription)
+        openFullLab.tap()
+
+        let capabilityMap = app.descendants(matching: .any)["robot-full-lab-capability-map"]
+        XCTAssertTrue(capabilityMap.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(capabilityMap.label.contains("CAMERAS"))
+        XCTAssertTrue(capabilityMap.label.contains("TIMELINE"))
+        XCTAssertTrue(capabilityMap.label.contains("POLICIES"))
+
+        let workspace = app.webViews.firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 12), app.debugDescription)
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 5), app.debugDescription)
+        let humanoidReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [humanoidReady], timeout: 55), .completed)
+
+        let pushPreview = app.buttons["Configure display-only push-vector preview"]
+        let followCamera = app.buttons["Follow"]
+        XCTAssertTrue(pushPreview.waitForExistence(timeout: 12), app.debugDescription)
+        XCTAssertTrue(pushPreview.isHittable, app.debugDescription)
+        XCTAssertTrue(followCamera.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(followCamera.isHittable, app.debugDescription)
+
+        let humanoidScene = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        humanoidScene.name = "Complete Humanoid lab scene and camera controls"
+        humanoidScene.lifetime = .keepAlways
+        add(humanoidScene)
+
+        let humanoidStart = app.buttons.matching(
+            NSPredicate(
+                format: "label == 'Start learning' OR label BEGINSWITH[c] 'Keep learning'"
+            )
+        ).firstMatch
+        for _ in 0..<8 where !humanoidStart.isHittable {
+            workspace.swipeUp()
+        }
+        XCTAssertTrue(humanoidStart.isHittable, app.debugDescription)
+        let policySeed = app.staticTexts["Policy seed"]
+        XCTAssertTrue(policySeed.exists, app.debugDescription)
+
+        let humanoidLearning = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        humanoidLearning.name = "Complete Humanoid lab optimizer and policy controls"
+        humanoidLearning.lifetime = .keepAlways
+        add(humanoidLearning)
+
+        let arm = app.segmentedControls.buttons["iiwa14"]
+        XCTAssertTrue(arm.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(arm.isHittable, app.debugDescription)
+        arm.tap()
+
+        let armReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate(
+                format: "label CONTAINS[c] 'ready' OR label CONTAINS[c] 'running'"
+            ),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [armReady], timeout: 55), .completed)
+
+        let frictionCones = app.buttons["Friction cones"]
+        let graspCamera = app.buttons["Grasp Focus camera"]
+        XCTAssertTrue(frictionCones.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(frictionCones.isHittable, app.debugDescription)
+        XCTAssertTrue(graspCamera.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(graspCamera.isHittable, app.debugDescription)
+
+        let armScene = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        armScene.name = "Complete Arm lab physics and camera controls"
+        armScene.lifetime = .keepAlways
+        add(armScene)
+
+        let graspMicroscope = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Tactile Grasp Microscope'")
+        ).firstMatch
+        let jointKinematics = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] '7-DoF iiwa Joint Kinematics'")
+        ).firstMatch
+        for _ in 0..<8 where !(graspMicroscope.isHittable && jointKinematics.isHittable) {
+            workspace.swipeUp()
+        }
+        XCTAssertTrue(graspMicroscope.isHittable, app.debugDescription)
+        XCTAssertTrue(jointKinematics.isHittable, app.debugDescription)
+
+        let armDiagnostics = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        armDiagnostics.name = "Complete Arm lab grasp and joint diagnostics"
+        armDiagnostics.lifetime = .keepAlways
+        add(armDiagnostics)
+
+        let closeFullLab = app.buttons["robot-close-full-lab"]
+        XCTAssertTrue(closeFullLab.isHittable, app.debugDescription)
+        closeFullLab.tap()
+        XCTAssertTrue(openFullLab.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["robot-stage"].waitForExistence(timeout: 5),
+            app.debugDescription
+        )
+    }
+
     func testSwitchesBetweenFocusedLabs() throws {
         let app = XCUIApplication()
         app.launch()
