@@ -475,10 +475,18 @@ async function run() {
         await ownerPage.waitForTimeout(1000);
         const sceneElement = ownerPage.locator("[data-g1-scene-digest]");
         const before = await sceneElement.getAttribute("data-g1-scene-digest");
-        // The visible root grab ring in the reset follow-camera view.
-        await ownerPage.mouse.move(507, 210);
+        // Follow the actual projected handle, which moves with the camera.
+        const handle = await ownerPage
+          .getByText("Drag robot", { exact: true })
+          .boundingBox();
+        assert(handle, "The robot placement handle is missing");
+        const grab = {
+          x: handle.x + handle.width / 2,
+          y: handle.y + handle.height / 2,
+        };
+        await ownerPage.mouse.move(grab.x, grab.y);
         await ownerPage.mouse.down();
-        await ownerPage.mouse.move(565, 250, { steps: 12 });
+        await ownerPage.mouse.move(grab.x + 58, grab.y + 40, { steps: 12 });
         assert.equal(
           await sceneElement.getAttribute("data-g1-scene-digest"),
           before,
@@ -503,7 +511,9 @@ async function run() {
           null,
           { timeout: 30_000 },
         );
-        await ownerPage.getByRole("button", { name: /^Stop · gen / }).click();
+        await ownerPage
+          .getByRole("button", { name: /^Stop · gen / })
+          .press("Enter");
         await ownerPage.waitForFunction(
           () =>
             (

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
+import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox, Html } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
@@ -1685,6 +1685,11 @@ function RagdollDragger({
             metalness={0.8}
           />
         </mesh>
+        <Html center zIndexRange={[4, 0]} style={{ pointerEvents: "none" }}>
+          <span className="whitespace-nowrap rounded-full border border-cyan-300/50 bg-slate-950/90 px-2 py-1 text-[10px] font-semibold text-cyan-100">
+            Drag robot
+          </span>
+        </Html>
         <mesh position={[0, -0.1, 0]}>
           <cylinderGeometry args={[0.008, 0.008, 0.16, 8]} />
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.7} />
