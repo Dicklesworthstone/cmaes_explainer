@@ -9,6 +9,14 @@ import {
 import { useReducedMotion } from "framer-motion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
+import { ArmLearningLedger } from "./ArmLearningLedger";
+import { PolicyExchange } from "./PolicyExchange";
+import {
+  appendArmLedgerPoint,
+  armLedgerPoint,
+  type ArmLedgerPoint,
+} from "../lib/armLearningLedger";
+import type { SharedPolicy } from "../lib/g1PolicyShare";
 import {
   ARM_TABLE_CENTER_X,
   ARM_TABLE_DEPTH,
@@ -91,6 +99,7 @@ import {
   type ArmSelfContact,
 } from "../lib/armContactPhysics";
 import {
+  FRANKENSIM_OWNER_KERNEL_VERSION,
   HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
   type CmaFamily,
   type HouseholdManipulationAdmission,
@@ -121,6 +130,8 @@ type WorkerResponse =
       family: ArmTraceOrigin;
       continuing?: boolean;
       stopped?: boolean;
+      /** Coefficients behind this trace, mirroring the worker's response. */
+      policy?: Float64Array;
     }
   | {
       type: "progress";
@@ -1770,6 +1781,16 @@ export function HouseholdArmFlagship({
   const [family, setFamily] = useState<CmaFamily>("lm-cma");
   const [seedIndex, setSeedIndex] = useState(0);
   const [generation, setGeneration] = useState(0);
+  // Physical measurements of each replayed policy, and the coefficients behind
+  // whatever is on stage, so the arm can show what it learned and keep it.
+  const [ledger, setLedger] = useState<ArmLedgerPoint[]>([]);
+  const [stagePolicy, setStagePolicy] = useState<Float64Array | null>(null);
+  const trainingStartedAtRef = useRef<number | null>(null);
+  const trainingSecondsRef = useRef(0);
+  const [trainingSeconds, setTrainingSeconds] = useState(0);
+  // The search radius the worker is actually using, recorded from its progress
+  // messages so an exported policy carries the run it came from.
+  const [searchSigma, setSearchSigma] = useState(0);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<ArmTraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -1892,6 +1913,11 @@ export function HouseholdArmFlagship({
       } else if (message.type === "progress") {
         setGeneration(message.generation);
         setBestObjective(message.bestObjective);
+        setSearchSigma(message.sigma);
+        if (trainingStartedAtRef.current === null) trainingStartedAtRef.current = Date.now();
+        setTrainingSeconds(
+          trainingSecondsRef.current + (Date.now() - trainingStartedAtRef.current) / 1000,
+        );
         setStatus(message.continuous
           ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
           : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
@@ -1906,9 +1932,20 @@ export function HouseholdArmFlagship({
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
+        if (message.policy) setStagePolicy(message.policy);
+        setLedger((previous) =>
+          appendArmLedgerPoint(previous, armLedgerPoint(message.trace, message.generation)),
+        );
         if (message.continuing) {
           setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
           return;
+        }
+        // Bank the elapsed search time: the run has ended until the next
+        // generation arrives.
+        if (trainingStartedAtRef.current !== null) {
+          trainingSecondsRef.current += (Date.now() - trainingStartedAtRef.current) / 1000;
+          trainingStartedAtRef.current = null;
+          setTrainingSeconds(trainingSecondsRef.current);
         }
         setBusy(null);
         inFlightRef.current = false;
@@ -2014,6 +2051,15 @@ export function HouseholdArmFlagship({
       "optimize",
     );
   }, [post, task, family, seedIndex]);
+
+  /** Replay a policy the operator brought in, from a file or a share link. */
+  const handlePolicyImport = useCallback(
+    (imported: SharedPolicy) => {
+      setStagePolicy(imported.policy);
+      post({ type: "replay", task, policy: imported.policy, generation: imported.generation }, "preview");
+    },
+    [post, task],
+  );
 
   const stopContinuousOptimization = useCallback(() => {
     if (!workerRef.current || busy !== "optimize" || stopRequested) return;
@@ -2767,6 +2813,38 @@ export function HouseholdArmFlagship({
             {error ? (
               <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p>
             ) : null}
+            {ledger.length > 0 ? (
+              <div className="mt-3">
+                <ArmLearningLedger points={ledger} trainingSeconds={trainingSeconds} />
+              </div>
+            ) : null}
+            <div className="mt-3">
+              <PolicyExchange
+                policy={stagePolicy}
+                subject="iiwa"
+                title="Keep this policy"
+                disabled={busy !== null}
+                meta={{
+                  kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+                  task,
+                  challenge: "household",
+                  family,
+                  generation,
+                  sigma: searchSigma,
+                }}
+                measured={
+                  ledger.length > 0
+                    ? {
+                        placementErrorMeters: ledger[ledger.length - 1].placementErrorMeters,
+                        placed: ledger[ledger.length - 1].placed,
+                        energyJoules: ledger[ledger.length - 1].energyJoules,
+                        liftMeters: ledger[ledger.length - 1].liftMeters,
+                      }
+                    : null
+                }
+                onImport={handlePolicyImport}
+              />
+            </div>
           </div>
         </div>
       </div>

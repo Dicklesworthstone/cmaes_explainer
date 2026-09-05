@@ -11,7 +11,7 @@ import {
   type SharedPolicy,
   type SharedPolicyMeta,
 } from "../lib/g1PolicyShare";
-import type { LearningLedgerPoint } from "../lib/g1LearningLedger";
+import type { PolicyFile } from "../lib/g1PolicyShare";
 
 /**
  * Getting a trained gait out of the tab, and someone else's back in.
@@ -28,11 +28,18 @@ import type { LearningLedgerPoint } from "../lib/g1LearningLedger";
 export interface PolicyExchangeProps {
   /** Coefficients currently on stage, or null before any policy has arrived. */
   policy: Float64Array | null;
+  /** Short slug for the downloaded file name, e.g. "g1" or "iiwa". */
+  subject?: string;
+  /** Panel heading; the two robots do not both have a "gait". */
+  title?: string;
   /** Owner busy/readiness prevents an import from being silently discarded. */
   disabled?: boolean;
   meta: SharedPolicyMeta;
-  /** Physical summary written into the file, for whoever opens it later. */
-  measured: LearningLedgerPoint | null;
+  /**
+   * Physical summary written into the file, for whoever opens it later. Each
+   * robot supplies the facts it is actually judged by.
+   */
+  measured: PolicyFile["measured"] | null;
   /** Called with an imported policy for the owner to replay. */
   onImport: (imported: SharedPolicy) => void;
 }
@@ -47,6 +54,8 @@ const LINK_BYTES_PER_COEFFICIENT = 8;
 
 export function PolicyExchange({
   policy,
+  subject = "g1",
+  title = "Keep this gait",
   disabled = false,
   meta,
   measured,
@@ -58,27 +67,26 @@ export function PolicyExchange({
 
   const download = useCallback(() => {
     if (!policy) return;
-    const contents = policyFileContents(
-      policy,
-      meta,
-      measured
-        ? {
-            distanceMeters: measured.distanceMeters,
-            speedMetersPerSecond: measured.speedMetersPerSecond,
-            metersPerKilojoule: measured.metersPerKilojoule,
-            energyJoules: measured.energyJoules,
-          }
-        : undefined,
-    );
+    // The caller decides which facts describe its robot; this just records them.
+    const contents = policyFileContents(policy, meta, measured ?? undefined);
     const blob = new Blob([JSON.stringify(contents, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `g1-${meta.task}-gen${meta.generation}.policy.json`;
+    anchor.download = `${subject}-${meta.task}-gen${meta.generation}.policy.json`;
+    // Attached, then revoked on a later tick. Revoking synchronously after
+    // click() races the browser's own fetch of the blob and cancels the
+    // download before it starts; a detached anchor is likewise ignored by some
+    // browsers. This worked on the walking page only by timing luck.
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }, 0);
     setNotice({ tone: "ok", text: `Saved ${anchor.download} — ${policy.length} coefficients, full precision.` });
-  }, [policy, meta, measured]);
+  }, [policy, subject, meta, measured]);
 
   const share = useCallback(async () => {
     if (!policy) return;
@@ -146,7 +154,7 @@ export function PolicyExchange({
     <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
       <div className="flex items-baseline justify-between">
         <span className="text-[0.62rem] font-semibold uppercase tracking-wider text-slate-300">
-          Keep this gait
+          {title}
         </span>
         <span className="font-mono text-[0.6rem] text-slate-500">
           {ready ? `${policy.length.toLocaleString()} coefficients · gen ${meta.generation.toLocaleString()}` : "no policy yet"}

@@ -21,6 +21,13 @@ import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 type WorkerRequest =
   | { type: "preview"; task: HouseholdManipulationTask }
   | {
+      /** Render a policy the operator imported from a file or a share link. */
+      type: "replay";
+      task: HouseholdManipulationTask;
+      policy: Float64Array;
+      generation: number;
+    }
+  | {
       type: "optimize";
       task: HouseholdManipulationTask;
       family: CmaFamily;
@@ -54,6 +61,11 @@ type WorkerResponse =
       family: ArmTraceOrigin;
       continuing?: boolean;
       stopped?: boolean;
+      /**
+       * Coefficients behind this trace, so the page can export or share the
+       * policy it is showing. Sent with replayed policies only.
+       */
+      policy?: Float64Array;
     }
   | {
       type: "progress";
@@ -196,6 +208,36 @@ function reportParallelEvaluation(
   return true;
 }
 
+/**
+ * Render a policy the operator brought with them, on the same admitted owner
+ * the search uses — so an imported gait is measured by exactly the owner that
+ * would have trained it.
+ */
+async function replayArmPolicy(
+  task: HouseholdManipulationTask,
+  policy: Float64Array,
+  generation: number,
+): Promise<void> {
+  post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
+  const evaluator = requireOk(
+    await createFrankenSimHouseholdManipulationEvaluator(await taskConfig(task)),
+    "household-arm admission"
+  );
+  try {
+    const trace = requireOk(evaluator.trace(policy), "imported policy trace");
+    post({
+      type: "trace",
+      trace,
+      admission: evaluator.admission,
+      generation,
+      family: "lm-ma",
+      policy: policy.slice(),
+    });
+  } finally {
+    evaluator.free();
+  }
+}
+
 async function preview(task: HouseholdManipulationTask): Promise<void> {
   post({
     type: "status",
@@ -207,8 +249,9 @@ async function preview(task: HouseholdManipulationTask): Promise<void> {
     "household-arm admission"
   );
   try {
+    const curriculumMean = evaluator.curriculumPolicyMean();
     const trace = requireOk(
-      evaluator.trace(evaluator.curriculumPolicyMean()),
+      evaluator.trace(curriculumMean),
       "household-arm curriculum trace"
     );
     post({
@@ -217,6 +260,7 @@ async function preview(task: HouseholdManipulationTask): Promise<void> {
       admission: evaluator.admission,
       generation: 0,
       family: "curriculum",
+      policy: curriculumMean.slice(),
     });
   } finally {
     evaluator.free();
@@ -341,6 +385,7 @@ async function optimize(
           generation: completedGeneration,
           family,
           continuing: true,
+          policy: run.bestPolicy.slice(),
         });
       }
     }
@@ -359,6 +404,7 @@ async function optimize(
       admission: run.evaluator.admission,
       generation: completedGeneration,
       family,
+      policy: run.bestPolicy.slice(),
       stopped,
     });
   } catch (error) {
@@ -481,7 +527,9 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // the work inside .then() is what actually serializes, because the
   // IIFE cannot start until the previous task resolves.
   const work = () =>
-    request.type === "preview"
+    request.type === "replay"
+      ? replayArmPolicy(request.task, request.policy, request.generation)
+      : request.type === "preview"
       ? preview(request.task)
       : request.type === "compare"
         ? compareFamilies(request.task, request.generations)

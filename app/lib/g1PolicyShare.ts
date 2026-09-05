@@ -42,9 +42,15 @@ export const MAX_POLICY_FILE_BYTES = 2_000_000;
 export interface SharedPolicyMeta {
   /** Owner kernel the policy was trained against, e.g. "fs-cmaes-viz-wasm 0.6.19". */
   kernelVersion: string;
-  task: G1Task;
-  challenge: G1Challenge;
-  family: Exclude<CmaFamily, "full">;
+  /**
+   * What the policy was trained on. Plain strings rather than the walking
+   * enums, because both robots ship policies through this format and a
+   * manipulation task is not a G1Task. These are provenance written into a
+   * file, not values anything branches on.
+   */
+  task: string;
+  challenge: string;
+  family: string;
   /** CMA generation the policy was taken from. */
   generation: number;
   /** Search radius the run used. */
@@ -63,12 +69,14 @@ export interface PolicyFile extends SharedPolicyMeta {
   /** ISO 8601 timestamp of export. */
   exportedAt: string;
   /** Physical summary at export, for a human reading the file. */
-  measured?: {
-    distanceMeters: number;
-    speedMetersPerSecond: number | null;
-    metersPerKilojoule: number | null;
-    energyJoules: number;
-  };
+  /**
+   * Physical summary at export, for a human reading the file.
+   *
+   * Open-shaped because the two robots are judged by different facts: a gait by
+   * distance and energy, a pick-and-place by how close the object landed. Both
+   * write what they measure rather than being forced into one vocabulary.
+   */
+  measured?: Record<string, number | boolean | null>;
   /** JSON's number syntax loses -0; that one value uses an explicit token. */
   policy: Array<number | "-0">;
 }

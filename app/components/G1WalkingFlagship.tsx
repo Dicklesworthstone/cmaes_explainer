@@ -97,6 +97,11 @@ type ComparisonRow = {
   elapsedMilliseconds: number;
 };
 
+/** The values this owner actually runs, used to narrow imported provenance. */
+const G1_TASKS = ["balance", "stepping", "walking"] as const;
+const G1_CHALLENGES = ["flat", "terrain-and-push"] as const;
+const SCALABLE_FAMILIES = ["separable", "lm-cma", "lm-ma"] as const;
+
 type WorkerResponse =
   | { type: "status"; phase: string; detail: string }
   | {
@@ -2417,15 +2422,31 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (imported.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION) {
         throw new Error(`This policy needs ${imported.kernelVersion}; this page runs ${FRANKENSIM_OWNER_KERNEL_VERSION}.`);
       }
+      // A policy file carries its provenance as plain strings, because the two
+      // robots share this format. Narrow them before they reach typed state:
+      // a file naming a task this owner does not have must be refused, not
+      // assigned and then rendered as if it meant something here.
+      const importedTask = G1_TASKS.find((value) => value === imported.task);
+      const importedChallenge = G1_CHALLENGES.find((value) => value === imported.challenge);
+      const importedFamily = SCALABLE_FAMILIES.find((value) => value === imported.family);
+      if (!importedTask || !importedChallenge) {
+        throw new Error(
+          `This policy is for "${imported.task}" / "${imported.challenge}", which this owner does not run.`,
+        );
+      }
       recoveryAttemptedRef.current = true;
-      taskRef.current = imported.task;
-      challengeRef.current = imported.challenge;
-      familyRef.current = imported.family;
+      taskRef.current = importedTask;
+      challengeRef.current = importedChallenge;
       sigmaRef.current = imported.sigma;
-      setTask(imported.task);
-      setChallenge(imported.challenge);
-      setFamily(imported.family);
+      setTask(importedTask);
+      setChallenge(importedChallenge);
       setSearchSigma(imported.sigma);
+      // An unrecognised family is not worth refusing the policy over: the
+      // coefficients are what matter, and the page keeps its current search.
+      if (importedFamily) {
+        familyRef.current = importedFamily;
+        setFamily(importedFamily);
+      }
       resumedPolicyRef.current = imported.policy;
       // Replay uses the canonical owner scene. Clear a dragged preview seat
       // so that its different geometry cannot be shown with this receipt.
@@ -2448,9 +2469,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       post(
         {
           type: "replay",
-          task: imported.task,
-          challenge: imported.challenge,
-          family: imported.family,
+          task: importedTask,
+          challenge: importedChallenge,
+          family: importedFamily ?? familyRef.current,
           policy: imported.policy,
           generation: imported.generation,
         },
@@ -3652,7 +3673,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   generation,
                   sigma: searchSigma,
                 }}
-                measured={ledger.length > 0 ? ledger[ledger.length - 1] : null}
+                measured={
+                  ledger.length > 0
+                    ? {
+                        distanceMeters: ledger[ledger.length - 1].distanceMeters,
+                        speedMetersPerSecond: ledger[ledger.length - 1].speedMetersPerSecond,
+                        metersPerKilojoule: ledger[ledger.length - 1].metersPerKilojoule,
+                        energyJoules: ledger[ledger.length - 1].energyJoules,
+                      }
+                    : null
+                }
                 onImport={handlePolicyImport}
               />
             </div>
