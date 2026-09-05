@@ -69,9 +69,23 @@ describe("G1 training session persistence", () => {
   test("rejects invalid search metadata and preserves signed zero", () => {
     const good = encodeTrainingSession(snapshotOf());
     for (const broken of [
-      { sigma: null }, { sigma: -1 }, { family: "full" },
-      { task: "unknown" }, { challenge: "unknown" }, { generation: 1.5 },
+      { sigma: null }, { sigma: -1 }, { generation: 1.5 },
+      // Structurally impossible provenance is still refused here.
+      { task: "" }, { challenge: "   " },
     ]) expect(decodeTrainingSession(JSON.stringify({ ...good, ...broken }), 32)).toBeNull();
+
+    // A well-formed run for a task this owner does not run is NOT refused by
+    // the decoder — the format carries manipulation policies too, so it cannot
+    // whitelist walking's vocabulary. It is refused where that actually
+    // matters, by isResumable, which is asserted in its own test above.
+    const foreign = decodeTrainingSession(
+      JSON.stringify({ ...good, task: "kitchen-mug" }),
+      32,
+    );
+    expect(foreign).not.toBeNull();
+    expect(
+      isResumable(foreign!, foreign!.kernelVersion, "walking", foreign!.challenge),
+    ).toBe(false);
     const signed = snapshotOf({ policy: Float64Array.of(-0, 1e-20, Number.MIN_VALUE) });
     const restored = decodeTrainingSession(JSON.stringify(encodeTrainingSession(signed)), 3);
     expect(restored).not.toBeNull();

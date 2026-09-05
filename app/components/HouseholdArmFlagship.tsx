@@ -110,6 +110,9 @@ import {
 } from "../lib/frankensimCmaes";
 type ArmTraceOrigin = CmaFamily | "curriculum";
 
+/** Matches the search radius armOptimizationWorker starts a session with. */
+const ARM_DEFAULT_SEARCH_SIGMA = 0.001;
+
 type ComparisonRow = {
   family: CmaFamily;
   initialObjective: number;
@@ -1789,8 +1792,10 @@ export function HouseholdArmFlagship({
   const trainingSecondsRef = useRef(0);
   const [trainingSeconds, setTrainingSeconds] = useState(0);
   // The search radius the worker is actually using, recorded from its progress
-  // messages so an exported policy carries the run it came from.
-  const [searchSigma, setSearchSigma] = useState(0);
+  // messages so an exported policy carries the run it came from. Seeded with
+  // the worker's own default rather than 0, because a policy exported before
+  // the first generation still came from a run that would use this radius.
+  const [searchSigma, setSearchSigma] = useState(ARM_DEFAULT_SEARCH_SIGMA);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<ArmTraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
