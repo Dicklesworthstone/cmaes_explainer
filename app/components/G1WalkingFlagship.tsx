@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Canvas, useFrame } from "@react-three/fiber";
+import React, { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox, Html } from "@react-three/drei";
 import { useReducedMotion } from "framer-motion";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
@@ -1600,29 +1600,37 @@ function RagdollDragger({
   const [lastColliding, setLastColliding] = useState(false);
   const startPointerRef = useRef<[number, number]>([0, 0]);
   const startOffsetRef = useRef<[number, number, number]>([0, 0, 0]);
+  const draggingRef = useRef(false);
+  const dragPlaneRef = useRef(new THREE.Plane());
+  const dragPointRef = useRef(new THREE.Vector3());
   const currentPos: [number, number, number] = dragOffset
     ? [pelvisThree[0] + dragOffset[0], pelvisThree[1] + dragOffset[1], pelvisThree[2] + dragOffset[2]]
     : pelvisThree;
 
-  const handlePointerDown = (e: any) => {
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
+    dragPlaneRef.current.set(new THREE.Vector3(0, 1, 0), -pelvisThree[1]);
+    if (!e.ray.intersectPlane(dragPlaneRef.current, dragPointRef.current)) return;
+    draggingRef.current = true;
+    (e.target as Element).setPointerCapture(e.pointerId);
     setIsDragging(true);
-    startPointerRef.current = [e.point.x, e.point.z];
+    startPointerRef.current = [dragPointRef.current.x, dragPointRef.current.z];
     startOffsetRef.current = dragOffset || [0, 0, 0];
   };
 
-  const handlePointerMove = (e: any) => {
-    if (!isDragging) return;
+  const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!draggingRef.current) return;
     e.stopPropagation();
-    const dx = e.point.x - startPointerRef.current[0];
-    const dz = e.point.z - startPointerRef.current[1];
+    if (!e.ray.intersectPlane(dragPlaneRef.current, dragPointRef.current)) return;
+    const dx = dragPointRef.current.x - startPointerRef.current[0];
+    const dz = dragPointRef.current.z - startPointerRef.current[1];
     const proposed: [number, number, number] = [
       pelvisThree[0] + startOffsetRef.current[0] + dx,
       pelvisThree[1],
       pelvisThree[2] + startOffsetRef.current[2] + dz,
     ];
 
-    // CONTINUOUS COLLISION DETECTION (CCD) & OBB/WALL SURFACE CLAMPING
+    // Bound the requested placement; the owner evaluates it after release.
     const { clampedPosition, isColliding, nearestObstacleName, minClearance } =
       clampPositionAgainstHouseCollisions(proposed, houseSceneData.obstacles, 0.32);
 
@@ -1635,28 +1643,19 @@ function RagdollDragger({
     onCollisionChange({ isColliding, obstacleName: nearestObstacleName, clearance: minClearance });
     setLastColliding(isColliding);
   };
-  const handlePointerUp = () => {
-    if (isDragging) onDragCommit?.();
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!draggingRef.current) return;
+    e.stopPropagation();
+    draggingRef.current = false;
+    const target = e.target as Element;
+    if (target.hasPointerCapture(e.pointerId)) target.releasePointerCapture(e.pointerId);
+    onDragCommit?.();
     setIsDragging(false);
     setLastColliding(false);
   };
 
   return (
     <group>
-      {/* Invisible horizontal raycast plane for smooth dragging */}
-      {isDragging && (
-        <mesh
-          position={[0, pelvisThree[1], 0]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          visible={false}
-        >
-          <planeGeometry args={[100, 100]} />
-          <meshBasicMaterial transparent opacity={0} />
-        </mesh>
-      )}
-
       {/* Holographic Ragdoll Grab Pin / Handle floating above the head.
           The handle centre sits one sphere radius plus a visible gap above
           the head crown, so it never intersects the robot; the stalk drops
@@ -1671,7 +1670,13 @@ function RagdollDragger({
         {/* Hit target. The visible affordance is a ring, so the obvious place
             to aim — its centre — is a hole and a click there grabs nothing.
             This invisible sphere covers the ring and its interior. */}
-        <mesh onPointerDown={handlePointerDown}>
+        <mesh
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onLostPointerCapture={handlePointerUp}
+        >
           <sphereGeometry args={[0.1, 12, 10]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
@@ -2192,12 +2197,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const familyRef = useRef<ScalableFamily>(family);
   const sigmaRef = useRef<number>(searchSigma);
   useEffect(() => {
-    robotDragOffsetRef.current = robotDragOffset;
+    // Placement writers update their ref synchronously. An older rendered
+    // offset must not overwrite the last pointer move before release.
     taskRef.current = task;
     challengeRef.current = challenge;
     familyRef.current = family;
     sigmaRef.current = searchSigma;
-  }, [robotDragOffset, task, challenge, family, searchSigma]);
+  }, [task, challenge, family, searchSigma]);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
 
