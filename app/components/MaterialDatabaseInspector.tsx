@@ -146,15 +146,16 @@ export function MaterialDatabaseInspector() {
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl">
-      <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-neutral-800 pb-3 mb-4">
         <div>
           <h2 className="text-base font-bold text-amber-400">PBR Material Database & Physical Matrix</h2>
-          <p className="text-xs text-neutral-400">Craftsman 1928 Catalog • BRDF Validation & Contact Properties</p>
+          <p className="text-xs text-neutral-400">Craftsman 1928 Catalog • Shading Parameters & Contact Presets</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-neutral-400">Filter:</label>
+          <label htmlFor="material-category-filter" className="text-xs text-neutral-400">Filter:</label>
           <select
-            className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
+            id="material-category-filter"
+            className="min-h-11 max-w-full bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
           >

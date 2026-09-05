@@ -54,6 +54,9 @@ describe("G1 training session persistence", () => {
     const good = JSON.stringify(encodeTrainingSession(snapshotOf()));
     expect(decodeTrainingSession(null, 32)).toBeNull();
     expect(decodeTrainingSession("not json", 32)).toBeNull();
+    for (const root of ["null", "0", "true", '"session"', "[]"]) {
+      expect(decodeTrainingSession(root, 32)).toBeNull();
+    }
     expect(decodeTrainingSession(JSON.stringify({ version: 99 }), 32)).toBeNull();
     // A policy sized for a different owner is not this page's policy.
     expect(decodeTrainingSession(good, 5_040)).toBeNull();
@@ -61,6 +64,20 @@ describe("G1 training session persistence", () => {
     const poisoned = JSON.parse(good);
     poisoned.policy[3] = null;
     expect(decodeTrainingSession(JSON.stringify(poisoned), 32)).toBeNull();
+  });
+
+  test("rejects invalid search metadata and preserves signed zero", () => {
+    const good = encodeTrainingSession(snapshotOf());
+    for (const broken of [
+      { sigma: null }, { sigma: -1 }, { family: "full" },
+      { task: "unknown" }, { challenge: "unknown" }, { generation: 1.5 },
+    ]) expect(decodeTrainingSession(JSON.stringify({ ...good, ...broken }), 32)).toBeNull();
+    const signed = snapshotOf({ policy: Float64Array.of(-0, 1e-20, Number.MIN_VALUE) });
+    const restored = decodeTrainingSession(JSON.stringify(encodeTrainingSession(signed)), 3);
+    expect(restored).not.toBeNull();
+    expect(new Uint8Array(restored!.policy.buffer)).toEqual(new Uint8Array(signed.policy.buffer));
+    const malformedLedger = { ...good, ledger: [{ generation: 1 }, null, ...good.ledger] };
+    expect(decodeTrainingSession(JSON.stringify(malformedLedger), 32)?.ledger).toEqual(good.ledger);
   });
 
   test("does not restore a run that never left the seed", () => {

@@ -43,12 +43,20 @@ export class RoboticsEvaluationPool {
     this.workers = [];
     try {
       for (let lane = 0; lane < lanes; lane++) {
-        this.workers.push(
-          new Worker(new URL("../workers/roboticsEvaluationWorker.ts", import.meta.url), {
+        const evaluationWorker = new Worker(
+          new URL("../workers/roboticsEvaluationWorker.ts", import.meta.url), {
             type: "module",
             name: `frankensim-${config.model}-evaluation-${lane + 1}`,
-          })
+          },
         );
+        // This pool owns recovery from a failed lane, including failures that
+        // arrive before the first shard request. Without preventing default,
+        // an already-handled child error also kills the healthy parent worker.
+        evaluationWorker.addEventListener("error", (event) => {
+          event.preventDefault();
+          this.fallbackReason ??= event.message || "robotics evaluation worker failed";
+        });
+        this.workers.push(evaluationWorker);
       }
     } catch (error) {
       this.fallbackReason = `worker construction failed: ${
@@ -71,6 +79,7 @@ export class RoboticsEvaluationPool {
         ?? (this.workers.length < 2
           ? "fewer than two browser evaluation lanes are available"
           : "the population contains fewer than two candidates");
+      if (this.fallbackReason) this.terminateWorkers();
       return {
         objectives: sequential(),
         lanes: 1,
@@ -158,6 +167,7 @@ export class RoboticsEvaluationPool {
         }
       };
       const onError = (event: ErrorEvent): void => {
+        event.preventDefault();
         cleanup();
         reject(new Error(event.message || "robotics evaluation worker failed"));
       };

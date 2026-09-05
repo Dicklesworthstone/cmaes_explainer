@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 
 describe("Project Honesty Ledger & Traceability Registry", () => {
-  test("HONESTY_CHIP_REGISTRY contains comprehensive verified chips across all categories", () => {
+  test("source index retains the existing implementation categories", () => {
     expect(HONESTY_CHIP_REGISTRY.length).toBeGreaterThanOrEqual(15);
 
     const categories = new Set(HONESTY_CHIP_REGISTRY.map((c) => c.category));
@@ -24,7 +24,7 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
       expect(chip.citation.length).toBeGreaterThan(0);
       expect(chip.mathFormula.length).toBeGreaterThan(0);
       expect(chip.claim.length).toBeGreaterThan(0);
-      expect(chip.status).toBe("verified");
+      expect(["implemented", "conceptual", "display-only"]).toContain(chip.status);
     }
   });
 
@@ -38,5 +38,12 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
       expect(fs.existsSync(sourcePath)).toBe(true);
       expect(fs.existsSync(testPath)).toBe(true);
     }
+  });
+
+  test("every task reference resolves in the committed tracker", () => {
+    const issues = fs.readFileSync(path.join(process.cwd(), ".beads/issues.jsonl"), "utf8")
+      .trim().split("\n").map((line) => JSON.parse(line) as { id: string });
+    const ids = new Set(issues.map((issue) => issue.id));
+    for (const chip of HONESTY_CHIP_REGISTRY) expect(ids.has(chip.beadId)).toBe(true);
   });
 });

@@ -38,7 +38,7 @@ export function FurnitureCatalogInspector() {
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl">
-      <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-neutral-800 pb-3 mb-4">
         <div>
           <h2 className="text-base font-bold text-cyan-400">Furniture Catalog & Spec Inspector</h2>
           <p className="text-xs text-neutral-400">
@@ -46,9 +46,10 @@ export function FurnitureCatalogInspector() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-neutral-400">Room:</label>
+          <label htmlFor="furniture-room-filter" className="text-xs text-neutral-400">Room:</label>
           <select
-            className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
+            id="furniture-room-filter"
+            className="min-h-11 max-w-full bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
             value={selectedRoom}
             onChange={(e) => setSelectedRoom(e.target.value)}
           >

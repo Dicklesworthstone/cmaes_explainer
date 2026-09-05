@@ -18,7 +18,6 @@ import {
 } from "../lib/g1PolicyShare";
 import {
   describeAge,
-  isResumable,
   loadTrainingSession,
   saveTrainingSession,
 } from "../lib/g1TrainingSession";
@@ -2155,14 +2154,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // the replay cadence, not every generation, because each one costs a real
   // rollout.
   const [ledger, setLedger] = useState<LearningLedgerPoint[]>([]);
-  // The coefficients behind whatever is on stage, and the curriculum mean a
-  // share link measures its delta against. Both arrive from the worker with
-  // the traces it replays.
+  // Stage coefficients and the admitted curriculum identify the loaded owner
+  // and policy length. Shares carry absolute values without a baseline.
   const [stagePolicy, setStagePolicy] = useState<Float64Array | null>(null);
   const [policyBaseline, setPolicyBaseline] = useState<Float64Array | null>(null);
-  // A policy arriving in the URL cannot be decoded until the owner has handed
-  // over its baseline, so the fragment waits here until it can be read.
+  // Wait for owner readiness before replaying a policy from the URL.
   const pendingShareRef = useRef<string | null>(null);
+  const recoveryAttemptedRef = useRef(false);
   // Wall-clock time actually spent searching, accumulated across start/stop so
   // a run left going overnight can say what it cost. Kept in a ref and mirrored
   // into state on progress messages, which already arrive at a sane cadence.
@@ -2343,7 +2341,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         family,
         generations: G1_LIVE_REPLAY_INTERVAL,
         seedIndex,
-        mode: "continue",
+        mode: resumedPolicyRef.current ? "fresh" : "continue",
         challenge,
         sigma: searchSigma,
         continuous: true,
@@ -2370,6 +2368,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   }, [busy, stopRequested, task, family, seedIndex, challenge]);
 
   const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
+    resumedPolicyRef.current = null;
     setTask(nextTask);
     setChallenge(nextChallenge);
     setTrace(null);
@@ -2412,12 +2411,46 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
     (imported: SharedPolicy) => {
+      if (!workerRef.current || inFlightRef.current) {
+        throw new Error("Finish or stop the current experiment before loading a policy.");
+      }
+      if (imported.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION) {
+        throw new Error(`This policy needs ${imported.kernelVersion}; this page runs ${FRANKENSIM_OWNER_KERNEL_VERSION}.`);
+      }
+      recoveryAttemptedRef.current = true;
+      taskRef.current = imported.task;
+      challengeRef.current = imported.challenge;
+      familyRef.current = imported.family;
+      sigmaRef.current = imported.sigma;
+      setTask(imported.task);
+      setChallenge(imported.challenge);
+      setFamily(imported.family);
+      setSearchSigma(imported.sigma);
+      resumedPolicyRef.current = imported.policy;
+      // Replay uses the canonical owner scene. Clear a dragged preview seat
+      // so that its different geometry cannot be shown with this receipt.
+      robotDragOffsetRef.current = null;
+      setRobotDragOffset(null);
+      setUserHasDragged(false);
+      setLimbOffsets({});
+      setTrace(null);
+      setAdmission(null);
+      setStabilizerTrace(null);
+      setCurriculumTrace(null);
+      setComparison(null);
+      progressHistoryRef.current = [];
+      setProgressHistory([]);
+      setLedger([]);
+      trainingSecondsRef.current = 0;
+      setTrainingSeconds(0);
+      setRestoredNotice("Imported policy loaded. Learning starts from these coefficients.");
       setStagePolicy(imported.policy);
       post(
         {
           type: "replay",
-          task: taskRef.current,
-          challenge: challengeRef.current,
+          task: imported.task,
+          challenge: imported.challenge,
+          family: imported.family,
           policy: imported.policy,
           generation: imported.generation,
         },
@@ -2428,8 +2461,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   );
 
   // A policy can arrive in the URL before the owner has loaded. Stash the
-  // fragment on mount and decode it once the baseline it is measured against
-  // is available, which is when the curriculum trace lands.
+  // fragment on mount and decode it once the owner's policy length is known.
   useEffect(() => {
     pendingShareRef.current = policyFragmentFromHash(window.location.hash);
   }, []);
@@ -2438,41 +2470,43 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // explicit request and outranks whatever was left in storage.
   useEffect(() => {
     if (!policyBaseline || pendingShareRef.current) return;
-    if (resumedPolicyRef.current) return;
+    if (recoveryAttemptedRef.current) return;
     const saved = loadTrainingSession(policyBaseline.length);
-    if (!saved) return;
-    if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, challengeRef.current)) {
+    if (!saved) {
+      recoveryAttemptedRef.current = true;
       return;
     }
-    resumedPolicyRef.current = saved.policy;
-    trainingSecondsRef.current = saved.trainingSeconds;
+    if (saved.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION) {
+      return;
+    }
+    let active = true;
     // Deferred: setting state synchronously inside an effect cascades renders,
     // and nothing here needs to land before the browser paints.
     queueMicrotask(() => {
+      if (!active) return;
+      try {
+        handlePolicyImport(saved);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
+        return;
+      }
+      trainingSecondsRef.current = saved.trainingSeconds;
       setTrainingSeconds(saved.trainingSeconds);
       setLedger(saved.ledger.slice());
       setRestoredNotice(
         `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Learning continues from it.`,
       );
     });
-    post(
-      {
-        type: "replay",
-        task: taskRef.current,
-        challenge: challengeRef.current,
-        policy: saved.policy,
-        generation: saved.generation,
-      },
-      "preview",
-    );
-  }, [policyBaseline, post]);
+    return () => { active = false; };
+  }, [policyBaseline, handlePolicyImport]);
 
   useEffect(() => {
     const fragment = pendingShareRef.current;
     if (!fragment || !policyBaseline) return;
+    recoveryAttemptedRef.current = true;
     pendingShareRef.current = null;
     let active = true;
-    void decodePolicyFragment(fragment, policyBaseline)
+    void decodePolicyFragment(fragment, policyBaseline.length)
       .then((imported) => {
         if (!active) return;
         setStatus(
@@ -2546,7 +2580,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   ]);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
+    if (inFlightRef.current) return;
     setCurrentChapter(ch.id);
+    if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
+      familyRef.current = ch.targetTrace;
+      setFamily(ch.targetTrace);
+    }
     if (ch.challenge !== challenge) {
       requestPreview(task, ch.challenge);
       setSampleIndex(0);
@@ -2611,6 +2650,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (message.type === "status") {
         setStatus(message.detail);
       } else if (message.type === "progress") {
+        resumedPolicyRef.current = null;
         if (trainingStartedAtRef.current === null) {
           trainingStartedAtRef.current = Date.now();
         }
@@ -2675,6 +2715,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       } else if (message.type === "trace") {
         setAdmission(message.admission);
         setTask(message.admission.config.task);
+        setChallenge(message.admission.config.challenge);
         if (message.family === "stabilizer") {
           setStabilizerTrace(message.trace);
           setStatus(`Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`);
@@ -2882,7 +2923,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       {/* Keep the robot first in embedded mode; its complete story tour is
           restored immediately after the primary stage/control grid below. */}
       {!embedded ? (
-        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} receipt={trace} admission={admission} kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION} disabled={busy !== null || !workerAvailable} />
       ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
@@ -3602,7 +3643,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <div className="mt-3">
               <PolicyExchange
                 policy={stagePolicy}
-                baseline={policyBaseline}
+                disabled={busy !== null || !workerAvailable}
                 meta={{
                   kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
                   task,
@@ -3644,7 +3685,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       </div>
 
       {embedded ? (
-        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} />
+        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} receipt={trace} admission={admission} kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION} disabled={busy !== null || !workerAvailable} />
       ) : null}
       {trace ? (
         <div className="space-y-3">

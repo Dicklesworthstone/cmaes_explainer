@@ -16,10 +16,10 @@ export function HonestyChipStack() {
   const [selectedChipId, setSelectedChipId] = useState<string | null>(null);
 
   const categories: { id: string; label: string }[] = [
-    { id: "all", label: "All Verifications" },
+    { id: "all", label: "All Sources" },
     { id: "physics", label: "Multi-Body Physics" },
     { id: "obstacle-avoidance", label: "Obstacle Avoidance & CBF" },
-    { id: "graphics", label: "PBR & Photoreal Lighting" },
+    { id: "graphics", label: "Rendering Helpers" },
     { id: "clipping", label: "Clipping & SDFs" },
     { id: "navigation", label: "Multi-Room Navigation" },
     { id: "telemetry", label: "Kernel Telemetry" },
@@ -58,11 +58,11 @@ export function HonestyChipStack() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
             <h2 className="text-base font-bold text-neutral-100">Interactive Honesty Chip Stack</h2>
           </div>
           <p className="text-xs text-neutral-400">
-            100% Mathematical & Empirical Provenance • Every Claim Linked to Code, Tests, and Beads ID
+            Source and test index. Helper implementations and background equations do not certify a live robot run.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -76,7 +76,7 @@ export function HonestyChipStack() {
           />
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               // Export the *visible* (filtered) set so the user can audit the
               // exact claims they are reading, not a hidden superset.
               const payload = {
@@ -91,10 +91,13 @@ export function HonestyChipStack() {
                 claims: filteredChips,
               };
               const json = JSON.stringify(payload, null, 2);
-              if (typeof navigator !== "undefined" && navigator.clipboard) {
-                void navigator.clipboard.writeText(json);
+              try {
+                if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+                await navigator.clipboard.writeText(json);
+                setCopyToast(`Copied ${filteredChips.length} claim${filteredChips.length === 1 ? "" : "s"} as JSON to clipboard`);
+              } catch {
+                setCopyToast("Could not copy. Allow clipboard access and try again.");
               }
-              setCopyToast(`Copied ${filteredChips.length} claim${filteredChips.length === 1 ? "" : "s"} as JSON to clipboard`);
             }}
             className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/15 transition-colors"
           >
@@ -149,7 +152,9 @@ export function HonestyChipStack() {
                 <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30 truncate">
                   {chip.beadId}
                 </span>
-                <span className="text-[10px] text-emerald-400 font-semibold">✓ VERIFIED</span>
+                <span className="shrink-0 text-[10px] text-amber-300 font-semibold uppercase">
+                  {chip.status === "implemented" ? "Helper code" : chip.status}
+                </span>
               </div>
               <div className="font-semibold text-xs text-neutral-200 group-hover:text-amber-200 transition-colors line-clamp-1">
                 {chip.title}
@@ -164,10 +169,10 @@ export function HonestyChipStack() {
 
       {/* Detail Drawer Modal when Chip is Selected */}
       {activeChip && (
-        <div className="p-4 rounded-xl bg-neutral-950 border border-amber-500/40 space-y-3 relative shadow-2xl animate-in fade-in duration-150">
+        <div className="min-w-0 p-4 rounded-xl bg-neutral-950 border border-amber-500/40 space-y-3 relative shadow-2xl">
           <button
             onClick={() => setSelectedChipId(null)}
-            className="absolute top-3 right-3 text-neutral-400 hover:text-neutral-200 text-xs px-2 py-1 bg-neutral-900 rounded border border-neutral-800"
+            className="float-right min-h-11 text-neutral-400 hover:text-neutral-200 text-xs px-3 py-2 bg-neutral-900 rounded border border-neutral-800"
           >
             ✕ Close
           </button>
@@ -182,7 +187,7 @@ export function HonestyChipStack() {
           {/* Mathematical Formulation */}
           <div className="bg-neutral-900/90 border border-neutral-800 p-3 rounded-lg space-y-1">
             <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-              Mathematical Formulation (LaTeX)
+              Background Equation (LaTeX)
             </span>
             <div className="font-mono text-xs text-amber-200 overflow-x-auto py-1">
               <code>{activeChip.mathFormula}</code>
@@ -196,23 +201,23 @@ export function HonestyChipStack() {
               <p className="text-neutral-200 text-xs leading-relaxed">{activeChip.claim}</p>
             </div>
             <div className="bg-neutral-900/60 border border-neutral-800/80 p-2.5 rounded-lg space-y-1">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase">Foundational Citation</span>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">Background Reference</span>
               <p className="text-amber-300/90 text-xs italic">{activeChip.citation}</p>
             </div>
           </div>
 
           {/* File Links & Traceability */}
           <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-neutral-800 text-neutral-400 gap-2">
-            <div className="flex items-center gap-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-4 break-words">
               <span>
-                Source: <span className="text-cyan-400 font-semibold">{activeChip.sourceFile}</span>
+                Source: <a className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]" href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.sourceFile}`}>{activeChip.sourceFile}</a>
               </span>
               <span>
-                Test Suite: <span className="text-emerald-400 font-semibold">{activeChip.testFile}</span>
+                Test suite: <a className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]" href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.testFile}`}>{activeChip.testFile}</a>
               </span>
             </div>
             <div className="text-[11px] text-neutral-500">
-              Audit Hash: <span className="text-neutral-400 font-mono">Verified Green ✓</span>
+              Runtime owner, configuration and measurement receipt: not attached to this entry.
             </div>
           </div>
         </div>

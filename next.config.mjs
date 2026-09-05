@@ -3,6 +3,8 @@ import path from "path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep concurrent development and verification builds from sharing caches.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   reactCompiler: true,
   productionBrowserSourceMaps: true,

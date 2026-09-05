@@ -155,6 +155,7 @@ async function preview(
 async function replayPolicy(
   task: G1Task,
   challenge: G1Challenge,
+  family: Exclude<CmaFamily, "full">,
   policy: Float64Array,
   generation: number,
 ): Promise<void> {
@@ -170,7 +171,7 @@ async function replayPolicy(
       trace,
       admission: evaluator.admission,
       generation,
-      family: "lm-ma",
+      family,
       policy: policy.slice(),
       baseline: evaluator.walkingCurriculumMean().slice(),
     });
@@ -366,6 +367,10 @@ async function optimize(
           policy: run.bestPolicy.slice(),
         });
       }
+      // A sequential evaluation can resolve synchronously. Awaiting that
+      // promise alone only drains microtasks and can starve the Stop message
+      // for the entire run. Yield a task after each completed generation.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
     run.completedGeneration = completedGeneration;
     post({
@@ -524,6 +529,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
         ? replayPolicy(
             request.task ?? "walking",
             request.challenge ?? "terrain-and-push",
+            request.family,
             request.policy,
             request.generation
           )

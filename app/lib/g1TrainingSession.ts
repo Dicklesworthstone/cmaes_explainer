@@ -13,6 +13,7 @@
  */
 
 import type { LearningLedgerPoint } from "./g1LearningLedger";
+import { MAX_POLICY_FILE_BYTES, validatePolicyMetadata, type SharedPolicyMeta } from "./g1PolicyShare";
 
 const STORAGE_KEY = "cmaes.g1.training-session.v1";
 
@@ -20,24 +21,24 @@ export interface SavedTrainingSession {
   version: 1;
   /** Owner build the policy was trained against; a mismatch is not resumable. */
   kernelVersion: string;
-  task: string;
-  challenge: string;
-  family: string;
+  task: SharedPolicyMeta["task"];
+  challenge: SharedPolicyMeta["challenge"];
+  family: SharedPolicyMeta["family"];
   sigma: number;
   generation: number;
   /** Wall-clock seconds of search behind this policy. */
   trainingSeconds: number;
   /** Epoch milliseconds of the last save. */
   savedAt: number;
-  policy: number[];
+  policy: Array<number | "-0">;
   ledger: LearningLedgerPoint[];
 }
 
 export interface TrainingSessionSnapshot {
   kernelVersion: string;
-  task: string;
-  challenge: string;
-  family: string;
+  task: SharedPolicyMeta["task"];
+  challenge: SharedPolicyMeta["challenge"];
+  family: SharedPolicyMeta["family"];
   sigma: number;
   generation: number;
   trainingSeconds: number;
@@ -62,7 +63,7 @@ export function encodeTrainingSession(snapshot: TrainingSessionSnapshot): SavedT
     generation: snapshot.generation,
     trainingSeconds: snapshot.trainingSeconds,
     savedAt: Date.now(),
-    policy: Array.from(snapshot.policy),
+    policy: Array.from(snapshot.policy, (value) => Object.is(value, -0) ? "-0" : value),
     ledger: snapshot.ledger.map((point) => ({ ...point })),
   };
 }
@@ -77,39 +78,42 @@ export function decodeTrainingSession(
   raw: string | null,
   expectedPolicyLength: number,
 ): TrainingSessionSnapshot | null {
-  if (!raw) return null;
+  if (!raw || raw.length > MAX_POLICY_FILE_BYTES) return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
+    validatePolicyMetadata(parsed);
   } catch {
     return null;
   }
   const saved = parsed as Partial<SavedTrainingSession>;
   if (saved.version !== 1) return null;
   if (!Array.isArray(saved.policy) || saved.policy.length !== expectedPolicyLength) return null;
-  if (!saved.policy.every((value) => typeof value === "number" && Number.isFinite(value))) {
+  if (!saved.policy.every((value) => value === "-0" || (typeof value === "number" && Number.isFinite(value)))) {
     return null;
   }
-  if (typeof saved.generation !== "number" || !Number.isFinite(saved.generation)) return null;
+  if (typeof saved.generation !== "number" || !Number.isInteger(saved.generation)) return null;
   // A run with no generations behind it is the seed, which is not worth
   // restoring over the seed the page already loads.
   if (saved.generation <= 0) return null;
   return {
-    kernelVersion: saved.kernelVersion ?? "unknown",
-    task: saved.task ?? "walking",
-    challenge: saved.challenge ?? "terrain-and-push",
-    family: saved.family ?? "lm-ma",
-    sigma: typeof saved.sigma === "number" ? saved.sigma : 0.0005,
+    kernelVersion: parsed.kernelVersion,
+    task: parsed.task,
+    challenge: parsed.challenge,
+    family: parsed.family,
+    sigma: parsed.sigma,
     generation: saved.generation,
     trainingSeconds:
-      typeof saved.trainingSeconds === "number" && Number.isFinite(saved.trainingSeconds)
+      typeof saved.trainingSeconds === "number" && Number.isFinite(saved.trainingSeconds) && saved.trainingSeconds >= 0
         ? saved.trainingSeconds
         : 0,
-    policy: Float64Array.from(saved.policy),
+    policy: Float64Array.from(saved.policy, (value) => value === "-0" ? -0 : value),
     ledger: Array.isArray(saved.ledger)
       ? (saved.ledger.filter(
           (point): point is LearningLedgerPoint =>
-            !!point && typeof (point as LearningLedgerPoint).generation === "number",
+            !!point && typeof point === "object" &&
+            [point.generation, point.distanceMeters, point.energyJoules, point.walkSeconds, point.targetSpeedMetersPerSecond].every(Number.isFinite) &&
+            [point.speedMetersPerSecond, point.metersPerKilojoule, point.speedTrackingFraction].every((value) => value === null || Number.isFinite(value)),
         ) as LearningLedgerPoint[])
       : [],
   };
@@ -163,7 +167,8 @@ export function loadTrainingSession(
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const snapshot = decodeTrainingSession(raw, expectedPolicyLength);
     if (!snapshot || !raw) return null;
-    const savedAt = (JSON.parse(raw) as SavedTrainingSession).savedAt ?? Date.now();
+    const timestamp = (JSON.parse(raw) as SavedTrainingSession).savedAt;
+    const savedAt = Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : Date.now();
     return { ...snapshot, savedAt };
   } catch {
     return null;

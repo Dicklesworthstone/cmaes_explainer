@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { BookOpen, Sparkles, AlertTriangle, ShieldCheck, Footprints } from "lucide-react";
+import { BookOpen, Sparkles } from "lucide-react";
+import type { G1Admission, G1ObjectiveReceipt } from "../lib/frankensimCmaes";
 
 export interface StoryChapter {
   id: number;
@@ -18,10 +19,10 @@ export const STORY_CHAPTERS: StoryChapter[] = [
   {
     id: 1,
     badge: "Chapter 1",
-    title: "The 29-Limb Puppet",
-    subtitle: "Why walking is a 5,040-dimensional labyrinth",
+    title: "The 29-Joint Robot",
+    subtitle: "A 5,040-dimensional policy",
     description:
-      "A Unitree G1 humanoid has 29 physical joints. 15 leg and waist motors must read 42 live sensor feedback channels through 8 gait-phase periodic terms. That creates 5,040 simultaneous numbers that must be tuned together. One wrong weight, and the robot collapses.",
+      "The model has 29 physical joints. Its 15 learned leg and waist actions combine 42 observation channels with 8 phase terms: 15 × 42 × 8 = 5,040 policy coefficients. Explore the standing prior to see the starting controller.",
     targetTrace: "stabilizer",
     challenge: "flat",
     highlights: ["29 physical joints", "42 sensor signals", "5,040 policy weights"],
@@ -29,47 +30,51 @@ export const STORY_CHAPTERS: StoryChapter[] = [
   {
     id: 2,
     badge: "Chapter 2",
-    title: "Generation 0: The Faceplant",
-    subtitle: "The contact paradox & zero gradients",
+    title: "Test the Starting Policy",
+    subtitle: "Contacts, terrain and disturbances",
     description:
-      "Without training, the robot immediately falls within 0.35 seconds. Traditional AI gradients fail here because physics has sharp contact discontinuities—gravity is smooth, but floor impact forces spike infinitely fast in a microsecond.",
+      "Switch to terrain and a push, then inspect the owner receipt. Contacts can make an objective difficult to differentiate; CMA-ES uses candidate scores without requiring those derivatives. The starting controller may remain upright or fall depending on the experiment.",
     targetTrace: "stabilizer",
     challenge: "terrain-and-push",
-    highlights: ["Fall at t=0.35s", "Infinite contact gradients", "Black-box necessity"],
+    highlights: ["Terrain + push", "Measure the outcome", "Derivative-free search"],
   },
   {
     id: 3,
     badge: "Chapter 3",
-    title: "Generations 1–15: Finding Footfalls",
-    subtitle: "Covariance shaping & weight transfer",
+    title: "Search for Better Footfalls",
+    subtitle: "Try diagonal adaptation",
     description:
-      "CMA-ES evaluates 16 candidate darts simultaneously. It discovers alternating left/right foot unloading and stretches its 5,040-D search ellipsoid along the forward velocity axis, learning forward momentum without falling.",
+      "Select separable CMA-ES on flat ground, then start learning. Each candidate receives its own physical rollout score. Diagonal adaptation changes the spread of individual policy coefficients; improved walking must appear in the measured distance, contacts and posture.",
     targetTrace: "separable",
     challenge: "flat",
-    highlights: ["Alternating foot unloading", "Covariance elongation", "1.2 m/s steady stride"],
+    highlights: ["Separable CMA-ES", "Candidate rollouts", "Compare measured progress"],
   },
   {
     id: 4,
     badge: "Chapter 4",
-    title: "Generation 40+: Obstacle Mastery",
-    subtitle: "High-Order CBFs & terrain recovery",
+    title: "Challenge the Learned Policy",
+    subtitle: "Try limited-memory adaptation",
     description:
-      "Facing an unexpected lateral shove (15 N·s) and uneven Craftsman bungalow terrain, High-Order Control Barrier Functions (HOCBF) and CMA-ES reflexes activate ankle roll compensation within 24 milliseconds, preserving upright equilibrium.",
+      "Select LM-CMA with terrain and a push. Compare the actual push impulse, recovery and clearance reported by the owner. Robust whole-house walking is the goal; selecting this chapter does not establish obstacle mastery or a safety guarantee.",
     targetTrace: "lm-cma",
     challenge: "terrain-and-push",
-    highlights: ["HOCBF safety barrier", "24ms reflex recovery", "Bungalow obstacle clearance"],
+    highlights: ["LM-CMA", "Measured recovery", "Goal: robust walking"],
   },
 ];
 
 interface G1StoryTourProps {
   currentChapter: number;
   onSelectChapter: (chapter: StoryChapter) => void;
+  receipt?: G1ObjectiveReceipt | null;
+  admission?: G1Admission | null;
+  kernelVersion?: string | null;
+  disabled?: boolean;
 }
 
-export function G1StoryTour({ currentChapter, onSelectChapter }: G1StoryTourProps) {
+export function G1StoryTour({ currentChapter, onSelectChapter, receipt, admission, kernelVersion, disabled }: G1StoryTourProps) {
   return (
     <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/80 p-5 backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-cyan-400" />
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
@@ -77,9 +82,15 @@ export function G1StoryTour({ currentChapter, onSelectChapter }: G1StoryTourProp
           </span>
         </div>
         <span className="text-[0.68rem] text-slate-400">
-          Click a chapter to explore the learning progression
+          Choose an experiment, then inspect its measured outcome
         </span>
       </div>
+
+      <p role="status" className="mt-3 text-xs leading-5 text-slate-300">
+        {receipt && admission && kernelVersion && receipt.completedSteps > 0
+          ? `Current owner ${kernelVersion} · ${admission.config.task} · ${admission.config.challenge}: ${receipt.distanceMeters.toFixed(3)} m over ${(receipt.completedSteps * admission.config.stepSeconds).toFixed(3)} s (${receipt.completedSteps} physics steps). These values describe this run only.`
+          : "No completed owner rollout is available yet. Chapter descriptions explain experiments and goals."}
+      </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {STORY_CHAPTERS.map((ch) => {
@@ -88,8 +99,10 @@ export function G1StoryTour({ currentChapter, onSelectChapter }: G1StoryTourProp
             <button
               key={ch.id}
               type="button"
+              disabled={disabled}
+              aria-pressed={isActive}
               onClick={() => onSelectChapter(ch)}
-              className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all duration-200 ${
+              className={`flex flex-col justify-between rounded-xl border p-3.5 text-left transition-colors duration-200 disabled:cursor-wait disabled:opacity-60 ${
                 isActive
                   ? "border-cyan-400/60 bg-cyan-950/40 ring-1 ring-cyan-400/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]"
                   : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"

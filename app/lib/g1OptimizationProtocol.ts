@@ -57,6 +57,7 @@ export type G1OptimizationRequest =
       type: "replay";
       task: G1Task;
       challenge: G1Challenge;
+      family: Exclude<CmaFamily, "full">;
       policy: Float64Array;
       /** Generation the imported policy came from, so it is not filed as the seed. */
       generation: number;

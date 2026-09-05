@@ -1,6 +1,8 @@
 // Smoke tests for the HonestyChipStack surface area (cmaes-feat-fs6-honesty).
 
 import { describe, expect, test } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { HonestyChipStack } from "../app/components/HonestyChipStack";
 import {
   HONESTY_CHIP_REGISTRY,
   type HonestyCategory,
@@ -40,7 +42,7 @@ describe("HONESTY_CHIP_REGISTRY (cmaes-feat-fs6-honesty)", () => {
         const value = chip[key];
         expect(value, `chip ${chip.id ?? "<no id>"} missing ${key}`).toBeDefined();
         if (key === "status") {
-          expect(["verified", "active"]).toContain(value as string);
+          expect(["implemented", "conceptual", "display-only"]).toContain(value as string);
         } else if (typeof value === "string") {
           expect(value.length, `chip ${chip.id} has empty ${key}`).toBeGreaterThan(0);
         }
@@ -52,6 +54,17 @@ describe("HONESTY_CHIP_REGISTRY (cmaes-feat-fs6-honesty)", () => {
     for (const chip of HONESTY_CHIP_REGISTRY) {
       expect(ALLOWED_CATEGORIES.has(chip.category)).toBe(true);
     }
+  });
+
+  test("rendered cards identify helper and display scope without claiming runtime verification", () => {
+    const markup = renderToStaticMarkup(<HonestyChipStack />);
+    expect(markup).toContain("Helper code");
+    expect(markup).toContain("conceptual");
+    expect(markup).toContain("display-only");
+    expect(markup).toContain("do not certify a live robot run");
+    expect(markup).not.toContain("VERIFIED");
+    expect(markup).not.toContain("Verified Green");
+    expect(markup).not.toContain("100% Mathematical");
   });
 
   test("every chip's id is unique", () => {

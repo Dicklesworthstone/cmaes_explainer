@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { Download, Link2, Upload } from "lucide-react";
 import {
   encodePolicyFragment,
+  MAX_POLICY_FILE_BYTES,
   policyFileContents,
   policyFromFileContents,
   policyShareUrl,
@@ -27,8 +28,8 @@ import type { LearningLedgerPoint } from "../lib/g1LearningLedger";
 export interface PolicyExchangeProps {
   /** Coefficients currently on stage, or null before any policy has arrived. */
   policy: Float64Array | null;
-  /** Curriculum mean this owner starts from; share links store the delta to it. */
-  baseline: Float64Array | null;
+  /** Owner busy/readiness prevents an import from being silently discarded. */
+  disabled?: boolean;
   meta: SharedPolicyMeta;
   /** Physical summary written into the file, for whoever opens it later. */
   measured: LearningLedgerPoint | null;
@@ -46,7 +47,7 @@ const LINK_BYTES_PER_COEFFICIENT = 8;
 
 export function PolicyExchange({
   policy,
-  baseline,
+  disabled = false,
   meta,
   measured,
   onImport,
@@ -80,10 +81,10 @@ export function PolicyExchange({
   }, [policy, meta, measured]);
 
   const share = useCallback(async () => {
-    if (!policy || !baseline) return;
+    if (!policy) return;
     setBusy(true);
     try {
-      const fragment = await encodePolicyFragment(policy, baseline, meta);
+      const fragment = await encodePolicyFragment(policy, meta);
       const url = policyShareUrl(window.location.origin, window.location.pathname, fragment);
       // Put it in the address bar regardless: if the clipboard is blocked, the
       // link is still somewhere the operator can copy it from by hand.
@@ -111,23 +112,21 @@ export function PolicyExchange({
     } finally {
       setBusy(false);
     }
-  }, [policy, baseline, meta]);
+  }, [policy, meta]);
 
   const importFile = useCallback(
     async (file: File) => {
       setBusy(true);
       try {
+        if (file.size > MAX_POLICY_FILE_BYTES) throw new Error("That policy file is too large.");
         const imported = policyFromFileContents(
           await file.text(),
-          baseline?.length ?? 5_040,
+          policy?.length ?? 5_040,
         );
         onImport(imported);
         setNotice({
-          tone: imported.kernelVersion === meta.kernelVersion ? "ok" : "warn",
-          text:
-            imported.kernelVersion === meta.kernelVersion
-              ? `Loaded a generation-${imported.generation} ${imported.task} policy. Replaying it now.`
-              : `Loaded a policy trained on ${imported.kernelVersion}; this page runs ${meta.kernelVersion}. Replaying it, but the numbers may differ from the sender's.`,
+          tone: "ok",
+          text: `Loaded a generation-${imported.generation} ${imported.task} policy. Replaying it now.`,
         });
       } catch (error) {
         setNotice({
@@ -138,10 +137,10 @@ export function PolicyExchange({
         setBusy(false);
       }
     },
-    [baseline, meta, onImport],
+    [policy, onImport],
   );
 
-  const ready = policy !== null && baseline !== null;
+  const ready = policy !== null && !disabled;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
@@ -176,7 +175,7 @@ export function PolicyExchange({
         <button
           type="button"
           onClick={() => fileInput.current?.click()}
-          disabled={busy}
+          disabled={busy || disabled}
           className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 text-[0.68rem] font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Upload className="h-3.5 w-3.5" />

@@ -47,6 +47,39 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
     expect(optimizer.state.generation).toBe(2);
   });
 
+  test("evolution paths agree with an independent two-dimensional inverse-square-root formula", () => {
+    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "analytic whitening", dimension: 2, populationSize: 8, seed: 31, initialSigma: 0.5 });
+    const raw = Array.from({ length: 4 }, (_, i) => Math.log(4.5) - Math.log(i + 1));
+    const sum = raw.reduce((a, b) => a + b, 0);
+    const weights = raw.map((w) => w / sum);
+    const muEff = 1 / weights.reduce((a, w) => a + w * w, 0);
+    const cs = (muEff + 2) / (2 + muEff + 5);
+    const cc = (4 + muEff / 2) / (2 + 4 + muEff);
+    const chi = Math.sqrt(2) * (1 - 1 / 8 + 1 / 84);
+    for (let generation = 1; generation <= 8; generation++) {
+      const before = optimizer.state;
+      const points = optimizer.samplePopulation();
+      const values = points.map((x) => 100 * (x[0] + x[1] - 1) ** 2 + (x[0] - x[1]) ** 2);
+      const ranked = points.map((point, i) => ({ point, value: values[i] })).sort((a, b) => a.value - b.value);
+      const mean = [0, 1].map((axis) => weights.reduce((total, w, i) => total + w * ranked[i].point[axis], 0));
+      const y = mean.map((v, i) => (v - before.mean[i]) / before.sigma);
+      const [[a, b], [, d]] = before.covariance;
+      // For SPD 2x2 C: C^-1/2 = sqrt(tr(C)+2sqrt(det(C))) * (C+sqrt(det(C))I)^-1.
+      const rootDet = Math.sqrt(a * d - b * b);
+      const scale = Math.sqrt(a + d + 2 * rootDet) / ((a + rootDet) * (d + rootDet) - b * b);
+      const whitened = [scale * ((d + rootDet) * y[0] - b * y[1]), scale * ((a + rootDet) * y[1] - b * y[0])];
+      const ps = whitened.map((v, i) => (1 - cs) * before.evolutionPathSigma[i] + Math.sqrt(cs * (2 - cs) * muEff) * v);
+      const hs = Math.hypot(...ps) / Math.sqrt(1 - (1 - cs) ** (2 * generation)) / chi < 1.4 + 2 / 3 ? 1 : 0;
+      const pc = y.map((v, i) => (1 - cc) * before.evolutionPathC[i] + hs * Math.sqrt(cc * (2 - cc) * muEff) * v);
+      optimizer.tellEvaluations(points, values);
+      for (let i = 0; i < 2; i++) {
+        expect(optimizer.state.evolutionPathSigma[i]).toBeCloseTo(ps[i], 11);
+        expect(optimizer.state.evolutionPathC[i]).toBeCloseTo(pc[i], 11);
+      }
+    }
+    expect(Math.abs(optimizer.state.covariance[0][1])).toBeGreaterThan(0.01);
+  });
+
   test("monotone fitness transforms and tied scores preserve the same distribution", () => {
     const options = { ownerId: "test", name: "rank invariance", dimension: 3, populationSize: 8, seed: 72 };
     const a = new LiveCmaesOptimizer(options);
