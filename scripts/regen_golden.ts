@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { loadGaitTransformerWeights, GaitTransformerPolicy } from "../app/lib/gaitTransformer";
 import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
 
-const weightsBuf = readFileSync("public/robots/g1/transformer/g1-ablation-weights-v2.bin").buffer;
+const weightsBuf = readFileSync("public/robots/g1/transformer/g1-ablation-weights-v3.bin").buffer;
 const weights = loadGaitTransformerWeights(weightsBuf);
 const policy = new GaitTransformerPolicy(weights);
 

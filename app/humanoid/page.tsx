@@ -91,11 +91,12 @@ export default function HumanoidPage() {
             all 60 iterations, checkpoint from iteration 0, and a policy head
             exported entirely zero, so it emitted no action at all. Rather than
             display that as a result, the shipped artifact keeps that trunk
-            byte-for-byte and fits only its 29×256 output layer to the gait
-            CMA-ES finds here, which is enough to make it walk. That is a
-            repair, not a race: the gait is CMA-ES&apos;s and the trunk is an
-            untrained initialisation, so this shows the earlier zero distance
-            was a missing output layer rather than anything about transformers.
+            frozen and trains only its 29×256 output layer — first cloned from
+            the CMA-ES gait, then searched against this environment&apos;s own
+            reward — until it walks 6.86 m. The contract caps speed at 0.65 m/s,
+            so 7.80 m is the most any policy can travel here: CMA-ES reaches 90%
+            of that and the transformer 88%. Both sit near a wall neither can
+            pass, which is the useful comparison — not which number is larger.
             Artifacts remain under{" "}
             <code className="break-all">public/robots/g1/transformer/</code>.
           </p>

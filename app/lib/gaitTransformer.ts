@@ -424,7 +424,7 @@ export class GaitTransformerPolicy {
 }
 
 /** Default artifact path, relative to the site root. */
-export const TRANSFORMER_WEIGHTS_URL = "/robots/g1/transformer/g1-ablation-weights-v2.bin";
+export const TRANSFORMER_WEIGHTS_URL = "/robots/g1/transformer/g1-ablation-weights-v3.bin";
 
 export async function fetchDefaultTransformerWeights(): Promise<LoadedTransformerWeights> {
   const res = await fetch(TRANSFORMER_WEIGHTS_URL);

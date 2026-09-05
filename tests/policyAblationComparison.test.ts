@@ -14,7 +14,7 @@ import {
 import { runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
 
 /** The artifact the site actually serves. */
-const WEIGHTS_PATH = new URL("../public/robots/g1/transformer/g1-ablation-weights-v2.bin", import.meta.url);
+const WEIGHTS_PATH = new URL("../public/robots/g1/transformer/g1-ablation-weights-v3.bin", import.meta.url);
 /** The original export, kept so the repair it needed stays documented. */
 const LEGACY_WEIGHTS_PATH = new URL("../public/robots/g1/transformer/g1-ablation-weights-v1.bin", import.meta.url);
 const RECEIPT_PATH = new URL("../public/robots/g1/transformer/g1-ablation-train-receipt.json", import.meta.url);

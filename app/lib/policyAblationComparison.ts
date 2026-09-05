@@ -62,12 +62,25 @@ export interface AblationPairResult {
   transformerReceipt: PolicyAblationReceipt;
   efficiencyMultiplier: number;
   speedDeltaMps: number;
+  /**
+   * The furthest ANY policy can travel on this contract, in metres.
+   *
+   * The environment sets forward speed to targetSpeed x gaitDrive with
+   * gaitDrive capped at 1, so sustaining the commanded speed for the whole
+   * horizon is the hard maximum. Without it the two distances on screen are
+   * uninterpretable: a reader cannot tell whether 7 m is excellent or feeble,
+   * and "which is bigger" looks like the only question. It is not — both
+   * policies sit near a ceiling neither can pass.
+   */
+  theoreticalMaxDistanceMeters: number;
 }
 
 // G1 mass matches the kernel's body-weight calculation (total link mass × g).
 const ROBOT_MASS_KG = 45.0;
 const DT_SECONDS = 1 / 60;
 const FINAL_STEPS = 720;
+/** The environment's commanded forward speed; G1TrainEnv defaults to this. */
+const TARGET_SPEED_MPS = 0.65;
 
 // ─── Training receipt (validated at the boundary, typed after) ───
 
@@ -262,6 +275,8 @@ function rolloutTransformerPolicy(
 export function runMeasuredAblation(inputs: AblationInputs, seed = 42): AblationPairResult {
   // ── Transformer side (real historical artifact, failed v2 transfer) ──
   const policy = new GaitTransformerPolicy(inputs.weights);
+  // targetSpeed x gaitDrive, gaitDrive <= 1, sustained for the full horizon.
+  const theoreticalMaxDistanceMeters = TARGET_SPEED_MPS * FINAL_STEPS * DT_SECONDS;
   const tfRun = rolloutTransformerPolicy(policy, FINAL_STEPS);
   const tfDistance = tfRun.distance;
   const tfSpeed = tfDistance / (tfRun.completed * DT_SECONDS);
@@ -323,5 +338,6 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
     efficiencyMultiplier:
       transformerReceipt.trainingSamplesRequired / cmaesReceipt.trainingSamplesRequired,
     speedDeltaMps: transformerReceipt.averageSpeedMps - cmaesReceipt.averageSpeedMps,
+    theoreticalMaxDistanceMeters,
   };
 }

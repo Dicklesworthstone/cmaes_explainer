@@ -127,8 +127,8 @@ export function PolicyAblationComparison() {
             Both sides execute for the same 720-step horizon on the current
             action-causal stand-in, where forward motion requires real actuator
             work. CMA-ES searches that contract live. The transformer runs the
-            committed 2.9M-parameter trunk with a policy head fitted offline to
-            the gait CMA-ES found, which is why it moves at all — see below.
+            committed 2.9M-parameter trunk with a policy head trained offline on
+            this same reward, which is why it moves at all — see below.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -214,14 +214,35 @@ export function PolicyAblationComparison() {
         />
         <PolicyCard
           accent="indigo"
-          title="Transformer (committed trunk, fitted head)"
-          badge={`${tf.parameterCount.toLocaleString()} Parameters • Distilled Head`}
+          title="Transformer (committed trunk, trained head)"
+          badge={`${tf.parameterCount.toLocaleString()} Parameters • Head Trained on Reward`}
           receipt={tf}
         />
       </div>
 
       <div className="p-2.5 rounded bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-400 space-y-1">
-        <div className="text-neutral-300 font-bold text-[10px] uppercase">Provenance</div>
+        <div className="text-neutral-300 font-bold text-[10px] uppercase">
+          What counts as good here
+        </div>
+        <p className="leading-relaxed">
+          This contract caps forward speed at 0.65 m/s, so{" "}
+          <strong className="text-neutral-200">
+            {result.theoreticalMaxDistanceMeters.toFixed(2)} m
+          </strong>{" "}
+          is the furthest ANY policy can travel in 720 steps — sustaining the
+          commanded speed for the entire horizon. CMA-ES reaches{" "}
+          <strong className="text-neutral-200">
+            {((cma.distanceTraveledMeters / result.theoreticalMaxDistanceMeters) * 100).toFixed(0)}%
+          </strong>{" "}
+          of that ceiling and the transformer{" "}
+          <strong className="text-neutral-200">
+            {((tf.distanceTraveledMeters / result.theoreticalMaxDistanceMeters) * 100).toFixed(0)}%
+          </strong>
+          . Both sit near a wall neither can pass, which is the useful thing to
+          know: the gap between them is small because the room above them is
+          small, not because one architecture is dramatically better.
+        </p>
+        <div className="text-neutral-300 font-bold text-[10px] uppercase pt-1">Provenance</div>
         <p className="leading-relaxed">
           Transformer: the trunk comes from{" "}
           <code className="text-neutral-200">fs-g1-train/examples/train_ablation.rs</code> —
@@ -234,18 +255,21 @@ export function PolicyAblationComparison() {
           that granted target speed regardless of action.
         </p>
         <p className="leading-relaxed">
-          What is shipped now (v2) keeps that trunk byte-for-byte and replaces
-          only the 29×256 output layer, fitted by ridge regression to the gait
-          CMA-ES discovers on this same contract
-          (<code className="text-neutral-200">scripts/fit-transformer-head.ts</code>).
-          It therefore walks — measured above, with real actuator work rather
-          than free motion. It is emphatically NOT evidence that a transformer
-          beats CMA-ES: the gait it executes is one CMA-ES found, and the trunk
-          it runs on is an untrained initialisation. What it does show is that
-          the earlier zero distance was a missing output layer, not a fact about
-          transformers. Both cards are evaluated on the action-causal kinematic
-          stand-in, which still has no push/joint-limit/slip telemetry; it is not
-          the full G1 owner.
+          What ships now keeps that trunk byte-for-byte, frozen, and replaces
+          only the 29×256 output layer. That layer was first fitted by ridge
+          regression to the gait CMA-ES finds
+          (<code className="text-neutral-200">scripts/fit-transformer-head.ts</code>,
+          6.63 m), then trained on this environment&apos;s own reward by an
+          evolution strategy over 2,401 episodes
+          (<code className="text-neutral-200">scripts/train-transformer-head.ts</code>),
+          reaching 6.86 m measured on three held-out seeds. So it is trained, not
+          merely copied — but the 2.9M-parameter trunk beneath it is still an
+          untrained initialisation, and a linear readout of frozen random
+          features is the whole of what improved. That is the honest reason it
+          lands a little short of a hand-designed phase basis that CMA-ES tuned
+          for this exact contract. Both cards are evaluated on the action-causal
+          kinematic stand-in, which has no push/joint-limit/slip telemetry; it is
+          not the full G1 owner.
         </p>
         <p className="leading-relaxed">
           The original v1 export remains available with its zero policy head.

@@ -39,7 +39,7 @@ self_.onmessage = (e: MessageEvent<AblationWorkerRequest>) => {
     inputs
       ? Promise.resolve(inputs)
       : loadAblationInputs(
-          () => load("/robots/g1/transformer/g1-ablation-weights-v2.bin").then((r) => r.arrayBuffer()),
+          () => load("/robots/g1/transformer/g1-ablation-weights-v3.bin").then((r) => r.arrayBuffer()),
           () => load("/robots/g1/transformer/g1-ablation-train-receipt.json").then((r) => r.json()),
         ),
   ])
