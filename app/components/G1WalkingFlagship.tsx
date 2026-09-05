@@ -2572,19 +2572,63 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (busy !== null || inFlightRef.current) {
           return { accepted: false, detail: "Finish or stop the current owner request first." };
         }
-        if (!command.task) {
+        const selectedTask = command.task;
+        if (
+          selectedTask !== "balance" &&
+          selectedTask !== "stepping" &&
+          selectedTask !== "walking"
+        ) {
           return { accepted: false, detail: "The locomotion task was not provided." };
         }
-        if (command.task === task) {
+        if (selectedTask === task) {
           return {
             accepted: true,
             detail: `${G1_TASK_COPY[task].label} is already the active physical objective.`,
           };
         }
-        requestPreview(command.task, challenge);
+        requestPreview(selectedTask, challenge);
         return {
           accepted: true,
-          detail: `Accepted ${G1_TASK_COPY[command.task].label}; loading its owner-composed policy seed.`,
+          detail: `Accepted ${G1_TASK_COPY[selectedTask].label}; loading its owner-composed policy seed.`,
+        };
+      }
+      if (command.command === "select-challenge") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        const selectedChallenge = command.challenge;
+        if (selectedChallenge !== "flat" && selectedChallenge !== "terrain-and-push") {
+          return { accepted: false, detail: "The physical challenge was not provided." };
+        }
+        if (selectedChallenge === challenge) {
+          return { accepted: true, detail: `${selectedChallenge === "flat" ? "Flat ground" : "Terrain + push"} is already active.` };
+        }
+        requestPreview(task, selectedChallenge);
+        return {
+          accepted: true,
+          detail: `Accepted ${selectedChallenge === "flat" ? "flat ground" : "terrain + push"}; loading its owner-composed receipt.`,
+        };
+      }
+      if (command.command === "select-family") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        const selectedFamily = command.family;
+        if (
+          selectedFamily !== "separable" &&
+          selectedFamily !== "lm-cma" &&
+          selectedFamily !== "lm-ma"
+        ) {
+          return { accepted: false, detail: "The scalable optimizer family was not provided." };
+        }
+        if (selectedFamily === family) {
+          return { accepted: true, detail: `${FAMILY_COPY[family].title} is already selected.` };
+        }
+        familyRef.current = selectedFamily;
+        setFamily(selectedFamily);
+        return {
+          accepted: true,
+          detail: `Accepted ${FAMILY_COPY[selectedFamily].title} for the next owner learning run.`,
         };
       }
       if (command.command === "stop") {
@@ -2885,9 +2929,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         completedSteps: trace?.completedSteps ?? null,
         bodyPenetrationMeters: trace?.maximumBodyPenetrationMeters ?? null,
         activeTask: task,
+        activeChallenge: challenge,
+        activeFamily: family,
       },
     );
-  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task]);
+  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task, challenge, family]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective

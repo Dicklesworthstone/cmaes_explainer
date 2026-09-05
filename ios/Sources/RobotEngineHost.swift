@@ -19,6 +19,56 @@ enum RobotLocomotionTask: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum RobotManipulationTask: String, Codable, CaseIterable, Identifiable {
+    case kitchenMug = "kitchen-mug"
+    case livingRoomRemote = "living-room-remote"
+    case backyardTrowel = "backyard-trowel"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .kitchenMug: "Mug"
+        case .livingRoomRemote: "Remote"
+        case .backyardTrowel: "Trowel"
+        }
+    }
+}
+
+enum RobotChallenge: String, Codable, CaseIterable, Identifiable {
+    case flat
+    case terrainAndPush = "terrain-and-push"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .flat: "Flat ground"
+        case .terrainAndPush: "Terrain + push"
+        }
+    }
+}
+
+enum RobotOptimizerFamily: String, Codable, CaseIterable, Identifiable {
+    case full
+    case separable
+    case lmCMA = "lm-cma"
+    case lmMA = "lm-ma"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .full: "Full CMA-ES"
+        case .separable: "Separable CMA-ES"
+        case .lmCMA: "LM-CMA"
+        case .lmMA: "LM-MA"
+        }
+    }
+
+    static var scalableCases: [Self] { [.separable, .lmCMA, .lmMA] }
+}
+
 enum RobotReceiptLens: String, CaseIterable, Identifiable {
     case baseline = "owner-receipt"
     case cautious = "cautious-monk"
@@ -49,11 +99,15 @@ struct RobotEngineMetrics: Codable, Equatable {
     var collisionRiskIntegral: Double?
     var possibleCollisionTimeSeconds: Double?
     var activeTask: RobotLocomotionTask?
+    var activeArmTask: RobotManipulationTask?
+    var activeChallenge: RobotChallenge?
+    var activeFamily: RobotOptimizerFamily?
 
     var isEmpty: Bool {
         generation == nil && bestObjective == nil && completedSteps == nil && placed == nil &&
             bodyPenetrationMeters == nil && certifiedClearanceMeters == nil &&
-            collisionRiskIntegral == nil && possibleCollisionTimeSeconds == nil && activeTask == nil
+            collisionRiskIntegral == nil && possibleCollisionTimeSeconds == nil && activeTask == nil &&
+            activeArmTask == nil && activeChallenge == nil && activeFamily == nil
     }
 
     init(
@@ -65,7 +119,10 @@ struct RobotEngineMetrics: Codable, Equatable {
         certifiedClearanceMeters: Double? = nil,
         collisionRiskIntegral: Double? = nil,
         possibleCollisionTimeSeconds: Double? = nil,
-        activeTask: RobotLocomotionTask? = nil
+        activeTask: RobotLocomotionTask? = nil,
+        activeArmTask: RobotManipulationTask? = nil,
+        activeChallenge: RobotChallenge? = nil,
+        activeFamily: RobotOptimizerFamily? = nil
     ) {
         self.generation = generation
         self.bestObjective = bestObjective
@@ -76,6 +133,9 @@ struct RobotEngineMetrics: Codable, Equatable {
         self.collisionRiskIntegral = collisionRiskIntegral
         self.possibleCollisionTimeSeconds = possibleCollisionTimeSeconds
         self.activeTask = activeTask
+        self.activeArmTask = activeArmTask
+        self.activeChallenge = activeChallenge
+        self.activeFamily = activeFamily
     }
 
     init?(payload: [String: Any]) {
@@ -87,7 +147,10 @@ struct RobotEngineMetrics: Codable, Equatable {
               Self.hasValidOptionalNonnegativeNumber(payload, key: "certifiedClearanceMeters"),
               Self.hasValidOptionalNonnegativeNumber(payload, key: "collisionRiskIntegral"),
               Self.hasValidOptionalNonnegativeNumber(payload, key: "possibleCollisionTimeSeconds"),
-              Self.hasValidOptionalTask(payload, key: "activeTask") else {
+              Self.hasValidOptionalTask(payload, key: "activeTask"),
+              Self.hasValidOptionalArmTask(payload, key: "activeArmTask"),
+              Self.hasValidOptionalChallenge(payload, key: "activeChallenge"),
+              Self.hasValidOptionalFamily(payload, key: "activeFamily") else {
             return nil
         }
 
@@ -100,6 +163,9 @@ struct RobotEngineMetrics: Codable, Equatable {
         collisionRiskIntegral = Self.finiteDouble(payload["collisionRiskIntegral"])
         possibleCollisionTimeSeconds = Self.finiteDouble(payload["possibleCollisionTimeSeconds"])
         activeTask = (payload["activeTask"] as? String).flatMap(RobotLocomotionTask.init(rawValue:))
+        activeArmTask = (payload["activeArmTask"] as? String).flatMap(RobotManipulationTask.init(rawValue:))
+        activeChallenge = (payload["activeChallenge"] as? String).flatMap(RobotChallenge.init(rawValue:))
+        activeFamily = (payload["activeFamily"] as? String).flatMap(RobotOptimizerFamily.init(rawValue:))
         guard generation.map({ $0 >= 0 }) ?? true,
               completedSteps.map({ $0 >= 0 }) ?? true else {
             return nil
@@ -132,6 +198,24 @@ struct RobotEngineMetrics: Codable, Equatable {
         guard let value = payload[key], !(value is NSNull) else { return true }
         guard let value = value as? String else { return false }
         return RobotLocomotionTask(rawValue: value) != nil
+    }
+
+    private static func hasValidOptionalArmTask(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = value as? String else { return false }
+        return RobotManipulationTask(rawValue: value) != nil
+    }
+
+    private static func hasValidOptionalChallenge(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = value as? String else { return false }
+        return RobotChallenge(rawValue: value) != nil
+    }
+
+    private static func hasValidOptionalFamily(_ payload: [String: Any], key: String) -> Bool {
+        guard let value = payload[key], !(value is NSNull) else { return true }
+        guard let value = value as? String else { return false }
+        return RobotOptimizerFamily(rawValue: value) != nil
     }
 
     private static func finiteDouble(_ value: Any?) -> Double? {
@@ -188,10 +272,17 @@ struct RobotEngineStatusMessage {
             return nil
         }
         let allowedCapabilities: Set<String> = lab == .humanoid
-            ? ["optimize", "select-task"]
-            : ["optimize"]
-        guard Set(rawCapabilities).isSubset(of: allowedCapabilities),
-              lab == .humanoid || metrics.activeTask == nil else { return nil }
+            ? ["optimize", "select-task", "select-challenge", "select-family"]
+            : ["optimize", "select-task", "select-family"]
+        guard Set(rawCapabilities).isSubset(of: allowedCapabilities) else { return nil }
+        switch lab {
+        case .humanoid:
+            guard metrics.activeArmTask == nil,
+                  metrics.activeFamily != .full else { return nil }
+        case .arm:
+            guard metrics.activeTask == nil,
+                  metrics.activeChallenge == nil else { return nil }
+        }
         self.sequence = sequence
         self.lab = lab
         self.state = state
@@ -226,6 +317,9 @@ struct RobotEngineCommandAcknowledgement {
     let accepted: Bool
     let detail: String
     let task: RobotLocomotionTask?
+    let armTask: RobotManipulationTask?
+    let challenge: RobotChallenge?
+    let family: RobotOptimizerFamily?
 
     init?(payload: [String: Any]) {
         guard payload["type"] as? String == "engine.command.ack",
@@ -237,18 +331,47 @@ struct RobotEngineCommandAcknowledgement {
               let rawLab = payload["lab"] as? String,
               let lab = RobotLab(rawValue: rawLab),
               let command = payload["command"] as? String,
-              ["optimize", "stop", "select-task"].contains(command),
+              ["optimize", "stop", "select-task", "select-challenge", "select-family"].contains(command),
               let accepted = payload["accepted"] as? Bool,
               let detail = payload["detail"] as? String,
               !detail.isEmpty,
               detail.count <= 300 else {
             return nil
         }
-        let task = (payload["task"] as? String).flatMap(RobotLocomotionTask.init(rawValue:))
+        var task: RobotLocomotionTask?
+        var armTask: RobotManipulationTask?
+        var challenge: RobotChallenge?
+        var family: RobotOptimizerFamily?
         if command == "select-task" {
-            guard lab == .humanoid, task != nil else { return nil }
-        } else if payload["task"] != nil {
-            return nil
+            guard let rawTask = payload["task"] as? String,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil else { return nil }
+            switch lab {
+            case .humanoid:
+                guard let selection = RobotLocomotionTask(rawValue: rawTask) else { return nil }
+                task = selection
+            case .arm:
+                guard let selection = RobotManipulationTask(rawValue: rawTask) else { return nil }
+                armTask = selection
+            }
+        } else if command == "select-challenge" {
+            guard lab == .humanoid,
+                  let rawChallenge = payload["challenge"] as? String,
+                  let selection = RobotChallenge(rawValue: rawChallenge),
+                  payload["task"] == nil,
+                  payload["family"] == nil else { return nil }
+            challenge = selection
+        } else if command == "select-family" {
+            guard let rawFamily = payload["family"] as? String,
+                  let selection = RobotOptimizerFamily(rawValue: rawFamily),
+                  (lab == .arm || selection != .full),
+                  payload["task"] == nil,
+                  payload["challenge"] == nil else { return nil }
+            family = selection
+        } else {
+            guard payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil else { return nil }
         }
         self.sequence = sequence
         self.commandID = commandID
@@ -257,6 +380,9 @@ struct RobotEngineCommandAcknowledgement {
         self.accepted = accepted
         self.detail = detail
         self.task = task
+        self.armTask = armTask
+        self.challenge = challenge
+        self.family = family
     }
 
     private static func integer(_ value: Any?) -> Int? {
@@ -334,7 +460,12 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var metrics = RobotEngineMetrics.empty
     @Published private(set) var supportsOptimize = false
     @Published private(set) var supportsTaskSelection = false
+    @Published private(set) var supportsChallengeSelection = false
+    @Published private(set) var supportsFamilySelection = false
     @Published private(set) var activeHumanoidTask = RobotLocomotionTask.walking
+    @Published private(set) var activeArmTask = RobotManipulationTask.kitchenMug
+    @Published private(set) var activeChallenge = RobotChallenge.flat
+    @Published private(set) var activeFamily = RobotOptimizerFamily.lmMA
     @Published private(set) var selectedReceiptLens = RobotReceiptLens.baseline
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
@@ -348,7 +479,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var readinessTimeoutTask: Task<Void, Never>?
     private var readinessDeadline = RobotReadinessDeadline()
     private var commandTimeoutTask: Task<Void, Never>?
+    private var pendingCommand: String?
     private var pendingRequestedTask: RobotLocomotionTask?
+    private var pendingRequestedArmTask: RobotManipulationTask?
+    private var pendingRequestedChallenge: RobotChallenge?
+    private var pendingRequestedFamily: RobotOptimizerFamily?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 #if DEBUG
@@ -422,6 +557,39 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         )
     }
 
+    func selectArmTask(_ task: RobotManipulationTask) {
+        guard selectedLab == .arm,
+              supportsTaskSelection,
+              task != activeArmTask else { return }
+        sendOwnerCommand(
+            "select-task",
+            pendingDetail: "Loading the (task.title.lowercased()) physical benchmark…",
+            armTask: task
+        )
+    }
+
+    func selectChallenge(_ challenge: RobotChallenge) {
+        guard selectedLab == .humanoid,
+              supportsChallengeSelection,
+              challenge != activeChallenge else { return }
+        sendOwnerCommand(
+            "select-challenge",
+            pendingDetail: "Loading the (challenge.title.lowercased()) experiment…",
+            challenge: challenge
+        )
+    }
+
+    func selectFamily(_ family: RobotOptimizerFamily) {
+        guard supportsFamilySelection,
+              family != activeFamily,
+              selectedLab == .arm || family != .full else { return }
+        sendOwnerCommand(
+            "select-family",
+            pendingDetail: "Selecting (family.title) for the next learning run…",
+            family: family
+        )
+    }
+
     func selectReceiptLens(_ lens: RobotReceiptLens) {
         guard selectedLab == .humanoid,
               phase == .ready || phase == .running else { return }
@@ -454,22 +622,51 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private func sendOwnerCommand(
         _ command: String,
         pendingDetail: String,
-        task: RobotLocomotionTask? = nil
+        task: RobotLocomotionTask? = nil,
+        armTask: RobotManipulationTask? = nil,
+        challenge: RobotChallenge? = nil,
+        family: RobotOptimizerFamily? = nil
     ) {
         guard pendingCommandID == nil else { return }
-        if command == "optimize" || command == "select-task" {
+        if command == "optimize" || command.hasPrefix("select-") {
             guard phase == .ready else { return }
         } else {
             guard command == "stop", phase == .running else { return }
         }
-        if command == "select-task" {
-            guard selectedLab == .humanoid, supportsTaskSelection, task != nil else { return }
-        } else {
-            guard task == nil else { return }
+        switch command {
+        case "select-task":
+            guard supportsTaskSelection,
+                  challenge == nil,
+                  family == nil,
+                  (selectedLab == .humanoid && task != nil && armTask == nil) ||
+                    (selectedLab == .arm && task == nil && armTask != nil) else { return }
+        case "select-challenge":
+            guard selectedLab == .humanoid,
+                  supportsChallengeSelection,
+                  challenge != nil,
+                  task == nil,
+                  armTask == nil,
+                  family == nil else { return }
+        case "select-family":
+            guard supportsFamilySelection,
+                  let family,
+                  selectedLab == .arm || family != .full,
+                  task == nil,
+                  armTask == nil,
+                  challenge == nil else { return }
+        default:
+            guard task == nil,
+                  armTask == nil,
+                  challenge == nil,
+                  family == nil else { return }
         }
         let commandID = UUID().uuidString
         pendingCommandID = commandID
+        pendingCommand = command
         pendingRequestedTask = task
+        pendingRequestedArmTask = armTask
+        pendingRequestedChallenge = challenge
+        pendingRequestedFamily = family
         commandDetail = pendingDetail
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
@@ -479,8 +676,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 return
             }
             guard let self, self.pendingCommandID == commandID else { return }
-            self.pendingCommandID = nil
-            self.pendingRequestedTask = nil
+            self.clearPendingCommand()
             self.commandDetail = "The embedded owner did not acknowledge the command within five seconds."
         }
         var payload: [String: Any] = [
@@ -492,6 +688,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         ]
         if let task {
             payload["task"] = task.rawValue
+        }
+        if let armTask {
+            payload["task"] = armTask.rawValue
+        }
+        if let challenge {
+            payload["challenge"] = challenge.rawValue
+        }
+        if let family {
+            payload["family"] = family.rawValue
         }
         Task { [weak self] in
             guard let self else { return }
@@ -506,8 +711,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 guard result as? Bool == true else {
                     self.commandTimeoutTask?.cancel()
                     self.commandTimeoutTask = nil
-                    self.pendingCommandID = nil
-                    self.pendingRequestedTask = nil
+                    self.clearPendingCommand()
                     self.commandDetail = "The embedded owner is not ready to receive native commands."
                     return
                 }
@@ -515,8 +719,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 guard self.pendingCommandID == commandID else { return }
                 self.commandTimeoutTask?.cancel()
                 self.commandTimeoutTask = nil
-                self.pendingCommandID = nil
-                self.pendingRequestedTask = nil
+                self.clearPendingCommand()
                 self.commandDetail = "Native command delivery failed: \(error.localizedDescription)"
             }
         }
@@ -538,6 +741,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             capabilities: [
                 supportsOptimize ? "optimize" : nil,
                 supportsTaskSelection ? "select-task" : nil,
+                supportsChallengeSelection ? "select-challenge" : nil,
+                supportsFamilySelection ? "select-family" : nil,
             ].compactMap { $0 },
             metrics: metrics,
             provenance: RobotReceiptProvenance(
@@ -751,18 +956,33 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         if let acknowledgement = RobotEngineCommandAcknowledgement(payload: payload) {
             guard acknowledgement.lab == selectedLab,
                   acknowledgement.sequence > lastBridgeSequence,
-                  acknowledgement.commandID == pendingCommandID else { return }
+                  acknowledgement.commandID == pendingCommandID,
+                  acknowledgement.command == pendingCommand,
+                  acknowledgementMatchesPendingSelection(acknowledgement) else { return }
             lastBridgeSequence = acknowledgement.sequence
             commandTimeoutTask?.cancel()
             commandTimeoutTask = nil
-            pendingCommandID = nil
-            if acknowledgement.accepted,
-               acknowledgement.command == "select-task",
-               let task = acknowledgement.task,
-               task == pendingRequestedTask {
-                activeHumanoidTask = task
+            if acknowledgement.accepted {
+                switch acknowledgement.command {
+                case "select-task":
+                    if let task = acknowledgement.task {
+                        activeHumanoidTask = task
+                    } else if let task = acknowledgement.armTask {
+                        activeArmTask = task
+                    }
+                case "select-challenge":
+                    if let challenge = acknowledgement.challenge {
+                        activeChallenge = challenge
+                    }
+                case "select-family":
+                    if let family = acknowledgement.family {
+                        activeFamily = family
+                    }
+                default:
+                    break
+                }
             }
-            pendingRequestedTask = nil
+            clearPendingCommand()
             commandDetail = acknowledgement.detail
             return
         }
@@ -776,10 +996,63 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         metrics = event.metrics
         supportsOptimize = event.capabilities.contains("optimize")
         supportsTaskSelection = event.capabilities.contains("select-task")
+        supportsChallengeSelection = event.capabilities.contains("select-challenge")
+        supportsFamilySelection = event.capabilities.contains("select-family")
         if event.lab == .humanoid, let task = event.metrics.activeTask {
             activeHumanoidTask = task
         }
+        if event.lab == .arm, let task = event.metrics.activeArmTask {
+            activeArmTask = task
+        }
+        if event.lab == .humanoid, let challenge = event.metrics.activeChallenge {
+            activeChallenge = challenge
+        }
+        if let family = event.metrics.activeFamily {
+            activeFamily = family
+        }
         apply(state: event.state, detail: event.detail)
+    }
+
+    private func acknowledgementMatchesPendingSelection(
+        _ acknowledgement: RobotEngineCommandAcknowledgement
+    ) -> Bool {
+        switch acknowledgement.command {
+        case "select-task":
+            if acknowledgement.lab == .humanoid {
+                return acknowledgement.task == pendingRequestedTask &&
+                    pendingRequestedArmTask == nil &&
+                    pendingRequestedChallenge == nil &&
+                    pendingRequestedFamily == nil
+            }
+            return acknowledgement.armTask == pendingRequestedArmTask &&
+                pendingRequestedTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil
+        case "select-challenge":
+            return acknowledgement.challenge == pendingRequestedChallenge &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedFamily == nil
+        case "select-family":
+            return acknowledgement.family == pendingRequestedFamily &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil
+        default:
+            return pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil
+        }
+    }
+
+    private func clearPendingCommand() {
+        pendingCommandID = nil
+        pendingCommand = nil
+        pendingRequestedTask = nil
+        pendingRequestedArmTask = nil
+        pendingRequestedChallenge = nil
+        pendingRequestedFamily = nil
     }
 
     private func receiveLegacyStatus(_ payload: [String: Any]) {
@@ -794,6 +1067,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         metrics = .empty
         supportsOptimize = false
         supportsTaskSelection = false
+        supportsChallengeSelection = false
+        supportsFamilySelection = false
         self.detail = detail
         apply(state: state, detail: detail)
     }
@@ -837,10 +1112,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         metrics = .empty
         supportsOptimize = false
         supportsTaskSelection = false
+        supportsChallengeSelection = false
+        supportsFamilySelection = false
+        activeHumanoidTask = .walking
+        activeArmTask = .kitchenMug
+        activeChallenge = .flat
+        activeFamily = selectedLab == .humanoid ? .lmMA : .lmCMA
         selectedReceiptLens = .baseline
         commandTimeoutTask?.cancel()
-        pendingCommandID = nil
-        pendingRequestedTask = nil
+        clearPendingCommand()
         commandDetail = nil
     }
 }

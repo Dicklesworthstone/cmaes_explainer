@@ -2081,6 +2081,8 @@ export function HouseholdArmFlagship({
       certifiedClearanceMeters: trace?.minimumCertifiedClearanceMeters ?? null,
       collisionRiskIntegral: trace?.collisionRiskIntegral ?? null,
       possibleCollisionTimeSeconds: trace?.possibleCollisionTimeSeconds ?? null,
+      activeArmTask: task,
+      activeFamily: family,
     });
   }, [
     embedded,
@@ -2091,6 +2093,8 @@ export function HouseholdArmFlagship({
     status,
     generation,
     bestObjective,
+    task,
+    family,
   ]);
 
   const post = useCallback(
@@ -2236,6 +2240,50 @@ export function HouseholdArmFlagship({
     return installFrankenRobotsNativeCommandHandler("arm", (command) => {
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The arm owner worker is not ready." };
+      }
+      if (command.command === "select-task") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        const selectedTask = command.task;
+        if (
+          selectedTask !== "kitchen-mug" &&
+          selectedTask !== "living-room-remote" &&
+          selectedTask !== "backyard-trowel"
+        ) {
+          return { accepted: false, detail: "The household task was not provided." };
+        }
+        if (selectedTask === task) {
+          return { accepted: true, detail: `${TASK_COPY[task].title} is already active.` };
+        }
+        selectTaskRef.current?.(selectedTask);
+        return {
+          accepted: true,
+          detail: `Accepted ${TASK_COPY[selectedTask].title}; loading its physical benchmark.`,
+        };
+      }
+      if (command.command === "select-family") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        const selectedFamily = command.family;
+        if (
+          selectedFamily !== "full" &&
+          selectedFamily !== "separable" &&
+          selectedFamily !== "lm-cma" &&
+          selectedFamily !== "lm-ma"
+        ) {
+          return { accepted: false, detail: "The optimizer family was not provided." };
+        }
+        if (selectedFamily === family) {
+          return { accepted: true, detail: `${FAMILY_COPY[family].title} is already selected.` };
+        }
+        familyRef.current = selectedFamily;
+        setFamily(selectedFamily);
+        return {
+          accepted: true,
+          detail: `Accepted ${FAMILY_COPY[selectedFamily].title} for the next owner learning run.`,
+        };
       }
       if (command.command === "stop") {
         if (busy !== "optimize") {

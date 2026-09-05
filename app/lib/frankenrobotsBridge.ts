@@ -4,7 +4,18 @@ export const FRANKENROBOTS_BRIDGE_SCHEMA_VERSION = 1;
 
 export type FrankenRobotsLab = "humanoid" | "arm";
 export type FrankenRobotsLocomotionTask = "balance" | "stepping" | "walking";
-export type FrankenRobotsCommandKind = "optimize" | "stop" | "select-task";
+export type FrankenRobotsManipulationTask =
+  | "kitchen-mug"
+  | "living-room-remote"
+  | "backyard-trowel";
+export type FrankenRobotsChallenge = "flat" | "terrain-and-push";
+export type FrankenRobotsOptimizerFamily = "full" | "separable" | "lm-cma" | "lm-ma";
+export type FrankenRobotsCommandKind =
+  | "optimize"
+  | "stop"
+  | "select-task"
+  | "select-challenge"
+  | "select-family";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -12,7 +23,9 @@ export type FrankenRobotsNativeCommand = {
   commandId: string;
   lab: FrankenRobotsLab;
   command: FrankenRobotsCommandKind;
-  task?: FrankenRobotsLocomotionTask;
+  task?: FrankenRobotsLocomotionTask | FrankenRobotsManipulationTask;
+  challenge?: FrankenRobotsChallenge;
+  family?: FrankenRobotsOptimizerFamily;
 };
 
 export type FrankenRobotsCommandResult = {
@@ -75,22 +88,51 @@ export function decodeFrankenRobotsNativeCommand(
     candidate.lab !== expectedLab ||
     (candidate.command !== "optimize" &&
       candidate.command !== "stop" &&
-      candidate.command !== "select-task") ||
+      candidate.command !== "select-task" &&
+      candidate.command !== "select-challenge" &&
+      candidate.command !== "select-family") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
   ) {
     return null;
   }
   if (candidate.command === "select-task") {
+    const validHumanoidTask =
+      expectedLab === "humanoid" &&
+      (candidate.task === "balance" ||
+        candidate.task === "stepping" ||
+        candidate.task === "walking");
+    const validArmTask =
+      expectedLab === "arm" &&
+      (candidate.task === "kitchen-mug" ||
+        candidate.task === "living-room-remote" ||
+        candidate.task === "backyard-trowel");
+    if ((!validHumanoidTask && !validArmTask) || candidate.challenge !== undefined || candidate.family !== undefined) {
+      return null;
+    }
+  } else if (candidate.command === "select-challenge") {
     if (
       expectedLab !== "humanoid" ||
-      (candidate.task !== "balance" &&
-        candidate.task !== "stepping" &&
-        candidate.task !== "walking")
+      (candidate.challenge !== "flat" && candidate.challenge !== "terrain-and-push") ||
+      candidate.task !== undefined ||
+      candidate.family !== undefined
     ) {
       return null;
     }
-  } else if (candidate.task !== undefined) {
+  } else if (candidate.command === "select-family") {
+    const validFamily =
+      candidate.family === "separable" ||
+      candidate.family === "lm-cma" ||
+      candidate.family === "lm-ma" ||
+      (expectedLab === "arm" && candidate.family === "full");
+    if (!validFamily || candidate.task !== undefined || candidate.challenge !== undefined) {
+      return null;
+    }
+  } else if (
+    candidate.task !== undefined ||
+    candidate.challenge !== undefined ||
+    candidate.family !== undefined
+  ) {
     return null;
   }
   return candidate as FrankenRobotsNativeCommand;
@@ -136,6 +178,8 @@ export function installFrankenRobotsNativeCommandHandler(
       commandId: command.commandId,
       command: command.command,
       ...(command.task ? { task: command.task } : {}),
+      ...(command.challenge ? { challenge: command.challenge } : {}),
+      ...(command.family ? { family: command.family } : {}),
       accepted: result.accepted,
       detail: result.detail.slice(0, 300),
     });
@@ -170,6 +214,9 @@ export function reportFrankenRobotsEngineState(
     state,
     detail,
     metrics,
-    capabilities: lab === "humanoid" ? ["optimize", "select-task"] : ["optimize"],
+    capabilities:
+      lab === "humanoid"
+        ? ["optimize", "select-task", "select-challenge", "select-family"]
+        : ["optimize", "select-task", "select-family"],
   });
 }

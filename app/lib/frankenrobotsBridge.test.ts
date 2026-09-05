@@ -19,7 +19,7 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand(stop, "humanoid")).toEqual(stop);
   });
 
-  test("accepts only typed Humanoid locomotion-task selection", () => {
+  test("accepts only lab-appropriate typed task selection", () => {
     const selection = {
       ...valid,
       commandId: "9B84A8A2-walk",
@@ -28,11 +28,57 @@ describe("FrankenRobots native command contract", () => {
     } as const;
     expect(decodeFrankenRobotsNativeCommand(selection, "humanoid")).toEqual(selection);
     expect(decodeFrankenRobotsNativeCommand(selection, "arm")).toBeNull();
+    const armSelection = {
+      ...valid,
+      commandId: "9B84A8A2-mug",
+      lab: "arm",
+      command: "select-task",
+      task: "kitchen-mug",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(armSelection, "arm")).toEqual(armSelection);
+    expect(decodeFrankenRobotsNativeCommand(armSelection, "humanoid")).toBeNull();
     expect(
       decodeFrankenRobotsNativeCommand({ ...selection, task: "dancing" }, "humanoid"),
     ).toBeNull();
     expect(
       decodeFrankenRobotsNativeCommand({ ...valid, task: "walking" }, "humanoid"),
+    ).toBeNull();
+  });
+
+  test("accepts strict challenge and optimizer-family selections", () => {
+    const challenge = {
+      ...valid,
+      commandId: "9B84A8A2-terrain",
+      command: "select-challenge",
+      challenge: "terrain-and-push",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(challenge, "humanoid")).toEqual(challenge);
+    expect(decodeFrankenRobotsNativeCommand({ ...challenge, lab: "arm" }, "arm")).toBeNull();
+
+    const scalableFamily = {
+      ...valid,
+      commandId: "9B84A8A2-lmma",
+      command: "select-family",
+      family: "lm-ma",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(scalableFamily, "humanoid")).toEqual(scalableFamily);
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...scalableFamily, lab: "arm" }, "arm"),
+    ).toEqual({ ...scalableFamily, lab: "arm" });
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...scalableFamily, family: "full" }, "humanoid"),
+    ).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand(
+        { ...scalableFamily, lab: "arm", family: "full" },
+        "arm",
+      ),
+    ).not.toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...challenge, task: "walking" }, "humanoid"),
+    ).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...scalableFamily, challenge: "flat" }, "humanoid"),
     ).toBeNull();
   });
 
