@@ -269,6 +269,29 @@ async function run() {
         viewport: { width: 1280, height: 900 },
         userAgent: USER_AGENT,
       });
+      // Capture the real page's messages at the native-shell boundary.
+      // This exercises the browser handler, not an iOS device or WebKit.
+      await ownerContext.addInitScript(() => {
+        const host = window as unknown as {
+          __ownerBridgeMessages: Record<string, unknown>[];
+          webkit: {
+            messageHandlers: {
+              frankenrobots: {
+                postMessage: (payload: Record<string, unknown>) => void;
+              };
+            };
+          };
+        };
+        host.__ownerBridgeMessages = [];
+        host.webkit = {
+          messageHandlers: {
+            frankenrobots: {
+              postMessage: (payload) =>
+                host.__ownerBridgeMessages.push(payload),
+            },
+          },
+        };
+      });
       let interventions = 0;
       if (changed) {
         await ownerContext.route(
@@ -296,6 +319,7 @@ async function run() {
       observe(ownerPage);
       await ownerPage.goto(new URL("/frankenrobots/humanoid", base).href);
       let evidence: string;
+      let nativeRefusal: unknown = null;
       if (changed) {
         const expected =
           changed === "manifest.json"
@@ -318,6 +342,36 @@ async function run() {
           await ownerPage.getByTestId("g1-owner-admission").count(),
           0,
         );
+        const bridge = await ownerPage.evaluate(() => {
+          const host = window as unknown as {
+            __ownerBridgeMessages: Record<string, unknown>[];
+            __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+          };
+          const delivered = host.__frankenrobotsReceiveNativeCommand({
+            type: "engine.command",
+            schemaVersion: 1,
+            commandId: "tampered-owner-start",
+            lab: "humanoid",
+            command: "optimize",
+          });
+          return { delivered, messages: host.__ownerBridgeMessages };
+        });
+        assert(bridge.delivered, "Native command never reached the handler");
+        const latestMessages = bridge.messages.slice().reverse();
+        const ack = latestMessages.find(
+          (message) => message.type === "engine.command.ack",
+        );
+        assert.equal(
+          ack?.accepted,
+          false,
+          "Native start admitted a foreign owner",
+        );
+        const state = latestMessages.find(
+          (message) => message.type === "engine.status",
+        );
+        assert.equal(state?.state, "failed");
+        assert(String(state?.detail).includes(expected));
+        nativeRefusal = bridge;
       } else {
         const summary = ownerPage.getByText("Owner controller and source", {
           exact: true,
@@ -348,6 +402,7 @@ async function run() {
         changed,
         interventions,
         evidence,
+        nativeRefusal,
         artifact: FRANKENSIM_OWNER_ARTIFACT,
       });
       await ownerContext.close();

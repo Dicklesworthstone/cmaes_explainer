@@ -2339,6 +2339,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   }, []);
 
   const startContinuousOptimization = useCallback(() => {
+    if (!admission) return;
     setStopRequested(false);
     post(
       {
@@ -2358,7 +2359,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       },
       "optimize",
     );
-  }, [post, task, family, seedIndex, challenge, searchSigma]);
+  }, [admission, post, task, family, seedIndex, challenge, searchSigma]);
 
   const stopContinuousOptimization = useCallback(() => {
     if (!workerRef.current || busy !== "optimize" || stopRequested) return;
@@ -2548,7 +2549,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
-      if (!workerAvailable || !workerRef.current) {
+      if (!workerAvailable || !workerRef.current || !admission) {
         return { accepted: false, detail: "The humanoid owner worker is not ready." };
       }
       if (command.command === "select-task") {
@@ -2592,6 +2593,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   }, [
     embedded,
     workerAvailable,
+    admission,
     busy,
     startContinuousOptimization,
     stopContinuousOptimization,
@@ -2852,7 +2854,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     let bridgeState: "loading" | "ready" | "running" | "failed";
-    if (!workerAvailable) bridgeState = "failed";
+    if (!workerAvailable || (!admission && error)) bridgeState = "failed";
     else if (busy === "preview") bridgeState = "loading";
     else if (busy) bridgeState = "running";
     else if (trace) bridgeState = "ready";
@@ -2860,7 +2862,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     reportFrankenRobotsEngineState(
       "humanoid",
       bridgeState,
-      status,
+      bridgeState === "failed" ? error ?? status : status,
       {
         generation,
         bestObjective,
@@ -2869,7 +2871,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         activeTask: task,
       },
     );
-  }, [embedded, workerAvailable, busy, trace, status, generation, bestObjective, task]);
+  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
@@ -3618,7 +3620,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <div className="mt-4 grid grid-cols-3 gap-3">
             <button
               type="button"
-              disabled={!workerAvailable || (busy !== null && busy !== "optimize") || stopRequested}
+              disabled={!workerAvailable || !admission || (busy !== null && busy !== "optimize") || stopRequested}
               onClick={busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
