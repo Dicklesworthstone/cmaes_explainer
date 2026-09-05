@@ -1535,6 +1535,7 @@ function ArmStage({
   onUnreachableChange,
   onSelfCollisionChange,
   physicsDebug,
+  allowVerticalPageScroll,
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
@@ -1555,6 +1556,7 @@ function ArmStage({
   }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
   physicsDebug: boolean;
+  allowVerticalPageScroll: boolean;
 }) {
   const currentSample = trace
     ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)]
@@ -1602,6 +1604,11 @@ function ArmStage({
     <Canvas
       dpr={[1, 1.5]}
       shadows
+      // Studio OrbitControls normally owns every one-finger touch. In the
+      // native full-lab route that made a full-viewport stage an impassable
+      // scroll trap. Keep horizontal orbit gestures, but reserve vertical
+      // pans for reaching the timeline, optimizer, policies, and receipts.
+      style={allowVerticalPageScroll ? { touchAction: "pan-y" } : undefined}
       gl={{
         antialias: true,
         alpha: false,
@@ -2656,6 +2663,7 @@ export function HouseholdArmFlagship({
                   onUnreachableChange={setArmUnreachable}
                   onSelfCollisionChange={setArmSelfContacts}
                   physicsDebug={physicsDebug}
+                  allowVerticalPageScroll={embedded}
                 />
               ) : null}
               <FreeFlyHintBanner visible={cameraMode === "fly"} />

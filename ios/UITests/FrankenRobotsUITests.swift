@@ -178,8 +178,8 @@ final class FrankenRobotsUITests: XCTestCase {
             workspace.swipeUp()
         }
         XCTAssertTrue(humanoidStart.isHittable, app.debugDescription)
-        let policySeed = app.staticTexts["Policy seed"]
-        XCTAssertTrue(policySeed.exists, app.debugDescription)
+        let policySeed = app.buttons["Policy seed"]
+        XCTAssertTrue(policySeed.isHittable, app.debugDescription)
 
         let humanoidLearning = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         humanoidLearning.name = "Complete Humanoid lab optimizer and policy controls"
@@ -199,7 +199,9 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [armReady], timeout: 55), .completed)
 
-        let frictionCones = app.buttons["Friction cones"]
+        let frictionCones = app.buttons.matching(
+            NSPredicate(format: "label ==[c] 'Friction cones'")
+        ).firstMatch
         let graspCamera = app.buttons["Grasp Focus camera"]
         XCTAssertTrue(frictionCones.waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(frictionCones.isHittable, app.debugDescription)
