@@ -37,6 +37,7 @@ import {
 } from "../lib/humanoidRagdollIk";
 import {
   DEFAULT_G1_WALKING_CONFIG,
+  FRANKENSIM_OWNER_ARTIFACT,
   FRANKENSIM_OWNER_KERNEL_VERSION,
   type CmaFamily,
   type G1Admission,
@@ -3446,7 +3447,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           </div>
 
           <p className="mt-5 text-sm leading-6 text-slate-400">
-            Fifteen actuators each read 42 physical signals through eight gait-phase basis terms:
+            Fifteen learned actuator rows each read 42 physical signals through eight gait-phase basis terms:
             <span className="mt-2 block font-mono text-cyan-200">15 × 42 × 8 = 5,040 learned weights</span>
           </p>
 
@@ -3455,6 +3456,37 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             periodic foot unloading, then pelvis feedback. Live search expands that curriculum to all
             5,040 weights. Every candidate is scored on the same 1.5-second, 720-step task and challenge you watch.
           </p>
+
+          {admission && (
+            <details className="mt-3 rounded-xl border border-white/10 p-3 text-xs leading-5 text-slate-400">
+              <summary className="cursor-pointer font-semibold text-cyan-200">
+                Owner controller and source
+              </summary>
+              <div data-testid="g1-owner-admission" className="mt-2 space-y-2">
+                <p>
+                  {admission.physicalActuatorCount} physical actuators, {admission.linkCount} links:
+                  {" "}{admission.learnedPolicyRowCount} learned rows and
+                  {" "}{admission.reflexActuatorCount} reflex-controlled arm joints.
+                  All joints participate in the owner dynamics.
+                </p>
+                <p>
+                  The initializer supplies {admission.curriculumIndices.bias.length} standing biases,
+                  {" "}{admission.curriculumIndices.phase.length} phase coefficients and
+                  {" "}{admission.curriculumIndices.feedback.length} inertial-feedback coefficients.
+                  Arm swing ramps smoothly from {admission.armSwingGateStartSeconds.toFixed(3)} to
+                  {" "}{admission.armSwingGateEndSeconds.toFixed(3)} physical seconds; changing gait frequency keeps these times fixed.
+                </p>
+                <a
+                  className="text-cyan-300 underline underline-offset-2"
+                  href="/wasm/fs-cmaes/v0622/manifest.json"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Verified owner build · {FRANKENSIM_OWNER_ARTIFACT.sourceRevision.slice(0, 12)}
+                </a>
+              </div>
+            </details>
+          )}
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[0.65rem] leading-4 text-slate-400">
             <div className="rounded-xl border border-white/10 bg-white/[0.025] px-2 py-3">
@@ -3709,7 +3741,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 />
               </div>
             ) : null}
-            {error ? <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
+            {error ? <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
           </div>
         </div>
       </div>

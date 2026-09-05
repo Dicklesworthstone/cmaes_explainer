@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "kernelVersion": "fs-cmaes-viz-wasm 0.6.22",
+  "sourceRevision": "78374ed045a6994aa9d59515397cb008119be7eb",
+  "schemas": { "cma": 2, "g1": 9, "arm": 4 },
+  "build": {
+    "rustc": "1.99.0-nightly (3659db0d3 2026-07-05), nightly-2026-07-06, LLVM 22.1.8",
+    "wasmBindgen": "0.2.127",
+    "recipe": "On the Linux worker: FSCMAES_SOURCE_REVISION=78374ed045a6994aa9d59515397cb008119be7eb CARGO_TARGET_DIR=/data/tmp/rch_target_frankensim_check CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS='-Z threads=4 --force-warn dead_code' cargo +nightly-2026-07-06 build --manifest-path crates/fs-cmaes-viz-wasm/Cargo.toml --locked --release --target wasm32-unknown-unknown -j 2. Copy the resulting release/fs_cmaes_viz_wasm.wasm without changing bytes, verify rawWasmSha256, then run wasm-bindgen /tmp/cmaes-owner-raw-v0622-78374ed0.wasm --target web --out-dir public/wasm/fs-cmaes/v0622 --out-name fs_cmaes_viz_wasm.",
+    "host": "x86_64-unknown-linux-gnu",
+    "ownerSourceFilesSha256": "b4411d9446363fc389e5f08e7afbbede15983c16c5e6eed2a8bfb4ea763f2c4b",
+    "ownerSourceFileCount": 21,
+    "sourceFingerprintScope": "Tracked owner crate Rust files, Cargo manifest/lock, robot_models.rs and rust-toolchain.toml; excludes external path dependencies",
+    "cargoLockSha256": "b99ff5fc1bf1d85f9fd2a7962e4330b89ce94cb6cb6ae0e76cd73fb334cb7179",
+    "rawWasmSha256": "8aa6b0f859ece70d3fcaba339961bbd5c2fb6ab9b389912b91685bb10652a8a2",
+    "diagnostics": "The unmodified wasm32 build fails on 12 Asupersync dead-code errors for native server helpers. This packaging build retains dead-code diagnostics as warnings. Native tests use the original flags. No full external-dependency source-content receipt is claimed."
+  },
+  "assets": {
+    "javascriptSha256": "4190fc111b7ba57755baf2b1aaa57961e71cb3f8f8f2f9ec7d2ee6c8a54b76db",
+    "wasmSha256": "456f50001980da7b3701be761392f08d526ade991c00492ff4cdf3763cf9c30e"
+  },
+  "g1": {
+    "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",
+    "physicalActuatorCount": 29,
+    "linkCount": 30,
+    "learnedJointIndices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    "reflexJointIndices": [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28],
+    "policyFeaturesPerRow": 336,
+    "phaseBasisCount": 8,
+    "poseOrder": "pelvis-then-source-joints",
+    "curriculumIndices": {
+      "bias": [0, 336, 672, 1008, 1344, 1680, 2016, 2352, 2688, 3024, 3360, 3696, 4032, 4368, 4704],
+      "phase": [1, 2, 337, 338, 673, 674, 1009, 1010, 1345, 1346, 1681, 1682, 2017, 2018, 2353, 2354, 2689, 2690, 3025, 3026, 3361, 3362, 3697, 3698, 4033, 4034, 4369, 4370, 4705, 4706],
+      "feedback": [248, 256, 272, 280, 584, 592, 608, 616, 920, 928, 944, 952, 1256, 1264, 1280, 1288, 1592, 1600, 1616, 1624, 1928, 1936, 1952, 1960, 2264, 2272, 2288, 2296, 2600, 2608, 2624, 2632, 2936, 2944, 2960, 2968, 3272, 3280, 3296, 3304, 3608, 3616, 3632, 3640, 3944, 3952, 3968, 3976, 4280, 4288, 4304, 4312, 4616, 4624, 4640, 4648, 4952, 4960, 4976, 4984]
+    },
+    "armSwingGateSeconds": [0.3225806451612903, 0.9677419354838709],
+    "armSwingGate": "Clamped cubic smoothstep t*t*(3-2*t) in fixed physical seconds; changing gait frequency does not change the gate times. Shoulder and elbow swing is gated; posture and angular-velocity damping remain active."
+  }
+}

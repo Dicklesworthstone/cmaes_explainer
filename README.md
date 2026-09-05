@@ -5,7 +5,7 @@ combines Next.js, React Three Fiber, MathJax, a reference-audited TypeScript
 CMA-ES, and versioned Frankensim WebAssembly kernels.
 
 The flagship experiment optimizes a real 5,040-parameter residual policy for a
-source-bound Unitree G1 lower-body model over disclosed terrain and a timed
+source-bound Unitree G1 whole-body model over disclosed terrain and a timed
 lateral push. Optimization coordination runs in a Web Worker and expensive
 candidate rollouts fan out across persistent WASM evaluation workers after an
 exact sequential-parity check.
@@ -71,7 +71,7 @@ This is the SOTA penetration-depth / contact-manifold math from
 *Geometry-Aware Control Barrier Functions*), deployed as four primitives
 that compose into a single floor the policy can never fall through:
 
-- **Owner-side keep-out boxes** (packet schema 8): the walking config
+- **Owner-side keep-out boxes** (packet schema 9): the walking config
   declares the rigid house bodies nearest the robot, and the owner tests its
   20 body colliders against them every step, terminating the rollout on real
   penetration and reporting the depth in the receipt. This is the floor: a
@@ -134,7 +134,7 @@ case; the geometric guard bounds the worst case. See
 
 
 The G1 demo is deliberately an explainer model, not a hardware controller or a
-sim-to-real claim. The current schema-8 owner integrates the 29-actuated-joint,
+sim-to-real claim. The current schema-9 owner integrates the 29-actuated-joint,
 30-link whole-body model and publishes 30 world-frame link poses; its disclosed arm-swing reflex
 is part of the physical rollout rather than display-only dressing. Full CMA-ES
 is exercised on the 128-D arm but intentionally refused at 5,040 dimensions
@@ -142,7 +142,8 @@ because its dense covariance would require 25,401,600 entries.
 
 ## Versioned WebAssembly
 
-Two audited surfaces coexist intentionally:
+The tutorial uses `v041`; the robot flagships use `v0622`. Earlier artifacts
+remain available for historical comparisons:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
   the existing low-dimensional visualizations (CmaesIntro / CmaesInternalsLab).
@@ -150,12 +151,12 @@ Two audited surfaces coexist intentionally:
   (15-DoF lower body) and schema-2 household arm (128-D). Used by the
   flagships pre-cmaes-pvz.
 - `public/wasm/fs-cmaes/v068/` is the multi-factor-objective kernel
-  (cmaes-pvz): the v066 ask/tell surface, the schema-7 30-DoF G1, and the
+  (cmaes-pvz): the v066 ask/tell surface, the schema-7 29-actuator G1, and the
   per-step survival-bonus shaping the flagship receipt card surfaces.
 - `public/wasm/fs-cmaes/v069/` is the arm-swing-gate refinement of v068: the
-  upper-body reflex is quiet during the balance phase and ramps in over
-  gait cycles 0.5..1.5, matching the v066 effective behavior on the lower
-  body while keeping the 30-DoF inertia in the solver.
+  arm-swing multiplier ramps from 0.323 to 0.968 physical seconds. These are
+  cycles 0.5..1.5 at the nominal 1.55 Hz calibration; the times stay fixed
+  when gait frequency changes. All 29 actuators remain in the dynamics.
 - `public/wasm/fs-cmaes/v0610/` keeps the v069 G1 contract and tightens the
   household-arm placement verdict: a rollout is placed only when grasp,
   transport, release, tolerance, and lift checks pass with zero collision risk,
@@ -192,8 +193,16 @@ Two audited surfaces coexist intentionally:
   the living-room placement the curriculum is unchanged; seated inside the
   sofa it terminates at step 1.
 
-The browser adapters fail closed on an unexpected kernel identity or malformed
-packet. They do not silently label a TypeScript fallback as WebAssembly.
+- `public/wasm/fs-cmaes/v0622/` exposes the controller layout through G1
+  schema 9: 29 physical actuators, 30 links, 15 learned rows, 14 reflex joints,
+  exact 15/30/60 curriculum coordinate membership, and fixed arm-gate times.
+  CMA schema 2 and household-arm schema 4 remain distinct contracts. Its
+  manifest records the source revision, build tools and executable hashes.
+
+The browser verifies the published manifest and both executable assets before
+importing the owner, then checks the source revision exported by that WASM.
+Native engine preparation applies the same checks to the bundled bytes. An
+unexpected source, artifact, schema or malformed packet is refused.
 
 ## Quality gates
 

@@ -1,5 +1,5 @@
 // Run after bun run build, or set BASE_URL to an already running app.
-// These are HPO/tutorial and receipts journeys, not physical-robot certification.
+// HPO/tutorial, receipts, and owner artifact admission; not gait certification.
 import assert from "node:assert/strict";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -11,6 +11,7 @@ import {
   CmaesHyperparameterOptimizer,
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
+import { FRANKENSIM_OWNER_ARTIFACT } from "../app/lib/frankensimCmaes";
 
 const USER_AGENT = "OpenAI File Downloader, XaiImageApiFetch/1.0";
 const pause = (ms: number) =>
@@ -258,6 +259,99 @@ async function run() {
       results.push({ journey: "receipts", ...evidence });
       await receiptPage.close();
     }
+    for (const changed of [
+      null,
+      "manifest.json",
+      "fs_cmaes_viz_wasm.js",
+      "fs_cmaes_viz_wasm_bg.wasm",
+    ]) {
+      const ownerContext = await browser.newContext({
+        viewport: { width: 1280, height: 900 },
+        userAgent: USER_AGENT,
+      });
+      let interventions = 0;
+      if (changed) {
+        await ownerContext.route(
+          `**/wasm/fs-cmaes/v0622/${changed}`,
+          async (route) => {
+            const response = await route.fetch();
+            assert(
+              response.ok(),
+              `Could not fetch owner ${changed} for intervention`,
+            );
+            let body = await response.body();
+            if (changed === "manifest.json") {
+              const manifest = JSON.parse(body.toString("utf8"));
+              manifest.sourceRevision = "0".repeat(40);
+              body = Buffer.from(JSON.stringify(manifest));
+            } else {
+              body[0] ^= 1;
+            }
+            interventions++;
+            await route.fulfill({ response, body });
+          },
+        );
+      }
+      const ownerPage = await ownerContext.newPage();
+      observe(ownerPage);
+      await ownerPage.goto(new URL("/frankenrobots/humanoid", base).href);
+      let evidence: string;
+      if (changed) {
+        const expected =
+          changed === "manifest.json"
+            ? "published owner manifest does not match"
+            : changed.endsWith(".js")
+              ? "JavaScript SHA-256 mismatch"
+              : "WASM SHA-256 mismatch";
+        const alert = ownerPage
+          .getByRole("alert")
+          .filter({ hasText: expected });
+        await alert.waitFor({ state: "visible", timeout: 60_000 });
+        evidence = await alert.innerText();
+        assert(interventions > 0, "No owner bytes were changed");
+        assert(
+          await ownerPage
+            .getByRole("button", { name: "Start learning", exact: true })
+            .isDisabled(),
+        );
+        assert.equal(
+          await ownerPage.getByTestId("g1-owner-admission").count(),
+          0,
+        );
+      } else {
+        const summary = ownerPage.getByText("Owner controller and source", {
+          exact: true,
+        });
+        await summary.waitFor({ timeout: 60_000 });
+        await summary.click();
+        evidence = await ownerPage
+          .getByTestId("g1-owner-admission")
+          .innerText();
+        assert.match(evidence, /29 physical actuators, 30 links/);
+        assert.match(evidence, /15 learned rows and 14 reflex-controlled/);
+        assert.match(
+          evidence,
+          /15 standing biases, 30 phase coefficients and 60 inertial-feedback/,
+        );
+        assert.match(evidence, /0\.323 to 0\.968 physical seconds/);
+        assert(
+          evidence.includes(
+            FRANKENSIM_OWNER_ARTIFACT.sourceRevision.slice(0, 12),
+          ),
+        );
+      }
+      await ownerPage.screenshot({
+        path: join(out, `owner-${changed ?? "valid"}.png`),
+      });
+      results.push({
+        journey: "owner-artifact-admission",
+        changed,
+        interventions,
+        evidence,
+        artifact: FRANKENSIM_OWNER_ARTIFACT,
+      });
+      await ownerContext.close();
+    }
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
@@ -296,7 +390,7 @@ async function run() {
           errors,
           results,
           scope:
-            "Browser HPO and receipts; excludes robot physics, performance, independent algorithm verification and deployment identity",
+            "Browser HPO, receipts and owner byte/source admission; excludes gait certification, device performance and independent algorithm verification",
         },
         null,
         2,

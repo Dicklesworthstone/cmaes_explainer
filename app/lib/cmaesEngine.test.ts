@@ -8,9 +8,12 @@ import {
   runRandomSearch,
 } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
+import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0622/manifest.json";
 import {
   CMAES_VISUALIZATION_F_TARGET,
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  DEFAULT_G1_WALKING_CONFIG,
+  buildG1Config,
   buildCmaFamilyConfig,
   decodeCmaFamilyAsk,
   decodeCmaFamilySnapshot,
@@ -25,8 +28,11 @@ import {
   evaluateCmaesVisualizationLandscape,
   isCompatibleCmaesKernelVersion,
   wasmRunToNdStates,
+  verifyOwnerArtifacts,
+  verifyOwnerRuntimeIdentity,
   type CmaesVizGeneration,
   type CmaesVizRun,
+  type OwnerArtifactManifest,
 } from "./frankensimCmaes";
 import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
 import { resolveRenderedGripperContactGeometry } from "./armContactPhysics";
@@ -1160,10 +1166,10 @@ describe("schema-2 owner CMA packet adapter", () => {
 describe("G1 walking packet adapter", () => {
   const admission = new Float64Array([
     0x47315737,
-    8,
+    9,
     0,
     1,
-    21,
+    136,
     5_040,
     30,
     7,
@@ -1180,6 +1186,24 @@ describe("G1 walking packet adapter", () => {
     0.55,
     0.7,
     72,
+    29,
+    15,
+    14,
+    336,
+    8,
+    15,
+    30,
+    60,
+    1 / 3.1,
+    3 / 3.1,
+    ...Array.from({ length: 15 }, (_, row) => row * 336),
+    ...Array.from({ length: 15 }, (_, row) => [
+      row * 336 + 1,
+      row * 336 + 2,
+    ]).flat(),
+    ...Array.from({ length: 15 }, (_, row) =>
+      [248, 256, 272, 280].map((offset) => row * 336 + offset),
+    ).flat(),
   ]);
   const objectiveWords = [
     12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6,
@@ -1197,16 +1221,37 @@ describe("G1 walking packet adapter", () => {
     expect(decoded.ok.config.task).toBe("walking");
     expect(decoded.ok.config.challenge).toBe("terrain-and-push");
     expect(decoded.ok.pushPeakForceNewtons).toBe(72);
+    expect(decoded.ok.physicalActuatorCount).toBe(29);
+    expect(decoded.ok.learnedPolicyRowCount).toBe(15);
+    expect(decoded.ok.reflexActuatorCount).toBe(14);
+    expect(decoded.ok.curriculumIndices.bias).toHaveLength(15);
+    expect(decoded.ok.curriculumIndices.phase).toHaveLength(30);
+    expect(decoded.ok.curriculumIndices.feedback).toHaveLength(60);
+    expect(decoded.ok.armSwingGateStartSeconds).toBe(1 / 3.1);
+    expect(decoded.ok.armSwingGateEndSeconds).toBe(3 / 3.1);
+
+    for (let field = 21; field < 136; field++) {
+      const malformed = admission.slice();
+      malformed[field] += 1;
+      expect(() => decodeG1Admission(malformed)).toThrow("malformed G1 packet");
+    }
+    const staleSchema = admission.slice();
+    staleSchema[1] = 8;
+    expect(() => decodeG1Admission(staleSchema)).toThrow("schema");
 
     const wrongLayout = admission.slice();
     wrongLayout[5] = 5_039;
     expect(() => decodeG1Admission(wrongLayout)).toThrow("layout mismatch");
 
-    const pushAfterHorizon = admission.slice();
-    pushAfterHorizon[19] = 1.6;
-    expect(() => decodeG1Admission(pushAfterHorizon)).toThrow(
+    const reversedPush = admission.slice();
+    reversedPush[19] = 0.5;
+    expect(() => decodeG1Admission(reversedPush)).toThrow(
       "admitted controls",
     );
+    const shortHorizon = admission.slice();
+    shortHorizon[10] = 0.1;
+    const shortAdmission = decodeG1Admission(shortHorizon);
+    expect("ok" in shortAdmission).toBe(true);
 
     const wrongControls = admission.slice();
     wrongControls[11] = -0.1;
@@ -1216,7 +1261,7 @@ describe("G1 walking packet adapter", () => {
   test("decodes decomposed objectives, population rows, and owner poses", () => {
     const evaluation = new Float64Array([
       0x47315737,
-      8,
+      9,
       0,
       2,
       29,
@@ -1242,7 +1287,7 @@ describe("G1 walking packet adapter", () => {
     );
 
     const population = decodeG1Population(
-      new Float64Array([0x47315737, 8, 0, 4, 9, 3, 4, 3, 2]),
+      new Float64Array([0x47315737, 9, 0, 4, 9, 3, 4, 3, 2]),
     );
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
@@ -1260,7 +1305,7 @@ describe("G1 walking packet adapter", () => {
     const trace = decodeG1Trace(
       new Float64Array([
         0x47315737,
-        8,
+        9,
         0,
         3,
         243,
@@ -1276,7 +1321,7 @@ describe("G1 walking packet adapter", () => {
 
     const nonUnitQuaternion = new Float64Array([
       0x47315737,
-      8,
+      9,
       0,
       3,
       243,
@@ -1293,7 +1338,7 @@ describe("G1 walking packet adapter", () => {
   test("decodes exact termination reasons and rejects unknown reason IDs", () => {
     const baseTilt = new Float64Array([
       0x47315737,
-      8,
+      9,
       0,
       2,
       29,
@@ -1316,7 +1361,7 @@ describe("G1 walking packet adapter", () => {
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
     expect(() =>
       decodeG1Trace(
-        new Float64Array([0x47315737, 8, 0, 3, 30, ...objectiveWords, 1]),
+        new Float64Array([0x47315737, 9, 0, 3, 30, ...objectiveWords, 1]),
       ),
     ).toThrow("trace shape");
   });
@@ -1478,16 +1523,101 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
+  const javascriptBytes = await Bun.file(
+    new URL(
+      "../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js",
+      import.meta.url,
+    ),
+  ).arrayBuffer();
+  await verifyOwnerArtifacts(ownerArtifactManifest, javascriptBytes, wasmBytes);
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.21");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.22");
+  verifyOwnerRuntimeIdentity(
+    ownerArtifactManifest,
+    wasm.cmaes_viz_kernel_version(),
+    wasm.cmaes_viz_source_revision(),
+  );
+  expect(wasm.cmaes_viz_source_revision()).toMatch(/^[0-9a-f]{40}$/);
+
+  const foreignSource = {
+    ...ownerArtifactManifest,
+    sourceRevision: "0".repeat(40),
+  };
+  expect(() =>
+    verifyOwnerRuntimeIdentity(
+      foreignSource,
+      wasm.cmaes_viz_kernel_version(),
+      wasm.cmaes_viz_source_revision(),
+    ),
+  ).toThrow("runtime identity");
+  const foreignSchema = {
+    ...ownerArtifactManifest,
+    schemas: { ...ownerArtifactManifest.schemas, g1: 8 },
+  };
+  await expect(
+    verifyOwnerArtifacts(foreignSchema, javascriptBytes, wasmBytes),
+  ).rejects.toThrow("identity or schema");
+  const corruptLayouts: ((manifest: OwnerArtifactManifest) => void)[] = [
+    (manifest) => {
+      manifest.g1.physicalActuatorCount = 30;
+    },
+    (manifest) => {
+      manifest.g1.learnedJointIndices[0] = 15;
+    },
+    (manifest) => {
+      manifest.g1.reflexJointIndices[0] = 0;
+    },
+    (manifest) => {
+      manifest.g1.armSwingGateSeconds[0] = 0.5;
+    },
+    (manifest) => {
+      manifest.g1.curriculumIndices.feedback[0] += 1;
+    },
+  ];
+  for (const corrupt of corruptLayouts) {
+    const manifest = structuredClone(ownerArtifactManifest);
+    corrupt(manifest);
+    await expect(
+      verifyOwnerArtifacts(manifest, javascriptBytes, wasmBytes),
+    ).rejects.toThrow("owner manifest");
+  }
+  const damagedJavascript = javascriptBytes.slice(0);
+  new Uint8Array(damagedJavascript)[0] ^= 1;
+  await expect(
+    verifyOwnerArtifacts(ownerArtifactManifest, damagedJavascript, wasmBytes),
+  ).rejects.toThrow("JavaScript SHA-256 mismatch");
+  const damagedWasm = wasmBytes.slice(0);
+  new Uint8Array(damagedWasm)[0] ^= 1;
+  await expect(
+    verifyOwnerArtifacts(ownerArtifactManifest, javascriptBytes, damagedWasm),
+  ).rejects.toThrow("WASM SHA-256 mismatch");
+
+  const shortOwner = new wasm.G1WalkingVizEvaluator(
+    buildG1Config({ ...DEFAULT_G1_WALKING_CONFIG, durationSeconds: 0.1 }),
+  );
+  try {
+    const shortAdmission = decodeG1Admission(shortOwner.receipt());
+    if (!("ok" in shortAdmission)) throw new Error("short owner admission refused");
+    expect(shortAdmission.ok.config.durationSeconds).toBe(0.1);
+    // The disclosed push/gate times may lie after a valid short horizon.
+    expect(shortAdmission.ok.pushStartSeconds).toBeGreaterThan(0.1);
+    const shortReceipt = decodeG1Evaluation(
+      shortOwner.evaluate(new Float64Array(5_040)),
+    );
+    if (!("ok" in shortReceipt)) throw new Error("short owner evaluation refused");
+    expect(shortReceipt.ok.completedSteps).toBe(48);
+    expect(shortReceipt.ok.pushImpulseNewtonSeconds).toBe(0);
+  } finally {
+    shortOwner.free();
+  }
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1583,7 +1713,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   const evaluator = new wasm.G1WalkingVizEvaluator(
     new Float64Array([
       0x47315737,
-      8,
+      9,
       0,
       12,
       1 / 480,
@@ -1674,7 +1804,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   const flatEvaluator = new wasm.G1WalkingVizEvaluator(
     new Float64Array([
       0x47315737,
-      8,
+      9,
       0,
       12,
       1 / 480,

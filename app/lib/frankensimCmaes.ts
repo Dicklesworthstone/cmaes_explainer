@@ -1,4 +1,5 @@
 import type { HouseholdKernelObstacle } from "./houseMultiObstacleKernel";
+import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0622/manifest.json";
 
 /**
  * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
@@ -133,7 +134,128 @@ export interface CmaesVizRun {
 type WasmModule = {
   cmaes_viz_run?: (...args: unknown[]) => Float64Array;
   cmaes_viz_kernel_version?: () => string;
+  cmaes_viz_source_revision?: () => string;
 };
+
+export interface OwnerArtifactManifest {
+  formatVersion: number;
+  kernelVersion: string;
+  sourceRevision: string;
+  schemas: { cma: number; g1: number; arm: number };
+  build: { rustc: string; wasmBindgen: string; recipe: string };
+  assets: { javascriptSha256: string; wasmSha256: string };
+  g1: {
+    sourceUrdfRevision: string;
+    physicalActuatorCount: number;
+    linkCount: number;
+    learnedJointIndices: number[];
+    reflexJointIndices: number[];
+    policyFeaturesPerRow: number;
+    phaseBasisCount: number;
+    poseOrder: string;
+    curriculumIndices: { bias: number[]; phase: number[]; feedback: number[] };
+    armSwingGateSeconds: number[];
+  };
+}
+
+/** Verify the bytes that will actually be executed, before importing the glue. */
+export async function verifyOwnerArtifacts(
+  manifest: OwnerArtifactManifest,
+  javascriptBytes: ArrayBuffer,
+  wasmBytes: ArrayBuffer,
+): Promise<void> {
+  if (
+    !manifest ||
+    manifest.formatVersion !== 1 ||
+    manifest.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
+    !/^[0-9a-f]{40}$/.test(manifest.sourceRevision) ||
+    manifest.schemas?.cma !== OWNER_CMA_SCHEMA ||
+    manifest.schemas?.g1 !== G1_SCHEMA ||
+    manifest.schemas?.arm !== ARM_SCHEMA ||
+    typeof manifest.build?.rustc !== "string" ||
+    !manifest.build.rustc.trim() ||
+    typeof manifest.build?.wasmBindgen !== "string" ||
+    !manifest.build.wasmBindgen.trim() ||
+    typeof manifest.build?.recipe !== "string" ||
+    !manifest.build.recipe.trim() ||
+    !manifest.assets
+  ) {
+    throw new Error(
+      "owner artifact manifest has an incompatible identity or schema",
+    );
+  }
+  const g1 = manifest.g1;
+  if (
+    !g1 ||
+    g1.physicalActuatorCount !== 29 ||
+    g1.linkCount !== 30 ||
+    g1.policyFeaturesPerRow !== 336 ||
+    g1.phaseBasisCount !== 8 ||
+    g1.poseOrder !== "pelvis-then-source-joints" ||
+    !/^[0-9a-f]{40}$/.test(g1.sourceUrdfRevision) ||
+    JSON.stringify(g1.armSwingGateSeconds) !==
+      JSON.stringify([1 / 3.1, 3 / 3.1]) ||
+    !Array.isArray(g1.learnedJointIndices) ||
+    g1.learnedJointIndices.length !== 15 ||
+    !g1.learnedJointIndices.every((joint, index) => joint === index) ||
+    !Array.isArray(g1.reflexJointIndices) ||
+    g1.reflexJointIndices.length !== 14 ||
+    !g1.reflexJointIndices.every((joint, index) => joint === index + 15)
+  ) {
+    throw new Error("owner manifest has an incompatible G1 controller layout");
+  }
+  for (const [name, offsets] of [
+    ["bias", [0]],
+    ["phase", [1, 2]],
+    ["feedback", [248, 256, 272, 280]],
+  ] as const) {
+    const indices = g1.curriculumIndices?.[name];
+    if (
+      !Array.isArray(indices) ||
+      indices.length !== 15 * offsets.length ||
+      !indices.every(
+        (index, coordinate) =>
+          index ===
+          Math.floor(coordinate / offsets.length) * 336 +
+            offsets[coordinate % offsets.length],
+      )
+    ) {
+      throw new Error(`owner manifest has incompatible G1 ${name} indices`);
+    }
+  }
+  for (const [label, bytes, expected] of [
+    ["JavaScript", javascriptBytes, manifest.assets.javascriptSha256],
+    ["WASM", wasmBytes, manifest.assets.wasmSha256],
+  ] as const) {
+    if (!/^[0-9a-f]{64}$/.test(expected)) {
+      throw new Error(`owner ${label} manifest digest is invalid`);
+    }
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const actual = Array.from(digest, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    if (actual !== expected) {
+      throw new Error(
+        `owner ${label} SHA-256 mismatch: expected ${expected}, received ${actual}`,
+      );
+    }
+  }
+}
+
+export function verifyOwnerRuntimeIdentity(
+  manifest: OwnerArtifactManifest,
+  kernelVersion: string | undefined,
+  sourceRevision: string | undefined,
+): void {
+  if (
+    kernelVersion !== manifest.kernelVersion ||
+    sourceRevision !== manifest.sourceRevision
+  ) {
+    throw new Error(
+      "owner runtime identity does not match the artifact manifest",
+    );
+  }
+}
 
 let fsCmaesModule: WasmModule | null = null;
 let loadAttempted = false;
@@ -164,6 +286,7 @@ export function isCompatibleCmaesKernelVersion(
 async function loadWasmModule(
   jsPath: string,
   wasmPath: string,
+  ownerManifest?: OwnerArtifactManifest,
 ): Promise<WasmModule> {
   if (
     typeof fetch !== "function" ||
@@ -199,14 +322,34 @@ async function loadWasmModule(
     ).href;
   const jsUrl = resolveAssetUrl(jsPath);
   const wasmUrl = resolveAssetUrl(wasmPath);
-  const jsText = await fetch(jsUrl, {
+  const jsBytes = await fetch(jsUrl, {
     signal: AbortSignal.timeout(10_000),
   }).then((r) => {
     if (!r.ok) throw new Error(`fetch ${jsUrl}: ${r.status}`);
-    return r.text();
+    return r.arrayBuffer();
   });
+  let wasmInput: string | ArrayBuffer = wasmUrl;
+  if (ownerManifest) {
+    const [response, manifestResponse] = await Promise.all([
+      fetch(wasmUrl, { signal: AbortSignal.timeout(10_000) }),
+      fetch(new URL("manifest.json", jsUrl), {
+        signal: AbortSignal.timeout(10_000),
+      }),
+    ]);
+    if (!response.ok) throw new Error(`fetch ${wasmUrl}: ${response.status}`);
+    if (!manifestResponse.ok)
+      throw new Error(`owner manifest fetch: ${manifestResponse.status}`);
+    const publishedManifest: unknown = await manifestResponse.json();
+    if (JSON.stringify(publishedManifest) !== JSON.stringify(ownerManifest)) {
+      throw new Error(
+        "published owner manifest does not match the reviewed build",
+      );
+    }
+    wasmInput = await response.arrayBuffer();
+    await verifyOwnerArtifacts(ownerManifest, jsBytes, wasmInput);
+  }
   const blobUrl = URL.createObjectURL(
-    new Blob([jsText], { type: "text/javascript" }),
+    new Blob([jsBytes], { type: "text/javascript" }),
   );
   try {
     // Dynamic import is REQUIRED here: the specifier is a runtime-created
@@ -214,10 +357,19 @@ async function loadWasmModule(
     // express a runtime URL, and webpackIgnore stops Turbopack from mangling
     // the glue (the sanctioned frankensim loader pattern).
     const mod = (await import(/* webpackIgnore: true */ blobUrl)) as {
-      default?: (opts: { module_or_path: string }) => Promise<unknown>;
+      default?: (opts: {
+        module_or_path: string | ArrayBuffer;
+      }) => Promise<unknown>;
     } & WasmModule;
     if (typeof mod.default === "function") {
-      await mod.default({ module_or_path: wasmUrl });
+      await mod.default({ module_or_path: wasmInput });
+    }
+    if (ownerManifest) {
+      verifyOwnerRuntimeIdentity(
+        ownerManifest,
+        mod.cmaes_viz_kernel_version?.(),
+        mod.cmaes_viz_source_revision?.(),
+      );
     }
     return mod;
   } finally {
@@ -975,10 +1127,9 @@ const OWNER_CMA_KIND_SNAPSHOT = 4;
 const OWNER_CMA_SNAPSHOT_WORDS = 31;
 
 const G1_MAGIC = 0x47315737;
-// Schema 8 (owner 0.6.15): the walking config carries a variable-length
-// roster of keep-out boxes, and the receipt reports the deepest body
-// penetration the owner's obstacle guard measured.
-const G1_SCHEMA = 8;
+// Schema 9 exposes physical versus learned/reflex actuators, the initializer's
+// exact coordinate membership, and the controller's fixed arm-swing gate times.
+const G1_SCHEMA = 9;
 const G1_CONFIG_FIXED_WORDS = 12;
 const G1_OBSTACLE_WORDS = 8;
 export const G1_MAX_OBSTACLES = 64;
@@ -993,10 +1144,8 @@ const G1_POSE_WORDS = 7;
 const G1_TRACE_SAMPLE_WORDS = 213;
 
 const ARM_MAGIC = 0x41524d31;
-// Schema 3 (owner 0.6.14): the config packet carries an object-mass
-// override, Coulomb friction coefficients, and a variable-length roster of
-// extra obstacle boxes; the admission echoes the effective friction and the
-// extra-obstacle count in three trailing words.
+// Schema 4 includes the body role in each eight-word obstacle. Admission
+// echoes the effective mass, friction and obstacle count.
 const ARM_SCHEMA = 4;
 const ARM_CONFIG_FIXED_WORDS = 12;
 const ARM_OBSTACLE_WORDS = 8;
@@ -1015,7 +1164,8 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.21";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.22";
+export const FRANKENSIM_OWNER_ARTIFACT = ownerArtifactManifest;
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1095,6 +1245,7 @@ const ARM_REFUSAL_NAMES = [
 export interface OwnerKernelStatus {
   source: "wasm" | "unavailable";
   kernelVersion: string | null;
+  artifactIdentity: OwnerArtifactManifest | null;
   error: string | null;
 }
 
@@ -1216,14 +1367,15 @@ type OwnerWasmModule = WasmModule & {
 let ownerModule: OwnerWasmModule | null = null;
 let ownerLoadPromise: Promise<OwnerKernelStatus> | null = null;
 
-/** Load and probe the CMA-2 / G1-7 / household-arm-2 owner package once per realm. */
+/** Load the byte-verified CMA-2 / G1-9 / household-arm-4 package once per realm. */
 export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   if (ownerLoadPromise) return ownerLoadPromise;
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm_bg.wasm",
+        "/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+        ownerArtifactManifest,
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"
@@ -1233,6 +1385,7 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
         return {
           source: "unavailable",
           kernelVersion: version,
+          artifactIdentity: null,
           error: `expected ${FRANKENSIM_OWNER_KERNEL_VERSION}, received ${version ?? "no version"}`,
         };
       }
@@ -1244,15 +1397,22 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
         return {
           source: "unavailable",
           kernelVersion: version,
+          artifactIdentity: null,
           error: "owner package is missing a CMA, G1, or household-arm export",
         };
       }
       ownerModule = loaded;
-      return { source: "wasm", kernelVersion: version, error: null };
+      return {
+        source: "wasm",
+        kernelVersion: version,
+        artifactIdentity: ownerArtifactManifest,
+        error: null,
+      };
     } catch (error) {
       return {
         source: "unavailable",
         kernelVersion: null,
+        artifactIdentity: null,
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -1819,6 +1979,14 @@ export interface G1Admission {
   linkCount: 30;
   poseWords: 7;
   traceSampleWords: 213;
+  physicalActuatorCount: 29;
+  learnedPolicyRowCount: 15;
+  reflexActuatorCount: 14;
+  policyFeaturesPerRow: 336;
+  phaseBasisCount: 8;
+  curriculumIndices: { bias: number[]; phase: number[]; feedback: number[] };
+  armSwingGateStartSeconds: number;
+  armSwingGateEndSeconds: number;
   config: G1WalkingConfig;
   terrainAmplitudeMeters: number;
   terrainWavenumberRadiansPerMeter: number;
@@ -1895,12 +2063,13 @@ export interface G1TraceReceipt extends G1ObjectiveReceipt {
 }
 
 /**
- * Schema-8 walking config packet:
- *   [0..3]  magic, schema, kind, wordCount = 12 + 7n
+ * Schema-9 walking config packet:
+ *   [0..3]  magic, schema, kind, wordCount = 12 + 8n
  *   [4..10] stepSeconds, durationSeconds, targetSpeed, gaitFrequency,
  *           traceStride, task, challenge
- *   [11]    n = keep-out box count (0..64)
- *   then n x [cx, cy, cz, hx, hy, hz, yaw] in the owner frame (z up),
+ *   [11]    n = scene box count (0..64)
+ *   then n x [cx, cy, cz, hx, hy, hz, yaw, role] in the owner frame (z up),
+ *   where role is 0 for keep-out and 1 for support,
  *   expressed RELATIVE TO THE ROBOT'S START, because the owner always
  *   begins its rollout at the origin while the browser seats the rendered
  *   robot elsewhere in the house.
@@ -1968,7 +2137,7 @@ export function decodeG1Admission(
 ): PackedResult<G1Admission> {
   const header = decodeG1Header(packet, G1_KIND_ADMISSION);
   if ("refusal" in header) return header;
-  if (packet.length !== 21)
+  if (packet.length !== 136)
     throw new Error("malformed G1 packet: admission length");
   const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
   const linkCount = exactPacketInteger(packet, 6, "link count");
@@ -1982,6 +2151,52 @@ export function decodeG1Admission(
   ) {
     throw new Error("malformed G1 packet: owner layout mismatch");
   }
+  const topology = [29, 15, 14, 336, 8, 15, 30, 60];
+  for (let index = 0; index < topology.length; index++) {
+    if (
+      exactPacketInteger(packet, 21 + index, "controller layout") !==
+      topology[index]
+    ) {
+      throw new Error("malformed G1 packet: controller layout mismatch");
+    }
+  }
+  const armSwingGateStartSeconds = finitePacketNumber(
+    packet,
+    29,
+    "arm gate start",
+  );
+  const armSwingGateEndSeconds = finitePacketNumber(packet, 30, "arm gate end");
+  if (
+    armSwingGateStartSeconds !== 1 / 3.1 ||
+    armSwingGateEndSeconds !== 3 / 3.1
+  ) {
+    throw new Error("malformed G1 packet: arm gate mismatch");
+  }
+  const decodeCurriculumBlock = (
+    start: number,
+    offsets: number[],
+  ): number[] => {
+    const indices: number[] = [];
+    for (let row = 0; row < 15; row++) {
+      for (const offset of offsets) {
+        const index = exactPacketInteger(
+          packet,
+          start + indices.length,
+          "curriculum index",
+        );
+        if (index !== row * 336 + offset) {
+          throw new Error("malformed G1 packet: curriculum index mismatch");
+        }
+        indices.push(index);
+      }
+    }
+    return indices;
+  };
+  const curriculumIndices = {
+    bias: decodeCurriculumBlock(31, [0]),
+    phase: decodeCurriculumBlock(46, [1, 2]),
+    feedback: decodeCurriculumBlock(76, [248, 256, 272, 280]),
+  };
   const stepSeconds = finitePacketNumber(packet, 9, "step seconds");
   const durationSeconds = finitePacketNumber(packet, 10, "duration seconds");
   const targetSpeed = finitePacketNumber(packet, 11, "target speed");
@@ -2036,7 +2251,6 @@ export function decodeG1Admission(
     terrainWavenumberRadiansPerMeter <= 0 ||
     pushStartSeconds < 0 ||
     pushEndSeconds <= pushStartSeconds ||
-    pushEndSeconds > durationSeconds ||
     pushPeakForceNewtons < 0
   ) {
     throw new Error("malformed G1 packet: admitted controls");
@@ -2047,6 +2261,14 @@ export function decodeG1Admission(
       linkCount: G1_LINK_COUNT,
       poseWords: G1_POSE_WORDS,
       traceSampleWords: G1_TRACE_SAMPLE_WORDS,
+      physicalActuatorCount: 29,
+      learnedPolicyRowCount: 15,
+      reflexActuatorCount: 14,
+      policyFeaturesPerRow: 336,
+      phaseBasisCount: 8,
+      curriculumIndices,
+      armSwingGateStartSeconds,
+      armSwingGateEndSeconds,
       config: {
         task,
         challenge,

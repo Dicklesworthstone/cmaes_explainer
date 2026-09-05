@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR=${0:A:h}
 PROJECT_ROOT=${SCRIPT_DIR:h}
-FRANKENSIM_ROOT=${FRANKENSIM_ROOT:-${PROJECT_ROOT:h}/frankensim}
 MODE="stage"
 MODE_EXPLICIT=0
 ACTIVATION_STAGE=""
@@ -39,10 +38,36 @@ verify_source_fences() {
     || fail "cmaes_explainer HEAD moved during export"
   [[ -z "$(git status --porcelain --untracked-files=normal)" ]] \
     || fail "cmaes_explainer changed during export"
-  [[ "$(git -C "$FRANKENSIM_ROOT" rev-parse HEAD)" == "$FRANKENSIM_COMMIT" ]] \
-    || fail "FrankenSim HEAD moved during export"
-  [[ -z "$(git -C "$FRANKENSIM_ROOT" status --porcelain --untracked-files=normal)" ]] \
-    || fail "FrankenSim changed during export"
+}
+
+# The engine consumes committed WASM, not the adjacent Rust working tree.
+# Compare the staged manifest with the reviewed project bytes, then use the
+# same hash/schema checks as the browser and interrogate the actual module.
+verify_owner_artifact() {
+  local engine_dir="$1"
+  OWNER_ASSET_ROOT="$engine_dir/wasm/fs-cmaes/$OWNER_RUNTIME_DIR" \
+  OWNER_REVIEWED_ROOT="$PROJECT_ROOT/public/wasm/fs-cmaes/$OWNER_RUNTIME_DIR" \
+  OWNER_ADAPTER="$PROJECT_ROOT/app/lib/frankensimCmaes.ts" bun -e '
+    const root = process.env.OWNER_ASSET_ROOT;
+    const reviewedRoot = process.env.OWNER_REVIEWED_ROOT;
+    const manifestBytes = await Bun.file(`${root}/manifest.json`).text();
+    const reviewedBytes = await Bun.file(`${reviewedRoot}/manifest.json`).text();
+    if (manifestBytes !== reviewedBytes) throw new Error("owner manifest differs from reviewed source");
+    const manifest = JSON.parse(manifestBytes);
+    const { verifyOwnerArtifacts, verifyOwnerRuntimeIdentity } = await import(process.env.OWNER_ADAPTER);
+    const jsBytes = await Bun.file(`${root}/fs_cmaes_viz_wasm.js`).arrayBuffer();
+    const wasmBytes = await Bun.file(`${root}/fs_cmaes_viz_wasm_bg.wasm`).arrayBuffer();
+    await verifyOwnerArtifacts(manifest, jsBytes, wasmBytes);
+    const moduleUrl = URL.createObjectURL(new Blob([jsBytes], { type: "text/javascript" }));
+    try {
+      const owner = await import(moduleUrl);
+      await owner.default({ module_or_path: wasmBytes });
+      verifyOwnerRuntimeIdentity(manifest, owner.cmaes_viz_kernel_version(), owner.cmaes_viz_source_revision());
+    } finally {
+      URL.revokeObjectURL(moduleUrl);
+    }
+    process.stdout.write(manifest.sourceRevision + "\n");
+  ' || fail "owner artifact bytes or identity are not the reviewed build"
 }
 
 verify_content_manifest() {
@@ -86,9 +111,12 @@ validate_payload() {
     "fs_cmaes_viz_wasm_bg.wasm" \
     "fs_cmaes_viz_wasm.d.ts" \
     "fs_cmaes_viz_wasm_bg.wasm.d.ts" \
+    "manifest.json" \
     "package.json"; do
     [[ -s "$owner_asset_root/$required_asset" ]] || fail "$engine_label is missing owner $OWNER_KERNEL_VERSION asset: $required_asset"
   done
+  [[ "$(verify_owner_artifact "$engine_dir")" == "$FRANKENSIM_COMMIT" ]] \
+    || fail "$engine_label has a different owner source identity"
 
   [[ -s "$engine_dir/workers/g1MeshParseWorker.js" ]] || fail "$engine_label is missing the runtime G1 mesh parser"
 
@@ -117,7 +145,7 @@ validate_stage_receipts() {
   [[ "$(<"$engine_dir/source-commit.txt")" == "$SOURCE_COMMIT" ]] || fail "stage was built from a different cmaes_explainer revision"
   [[ "$(<"$engine_dir/source-tree-state.txt")" == "clean" ]] || fail "stage does not record a clean cmaes_explainer tree"
   [[ "$(<"$engine_dir/frankensim-workspace-commit.txt")" == "$FRANKENSIM_COMMIT" ]] || fail "stage was built from a different FrankenSim revision"
-  [[ "$(<"$engine_dir/frankensim-workspace-state.txt")" == "clean" ]] || fail "stage does not record a clean FrankenSim tree"
+  [[ "$(<"$engine_dir/frankensim-workspace-state.txt")" == "artifact-bound" ]] || fail "stage has no artifact-bound FrankenSim source identity"
   [[ "$(<"$engine_dir/owner-kernel-version.txt")" == "$OWNER_KERNEL_VERSION" ]] || fail "stage owner-kernel receipt does not match the current source"
 }
 
@@ -146,7 +174,7 @@ build_stage() {
   print -r -- "$SOURCE_COMMIT" > "$STAGED_ENGINE/source-commit.txt"
   print -r -- "clean" > "$STAGED_ENGINE/source-tree-state.txt"
   print -r -- "$FRANKENSIM_COMMIT" > "$STAGED_ENGINE/frankensim-workspace-commit.txt"
-  print -r -- "clean" > "$STAGED_ENGINE/frankensim-workspace-state.txt"
+  print -r -- "artifact-bound" > "$STAGED_ENGINE/frankensim-workspace-state.txt"
   print -r -- "$OWNER_KERNEL_VERSION" > "$STAGED_ENGINE/owner-kernel-version.txt"
 
   validate_payload "$STAGED_ENGINE" "stage at $STAGE_PARENT"
@@ -244,22 +272,16 @@ main() {
     fail "--expect-manifest-sha256 is valid only with --activate-stage"
   fi
 
-  [[ "$(git -C "$FRANKENSIM_ROOT" rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]] \
-    || fail "FrankenSim is not a Git worktree: $FRANKENSIM_ROOT"
-
   cd "$PROJECT_ROOT"
   SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)
   [[ -z "$SOURCE_DIRTY" ]] || fail "cmaes_explainer has uncommitted or untracked bytes; source-commit.txt would be incomplete"
 
-  FRANKENSIM_DIRTY=$(git -C "$FRANKENSIM_ROOT" status --porcelain --untracked-files=normal)
-  [[ -z "$FRANKENSIM_DIRTY" ]] || fail "FrankenSim has uncommitted or untracked bytes; its commit receipt would be incomplete"
-
   SOURCE_COMMIT=$(git rev-parse HEAD)
-  FRANKENSIM_COMMIT=$(git -C "$FRANKENSIM_ROOT" rev-parse HEAD)
   OWNER_KERNEL_VERSION=$(sed -n 's/^export const FRANKENSIM_OWNER_KERNEL_VERSION = "\([^"]*\)";/\1/p' \
     "$PROJECT_ROOT/app/lib/frankensimCmaes.ts")
   [[ -n "$OWNER_KERNEL_VERSION" ]] || fail "FRANKENSIM_OWNER_KERNEL_VERSION could not be resolved"
   OWNER_RUNTIME_DIR=$(resolve_owner_runtime_dir "$OWNER_KERNEL_VERSION")
+  FRANKENSIM_COMMIT=$(verify_owner_artifact "$PROJECT_ROOT/public")
 
   if [[ "$MODE" == "activate-stage" ]]; then
     STAGED_ENGINE="${ACTIVATION_STAGE:A}"

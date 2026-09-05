@@ -1,9 +1,8 @@
 // Safety and coordinate-contract checks for the versioned G1 owner trace.
 //
-// Important boundary: the v0613 terrain-and-push owner does not consume the
-// Craftsman house wall OBBs. Whole-house path collision is verified by
-// houseMultiObstacleKernel.test.ts, where those obstacles actually participate
-// in the computation. The owner checks below cover finite 30-link poses, a
+// This local experiment declares no house obstacles. Whole-house path helpers
+// have their own tests; those do not establish an articulated house tour.
+// The owner checks below cover finite 30-link poses, a
 // bounded local experiment, plausible z-up heights, and receipt parity. The
 // final test separately verifies the browser's explicit composition of that
 // owner pose with its house-aware spawn guard.
@@ -34,11 +33,11 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v0616/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();
@@ -47,12 +46,12 @@ await ownerModule.default({ module_or_path: ownerBytes });
 const Evaluator = ownerModule.G1WalkingVizEvaluator;
 if (!Evaluator) throw new Error("G1WalkingVizEvaluator export missing from the shipped WASM");
 const evaluator = new Evaluator(
-  // Schema-8 walking config: eleven fixed words plus a keep-out box count.
+  // Schema-9 walking config: eleven fixed words plus a keep-out box count.
   // This suite pins the owner's own coordinate and safety envelope, so it
   // declares no boxes; the browser's roster is covered separately.
   new Float64Array([
     0x47315737,
-    8,
+    9,
     0,
     12,
     1 / 480,
@@ -106,7 +105,7 @@ function receiptWithoutSamples(receipt: G1TraceReceipt): G1ObjectiveReceipt {
   return objective;
 }
 
-describe("G1 v0613 owner trace safety envelope", () => {
+describe("G1 v0622 owner trace safety envelope", () => {
   test("emits finite, bounded, 30-link world poses", () => {
     expect(curriculumTrace.samples.length).toBeGreaterThanOrEqual(5);
     assertFiniteBoundedOwnerTrace(curriculumTrace);

@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -111,8 +117,11 @@ describe("FrankenRobots engine exporter safety boundary", () => {
       "SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)",
     );
     expect(script).toContain(
-      'FRANKENSIM_DIRTY=$(git -C "$FRANKENSIM_ROOT" status --porcelain --untracked-files=normal)',
+      'FRANKENSIM_COMMIT=$(verify_owner_artifact "$PROJECT_ROOT/public")',
     );
+    expect(script).not.toContain("FRANKENSIM_ROOT");
+    expect(script).toContain("verifyOwnerArtifacts");
+    expect(script).toContain("verifyOwnerRuntimeIdentity");
     expect(script).toContain("verify_source_fences");
     expect(script).toContain("HEAD moved during export");
     expect(script).toContain("frankenrobots/humanoid/index.html");
@@ -129,6 +138,67 @@ describe("FrankenRobots engine exporter safety boundary", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("v0613\n");
     expect(result.stderr).toBe("");
+  });
+
+  test("native export accepts the real owner and refuses changed manifest, glue and WASM bytes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "frankenrobots-owner-test-"));
+    const relativeOwner = "wasm/fs-cmaes/v0622";
+    const shippedOwner = fileURLToPath(
+      new URL(`../public/${relativeOwner}`, import.meta.url),
+    );
+    const invoke = async (engine: string) => {
+      const child = Bun.spawn({
+        cmd: [
+          "zsh",
+          "-c",
+          'source "$1"; OWNER_RUNTIME_DIR=v0622; verify_owner_artifact "$2"',
+          "verify-owner",
+          scriptFilePath,
+          engine,
+        ],
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode, stdout, stderr };
+    };
+    for (const changed of [
+      null,
+      "manifest.json",
+      "fs_cmaes_viz_wasm.js",
+      "fs_cmaes_viz_wasm_bg.wasm",
+    ]) {
+      const engine = join(root, changed ?? "valid");
+      const owner = join(engine, relativeOwner);
+      mkdirSync(owner, { recursive: true });
+      cpSync(shippedOwner, owner, { recursive: true });
+      if (changed) {
+        const path = join(owner, changed);
+        const bytes = readFileSync(path);
+        bytes[0] ^= 1;
+        writeFileSync(path, bytes);
+      }
+      const result = await invoke(engine);
+      writeFileSync(
+        join(root, `${changed ?? "valid"}-result.json`),
+        JSON.stringify(result, null, 2),
+      );
+      if (changed) {
+        expect(result.exitCode).not.toBe(0);
+        expect(result.stderr).toContain(
+          changed === "manifest.json" ? "manifest differs" : "SHA-256 mismatch",
+        );
+      } else {
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.trim()).toMatch(/^[0-9a-f]{40}$/);
+        expect(result.stderr).toBe("");
+      }
+    }
   });
 
   test("refuses an owner-kernel contract without an exact semver suffix", async () => {
