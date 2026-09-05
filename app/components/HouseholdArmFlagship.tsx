@@ -561,6 +561,8 @@ function ArmEnvironment({
   );
 }
 
+type ArmPlaybackSeek = { revision: number; sampleIndex: number };
+
 function ArmRig({
   trace,
   admission,
@@ -568,10 +570,9 @@ function ArmRig({
   microscopeMode,
   physicsDebug,
   targetPosition,
-  requestedSampleIndex,
+  playbackSeek,
   isPlaying,
   playbackSpeed,
-  playbackResetToken,
   onSampleIndexChange,
   onSelfCollisionChange,
 }: {
@@ -581,11 +582,10 @@ function ArmRig({
   microscopeMode: boolean;
   physicsDebug?: boolean;
   targetPosition?: [number, number, number] | null;
-  requestedSampleIndex: number;
+  playbackSeek: ArmPlaybackSeek;
   isPlaying: boolean;
   playbackSpeed: number;
-  playbackResetToken: number;
-  onSampleIndexChange: (sampleIndex: number) => void;
+  onSampleIndexChange: (sampleIndex: number, revision: number) => void;
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
 }) {
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
@@ -616,20 +616,14 @@ function ArmRig({
     [trace],
   );
   useLayoutEffect(() => {
-    playbackSeconds.current = 0;
-    sampleIndex.current = 0;
-    publishedSampleIndex.current = -1;
-  }, [trace, playbackResetToken]);
-  useLayoutEffect(() => {
     const nextIndex = clampArmPlaybackIndex(
       trace.samples.length,
-      requestedSampleIndex,
+      playbackSeek.sampleIndex,
     );
-    if (nextIndex === sampleIndex.current) return;
     sampleIndex.current = nextIndex;
-    playbackSeconds.current = trace.samples[nextIndex]?.timeSeconds ?? 0;
+    playbackSeconds.current = nextIndex === 0 ? 0 : trace.samples[nextIndex]?.timeSeconds ?? 0;
     publishedSampleIndex.current = -1;
-  }, [requestedSampleIndex, trace]);
+  }, [playbackSeek, trace]);
   // Boundary volumes the kernel's objective already avoids: the counter slab,
   // the task's backdrop wall, and the declared obstacle box. The checker below
   // flags visible penetrations of exactly these volumes — presentation-layer
@@ -715,7 +709,7 @@ function ArmRig({
     if (publishedSampleIndex.current !== sampleIndex.current) {
       publishedSampleIndex.current = sampleIndex.current;
       setCurrentSample(sample);
-      onSampleIndexChange(sampleIndex.current);
+      onSampleIndexChange(sampleIndex.current, playbackSeek.revision);
     }
     // Render the measured chain verbatim. Contact diagnostics can tint it,
     // but may not bend the links or relocate the object behind the receipt.
@@ -1427,7 +1421,7 @@ function ArmStage({
   sampleIndex,
   isPlaying,
   playbackSpeed,
-  playbackResetToken,
+  playbackSeek,
   onSampleIndexChange,
   dragTarget,
   onDragTargetChange,
@@ -1445,8 +1439,8 @@ function ArmStage({
   sampleIndex: number;
   isPlaying: boolean;
   playbackSpeed: number;
-  playbackResetToken: number;
-  onSampleIndexChange: (sampleIndex: number) => void;
+  playbackSeek: ArmPlaybackSeek;
+  onSampleIndexChange: (sampleIndex: number, revision: number) => void;
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
   dragTarget?: [number, number, number] | null;
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
@@ -1610,10 +1604,9 @@ function ArmStage({
           microscopeMode={microscopeMode}
           physicsDebug={physicsDebug}
           targetPosition={objectPos}
-          requestedSampleIndex={sampleIndex}
+          playbackSeek={playbackSeek}
           isPlaying={isPlaying}
           playbackSpeed={playbackSpeed}
-          playbackResetToken={playbackResetToken}
           onSampleIndexChange={onSampleIndexChange}
           onSelfCollisionChange={onSelfCollisionChange}
         />
@@ -1737,7 +1730,19 @@ export function HouseholdArmFlagship({
   const [sampleIndex, setSampleIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-  const [playbackResetToken, setPlaybackResetToken] = useState(0);
+  const [playbackSeek, setPlaybackSeek] = useState<ArmPlaybackSeek>({ revision: 0, sampleIndex: 0 });
+  const playbackRevisionRef = useRef(0);
+  const seekPlayback = useCallback((index: number) => {
+    const revision = ++playbackRevisionRef.current;
+    setPlaybackSeek({ revision, sampleIndex: index });
+    setSampleIndex(index);
+  }, []);
+  const handleSampleIndexChange = useCallback((index: number, revision: number) => {
+    // The Canvas is a separate React root. A frame queued before Restart or
+    // a scrub must not overwrite the newer command with its old position.
+    // Published positions update the HUD; only explicit seeks drive the rig.
+    if (revision === playbackRevisionRef.current) setSampleIndex(index);
+  }, []);
   const [armDragTarget, setArmDragTarget] = useState<
     [number, number, number] | null
   >(null);
@@ -1852,8 +1857,7 @@ export function HouseholdArmFlagship({
       } else if (message.type === "trace") {
         setTrace(message.trace);
         setAdmission(message.admission);
-        setSampleIndex(0);
-        setPlaybackResetToken((token) => token + 1);
+        seekPlayback(0);
         setIsPlaying(true);
         if (message.family === "curriculum") setCurriculumTrace(message.trace);
         setActiveTrace(message.family);
@@ -1946,7 +1950,7 @@ export function HouseholdArmFlagship({
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated]);
+  }, [workerActivated, seekPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2206,9 +2210,8 @@ export function HouseholdArmFlagship({
       setTask(nextTask);
       setTrace(null);
       setAdmission(null);
-      setSampleIndex(0);
+      seekPlayback(0);
       setIsPlaying(false);
-      setPlaybackResetToken((token) => token + 1);
       setCurriculumTrace(null);
       setComparison(null);
       setArmDragTarget(null);
@@ -2232,7 +2235,7 @@ export function HouseholdArmFlagship({
       setStatus(`Loading the ${TASK_COPY[nextTask].setting} benchmark…`);
       workerRef.current.postMessage({ type: "preview", task: nextTask });
     },
-    [task],
+    [task, seekPlayback],
   );
 
   const objectiveDelta =
@@ -2632,8 +2635,7 @@ export function HouseholdArmFlagship({
                   disabled={!trace}
                   onClick={() => {
                     setIsPlaying(false);
-                    setSampleIndex(0);
-                    setPlaybackResetToken((token) => token + 1);
+                    seekPlayback(0);
                   }}
                   className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-35"
                 >
@@ -2691,13 +2693,12 @@ export function HouseholdArmFlagship({
                     disabled={!trace}
                     onChange={(event) => {
                       setIsPlaying(false);
-                      setSampleIndex(
+                      seekPlayback(
                         clampArmPlaybackIndex(
                           trace?.samples.length ?? 0,
                           Number(event.target.value),
                         ),
                       );
-                      setPlaybackResetToken((token) => token + 1);
                     }}
                     className="relative w-full min-w-0 accent-orange-400 disabled:opacity-35"
                     title={
@@ -2766,8 +2767,8 @@ export function HouseholdArmFlagship({
                   sampleIndex={sampleIndex}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
-                  playbackResetToken={playbackResetToken}
-                  onSampleIndexChange={setSampleIndex}
+                  playbackSeek={playbackSeek}
+                  onSampleIndexChange={handleSampleIndexChange}
                   dragTarget={armDragTarget}
                   onDragTargetChange={setArmDragTarget}
                   onCollisionChange={setArmCollisionState}
@@ -2902,8 +2903,7 @@ export function HouseholdArmFlagship({
               onClick={() => {
                 if (!curriculumTrace) return;
                 setTrace(curriculumTrace);
-                setSampleIndex(0);
-                setPlaybackResetToken((token) => token + 1);
+                seekPlayback(0);
                 setIsPlaying(true);
                 setActiveTrace("curriculum");
                 setGeneration(0);

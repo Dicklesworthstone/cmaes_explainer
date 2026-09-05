@@ -595,6 +595,12 @@ async function run() {
       ["Trowel", "backyard-trowel", false, 30],
     ] as const) {
       await armPage.getByRole("tab", { name: new RegExp(`^${label}`) }).click();
+      await armPage.waitForFunction(() => {
+        const slider = document.querySelector<HTMLInputElement>(
+          'input[aria-label="Arm trace position"]',
+        );
+        return slider && Number(slider.value) > 0;
+      });
       await armPage
         .getByRole("button", { name: "Restart arm trace", exact: true })
         .click();
@@ -615,31 +621,50 @@ async function run() {
         telemetry.ownerAdmission.scene.extraObstacleCount,
         bodyCount,
       );
-      const poses = telemetry.samples[0].linkPoses.map(
-        (pose: { quaternion: HouseholdRobotPose["quaternionWxyz"] }) => ({
-          quaternionWxyz: pose.quaternion,
-        }),
-      );
-      const angles = iiwaJointAnglesFromOwnerPoses(poses);
-      for (const [index, name] of [
-        "A1 Base",
-        "A2 Shoulder",
-        "A3 Arm",
-        "A4 Elbow",
-        "A5 Wrist 1",
-        "A6 Wrist 2",
-        "A7 Flange",
-      ].entries()) {
-        const card = armPage
-          .getByText(name, { exact: true })
-          .locator("..")
-          .locator("..");
-        const degrees = (angles[index] * 180) / Math.PI;
-        const expected = `${degrees >= 0 ? "+" : ""}${degrees.toFixed(1)}°`;
-        assert(
-          (await card.innerText()).includes(expected),
-          `${name} differs from the exported owner pose`,
+      const measuredReadouts = [];
+      for (const sampleIndex of [0, telemetry.samples.length - 1, 0]) {
+        if (measuredReadouts.length > 0) {
+          await armPage
+            .getByRole("slider", { name: "Arm trace position", exact: true })
+            .press(sampleIndex === 0 ? "Home" : "End");
+        }
+        await armPage.waitForFunction((expectedIndex) => {
+          const slider = document.querySelector<HTMLInputElement>(
+            'input[aria-label="Arm trace position"]',
+          );
+          return slider && Number(slider.value) === expectedIndex;
+        }, sampleIndex);
+        await armPage
+          .getByRole("button", { name: "Play arm trace", exact: true })
+          .waitFor();
+        const poses = telemetry.samples[sampleIndex].linkPoses.map(
+          (pose: { quaternion: HouseholdRobotPose["quaternionWxyz"] }) => ({
+            quaternionWxyz: pose.quaternion,
+          }),
         );
+        const angles = iiwaJointAnglesFromOwnerPoses(poses);
+        for (const [index, name] of [
+          "A1 Base",
+          "A2 Shoulder",
+          "A3 Arm",
+          "A4 Elbow",
+          "A5 Wrist 1",
+          "A6 Wrist 2",
+          "A7 Flange",
+        ].entries()) {
+          const card = armPage
+            .getByText(name, { exact: true })
+            .locator("..")
+            .locator("..");
+          const degrees = (angles[index] * 180) / Math.PI;
+          const expected = `${degrees >= 0 ? "+" : ""}${degrees.toFixed(1)}°`;
+          const actual = await card.innerText();
+          assert(
+            actual.includes(expected),
+            `${name} at sample ${sampleIndex}: expected ${expected}, saw ${actual}`,
+          );
+        }
+        measuredReadouts.push({ sampleIndex, angles });
       }
       await armPage
         .getByText("iiwa joint angles · measured owner poses", { exact: true })
@@ -652,7 +677,7 @@ async function run() {
         task,
         placed,
         bodyCount,
-        angles,
+        measuredReadouts,
         telemetryPath,
       });
     }
