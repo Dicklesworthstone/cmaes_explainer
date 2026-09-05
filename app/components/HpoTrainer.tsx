@@ -5,6 +5,7 @@ import {
   CmaesHyperparameterOptimizer,
   defaultGenotypeFromSpecs,
   G1_TRAINING_HYPERPARAMETERS,
+  type HpoCandidateDecoded,
   type HpoParameterSpec,
   type HpoSweepResult,
 } from "../lib/cmaesHyperparameterLoop";
@@ -12,15 +13,41 @@ import { Section } from "./Section";
 
 const RUN_BATCH_SIZES = [1, 5, 20] as const;
 
-function formatParam(
-  name: string,
-  value: number,
-  spec: HpoParameterSpec,
-): string {
+function formatParam(value: number, spec: HpoParameterSpec): string {
   if (spec.isLogScale) {
-    return `${name} = ${value.toExponential(2)}`;
+    return value.toExponential(2);
   }
-  return `${name} = ${value.toFixed(3)}`;
+  return value.toFixed(3);
+}
+
+export function HpoBestParameters({ best }: { best?: HpoCandidateDecoded }) {
+  const bestByName: Record<string, number> = best
+    ? {
+        muon_learning_rate: best.muonLearningRate,
+        muon_momentum: best.muonMomentum,
+        ppo_entropy_coef: best.ppoEntropyCoef,
+        weight_progress: best.weightProgress,
+        weight_upright: best.weightUpright,
+        weight_energy: best.weightEnergy,
+        gae_lambda: best.gaeLambda,
+        value_loss_coef: best.valueLossCoef,
+      }
+    : {};
+  return (
+    <ul className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 font-mono text-sm text-slate-200">
+      {G1_TRAINING_HYPERPARAMETERS.map((spec) => {
+        const value = bestByName[spec.name];
+        return (
+          <li key={spec.name} className="contents" data-testid="hpo-best-param">
+            <span className="break-all text-slate-400">{spec.name}</span>
+            <span className="text-right text-slate-100">
+              {value === undefined ? "-" : formatParam(value, spec)}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 export function HpoTrainer() {
@@ -31,6 +58,7 @@ export function HpoTrainer() {
   const [batch, setBatch] = useState<(typeof RUN_BATCH_SIZES)[number]>(1);
   const [warmStart, setWarmStart] = useState(false);
   const [mirrored, setMirrored] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
   const optimizerRef = useRef<CmaesHyperparameterOptimizer | null>(null);
   // Ref (not state) so React 19 strict mode running the updater twice
   // does NOT trigger a duplicate setLastDelta side-effect.
@@ -53,25 +81,29 @@ export function HpoTrainer() {
     return optimizerRef.current;
   }, [warmStart, mirrored]);
 
-  const runBatch = useCallback(async (gens: number) => {
-    if (running) return;
-    setRunning(true);
-    try {
-      const optimizer = ensureOptimizer();
-      for (let g = 0; g < gens; g += 1) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        const r = optimizer.stepGeneration();
-        const prevBest = lastBestRef.current;
-        const delta = prevBest === null ? null : r.bestFitness - prevBest;
-        lastBestRef.current = r.bestFitness;
-        setResult(r);
-        setLastDelta(delta);
-        setHistory((prev) => [...prev, r.bestFitness]);
+  const runBatch = useCallback(
+    async (gens: number) => {
+      if (running) return;
+      setRunning(true);
+      setCopyStatus("");
+      try {
+        const optimizer = ensureOptimizer();
+        for (let g = 0; g < gens; g += 1) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          const r = optimizer.stepGeneration();
+          const prevBest = lastBestRef.current;
+          const delta = prevBest === null ? null : r.bestFitness - prevBest;
+          lastBestRef.current = r.bestFitness;
+          setResult(r);
+          setLastDelta(delta);
+          setHistory((prev) => [...prev, r.bestFitness]);
+        }
+      } finally {
+        setRunning(false);
       }
-    } finally {
-      setRunning(false);
-    }
-  }, [running, ensureOptimizer]);
+    },
+    [running, ensureOptimizer],
+  );
 
   const reset = useCallback(() => {
     optimizerRef.current = null;
@@ -79,38 +111,47 @@ export function HpoTrainer() {
     setResult(null);
     setHistory([]);
     setLastDelta(null);
+    setCopyStatus("");
   }, []);
 
-  const best = result?.bestHyperparameters;
-  const bestByName: Record<string, number> = best
-    ? {
-        muonLearningRate: best.muonLearningRate,
-        muonMomentum: best.muonMomentum,
-        ppoEntropyCoef: best.ppoEntropyCoef,
-        weightProgress: best.weightProgress,
-        weightUpright: best.weightUpright,
-        weightEnergy: best.weightEnergy,
-        gaeLambda: best.gaeLambda,
-        valueLossCoef: best.valueLossCoef,
-      }
-    : {};
+  const copyHistory = async () => {
+    const payload = {
+      schema: "cmaes-explainer.hpo-history/v1",
+      exportedAt: new Date().toISOString(),
+      seed: "0x47315040",
+      environment: "G1StepwiseEnv kinematic stand-in",
+      maximumStepsPerRollout: 120,
+      warmStart,
+      mirrored,
+      generations: history.length,
+      result,
+      csv: [
+        "generation,best_fitness",
+        ...history.map((v, i) => `${i + 1},${v.toExponential(6)}`),
+      ].join("\n"),
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopyStatus("History copied.");
+    } catch {
+      setCopyStatus("Copy failed. Allow clipboard access and try again.");
+    }
+  };
 
   return (
     <Section
       id="hpo-trainer"
-      title="Training the trainer: outer CMA-ES over 8 training hyperparameters"
+      title="Exploring hyperparameter search with CMA-ES"
     >
       <div className="space-y-4">
         <p className="max-w-3xl text-sm leading-7 text-slate-400">
-          The disclosed training stack has 8 hyperparameters (inner LR, Muon
-          momentum, PPO entropy coefficient, four reward weights, GAE
-          lambda, value loss coefficient). CMA-ES is genuinely strongest for
-          small-D expensive black-box problems like outer-loop hyperparameter
-          search, so the outer loop is itself a CMA-ES over this 8-D space.
-          The inner rollout is the disclosed G1StepwiseEnv kinematic stub
-          (a real env, not a fabricated table). Each generation is 8
-          candidates times 120-step rollouts, mirrored if you ask for it.
-          This is the same loop the bead cmaes-89eg ships.
+          This eight-dimensional CMA-ES search evaluates a kinematic stand-in
+          for G1 motion. Learning rate, momentum and entropy currently control
+          action amplitude, smoothing and noise; the three reward weights, GAE
+          lambda and value-loss coefficient do not yet affect evaluation. No PPO
+          or Muon training runs here. Each generation evaluates eight
+          candidates, or sixteen with mirrored sampling, for up to 120 steps per
+          rollout.
         </p>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -173,8 +214,9 @@ export function HpoTrainer() {
               <select
                 value={batch}
                 onChange={(e) => {
-                  const next = Number(e.target.value) as
-                    | (typeof RUN_BATCH_SIZES)[number];
+                  const next = Number(
+                    e.target.value,
+                  ) as (typeof RUN_BATCH_SIZES)[number];
                   setBatch(next);
                 }}
                 disabled={running}
@@ -209,7 +251,7 @@ export function HpoTrainer() {
               <span>
                 WS warm start{" "}
                 <span className="text-slate-500">
-                  (seed at the hand-tuned defaults — Nomura, AAAI 2021)
+                  (start the mean at the hand-tuned defaults)
                 </span>
               </span>
             </label>
@@ -227,13 +269,15 @@ export function HpoTrainer() {
               <span>
                 Mirrored sampling{" "}
                 <span className="text-slate-500">
-                  (antithetic pairs, 2× rollouts — Conti 2017)
+                  (antithetic pairs, separate scores, 2× rollouts)
                 </span>
               </span>
             </label>
             <span className="ml-auto text-xs text-slate-500">
-              {warmStart ? "Warm start: ON (defaults prior)." : "Warm start: off (cold origin)."} Seed:
-              0x47315040.
+              {warmStart
+                ? "Warm start: ON (defaults prior)."
+                : "Warm start: off (cold origin)."}{" "}
+              Seed: 0x47315040.
             </span>
           </div>
         </div>
@@ -242,33 +286,15 @@ export function HpoTrainer() {
             <div className="text-xs uppercase tracking-wider text-slate-500">
               Best hyperparameters so far
             </div>
-            <ul className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 font-mono text-sm text-slate-200">
-              {G1_TRAINING_HYPERPARAMETERS.map((spec) => {
-                const value = bestByName[spec.name];
-                const formatted =
-                  value === undefined ? "-" : formatParam(spec.name, value, spec);
-                return (
-                  <li
-                    key={spec.name}
-                    className="contents"
-                    data-testid="hpo-best-param"
-                  >
-                    <span className="text-slate-400">{spec.name}</span>
-                    <span className="text-right text-slate-100">
-                      {formatted}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            <HpoBestParameters best={result?.bestHyperparameters} />
             <p className="mt-3 text-xs text-slate-500">
-              Each value is decoded from the CMA-ES mean under the same
-              log-scale convention the kernel uses for inner LR. The
-              starting prior is the centre of each spec range.
+              These are the best evaluated candidate&apos;s parameters, not the
+              current search mean. The cold start uses the centre of each range
+              (in log space where specified); warm start uses the defaults.
             </p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-xs uppercase tracking-wider text-slate-500">
                 Fitness history (lower is better)
               </div>
@@ -278,42 +304,23 @@ export function HpoTrainer() {
                 </div>
                 <button
                   type="button"
-                  disabled={history.length === 0}
-                  onClick={() => {
-                    // Export the trajectory as a 2-column CSV: generation,bestFitness.
-                    // Also inline JSON so the user can paste it into a tool without
-                    // re-parsing. The fitness axis is the negation of mean inner-
-                    // rollout reward, so lower is better.
-                    const csv = [
-                      "generation,best_fitness",
-                      ...history.map((v, i) => `${i + 1},${v.toExponential(6)}`),
-                    ].join("\n");
-                    const payload = {
-                      schema: "cmaes-explainer.hpo-history/v1",
-                      exportedAt: new Date().toISOString(),
-                      seed: "0x47315040",
-                      warmStart,
-                      mirrored,
-                      generations: history.length,
-                      csv,
-                    };
-                    const json = JSON.stringify(payload, null, 2);
-                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                      void navigator.clipboard.writeText(json);
-                    }
-                  }}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={history.length === 0 || running}
+                  onClick={() => void copyHistory()}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Copy history
                 </button>
               </div>
             </div>
+            <p role="status" className="mt-2 text-xs text-slate-400">
+              {copyStatus}
+            </p>
             <FitnessSparkline values={history} />
             <p className="mt-3 text-xs text-slate-500">
-              The CMA-ES outer loop is a (1+lambda)-ES with antithetic
-              mirroring available. The fitness is the negation of mean
-              inner-rollout reward, so a lower number means the policy
-              under those hyperparameters gathered more total reward.
+              The outer loop adapts the full CMA-ES covariance, with antithetic
+              sampling available. The fitness is the negation of mean
+              inner-rollout reward, so a lower number means the policy under
+              those hyperparameters gathered more total reward.
             </p>
           </div>
         </div>
@@ -342,8 +349,7 @@ function FitnessSparkline({ values }: { values: number[] }) {
   const points = values
     .map((v, i) => {
       const x = padX + i * xStep;
-      const y =
-        padY + (1 - (v - minVal) / range) * (height - 2 * padY);
+      const y = padY + (1 - (v - minVal) / range) * (height - 2 * padY);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
