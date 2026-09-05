@@ -195,7 +195,8 @@ export function runCmaesPolicySearch(
     const lambda = Math.min(populationSize, remaining);
     // Always draw the full population so the RNG stream is independent of
     // where the budget happens to cut off; slice to the budget remainder.
-    const candidates = optimizer.samplePopulation().slice(0, lambda);
+    const population = optimizer.samplePopulation();
+    const candidates = lambda === populationSize ? population : population.slice(0, lambda);
     const fitnesses: number[] = new Array<number>(lambda);
     for (let i = 0; i < lambda; i++) {
       fitnesses[i] = episodeFitness(candidates[i]);
@@ -205,10 +206,9 @@ export function runCmaesPolicySearch(
       }
     }
     evaluationsPerformed += lambda;
-    // tellEvaluations ranks up to state.muElite candidates; a trailing partial
-    // generation smaller than muElite cannot be told without out-of-bounds
-    // reads, so skip the tell (best tracking above already covers it).
-    if (lambda >= optimizer.state.muElite) {
+    // Adapt only on a complete generation. The final budget remainder still
+    // contributes to the incumbent above, without inventing unrun evaluations.
+    if (lambda === populationSize) {
       optimizer.tellEvaluations(candidates, fitnesses);
     }
   }

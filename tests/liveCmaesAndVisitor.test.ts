@@ -1,8 +1,94 @@
 import { describe, expect, test } from "bun:test";
 import { LiveCmaesOptimizer } from "../app/lib/liveCmaesHousehold";
+import { CMAESOptimizerND } from "../app/lib/cmaesEngineND";
 import { generateVisitorModeClip, VISITOR_CLIP_KEYFRAMES } from "../app/lib/visitorModeClip";
 
 describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
+  test("household search matches shared CMA state on a rotated nonseparable objective", () => {
+    const objective = (x: number[]) => 80 * (x[0] + 2 * x[1] - 0.8) ** 2 + (2 * x[0] - x[1] + 0.3) ** 2 + 3 * x[2] ** 2;
+    const shared = new CMAESOptimizerND(objective, { dim: 3, lambda: 8, initialMean: [0, 0, 0], initialSigma: 0.5, seed: 41, repairStrategy: "none" });
+    const live = new LiveCmaesOptimizer({ ownerId: "test", name: "rotated ellipsoid", dimension: 3, populationSize: 8, initialSigma: 0.5, seed: 41 });
+    for (let generation = 1; generation <= 30; generation++) {
+      const points = live.samplePopulation();
+      const expected = shared.step();
+      expect(points).toEqual([...expected.samples].sort((a, b) => a.id - b.id).map((sample) => sample.x));
+      live.tellEvaluations(points, points.map(objective));
+      const actual = live.state;
+      expect(actual.mean).toEqual(expected.mean);
+      expect(actual.covariance).toEqual(expected.covariance);
+      expect(actual.evolutionPathC).toEqual(expected.pC);
+      expect(actual.evolutionPathSigma).toEqual(expected.pSigma);
+      expect(actual.sigma).toBe(expected.sigma);
+      expect(actual.bestParams).toEqual(expected.bestX);
+      expect(actual.bestFitness).toBe(expected.bestFitness);
+      expect(expected.evalCount).toBe(generation * 8);
+    }
+    expect(Math.abs(live.state.covariance[0][1])).toBeGreaterThan(1e-5);
+    expect(live.state.bestFitness).toBeLessThan(live.state.fitnessHistory[0] / 100);
+  });
+
+  test("invalid and reordered tells leave the pending generation available for a correct retry", () => {
+    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "identity", dimension: 2, populationSize: 4 });
+    expect(() => optimizer.tellEvaluations([], [])).toThrow("Ask");
+    const points = optimizer.samplePopulation();
+    const before = optimizer.state;
+    expect(() => optimizer.samplePopulation()).toThrow("pending");
+    expect(() => optimizer.tellEvaluations(points.slice(1), [1, 2, 3])).toThrow("complete population");
+    expect(() => optimizer.tellEvaluations([...points].reverse(), [1, 2, 3, 4])).toThrow("coordinates or order");
+    expect(() => optimizer.tellEvaluations(points, [1, NaN, 2, 3])).toThrow("NaN");
+    expect(() => optimizer.tellEvaluations(points, [1, -Infinity, 2, 3])).toThrow("-Infinity");
+    expect(optimizer.state).toEqual(before);
+    optimizer.tellEvaluations(points, [1, 2, 3, Infinity]);
+    expect(optimizer.state.generation).toBe(1);
+    expect(() => optimizer.tellEvaluations(points, [1, 2, 3, 4])).toThrow("Ask");
+    const next = optimizer.samplePopulation();
+    expect(() => optimizer.tellEvaluations(points, [1, 2, 3, 4])).toThrow("coordinates or order");
+    optimizer.tellEvaluations(next, [4, 3, 2, 1]);
+    expect(optimizer.state.generation).toBe(2);
+  });
+
+  test("monotone fitness transforms and tied scores preserve the same distribution", () => {
+    const options = { ownerId: "test", name: "rank invariance", dimension: 3, populationSize: 8, seed: 72 };
+    const a = new LiveCmaesOptimizer(options);
+    const b = new LiveCmaesOptimizer(options);
+    for (let generation = 0; generation < 12; generation++) {
+      const x = a.samplePopulation();
+      const y = b.samplePopulation();
+      expect(x).toEqual(y);
+      const f = x.map((point, index) => generation % 3 === 0 ? index % 2 : point.reduce((sum, value) => sum + value * value, 0));
+      a.tellEvaluations(x, f);
+      b.tellEvaluations(y, f.map((value) => 3 * value + 7));
+      expect(a.state.mean).toEqual(b.state.mean);
+      expect(a.state.covariance).toEqual(b.state.covariance);
+      expect(a.state.sigma).toBe(b.state.sigma);
+    }
+  });
+
+  test("a stale batch is refused even when floating-point rounding makes all coordinates coincide", () => {
+    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "tiny sigma", dimension: 2, populationSize: 4, initialMean: [1e10, 1e10], initialSigma: 1e-16 });
+    const old = optimizer.samplePopulation();
+    optimizer.tellEvaluations(old, [1, 2, 3, 4]);
+    const current = optimizer.samplePopulation();
+    expect(current).toEqual(old);
+    expect(() => optimizer.tellEvaluations(old, [1, 2, 3, 4])).toThrow("different population");
+    optimizer.tellEvaluations(current, [4, 3, 2, 1]);
+    expect(optimizer.state.generation).toBe(2);
+  });
+
+  test("antithetic candidates keep directional information on a linear objective", () => {
+    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "linear", dimension: 2, populationSize: 16, seed: 9 });
+    const points = optimizer.samplePopulation(true);
+    for (let i = 0; i < points.length; i += 2) {
+      expect(points[i][0] + points[i + 1][0]).toBe(0);
+      expect(points[i][1] + points[i + 1][1]).toBe(0);
+    }
+    const fitness = points.map((point) => point[0]);
+    optimizer.tellEvaluations(points, fitness);
+    expect(optimizer.state.mean[0]).toBeLessThan(0);
+    expect(optimizer.state.bestFitness).toBe(Math.min(...fitness));
+    expect(optimizer.state.bestParams[0]).toBe(optimizer.state.bestFitness);
+  });
+
   test("LiveCmaesOptimizer iteratively minimizes objective function", () => {
     const optimizer = new LiveCmaesOptimizer({
       ownerId: "walking-owner-1",

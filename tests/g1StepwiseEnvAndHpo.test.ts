@@ -203,6 +203,31 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
     expect(mirroredAgain.stepGeneration().bestFitness).toBe(r2.bestFitness);
   });
 
+  test("mirrored HPO reports a real candidate score and counts every actual rollout", () => {
+    const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 12, {
+      mirroredSampling: true, replicationsPerCandidate: 2, baseRolloutSeed: 71,
+    });
+    // Instrument the real evaluator without replacing its environment or score.
+    const instrumented = hpo as unknown as {
+      evaluatePoint(genotype: number[]): { fitness: number; rollouts: number };
+    };
+    const evaluate = instrumented.evaluatePoint.bind(hpo);
+    const evaluated: { genotype: number[]; fitness: number; rollouts: number }[] = [];
+    instrumented.evaluatePoint = (genotype) => {
+      const result = evaluate(genotype);
+      evaluated.push({ genotype: [...genotype], ...result });
+      return result;
+    };
+    const result = hpo.stepGeneration();
+    const best = evaluated.reduce((a, b) => a.fitness <= b.fitness ? a : b);
+    expect(evaluated.length).toBe(16);
+    expect(result.evaluationsCount).toBe(evaluated.reduce((sum, entry) => sum + entry.rollouts, 0));
+    expect(result.evaluationsCount).toBe(32);
+    expect(result.bestFitness).toBe(best.fitness);
+    expect(result.bestHyperparameters).toEqual(hpo.decodeGenotype(best.genotype));
+    expect(new Set(evaluated.map((entry) => entry.fitness)).size).toBeGreaterThan(1);
+  });
+
   test("replications multiply rollout cost and keep best-ever monotone", () => {
     const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 9, {
       replicationsPerCandidate: 3,

@@ -465,8 +465,9 @@ export class CMAESOptimizerND {
   private covariance: MatrixND;
   private currentEigen: SymmetricEigendecompositionND;
   private previousProjectionBasis: MatrixND | null = null;
+  private pending: { candidates: CandidateSampleND[]; points: VectorND[]; noise: number[] } | null = null;
 
-  constructor(private readonly objective: (x: VectorND) => number, options: CMAESOptionsND) {
+  constructor(private readonly objective: ((x: VectorND) => number) | null, options: CMAESOptionsND) {
     this.dim = options.dim;
     if (!Number.isInteger(this.dim) || this.dim < 1) throw new RangeError("dim must be a positive integer.");
 
@@ -597,32 +598,73 @@ export class CMAESOptimizerND {
     return aligned;
   }
 
-  step(): CMAESGenerationStateND {
+  /** Sample one pending generation. Returned coordinates are defensive copies. */
+  ask(mirrored = false): VectorND[] {
+    if (this.pending) throw new Error("Tell the pending generation before asking again.");
+    if (mirrored && this.lambda % 2 !== 0) {
+      throw new RangeError("Mirrored sampling requires an even population.");
+    }
     const currentEigen = this.currentEigen;
     const oldMean = [...this.mean];
     const oldSigma = this.sigma;
 
     const candidates: CandidateSampleND[] = [];
+    const noises: number[] = [];
     for (let id = 0; id < this.lambda; id++) {
-      const z = sampleGaussianVectorND(this.dim, this.rng);
+      const z = mirrored && id % 2 === 1
+        ? candidates[id - 1].z.map((value) => -value)
+        : sampleGaussianVectorND(this.dim, this.rng);
       const transformed = transformFromEigenCoordinates(currentEigen.eigenvalues, currentEigen.eigenvectors, z);
       const rawX = oldMean.map((mean, index) => mean + oldSigma * transformed[index]);
       const x = rawX.map((value) => this.repair(value));
-      const trueFitness = safeObjectiveValue(this.objective(x));
       const noise = this.noiseLevel > 0 ? this.noiseLevel * sampleGaussian(this.rng) : 0;
+      noises.push(noise);
       candidates.push({
         id,
         rawX,
         x,
         z,
         projected3D: [0, 0, 0],
-        fitness: trueFitness + noise,
-        trueFitness,
+        fitness: Infinity,
+        trueFitness: Infinity,
         rank: 0,
         isElite: false
       });
-      this.evalCount++;
     }
+    const points = candidates.map((candidate) => [...candidate.x]);
+    this.pending = { candidates, points, noise: noises };
+    return points;
+  }
+
+  /** Consume the same population object returned by ask, in its original order. */
+  tell(points: VectorND[], fitnessValues: number[]): CMAESGenerationStateND {
+    if (!this.pending) throw new Error("Ask for a generation before telling evaluations.");
+    if (points.length !== this.lambda || fitnessValues.length !== this.lambda) {
+      throw new RangeError("Tell requires one score per candidate in the complete population.");
+    }
+    const pending = this.pending;
+    // Coordinates can coincide at tiny sigma. The population object's identity
+    // still distinguishes this generation from an old batch with stale scores.
+    if (points !== pending.points) {
+      throw new RangeError("Candidate coordinates or order belong to a different population object.");
+    }
+    // Validate the whole tell before changing paths, counters or the incumbent.
+    const scores = points.map((point, index) => {
+      requireFiniteVector("candidate", point, this.dim);
+      if (point.some((value, axis) => !Object.is(value, pending.candidates[index].x[axis]))) {
+        throw new RangeError("Candidate coordinates or order do not match the pending generation.");
+      }
+      const value = fitnessValues[index];
+      if (typeof value !== "number") throw new RangeError("Fitness must be a number.");
+      const trueFitness = safeObjectiveValue(value);
+      return { trueFitness, fitness: safeObjectiveValue(trueFitness + pending.noise[index]) };
+    });
+    const candidates = pending.candidates.map((candidate, index) => ({ ...candidate, ...scores[index] }));
+    const currentEigen = this.currentEigen;
+    const oldMean = [...this.mean];
+    const oldSigma = this.sigma;
+    this.pending = null;
+    this.evalCount += this.lambda;
 
     candidates.sort((a, b) => a.fitness - b.fitness || a.id - b.id);
     candidates.forEach((candidate, rank) => {
@@ -762,5 +804,12 @@ export class CMAESOptimizerND {
     };
     this.history.push(state);
     return state;
+  }
+
+  step(): CMAESGenerationStateND {
+    const objective = this.objective;
+    if (!objective) throw new Error("This optimizer uses ask/tell; no objective callback was provided.");
+    const points = this.ask();
+    return this.tell(points, points.map((point) => objective([...point])));
   }
 }

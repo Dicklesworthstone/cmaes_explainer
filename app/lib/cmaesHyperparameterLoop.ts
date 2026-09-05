@@ -81,16 +81,14 @@ export interface HpoLoopOptions {
   /** Initial sigma used only when warm-starting (defaults to 0.35). */
   warmStartSigma?: number;
   /**
-   * Mirrored (antithetic) fitness estimation: for each sampled candidate x,
-   * evaluate x and its mirror 2m − x and tell back the average. The tell set
-   * stays λ, so selection statistics (μ, weights) are unchanged — only the
-   * fitness estimator gains variance reduction. Costs 2× evaluations.
+   * Sample eight antithetic pairs around the current mean. All sixteen
+   * candidates keep their own scores and participate in selection; this costs
+   * twice the eight-candidate default population's rollout budget.
    */
   mirroredSampling?: boolean;
   /**
    * Independent rollout replications averaged per evaluated point, seeded via
-   * `baseRolloutSeed` (replication r > 0 resets the env with seed
-   * baseRolloutSeed + r; replication 0 keeps the historical default seed 42).
+   * `baseRolloutSeed` (replication r resets the env with baseRolloutSeed + r).
    * The current kinematic stand-in env is deterministic, so replications are
    * exact no-ops today — the plumbing activates the moment the env gains
    * stochastic pushes/initial states.
@@ -174,13 +172,19 @@ export class CmaesHyperparameterOptimizer {
       name: "Outer-Loop CMA-ES HPO",
       dimension: specs.length,
       initialSigma: warm !== undefined ? (options.warmStartSigma ?? 0.35) : 0.35,
-      populationSize: 8,
+      populationSize: options.mirroredSampling ? 16 : 8,
       seed,
       initialMean: warm,
     });
     this.mirroredSampling = options.mirroredSampling ?? false;
-    this.replicationsPerCandidate = Math.max(1, Math.floor(options.replicationsPerCandidate ?? 1));
+    this.replicationsPerCandidate = options.replicationsPerCandidate ?? 1;
+    if (!Number.isSafeInteger(this.replicationsPerCandidate) || this.replicationsPerCandidate < 1) {
+      throw new RangeError("replicationsPerCandidate must be a positive integer.");
+    }
     this.baseRolloutSeed = options.baseRolloutSeed ?? 42;
+    if (!Number.isSafeInteger(this.baseRolloutSeed)) {
+      throw new RangeError("baseRolloutSeed must be a finite safe integer.");
+    }
     this.env = new G1TrainEnv({ maxSteps: 200 }); // Fast evaluation rollouts
   }
 
@@ -224,7 +228,7 @@ export class CmaesHyperparameterOptimizer {
   }
   /**
    * One rollout under the given genotype. Replication r resets the env with
-   * seed 42 (r = 0, historical default) or baseRolloutSeed + r; the fitness
+   * baseRolloutSeed + r, shared across candidates at the same replication; the fitness
    * is the mean total reward negated (minimization). Returns the rollout
    * count so stepGeneration can report honest evaluation totals.
    */
@@ -233,7 +237,7 @@ export class CmaesHyperparameterOptimizer {
     let aggregate = 0.0;
 
     for (let rep = 0; rep < this.replicationsPerCandidate; rep++) {
-      this.env.reset(rep === 0 ? 42 : this.baseRolloutSeed + rep);
+      this.env.reset(this.baseRolloutSeed + rep);
       let totalReward = 0.0;
       // Muon momentum: carry an exponential moving average of the
       // previous action so consecutive actions smooth out. Stand-in
@@ -289,23 +293,16 @@ export class CmaesHyperparameterOptimizer {
   }
 
   public stepGeneration(): HpoSweepResult {
-    const candidates = this.cmaOptimizer.samplePopulation();
+    const candidates = this.cmaOptimizer.samplePopulation(this.mirroredSampling);
     let rollouts = 0;
 
-    // Evaluate each HPO candidate via inner rollout; optionally average each
-    // candidate with its mirror 2m − x (antithetic pairing, Conti et al.
-    // arXiv:1712.06560). The tell set stays λ either way, so μ/weights are
-    // untouched — only the fitness estimator changes.
+    // Replications average only repeated evaluations of the same genotype.
+    // A mirror is a distinct candidate and must retain its own fitness.
     const fitnesses = candidates.map((cand) => {
       const base = this.evaluatePoint(cand);
       rollouts += base.rollouts;
 
-      if (!this.mirroredSampling) return base.fitness;
-
-      const mirror = this.cmaOptimizer.state.mean.map((m, i) => 2.0 * m - cand[i]);
-      const mirrored = this.evaluatePoint(mirror);
-      rollouts += mirrored.rollouts;
-      return 0.5 * (base.fitness + mirrored.fitness);
+      return base.fitness;
     });
 
     const tellRes = this.cmaOptimizer.tellEvaluations(candidates, fitnesses);
