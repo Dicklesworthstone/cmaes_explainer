@@ -30,6 +30,32 @@ export interface ArmLedgerPoint {
   graspSeconds: number;
   /** Whether a grasp was ever established at all. */
   everGrasped: boolean;
+  /** The owner kernel's own placement bit, before the browser's re-check. */
+  ownerReportedPlaced: boolean;
+  /** Smallest certified separation across all checked pairs [m]. */
+  minimumClearanceMeters: number;
+  /** Time during which some pair could not be proven separated [s]. */
+  unprovenSeparationSeconds: number;
+}
+
+/**
+ * Why the owner refused, in one phrase, or null when it did not.
+ *
+ * A task that always reads "not placed" looks like a broken page. It is not:
+ * the trowel is deliberately a task the collision gate can refuse, and after
+ * 928 generations of training it still does — the accuracy improves from 6.9 mm
+ * to 3.5 mm while the verdict never flips, because a hard body is a motion
+ * filter rather than a gradient the search can follow around. Saying which
+ * check failed turns that from a mystery into the point.
+ */
+export function armRefusalReason(point: ArmLedgerPoint): string | null {
+  if (point.placed) return null;
+  if (!point.everGrasped) return "never grasped the object";
+  if (point.unprovenSeparationSeconds > 0) {
+    return `collision envelope · ${(point.minimumClearanceMeters * 1000).toFixed(0)} mm closest certified clearance`;
+  }
+  if (!point.ownerReportedPlaced) return "owner did not report a placement";
+  return "browser collision re-check refused it";
 }
 
 /** The receipt fields the arm ledger reads. Structural, so a fuller receipt fits. */
@@ -41,6 +67,9 @@ export interface ArmLedgerSource {
   firstGraspTimeSeconds: number;
   graspDurationSeconds: number;
   everGrasped: boolean;
+  ownerReportedPlaced?: boolean;
+  minimumCertifiedClearanceMeters?: number;
+  possibleCollisionTimeSeconds?: number;
 }
 
 function finite(value: number, fallback = 0): number {
@@ -58,6 +87,9 @@ export function armLedgerPoint(receipt: ArmLedgerSource, generation: number): Ar
     firstGraspSeconds: Math.max(0, finite(receipt.firstGraspTimeSeconds)),
     graspSeconds: Math.max(0, finite(receipt.graspDurationSeconds)),
     everGrasped: receipt.everGrasped === true,
+    ownerReportedPlaced: receipt.ownerReportedPlaced === true,
+    minimumClearanceMeters: Math.max(0, finite(receipt.minimumCertifiedClearanceMeters ?? 0)),
+    unprovenSeparationSeconds: Math.max(0, finite(receipt.possibleCollisionTimeSeconds ?? 0)),
   };
 }
 
