@@ -2117,6 +2117,15 @@ export function HouseholdArmFlagship({
       setArmDragTarget(null);
       setArmUnreachable(false);
       setArmCollisionState({ isColliding: false, clearance: 1.0 });
+      // The ledger is per-task: mug points and trowel points are measurements of
+      // different problems, and keeping both would compare each task's progress
+      // against the other task's seed. The training clock resets with them,
+      // because it counted search spent on the task being left behind.
+      setLedger([]);
+      setStagePolicy(null);
+      trainingSecondsRef.current = 0;
+      trainingStartedAtRef.current = null;
+      setTrainingSeconds(0);
       setGeneration(0);
       setError(null);
       setBusy("preview");
