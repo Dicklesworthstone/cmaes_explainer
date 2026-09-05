@@ -154,7 +154,8 @@ export interface OwnerArtifactManifest {
     phaseBasisCount: number;
     poseOrder: string;
     curriculumIndices: { bias: number[]; phase: number[]; feedback: number[] };
-    armSwingGateSeconds: number[];
+    // Decimal strings preserve every f64 bit through production JSON bundling.
+    armSwingGateSeconds: string[];
   };
 }
 
@@ -193,7 +194,9 @@ export async function verifyOwnerArtifacts(
     g1.phaseBasisCount !== 8 ||
     g1.poseOrder !== "pelvis-then-source-joints" ||
     !/^[0-9a-f]{40}$/.test(g1.sourceUrdfRevision) ||
-    JSON.stringify(g1.armSwingGateSeconds) !==
+    !Array.isArray(g1.armSwingGateSeconds) ||
+    !g1.armSwingGateSeconds.every((seconds) => typeof seconds === "string") ||
+    JSON.stringify(g1.armSwingGateSeconds.map(Number)) !==
       JSON.stringify([1 / 3.1, 3 / 3.1]) ||
     !Array.isArray(g1.learnedJointIndices) ||
     g1.learnedJointIndices.length !== 15 ||

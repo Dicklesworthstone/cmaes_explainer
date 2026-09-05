@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cmaesexplainer.vercel.app"),
+  metadataBase: new URL("https://cmaes-explainer.vercel.app"),
   title: "CMA-ES: A Love Letter to My Favorite Black-Box Optimizer",
   description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
   authors: [{ name: "Jeffrey Emanuel", url: "https://jeffreyemanuel.com/" }],

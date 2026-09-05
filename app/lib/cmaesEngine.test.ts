@@ -1576,7 +1576,10 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
       manifest.g1.reflexJointIndices[0] = 0;
     },
     (manifest) => {
-      manifest.g1.armSwingGateSeconds[0] = 0.5;
+      manifest.g1.armSwingGateSeconds[0] = "0.5";
+    },
+    (manifest) => {
+      manifest.g1.armSwingGateSeconds[1] = "0.9677419354838708";
     },
     (manifest) => {
       manifest.g1.curriculumIndices.feedback[0] += 1;
