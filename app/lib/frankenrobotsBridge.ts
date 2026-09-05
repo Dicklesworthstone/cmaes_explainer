@@ -22,6 +22,7 @@ export type FrankenRobotsCamera =
   | "front"
   | "fly";
 export type FrankenRobotsPlaybackSpeed = 0.25 | 0.5 | 1 | 2;
+export type FrankenRobotsSeedIndex = 0 | 1 | 2;
 export type FrankenRobotsReceiptLens =
   | "owner-receipt"
   | "cautious-monk"
@@ -41,7 +42,9 @@ export type FrankenRobotsCommandKind =
   | "set-speed"
   | "set-camera"
   | "select-receipt-lens"
-  | "set-overlay";
+  | "set-overlay"
+  | "set-seed"
+  | "set-sigma";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -58,6 +61,8 @@ export type FrankenRobotsNativeCommand = {
   receiptLens?: FrankenRobotsReceiptLens;
   overlay?: FrankenRobotsOverlay;
   enabled?: boolean;
+  seedIndex?: FrankenRobotsSeedIndex;
+  sigma?: number;
 };
 
 export type FrankenRobotsCommandResult = {
@@ -92,6 +97,32 @@ const commandOutcomesByLab: Record<
 > = {
   humanoid: new Map(),
   arm: new Map(),
+};
+
+const COMMAND_ENVELOPE_KEYS = new Set([
+  "type",
+  "schemaVersion",
+  "commandId",
+  "lab",
+  "command",
+]);
+
+const COMMAND_ARGUMENT_KEYS: Record<FrankenRobotsCommandKind, ReadonlySet<string>> = {
+  optimize: new Set(),
+  stop: new Set(),
+  "select-task": new Set(["task"]),
+  "select-challenge": new Set(["challenge"]),
+  "select-family": new Set(["family"]),
+  replay: new Set(),
+  play: new Set(),
+  pause: new Set(),
+  seek: new Set(["sampleIndex"]),
+  "set-speed": new Set(["speed"]),
+  "set-camera": new Set(["camera"]),
+  "select-receipt-lens": new Set(["receiptLens"]),
+  "set-overlay": new Set(["overlay", "enabled"]),
+  "set-seed": new Set(["seedIndex"]),
+  "set-sigma": new Set(["sigma"]),
 };
 
 function postNativeMessage(
@@ -130,9 +161,19 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.command !== "set-speed" &&
       candidate.command !== "set-camera" &&
       candidate.command !== "select-receipt-lens" &&
-      candidate.command !== "set-overlay") ||
+      candidate.command !== "set-overlay" &&
+      candidate.command !== "set-seed" &&
+      candidate.command !== "set-sigma") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
+  ) {
+    return null;
+  }
+  const allowedArguments = COMMAND_ARGUMENT_KEYS[candidate.command as FrankenRobotsCommandKind];
+  if (
+    Object.keys(candidate).some(
+      (key) => !COMMAND_ENVELOPE_KEYS.has(key) && !allowedArguments.has(key),
+    )
   ) {
     return null;
   }
@@ -289,6 +330,24 @@ export function decodeFrankenRobotsNativeCommand(
     ) {
       return null;
     }
+  } else if (candidate.command === "set-seed") {
+    if (
+      !Number.isSafeInteger(candidate.seedIndex) ||
+      (candidate.seedIndex as number) < 0 ||
+      (candidate.seedIndex as number) > 2
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "set-sigma") {
+    if (
+      expectedLab !== "humanoid" ||
+      typeof candidate.sigma !== "number" ||
+      !Number.isFinite(candidate.sigma) ||
+      candidate.sigma < 0.0002 ||
+      candidate.sigma > 0.01
+    ) {
+      return null;
+    }
   } else if (
     candidate.task !== undefined ||
     candidate.challenge !== undefined ||
@@ -353,6 +412,8 @@ export function installFrankenRobotsNativeCommandHandler(
       ...(command.receiptLens ? { receiptLens: command.receiptLens } : {}),
       ...(command.overlay ? { overlay: command.overlay } : {}),
       ...(command.enabled !== undefined ? { enabled: command.enabled } : {}),
+      ...(command.seedIndex !== undefined ? { seedIndex: command.seedIndex } : {}),
+      ...(command.sigma !== undefined ? { sigma: command.sigma } : {}),
       accepted: result.accepted,
       detail: result.detail.slice(0, 300),
     });
@@ -401,6 +462,8 @@ export function reportFrankenRobotsEngineState(
             "set-camera",
             "select-receipt-lens",
             "set-overlay",
+            "set-seed",
+            "set-sigma",
           ]
         : [
             "optimize",
@@ -412,6 +475,7 @@ export function reportFrankenRobotsEngineState(
             "set-speed",
             "set-camera",
             "set-overlay",
+            "set-seed",
           ],
   });
 }

@@ -66,6 +66,10 @@ final class RobotEngineBridgeTests: XCTestCase {
         )
         XCTAssertEqual(RobotPlaybackSpeed.allCases.map(\.rawValue), [0.25, 0.5, 1, 2])
         XCTAssertEqual(
+            RobotSearchSigmaPreset.allCases.map(\.value),
+            [0.0002, 0.0005, 0.001, 0.005, 0.01]
+        )
+        XCTAssertEqual(
             RobotOverlayMode.available(for: .humanoid).map(\.rawValue),
             ["xray", "physics-debug"]
         )
@@ -218,21 +222,25 @@ final class RobotEngineBridgeTests: XCTestCase {
         var taskCapability = statusPayload()
         taskCapability["capabilities"] = [
             "optimize", "select-task", "select-challenge", "select-family",
-            "select-receipt-lens", "set-overlay"
+            "select-receipt-lens", "set-overlay", "set-seed", "set-sigma"
         ]
         taskCapability["metrics"] = [
             "activeTask": "walking",
             "activeChallenge": "flat",
-            "activeFamily": "lm-ma"
+            "activeFamily": "lm-ma",
+            "activeSeedIndex": 2,
+            "activeSigma": 0.0005
         ]
-        XCTAssertEqual(
-            RobotEngineStatusMessage(payload: taskCapability)?.metrics.activeTask,
-            .walking
-        )
+        let taskEvent = try XCTUnwrap(RobotEngineStatusMessage(payload: taskCapability))
+        XCTAssertEqual(taskEvent.metrics.activeTask, .walking)
+        XCTAssertEqual(taskEvent.metrics.activeSeedIndex, 2)
+        XCTAssertEqual(taskEvent.metrics.activeSigma, 0.0005)
         taskCapability["lab"] = "arm"
         XCTAssertNil(RobotEngineStatusMessage(payload: taskCapability))
         var armCapability = statusPayload(lab: "arm")
-        armCapability["capabilities"] = ["optimize", "select-task", "select-family", "set-overlay"]
+        armCapability["capabilities"] = [
+            "optimize", "select-task", "select-family", "set-overlay", "set-seed"
+        ]
         armCapability["metrics"] = [
             "activeArmTask": "backyard-trowel",
             "activeFamily": "full"
@@ -242,6 +250,14 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(armEvent.metrics.activeFamily, .full)
         armCapability["capabilities"] = ["select-receipt-lens"]
         XCTAssertNil(RobotEngineStatusMessage(payload: armCapability))
+        armCapability = statusPayload(lab: "arm")
+        armCapability["metrics"] = ["activeSigma": 0.001]
+        XCTAssertNil(RobotEngineStatusMessage(payload: armCapability))
+        var invalidRunSetup = statusPayload()
+        invalidRunSetup["metrics"] = ["activeSeedIndex": 3]
+        XCTAssertNil(RobotEngineStatusMessage(payload: invalidRunSetup))
+        invalidRunSetup["metrics"] = ["activeSigma": 0.02]
+        XCTAssertNil(RobotEngineStatusMessage(payload: invalidRunSetup))
         var invalidHumanoidFamily = statusPayload()
         invalidHumanoidFamily["metrics"] = ["activeFamily": "full"]
         XCTAssertNil(RobotEngineStatusMessage(payload: invalidHumanoidFamily))
@@ -383,6 +399,23 @@ final class RobotEngineBridgeTests: XCTestCase {
         overlayPayload["enabled"] = true
         overlayPayload["lab"] = "humanoid"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: overlayPayload))
+
+        var seedPayload = payload
+        seedPayload["commandId"] = "9B84A8A2-seed"
+        seedPayload["command"] = "set-seed"
+        seedPayload["seedIndex"] = 1
+        XCTAssertEqual(RobotEngineCommandAcknowledgement(payload: seedPayload)?.seedIndex, 1)
+        seedPayload["seedIndex"] = 3
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: seedPayload))
+
+        var sigmaPayload = payload
+        sigmaPayload["commandId"] = "9B84A8A2-sigma"
+        sigmaPayload["lab"] = "humanoid"
+        sigmaPayload["command"] = "set-sigma"
+        sigmaPayload["sigma"] = 0.0005
+        XCTAssertEqual(RobotEngineCommandAcknowledgement(payload: sigmaPayload)?.sigma, 0.0005)
+        sigmaPayload["lab"] = "arm"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: sigmaPayload))
 
         for command in ["replay", "play", "pause"] {
             var transportPayload = payload

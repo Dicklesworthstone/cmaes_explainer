@@ -170,6 +170,40 @@ describe("FrankenRobots native command contract", () => {
     ).toBeNull();
   });
 
+  test("accepts only bounded owner seed and exploration-radius settings", () => {
+    const seed = {
+      ...valid,
+      commandId: "seed-two",
+      command: "set-seed",
+      seedIndex: 1,
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(seed, "humanoid")).toEqual(seed);
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...seed, lab: "arm" }, "arm"),
+    ).toEqual({ ...seed, lab: "arm" });
+    expect(decodeFrankenRobotsNativeCommand({ ...seed, seedIndex: 3 }, "humanoid")).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...seed, seedIndex: 1.5 }, "humanoid")).toBeNull();
+
+    const sigma = {
+      ...valid,
+      commandId: "sigma-refine",
+      command: "set-sigma",
+      sigma: 0.0005,
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(sigma, "humanoid")).toEqual(sigma);
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...sigma, lab: "arm" }, "arm"),
+    ).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...sigma, sigma: 0.0001 }, "humanoid")).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...sigma, sigma: Number.NaN }, "humanoid")).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...sigma, secretOverride: true }, "humanoid"),
+    ).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...valid, command: "optimize", sigma: 0.001 }, "humanoid"),
+    ).toBeNull();
+  });
+
   test("rejects foreign schema, lab, command, and unsafe IDs", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...valid, schemaVersion: 2 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(valid, "arm")).toBeNull();
@@ -293,6 +327,8 @@ describe("FrankenRobots native command contract", () => {
       });
       expect(messages[0]?.capabilities).toContain("select-receipt-lens");
       expect(messages[0]?.capabilities).toContain("set-overlay");
+      expect(messages[0]?.capabilities).toContain("set-seed");
+      expect(messages[0]?.capabilities).toContain("set-sigma");
       expect(messages[1]).toMatchObject({
         type: "trace.state",
         receiptLens: "glass-floor",

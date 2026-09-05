@@ -391,6 +391,27 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [humanoidFamilySelected], timeout: 8), .completed)
 
+        let runSetup = app.buttons["robot-native-run-setup"]
+        XCTAssertTrue(runSetup.isHittable, app.debugDescription)
+        runSetup.tap()
+        let seedTwo = app.buttons["robot-seed-1"]
+        XCTAssertTrue(seedTwo.waitForExistence(timeout: 5), app.debugDescription)
+        seedTwo.tap()
+        var setupReflected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS[c] 'Seed 2'"),
+            object: runSetup
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [setupReflected], timeout: 8), .completed)
+        runSetup.tap()
+        let measuredSigma = app.buttons["robot-sigma-measured"]
+        XCTAssertTrue(measuredSigma.waitForExistence(timeout: 5), app.debugDescription)
+        measuredSigma.tap()
+        setupReflected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS[c] '0.001'"),
+            object: runSetup
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [setupReflected], timeout: 8), .completed)
+
         let arm = app.segmentedControls.buttons["Robot Arm"]
         XCTAssertTrue(arm.isHittable, app.debugDescription)
         arm.tap()
@@ -428,8 +449,20 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [armFamilySelected], timeout: 8), .completed)
 
+        let armRunSetup = app.buttons["robot-native-run-setup"]
+        XCTAssertTrue(armRunSetup.isHittable, app.debugDescription)
+        armRunSetup.tap()
+        let seedThree = app.buttons["robot-seed-2"]
+        XCTAssertTrue(seedThree.waitForExistence(timeout: 5), app.debugDescription)
+        seedThree.tap()
+        setupReflected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'Seed 3'"),
+            object: armRunSetup
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [setupReflected], timeout: 8), .completed)
+
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        screenshot.name = "Native owner task challenge and optimizer selectors"
+        screenshot.name = "Native owner task challenge optimizer seed and sigma selectors"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }

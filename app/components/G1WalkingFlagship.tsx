@@ -2572,6 +2572,27 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (!workerAvailable || !workerRef.current || !admission) {
         return { accepted: false, detail: "The humanoid owner worker is not ready." };
       }
+      if (command.command === "set-seed") {
+        if (busy !== null || inFlightRef.current || command.seedIndex === undefined) {
+          return { accepted: false, detail: "Finish the current owner request before changing seed." };
+        }
+        setSeedIndex(command.seedIndex);
+        return {
+          accepted: true,
+          detail: `Accepted declared Humanoid Philox seed ${command.seedIndex + 1} for the next owner run.`,
+        };
+      }
+      if (command.command === "set-sigma") {
+        if (busy !== null || inFlightRef.current || command.sigma === undefined) {
+          return { accepted: false, detail: "Finish the current owner request before changing sigma." };
+        }
+        sigmaRef.current = command.sigma;
+        setSearchSigma(command.sigma);
+        return {
+          accepted: true,
+          detail: `Accepted Humanoid exploration σ ${command.sigma.toFixed(4)} for the next owner run.`,
+        };
+      }
       if (command.command === "select-task") {
         if (busy !== null || inFlightRef.current) {
           return { accepted: false, detail: "Finish or stop the current owner request first." };
@@ -2665,6 +2686,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     challenge,
     task,
     family,
+    seedIndex,
+    searchSigma,
     trace,
     curriculumTrace,
     selectedPreset,
@@ -2941,9 +2964,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         activeTask: task,
         activeChallenge: challenge,
         activeFamily: family,
+        activeSeedIndex: seedIndex,
+        activeSigma: searchSigma,
       },
     );
-  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task, challenge, family]);
+  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task, challenge, family, seedIndex, searchSigma]);
 
   useEffect(() => {
     if (!embedded) return;

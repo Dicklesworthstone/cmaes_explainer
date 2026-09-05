@@ -471,6 +471,7 @@ struct FrankenRobotsView: View {
                 engine.phase != .ready || engine.pendingCommandID != nil ||
                     !engine.supportsFamilySelection
             )
+            runSetupMenu
             Spacer(minLength: 0)
         }
         .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
@@ -480,6 +481,68 @@ struct FrankenRobotsView: View {
 
     private var availableOptimizerFamilies: [RobotOptimizerFamily] {
         lab == .humanoid ? RobotOptimizerFamily.scalableCases : RobotOptimizerFamily.allCases
+    }
+
+    private var runSetupMenu: some View {
+        Menu {
+            Section("Declared Philox seed") {
+                ForEach(0..<3, id: \.self) { index in
+                    Button {
+                        engine.selectSeed(index: index)
+                    } label: {
+                        if engine.activeSeedIndex == index {
+                            Label("Seed \(index + 1)", systemImage: "checkmark")
+                        } else {
+                            Text("Seed \(index + 1)")
+                        }
+                    }
+                    .disabled(!engine.supportsSeedSelection)
+                    .accessibilityIdentifier("robot-seed-\(index)")
+                }
+            }
+            if lab == .humanoid {
+                Section("Exploration radius σ") {
+                    ForEach(RobotSearchSigmaPreset.allCases) { preset in
+                        Button {
+                            engine.selectSearchSigma(preset.value)
+                        } label: {
+                            if engine.activeSearchSigma == preset.value {
+                                Label(preset.title, systemImage: "checkmark")
+                            } else {
+                                Text(preset.title)
+                            }
+                        }
+                        .disabled(!engine.supportsSigmaSelection)
+                        .accessibilityIdentifier("robot-sigma-\(preset.rawValue)")
+                    }
+                }
+            }
+        } label: {
+            ViewThatFits(in: .horizontal) {
+                Label(runSetupValue, systemImage: "dial.medium")
+                Label("Run setup", systemImage: "dial.medium")
+                Image(systemName: "dial.medium")
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .accessibilityIdentifier("robot-native-run-setup")
+        .accessibilityLabel("Owner run setup")
+        .accessibilityValue(runSetupValue)
+        .accessibilityHint("Selects the declared owner seed and Humanoid exploration radius before learning")
+        .disabled(
+            engine.phase != .ready || engine.pendingCommandID != nil ||
+                (!engine.supportsSeedSelection && !engine.supportsSigmaSelection)
+        )
+    }
+
+    private var runSetupValue: String {
+        let seed = "Seed \(engine.activeSeedIndex + 1)"
+        guard lab == .humanoid else { return seed }
+        let sigma = engine.activeSearchSigma.formatted(
+            .number.precision(.fractionLength(2...4))
+        )
+        return "\(seed) · σ \(sigma)"
     }
 
     private var nativeTransportBar: some View {

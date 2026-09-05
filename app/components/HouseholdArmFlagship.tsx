@@ -1973,6 +1973,7 @@ export function HouseholdArmFlagship({
       possibleCollisionTimeSeconds: trace?.possibleCollisionTimeSeconds ?? null,
       activeArmTask: task,
       activeFamily: family,
+      activeSeedIndex: seedIndex,
     });
   }, [
     embedded,
@@ -1985,6 +1986,7 @@ export function HouseholdArmFlagship({
     bestObjective,
     task,
     family,
+    seedIndex,
   ]);
 
   const post = useCallback(
@@ -2210,6 +2212,16 @@ export function HouseholdArmFlagship({
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The arm owner worker is not ready." };
       }
+      if (command.command === "set-seed") {
+        if (busy !== null || inFlightRef.current || command.seedIndex === undefined) {
+          return { accepted: false, detail: "Finish the current owner request before changing seed." };
+        }
+        setSeedIndex(command.seedIndex);
+        return {
+          accepted: true,
+          detail: `Accepted declared Arm Philox seed ${command.seedIndex + 1} for the next owner run.`,
+        };
+      }
       if (command.command === "select-task") {
         if (busy !== null || inFlightRef.current) {
           return { accepted: false, detail: "Finish or stop the current owner request first." };
@@ -2285,6 +2297,7 @@ export function HouseholdArmFlagship({
     stopContinuousOptimization,
     task,
     family,
+    seedIndex,
     trace,
     curriculumTrace,
     seekPlayback,
