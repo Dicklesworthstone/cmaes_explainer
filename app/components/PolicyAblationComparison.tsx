@@ -128,7 +128,8 @@ export function PolicyAblationComparison() {
             action-causal stand-in, where forward motion requires real actuator
             work. CMA-ES searches that contract live. The transformer runs the
             committed 2.9M-parameter trunk with a policy head trained offline on
-            this same reward, which is why it moves at all — see below.
+            this same reward, reaching 7.09 m against the prior&apos;s 7.05 m at
+            this budget — see below.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -255,21 +256,30 @@ export function PolicyAblationComparison() {
           that granted target speed regardless of action.
         </p>
         <p className="leading-relaxed">
-          What ships now keeps that trunk byte-for-byte, frozen, and replaces
-          only the 29×256 output layer. That layer was first fitted by ridge
-          regression to the gait CMA-ES finds
+          What ships now keeps that trunk byte-for-byte and frozen, fixes its
+          observation normalisation — the artifact shipped with mean 0 and
+          variance 1, i.e. normalisation switched off, while joint velocities
+          have twelve times the spread of joint positions and one channel is a
+          constant −9.81 — and trains only the 29×256 output layer. That layer
+          is initialised by ridge regression onto the CMA-ES gait
           (<code className="text-neutral-200">scripts/fit-transformer-head.ts</code>,
-          6.63 m), then trained on this environment&apos;s own reward by an
-          evolution strategy over 2,401 episodes
+          6.76 m) and then searched against this environment&apos;s own reward by
+          an evolution strategy with momentum and step-size adaptation
           (<code className="text-neutral-200">scripts/train-transformer-head.ts</code>),
-          reaching 6.86 m measured on three held-out seeds. So it is trained, not
-          merely copied — but the 2.9M-parameter trunk beneath it is still an
-          untrained initialisation, and a linear readout of frozen random
-          features is the whole of what improved. That is the honest reason it
-          lands a little short of a hand-designed phase basis that CMA-ES tuned
-          for this exact contract. Both cards are evaluated on the action-causal
+          reaching <strong className="text-neutral-200">7.09 m</strong> on three
+          held-out seeds it never trained on. Both cards run on the action-causal
           kinematic stand-in, which has no push/joint-limit/slip telemetry; it is
           not the full G1 owner.
+        </p>
+        <p className="leading-relaxed">
+          Which architecture wins depends entirely on the search budget, and
+          saying so is the actual finding. At the 4,000-evaluation budget this
+          panel runs live, the phase prior reaches 7.05 m and the transformer
+          7.09 m. Give the phase prior 12,000 evaluations and it reaches 7.29 m,
+          ahead again — 105 well-chosen parameters converge further than 3,840
+          generic ones, because the phase basis already encodes the answer&apos;s
+          shape. The transformer gets more from less search; the prior gets more
+          from more search.
         </p>
         <p className="leading-relaxed">
           The original v1 export remains available with its zero policy head.

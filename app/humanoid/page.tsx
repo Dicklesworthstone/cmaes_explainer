@@ -91,13 +91,16 @@ export default function HumanoidPage() {
             all 60 iterations, checkpoint from iteration 0, and a policy head
             exported entirely zero, so it emitted no action at all. Rather than
             display that as a result, the shipped artifact keeps that trunk
-            frozen and trains only its 29×256 output layer — first cloned from
-            the CMA-ES gait, then searched against this environment&apos;s own
-            reward — until it walks 6.86 m. The contract caps speed at 0.65 m/s,
-            so 7.80 m is the most any policy can travel here: CMA-ES reaches 90%
-            of that and the transformer 88%. Both sit near a wall neither can
-            pass, which is the useful comparison — not which number is larger.
-            Artifacts remain under{" "}
+            frozen, repairs its observation normalisation, and trains only the
+            29×256 output layer — cloned from the CMA-ES gait, then searched
+            against this environment&apos;s own reward — until it walks{" "}
+            <strong>7.09 m</strong>, past the phase prior&apos;s 7.05 m at the
+            same budget. The contract caps speed at 0.65 m/s, so 7.80 m is the
+            most anything can travel here; give the 105-parameter prior three
+            times the search and it reaches 7.29 m and leads again. Which
+            architecture wins is a question about budget, not about
+            architecture, and that is the point worth taking away. Artifacts
+            remain under{" "}
             <code className="break-all">public/robots/g1/transformer/</code>.
           </p>
           <div className="mt-6">
