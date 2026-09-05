@@ -600,7 +600,24 @@ async function run() {
           before,
           observed,
         });
-        await ownerPage.evaluate(() => window.scrollTo(0, 0));
+        await ownerPage.evaluate(() =>
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
+        );
+        await ownerPage.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve()),
+              ),
+            ),
+        );
+        assert(
+          await ownerPage.locator("canvas").evaluate((canvas) => {
+            const gl = (canvas as HTMLCanvasElement).getContext("webgl2");
+            return gl !== null && !gl.isContextLost();
+          }),
+          "The G1 renderer lost its WebGL context",
+        );
       }
       await ownerPage.screenshot({
         path: join(out, `owner-${changed ?? "valid"}.png`),
