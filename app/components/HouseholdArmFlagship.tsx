@@ -1767,6 +1767,7 @@ export function HouseholdArmFlagship({
     };
   }, [requestedReducedMotion]);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const diagnosticsRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, {
     rootMargin: "600px 0px 600px 0px",
   });
@@ -2365,6 +2366,24 @@ export function HouseholdArmFlagship({
                   <span>{physicsDebug ? "Physics ON" : "Physics"}</span>
                 </button>
 
+                {embedded ? (
+                  <button
+                    type="button"
+                    aria-label="Show diagnostics and all arm controls"
+                    onClick={() =>
+                      diagnosticsRef.current?.scrollIntoView({
+                        behavior: reduceMotion ? "auto" : "smooth",
+                        block: "start",
+                      })
+                    }
+                    className="flex items-center gap-1 rounded-full border border-cyan-300/35 bg-cyan-950/85 px-2 py-1 text-[0.58rem] font-bold uppercase tracking-wider text-cyan-100 backdrop-blur-md transition-colors hover:bg-cyan-900/70"
+                    title="Jump past the interactive 3D stage to diagnostics, optimization, policy, and receipt controls"
+                  >
+                    <Sliders className="h-3.5 w-3.5" />
+                    <span>All controls ↓</span>
+                  </button>
+                ) : null}
+
                 {/* Export Telemetry Receipt Button */}
                 {trace && (
                   <button
@@ -2682,7 +2701,10 @@ export function HouseholdArmFlagship({
           {/* These diagnostics are part of the arm lab, including the native
               embedded route. Compact hosting may change spacing, but must not
               remove the grasp or joint-limit controls. */}
-          <div className={`mt-3 flex flex-col gap-3 ${embedded ? "px-1 pb-1" : ""}`}>
+          <div
+            ref={diagnosticsRef}
+            className={`mt-3 flex scroll-mt-2 flex-col gap-3 ${embedded ? "px-1 pb-1" : ""}`}
+          >
             <ArmGraspMicroscopeHUD
               sample={currentSampleForHUD}
               enabled={microscopeMode}

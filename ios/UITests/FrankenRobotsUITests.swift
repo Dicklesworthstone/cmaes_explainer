@@ -199,9 +199,7 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [armReady], timeout: 55), .completed)
 
-        let frictionCones = app.buttons.matching(
-            NSPredicate(format: "label ==[c] 'Friction cones'")
-        ).firstMatch
+        let frictionCones = app.buttons["FRICTION CONES"]
         let graspCamera = app.buttons["Grasp Focus camera"]
         XCTAssertTrue(frictionCones.waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(frictionCones.isHittable, app.debugDescription)
@@ -219,9 +217,9 @@ final class FrankenRobotsUITests: XCTestCase {
         let jointKinematics = app.staticTexts.matching(
             NSPredicate(format: "label CONTAINS[c] '7-DoF iiwa Joint Kinematics'")
         ).firstMatch
-        for _ in 0..<8 where !(graspMicroscope.isHittable && jointKinematics.isHittable) {
-            workspace.swipeUp()
-        }
+        let showArmControls = app.buttons["Show diagnostics and all arm controls"]
+        XCTAssertTrue(showArmControls.isHittable, app.debugDescription)
+        showArmControls.tap()
         XCTAssertTrue(graspMicroscope.isHittable, app.debugDescription)
         XCTAssertTrue(jointKinematics.isHittable, app.debugDescription)
 
