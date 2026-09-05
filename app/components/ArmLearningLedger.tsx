@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   armAccuracyImprovement,
   armEnergyImprovement,
+  armRefusalReason,
   type ArmLedgerPoint,
 } from "../lib/armLearningLedger";
 
@@ -143,8 +144,8 @@ export function ArmLearningLedger({
         />
         <Stat
           label="Owner verdict"
-          value={latest.placed ? "placed" : latest.everGrasped ? "not placed" : "never grasped"}
-          hint={latest.placed ? "collision-safe" : "refused"}
+          value={latest.placed ? "placed" : "refused"}
+          hint={latest.placed ? "collision-safe" : armRefusalReason(latest)}
           tone={latest.placed ? "plain" : "bad"}
         />
         <Stat
@@ -220,7 +221,9 @@ export function ArmLearningLedger({
         Placement error is the distance from the object&apos;s final centre to
         the goal, read from the same owner receipt as the objective. Amber points
         are rollouts the owner refused — a falling error line means nothing if
-        the placement was not accepted.
+        the placement was not accepted. A task can improve its accuracy for
+        thousands of generations and stay refused: a solid body is something the
+        search is blocked BY, not a penalty it can trade against.
       </p>
     </div>
   );

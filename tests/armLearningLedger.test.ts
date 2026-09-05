@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   appendArmLedgerPoint,
+  armRefusalReason,
   armAccuracyImprovement,
   armEnergyImprovement,
   armLedgerPoint,
@@ -68,6 +69,42 @@ describe("arm learning ledger", () => {
     expect(armEnergyImprovement(seed, failedCheaply)).toBeNull();
     const failedSeed = armLedgerPoint(receipt({ placed: false }), 0);
     expect(armEnergyImprovement(failedSeed, cheaper)).toBeNull();
+  });
+
+  test("says why the owner refused, so a permanently hard task is not a mystery", () => {
+    // The trowel is deliberately refusable, and stays refused through hundreds
+    // of generations while its accuracy improves. Without a reason on screen
+    // that reads as a broken page.
+    const blocked = armLedgerPoint(
+      receipt({
+        placed: false,
+        ownerReportedPlaced: true,
+        possibleCollisionTimeSeconds: 0.42,
+        minimumCertifiedClearanceMeters: 0.012,
+      }),
+      512,
+    );
+    expect(armRefusalReason(blocked)).toBe("collision envelope · 12 mm closest certified clearance");
+
+    const noGrasp = armLedgerPoint(receipt({ placed: false, everGrasped: false }), 8);
+    expect(armRefusalReason(noGrasp)).toBe("never grasped the object");
+
+    const ownerRefused = armLedgerPoint(
+      receipt({ placed: false, ownerReportedPlaced: false }),
+      8,
+    );
+    expect(armRefusalReason(ownerRefused)).toBe("owner did not report a placement");
+
+    // The browser's fail-closed re-check disagreeing with the owner is its own
+    // distinct case, and must not be reported as one of the others.
+    const browserRefused = armLedgerPoint(
+      receipt({ placed: false, ownerReportedPlaced: true }),
+      8,
+    );
+    expect(armRefusalReason(browserRefused)).toBe("browser collision re-check refused it");
+
+    // A placement the owner accepted has no refusal to explain.
+    expect(armRefusalReason(armLedgerPoint(receipt(), 8))).toBeNull();
   });
 
   test("re-measuring a generation replaces it rather than drawing a second point", () => {
