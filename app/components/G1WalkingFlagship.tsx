@@ -1310,7 +1310,14 @@ function CameraRig({
       const lookAt: [number, number, number] = [pelvis[0], pelvis[1] + 0.15, pelvis[2]];
       const boom = chooseBoom(lookAt, h, FOLLOW_BOOM_LENGTH, FOLLOW_BOOM_HEIGHT, obstacles, followAzimuth.current);
       followAzimuth.current = boom.azimuthDeg;
-      cameraScratchVec.set(...boom.position);
+      // A terminated rollout can put the look-at point inside a keep-out
+      // body. Every swept boom then collapses to that point, placing the
+      // camera inside the robot. Show the measured contact from above.
+      if (boom.fraction < 0.45) {
+        cameraScratchVec.set(pelvis[0] + 0.3, 5.5, pelvis[2] + 0.01);
+      } else {
+        cameraScratchVec.set(...boom.position);
+      }
       camera.position.lerp(cameraScratchVec, ease(3.5));
       lookAtRef.current.lerp(new THREE.Vector3(...lookAt), ease(6));
     } else if (cameraView === "pov") {
@@ -2009,7 +2016,7 @@ function stageSceneHint(
     case "orbit":
       return "1928 Sears Craftsman Living Room · Drag to orbit · pinch to zoom.";
     case "follow":
-      return "1928 Sears Craftsman Living Room · Follow camera tracks the pelvis.";
+      return "Follow camera tracks the pelvis; blocked views rise above the robot.";
     case "pov":
       return "1928 Sears Craftsman Living Room · Robot point of view.";
     case "blueprint":
