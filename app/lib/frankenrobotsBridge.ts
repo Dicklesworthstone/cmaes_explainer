@@ -22,6 +22,12 @@ export type FrankenRobotsCamera =
   | "front"
   | "fly";
 export type FrankenRobotsPlaybackSpeed = 0.25 | 0.5 | 1 | 2;
+export type FrankenRobotsReceiptLens =
+  | "owner-receipt"
+  | "cautious-monk"
+  | "olympic-sprinter"
+  | "glass-floor";
+export type FrankenRobotsOverlay = "xray" | "physics-debug" | "friction-cones";
 export type FrankenRobotsCommandKind =
   | "optimize"
   | "stop"
@@ -33,7 +39,9 @@ export type FrankenRobotsCommandKind =
   | "pause"
   | "seek"
   | "set-speed"
-  | "set-camera";
+  | "set-camera"
+  | "select-receipt-lens"
+  | "set-overlay";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -47,6 +55,9 @@ export type FrankenRobotsNativeCommand = {
   sampleIndex?: number;
   speed?: FrankenRobotsPlaybackSpeed;
   camera?: FrankenRobotsCamera;
+  receiptLens?: FrankenRobotsReceiptLens;
+  overlay?: FrankenRobotsOverlay;
+  enabled?: boolean;
 };
 
 export type FrankenRobotsCommandResult = {
@@ -117,7 +128,9 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.command !== "pause" &&
       candidate.command !== "seek" &&
       candidate.command !== "set-speed" &&
-      candidate.command !== "set-camera") ||
+      candidate.command !== "set-camera" &&
+      candidate.command !== "select-receipt-lens" &&
+      candidate.command !== "set-overlay") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
   ) {
@@ -140,7 +153,10 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.family !== undefined ||
       candidate.sampleIndex !== undefined ||
       candidate.speed !== undefined ||
-      candidate.camera !== undefined
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
     ) {
       return null;
     }
@@ -152,7 +168,10 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.family !== undefined ||
       candidate.sampleIndex !== undefined ||
       candidate.speed !== undefined ||
-      candidate.camera !== undefined
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
     ) {
       return null;
     }
@@ -168,7 +187,10 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.challenge !== undefined ||
       candidate.sampleIndex !== undefined ||
       candidate.speed !== undefined ||
-      candidate.camera !== undefined
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
     ) {
       return null;
     }
@@ -180,7 +202,10 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.challenge !== undefined ||
       candidate.family !== undefined ||
       candidate.speed !== undefined ||
-      candidate.camera !== undefined
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
     ) {
       return null;
     }
@@ -194,7 +219,10 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.challenge !== undefined ||
       candidate.family !== undefined ||
       candidate.sampleIndex !== undefined ||
-      candidate.camera !== undefined
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
     ) {
       return null;
     }
@@ -218,7 +246,46 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.challenge !== undefined ||
       candidate.family !== undefined ||
       candidate.sampleIndex !== undefined ||
-      candidate.speed !== undefined
+      candidate.speed !== undefined ||
+      candidate.receiptLens !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "select-receipt-lens") {
+    if (
+      expectedLab !== "humanoid" ||
+      (candidate.receiptLens !== "owner-receipt" &&
+        candidate.receiptLens !== "cautious-monk" &&
+        candidate.receiptLens !== "olympic-sprinter" &&
+        candidate.receiptLens !== "glass-floor") ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined ||
+      candidate.overlay !== undefined ||
+      candidate.enabled !== undefined
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "set-overlay") {
+    const validOverlay =
+      expectedLab === "humanoid"
+        ? candidate.overlay === "xray" || candidate.overlay === "physics-debug"
+        : candidate.overlay === "friction-cones" || candidate.overlay === "physics-debug";
+    if (
+      !validOverlay ||
+      typeof candidate.enabled !== "boolean" ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined ||
+      candidate.receiptLens !== undefined
     ) {
       return null;
     }
@@ -228,7 +295,10 @@ export function decodeFrankenRobotsNativeCommand(
     candidate.family !== undefined ||
     candidate.sampleIndex !== undefined ||
     candidate.speed !== undefined ||
-    candidate.camera !== undefined
+    candidate.camera !== undefined ||
+    candidate.receiptLens !== undefined ||
+    candidate.overlay !== undefined ||
+    candidate.enabled !== undefined
   ) {
     return null;
   }
@@ -280,6 +350,9 @@ export function installFrankenRobotsNativeCommandHandler(
       ...(command.sampleIndex !== undefined ? { sampleIndex: command.sampleIndex } : {}),
       ...(command.speed !== undefined ? { speed: command.speed } : {}),
       ...(command.camera ? { camera: command.camera } : {}),
+      ...(command.receiptLens ? { receiptLens: command.receiptLens } : {}),
+      ...(command.overlay ? { overlay: command.overlay } : {}),
+      ...(command.enabled !== undefined ? { enabled: command.enabled } : {}),
       accepted: result.accepted,
       detail: result.detail.slice(0, 300),
     });
@@ -326,6 +399,8 @@ export function reportFrankenRobotsEngineState(
             "seek",
             "set-speed",
             "set-camera",
+            "select-receipt-lens",
+            "set-overlay",
           ]
         : [
             "optimize",
@@ -336,6 +411,7 @@ export function reportFrankenRobotsEngineState(
             "seek",
             "set-speed",
             "set-camera",
+            "set-overlay",
           ],
   });
 }
@@ -348,6 +424,8 @@ export function reportFrankenRobotsTraceState(
     playing: boolean;
     speed: FrankenRobotsPlaybackSpeed;
     camera: FrankenRobotsCamera;
+    receiptLens?: FrankenRobotsReceiptLens;
+    overlays: FrankenRobotsOverlay[];
   },
 ): void {
   if (typeof window === "undefined") return;
@@ -358,5 +436,7 @@ export function reportFrankenRobotsTraceState(
     playing: state.playing,
     speed: state.speed,
     camera: state.camera,
+    ...(state.receiptLens ? { receiptLens: state.receiptLens } : {}),
+    overlays: state.overlays,
   });
 }

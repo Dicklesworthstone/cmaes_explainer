@@ -497,6 +497,8 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [mapped], timeout: 8), .completed)
 
+        toggleNativeOverlay("xray", expectedValue: "biomechanics", in: app)
+
         replay.tap()
         let replayed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'curriculum replay'"),
@@ -524,10 +526,31 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [focused], timeout: 8), .completed)
 
+        toggleNativeOverlay("friction-cones", expectedValue: "friction cones", in: app)
+
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        screenshot.name = "Native trace transport and lab-specific cameras"
+        screenshot.name = "Native trace transport cameras and owner overlays"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    private func toggleNativeOverlay(
+        _ identifier: String,
+        expectedValue: String,
+        in app: XCUIApplication
+    ) {
+        let menu = app.buttons["robot-native-overlays"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(menu.isEnabled)
+        menu.tap()
+        let item = app.buttons["robot-overlay-\(identifier)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
+        item.tap()
+        let reflected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS[c] %@", expectedValue),
+            object: menu
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [reflected], timeout: 8), .completed)
     }
 
     func testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations() throws {

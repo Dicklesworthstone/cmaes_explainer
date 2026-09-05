@@ -65,6 +65,14 @@ final class RobotEngineBridgeTests: XCTestCase {
             ["studio", "microscope", "overhead", "side", "front", "fly"]
         )
         XCTAssertEqual(RobotPlaybackSpeed.allCases.map(\.rawValue), [0.25, 0.5, 1, 2])
+        XCTAssertEqual(
+            RobotOverlayMode.available(for: .humanoid).map(\.rawValue),
+            ["xray", "physics-debug"]
+        )
+        XCTAssertEqual(
+            RobotOverlayMode.available(for: .arm).map(\.rawValue),
+            ["friction-cones", "physics-debug"]
+        )
     }
 
     func testTextScaleUsesBrowserStyleBoundedSteps() {
@@ -208,7 +216,10 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(lab: "foreign")))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(state: "invented")))
         var taskCapability = statusPayload()
-        taskCapability["capabilities"] = ["optimize", "select-task", "select-challenge", "select-family"]
+        taskCapability["capabilities"] = [
+            "optimize", "select-task", "select-challenge", "select-family",
+            "select-receipt-lens", "set-overlay"
+        ]
         taskCapability["metrics"] = [
             "activeTask": "walking",
             "activeChallenge": "flat",
@@ -221,7 +232,7 @@ final class RobotEngineBridgeTests: XCTestCase {
         taskCapability["lab"] = "arm"
         XCTAssertNil(RobotEngineStatusMessage(payload: taskCapability))
         var armCapability = statusPayload(lab: "arm")
-        armCapability["capabilities"] = ["optimize", "select-task", "select-family"]
+        armCapability["capabilities"] = ["optimize", "select-task", "select-family", "set-overlay"]
         armCapability["metrics"] = [
             "activeArmTask": "backyard-trowel",
             "activeFamily": "full"
@@ -229,6 +240,8 @@ final class RobotEngineBridgeTests: XCTestCase {
         let armEvent = try XCTUnwrap(RobotEngineStatusMessage(payload: armCapability))
         XCTAssertEqual(armEvent.metrics.activeArmTask, .backyardTrowel)
         XCTAssertEqual(armEvent.metrics.activeFamily, .full)
+        armCapability["capabilities"] = ["select-receipt-lens"]
+        XCTAssertNil(RobotEngineStatusMessage(payload: armCapability))
         var invalidHumanoidFamily = statusPayload()
         invalidHumanoidFamily["metrics"] = ["activeFamily": "full"]
         XCTAssertNil(RobotEngineStatusMessage(payload: invalidHumanoidFamily))
@@ -343,6 +356,34 @@ final class RobotEngineBridgeTests: XCTestCase {
         cameraPayload["lab"] = "humanoid"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: cameraPayload))
 
+        var lensPayload = payload
+        lensPayload["commandId"] = "9B84A8A2-lens"
+        lensPayload["lab"] = "humanoid"
+        lensPayload["command"] = "select-receipt-lens"
+        lensPayload["receiptLens"] = "glass-floor"
+        XCTAssertEqual(
+            RobotEngineCommandAcknowledgement(payload: lensPayload)?.receiptLens,
+            .glassFloor
+        )
+        lensPayload["lab"] = "arm"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: lensPayload))
+
+        var overlayPayload = payload
+        overlayPayload["commandId"] = "9B84A8A2-overlay"
+        overlayPayload["command"] = "set-overlay"
+        overlayPayload["overlay"] = "friction-cones"
+        overlayPayload["enabled"] = true
+        let overlayAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: overlayPayload)
+        )
+        XCTAssertEqual(overlayAcknowledgement.overlay, .frictionCones)
+        XCTAssertEqual(overlayAcknowledgement.overlayEnabled, true)
+        overlayPayload["enabled"] = 1
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: overlayPayload))
+        overlayPayload["enabled"] = true
+        overlayPayload["lab"] = "humanoid"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: overlayPayload))
+
         for command in ["replay", "play", "pause"] {
             var transportPayload = payload
             transportPayload["commandId"] = "9B84A8A2-\(command)"
@@ -380,7 +421,7 @@ final class RobotEngineBridgeTests: XCTestCase {
             "sampleCount": 720,
             "playing": true,
             "speed": 0.5,
-            "camera": "follow",
+            "camera": "follow"
         ]
         let state = try XCTUnwrap(RobotTraceStateMessage(payload: valid))
         XCTAssertEqual(state.sampleIndex, 42)
@@ -403,7 +444,6 @@ final class RobotEngineBridgeTests: XCTestCase {
         malformed = valid
         malformed["camera"] = "studio"
         XCTAssertNil(RobotTraceStateMessage(payload: malformed))
-
         var empty = valid
         empty["sampleIndex"] = 0
         empty["sampleCount"] = 0
@@ -414,6 +454,44 @@ final class RobotEngineBridgeTests: XCTestCase {
         arm["lab"] = "arm"
         arm["camera"] = "microscope"
         XCTAssertEqual(RobotTraceStateMessage(payload: arm)?.camera, .microscope)
+    }
+
+    func testTraceStateRequiresLabOwnedReceiptLensAndOverlays() throws {
+        let humanoid: [String: Any] = [
+            "type": "trace.state",
+            "schemaVersion": 1,
+            "sequence": 12,
+            "lab": "humanoid",
+            "sampleIndex": 42,
+            "sampleCount": 720,
+            "playing": true,
+            "speed": 0.5,
+            "camera": "follow",
+            "receiptLens": "cautious-monk",
+            "overlays": ["xray", "physics-debug"]
+        ]
+        let state = try XCTUnwrap(RobotTraceStateMessage(payload: humanoid))
+        XCTAssertEqual(state.receiptLens, .cautious)
+        XCTAssertEqual(state.overlays, [.xray, .physicsDebug])
+
+        var malformed = humanoid
+        malformed["overlays"] = ["xray", "xray"]
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+        malformed = humanoid
+        malformed["receiptLens"] = "secret-lens"
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+
+        var arm = humanoid
+        arm["lab"] = "arm"
+        arm["camera"] = "microscope"
+        arm.removeValue(forKey: "receiptLens")
+        arm["overlays"] = ["friction-cones", "physics-debug"]
+        XCTAssertEqual(
+            RobotTraceStateMessage(payload: arm)?.overlays,
+            [.frictionCones, .physicsDebug]
+        )
+        arm["receiptLens"] = "owner-receipt"
+        XCTAssertNil(RobotTraceStateMessage(payload: arm))
     }
 
     private func statusPayload(

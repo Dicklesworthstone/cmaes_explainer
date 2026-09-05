@@ -134,6 +134,29 @@ enum RobotReceiptLens: String, CaseIterable, Identifiable {
     }
 }
 
+enum RobotOverlayMode: String, CaseIterable, Identifiable {
+    case xray
+    case physicsDebug = "physics-debug"
+    case frictionCones = "friction-cones"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .xray: "Biomechanics X-Ray"
+        case .physicsDebug: "Physics Envelopes"
+        case .frictionCones: "Friction Cones"
+        }
+    }
+
+    static func available(for lab: RobotLab) -> [RobotOverlayMode] {
+        switch lab {
+        case .humanoid: [.xray, .physicsDebug]
+        case .arm: [.frictionCones, .physicsDebug]
+        }
+    }
+}
+
 struct RobotEngineMetrics: Codable, Equatable {
     static let empty = RobotEngineMetrics()
 
@@ -321,11 +344,12 @@ struct RobotEngineStatusMessage {
         let allowedCapabilities: Set<String> = lab == .humanoid
             ? [
                 "optimize", "select-task", "select-challenge", "select-family", "replay",
-                "playback", "seek", "set-speed", "set-camera",
+                "playback", "seek", "set-speed", "set-camera", "select-receipt-lens",
+                "set-overlay"
             ]
             : [
                 "optimize", "select-task", "select-family", "replay", "playback", "seek",
-                "set-speed", "set-camera",
+                "set-speed", "set-camera", "set-overlay"
             ]
         guard Set(rawCapabilities).isSubset(of: allowedCapabilities) else { return nil }
         switch lab {
@@ -370,6 +394,8 @@ struct RobotTraceStateMessage {
     let playing: Bool
     let speed: RobotPlaybackSpeed
     let camera: RobotCameraMode
+    let receiptLens: RobotReceiptLens?
+    let overlays: Set<RobotOverlayMode>
 
     init?(payload: [String: Any]) {
         guard payload["type"] as? String == "trace.state",
@@ -390,6 +416,26 @@ struct RobotTraceStateMessage {
               RobotCameraMode.available(for: lab).contains(camera) else {
             return nil
         }
+        let rawOverlays: [String]
+        if let candidate = payload["overlays"] {
+            guard let values = candidate as? [String] else { return nil }
+            rawOverlays = values
+        } else {
+            rawOverlays = []
+        }
+        let overlays = rawOverlays.compactMap(RobotOverlayMode.init(rawValue:))
+        guard overlays.count == rawOverlays.count,
+              Set(overlays).count == overlays.count,
+              Set(overlays).isSubset(of: Set(RobotOverlayMode.available(for: lab))) else { return nil }
+        let receiptLens: RobotReceiptLens?
+        if let rawLens = payload["receiptLens"] {
+            guard lab == .humanoid,
+                  let rawLens = rawLens as? String,
+                  let lens = RobotReceiptLens(rawValue: rawLens) else { return nil }
+            receiptLens = lens
+        } else {
+            receiptLens = nil
+        }
         self.sequence = sequence
         self.lab = lab
         self.sampleIndex = sampleIndex
@@ -397,6 +443,8 @@ struct RobotTraceStateMessage {
         self.playing = playing
         self.speed = speed
         self.camera = camera
+        self.receiptLens = receiptLens
+        self.overlays = Set(overlays)
     }
 
     private static func integer(_ value: Any?) -> Int? {
@@ -431,6 +479,9 @@ struct RobotEngineCommandAcknowledgement {
     let sampleIndex: Int?
     let speed: RobotPlaybackSpeed?
     let camera: RobotCameraMode?
+    let receiptLens: RobotReceiptLens?
+    let overlay: RobotOverlayMode?
+    let overlayEnabled: Bool?
 
     init?(payload: [String: Any]) {
         guard payload["type"] as? String == "engine.command.ack",
@@ -444,7 +495,8 @@ struct RobotEngineCommandAcknowledgement {
               let command = payload["command"] as? String,
               [
                 "optimize", "stop", "select-task", "select-challenge", "select-family", "replay",
-                "play", "pause", "seek", "set-speed", "set-camera",
+                "play", "pause", "seek", "set-speed", "set-camera", "select-receipt-lens",
+                "set-overlay"
               ].contains(command),
               let accepted = payload["accepted"] as? Bool,
               let detail = payload["detail"] as? String,
@@ -459,13 +511,19 @@ struct RobotEngineCommandAcknowledgement {
         var sampleIndex: Int?
         var speed: RobotPlaybackSpeed?
         var camera: RobotCameraMode?
+        var receiptLens: RobotReceiptLens?
+        var overlay: RobotOverlayMode?
+        var overlayEnabled: Bool?
         if command == "select-task" {
             guard let rawTask = payload["task"] as? String,
                   payload["challenge"] == nil,
                   payload["family"] == nil,
                   payload["sampleIndex"] == nil,
                   payload["speed"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             switch lab {
             case .humanoid:
                 guard let selection = RobotLocomotionTask(rawValue: rawTask) else { return nil }
@@ -482,7 +540,10 @@ struct RobotEngineCommandAcknowledgement {
                   payload["family"] == nil,
                   payload["sampleIndex"] == nil,
                   payload["speed"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             challenge = selection
         } else if command == "select-family" {
             guard let rawFamily = payload["family"] as? String,
@@ -492,7 +553,10 @@ struct RobotEngineCommandAcknowledgement {
                   payload["challenge"] == nil,
                   payload["sampleIndex"] == nil,
                   payload["speed"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             family = selection
         } else if command == "seek" {
             guard let selection = Self.integer(payload["sampleIndex"]), selection >= 0,
@@ -500,7 +564,10 @@ struct RobotEngineCommandAcknowledgement {
                   payload["challenge"] == nil,
                   payload["family"] == nil,
                   payload["speed"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             sampleIndex = selection
         } else if command == "set-speed" {
             guard let rawSpeed = Self.finiteDouble(payload["speed"]),
@@ -509,7 +576,10 @@ struct RobotEngineCommandAcknowledgement {
                   payload["challenge"] == nil,
                   payload["family"] == nil,
                   payload["sampleIndex"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             speed = selection
         } else if command == "set-camera" {
             guard let rawCamera = payload["camera"] as? String,
@@ -519,15 +589,48 @@ struct RobotEngineCommandAcknowledgement {
                   payload["challenge"] == nil,
                   payload["family"] == nil,
                   payload["sampleIndex"] == nil,
-                  payload["speed"] == nil else { return nil }
+                  payload["speed"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
             camera = selection
+        } else if command == "select-receipt-lens" {
+            guard lab == .humanoid,
+                  let rawLens = payload["receiptLens"] as? String,
+                  let selection = RobotReceiptLens(rawValue: rawLens),
+                  payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
+            receiptLens = selection
+        } else if command == "set-overlay" {
+            guard let rawOverlay = payload["overlay"] as? String,
+                  let selection = RobotOverlayMode(rawValue: rawOverlay),
+                  RobotOverlayMode.available(for: lab).contains(selection),
+                  let enabled = payload["enabled"] as? Bool,
+                  payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil else { return nil }
+            overlay = selection
+            overlayEnabled = enabled
         } else {
             guard payload["task"] == nil,
                   payload["challenge"] == nil,
                   payload["family"] == nil,
                   payload["sampleIndex"] == nil,
                   payload["speed"] == nil,
-                  payload["camera"] == nil else { return nil }
+                  payload["camera"] == nil,
+                  payload["receiptLens"] == nil,
+                  payload["overlay"] == nil,
+                  payload["enabled"] == nil else { return nil }
         }
         self.sequence = sequence
         self.commandID = commandID
@@ -542,6 +645,9 @@ struct RobotEngineCommandAcknowledgement {
         self.sampleIndex = sampleIndex
         self.speed = speed
         self.camera = camera
+        self.receiptLens = receiptLens
+        self.overlay = overlay
+        self.overlayEnabled = overlayEnabled
     }
 
     private static func integer(_ value: Any?) -> Int? {
@@ -631,6 +737,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var supportsSeek = false
     @Published private(set) var supportsSpeedSelection = false
     @Published private(set) var supportsCameraSelection = false
+    @Published private(set) var supportsReceiptLensSelection = false
+    @Published private(set) var supportsOverlaySelection = false
     @Published private(set) var activeHumanoidTask = RobotLocomotionTask.walking
     @Published private(set) var activeArmTask = RobotManipulationTask.kitchenMug
     @Published private(set) var activeChallenge = RobotChallenge.flat
@@ -641,6 +749,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var activePlaybackSpeed = RobotPlaybackSpeed.normal
     @Published private(set) var activeCamera = RobotCameraMode.follow
     @Published private(set) var selectedReceiptLens = RobotReceiptLens.baseline
+    @Published private(set) var activeOverlays: Set<RobotOverlayMode> = []
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
 
@@ -661,6 +770,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var pendingRequestedSampleIndex: Int?
     private var pendingRequestedSpeed: RobotPlaybackSpeed?
     private var pendingRequestedCamera: RobotCameraMode?
+    private var pendingRequestedReceiptLens: RobotReceiptLens?
+    private var pendingRequestedOverlay: RobotOverlayMode?
+    private var pendingRequestedOverlayEnabled: Bool?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 #if DEBUG
@@ -824,7 +936,20 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     func selectReceiptLens(_ lens: RobotReceiptLens) {
         guard selectedLab == .humanoid,
-              phase == .ready || phase == .running else { return }
+              phase == .ready || phase == .running,
+              lens != selectedReceiptLens else { return }
+        if !supportsReceiptLensSelection {
+            selectReceiptLensInLegacyBundle(lens)
+            return
+        }
+        sendOwnerCommand(
+            "select-receipt-lens",
+            pendingDetail: "Applying the \(lens.title) receipt lens…",
+            receiptLens: lens
+        )
+    }
+
+    private func selectReceiptLensInLegacyBundle(_ lens: RobotReceiptLens) {
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -845,10 +970,22 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     self.selectedReceiptLens = lens
                 }
             } catch {
-                // Keep the prior native selection when the exact embedded
-                // analysis control is absent or refuses navigation.
+                // Preserve the prior selection when the stale bundled control
+                // is absent. Current bundles use the typed command above.
             }
         }
+    }
+
+    func setOverlay(_ overlay: RobotOverlayMode, enabled: Bool) {
+        guard supportsOverlaySelection,
+              RobotOverlayMode.available(for: selectedLab).contains(overlay),
+              activeOverlays.contains(overlay) != enabled else { return }
+        sendOwnerCommand(
+            "set-overlay",
+            pendingDetail: "Turning \(overlay.title.lowercased()) \(enabled ? "on" : "off")…",
+            overlay: overlay,
+            overlayEnabled: enabled
+        )
     }
 
     private func sendOwnerCommand(
@@ -860,11 +997,20 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         family: RobotOptimizerFamily? = nil,
         sampleIndex: Int? = nil,
         speed: RobotPlaybackSpeed? = nil,
-        camera: RobotCameraMode? = nil
+        camera: RobotCameraMode? = nil,
+        receiptLens: RobotReceiptLens? = nil,
+        overlay: RobotOverlayMode? = nil,
+        overlayEnabled: Bool? = nil
     ) {
         guard pendingCommandID == nil else { return }
         guard phase == .ready || phase == .running else { return }
-        if command == "optimize" || command.hasPrefix("select-") {
+        let hasNoVisualizationArguments = receiptLens == nil &&
+            overlay == nil &&
+            overlayEnabled == nil
+        if command == "optimize" ||
+            command == "select-task" ||
+            command == "select-challenge" ||
+            command == "select-family" {
             guard phase == .ready else { return }
         } else if command == "stop" {
             guard phase == .running else { return }
@@ -877,6 +1023,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   sampleIndex == nil,
                   speed == nil,
                   camera == nil,
+                  hasNoVisualizationArguments,
                   (selectedLab == .humanoid && task != nil && armTask == nil) ||
                     (selectedLab == .arm && task == nil && armTask != nil) else { return }
         case "select-challenge":
@@ -888,7 +1035,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   family == nil,
                   sampleIndex == nil,
                   speed == nil,
-                  camera == nil else { return }
+                  camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "select-family":
             guard supportsFamilySelection,
                   let family,
@@ -898,16 +1046,19 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   challenge == nil,
                   sampleIndex == nil,
                   speed == nil,
-                  camera == nil else { return }
+                  camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "replay":
             guard supportsReplay,
                   task == nil, armTask == nil, challenge == nil, family == nil,
-                  sampleIndex == nil, speed == nil, camera == nil else { return }
+                  sampleIndex == nil, speed == nil, camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "play", "pause":
             guard supportsPlayback,
                   activeSampleCount > 0,
                   task == nil, armTask == nil, challenge == nil, family == nil,
-                  sampleIndex == nil, speed == nil, camera == nil else { return }
+                  sampleIndex == nil, speed == nil, camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "seek":
             guard supportsSeek,
                   activeSampleCount > 0,
@@ -915,19 +1066,37 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   sampleIndex >= 0,
                   sampleIndex < activeSampleCount,
                   task == nil, armTask == nil, challenge == nil, family == nil,
-                  speed == nil, camera == nil else { return }
+                  speed == nil, camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "set-speed":
             guard supportsSpeedSelection,
                   activeSampleCount > 0,
                   speed != nil,
                   task == nil, armTask == nil, challenge == nil, family == nil,
-                  sampleIndex == nil, camera == nil else { return }
+                  sampleIndex == nil, camera == nil,
+                  hasNoVisualizationArguments else { return }
         case "set-camera":
             guard supportsCameraSelection,
                   let camera,
                   RobotCameraMode.available(for: selectedLab).contains(camera),
                   task == nil, armTask == nil, challenge == nil, family == nil,
-                  sampleIndex == nil, speed == nil else { return }
+                  sampleIndex == nil, speed == nil,
+                  hasNoVisualizationArguments else { return }
+        case "select-receipt-lens":
+            guard selectedLab == .humanoid,
+                  supportsReceiptLensSelection,
+                  receiptLens != nil,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, speed == nil, camera == nil,
+                  overlay == nil, overlayEnabled == nil else { return }
+        case "set-overlay":
+            guard supportsOverlaySelection,
+                  let overlay,
+                  RobotOverlayMode.available(for: selectedLab).contains(overlay),
+                  overlayEnabled != nil,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, speed == nil, camera == nil,
+                  receiptLens == nil else { return }
         default:
             guard task == nil,
                   armTask == nil,
@@ -936,6 +1105,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   sampleIndex == nil,
                   speed == nil,
                   camera == nil,
+                  receiptLens == nil,
+                  overlay == nil,
+                  overlayEnabled == nil,
                   command == "optimize" || command == "stop" else { return }
         }
         let commandID = UUID().uuidString
@@ -948,6 +1120,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         pendingRequestedSampleIndex = sampleIndex
         pendingRequestedSpeed = speed
         pendingRequestedCamera = camera
+        pendingRequestedReceiptLens = receiptLens
+        pendingRequestedOverlay = overlay
+        pendingRequestedOverlayEnabled = overlayEnabled
         commandDetail = pendingDetail
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
@@ -987,6 +1162,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
         if let camera {
             payload["camera"] = camera.rawValue
+        }
+        if let receiptLens {
+            payload["receiptLens"] = receiptLens.rawValue
+        }
+        if let overlay {
+            payload["overlay"] = overlay.rawValue
+        }
+        if let overlayEnabled {
+            payload["enabled"] = overlayEnabled
         }
         Task { [weak self] in
             guard let self else { return }
@@ -1038,6 +1222,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 supportsSeek ? "seek" : nil,
                 supportsSpeedSelection ? "set-speed" : nil,
                 supportsCameraSelection ? "set-camera" : nil,
+                supportsReceiptLensSelection ? "select-receipt-lens" : nil,
+                supportsOverlaySelection ? "set-overlay" : nil,
             ].compactMap { $0 },
             metrics: metrics,
             provenance: RobotReceiptProvenance(
@@ -1293,6 +1479,19 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     if let camera = acknowledgement.camera {
                         activeCamera = camera
                     }
+                case "select-receipt-lens":
+                    if let lens = acknowledgement.receiptLens {
+                        selectedReceiptLens = lens
+                    }
+                case "set-overlay":
+                    if let overlay = acknowledgement.overlay,
+                       let enabled = acknowledgement.overlayEnabled {
+                        if enabled {
+                            activeOverlays.insert(overlay)
+                        } else {
+                            activeOverlays.remove(overlay)
+                        }
+                    }
                 default:
                     break
                 }
@@ -1312,6 +1511,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             isReplayPlaying = traceState.playing
             activePlaybackSpeed = traceState.speed
             activeCamera = traceState.camera
+            if let receiptLens = traceState.receiptLens {
+                selectedReceiptLens = receiptLens
+            }
+            activeOverlays = traceState.overlays
             return
         }
 
@@ -1331,6 +1534,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsSeek = event.capabilities.contains("seek")
         supportsSpeedSelection = event.capabilities.contains("set-speed")
         supportsCameraSelection = event.capabilities.contains("set-camera")
+        supportsReceiptLensSelection = event.capabilities.contains("select-receipt-lens")
+        supportsOverlaySelection = event.capabilities.contains("set-overlay")
         if event.lab == .humanoid, let task = event.metrics.activeTask {
             activeHumanoidTask = task
         }
@@ -1349,6 +1554,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private func acknowledgementMatchesPendingSelection(
         _ acknowledgement: RobotEngineCommandAcknowledgement
     ) -> Bool {
+        let hasNoPendingVisualizationArguments = pendingRequestedReceiptLens == nil &&
+            pendingRequestedOverlay == nil &&
+            pendingRequestedOverlayEnabled == nil
         switch acknowledgement.command {
         case "select-task":
             if acknowledgement.lab == .humanoid {
@@ -1358,7 +1566,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     pendingRequestedFamily == nil &&
                     pendingRequestedSampleIndex == nil &&
                     pendingRequestedSpeed == nil &&
-                    pendingRequestedCamera == nil
+                    pendingRequestedCamera == nil &&
+                    hasNoPendingVisualizationArguments
             }
             return acknowledgement.armTask == pendingRequestedArmTask &&
                 pendingRequestedTask == nil &&
@@ -1366,7 +1575,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedFamily == nil &&
                 pendingRequestedSampleIndex == nil &&
                 pendingRequestedSpeed == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                hasNoPendingVisualizationArguments
         case "select-challenge":
             return acknowledgement.challenge == pendingRequestedChallenge &&
                 pendingRequestedTask == nil &&
@@ -1374,7 +1584,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedFamily == nil &&
                 pendingRequestedSampleIndex == nil &&
                 pendingRequestedSpeed == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                hasNoPendingVisualizationArguments
         case "select-family":
             return acknowledgement.family == pendingRequestedFamily &&
                 pendingRequestedTask == nil &&
@@ -1382,7 +1593,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedChallenge == nil &&
                 pendingRequestedSampleIndex == nil &&
                 pendingRequestedSpeed == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                hasNoPendingVisualizationArguments
         case "seek":
             return acknowledgement.sampleIndex == pendingRequestedSampleIndex &&
                 pendingRequestedTask == nil &&
@@ -1390,7 +1602,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedChallenge == nil &&
                 pendingRequestedFamily == nil &&
                 pendingRequestedSpeed == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                hasNoPendingVisualizationArguments
         case "set-speed":
             return acknowledgement.speed == pendingRequestedSpeed &&
                 pendingRequestedTask == nil &&
@@ -1398,7 +1611,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedChallenge == nil &&
                 pendingRequestedFamily == nil &&
                 pendingRequestedSampleIndex == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                hasNoPendingVisualizationArguments
         case "set-camera":
             return acknowledgement.camera == pendingRequestedCamera &&
                 pendingRequestedTask == nil &&
@@ -1406,7 +1620,32 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedChallenge == nil &&
                 pendingRequestedFamily == nil &&
                 pendingRequestedSampleIndex == nil &&
-                pendingRequestedSpeed == nil
+                pendingRequestedSpeed == nil &&
+                pendingRequestedReceiptLens == nil &&
+                pendingRequestedOverlay == nil &&
+                pendingRequestedOverlayEnabled == nil
+        case "select-receipt-lens":
+            return acknowledgement.receiptLens == pendingRequestedReceiptLens &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil &&
+                pendingRequestedOverlay == nil &&
+                pendingRequestedOverlayEnabled == nil
+        case "set-overlay":
+            return acknowledgement.overlay == pendingRequestedOverlay &&
+                acknowledgement.overlayEnabled == pendingRequestedOverlayEnabled &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil &&
+                pendingRequestedReceiptLens == nil
         default:
             return pendingRequestedTask == nil &&
                 pendingRequestedArmTask == nil &&
@@ -1414,7 +1653,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 pendingRequestedFamily == nil &&
                 pendingRequestedSampleIndex == nil &&
                 pendingRequestedSpeed == nil &&
-                pendingRequestedCamera == nil
+                pendingRequestedCamera == nil &&
+                pendingRequestedReceiptLens == nil &&
+                pendingRequestedOverlay == nil &&
+                pendingRequestedOverlayEnabled == nil
         }
     }
 
@@ -1428,6 +1670,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         pendingRequestedSampleIndex = nil
         pendingRequestedSpeed = nil
         pendingRequestedCamera = nil
+        pendingRequestedReceiptLens = nil
+        pendingRequestedOverlay = nil
+        pendingRequestedOverlayEnabled = nil
     }
 
     private func receiveLegacyStatus(_ payload: [String: Any]) {
@@ -1449,6 +1694,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsSeek = false
         supportsSpeedSelection = false
         supportsCameraSelection = false
+        supportsReceiptLensSelection = false
+        supportsOverlaySelection = false
+        activeOverlays = []
         activeSampleIndex = 0
         activeSampleCount = 0
         isReplayPlaying = false
@@ -1502,6 +1750,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsSeek = false
         supportsSpeedSelection = false
         supportsCameraSelection = false
+        supportsReceiptLensSelection = false
+        supportsOverlaySelection = false
         activeHumanoidTask = .walking
         activeArmTask = .kitchenMug
         activeChallenge = .flat
@@ -1512,6 +1762,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         activePlaybackSpeed = .normal
         activeCamera = selectedLab == .humanoid ? .follow : .studio
         selectedReceiptLens = .baseline
+        activeOverlays = []
         commandTimeoutTask?.cancel()
         clearPendingCommand()
         commandDetail = nil

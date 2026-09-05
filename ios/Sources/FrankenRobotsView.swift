@@ -341,6 +341,7 @@ struct FrankenRobotsView: View {
                         if lab == .humanoid {
                             receiptLensMenu
                         }
+                        overlayMenu
                         nativeOptimizeButton
                     }
                 } else {
@@ -348,9 +349,8 @@ struct FrankenRobotsView: View {
                         HStack(spacing: 10) {
                             if lab == .humanoid {
                                 receiptLensMenu
-                            } else {
-                                nativeCommandLabel(title: "OWNER CONTROL")
                             }
+                            overlayMenu
                             Spacer(minLength: 8)
                             nativeOptimizeButton
                         }
@@ -695,11 +695,56 @@ struct FrankenRobotsView: View {
         }
         .buttonStyle(.bordered)
         .tint(lab.accent)
-        .disabled(engine.phase != .ready && engine.phase != .running)
+        .disabled(
+            engine.pendingCommandID != nil ||
+                (engine.phase != .ready && engine.phase != .running)
+        )
         .accessibilityIdentifier("robot-native-receipt-lenses")
         .accessibilityLabel("Receipt analysis lenses")
         .accessibilityValue(engine.selectedReceiptLens.title)
         .accessibilityHint("Reweights the visible receipt analysis without changing the owner objective or gait")
+    }
+
+    private var overlayMenu: some View {
+        Menu {
+            ForEach(RobotOverlayMode.available(for: lab)) { overlay in
+                let enabled = engine.activeOverlays.contains(overlay)
+                Button {
+                    engine.setOverlay(overlay, enabled: !enabled)
+                } label: {
+                    if enabled {
+                        Label(overlay.title, systemImage: "checkmark")
+                    } else {
+                        Text(overlay.title)
+                    }
+                }
+                .accessibilityIdentifier("robot-overlay-\(overlay.rawValue)")
+            }
+        } label: {
+            ViewThatFits(in: .horizontal) {
+                Label("Overlays", systemImage: "square.3.layers.3d")
+                Image(systemName: "square.3.layers.3d")
+            }
+            .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+            .frame(minWidth: 28, minHeight: 38)
+        }
+        .buttonStyle(.bordered)
+        .tint(lab.accent)
+        .disabled(
+            !engine.supportsOverlaySelection || engine.pendingCommandID != nil ||
+                (engine.phase != .ready && engine.phase != .running)
+        )
+        .accessibilityIdentifier("robot-native-overlays")
+        .accessibilityLabel("Robot visualization overlays")
+        .accessibilityValue(overlayAccessibilityValue)
+        .accessibilityHint("Shows or hides the web owner's existing visualization overlays")
+    }
+
+    private var overlayAccessibilityValue: String {
+        let enabled = RobotOverlayMode.available(for: lab)
+            .filter(engine.activeOverlays.contains)
+            .map(\.title)
+        return enabled.isEmpty ? "All off" : enabled.joined(separator: ", ")
     }
 
     private var wideLayout: some View {

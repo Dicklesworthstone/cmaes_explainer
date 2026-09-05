@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   decodeFrankenRobotsNativeCommand,
   installFrankenRobotsNativeCommandHandler,
+  reportFrankenRobotsEngineState,
+  reportFrankenRobotsTraceState,
 } from "./frankenrobotsBridge";
 
 describe("FrankenRobots native command contract", () => {
@@ -127,6 +129,47 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...armCamera, camera: "pov" }, "arm")).toBeNull();
   });
 
+  test("accepts only typed Humanoid receipt lenses and lab-owned overlays", () => {
+    const lens = {
+      ...valid,
+      commandId: "lens-glass-floor",
+      command: "select-receipt-lens",
+      receiptLens: "glass-floor",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(lens, "humanoid")).toEqual(lens);
+    expect(decodeFrankenRobotsNativeCommand({ ...lens, lab: "arm" }, "arm")).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...lens, receiptLens: "secret-lens" }, "humanoid"),
+    ).toBeNull();
+
+    const xray = {
+      ...valid,
+      commandId: "overlay-xray-on",
+      command: "set-overlay",
+      overlay: "xray",
+      enabled: true,
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(xray, "humanoid")).toEqual(xray);
+    expect(decodeFrankenRobotsNativeCommand({ ...xray, lab: "arm" }, "arm")).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...xray, enabled: 1 }, "humanoid")).toBeNull();
+
+    const frictionCones = {
+      ...valid,
+      commandId: "overlay-cones-off",
+      lab: "arm",
+      command: "set-overlay",
+      overlay: "friction-cones",
+      enabled: false,
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(frictionCones, "arm")).toEqual(frictionCones);
+    expect(
+      decodeFrankenRobotsNativeCommand(
+        { ...frictionCones, receiptLens: "owner-receipt" },
+        "arm",
+      ),
+    ).toBeNull();
+  });
+
   test("rejects foreign schema, lab, command, and unsafe IDs", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...valid, schemaVersion: 2 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(valid, "arm")).toBeNull();
@@ -216,6 +259,45 @@ describe("FrankenRobots native command contract", () => {
         detail: "An owner request is already running.",
       });
       cleanup();
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("reports capability-negotiated lenses and authoritative lab-owned overlay state", () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const messages: Record<string, unknown>[] = [];
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        webkit: {
+          messageHandlers: {
+            frankenrobots: {
+              postMessage: (message: Record<string, unknown>) => messages.push(message),
+            },
+          },
+        },
+      },
+    });
+    try {
+      reportFrankenRobotsEngineState("humanoid", "ready", "Owner ready.");
+      reportFrankenRobotsTraceState("humanoid", {
+        sampleIndex: 12,
+        sampleCount: 720,
+        playing: false,
+        speed: 0.5,
+        camera: "blueprint",
+        receiptLens: "glass-floor",
+        overlays: ["xray", "physics-debug"],
+      });
+      expect(messages[0]?.capabilities).toContain("select-receipt-lens");
+      expect(messages[0]?.capabilities).toContain("set-overlay");
+      expect(messages[1]).toMatchObject({
+        type: "trace.state",
+        receiptLens: "glass-floor",
+        overlays: ["xray", "physics-debug"],
+      });
     } finally {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");

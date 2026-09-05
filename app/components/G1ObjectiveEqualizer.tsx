@@ -7,9 +7,10 @@ import type {
   MultiFactorChannel,
   MultiFactorWeights,
 } from "../lib/g1MultiFactor";
+import type { FrankenRobotsReceiptLens } from "../lib/frankenrobotsBridge";
 
 export interface ReceiptAnalysisPreset {
-  id: string;
+  id: FrankenRobotsReceiptLens;
   name: string;
   badge: string;
   description: string;
@@ -99,7 +100,7 @@ export const RECEIPT_ANALYSIS_PRESETS: ReceiptAnalysisPreset[] = [
 
 interface G1ObjectiveEqualizerProps {
   multiFactor: MultiFactorResult | null;
-  selectedPreset: string;
+  selectedPreset: FrankenRobotsReceiptLens;
   onSelectPreset: (preset: ReceiptAnalysisPreset) => void;
 }
 

@@ -2133,6 +2133,23 @@ export function HouseholdArmFlagship({
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("arm", (command) => {
+      if (command.command === "set-overlay") {
+        if (command.overlay === "friction-cones" && command.enabled !== undefined) {
+          setMicroscopeMode(command.enabled);
+          return {
+            accepted: true,
+            detail: `Arm friction cones are ${command.enabled ? "on" : "off"}.`,
+          };
+        }
+        if (command.overlay === "physics-debug" && command.enabled !== undefined) {
+          setPhysicsDebug(command.enabled);
+          return {
+            accepted: true,
+            detail: `Arm collision envelopes are ${command.enabled ? "on" : "off"}.`,
+          };
+        }
+        return { accepted: false, detail: "The Arm overlay was not provided." };
+      }
       if (command.command === "set-camera") {
         const selectedCamera = command.camera;
         if (
@@ -2271,12 +2288,14 @@ export function HouseholdArmFlagship({
     trace,
     curriculumTrace,
     seekPlayback,
+    microscopeMode,
+    physicsDebug,
   ]);
 
   useEffect(() => {
     if (!embedded) return;
     const now = performance.now();
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}`;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}:${microscopeMode}:${physicsDebug}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
     if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
     nativeTraceReportAtRef.current = now;
@@ -2287,8 +2306,12 @@ export function HouseholdArmFlagship({
       playing: Boolean(trace) && isPlaying,
       speed: playbackSpeed,
       camera: cameraMode,
+      overlays: [
+        ...(microscopeMode ? (["friction-cones"] as const) : []),
+        ...(physicsDebug ? (["physics-debug"] as const) : []),
+      ],
     });
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode]);
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode, microscopeMode, physicsDebug]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {

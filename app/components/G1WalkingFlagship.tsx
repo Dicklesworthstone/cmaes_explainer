@@ -74,6 +74,7 @@ import {
   reportFrankenRobotsEngineState,
   reportFrankenRobotsTraceState,
   type FrankenRobotsPlaybackSpeed,
+  type FrankenRobotsReceiptLens,
 } from "../lib/frankenrobotsBridge";
 import {
   clampPositionAgainstHouseCollisions,
@@ -2129,7 +2130,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
   const [currentChapter, setCurrentChapter] = useState(1);
-  const [selectedPreset, setSelectedPreset] = useState("owner-receipt");
+  const [selectedPreset, setSelectedPreset] = useState<FrankenRobotsReceiptLens>("owner-receipt");
   const [shoveActive, setShoveActive] = useState(false);
   const [pushAngleDeg, setPushAngleDeg] = useState(90);
   const [pushImpulseNs, setPushImpulseNs] = useState(15);
@@ -2479,6 +2480,39 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
+      if (command.command === "select-receipt-lens") {
+        const preset = RECEIPT_ANALYSIS_PRESETS.find(
+          (candidate) => candidate.id === command.receiptLens,
+        );
+        if (!preset) {
+          return { accepted: false, detail: "The receipt-analysis lens was not provided." };
+        }
+        setSelectedPreset(preset.id);
+        setStatus(
+          `Viewing ${preset.name} receipt lens (${preset.lensStyle}). Owner task and optimization objective are unchanged.`,
+        );
+        return {
+          accepted: true,
+          detail: `Accepted ${preset.name} as a display-only receipt lens; the owner objective is unchanged.`,
+        };
+      }
+      if (command.command === "set-overlay") {
+        if (command.overlay === "xray" && command.enabled !== undefined) {
+          setXrayMode(command.enabled);
+          return {
+            accepted: true,
+            detail: `Humanoid biomechanics X-Ray is ${command.enabled ? "on" : "off"}.`,
+          };
+        }
+        if (command.overlay === "physics-debug" && command.enabled !== undefined) {
+          setPhysicsDebug(command.enabled);
+          return {
+            accepted: true,
+            detail: `Humanoid physics envelopes are ${command.enabled ? "on" : "off"}.`,
+          };
+        }
+        return { accepted: false, detail: "The Humanoid overlay was not provided." };
+      }
       if (command.command === "set-camera") {
         const selectedCamera = command.camera;
         if (
@@ -2633,6 +2667,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     family,
     trace,
     curriculumTrace,
+    selectedPreset,
+    xrayMode,
+    physicsDebug,
   ]);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
@@ -2911,7 +2948,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     const now = performance.now();
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}`;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}:${selectedPreset}:${xrayMode}:${physicsDebug}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
     if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
     nativeTraceReportAtRef.current = now;
@@ -2922,8 +2959,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       playing: Boolean(trace) && isPlaying,
       speed: playbackSpeed,
       camera: cameraView,
+      receiptLens: selectedPreset,
+      overlays: [
+        ...(xrayMode ? (["xray"] as const) : []),
+        ...(physicsDebug ? (["physics-debug"] as const) : []),
+      ],
     });
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView]);
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView, selectedPreset, xrayMode, physicsDebug]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
