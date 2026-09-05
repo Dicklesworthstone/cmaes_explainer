@@ -248,11 +248,10 @@ export function PolicyAblationComparison() {
           the full G1 owner.
         </p>
         <p className="leading-relaxed">
-          The exported policy head contains no nonzero values. The legacy
-          environment awarded target-speed progress to that inert output; the
-          current environment does not. Golden-vector parity proves the loader
-          reproduces the artifact, while this transfer result proves the
-          artifact does not control locomotion.
+          The original v1 export remains available with its zero policy head.
+          Golden-vector checks cover the fitted v2 artifact now loaded by this
+          panel; the live rollout measures its action-dependent motion on the
+          stated evaluation contract.
         </p>
       </div>
     </div>

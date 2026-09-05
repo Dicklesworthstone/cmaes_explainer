@@ -637,6 +637,9 @@ async function run() {
         await ownerPage.evaluate(() =>
           window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
         );
+        // Scrolling to the controls unmounts the expensive offscreen stage.
+        // A fresh canvas can have a valid context before its scene is mounted.
+        await handleLabel.waitFor({ state: "visible" });
         await ownerPage.evaluate(
           () =>
             new Promise<void>((resolve) =>
