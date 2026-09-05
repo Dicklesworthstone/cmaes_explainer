@@ -1014,6 +1014,18 @@ async function run() {
           }),
           "The G1 renderer lost its WebGL context",
         );
+        await ownerPage
+          .getByRole("button", { name: "Map", exact: true })
+          .click();
+        assert.deepEqual(
+          await captureReplayExport(ownerPage, out, "g1-overhead-standing"),
+          standingExport,
+          "Changing the inspection camera changed the measured experiment",
+        );
+        await ownerPage.evaluate(() =>
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
+        );
+        await handleLabel.waitFor({ state: "visible" });
       }
       await ownerPage.screenshot({
         path: join(out, `owner-${changed ?? "valid"}.png`),
@@ -1132,10 +1144,11 @@ async function run() {
         }
         measuredReadouts.push({ sampleIndex, angles });
       }
-      await armPage
+      const jointPanel = armPage
         .getByText("iiwa joint angles · measured owner poses", { exact: true })
-        .scrollIntoViewIfNeeded();
-      await armPage.screenshot({
+        .locator("xpath=../../..");
+      assert.equal(await jointPanel.getByText(/^A[1-7] /).count(), 7);
+      await jointPanel.screenshot({
         path: join(out, `arm-${task}-joint-readout.png`),
       });
       recordResult({

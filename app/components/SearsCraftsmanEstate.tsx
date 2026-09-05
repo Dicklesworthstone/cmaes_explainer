@@ -2,7 +2,8 @@
 
 import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import {
   CRAFTSMAN_WALKING_ROUTES,
@@ -300,6 +301,15 @@ export function SearsCraftsmanEstate({
   activeRouteId,
   timeOfDay = "afternoon-sun",
 }: SearsCraftsmanEstateProps) {
+  const ceilingRef = useRef<THREE.Group>(null);
+  const cameraWorldPosition = useMemo(() => new THREE.Vector3(), []);
+  useFrame(({ camera }) => {
+    if (!ceilingRef.current) return;
+    camera.getWorldPosition(cameraWorldPosition);
+    // Open-roof inspection also cuts away beams above the robot. Keep the
+    // coffered interior when viewing from below, or when the roof is shown.
+    ceilingRef.current.visible = showRoof || cameraWorldPosition.y < 2.64;
+  });
   const activeRoute: CraftsmanWalkingRoute | undefined = activeRouteId
     ? CRAFTSMAN_WALKING_ROUTES.find((r) => r.id === activeRouteId)
     : undefined;
@@ -1003,7 +1013,7 @@ export function SearsCraftsmanEstate({
       {/* ----------------------------------------------------------------- */}
       {/* 7. Exposed Coffered Ceiling Box Beams Overhead                    */}
       {/* ----------------------------------------------------------------- */}
-      <group position={[0, 2.82, 0]}>
+      <group ref={ceilingRef} position={[0, 2.82, 0]}>
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <planeGeometry args={[8.0, 7.6]} />
           <meshStandardMaterial color="#f8f4ec" roughness={0.92} />
