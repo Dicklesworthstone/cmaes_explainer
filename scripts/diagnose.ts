@@ -471,19 +471,29 @@ async function run() {
             exact: true,
           })
           .click();
-        await ownerPage.evaluate(() => window.scrollTo(0, 0));
+        await ownerPage.evaluate(() =>
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
+        );
         await ownerPage.waitForTimeout(1000);
         const sceneElement = ownerPage.locator("[data-g1-scene-digest]");
         const before = await sceneElement.getAttribute("data-g1-scene-digest");
         // Follow the actual projected handle, which moves with the camera.
-        const handle = await ownerPage
-          .getByText("Drag robot", { exact: true })
-          .boundingBox();
+        const handleLabel = ownerPage.getByText("Drag robot", { exact: true });
+        // The follow camera keeps this marker moving by fractions of a pixel.
+        // Scroll the real label into view without requiring a motionless 3D camera.
+        await handleLabel.evaluate((element) =>
+          element.scrollIntoView({ behavior: "instant", block: "center" }),
+        );
+        const handle = await handleLabel.boundingBox();
         assert(handle, "The robot placement handle is missing");
         const grab = {
           x: handle.x + handle.width / 2,
           y: handle.y + handle.height / 2,
         };
+        assert(
+          grab.x > 0 && grab.x < 1440 && grab.y > 0 && grab.y < 1000,
+          `Placement handle is outside the viewport: ${JSON.stringify(grab)}`,
+        );
         await ownerPage.mouse.move(grab.x, grab.y);
         await ownerPage.mouse.down();
         await ownerPage.mouse.move(grab.x + 58, grab.y + 40, { steps: 12 });
