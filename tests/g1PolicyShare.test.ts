@@ -157,6 +157,20 @@ describe("G1 policy share codec", () => {
     expect(decoded.generation).toBe(352);
   });
 
+  test("a truncated link explains itself instead of quoting the decompressor", async () => {
+    const policy = Float64Array.from({ length: 256 }, (_, i) => Math.sin(i) * 0.01);
+    const fragment = await encodePolicyFragment(policy, META);
+    // Still valid base64url, but the compressed payload stops mid-stream —
+    // exactly what a link shortener produces.
+    const cut = fragment.slice(0, Math.floor(fragment.length * 0.6));
+    await expect(decodePolicyFragment(cut, policy.length)).rejects.toThrow(/cut short/i);
+    // The technical cause is kept, not thrown away — but which words the engine
+    // uses for it is not asserted: Bun says "unexpected end of file" where
+    // Chrome says "Compressed input was truncated", and pinning either makes
+    // this test fail on the other runtime rather than on a real regression.
+    await expect(decodePolicyFragment(cut, policy.length)).rejects.toThrow(/\(.+\)/);
+  });
+
   test("a truncated share link says so in words a sender can act on", async () => {
     const baseline = baselineOf(512);
     const fragment = await encodePolicyFragment(learnedOf(baseline), META);

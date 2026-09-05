@@ -358,10 +358,22 @@ export async function decodePolicyFragment(
       "This browser cannot open compressed policy links. Use the policy file instead.",
     );
   }
-  return decodeSharedPolicy(
-    await pipeBytes(bytes, DecompressionStream, "deflate-raw"),
-    expectedLength,
-  );
+  let inflated: Uint8Array;
+  try {
+    inflated = await pipeBytes(bytes, DecompressionStream, "deflate-raw");
+  } catch (error) {
+    // The common real-world failure: a chat app shortened the link, so the
+    // fragment is still valid base64url but the compressed payload stops
+    // mid-stream. The browser's own words for that are "Compressed input was
+    // truncated", which is accurate and tells the holder of a broken link
+    // nothing about what to do.
+    throw new Error(
+      `This share link is incomplete — it looks cut short. Some chat apps shorten long links; ask the sender for the full one, or for the policy file instead. (${
+        error instanceof Error ? error.message : String(error)
+      })`,
+    );
+  }
+  return decodeSharedPolicy(inflated, expectedLength);
 }
 
 /** Build the shareable URL for a policy fragment. */

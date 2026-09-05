@@ -16,7 +16,11 @@ import {
   armLedgerPoint,
   type ArmLedgerPoint,
 } from "../lib/armLearningLedger";
-import type { SharedPolicy } from "../lib/g1PolicyShare";
+import {
+  decodePolicyFragment,
+  policyFragmentFromHash,
+  type SharedPolicy,
+} from "../lib/g1PolicyShare";
 import {
   describeAge,
   isResumable,
@@ -1819,6 +1823,13 @@ export function HouseholdArmFlagship({
   const sigmaRef = useRef(searchSigma);
   const taskRef = useRef(task);
   const recoveryAttemptedRef = useRef(false);
+  // A policy arriving in the URL cannot be read until the owner has told us how
+  // long a policy is. It waits here, and outranks whatever is in storage.
+  const pendingShareRef = useRef<string | null>(null);
+  // Late-bound: both handlers are declared below this effect, and it must not
+  // re-run every time they are recreated.
+  const selectTaskRef = useRef<((task: HouseholdManipulationTask) => void) | null>(null);
+  const handlePolicyImportRef = useRef<((imported: SharedPolicy) => void) | null>(null);
   const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
   useEffect(() => {
     familyRef.current = family;
@@ -2117,10 +2128,47 @@ export function HouseholdArmFlagship({
     );
   }, [post, task, family, seedIndex]);
 
+  useEffect(() => {
+    pendingShareRef.current = policyFragmentFromHash(window.location.hash);
+  }, []);
+
+  // A shared policy in the URL. Decoded once the owner is loaded, and replayed
+  // on the task it was trained for — a trowel policy opens the trowel, not
+  // whichever task the page happened to start on.
+  useEffect(() => {
+    const fragment = pendingShareRef.current;
+    if (!fragment || !stagePolicy) return;
+    let active = true;
+    void decodePolicyFragment(fragment, stagePolicy.length)
+      .then((imported) => {
+        if (!active) return;
+        if (imported.task !== taskRef.current) {
+          // Switch first; this effect runs again once that task's owner is up.
+          selectTaskRef.current?.(imported.task as HouseholdManipulationTask);
+          return;
+        }
+        pendingShareRef.current = null;
+        setStatus(
+          `Loaded a shared generation-${imported.generation} policy from this link. Replaying it…`,
+        );
+        handlePolicyImportRef.current?.(imported);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        pendingShareRef.current = null;
+        setError(error instanceof Error ? error.message : "This share link could not be read.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [stagePolicy]);
+
   // Recover a run the tab was in the middle of, once the owner has told us how
   // long a policy is. Guarded by a ref so a re-render cannot restore twice.
   useEffect(() => {
     if (recoveryAttemptedRef.current || !stagePolicy) return;
+    // An explicit link outranks whatever storage happens to hold.
+    if (pendingShareRef.current) return;
     recoveryAttemptedRef.current = true;
     const saved = loadTrainingSession<ArmLedgerPoint>(
       stagePolicy.length,
@@ -2282,6 +2330,11 @@ export function HouseholdArmFlagship({
     }
     return [0, 0.4, 0, -1.2, 0, 0.8, 0];
   }, [armDragTarget, currentSampleForHUD]);
+
+  useEffect(() => {
+    selectTaskRef.current = selectTask;
+    handlePolicyImportRef.current = handlePolicyImport;
+  }, [selectTask, handlePolicyImport]);
 
   return (
     <div className={embedded ? "space-y-2" : "space-y-8"}>
