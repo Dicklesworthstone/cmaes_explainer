@@ -99,14 +99,20 @@ export function validatePolicyMetadata(
   ) {
     throw new Error("policy share: invalid kernel version");
   }
-  if (!["balance", "stepping", "walking"].includes(meta.task)) {
-    throw new Error("policy share: invalid task");
-  }
-  if (!["flat", "terrain-and-push"].includes(meta.challenge)) {
-    throw new Error("policy share: invalid challenge");
-  }
-  if (!["separable", "lm-cma", "lm-ma"].includes(meta.family)) {
-    throw new Error("policy share: invalid optimizer family");
+  // Structural, not a whitelist. This format now carries policies for both
+  // robots, and a manipulation task is not a walking task — hardcoding one
+  // owner's vocabulary here refused the arm's own policies outright. These
+  // strings are provenance written into a file; nothing branches on them, and
+  // the consumer that DOES care (the walking page's import handler) narrows
+  // them to its own values before they reach typed state.
+  for (const [field, value] of [
+    ["task", meta.task],
+    ["challenge", meta.challenge],
+    ["optimizer family", meta.family],
+  ] as const) {
+    if (typeof value !== "string" || !value.trim() || textBytes(value).length > 255) {
+      throw new Error(`policy share: invalid ${field}`);
+    }
   }
   if (
     !Number.isInteger(meta.generation) ||

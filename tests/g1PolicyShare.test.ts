@@ -214,9 +214,21 @@ describe("G1 policy share codec", () => {
     for (const bad of [
       { generation: -1 }, { generation: 2 ** 32 }, { generation: 1.5 },
       { sigma: NaN }, { sigma: 0 }, { sigma: Infinity },
-      { task: "foreign" }, { challenge: "foreign" }, { family: "full" },
+      // Provenance strings are checked structurally, not against one robot's
+      // vocabulary: this format carries manipulation policies too, and
+      // whitelisting walking task names refused the arm's own exports.
+      { task: "" }, { challenge: "   " }, { family: "f".repeat(256) },
       { kernelVersion: "x".repeat(256) },
     ]) expect(() => encodeSharedPolicy(policy, { ...META, ...bad } as SharedPolicyMeta)).toThrow();
+    // A manipulation policy is valid provenance, not a foreign object.
+    expect(() =>
+      encodeSharedPolicy(policy, {
+        ...META,
+        task: "kitchen-mug",
+        challenge: "household",
+        family: "full",
+      }),
+    ).not.toThrow();
     const payload = encodeSharedPolicy(policy, META);
     const view = new DataView(payload.buffer);
     view.setUint16(4, 3, true);
