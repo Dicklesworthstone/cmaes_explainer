@@ -217,6 +217,28 @@ export function ArmLearningLedger({
         </svg>
       ) : null}
 
+      {!isSeed ? (
+        <p className="mt-2 text-[0.66rem] leading-4 text-slate-300">
+          {trainingSeconds >= 1 ? `In ${formatDuration(trainingSeconds)} and ` : "In "}
+          {latest.generation.toLocaleString()} generations, the arm went from{" "}
+          <span className="font-mono text-slate-100">
+            {formatMillimetres(seed.placementErrorMeters)}
+          </span>{" "}
+          to{" "}
+          <span className="font-mono text-emerald-200">
+            {formatMillimetres(latest.placementErrorMeters)}
+          </span>{" "}
+          from the goal
+          {seed.placed !== latest.placed
+            ? latest.placed
+              ? ", and the owner now accepts the placement it previously refused"
+              : ", but the owner no longer accepts the placement"
+            : latest.placed
+              ? ", with the placement accepted throughout"
+              : ", and the owner still refuses the placement"}
+          .
+        </p>
+      ) : null}
       <p className="mt-1 text-[0.6rem] leading-4 text-slate-500">
         Placement error is the distance from the object&apos;s final centre to
         the goal, read from the same owner receipt as the objective. Amber points
