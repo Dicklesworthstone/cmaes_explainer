@@ -487,7 +487,6 @@ async function run() {
         await ownerPage.evaluate(() =>
           window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
         );
-        await ownerPage.waitForTimeout(1000);
         const sceneElement = ownerPage.locator("[data-g1-scene-digest]");
         const before = await sceneElement.getAttribute("data-g1-scene-digest");
         // Follow the actual projected handle, which moves with the camera.
@@ -497,12 +496,45 @@ async function run() {
         await handleLabel.evaluate((element) =>
           element.scrollIntoView({ behavior: "instant", block: "center" }),
         );
-        const handle = await handleLabel.boundingBox();
-        assert(handle, "The robot placement handle is missing");
-        const grab = {
-          x: handle.x + handle.width / 2,
-          y: handle.y + handle.height / 2,
-        };
+        // Software WebGL can render fewer than one frame per second. A fixed
+        // sleep can aim at the previous camera projection and miss the sphere.
+        // Wait for three rendered positions within a quarter pixel instead.
+        const { grab, settling } = await handleLabel.evaluate(
+          (element) =>
+            new Promise<{
+              grab: { x: number; y: number };
+              settling: { x: number; y: number }[];
+            }>((resolve, reject) => {
+              const settling: { x: number; y: number }[] = [];
+              let stable = 0;
+              let frame = 0;
+              const timeout = setTimeout(() => {
+                cancelAnimationFrame(frame);
+                reject(new Error("The placement handle did not settle"));
+              }, 30_000);
+              const sample = () => {
+                const bounds = element.getBoundingClientRect();
+                const grab = {
+                  x: bounds.x + bounds.width / 2,
+                  y: bounds.y + bounds.height / 2,
+                };
+                const previous = settling.at(-1);
+                stable =
+                  previous &&
+                  Math.hypot(grab.x - previous.x, grab.y - previous.y) < 0.25
+                    ? stable + 1
+                    : 0;
+                settling.push(grab);
+                if (stable >= 3) {
+                  clearTimeout(timeout);
+                  resolve({ grab, settling });
+                } else {
+                  frame = requestAnimationFrame(sample);
+                }
+              };
+              frame = requestAnimationFrame(sample);
+            }),
+        );
         assert(
           grab.x > 0 && grab.x < 1440 && grab.y > 0 && grab.y < 1000,
           `Placement handle is outside the viewport: ${JSON.stringify(grab)}`,
@@ -598,6 +630,8 @@ async function run() {
         recordResult({
           journey: "g1-drag-start-stop-compare",
           before,
+          grab,
+          settling,
           observed,
         });
         await ownerPage.evaluate(() =>
