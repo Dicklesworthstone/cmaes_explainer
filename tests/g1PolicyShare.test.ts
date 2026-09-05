@@ -257,13 +257,39 @@ describe("G1 policy share codec", () => {
       expect(() => policyFromFileContents(root, 1)).toThrow("not a Frankensim G1 policy");
     }
     const file = policyFileContents(Float64Array.of(1), META);
-    expect(() => policyFromFileContents(JSON.stringify({ ...file, formatVersion: 99 }), 1)).toThrow("unsupported format");
+    expect(() => policyFromFileContents(JSON.stringify({ ...file, formatVersion: 99 }), 1)).toThrow("cannot read");
     expect(() => policyFromFileContents(JSON.stringify({ ...file, sigma: null }), 1)).toThrow("search radius");
     expect(() => policyFromFileContents(" ".repeat(2_000_001), 1)).toThrow("too large");
     await expect(decodePolicyFragment("a".repeat(800_000), 1)).rejects.toThrow();
     const compressedBomb = new Uint8Array(await new Response(new Blob([new Uint8Array(600_000)]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
     const encoded = btoa(String.fromCharCode(...compressedBomb)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     await expect(decodePolicyFragment(encoded, 1)).rejects.toThrow("decoded payload is too large");
+  });
+
+  test("still opens a policy file written by an older format", () => {
+    // A real export from kernel 0.6.19, refused outright once the writer moved
+    // to v4 even though v4 only ADDED a "-0" token this reader already handles.
+    const older = {
+      format: "frankensim-g1-policy",
+      formatVersion: 3,
+      exportedAt: "2026-09-04T16:59:02.000Z",
+      kernelVersion: "fs-cmaes-viz-wasm 0.6.19",
+      task: "walking",
+      challenge: "terrain-and-python",
+      family: "lm-ma",
+      generation: 184,
+      sigma: 0.0005,
+      policy: [-0.1759675435096895, 0.6851180719842116, 0.4904153935311562],
+    };
+    const restored = policyFromFileContents(JSON.stringify(older), 3);
+    expect(restored.generation).toBe(184);
+    expect(restored.kernelVersion).toBe("fs-cmaes-viz-wasm 0.6.19");
+    expect(restored.policy[1]).toBe(0.6851180719842116);
+
+    // A format from the future is still refused, and says which.
+    expect(() =>
+      policyFromFileContents(JSON.stringify({ ...older, formatVersion: 99 }), 3),
+    ).toThrow(/format v99/);
   });
 
   test("refuses files that are not policies, with a reason", () => {

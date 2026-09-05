@@ -2427,9 +2427,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       if (!workerRef.current || inFlightRef.current) {
         throw new Error("Finish or stop the current experiment before loading a policy.");
       }
-      if (imported.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION) {
-        throw new Error(`This policy needs ${imported.kernelVersion}; this page runs ${FRANKENSIM_OWNER_KERNEL_VERSION}.`);
-      }
+      // A policy from another kernel build is replayed, not refused. What makes
+      // a policy unusable is the wrong NUMBER of coefficients, and that is
+      // checked when the file is read. Refusing on the version string instead
+      // killed every shared gait the moment the owner was rebuilt — which
+      // happens often — and the honest alternative is to run it and say where
+      // it came from. PolicyExchange shows that caveat; the receipt on screen
+      // is this owner's, measured here.
       // A policy file carries its provenance as plain strings, because the two
       // robots share this format. Narrow them before they reach typed state:
       // a file naming a task this owner does not have must be refused, not

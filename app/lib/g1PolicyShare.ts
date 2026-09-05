@@ -33,6 +33,25 @@ import type { CmaFamily, G1Challenge, G1Task } from "./frankensimCmaes";
 /** Magic word identifying a G1 policy payload: "G1P\0" as little-endian u32. */
 const POLICY_MAGIC = 0x00503147;
 const POLICY_FORMAT_VERSION = 4;
+
+/**
+ * File formats this page can still open.
+ *
+ * A "keep your work" feature that cannot read the files it wrote last week is
+ * not keeping anything, and a real 0.6.19 export was refused outright with
+ * "unsupported format version" once the writer moved to v4.
+ *
+ * v3 and v4 differ only in that v4 may encode a negative-zero coefficient as
+ * the token "-0", which JSON's number syntax cannot represent. The reader
+ * already accepts plain numbers, so a v3 file needs nothing extra — it simply
+ * never contains that token.
+ *
+ * The BINARY link format is deliberately not given the same latitude: v3 links
+ * stored a delta against the curriculum mean where v4 stores absolute
+ * coefficients, so reading one as the other would silently produce a different
+ * policy. Files are compatible; links are not.
+ */
+const READABLE_FILE_FORMAT_VERSIONS = new Set([3, 4]);
 /** Header words before metadata and absolute coefficients, in bytes. */
 const HEADER_BYTES = 32;
 const MAX_COEFFICIENTS = 65_535;
@@ -451,8 +470,10 @@ export function policyFromFileContents(
       "That policy file contains a coefficient that is not a finite number.",
     );
   }
-  if (file.formatVersion !== POLICY_FORMAT_VERSION) {
-    throw new Error("That policy file uses an unsupported format version.");
+  if (!READABLE_FILE_FORMAT_VERSIONS.has(file.formatVersion as number)) {
+    throw new Error(
+      `That policy file uses format v${String(file.formatVersion)}, which this page cannot read.`,
+    );
   }
   const coefficients = file.policy;
   validatePolicyMetadata(file);

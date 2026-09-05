@@ -132,9 +132,16 @@ export function PolicyExchange({
           policy?.length ?? 5_040,
         );
         onImport(imported);
+        // A policy from a different owner build is replayed rather than
+        // refused, so where it came from has to be said out loud: the receipt
+        // on screen is measured by THIS owner and may not match what the sender
+        // saw. Silently replaying it would present their gait as ours.
+        const foreign = imported.kernelVersion !== meta.kernelVersion;
         setNotice({
-          tone: "ok",
-          text: `Loaded a generation-${imported.generation} ${imported.task} policy. Replaying it now.`,
+          tone: foreign ? "warn" : "ok",
+          text: foreign
+            ? `Loaded a generation-${imported.generation} ${imported.task} policy trained on ${imported.kernelVersion}; this page runs ${meta.kernelVersion}. Replaying it here, so these numbers are this owner's and may differ from the sender's.`
+            : `Loaded a generation-${imported.generation} ${imported.task} policy. Replaying it now.`,
         });
       } catch (error) {
         setNotice({
