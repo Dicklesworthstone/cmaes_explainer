@@ -51,6 +51,23 @@ struct FrankenRobotsApp: App {
 
                 Divider()
 
+                Button("Play or Pause Replay") {
+                    NotificationCenter.default.post(name: .toggleRobotReplay, object: nil)
+                }
+                .keyboardShortcut(.space, modifiers: [])
+
+                Button("Replay Curriculum") {
+                    NotificationCenter.default.post(name: .replayRobotCurriculum, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+
+                Button("Next Camera") {
+                    NotificationCenter.default.post(name: .selectNextRobotCamera, object: nil)
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+
+                Divider()
+
                 Button("Reload Engine") {
                     NotificationCenter.default.post(name: .reloadRobotEngine, object: nil)
                 }
@@ -88,4 +105,7 @@ private struct CatalystWindowFreedom: UIViewControllerRepresentable {
 extension Notification.Name {
     static let selectRobotLab = Notification.Name("FrankenRobots.selectLab")
     static let reloadRobotEngine = Notification.Name("FrankenRobots.reloadEngine")
+    static let replayRobotCurriculum = Notification.Name("FrankenRobots.replayCurriculum")
+    static let toggleRobotReplay = Notification.Name("FrankenRobots.toggleReplay")
+    static let selectNextRobotCamera = Notification.Name("FrankenRobots.selectNextCamera")
 }

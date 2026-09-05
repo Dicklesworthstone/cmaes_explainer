@@ -72,6 +72,8 @@ import { WalkQualityComparison } from "./WalkQualityComparison";
 import {
   installFrankenRobotsNativeCommandHandler,
   reportFrankenRobotsEngineState,
+  reportFrankenRobotsTraceState,
+  type FrankenRobotsPlaybackSpeed,
 } from "../lib/frankenrobotsBridge";
 import {
   clampPositionAgainstHouseCollisions,
@@ -2194,8 +2196,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     embedded ? "follow" : "orbit",
   );
   const [isPlaying, setIsPlaying] = useState(true);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
   const [sampleIndex, setSampleIndex] = useState(0);
+  const nativeTraceReportAtRef = useRef(0);
+  const nativeTraceSettingsRef = useRef("");
   const [currentChapter, setCurrentChapter] = useState(1);
   const [selectedPreset, setSelectedPreset] = useState("owner-receipt");
   const [shoveActive, setShoveActive] = useState(false);
@@ -2565,6 +2569,62 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
+      if (command.command === "set-camera") {
+        const selectedCamera = command.camera;
+        if (
+          selectedCamera !== "orbit" &&
+          selectedCamera !== "follow" &&
+          selectedCamera !== "pov" &&
+          selectedCamera !== "blueprint" &&
+          selectedCamera !== "fly"
+        ) {
+          return { accepted: false, detail: "The Humanoid camera was not provided." };
+        }
+        setCameraView(selectedCamera);
+        return { accepted: true, detail: `Accepted ${selectedCamera} camera.` };
+      }
+      if (command.command === "replay") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        if (!curriculumTrace) {
+          return { accepted: false, detail: "The Humanoid curriculum trace is not ready." };
+        }
+        setTrace(curriculumTrace);
+        setActiveTrace("curriculum");
+        setGeneration(0);
+        setBestObjective(curriculumTrace.objective);
+        setSampleIndex(0);
+        setIsPlaying(true);
+        setStatus(`${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`);
+        return { accepted: true, detail: "Accepted Humanoid curriculum replay from frame one." };
+      }
+      if (command.command === "play" || command.command === "pause") {
+        if (!trace) {
+          return { accepted: false, detail: "The Humanoid trace is not ready." };
+        }
+        const playing = command.command === "play";
+        setIsPlaying(playing);
+        return { accepted: true, detail: playing ? "Humanoid replay is playing." : "Humanoid replay is paused." };
+      }
+      if (command.command === "seek") {
+        if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
+          return { accepted: false, detail: "That Humanoid replay frame is unavailable." };
+        }
+        setSampleIndex(command.sampleIndex);
+        setIsPlaying(false);
+        return {
+          accepted: true,
+          detail: `Humanoid replay moved to frame ${command.sampleIndex + 1} of ${trace.samples.length}.`,
+        };
+      }
+      if (command.command === "set-speed") {
+        if (!trace || command.speed === undefined) {
+          return { accepted: false, detail: "The Humanoid replay speed is unavailable." };
+        }
+        setPlaybackSpeed(command.speed);
+        return { accepted: true, detail: `Humanoid replay speed is ${command.speed}×.` };
+      }
       if (!workerAvailable || !workerRef.current || !admission) {
         return { accepted: false, detail: "The humanoid owner worker is not ready." };
       }
@@ -2661,6 +2721,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     challenge,
     task,
     family,
+    trace,
+    curriculumTrace,
   ]);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
@@ -2934,6 +2996,23 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       },
     );
   }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task, challenge, family]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    const now = performance.now();
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}`;
+    const settingsChanged = settings !== nativeTraceSettingsRef.current;
+    if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
+    nativeTraceReportAtRef.current = now;
+    nativeTraceSettingsRef.current = settings;
+    reportFrankenRobotsTraceState("humanoid", {
+      sampleIndex: trace ? Math.min(sampleIndex, Math.max(0, trace.samples.length - 1)) : 0,
+      sampleCount: trace?.samples.length ?? 0,
+      playing: Boolean(trace) && isPlaying,
+      speed: playbackSpeed,
+      camera: cameraView,
+    });
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective

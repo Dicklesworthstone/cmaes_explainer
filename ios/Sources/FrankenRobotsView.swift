@@ -12,6 +12,7 @@ struct FrankenRobotsView: View {
     @State private var receiptDocument: RobotReceiptDocument?
     @State private var showingReceiptExporter = false
     @State private var receiptExportError: String?
+    @State private var scrubIndex: Double?
 
     init() {
 #if DEBUG
@@ -60,6 +61,7 @@ struct FrankenRobotsView: View {
         }
         .onChange(of: lab) { _, value in
             guidePage = .lab
+            scrubIndex = nil
             engine.select(value)
         }
         .task { engine.select(lab) }
@@ -69,6 +71,15 @@ struct FrankenRobotsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .reloadRobotEngine)) { _ in
             engine.reload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .replayRobotCurriculum)) { _ in
+            engine.replayCurriculum()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleRobotReplay)) { _ in
+            engine.toggleReplayPlayback()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .selectNextRobotCamera)) { _ in
+            engine.selectNextCamera()
         }
         .preferredColorScheme((RobotAppearance(rawValue: appearance) ?? .dark).colorScheme)
         .fileExporter(
@@ -318,6 +329,7 @@ struct FrankenRobotsView: View {
         VStack(spacing: 7) {
             nativeTaskPicker
             nativeExperimentSelectors
+            nativeTransportBar
             Group {
                 if horizontalStatusHasRoom {
                     HStack(spacing: 10) {
@@ -468,6 +480,131 @@ struct FrankenRobotsView: View {
 
     private var availableOptimizerFamilies: [RobotOptimizerFamily] {
         lab == .humanoid ? RobotOptimizerFamily.scalableCases : RobotOptimizerFamily.allCases
+    }
+
+    private var nativeTransportBar: some View {
+        HStack(spacing: 7) {
+            Button {
+                engine.replayCurriculum()
+            } label: {
+                ViewThatFits(in: .horizontal) {
+                    Label("Curriculum", systemImage: "backward.end.fill")
+                    Image(systemName: "backward.end.fill")
+                }
+                .frame(minWidth: 28, minHeight: 38)
+            }
+            .accessibilityIdentifier("robot-native-replay")
+            .accessibilityLabel("Replay owner curriculum")
+            .disabled(
+                !engine.supportsReplay || engine.activeSampleCount == 0 ||
+                    engine.pendingCommandID != nil || engine.phase == .running
+            )
+
+            Button {
+                engine.toggleReplayPlayback()
+            } label: {
+                Image(systemName: engine.isReplayPlaying ? "pause.fill" : "play.fill")
+                    .frame(minWidth: 28, minHeight: 38)
+            }
+            .accessibilityIdentifier("robot-native-playback")
+            .accessibilityLabel(engine.isReplayPlaying ? "Pause robot replay" : "Play robot replay")
+            .disabled(
+                !engine.supportsPlayback || engine.activeSampleCount == 0 ||
+                    engine.pendingCommandID != nil
+            )
+
+            Slider(
+                value: Binding(
+                    get: { scrubIndex ?? Double(engine.activeSampleIndex) },
+                    set: { scrubIndex = $0 }
+                ),
+                in: 0...Double(max(1, engine.activeSampleCount - 1)),
+                step: 1,
+                onEditingChanged: { editing in
+                    guard !editing, let scrubIndex else { return }
+                    self.scrubIndex = nil
+                    engine.seekReplay(to: Int(scrubIndex.rounded()))
+                }
+            )
+            .tint(lab.accent)
+            .accessibilityIdentifier("robot-native-timeline")
+            .accessibilityLabel("Robot replay position")
+            .accessibilityValue(replayPositionLabel)
+            .disabled(
+                !engine.supportsSeek || engine.activeSampleCount < 2 ||
+                    engine.pendingCommandID != nil
+            )
+
+            if horizontalStatusHasRoom {
+                Text(replayPositionLabel)
+                    .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+                    .foregroundStyle(RobotTheme.secondary)
+                    .lineLimit(1)
+                    .frame(minWidth: 58)
+            }
+
+            Menu {
+                ForEach(RobotPlaybackSpeed.allCases) { speed in
+                    Button {
+                        engine.selectPlaybackSpeed(speed)
+                    } label: {
+                        if engine.activePlaybackSpeed == speed {
+                            Label(speed.title, systemImage: "checkmark")
+                        } else {
+                            Text(speed.title)
+                        }
+                    }
+                    .accessibilityIdentifier("robot-speed-\(speed.rawValue)")
+                }
+            } label: {
+                Text(engine.activePlaybackSpeed.title)
+                    .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+                    .frame(minHeight: 38)
+            }
+            .accessibilityIdentifier("robot-native-speed")
+            .accessibilityLabel("Replay speed")
+            .accessibilityValue(engine.activePlaybackSpeed.title)
+            .disabled(
+                !engine.supportsSpeedSelection || engine.activeSampleCount == 0 ||
+                    engine.pendingCommandID != nil
+            )
+
+            Menu {
+                ForEach(RobotCameraMode.available(for: lab)) { camera in
+                    Button {
+                        engine.selectCamera(camera)
+                    } label: {
+                        if engine.activeCamera == camera {
+                            Label(camera.title, systemImage: "checkmark")
+                        } else {
+                            Text(camera.title)
+                        }
+                    }
+                    .accessibilityIdentifier("robot-camera-\(camera.rawValue)")
+                }
+            } label: {
+                ViewThatFits(in: .horizontal) {
+                    Label(engine.activeCamera.title, systemImage: "camera.fill")
+                    Image(systemName: "camera.fill")
+                }
+                .frame(minWidth: 28, minHeight: 38)
+            }
+            .accessibilityIdentifier("robot-native-camera")
+            .accessibilityLabel("Robot camera")
+            .accessibilityValue(engine.activeCamera.title)
+            .disabled(!engine.supportsCameraSelection || engine.pendingCommandID != nil)
+        }
+        .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+        .buttonStyle(.bordered)
+        .tint(lab.accent)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("robot-native-transport")
+    }
+
+    private var replayPositionLabel: String {
+        guard engine.activeSampleCount > 0 else { return "No trace" }
+        let shownIndex = min(engine.activeSampleIndex + 1, engine.activeSampleCount)
+        return "\(shownIndex) / \(engine.activeSampleCount)"
     }
 
     private func nativeCommandLabel(title: String) -> some View {

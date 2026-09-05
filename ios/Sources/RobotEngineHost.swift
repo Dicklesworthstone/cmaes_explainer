@@ -69,6 +69,53 @@ enum RobotOptimizerFamily: String, Codable, CaseIterable, Identifiable {
     static var scalableCases: [Self] { [.separable, .lmCMA, .lmMA] }
 }
 
+enum RobotCameraMode: String, Codable, CaseIterable, Identifiable {
+    case orbit
+    case follow
+    case pov
+    case blueprint
+    case studio
+    case microscope
+    case overhead
+    case side
+    case front
+    case fly
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .orbit: "Orbit"
+        case .follow: "Follow"
+        case .pov: "POV"
+        case .blueprint: "Map"
+        case .studio: "Studio"
+        case .microscope: "Grasp Focus"
+        case .overhead: "Top"
+        case .side: "Side"
+        case .front: "Front"
+        case .fly: "Free-fly"
+        }
+    }
+
+    static func available(for lab: RobotLab) -> [Self] {
+        switch lab {
+        case .humanoid: [.orbit, .follow, .pov, .blueprint, .fly]
+        case .arm: [.studio, .microscope, .overhead, .side, .front, .fly]
+        }
+    }
+}
+
+enum RobotPlaybackSpeed: Double, Codable, CaseIterable, Identifiable {
+    case quarter = 0.25
+    case half = 0.5
+    case normal = 1
+    case double = 2
+
+    var id: Double { rawValue }
+    var title: String { rawValue.formatted(.number.precision(.fractionLength(0...2))) + "×" }
+}
+
 enum RobotReceiptLens: String, CaseIterable, Identifiable {
     case baseline = "owner-receipt"
     case cautious = "cautious-monk"
@@ -272,8 +319,14 @@ struct RobotEngineStatusMessage {
             return nil
         }
         let allowedCapabilities: Set<String> = lab == .humanoid
-            ? ["optimize", "select-task", "select-challenge", "select-family"]
-            : ["optimize", "select-task", "select-family"]
+            ? [
+                "optimize", "select-task", "select-challenge", "select-family", "replay",
+                "playback", "seek", "set-speed", "set-camera",
+            ]
+            : [
+                "optimize", "select-task", "select-family", "replay", "playback", "seek",
+                "set-speed", "set-camera",
+            ]
         guard Set(rawCapabilities).isSubset(of: allowedCapabilities) else { return nil }
         switch lab {
         case .humanoid:
@@ -307,6 +360,61 @@ struct RobotEngineStatusMessage {
     }
 }
 
+struct RobotTraceStateMessage {
+    static let schemaVersion = 1
+
+    let sequence: Int
+    let lab: RobotLab
+    let sampleIndex: Int
+    let sampleCount: Int
+    let playing: Bool
+    let speed: RobotPlaybackSpeed
+    let camera: RobotCameraMode
+
+    init?(payload: [String: Any]) {
+        guard payload["type"] as? String == "trace.state",
+              let schemaVersion = Self.integer(payload["schemaVersion"]),
+              schemaVersion == Self.schemaVersion,
+              let sequence = Self.integer(payload["sequence"]), sequence > 0,
+              let rawLab = payload["lab"] as? String,
+              let lab = RobotLab(rawValue: rawLab),
+              let sampleIndex = Self.integer(payload["sampleIndex"]), sampleIndex >= 0,
+              let sampleCount = Self.integer(payload["sampleCount"]), sampleCount >= 0,
+              (sampleCount == 0 && sampleIndex == 0) || sampleIndex < sampleCount,
+              let playing = payload["playing"] as? Bool,
+              !playing || sampleCount > 0,
+              let rawSpeed = Self.finiteDouble(payload["speed"]),
+              let speed = RobotPlaybackSpeed(rawValue: rawSpeed),
+              let rawCamera = payload["camera"] as? String,
+              let camera = RobotCameraMode(rawValue: rawCamera),
+              RobotCameraMode.available(for: lab).contains(camera) else {
+            return nil
+        }
+        self.sequence = sequence
+        self.lab = lab
+        self.sampleIndex = sampleIndex
+        self.sampleCount = sampleCount
+        self.playing = playing
+        self.speed = speed
+        self.camera = camera
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        guard let value = finiteDouble(value),
+              value.rounded(.towardZero) == value,
+              value >= Double(Int.min),
+              value <= Double(Int.max) else { return nil }
+        return Int(value)
+    }
+
+    private static func finiteDouble(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        return value.isFinite ? value : nil
+    }
+}
+
 struct RobotEngineCommandAcknowledgement {
     static let schemaVersion = 1
 
@@ -320,6 +428,9 @@ struct RobotEngineCommandAcknowledgement {
     let armTask: RobotManipulationTask?
     let challenge: RobotChallenge?
     let family: RobotOptimizerFamily?
+    let sampleIndex: Int?
+    let speed: RobotPlaybackSpeed?
+    let camera: RobotCameraMode?
 
     init?(payload: [String: Any]) {
         guard payload["type"] as? String == "engine.command.ack",
@@ -331,7 +442,10 @@ struct RobotEngineCommandAcknowledgement {
               let rawLab = payload["lab"] as? String,
               let lab = RobotLab(rawValue: rawLab),
               let command = payload["command"] as? String,
-              ["optimize", "stop", "select-task", "select-challenge", "select-family"].contains(command),
+              [
+                "optimize", "stop", "select-task", "select-challenge", "select-family", "replay",
+                "play", "pause", "seek", "set-speed", "set-camera",
+              ].contains(command),
               let accepted = payload["accepted"] as? Bool,
               let detail = payload["detail"] as? String,
               !detail.isEmpty,
@@ -342,10 +456,16 @@ struct RobotEngineCommandAcknowledgement {
         var armTask: RobotManipulationTask?
         var challenge: RobotChallenge?
         var family: RobotOptimizerFamily?
+        var sampleIndex: Int?
+        var speed: RobotPlaybackSpeed?
+        var camera: RobotCameraMode?
         if command == "select-task" {
             guard let rawTask = payload["task"] as? String,
                   payload["challenge"] == nil,
-                  payload["family"] == nil else { return nil }
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil else { return nil }
             switch lab {
             case .humanoid:
                 guard let selection = RobotLocomotionTask(rawValue: rawTask) else { return nil }
@@ -359,19 +479,55 @@ struct RobotEngineCommandAcknowledgement {
                   let rawChallenge = payload["challenge"] as? String,
                   let selection = RobotChallenge(rawValue: rawChallenge),
                   payload["task"] == nil,
-                  payload["family"] == nil else { return nil }
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil else { return nil }
             challenge = selection
         } else if command == "select-family" {
             guard let rawFamily = payload["family"] as? String,
                   let selection = RobotOptimizerFamily(rawValue: rawFamily),
                   (lab == .arm || selection != .full),
                   payload["task"] == nil,
-                  payload["challenge"] == nil else { return nil }
+                  payload["challenge"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil else { return nil }
             family = selection
+        } else if command == "seek" {
+            guard let selection = Self.integer(payload["sampleIndex"]), selection >= 0,
+                  payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil else { return nil }
+            sampleIndex = selection
+        } else if command == "set-speed" {
+            guard let rawSpeed = Self.finiteDouble(payload["speed"]),
+                  let selection = RobotPlaybackSpeed(rawValue: rawSpeed),
+                  payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["camera"] == nil else { return nil }
+            speed = selection
+        } else if command == "set-camera" {
+            guard let rawCamera = payload["camera"] as? String,
+                  let selection = RobotCameraMode(rawValue: rawCamera),
+                  RobotCameraMode.available(for: lab).contains(selection),
+                  payload["task"] == nil,
+                  payload["challenge"] == nil,
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil else { return nil }
+            camera = selection
         } else {
             guard payload["task"] == nil,
                   payload["challenge"] == nil,
-                  payload["family"] == nil else { return nil }
+                  payload["family"] == nil,
+                  payload["sampleIndex"] == nil,
+                  payload["speed"] == nil,
+                  payload["camera"] == nil else { return nil }
         }
         self.sequence = sequence
         self.commandID = commandID
@@ -383,17 +539,25 @@ struct RobotEngineCommandAcknowledgement {
         self.armTask = armTask
         self.challenge = challenge
         self.family = family
+        self.sampleIndex = sampleIndex
+        self.speed = speed
+        self.camera = camera
     }
 
     private static func integer(_ value: Any?) -> Int? {
-        guard let number = value as? NSNumber,
-              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
-        let value = number.doubleValue
+        guard let value = finiteDouble(value) else { return nil }
         guard value.isFinite,
               value.rounded(.towardZero) == value,
               value >= Double(Int.min),
               value <= Double(Int.max) else { return nil }
         return Int(value)
+    }
+
+    private static func finiteDouble(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let value = number.doubleValue
+        return value.isFinite ? value : nil
     }
 }
 
@@ -462,10 +626,20 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var supportsTaskSelection = false
     @Published private(set) var supportsChallengeSelection = false
     @Published private(set) var supportsFamilySelection = false
+    @Published private(set) var supportsReplay = false
+    @Published private(set) var supportsPlayback = false
+    @Published private(set) var supportsSeek = false
+    @Published private(set) var supportsSpeedSelection = false
+    @Published private(set) var supportsCameraSelection = false
     @Published private(set) var activeHumanoidTask = RobotLocomotionTask.walking
     @Published private(set) var activeArmTask = RobotManipulationTask.kitchenMug
     @Published private(set) var activeChallenge = RobotChallenge.flat
     @Published private(set) var activeFamily = RobotOptimizerFamily.lmMA
+    @Published private(set) var activeSampleIndex = 0
+    @Published private(set) var activeSampleCount = 0
+    @Published private(set) var isReplayPlaying = false
+    @Published private(set) var activePlaybackSpeed = RobotPlaybackSpeed.normal
+    @Published private(set) var activeCamera = RobotCameraMode.follow
     @Published private(set) var selectedReceiptLens = RobotReceiptLens.baseline
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
@@ -484,6 +658,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private var pendingRequestedArmTask: RobotManipulationTask?
     private var pendingRequestedChallenge: RobotChallenge?
     private var pendingRequestedFamily: RobotOptimizerFamily?
+    private var pendingRequestedSampleIndex: Int?
+    private var pendingRequestedSpeed: RobotPlaybackSpeed?
+    private var pendingRequestedCamera: RobotCameraMode?
     private var lastBridgeSequence = 0
     private let scriptMessageHandler = WeakRobotScriptMessageHandler()
 #if DEBUG
@@ -590,6 +767,61 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         )
     }
 
+    func replayCurriculum() {
+        guard supportsReplay else { return }
+        sendOwnerCommand("replay", pendingDetail: "Replaying the owner curriculum…")
+    }
+
+    func toggleReplayPlayback() {
+        guard supportsPlayback, activeSampleCount > 0 else { return }
+        sendOwnerCommand(
+            isReplayPlaying ? "pause" : "play",
+            pendingDetail: isReplayPlaying ? "Pausing the replay…" : "Playing the replay…"
+        )
+    }
+
+    func seekReplay(to sampleIndex: Int) {
+        guard supportsSeek,
+              activeSampleCount > 0,
+              sampleIndex >= 0,
+              sampleIndex < activeSampleCount,
+              sampleIndex != activeSampleIndex else { return }
+        sendOwnerCommand(
+            "seek",
+            pendingDetail: "Moving to replay frame \(sampleIndex + 1)…",
+            sampleIndex: sampleIndex
+        )
+    }
+
+    func selectPlaybackSpeed(_ speed: RobotPlaybackSpeed) {
+        guard supportsSpeedSelection, activeSampleCount > 0, speed != activePlaybackSpeed else { return }
+        sendOwnerCommand(
+            "set-speed",
+            pendingDetail: "Setting replay speed to \(speed.title)…",
+            speed: speed
+        )
+    }
+
+    func selectCamera(_ camera: RobotCameraMode) {
+        guard supportsCameraSelection,
+              RobotCameraMode.available(for: selectedLab).contains(camera),
+              camera != activeCamera else { return }
+        sendOwnerCommand(
+            "set-camera",
+            pendingDetail: "Switching to the \(camera.title.lowercased()) camera…",
+            camera: camera
+        )
+    }
+
+    func selectNextCamera() {
+        let cameras = RobotCameraMode.available(for: selectedLab)
+        guard let current = cameras.firstIndex(of: activeCamera) else {
+            if let first = cameras.first { selectCamera(first) }
+            return
+        }
+        selectCamera(cameras[(current + 1) % cameras.count])
+    }
+
     func selectReceiptLens(_ lens: RobotReceiptLens) {
         guard selectedLab == .humanoid,
               phase == .ready || phase == .running else { return }
@@ -625,19 +857,26 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         task: RobotLocomotionTask? = nil,
         armTask: RobotManipulationTask? = nil,
         challenge: RobotChallenge? = nil,
-        family: RobotOptimizerFamily? = nil
+        family: RobotOptimizerFamily? = nil,
+        sampleIndex: Int? = nil,
+        speed: RobotPlaybackSpeed? = nil,
+        camera: RobotCameraMode? = nil
     ) {
         guard pendingCommandID == nil else { return }
+        guard phase == .ready || phase == .running else { return }
         if command == "optimize" || command.hasPrefix("select-") {
             guard phase == .ready else { return }
-        } else {
-            guard command == "stop", phase == .running else { return }
+        } else if command == "stop" {
+            guard phase == .running else { return }
         }
         switch command {
         case "select-task":
             guard supportsTaskSelection,
                   challenge == nil,
                   family == nil,
+                  sampleIndex == nil,
+                  speed == nil,
+                  camera == nil,
                   (selectedLab == .humanoid && task != nil && armTask == nil) ||
                     (selectedLab == .arm && task == nil && armTask != nil) else { return }
         case "select-challenge":
@@ -646,19 +885,58 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                   challenge != nil,
                   task == nil,
                   armTask == nil,
-                  family == nil else { return }
+                  family == nil,
+                  sampleIndex == nil,
+                  speed == nil,
+                  camera == nil else { return }
         case "select-family":
             guard supportsFamilySelection,
                   let family,
                   selectedLab == .arm || family != .full,
                   task == nil,
                   armTask == nil,
-                  challenge == nil else { return }
+                  challenge == nil,
+                  sampleIndex == nil,
+                  speed == nil,
+                  camera == nil else { return }
+        case "replay":
+            guard supportsReplay,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, speed == nil, camera == nil else { return }
+        case "play", "pause":
+            guard supportsPlayback,
+                  activeSampleCount > 0,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, speed == nil, camera == nil else { return }
+        case "seek":
+            guard supportsSeek,
+                  activeSampleCount > 0,
+                  let sampleIndex,
+                  sampleIndex >= 0,
+                  sampleIndex < activeSampleCount,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  speed == nil, camera == nil else { return }
+        case "set-speed":
+            guard supportsSpeedSelection,
+                  activeSampleCount > 0,
+                  speed != nil,
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, camera == nil else { return }
+        case "set-camera":
+            guard supportsCameraSelection,
+                  let camera,
+                  RobotCameraMode.available(for: selectedLab).contains(camera),
+                  task == nil, armTask == nil, challenge == nil, family == nil,
+                  sampleIndex == nil, speed == nil else { return }
         default:
             guard task == nil,
                   armTask == nil,
                   challenge == nil,
-                  family == nil else { return }
+                  family == nil,
+                  sampleIndex == nil,
+                  speed == nil,
+                  camera == nil,
+                  command == "optimize" || command == "stop" else { return }
         }
         let commandID = UUID().uuidString
         pendingCommandID = commandID
@@ -667,6 +945,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         pendingRequestedArmTask = armTask
         pendingRequestedChallenge = challenge
         pendingRequestedFamily = family
+        pendingRequestedSampleIndex = sampleIndex
+        pendingRequestedSpeed = speed
+        pendingRequestedCamera = camera
         commandDetail = pendingDetail
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
@@ -697,6 +978,15 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
         if let family {
             payload["family"] = family.rawValue
+        }
+        if let sampleIndex {
+            payload["sampleIndex"] = sampleIndex
+        }
+        if let speed {
+            payload["speed"] = speed.rawValue
+        }
+        if let camera {
+            payload["camera"] = camera.rawValue
         }
         Task { [weak self] in
             guard let self else { return }
@@ -743,6 +1033,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 supportsTaskSelection ? "select-task" : nil,
                 supportsChallengeSelection ? "select-challenge" : nil,
                 supportsFamilySelection ? "select-family" : nil,
+                supportsReplay ? "replay" : nil,
+                supportsPlayback ? "playback" : nil,
+                supportsSeek ? "seek" : nil,
+                supportsSpeedSelection ? "set-speed" : nil,
+                supportsCameraSelection ? "set-camera" : nil,
             ].compactMap { $0 },
             metrics: metrics,
             provenance: RobotReceiptProvenance(
@@ -978,12 +1273,45 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     if let family = acknowledgement.family {
                         activeFamily = family
                     }
+                case "replay":
+                    activeSampleIndex = 0
+                    isReplayPlaying = true
+                case "play":
+                    isReplayPlaying = true
+                case "pause":
+                    isReplayPlaying = false
+                case "seek":
+                    if let sampleIndex = acknowledgement.sampleIndex {
+                        activeSampleIndex = sampleIndex
+                        isReplayPlaying = false
+                    }
+                case "set-speed":
+                    if let speed = acknowledgement.speed {
+                        activePlaybackSpeed = speed
+                    }
+                case "set-camera":
+                    if let camera = acknowledgement.camera {
+                        activeCamera = camera
+                    }
                 default:
                     break
                 }
             }
             clearPendingCommand()
             commandDetail = acknowledgement.detail
+            return
+        }
+
+        if let traceState = RobotTraceStateMessage(payload: payload) {
+            guard traceState.lab == selectedLab,
+                  traceState.sequence > lastBridgeSequence,
+                  phase.acceptsOwnerStatus else { return }
+            lastBridgeSequence = traceState.sequence
+            activeSampleIndex = traceState.sampleIndex
+            activeSampleCount = traceState.sampleCount
+            isReplayPlaying = traceState.playing
+            activePlaybackSpeed = traceState.speed
+            activeCamera = traceState.camera
             return
         }
 
@@ -998,6 +1326,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsTaskSelection = event.capabilities.contains("select-task")
         supportsChallengeSelection = event.capabilities.contains("select-challenge")
         supportsFamilySelection = event.capabilities.contains("select-family")
+        supportsReplay = event.capabilities.contains("replay")
+        supportsPlayback = event.capabilities.contains("playback")
+        supportsSeek = event.capabilities.contains("seek")
+        supportsSpeedSelection = event.capabilities.contains("set-speed")
+        supportsCameraSelection = event.capabilities.contains("set-camera")
         if event.lab == .humanoid, let task = event.metrics.activeTask {
             activeHumanoidTask = task
         }
@@ -1022,27 +1355,66 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 return acknowledgement.task == pendingRequestedTask &&
                     pendingRequestedArmTask == nil &&
                     pendingRequestedChallenge == nil &&
-                    pendingRequestedFamily == nil
+                    pendingRequestedFamily == nil &&
+                    pendingRequestedSampleIndex == nil &&
+                    pendingRequestedSpeed == nil &&
+                    pendingRequestedCamera == nil
             }
             return acknowledgement.armTask == pendingRequestedArmTask &&
                 pendingRequestedTask == nil &&
                 pendingRequestedChallenge == nil &&
-                pendingRequestedFamily == nil
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil
         case "select-challenge":
             return acknowledgement.challenge == pendingRequestedChallenge &&
                 pendingRequestedTask == nil &&
                 pendingRequestedArmTask == nil &&
-                pendingRequestedFamily == nil
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil
         case "select-family":
             return acknowledgement.family == pendingRequestedFamily &&
                 pendingRequestedTask == nil &&
                 pendingRequestedArmTask == nil &&
-                pendingRequestedChallenge == nil
+                pendingRequestedChallenge == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil
+        case "seek":
+            return acknowledgement.sampleIndex == pendingRequestedSampleIndex &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil
+        case "set-speed":
+            return acknowledgement.speed == pendingRequestedSpeed &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedCamera == nil
+        case "set-camera":
+            return acknowledgement.camera == pendingRequestedCamera &&
+                pendingRequestedTask == nil &&
+                pendingRequestedArmTask == nil &&
+                pendingRequestedChallenge == nil &&
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil
         default:
             return pendingRequestedTask == nil &&
                 pendingRequestedArmTask == nil &&
                 pendingRequestedChallenge == nil &&
-                pendingRequestedFamily == nil
+                pendingRequestedFamily == nil &&
+                pendingRequestedSampleIndex == nil &&
+                pendingRequestedSpeed == nil &&
+                pendingRequestedCamera == nil
         }
     }
 
@@ -1053,6 +1425,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         pendingRequestedArmTask = nil
         pendingRequestedChallenge = nil
         pendingRequestedFamily = nil
+        pendingRequestedSampleIndex = nil
+        pendingRequestedSpeed = nil
+        pendingRequestedCamera = nil
     }
 
     private func receiveLegacyStatus(_ payload: [String: Any]) {
@@ -1069,6 +1444,14 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsTaskSelection = false
         supportsChallengeSelection = false
         supportsFamilySelection = false
+        supportsReplay = false
+        supportsPlayback = false
+        supportsSeek = false
+        supportsSpeedSelection = false
+        supportsCameraSelection = false
+        activeSampleIndex = 0
+        activeSampleCount = 0
+        isReplayPlaying = false
         self.detail = detail
         apply(state: state, detail: detail)
     }
@@ -1114,10 +1497,20 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         supportsTaskSelection = false
         supportsChallengeSelection = false
         supportsFamilySelection = false
+        supportsReplay = false
+        supportsPlayback = false
+        supportsSeek = false
+        supportsSpeedSelection = false
+        supportsCameraSelection = false
         activeHumanoidTask = .walking
         activeArmTask = .kitchenMug
         activeChallenge = .flat
         activeFamily = selectedLab == .humanoid ? .lmMA : .lmCMA
+        activeSampleIndex = 0
+        activeSampleCount = 0
+        isReplayPlaying = false
+        activePlaybackSpeed = .normal
+        activeCamera = selectedLab == .humanoid ? .follow : .studio
         selectedReceiptLens = .baseline
         commandTimeoutTask?.cancel()
         clearPendingCommand()

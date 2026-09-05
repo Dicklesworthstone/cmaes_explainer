@@ -82,6 +82,51 @@ describe("FrankenRobots native command contract", () => {
     ).toBeNull();
   });
 
+  test("accepts only bounded playback and lab-specific camera commands", () => {
+    for (const command of ["replay", "play", "pause"] as const) {
+      const transport = { ...valid, commandId: `transport-${command}`, command } as const;
+      expect(decodeFrankenRobotsNativeCommand(transport, "humanoid")).toEqual(transport);
+    }
+
+    const seek = { ...valid, commandId: "seek-12", command: "seek", sampleIndex: 12 } as const;
+    expect(decodeFrankenRobotsNativeCommand(seek, "humanoid")).toEqual(seek);
+    expect(decodeFrankenRobotsNativeCommand({ ...seek, sampleIndex: -1 }, "humanoid")).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...seek, sampleIndex: 1.5 }, "humanoid")).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...seek, speed: 1 }, "humanoid")).toBeNull();
+
+    for (const speed of [0.25, 0.5, 1, 2] as const) {
+      const selection = { ...valid, commandId: `speed-${speed}`, command: "set-speed", speed } as const;
+      expect(decodeFrankenRobotsNativeCommand(selection, "humanoid")).toEqual(selection);
+    }
+    expect(
+      decodeFrankenRobotsNativeCommand(
+        { ...valid, command: "set-speed", speed: 4 },
+        "humanoid",
+      ),
+    ).toBeNull();
+
+    const humanoidCamera = {
+      ...valid,
+      commandId: "camera-blueprint",
+      command: "set-camera",
+      camera: "blueprint",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(humanoidCamera, "humanoid")).toEqual(humanoidCamera);
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...humanoidCamera, camera: "studio" }, "humanoid"),
+    ).toBeNull();
+
+    const armCamera = {
+      ...valid,
+      commandId: "camera-microscope",
+      lab: "arm",
+      command: "set-camera",
+      camera: "microscope",
+    } as const;
+    expect(decodeFrankenRobotsNativeCommand(armCamera, "arm")).toEqual(armCamera);
+    expect(decodeFrankenRobotsNativeCommand({ ...armCamera, camera: "pov" }, "arm")).toBeNull();
+  });
+
   test("rejects foreign schema, lab, command, and unsafe IDs", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...valid, schemaVersion: 2 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(valid, "arm")).toBeNull();

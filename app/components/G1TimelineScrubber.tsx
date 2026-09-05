@@ -3,15 +3,16 @@
 import React from "react";
 import { Play, Pause, RotateCcw, FastForward, SkipBack, SkipForward, AlertCircle, CheckCircle2 } from "lucide-react";
 import type { G1TraceReceipt, G1TraceSample } from "../lib/frankensimCmaes";
+import type { FrankenRobotsPlaybackSpeed } from "../lib/frankenrobotsBridge";
 
 interface G1TimelineScrubberProps {
   trace: G1TraceReceipt | null;
   currentSampleIndex: number;
   isPlaying: boolean;
-  playbackSpeed: number;
+  playbackSpeed: FrankenRobotsPlaybackSpeed;
   onTogglePlay: () => void;
   onSeekIndex: (index: number) => void;
-  onSetSpeed: (speed: number) => void;
+  onSetSpeed: (speed: FrankenRobotsPlaybackSpeed) => void;
   onReset: () => void;
 }
 
@@ -179,7 +180,7 @@ export function G1TimelineScrubber({
 
         {/* Speed Selector Buttons */}
         <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
-          {[0.25, 0.5, 1.0, 2.0].map((s) => (
+          {([0.25, 0.5, 1, 2] as const).map((s) => (
             <button
               key={s}
               type="button"

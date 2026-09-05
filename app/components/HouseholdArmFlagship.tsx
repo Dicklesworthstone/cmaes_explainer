@@ -92,6 +92,8 @@ import {
 import {
   installFrankenRobotsNativeCommandHandler,
   reportFrankenRobotsEngineState,
+  reportFrankenRobotsTraceState,
+  type FrankenRobotsPlaybackSpeed,
 } from "../lib/frankenrobotsBridge";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
@@ -1855,7 +1857,9 @@ export function HouseholdArmFlagship({
   const [cameraMode, setCameraMode] = useState<ArmCameraMode>("studio");
   const [sampleIndex, setSampleIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
+  const nativeTraceReportAtRef = useRef(0);
+  const nativeTraceSettingsRef = useRef("");
   const [playbackResetToken, setPlaybackResetToken] = useState(0);
   const [armDragTarget, setArmDragTarget] = useState<
     [number, number, number] | null
@@ -2238,6 +2242,64 @@ export function HouseholdArmFlagship({
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("arm", (command) => {
+      if (command.command === "set-camera") {
+        const selectedCamera = command.camera;
+        if (
+          selectedCamera !== "studio" &&
+          selectedCamera !== "microscope" &&
+          selectedCamera !== "overhead" &&
+          selectedCamera !== "side" &&
+          selectedCamera !== "front" &&
+          selectedCamera !== "fly"
+        ) {
+          return { accepted: false, detail: "The Arm camera was not provided." };
+        }
+        setCameraMode(selectedCamera);
+        return { accepted: true, detail: `Accepted ${selectedCamera} camera.` };
+      }
+      if (command.command === "replay") {
+        if (busy !== null || inFlightRef.current) {
+          return { accepted: false, detail: "Finish or stop the current owner request first." };
+        }
+        if (!curriculumTrace) {
+          return { accepted: false, detail: "The Arm curriculum trace is not ready." };
+        }
+        setTrace(curriculumTrace);
+        setSampleIndex(0);
+        setPlaybackResetToken((token) => token + 1);
+        setIsPlaying(true);
+        setActiveTrace("curriculum");
+        setGeneration(0);
+        setBestObjective(curriculumTrace.objective);
+        setStatus(`${TASK_COPY[task].title} curriculum replayed from Frankensim WASM.`);
+        return { accepted: true, detail: "Accepted Arm curriculum replay from frame one." };
+      }
+      if (command.command === "play" || command.command === "pause") {
+        if (!trace) {
+          return { accepted: false, detail: "The Arm trace is not ready." };
+        }
+        const playing = command.command === "play";
+        setIsPlaying(playing);
+        return { accepted: true, detail: playing ? "Arm replay is playing." : "Arm replay is paused." };
+      }
+      if (command.command === "seek") {
+        if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
+          return { accepted: false, detail: "That Arm replay frame is unavailable." };
+        }
+        setSampleIndex(command.sampleIndex);
+        setIsPlaying(false);
+        return {
+          accepted: true,
+          detail: `Arm replay moved to frame ${command.sampleIndex + 1} of ${trace.samples.length}.`,
+        };
+      }
+      if (command.command === "set-speed") {
+        if (!trace || command.speed === undefined) {
+          return { accepted: false, detail: "The Arm replay speed is unavailable." };
+        }
+        setPlaybackSpeed(command.speed);
+        return { accepted: true, detail: `Arm replay speed is ${command.speed}×.` };
+      }
       if (!workerAvailable || !workerRef.current) {
         return { accepted: false, detail: "The arm owner worker is not ready." };
       }
@@ -2308,7 +2370,34 @@ export function HouseholdArmFlagship({
         detail: `Accepted continuous ${family} learning for the ${task} owner; it will run until Stop.`,
       };
     });
-  }, [embedded, workerAvailable, busy, startContinuousOptimization, stopContinuousOptimization, task, family]);
+  }, [
+    embedded,
+    workerAvailable,
+    busy,
+    startContinuousOptimization,
+    stopContinuousOptimization,
+    task,
+    family,
+    trace,
+    curriculumTrace,
+  ]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    const now = performance.now();
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}`;
+    const settingsChanged = settings !== nativeTraceSettingsRef.current;
+    if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
+    nativeTraceReportAtRef.current = now;
+    nativeTraceSettingsRef.current = settings;
+    reportFrankenRobotsTraceState("arm", {
+      sampleIndex: trace ? clampArmPlaybackIndex(trace.samples.length, sampleIndex) : 0,
+      sampleCount: trace?.samples.length ?? 0,
+      playing: Boolean(trace) && isPlaying,
+      speed: playbackSpeed,
+      camera: cameraMode,
+    });
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {
@@ -2846,7 +2935,7 @@ export function HouseholdArmFlagship({
                   aria-label="Arm trace playback speed"
                   value={playbackSpeed}
                   onChange={(event) =>
-                    setPlaybackSpeed(Number(event.target.value))
+                    setPlaybackSpeed(Number(event.target.value) as FrankenRobotsPlaybackSpeed)
                   }
                   className="shrink-0 rounded-lg border border-white/10 bg-slate-900 px-1.5 py-1 text-[0.65rem] font-bold text-slate-200"
                 >

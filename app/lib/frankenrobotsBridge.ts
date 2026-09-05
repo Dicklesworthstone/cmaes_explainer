@@ -10,12 +10,30 @@ export type FrankenRobotsManipulationTask =
   | "backyard-trowel";
 export type FrankenRobotsChallenge = "flat" | "terrain-and-push";
 export type FrankenRobotsOptimizerFamily = "full" | "separable" | "lm-cma" | "lm-ma";
+export type FrankenRobotsCamera =
+  | "orbit"
+  | "follow"
+  | "pov"
+  | "blueprint"
+  | "studio"
+  | "microscope"
+  | "overhead"
+  | "side"
+  | "front"
+  | "fly";
+export type FrankenRobotsPlaybackSpeed = 0.25 | 0.5 | 1 | 2;
 export type FrankenRobotsCommandKind =
   | "optimize"
   | "stop"
   | "select-task"
   | "select-challenge"
-  | "select-family";
+  | "select-family"
+  | "replay"
+  | "play"
+  | "pause"
+  | "seek"
+  | "set-speed"
+  | "set-camera";
 
 export type FrankenRobotsNativeCommand = {
   type: "engine.command";
@@ -26,6 +44,9 @@ export type FrankenRobotsNativeCommand = {
   task?: FrankenRobotsLocomotionTask | FrankenRobotsManipulationTask;
   challenge?: FrankenRobotsChallenge;
   family?: FrankenRobotsOptimizerFamily;
+  sampleIndex?: number;
+  speed?: FrankenRobotsPlaybackSpeed;
+  camera?: FrankenRobotsCamera;
 };
 
 export type FrankenRobotsCommandResult = {
@@ -90,7 +111,13 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.command !== "stop" &&
       candidate.command !== "select-task" &&
       candidate.command !== "select-challenge" &&
-      candidate.command !== "select-family") ||
+      candidate.command !== "select-family" &&
+      candidate.command !== "replay" &&
+      candidate.command !== "play" &&
+      candidate.command !== "pause" &&
+      candidate.command !== "seek" &&
+      candidate.command !== "set-speed" &&
+      candidate.command !== "set-camera") ||
     typeof candidate.commandId !== "string" ||
     !/^[A-Za-z0-9._-]{1,80}$/.test(candidate.commandId)
   ) {
@@ -107,7 +134,14 @@ export function decodeFrankenRobotsNativeCommand(
       (candidate.task === "kitchen-mug" ||
         candidate.task === "living-room-remote" ||
         candidate.task === "backyard-trowel");
-    if ((!validHumanoidTask && !validArmTask) || candidate.challenge !== undefined || candidate.family !== undefined) {
+    if (
+      (!validHumanoidTask && !validArmTask) ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined
+    ) {
       return null;
     }
   } else if (candidate.command === "select-challenge") {
@@ -115,7 +149,10 @@ export function decodeFrankenRobotsNativeCommand(
       expectedLab !== "humanoid" ||
       (candidate.challenge !== "flat" && candidate.challenge !== "terrain-and-push") ||
       candidate.task !== undefined ||
-      candidate.family !== undefined
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined
     ) {
       return null;
     }
@@ -125,13 +162,73 @@ export function decodeFrankenRobotsNativeCommand(
       candidate.family === "lm-cma" ||
       candidate.family === "lm-ma" ||
       (expectedLab === "arm" && candidate.family === "full");
-    if (!validFamily || candidate.task !== undefined || candidate.challenge !== undefined) {
+    if (
+      !validFamily ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "seek") {
+    if (
+      !Number.isSafeInteger(candidate.sampleIndex) ||
+      (candidate.sampleIndex as number) < 0 ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.speed !== undefined ||
+      candidate.camera !== undefined
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "set-speed") {
+    if (
+      (candidate.speed !== 0.25 &&
+        candidate.speed !== 0.5 &&
+        candidate.speed !== 1 &&
+        candidate.speed !== 2) ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.camera !== undefined
+    ) {
+      return null;
+    }
+  } else if (candidate.command === "set-camera") {
+    const validCamera =
+      expectedLab === "humanoid"
+        ? candidate.camera === "orbit" ||
+          candidate.camera === "follow" ||
+          candidate.camera === "pov" ||
+          candidate.camera === "blueprint" ||
+          candidate.camera === "fly"
+        : candidate.camera === "studio" ||
+          candidate.camera === "microscope" ||
+          candidate.camera === "overhead" ||
+          candidate.camera === "side" ||
+          candidate.camera === "front" ||
+          candidate.camera === "fly";
+    if (
+      !validCamera ||
+      candidate.task !== undefined ||
+      candidate.challenge !== undefined ||
+      candidate.family !== undefined ||
+      candidate.sampleIndex !== undefined ||
+      candidate.speed !== undefined
+    ) {
       return null;
     }
   } else if (
     candidate.task !== undefined ||
     candidate.challenge !== undefined ||
-    candidate.family !== undefined
+    candidate.family !== undefined ||
+    candidate.sampleIndex !== undefined ||
+    candidate.speed !== undefined ||
+    candidate.camera !== undefined
   ) {
     return null;
   }
@@ -180,6 +277,9 @@ export function installFrankenRobotsNativeCommandHandler(
       ...(command.task ? { task: command.task } : {}),
       ...(command.challenge ? { challenge: command.challenge } : {}),
       ...(command.family ? { family: command.family } : {}),
+      ...(command.sampleIndex !== undefined ? { sampleIndex: command.sampleIndex } : {}),
+      ...(command.speed !== undefined ? { speed: command.speed } : {}),
+      ...(command.camera ? { camera: command.camera } : {}),
       accepted: result.accepted,
       detail: result.detail.slice(0, 300),
     });
@@ -216,7 +316,47 @@ export function reportFrankenRobotsEngineState(
     metrics,
     capabilities:
       lab === "humanoid"
-        ? ["optimize", "select-task", "select-challenge", "select-family"]
-        : ["optimize", "select-task", "select-family"],
+        ? [
+            "optimize",
+            "select-task",
+            "select-challenge",
+            "select-family",
+            "replay",
+            "playback",
+            "seek",
+            "set-speed",
+            "set-camera",
+          ]
+        : [
+            "optimize",
+            "select-task",
+            "select-family",
+            "replay",
+            "playback",
+            "seek",
+            "set-speed",
+            "set-camera",
+          ],
+  });
+}
+
+export function reportFrankenRobotsTraceState(
+  lab: FrankenRobotsLab,
+  state: {
+    sampleIndex: number;
+    sampleCount: number;
+    playing: boolean;
+    speed: FrankenRobotsPlaybackSpeed;
+    camera: FrankenRobotsCamera;
+  },
+): void {
+  if (typeof window === "undefined") return;
+  postNativeMessage(lab, {
+    type: "trace.state",
+    sampleIndex: state.sampleIndex,
+    sampleCount: state.sampleCount,
+    playing: state.playing,
+    speed: state.speed,
+    camera: state.camera,
   });
 }

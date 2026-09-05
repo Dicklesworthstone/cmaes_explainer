@@ -55,6 +55,18 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(RobotReceiptLens.glassFloor.title, "Glass-Floor Walker")
     }
 
+    func testCameraAndPlaybackChoicesMatchBothEmbeddedLabs() {
+        XCTAssertEqual(
+            RobotCameraMode.available(for: .humanoid).map(\.rawValue),
+            ["orbit", "follow", "pov", "blueprint", "fly"]
+        )
+        XCTAssertEqual(
+            RobotCameraMode.available(for: .arm).map(\.rawValue),
+            ["studio", "microscope", "overhead", "side", "front", "fly"]
+        )
+        XCTAssertEqual(RobotPlaybackSpeed.allCases.map(\.rawValue), [0.25, 0.5, 1, 2])
+    }
+
     func testTextScaleUsesBrowserStyleBoundedSteps() {
         XCTAssertEqual(
             RobotTheme.steppedTextScale(from: RobotTheme.defaultTextScale, direction: 1),
@@ -298,6 +310,49 @@ final class RobotEngineBridgeTests: XCTestCase {
         familyPayload["lab"] = "humanoid"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: familyPayload))
 
+        var seekPayload = payload
+        seekPayload["commandId"] = "9B84A8A2-seek"
+        seekPayload["command"] = "seek"
+        seekPayload["sampleIndex"] = 42
+        XCTAssertEqual(
+            RobotEngineCommandAcknowledgement(payload: seekPayload)?.sampleIndex,
+            42
+        )
+        seekPayload["sampleIndex"] = 1.5
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: seekPayload))
+
+        var speedPayload = payload
+        speedPayload["commandId"] = "9B84A8A2-speed"
+        speedPayload["command"] = "set-speed"
+        speedPayload["speed"] = 0.25
+        XCTAssertEqual(
+            RobotEngineCommandAcknowledgement(payload: speedPayload)?.speed,
+            .quarter
+        )
+        speedPayload["speed"] = 4
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: speedPayload))
+
+        var cameraPayload = payload
+        cameraPayload["commandId"] = "9B84A8A2-camera"
+        cameraPayload["command"] = "set-camera"
+        cameraPayload["camera"] = "microscope"
+        XCTAssertEqual(
+            RobotEngineCommandAcknowledgement(payload: cameraPayload)?.camera,
+            .microscope
+        )
+        cameraPayload["lab"] = "humanoid"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: cameraPayload))
+
+        for command in ["replay", "play", "pause"] {
+            var transportPayload = payload
+            transportPayload["commandId"] = "9B84A8A2-\(command)"
+            transportPayload["command"] = command
+            XCTAssertEqual(
+                RobotEngineCommandAcknowledgement(payload: transportPayload)?.command,
+                command
+            )
+        }
+
         var malformed = payload
         malformed["accepted"] = "yes"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
@@ -313,6 +368,52 @@ final class RobotEngineBridgeTests: XCTestCase {
         malformed = payload
         malformed["detail"] = String(repeating: "x", count: 301)
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: malformed))
+    }
+
+    func testTraceStateRequiresBoundedOwnerPlaybackAndCameraState() throws {
+        let valid: [String: Any] = [
+            "type": "trace.state",
+            "schemaVersion": 1,
+            "sequence": 11,
+            "lab": "humanoid",
+            "sampleIndex": 42,
+            "sampleCount": 720,
+            "playing": true,
+            "speed": 0.5,
+            "camera": "follow",
+        ]
+        let state = try XCTUnwrap(RobotTraceStateMessage(payload: valid))
+        XCTAssertEqual(state.sampleIndex, 42)
+        XCTAssertEqual(state.sampleCount, 720)
+        XCTAssertTrue(state.playing)
+        XCTAssertEqual(state.speed, .half)
+        XCTAssertEqual(state.camera, .follow)
+
+        var malformed = valid
+        malformed["sampleIndex"] = 720
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+        malformed = valid
+        malformed["sampleCount"] = 0
+        malformed["sampleIndex"] = 0
+        malformed["playing"] = true
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+        malformed = valid
+        malformed["speed"] = 4
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+        malformed = valid
+        malformed["camera"] = "studio"
+        XCTAssertNil(RobotTraceStateMessage(payload: malformed))
+
+        var empty = valid
+        empty["sampleIndex"] = 0
+        empty["sampleCount"] = 0
+        empty["playing"] = false
+        XCTAssertNotNil(RobotTraceStateMessage(payload: empty))
+
+        var arm = valid
+        arm["lab"] = "arm"
+        arm["camera"] = "microscope"
+        XCTAssertEqual(RobotTraceStateMessage(payload: arm)?.camera, .microscope)
     }
 
     private func statusPayload(

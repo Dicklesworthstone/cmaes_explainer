@@ -434,6 +434,102 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testNativePlaybackTimelineSpeedAndCamerasDriveBothEmbeddedLabs() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 12), app.debugDescription)
+        var ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        let transport = app.descendants(matching: .any)["robot-native-transport"]
+        let playback = app.buttons["robot-native-playback"]
+        let replay = app.buttons["robot-native-replay"]
+        let timeline = app.sliders["robot-native-timeline"]
+        let speed = app.buttons["robot-native-speed"]
+        let camera = app.buttons["robot-native-camera"]
+        XCTAssertTrue(transport.waitForExistence(timeout: 8), app.debugDescription)
+        for control in [playback, replay, speed, camera] {
+            XCTAssertTrue(control.isEnabled, app.debugDescription)
+            XCTAssertTrue(control.isHittable, app.debugDescription)
+        }
+        XCTAssertTrue(timeline.isEnabled, app.debugDescription)
+        XCTAssertTrue(timeline.isHittable, app.debugDescription)
+
+        if playback.label.contains("Pause") {
+            playback.tap()
+        }
+        let paused = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'Play'"),
+            object: playback
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 8), .completed)
+
+        timeline.adjust(toNormalizedSliderPosition: 0.6)
+        let receipt = app.descendants(matching: .any)["robot-native-command-detail"]
+        let sought = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'moved to frame'"),
+            object: receipt
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [sought], timeout: 8), .completed)
+
+        speed.tap()
+        let halfSpeed = app.buttons["robot-speed-0.5"]
+        XCTAssertTrue(halfSpeed.waitForExistence(timeout: 5), app.debugDescription)
+        halfSpeed.tap()
+        let slowed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == '0.5×'"),
+            object: speed
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [slowed], timeout: 8), .completed)
+
+        camera.tap()
+        let blueprint = app.buttons["robot-camera-blueprint"]
+        XCTAssertTrue(blueprint.waitForExistence(timeout: 5), app.debugDescription)
+        blueprint.tap()
+        let mapped = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'Map'"),
+            object: camera
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [mapped], timeout: 8), .completed)
+
+        replay.tap()
+        let replayed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'curriculum replay'"),
+            object: receipt
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [replayed], timeout: 8), .completed)
+
+        let arm = app.segmentedControls.buttons["Robot Arm"]
+        XCTAssertTrue(arm.isHittable, app.debugDescription)
+        arm.tap()
+        ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        XCTAssertTrue(camera.waitForExistence(timeout: 5), app.debugDescription)
+        camera.tap()
+        let microscope = app.buttons["robot-camera-microscope"]
+        XCTAssertTrue(microscope.waitForExistence(timeout: 5), app.debugDescription)
+        microscope.tap()
+        let focused = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'Grasp Focus'"),
+            object: camera
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [focused], timeout: 8), .completed)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Native trace transport and lab-specific cameras"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations() throws {
         let device = XCUIDevice.shared
         device.orientation = .portrait
