@@ -31,7 +31,7 @@ import {
   KUKA_AUXILIARY_JOINT_LIMITS,
   KUKA_LINK_LENGTHS,
 } from "../lib/armInverseKinematics";
-import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
+import { stageBoxRenderTransform, type OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
 import type {
   HouseholdManipulationAdmission,
   HouseholdManipulationTraceSample,
@@ -113,11 +113,10 @@ export interface ArmPhysicsDebugOverlayProps {
   targetPosition: [number, number, number] | null;
   safeRadius?: number;
   /**
-   * World-space link origins AFTER the rig's obstacle projection, so the
-   * spheres sit where the rendered links actually are. Falls back to the
-   * raw owner poses when absent.
+   * Owner link origins transformed into the stage frame. The diagnostic
+   * spheres and the rig use the same measured positions.
    */
-  projectedLinkPositions?: readonly (readonly [number, number, number])[];
+  renderedLinkPositions?: readonly (readonly [number, number, number])[];
 }
 
 export function ArmPhysicsDebugOverlay({
@@ -127,7 +126,7 @@ export function ArmPhysicsDebugOverlay({
   obstacles,
   targetPosition,
   safeRadius = 0.04,
-  projectedLinkPositions,
+  renderedLinkPositions,
 }: ArmPhysicsDebugOverlayProps) {
   // Pre-build the OBB wireframe geometry once per overlay mount.
   // Hooks remain unconditional so toggling the overlay cannot change
@@ -209,9 +208,9 @@ export function ArmPhysicsDebugOverlay({
       {sample
         ? sample.linkPoses.map((pose, idx) => {
             const r = ARM_LINK_RADII[idx] ?? LINK_RADIUS[idx] ?? 0.05;
-            const projected = projectedLinkPositions?.[idx];
-            const pos: [number, number, number] = projected
-              ? [projected[0], projected[1], projected[2]]
+            const rendered = renderedLinkPositions?.[idx];
+            const pos: [number, number, number] = rendered
+              ? [rendered[0], rendered[1], rendered[2]]
               : ownerToThree(pose.position);
             return (
               <mesh key={`col-${idx}`} position={pos}>
@@ -249,7 +248,7 @@ export function ArmPhysicsDebugOverlay({
             obb.center[1],
             obb.center[2],
           ]}
-          rotation={[0, obb.rotationYawRad, 0]}
+          rotation={stageBoxRenderTransform(obb).rotation}
         >
           <lineBasicMaterial
             color="#f43f5e"

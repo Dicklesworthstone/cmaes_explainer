@@ -22,6 +22,7 @@ import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
   createHouseNavigationScene,
+  stageBoxRenderTransform,
   type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
 import {
@@ -141,8 +142,7 @@ function KmrThreeScene({
         return (
           <mesh
             key={obstacle.id}
-            position={obstacle.center}
-            rotation={[0, obstacle.rotationYawRad, 0]}
+            {...stageBoxRenderTransform(obstacle)}
           >
             <boxGeometry
               args={[

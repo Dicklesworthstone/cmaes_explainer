@@ -1,5 +1,7 @@
 import {
   DEFAULT_G1_WALKING_CONFIG,
+  FRANKENSIM_OWNER_ARTIFACT,
+  buildG1Config,
   type CmaFamily,
   type G1Challenge,
   type G1Task,
@@ -8,21 +10,19 @@ import {
 import {
   g1KernelObstacleRoster,
   g1SeatForHouse,
+  createHouseNavigationScene,
+  HOUSE_STRUCTURAL_SURFACES,
   type HouseholdKernelObstacle,
 } from "./houseMultiObstacleKernel";
 
-export type G1OptimizationRequest =
+export type G1OptimizationRequest = {
+  /** Stage translation of the owner origin; shared by every operation. */
+  seat?: [number, number, number];
+} & (
   | {
       type: "preview";
       task: G1Task;
       challenge: G1Challenge;
-      /**
-       * Stage position the browser will render the robot at, as a horizontal
-       * offset from the owner's origin. The keep-out roster is declared
-       * relative to it, so moving the robot re-certifies it against the house
-       * it is actually standing in. Omitted means the default seat.
-       */
-      seat?: [number, number, number];
     }
   | {
       type: "optimize";
@@ -68,7 +68,8 @@ export type G1OptimizationRequest =
       challenge: G1Challenge;
       generations: number;
       sigma?: number;
-    };
+    }
+);
 
 /**
  * Measured launch radius for the 5,040-D walking owner.
@@ -124,8 +125,68 @@ export function g1OptimizationConfig(
 export function g1ObstaclesForSeat(
   seat?: readonly [number, number, number],
 ): readonly HouseholdKernelObstacle[] {
-  if (!seat) return G1_KERNEL_OBSTACLES;
-  return g1KernelObstacleRoster(seat);
+  return g1KernelObstacleRoster(g1ResolveSeat(seat));
+}
+
+export function g1ResolveSeat(
+  seat: readonly [number, number, number] = G1_HOUSE_SEAT.offset,
+): [number, number, number] {
+  if (seat.length !== 3 || !seat.every(Number.isFinite) || seat[1] !== 0) {
+    throw new Error(
+      "G1 placement requires finite stage coordinates on the floor (y = 0).",
+    );
+  }
+  return [seat[0], seat[1], seat[2]];
+}
+
+export type G1SceneReceipt = {
+  seat: [number, number, number];
+  configWords: number[];
+  declaredBodyCount: number;
+  catalogBodyCount: number;
+  /** Hash of the exact owner config packet, stage translation and WASM digest. */
+  digest: string;
+};
+
+export async function g1ExperimentForSeat(
+  task: G1Task,
+  challenge: G1Challenge,
+  requestedSeat?: readonly [number, number, number],
+): Promise<{ config: G1WalkingConfig; scene: G1SceneReceipt }> {
+  const seat = g1ResolveSeat(requestedSeat);
+  const obstacles = g1ObstaclesForSeat(seat);
+  const config = g1OptimizationConfig(task, challenge, obstacles);
+  // Fixed little-endian f64 bytes preserve every admitted input, including
+  // adjacent floating-point values that rounded display strings would hide.
+  const configWords = Array.from(buildG1Config(config));
+  const values = [...seat, ...configWords];
+  const owner = new TextEncoder().encode(
+    `g1-scene-v1:${FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256}`,
+  );
+  const bytes = new Uint8Array(owner.length + values.length * 8);
+  bytes.set(owner);
+  const view = new DataView(bytes.buffer);
+  values.forEach((value, index) =>
+    view.setFloat64(owner.length + index * 8, value, true),
+  );
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const digest = Array.from(hash, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  const catalogBodyCount =
+    createHouseNavigationScene().obstacles.filter(
+      (body) => !body.exemptFromPenalty,
+    ).length + HOUSE_STRUCTURAL_SURFACES.length;
+  return {
+    config,
+    scene: {
+      seat,
+      configWords,
+      digest,
+      declaredBodyCount: obstacles.length,
+      catalogBodyCount,
+    },
+  };
 }
 
 export function g1OptimizationRunKey(
@@ -133,6 +194,7 @@ export function g1OptimizationRunKey(
   challenge: G1Challenge,
   family: Exclude<CmaFamily, "full">,
   seedIndex: number,
+  seat?: readonly [number, number, number],
 ): string {
-  return `${task}:${challenge}:${family}:${seedIndex}`;
+  return `${task}:${challenge}:${family}:${seedIndex}:${JSON.stringify(g1ResolveSeat(seat))}`;
 }

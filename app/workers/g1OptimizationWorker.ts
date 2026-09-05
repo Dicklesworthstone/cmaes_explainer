@@ -13,10 +13,11 @@ import {
 } from "../lib/frankensimCmaes";
 import {
   G1_DEFAULT_SEARCH_SIGMA,
-  g1ObstaclesForSeat,
-  g1OptimizationConfig,
+  g1ExperimentForSeat,
   g1OptimizationRunKey,
+  g1ResolveSeat,
   type G1OptimizationRequest,
+  type G1SceneReceipt,
 } from "../lib/g1OptimizationProtocol";
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
@@ -30,6 +31,7 @@ type WorkerResponse =
       type: "trace";
       trace: G1TraceReceipt;
       admission: G1Admission;
+      scene: G1SceneReceipt;
       generation: number;
       family: G1TraceOrigin;
       continuing?: boolean;
@@ -108,10 +110,9 @@ async function preview(
   seat?: [number, number, number]
 ): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
+  const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(
-      g1OptimizationConfig(task, challenge, g1ObstaclesForSeat(seat))
-    ),
+    await createFrankenSimG1WalkingEvaluator(config),
     "G1 admission"
   );
   try {
@@ -123,6 +124,7 @@ async function preview(
       type: "trace",
       trace: stabilizerTrace,
       admission: evaluator.admission,
+      scene,
       generation: 0,
       family: "stabilizer",
     });
@@ -135,6 +137,7 @@ async function preview(
       type: "trace",
       trace: curriculumTrace,
       admission: evaluator.admission,
+      scene,
       generation: 0,
       family: "curriculum",
       policy: curriculumMean.slice(),
@@ -158,10 +161,12 @@ async function replayPolicy(
   family: Exclude<CmaFamily, "full">,
   policy: Float64Array,
   generation: number,
+  seat?: [number, number, number],
 ): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
+  const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
+    await createFrankenSimG1WalkingEvaluator(config),
     "G1 admission"
   );
   try {
@@ -170,6 +175,7 @@ async function replayPolicy(
       type: "trace",
       trace,
       admission: evaluator.admission,
+      scene,
       generation,
       family,
       policy: policy.slice(),
@@ -183,12 +189,13 @@ async function replayPolicy(
 type G1Evaluator = FrankenSimG1WalkingEvaluator;
 type G1CmaSession = FrankenSimCmaFamilySession;
 
-// Continuable optimization runs, keyed "family:seed". Keeping the CMA
+// Continuable optimization runs, keyed by task, challenge, family, seed and seat. Keeping the CMA
 // session (mean/sigma/covariance path) alive across requests lets the
 // Optimize control extend a run for hundreds of generations instead of
 // restarting from the curriculum mean every click. Runs are freed when
 // replaced by a fresh request; the map is bounded to keep worker memory sane.
 type G1ActiveRun = {
+  scene: G1SceneReceipt;
   session: G1CmaSession;
   evaluator: G1Evaluator;
   pool: RoboticsEvaluationPool;
@@ -226,6 +233,7 @@ function g1FreeRun(run: G1ActiveRun): void {
   } catch {
     // ditto
   }
+  run.evaluator.free();
 }
 
 async function optimize(
@@ -237,12 +245,13 @@ async function optimize(
   challenge: G1Challenge = "terrain-and-push",
   requestedSigma?: number,
   continuous = false,
-  resumeFrom?: Float64Array
+  resumeFrom?: Float64Array,
+  seat?: [number, number, number],
 ): Promise<void> {
   const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const population = G1_POPULATION;
-  const runKey = g1OptimizationRunKey(task, challenge, family, seedIndex);
+  const runKey = g1OptimizationRunKey(task, challenge, family, seedIndex, seat);
 
   let run = mode === "continue" ? g1ActiveRuns.get(runKey) : undefined;
   if (run) {
@@ -269,13 +278,14 @@ async function optimize(
     // Training and replay deliberately share one admitted evaluator. Optimizing
     // a short proxy and replaying a longer experiment rewards a different
     // behavior than the one the user sees.
+    const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
     const evaluator = requireOk(
-      await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
+      await createFrankenSimG1WalkingEvaluator(config),
       "G1 admission"
     );
     const evaluationPool = new RoboticsEvaluationPool({
       model: "g1",
-      config: g1OptimizationConfig(task, challenge),
+      config,
       dimension: 5_040,
     });
     // A run recovered from storage starts from the policy it reached; a fresh
@@ -302,8 +312,17 @@ async function optimize(
       }),
       "CMA admission"
     );
-    const activeRun: G1ActiveRun = { session, evaluator, pool: evaluationPool, bestPolicy, bestObjective, completedGeneration: 0, maxTotalGenerations: G1_MAX_TOTAL_GENERATIONS };
+    const activeRun: G1ActiveRun = { scene, session, evaluator, pool: evaluationPool, bestPolicy, bestObjective, completedGeneration: 0, maxTotalGenerations: G1_MAX_TOTAL_GENERATIONS };
     run = activeRun;
+    // Placement changes create distinct experiments. Retain a small number
+    // for continuation, releasing the owner and lane resources on eviction.
+    if (g1ActiveRuns.size >= 6) {
+      const oldest = g1ActiveRuns.entries().next().value;
+      if (oldest) {
+        g1FreeRun(oldest[1]);
+        g1ActiveRuns.delete(oldest[0]);
+      }
+    }
     g1ActiveRuns.set(runKey, activeRun);
   }
 
@@ -361,6 +380,7 @@ async function optimize(
           type: "trace",
           trace: checkpoint,
           admission: run.evaluator.admission,
+          scene: run.scene,
           generation: completedGeneration,
           family,
           continuing: true,
@@ -385,6 +405,7 @@ async function optimize(
       type: "trace",
       trace,
       admission: run.evaluator.admission,
+      scene: run.scene,
       generation: completedGeneration,
       family,
       stopped,
@@ -402,6 +423,7 @@ async function compareFamilies(
   requestedGenerations: number,
   task: G1Task = "walking",
   challenge: G1Challenge = "terrain-and-push",
+  seat?: [number, number, number],
 ): Promise<void> {
   const generations = Math.max(2, Math.min(8, Math.trunc(requestedGenerations)));
   const population = 16;
@@ -413,13 +435,14 @@ async function compareFamilies(
     detail: `Running all three scalable owners on the identical 5,040-D ${task}, ${challenge} objective…`,
   });
 
+  const { config } = await g1ExperimentForSeat(task, challenge, seat);
   const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(g1OptimizationConfig(task, challenge)),
+    await createFrankenSimG1WalkingEvaluator(config),
     "G1 comparison admission"
   );
   const evaluationPool = new RoboticsEvaluationPool({
     model: "g1",
-    config: g1OptimizationConfig(task, challenge),
+    config,
     dimension: 5_040,
   });
   let parallelAnnounced = false;
@@ -489,12 +512,19 @@ async function compareFamilies(
 
 worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
+  try {
+    g1ResolveSeat(request.seat);
+  } catch (error) {
+    post({ type: "error", message: error instanceof Error ? error.message : String(error) });
+    return;
+  }
   if (request.type === "stop") {
     const runKey = g1OptimizationRunKey(
       request.task,
       request.challenge,
       request.family,
       request.seedIndex,
+      request.seat,
     );
     if (g1OptimizationRequests.has(runKey)) {
       g1StopRequests.add(runKey);
@@ -509,7 +539,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     return;
   }
   const optimizationRunKey = request.type === "optimize"
-    ? g1OptimizationRunKey(request.task, request.challenge, request.family, request.seedIndex)
+    ? g1OptimizationRunKey(request.task, request.challenge, request.family, request.seedIndex, request.seat)
     : null;
   if (optimizationRunKey) g1OptimizationRequests.add(optimizationRunKey);
   // The work factory is invoked ONLY inside the gate's .then callback,
@@ -531,10 +561,11 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.challenge ?? "terrain-and-push",
             request.family,
             request.policy,
-            request.generation
+            request.generation,
+            request.seat,
           )
       : request.type === "compare"
-        ? compareFamilies(request.generations, request.task ?? "walking", request.challenge)
+        ? compareFamilies(request.generations, request.task ?? "walking", request.challenge, request.seat)
         : optimize(
             request.family,
             request.generations,
@@ -545,6 +576,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.sigma,
             request.continuous,
             request.resumeFrom,
+            request.seat,
           );
   const scheduled = g1Gate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

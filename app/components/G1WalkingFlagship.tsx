@@ -49,8 +49,8 @@ import {
 import {
   G1_DEFAULT_SEARCH_SIGMA,
   G1_HOUSE_SEAT,
-  G1_KERNEL_OBSTACLES,
   type G1OptimizationRequest,
+  type G1SceneReceipt,
 } from "../lib/g1OptimizationProtocol";
 import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
 import { resolveG1PushVisualization } from "../lib/g1PushVisualization";
@@ -79,9 +79,7 @@ import {
   createHouseNavigationScene,
   distanceToOBB,
   findClearTrajectorySpawnOffset,
-  projectPointOutOfOBB,
   resolveCameraBoom,
-  sweptSphereOBBEntryPoint,
   type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
@@ -109,6 +107,7 @@ type WorkerResponse =
       type: "trace";
       trace: G1TraceReceipt;
       admission: G1Admission;
+      scene: G1SceneReceipt;
       generation: number;
       family: G1TraceOrigin;
       continuing?: boolean;
@@ -230,11 +229,6 @@ const JOINT_COLOR = "#111820";
 const G1_HEAD_JOINT_ORIGIN: [number, number, number] = [0.004, 0, -0.054];
 const G1_POPULATION = 16;
 const G1_LIVE_REPLAY_INTERVAL = 32;
-// SOTA per-link clearance: must be >= the largest link sphere radius
-// (0.105 m at the pelvis, 0.075 m at mid-links) plus a small margin so
-// the visible link surface does not penetrate OBBs. The previous
-// constant 0.05 m was less than the link radius, so the link mesh still
-// visibly tunneled through furniture (verified cmaes-u76s followup).
 /** Height of the rendered terrain above the wood floor planes at y = 0 [m]. */
 const TERRAIN_ABOVE_FLOOR_M = 0.006;
 /** Wireframe overlay offset above the terrain solid [m]. */
@@ -731,78 +725,6 @@ const G1_LINK_RIGHT_WRIST = 29;
 // fallback rig, matching the STL silhouette).
 const G1_HEAD_CROWN_ABOVE_TORSO_METERS = 0.45;
 
-/**
- * PENETRATION PROJECTION (visualization layer). The G1 kernel's IK is
- * obstacle-blind, so a foot or knee can land inside a chair, table, or
- * wall OBB during the rendered trajectory. For every link we push the
- * link centre out of any OBB it entered, then run a swept-sphere CCD pass
- * from the previous frame so a link never teleports to a deep-interior
- * closest point (Redon, Lin, Benichou 2002; Ericson 2005 §5.5.7). The
- * kernel trace stays untouched; the projection is applied per frame to a
- * derived sample that RobotPoseMeshes / RobotPose consume.
- *
- * Everything is evaluated in WORLD space: the spawn/drag offset is added
- * before testing and removed again afterwards, because the mesh is drawn
- * inside a group translated by that offset. Projecting in the raw kernel
- * frame (the previous behaviour) tested the robot against furniture
- * several metres away from where it was actually standing.
- */
-function projectSampleAgainstHouse(
-  sample: G1TraceSample,
-  previousSample: G1TraceSample | null,
-  offset: readonly [number, number, number] | null,
-  obstacles: readonly OrientedBoundingBox[] = houseSceneData.obstacles,
-): G1TraceSample {
-  const ox = offset ? offset[0] : 0;
-  const oy = offset ? offset[1] : 0;
-  const oz = offset ? offset[2] : 0;
-  const prevPositions = previousSample
-    ? previousSample.linkPoses.map((pose) => ownerToThree(pose.position))
-    : null;
-  const linkPoses = sample.linkPoses.map((pose, link) => {
-    const p = ownerToThree(pose.position);
-    let qx = p[0] + ox;
-    let qy = p[1] + oy;
-    let qz = p[2] + oz;
-    for (const obb of obstacles) {
-      if (obb.exemptFromPenalty) continue;
-      const projected = projectPointOutOfOBB([qx, qy, qz], obb, G1_LINK_CLEARANCE_METERS);
-      if (projected.wasInside) {
-        qx = projected.point[0];
-        qy = projected.point[1];
-        qz = projected.point[2];
-      }
-    }
-    if (prevPositions && prevPositions[link]) {
-      const prev = prevPositions[link];
-      for (const obb of obstacles) {
-        if (obb.exemptFromPenalty) continue;
-        const ccd = sweptSphereOBBEntryPoint(
-          [prev[0] + ox, prev[1] + oy, prev[2] + oz],
-          [qx, qy, qz],
-          G1_LINK_CLEARANCE_METERS,
-          obb,
-        );
-        if (ccd.wasHit && ccd.entryPoint) {
-          qx = ccd.entryPoint[0];
-          qy = ccd.entryPoint[1];
-          qz = ccd.entryPoint[2];
-        }
-      }
-    }
-    // Back to the un-offset owner frame: three (x, y, z) -> owner (x, -z, y).
-    const wx = qx - ox;
-    const wy = qy - oy;
-    const wz = qz - oz;
-    return {
-      ...pose,
-      position: [wx, -wz, wy] as [number, number, number],
-      quaternionWxyz: [...pose.quaternionWxyz] as [number, number, number, number],
-    };
-  });
-  return { ...sample, linkPoses };
-}
-
 type RobotAnchors = {
   pelvis: [number, number, number];
   headCrown: [number, number, number];
@@ -814,7 +736,7 @@ type RobotAnchors = {
   links: [number, number, number][];
 };
 
-/** World-space anchor points on the rendered (projected, offset) robot. */
+/** World-space anchor points from the owner pose and its stage placement. */
 function computeRobotAnchors(
   sample: G1TraceSample,
   offset: readonly [number, number, number] | null,
@@ -904,15 +826,9 @@ function RobotPlayback({
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
-  const renderSample = useMemo(
-    () =>
-      projectSampleAgainstHouse(
-        sample,
-        sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
-        positionOffset ?? null,
-      ),
-    [sample, sampleIndex, trace, positionOffset],
-  );
+  // Render the measured articulated pose, including a contact or refusal.
+  // Moving individual links here would disconnect the visible robot from its receipt.
+  const renderSample = sample;
   // Procedural synthesized footstep acoustics on contact state changes
   const prevContactsRef = useRef<{ left: boolean; right: boolean }>({ left: false, right: false });
   useEffect(() => {
@@ -1820,9 +1736,8 @@ type NearestObstacleReadout = {
 };
 
 /**
- * The closest rigid house surface to any rendered link: the live value of
- * the clearance term the multi-factor objective and the HOCBF safety
- * barrier both consume. Returned in world space so it can be drawn.
+ * Distance from a rendered link origin to the nearest catalog box.
+ * This visual diagnostic is separate from the owner's collider clearance.
  */
 function nearestRigidObstacle(
   links: readonly [number, number, number][],
@@ -1848,10 +1763,8 @@ function nearestRigidObstacle(
   return best;
 }
 
-// The per-frame projection pushes every link to exactly the clearance floor,
-// so a reading AT the floor is the guard working, not a violation. Only a
-// genuine breach of the floor is red.
-const G1_CLEARANCE_BREACH_METERS = G1_LINK_CLEARANCE_METERS - 0.005;
+// Use a conservative visual margin without moving the measured link origins.
+const G1_CLEARANCE_BREACH_METERS = G1_LINK_CLEARANCE_METERS;
 
 function clearanceColor(distance: number): string {
   if (distance < G1_CLEARANCE_BREACH_METERS) return "#f43f5e";
@@ -1915,6 +1828,7 @@ function RobotStage({
   pushAngleDeg = 90,
   pushImpulseNs = 15,
   robotDragOffset,
+  requestedDragOffset,
   dragMode = "pelvis",
   limbOffsets = {},
   onRobotDragChange,
@@ -1941,6 +1855,7 @@ function RobotStage({
   pushAngleDeg?: number;
   pushImpulseNs?: number;
   robotDragOffset?: [number, number, number] | null;
+  requestedDragOffset?: [number, number, number] | null;
   dragMode?: "pelvis" | "limbs";
   limbOffsets?: Partial<Record<InteractiveLimbPinId, [number, number, number]>>;
   onRobotDragChange?: (offset: [number, number, number] | null) => void;
@@ -1950,21 +1865,16 @@ function RobotStage({
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.0, 0.75, 0.0] as [number, number, number]);
-  // The same world-space projection RobotPlayback draws, so handles, pins,
-  // the debug ring, and the camera all track the mesh the viewer sees.
+  // Handles, diagnostics and the camera use the same unmodified owner pose.
   const anchors = useMemo(
     () =>
       sample
         ? computeRobotAnchors(
-            projectSampleAgainstHouse(
-              sample,
-              trace && sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
-              robotDragOffset ?? null,
-            ),
+            sample,
             robotDragOffset ?? null,
           )
         : null,
-    [sample, trace, sampleIndex, robotDragOffset],
+    [sample, robotDragOffset],
   );
   const heading = useMemo<[number, number]>(
     () => (trace ? robotHeading(trace, sampleIndex) : [1, 0]),
@@ -2045,7 +1955,7 @@ function RobotStage({
         pelvisThree={pelvisThree}
         anchors={anchors}
         heading={heading}
-        dragOffset={robotDragOffset ?? null}
+        dragOffset={requestedDragOffset ?? robotDragOffset ?? null}
         dragMode={dragMode}
         limbOffsets={limbOffsets}
         onDragChange={onRobotDragChange ?? (() => {})}
@@ -2126,6 +2036,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const inFlightRef = useRef<boolean>(false);
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
   const [admission, setAdmission] = useState<G1Admission | null>(null);
+  const [scene, setScene] = useState<G1SceneReceipt | null>(null);
   const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
   const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
   const [workerAvailable, setWorkerAvailable] = useState(true);
@@ -2203,12 +2114,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [pushImpulseNs, setPushImpulseNs] = useState(15);
   const [showPushOptions, setShowPushOptions] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(null);
+  // A requested placement is a handle, not an edited physical trace. Only a
+  // returned owner scene moves the robot and its receipt together.
+  const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(G1_HOUSE_SEAT.offset);
 
   const handleExportTelemetry = useCallback(() => {
     if (!trace) return;
     const telemetryData = {
       exportTimestamp: new Date().toISOString(),
+      scene,
+      ownerConfig: admission?.config,
       task,
       challenge,
       family,
@@ -2235,7 +2150,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported trajectory telemetry JSON receipt.");
-  }, [trace, task, challenge, family, generation, bestObjective]);
+  }, [trace, scene, admission, task, challenge, family, generation, bestObjective]);
 
   const handleApplyShove = useCallback(() => {
     setShoveActive(true);
@@ -2244,51 +2159,18 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       `Previewing a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. The owner rollout, controller, HOCBF result, and receipt are unchanged.`,
     );
   }, [pushAngleDeg, pushImpulseNs]);
-  // Spawn-safe seat. This is now decided BEFORE any rollout, from a
-  // conservative policy-independent walking envelope, because the walking
-  // owner needs its keep-out boxes declared relative to wherever the robot
-  // starts and cannot be told that after the fact. Deriving the seat from a
-  // returned trace, as this did, would be circular now that the trace itself
-  // depends on the roster. g1SeatForHouse picks the candidate nearest the
-  // living room whose whole swept envelope clears every rigid obstacle.
-  // Async-defer the setState so the effect body does not fire a
-  // synchronous setState inside another effect (react-hooks).
-  useEffect(() => {
-    if (robotDragOffset !== null) return;
-    if (!trace) return;
-    const pelvisPose = trace.samples[0]?.linkPoses[0];
-    if (!pelvisPose) return;
-    let cancelled = false;
-    const pelvis = ownerToThree(pelvisPose.position);
-    const seated: [number, number, number] = [
-      G1_HOUSE_SEAT.offset[0] - pelvis[0],
-      0,
-      G1_HOUSE_SEAT.offset[2] - pelvis[2],
-    ];
-    Promise.resolve().then(() => {
-      if (cancelled) return;
-      setRobotDragOffset((current) => current ?? seated);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [trace, robotDragOffset]);
   // Live nearest-surface clearance of the rendered robot (same number the
   // on-canvas beam draws), for the toolbar readout.
   const liveClearance = useMemo(() => {
-    if (!trace || !robotDragOffset) return null;
+    if (!trace || !scene) return null;
     const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
     if (!sample) return null;
     const anchors = computeRobotAnchors(
-      projectSampleAgainstHouse(
-        sample,
-        sampleIndex > 0 ? trace.samples[sampleIndex - 1] : null,
-        robotDragOffset,
-      ),
-      robotDragOffset,
+      sample,
+      scene.seat,
     );
     return nearestRigidObstacle(anchors.links, houseSceneData.obstacles);
-  }, [trace, sampleIndex, robotDragOffset]);
+  }, [trace, sampleIndex, scene]);
   const [dragCollisionState, setDragCollisionState] = useState<{
     isColliding: boolean;
     obstacleName: string | null;
@@ -2297,7 +2179,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [userHasDragged, setUserHasDragged] = useState(false);
   // Read inside the drag-release callback, which must not re-subscribe the
   // pointer handlers every time the seat, task or challenge changes.
-  const robotDragOffsetRef = useRef<[number, number, number] | null>(null);
+  const robotDragOffsetRef = useRef<[number, number, number] | null>(G1_HOUSE_SEAT.offset);
   const taskRef = useRef<G1Task>(task);
   const challengeRef = useRef<G1Challenge>(challenge);
   // Read inside the worker message handler, which must not re-subscribe every
@@ -2315,8 +2197,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
 
   const handleRobotDragChange = useCallback((offset: [number, number, number] | null) => {
+    if (inFlightRef.current) return;
+    robotDragOffsetRef.current = offset;
     setRobotDragOffset(offset);
     if (offset !== null) setUserHasDragged(true);
+    setStatus("Placement preview: the ring marks the requested position. Release to evaluate it with the owner.");
   }, []);
 
 
@@ -2335,11 +2220,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     inFlightRef.current = true;
     setError(null);
     setBusy(mode);
-    workerRef.current.postMessage(message);
+    workerRef.current.postMessage({
+      ...message,
+      seat: message.seat ?? robotDragOffsetRef.current ?? G1_HOUSE_SEAT.offset,
+    } satisfies G1OptimizationRequest);
   }, []);
 
   const startContinuousOptimization = useCallback(() => {
-    if (!admission) return;
+    if (!admission || !scene) return;
     setStopRequested(false);
     post(
       {
@@ -2350,6 +2238,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         seedIndex,
         mode: resumedPolicyRef.current ? "fresh" : "continue",
         challenge,
+        seat: scene.seat,
         sigma: searchSigma,
         continuous: true,
         // Only meaningful for a session the worker does not already hold: after
@@ -2359,7 +2248,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       },
       "optimize",
     );
-  }, [admission, post, task, family, seedIndex, challenge, searchSigma]);
+  }, [admission, scene, post, task, family, seedIndex, challenge, searchSigma]);
 
   const stopContinuousOptimization = useCallback(() => {
     if (!workerRef.current || busy !== "optimize" || stopRequested) return;
@@ -2371,8 +2260,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       family,
       seedIndex,
       challenge,
+      seat: scene?.seat,
     } satisfies G1OptimizationRequest);
-  }, [busy, stopRequested, task, family, seedIndex, challenge]);
+  }, [busy, stopRequested, task, family, seedIndex, challenge, scene]);
 
   const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
     resumedPolicyRef.current = null;
@@ -2399,17 +2289,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
   }, [post]);
 
-  // Releasing the robot re-certifies it where it now stands.
-  //
-  // The owner always starts its rollout at its own origin, so a receipt is
-  // only about the seat whose keep-out roster produced it. Without this the
-  // page kept displaying the original seat's verdict after a drag: put the
-  // robot in the sofa and it still read "0 penetration". Now the boxes are
-  // re-expressed around the new seat and the owner answers again — including
-  // refusing, which is the honest answer for a robot stood inside furniture.
+  // Keep the last measured robot in place until the owner answers for the
+  // requested position. A refusal leaves that previous trace intact.
   const handleRobotDragCommit = useCallback(() => {
     const offset = robotDragOffsetRef.current;
-    if (!offset) return;
+    if (!offset || inFlightRef.current) return;
+    setAdmission(null);
+    setStabilizerTrace(null);
+    setCurriculumTrace(null);
+    setComparison(null);
+    setLedger([]);
+    progressHistoryRef.current = [];
+    setProgressHistory([]);
+    resumedPolicyRef.current = null;
     post(
       {
         type: "preview",
@@ -2797,16 +2689,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
       } else if (message.type === "trace") {
-        setAdmission(message.admission);
-        setTask(message.admission.config.task);
-        setChallenge(message.admission.config.challenge);
         if (message.family === "stabilizer") {
           setStabilizerTrace(message.trace);
           setStatus(`Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`);
-          // The stabilizer trace is a one-shot at init; release the gate.
-          inFlightRef.current = false;
           return;
         }
+        setAdmission(message.admission);
+        setScene(message.scene);
+        robotDragOffsetRef.current = message.scene.seat;
+        setRobotDragOffset(message.scene.seat);
+        setTask(message.admission.config.task);
+        setChallenge(message.admission.config.challenge);
         setTrace(message.trace);
         if (message.family === "curriculum") setCurriculumTrace(message.trace);
         setActiveTrace(message.family);
@@ -3005,7 +2898,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     : [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-g1-scene-digest={scene?.digest} data-g1-scene-seat={scene ? JSON.stringify(scene.seat) : undefined}>
       {/* Keep the robot first in embedded mode; its complete story tour is
           restored immediately after the primary stage/control grid below. */}
       {!embedded ? (
@@ -3235,9 +3128,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   <button
                     type="button"
                     onClick={() => {
-                      setRobotDragOffset(null);
+                      if (inFlightRef.current) return;
+                      robotDragOffsetRef.current = G1_HOUSE_SEAT.offset;
+                      setRobotDragOffset(G1_HOUSE_SEAT.offset);
                       setLimbOffsets({});
                       setUserHasDragged(false);
+                      handleRobotDragCommit();
                     }}
                     className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
                     title="Reset robot and limbs to nominal position"
@@ -3258,11 +3154,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                       ? "border-rose-400/80 bg-rose-950/85 text-rose-200"
                       : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
                   }`}
-                  title={`Every step, the walking owner tested a collider sphere on each of its 30 links — hands and feet included — against ${G1_KERNEL_OBSTACLES.length} house boxes sent in the config packet. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m. A rollout that drives any link into the geometry is terminated and charged, not projected away.`}
+                  title={`The owner tested all 30 links against ${scene?.declaredBodyCount ?? 0} of ${scene?.catalogBodyCount ?? 0} catalog bodies. Remaining bodies and detailed estate meshes are outside this receipt's collision scope. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m.`}
                 >
                   {trace.terminationReason === "body obstacle"
                     ? `🧱 Owner stopped on contact · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm into geometry`
-                    : `🧱 All 30 links vs ${G1_KERNEL_OBSTACLES.length} house boxes · 0 penetration`}
+                    : `🧱 ${scene?.declaredBodyCount ?? 0}/${scene?.catalogBodyCount ?? 0} catalog bodies · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm penetration`}
                 </span>
               ) : null}
 
@@ -3276,7 +3172,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                         ? "border-amber-400/70 bg-amber-950/85 text-amber-200"
                         : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
                   }`}
-                  title="Distance from the nearest rendered link to the nearest rigid house surface: the clearance term the collision penalty and HOCBF barrier consume"
+                  title="Visual diagnostic: distance from a link origin to the catalog surface. This is separate from the owner collider clearance and HOCBF result."
                 >
                   📏 {liveClearance.distance.toFixed(2)} m · {liveClearance.obstacleName}
                 </span>
@@ -3421,7 +3317,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   shoveActive={shoveActive}
                   pushAngleDeg={pushAngleDeg}
                   pushImpulseNs={pushImpulseNs}
-                  robotDragOffset={robotDragOffset}
+                  robotDragOffset={scene?.seat ?? G1_HOUSE_SEAT.offset}
+                  requestedDragOffset={robotDragOffset}
                   dragMode={dragMode}
                   limbOffsets={limbOffsets}
                   onRobotDragChange={handleRobotDragChange}
@@ -3945,8 +3842,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
             <button
               type="button"
-              disabled={busy !== null || !workerAvailable}
-              onClick={() => post({ type: "compare", task, generations: 4, challenge }, "compare")}
+              disabled={busy !== null || !workerAvailable || !admission || !scene}
+              onClick={() => post({ type: "compare", task, generations: 4, challenge, seat: scene?.seat }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />

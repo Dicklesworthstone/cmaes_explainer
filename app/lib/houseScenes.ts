@@ -7,16 +7,16 @@
 //   room with fireplace, dining room, kitchen, two bedrooms, bath).
 //   Dimensions are catalog-plausible approximations — labeled as such; they
 //   are set dressing and obstacle envelopes, not archival reproductions.
-// - Coordinate system: owner frame (x lateral, y forward, z up), meters.
+// - Floorplan coordinates are [stage x, stage z], in meters. Height is stage
+//   +Y. Positive plan yaw rotates +X toward +Z (negative Three Euler-Y).
 //   The full floorplan is in whole-house meters; the arm counter corner is
 //   exported separately at counter scale for the arm stage slots.
 //
 // Layering contract:
-// - Presentation layers (arm stage, G1 backdrop) render walls/furniture from
-//   this module — single source of truth for both robots.
-// - Physics: until the kernel supports multi-obstacle scenes (bead
-//   cmaes-u53), exactly ONE furniture piece per task maps into the kernel's
-//   single obstacle slot; everything else is display-only and labeled.
+// - The arm furniture, KMR boxes and navigation collision catalog consume
+//   this data. The detailed Sears estate backdrop is independently authored;
+//   its mesh bounds have not yet been reconciled with this catalog.
+// - Owners receive conservative box rosters, not the detailed furniture meshes.
 
 import { type FurnitureKind } from "./furnitureTaxonomy";
 
@@ -28,13 +28,13 @@ export interface HouseFurniture {
   fragility?: string | number;
   articulation?: any;
   room: string;
-  /** Footprint center in whole-house meters [x, y]. */
+  /** Footprint center in whole-house meters [stage x, stage z]. */
   center: [number, number];
   /** Footprint size [dx, dy] in meters. */
   size: [number, number];
   /** Height in meters. */
   height: number;
-  /** Yaw in radians (owner frame). */
+  /** Positive rotation from plan +X toward +Z, radians. */
   rotation: number;
   /** Period-catalog approximation note. */
   note: string;
@@ -271,7 +271,7 @@ export const ARM_COUNTER_PLACEMENTS: Record<
     note: "kitchen corner of the Craftsman bungalow; island is the kernel obstacle",
   },
   "living-room-remote": {
-    obstacleFurniture: "library-table",
+    obstacleFurniture: "library table",
     goalFurniture: "sofa",
     note: "parlor corner; library table is the kernel obstacle",
   },

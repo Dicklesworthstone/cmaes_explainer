@@ -1,4 +1,6 @@
 import { distanceToOBB, projectPointOutOfOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
+import { Euler, Quaternion } from "three";
+import type { HouseholdRobotPose } from "./frankensimCmaes";
 // helpers for the household-arm UI. This reduced procedural chain is not the
 // source-bound FrankenSim iiwa 7 R800 owner and must not certify placement.
 
@@ -6,6 +8,46 @@ import { distanceToOBB, projectPointOutOfOBB, type OrientedBoundingBox } from ".
 export interface KukaJointLimits {
   min: number;
   max: number;
+}
+
+/** Source iiwa 7 R800 joint frames in FrankenSim 78374ed0, robot_models.rs.
+ * RPY means Rz(yaw) Ry(pitch) Rx(roll); every joint revolves about local +Z.
+ * These frames decode measured link rotations, independently of the reduced
+ * reachability probe below. Source limits are below pi, so the principal
+ * angle uniquely identifies each joint coordinate.
+ */
+export const IIWA_OWNER_JOINT_ORIGIN_RPY: readonly (readonly [number, number, number])[] = [
+  [0, 0, 0],
+  [Math.PI / 2, 0, Math.PI],
+  [Math.PI / 2, 0, Math.PI],
+  [Math.PI / 2, 0, 0],
+  [-Math.PI / 2, Math.PI, 0],
+  [Math.PI / 2, 0, 0],
+  [-Math.PI / 2, Math.PI, 0],
+];
+
+export const IIWA_OWNER_JOINT_LIMIT_DEGREES = [170, 120, 170, 120, 170, 120, 175] as const;
+
+export function iiwaJointAnglesFromOwnerPoses(
+  poses: readonly Pick<HouseholdRobotPose, "quaternionWxyz">[],
+): number[] {
+  if (poses.length !== 8) throw new Error("iiwa joint readout requires eight source-ordered link poses");
+  const rotations = poses.map(({ quaternionWxyz: q }) => {
+    if (q.length !== 4 || !q.every(Number.isFinite) || Math.abs(Math.hypot(...q) - 1) > 1e-6) {
+      throw new Error("iiwa joint readout requires unit owner quaternions");
+    }
+    return new Quaternion(q[1], q[2], q[3], q[0]).normalize();
+  });
+  return IIWA_OWNER_JOINT_ORIGIN_RPY.map(([roll, pitch, yaw], index) => {
+    const origin = new Quaternion().setFromEuler(new Euler(roll, pitch, yaw, "ZYX"));
+    const relative = rotations[index].clone().invert().multiply(rotations[index + 1]);
+    const joint = origin.invert().multiply(relative).normalize();
+    if (Math.hypot(joint.x, joint.y) > 1e-6) {
+      throw new Error(`iiwa link ${index + 1} does not match its source joint frame`);
+    }
+    const angle = 2 * Math.atan2(joint.z, joint.w);
+    return Math.atan2(Math.sin(angle), Math.cos(angle));
+  });
 }
 
 // Procedural 7-DoF joint bounds used by the browser-side reachability lens.

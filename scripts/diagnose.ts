@@ -12,6 +12,24 @@ import {
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
 import { FRANKENSIM_OWNER_ARTIFACT } from "../app/lib/frankensimCmaes";
+import type {
+  G1OptimizationRequest,
+  G1SceneReceipt,
+} from "../app/lib/g1OptimizationProtocol";
+import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
+import type { HouseholdRobotPose } from "../app/lib/frankensimCmaes";
+
+type G1BrowserObservation = {
+  requests: G1OptimizationRequest[];
+  traces: {
+    scene: G1SceneReceipt;
+    family: string;
+    generation: number;
+    stopped?: boolean;
+  }[];
+  progress: number;
+  comparisons: number;
+};
 
 const USER_AGENT = "OpenAI File Downloader, XaiImageApiFetch/1.0";
 const pause = (ms: number) =>
@@ -274,6 +292,7 @@ async function run() {
       await ownerContext.addInitScript(() => {
         const host = window as unknown as {
           __ownerBridgeMessages: Record<string, unknown>[];
+          __g1Observation: G1BrowserObservation;
           webkit: {
             messageHandlers: {
               frankenrobots: {
@@ -283,6 +302,50 @@ async function run() {
           };
         };
         host.__ownerBridgeMessages = [];
+        host.__g1Observation = {
+          requests: [],
+          traces: [],
+          progress: 0,
+          comparisons: 0,
+        };
+        // Observe unmodified messages on real workers. No owner output or
+        // request is replaced; the gesture and buttons below drive the page.
+        const nativePost = Worker.prototype.postMessage;
+        const observedWorkers = new WeakSet<Worker>();
+        Worker.prototype.postMessage = function (
+          this: Worker,
+          message: unknown,
+          transferOrOptions?: Transferable[] | StructuredSerializeOptions,
+        ) {
+          const request = message as G1OptimizationRequest;
+          if (
+            request &&
+            ["preview", "optimize", "stop", "replay", "compare"].includes(
+              request.type,
+            ) &&
+            ["walking", "stepping", "balance"].includes(request.task)
+          ) {
+            host.__g1Observation.requests.push(structuredClone(request));
+            if (!observedWorkers.has(this)) {
+              observedWorkers.add(this);
+              this.addEventListener("message", (event: MessageEvent) => {
+                const reply = event.data;
+                if (reply.type === "progress") host.__g1Observation.progress++;
+                if (reply.type === "comparison" && reply.complete)
+                  host.__g1Observation.comparisons++;
+                if (reply.type === "trace" && reply.scene) {
+                  host.__g1Observation.traces.push({
+                    scene: reply.scene,
+                    family: reply.family,
+                    generation: reply.generation,
+                    stopped: reply.stopped,
+                  });
+                }
+              });
+            }
+          }
+          return Reflect.apply(nativePost, this, [message, transferOrOptions]);
+        };
         host.webkit = {
           messageHandlers: {
             frankenrobots: {
@@ -393,6 +456,117 @@ async function run() {
             FRANKENSIM_OWNER_ARTIFACT.sourceRevision.slice(0, 12),
           ),
         );
+        await summary.click();
+        await ownerPage.setViewportSize({ width: 1440, height: 1000 });
+        await ownerPage
+          .getByRole("button", {
+            name: "Pause simulation playback",
+            exact: true,
+          })
+          .click();
+        await ownerPage
+          .getByRole("button", {
+            name: "Reset simulation to initial frame",
+            exact: true,
+          })
+          .click();
+        await ownerPage.evaluate(() => window.scrollTo(0, 0));
+        await ownerPage.waitForTimeout(1000);
+        const sceneElement = ownerPage.locator("[data-g1-scene-digest]");
+        const before = await sceneElement.getAttribute("data-g1-scene-digest");
+        // The visible root grab ring in the reset follow-camera view.
+        await ownerPage.mouse.move(507, 210);
+        await ownerPage.mouse.down();
+        await ownerPage.mouse.move(565, 250, { steps: 12 });
+        assert.equal(
+          await sceneElement.getAttribute("data-g1-scene-digest"),
+          before,
+          "Physical scene changed before placement was evaluated",
+        );
+        await ownerPage.mouse.up();
+        await ownerPage.waitForFunction(
+          (previous) =>
+            document
+              .querySelector("[data-g1-scene-digest]")
+              ?.getAttribute("data-g1-scene-digest") !== previous,
+          before,
+          { timeout: 15_000 },
+        );
+        await ownerPage
+          .getByRole("button", { name: "Start learning", exact: true })
+          .click();
+        await ownerPage.waitForFunction(
+          () =>
+            (window as unknown as { __g1Observation: G1BrowserObservation })
+              .__g1Observation.progress > 0,
+          null,
+          { timeout: 30_000 },
+        );
+        await ownerPage.getByRole("button", { name: /^Stop · gen / }).click();
+        await ownerPage.waitForFunction(
+          () =>
+            (
+              window as unknown as { __g1Observation: G1BrowserObservation }
+            ).__g1Observation.traces.some((trace) => trace.stopped),
+          null,
+          { timeout: 30_000 },
+        );
+        await ownerPage
+          .getByRole("button", {
+            name: "Run scalable-family race",
+            exact: true,
+          })
+          .click();
+        await ownerPage.waitForFunction(
+          () =>
+            (window as unknown as { __g1Observation: G1BrowserObservation })
+              .__g1Observation.comparisons === 1,
+          null,
+          { timeout: 30_000 },
+        );
+        const observed = await ownerPage.evaluate(
+          () =>
+            (window as unknown as { __g1Observation: G1BrowserObservation })
+              .__g1Observation,
+        );
+        const moved = observed.requests.find(
+          (request) => request.type === "preview" && request.seat,
+        );
+        assert(moved?.seat, "No owner request followed the visible drag");
+        for (const type of ["optimize", "stop", "compare"]) {
+          const request = observed.requests.find(
+            (request) => request.type === type,
+          );
+          assert.deepEqual(
+            request?.seat,
+            moved.seat,
+            `${type} used a different placement`,
+          );
+        }
+        const stopped = observed.traces.find((trace) => trace.stopped);
+        assert(
+          stopped && stopped.generation > 0,
+          "No real optimized replay followed Stop",
+        );
+        assert.deepEqual(stopped.scene.seat, moved.seat);
+        assert.notEqual(stopped.scene.digest, before);
+        assert.equal(
+          await sceneElement.getAttribute("data-g1-scene-digest"),
+          stopped.scene.digest,
+        );
+        const downloadPromise = ownerPage.waitForEvent("download");
+        await ownerPage
+          .getByRole("button", { name: "Export Telemetry", exact: true })
+          .click();
+        await (
+          await downloadPromise
+        ).saveAs(join(out, "g1-moved-seat-telemetry.json"));
+        results.push({
+          journey: "g1-drag-start-stop-compare",
+          before,
+          observed,
+        });
+        await ownerPage.evaluate(() => window.scrollTo(0, 0));
       }
       await ownerPage.screenshot({
         path: join(out, `owner-${changed ?? "valid"}.png`),
@@ -407,6 +581,81 @@ async function run() {
       });
       await ownerContext.close();
     }
+    const armContext = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      userAgent: USER_AGENT,
+    });
+    const armPage = await armContext.newPage();
+    observe(armPage);
+    await armPage.goto(new URL("/frankenrobots/arm", base).href);
+    for (const [label, task, placed, bodyCount] of [
+      ["Mug", "kitchen-mug", true, 27],
+      ["Remote", "living-room-remote", true, 26],
+      ["Trowel", "backyard-trowel", false, 30],
+    ] as const) {
+      await armPage.getByRole("tab", { name: new RegExp(`^${label}`) }).click();
+      await armPage
+        .getByRole("button", { name: "Restart arm trace", exact: true })
+        .click();
+      const downloadPromise = armPage.waitForEvent("download");
+      await armPage
+        .getByRole("button", { name: "Export Telemetry", exact: true })
+        .click();
+      const telemetryPath = join(out, `arm-${task}-telemetry.json`);
+      await (await downloadPromise).saveAs(telemetryPath);
+      const telemetry = await Bun.file(telemetryPath).json();
+      assert.equal(telemetry.task, task);
+      assert.equal(
+        telemetry.placed,
+        placed,
+        `${task} benchmark outcome changed`,
+      );
+      assert.equal(
+        telemetry.ownerAdmission.scene.extraObstacleCount,
+        bodyCount,
+      );
+      const poses = telemetry.samples[0].linkPoses.map(
+        (pose: { quaternion: HouseholdRobotPose["quaternionWxyz"] }) => ({
+          quaternionWxyz: pose.quaternion,
+        }),
+      );
+      const angles = iiwaJointAnglesFromOwnerPoses(poses);
+      for (const [index, name] of [
+        "A1 Base",
+        "A2 Shoulder",
+        "A3 Arm",
+        "A4 Elbow",
+        "A5 Wrist 1",
+        "A6 Wrist 2",
+        "A7 Flange",
+      ].entries()) {
+        const card = armPage
+          .getByText(name, { exact: true })
+          .locator("..")
+          .locator("..");
+        const degrees = (angles[index] * 180) / Math.PI;
+        const expected = `${degrees >= 0 ? "+" : ""}${degrees.toFixed(1)}°`;
+        assert(
+          (await card.innerText()).includes(expected),
+          `${name} differs from the exported owner pose`,
+        );
+      }
+      await armPage
+        .getByText("iiwa joint angles · measured owner poses", { exact: true })
+        .scrollIntoViewIfNeeded();
+      await armPage.screenshot({
+        path: join(out, `arm-${task}-joint-readout.png`),
+      });
+      results.push({
+        journey: "arm-owner-joint-readout",
+        task,
+        placed,
+        bodyCount,
+        angles,
+        telemetryPath,
+      });
+    }
+    await armContext.close();
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
