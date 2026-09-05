@@ -61,77 +61,45 @@ Open <http://localhost:3000>.
   convergence, binary packet refusals, all four owner families, G1 challenge
   invariants, and all three manipulation tasks.
 
-## The collision-guard chain (no policy can tunnel a wall)
+## Scene inputs, collision checks and measured playback
 
-The flagship scenes implement a **layered, certified geometric guard chain**
-that the policy (transformer or CMA-ES) cannot violate at the user surface.
-This is the SOTA penetration-depth / contact-manifold math from
-`docs/SOTA-MATH.md` (Ericson, *Real-Time Collision Detection*; Bergen,
-*Collision Detection in Interactive 3D Environments*; Jo/Zhang/Yang/Luo,
-*Geometry-Aware Control Barrier Functions*), deployed as four primitives
-that compose into a single floor the policy can never fall through:
+The robot displays use the physical owners' link and object poses. Browser
+push-outs do not alter those poses after evaluation. A stopped G1 rollout
+can therefore show the penetration reported by its owner; the display does
+not establish zero penetration or universal continuous collision safety.
 
-- **Owner-side keep-out boxes** (packet schema 9): the walking config
-  declares the rigid house bodies nearest the robot, and the owner tests its
-  20 body colliders against them every step, terminating the rollout on real
-  penetration and reporting the depth in the receipt. This is the floor: a
-  policy that walks into the sofa loses its rollout, so the optimizer is
-  charged for it rather than the renderer hiding it.
-- **Spawn-safe** (`g1SeatForHouse` in
-  `app/lib/houseMultiObstacleKernel.ts`): the robot's seat is chosen before
-  the first rollout, because the owner needs its boxes expressed relative to
-  wherever the robot starts. A grid sweep ordered by distance from the living
-  room returns the nearest placement whose whole measured walking envelope
-  clears every rigid body. The arm flagship mirrors this with
-  `clampArmTargetPosition` for the KUKA target marker — the first frame is
-  provably collision-free, so the user can never load a page and see the
-  humanoid spawn inside a wall.
-- **Per-drag OBB clamp** (`clampPositionAgainstHouseCollisions`,
-  `clampArmTargetPosition`): the OBB Signed Distance Function
-  $\mathbf{d} = |\mathbf{R}^T(\mathbf{x} - \mathbf{c})| - \mathbf{h}$ from
-  Ericson §5.2.3, plus the conservative push-out that preserves the same
-  body frame. The dragger's `isColliding` flag fires whenever the
-  proposed position has any OBB with signed distance
-  $< \text{safeRadius}$. Visualized live as the red badge above each
-  scene: "⚠️ Surface Clamped" when fired, "🖐️ Target Moved" otherwise.
-- **Reachability guard** (`isTargetKukaReachable` in
-  `app/lib/armInverseKinematics.ts`): a 30-iteration Damped Least Squares
-  (DLS) IK attempt with 2 cm residual tolerance. If the proposed target
-  is not reachable by the KUKA arm, the dragger holds the previous good
-  target and surfaces a "⛔ Unreachable — Workspace Limit" badge in the
-  HUD. Implements the SOTA conservative-advance / penetration-guard from
-  CBF literature: rather than computing the *best* next configuration,
-  we accept only the configurations the certified solver can actually
-  reach.
-- **Continuous Collision Detection (CCD)** bounds per-step displacement
-  $\le v_{\max} \cdot dt$ by the joint speed limit $\times 1/480\text{s}
-  \approx 6\text{ mm}$, well under the 0.04 m margin used by both clamp
-  primitives, so a discrete step cannot miss a wall.
+- **G1 placement and learning:** the floor translation reaches preview,
+  learning, Stop, replay, comparison and parallel evaluation. The returned
+  scene receipt binds that translation, the exact configuration words and
+  the shipped WASM digest. Dragging changes a requested placement handle;
+  the physical display changes when the owner returns its evaluated scene.
+  Elevated placements are refused; arbitrary seat rotation remains unfinished.
+- **Bounded G1 collision coverage:** the owner checks 20 body colliders
+  against the 48 nearest declared bodies from the 78-body collision catalog.
+  It terminates on penetration and reports the measured depth. The current
+  ABI cannot carry the entire catalog. The detailed estate mesh is also
+  independently authored, so the receipt is not proof of collision coverage
+  for every visible furnishing.
+- **Arm scene and readouts:** rendering and obstacle selection use the same
+  task furniture roster and coordinate conversion. Mug, remote and trowel
+  declare 27, 26 and 30 bodies respectively, including the support slab;
+  insufficient packet capacity is refused. All seven iiwa joint dials derive
+  from the source-ordered owner link rotations. Restart and scrubbing seek
+  the measured trace; an older playback frame cannot undo a newer seek.
+- **Placement probes and debug views:** OBB clamps bound requested targets,
+  and the auxiliary arm reach probe uses a reduced IK model. Their markers,
+  clearance readouts and wireframes are diagnostics, not certification of
+  the physical trajectory or detailed render meshes. The Physics overlay is
+  disabled by default.
 
-**Physics debug overlay** (the "🔧 Physics" button in each flagship's HUD):
-toggles a visualization of (a) the body-link collider spheres, (b) the
-74-piece house OBB catalogue as wireframe boxes, (c) the KUKA arm's
-reachable workspace as a translucent green point cloud (sampled once
-at module load via the DLS surrogate), and (d) the current safety
-sphere. The user can verify the chain is operating as advertised.
-Disabled by default (zero JSX output, regression-bounded by
-`tests/physicsDebugOverlayDisabled.test.ts`).
-
-**Regression coverage**: the chain is bound at every layer — from the OBB SDF
-math and the owner-frame box conversion (`tests/houseMultiObstacleKernel.test.ts`),
-through the clamp primitives and spawn-safe algorithm
-(`tests/flagshipSpawnSafeAlgorithm.test.ts`, `tests/armReachabilityAndSpawn.test.ts`),
-to the G1 spawn safety (`tests/g1CollisionSafety.test.ts`).
-
-**Why this matters**: ARMOR (arXiv:2412.00396) and the collision-free
-traversal work (arXiv:2601.16035) prove that low-dimensional egocentric
-depth can dramatically reduce collision rates, but they do not certify
-*zero* penetration. Our chain provides the floor — even if the policy's
-collision-rate metric regresses, the user-facing scene cannot tunnel a
-wall. The policy work is improving the mean, not bounding the worst
-case; the geometric guard bounds the worst case. See
-`docs/SOTA-HUMANOID-POLICIES.md` §3.1 for the full SOTA framing.
-
+Regression coverage includes arbitrary-yaw box corners against the owner
+frame and signed-distance field, seven-joint reconstruction under arbitrary
+world rotations, every sample of three actual owner arm traces, and real
+G1 rollouts whose outputs change when placement changes. The browser smoke
+runner exercises drag, learning, Stop, comparison and export together, plus
+arm Restart/scrubbing against exported poses. Complete shared scene identity
+across G1, iiwa and KMR, dynamic furniture and full mesh/collider agreement
+remain open work.
 
 The G1 demo is deliberately an explainer model, not a hardware controller or a
 sim-to-real claim. The current schema-9 owner integrates the 29-actuated-joint,

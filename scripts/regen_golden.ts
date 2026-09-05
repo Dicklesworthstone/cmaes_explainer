@@ -1,19 +1,19 @@
 #!/usr/bin/env bun
 // scripts/regen_golden.ts
 //
-// Regenerates g1-ablation-golden.json + g1-ablation-train-receipt.json so
+// Regenerates g1-ablation-golden.json so
 // they are consistent with the current shipped weights file. Both are
 // SYNTHETIC (seeded random weights, not from a real PPO+Muon training run);
 // the lib's contract is exercised end-to-end but the absolute performance
 // numbers are not a benchmark. The hostNote in the receipt flags this.
 //
-// Run after any change to g1-ablation-weights-v1.bin or gaitTransformer.ts:
+// Run after any change to the shipped weights (v2) or gaitTransformer.ts:
 //   bun scripts/regen_golden.ts
 import { readFileSync, writeFileSync } from "fs";
 import { loadGaitTransformerWeights, GaitTransformerPolicy } from "../app/lib/gaitTransformer";
 import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
 
-const weightsBuf = readFileSync("public/robots/g1/transformer/g1-ablation-weights-v1.bin").buffer;
+const weightsBuf = readFileSync("public/robots/g1/transformer/g1-ablation-weights-v2.bin").buffer;
 const weights = loadGaitTransformerWeights(weightsBuf);
 const policy = new GaitTransformerPolicy(weights);
 
@@ -86,30 +86,16 @@ paramCount += cfg.dModel;                          // finalNorm
 paramCount += cfg.nOutputs * cfg.dModel;          // policyHead
 paramCount += cfg.dModel;                          // valueW
 
-const receipt = {
-  architecture: { parameterCount: paramCount },
-  training: { samplesConsumed: 38_000_000, wallclockSeconds: 86_400 },
-  evaluation: {
-    greedy720: {
-      distanceMeters: distance,
-      totalReward,
-      completedSteps: completed,
-    },
-  },
-  hostNote:
-    "SYNTHETIC data file. The weights and golden vectors are seeded random " +
-    "(not from a real PPO+Muon training run). The lib contract is exercised " +
-    "correctly — the policy parses, the forward pass is deterministic, and the " +
-    "rollout matches the receipt's greedy720 numbers. The absolute performance " +
-    "numbers are not a benchmark. Replace with the real export from " +
-    "fs-g1-train/examples/train_ablation.rs once the training has run.",
-  rolloutFell: fell,
-};
-writeFileSync(
-  "public/robots/g1/transformer/g1-ablation-train-receipt.json",
-  JSON.stringify(receipt, null, 2),
-);
+// The training receipt is NOT written here, deliberately.
+//
+// This script previously emitted one containing samplesConsumed: 38_000_000 and
+// wallclockSeconds: 86_400 — numbers no run produced. A file named
+// "train-receipt" holding invented training figures is fabricated evidence
+// whatever the accompanying note says, and it overwrote the genuine record of
+// the PPO+Muon run (60 iterations, 8,596 samples, 454 s). Only the training
+// code may write that file; this script regenerates golden vectors and nothing
+// else.
 
-console.log(`Wrote golden (${cases.length} cases) and receipt`);
+console.log(`Wrote golden (${cases.length} cases)`);
 console.log(`Rollout: ${completed} steps, ${distance.toFixed(3)}m, fell=${fell}`);
 console.log(`ParamCount: ${paramCount}`);

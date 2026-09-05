@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Euler, Vector3 } from "three";
 import {
   armWorkbenchObstacles,
   findClearSpawnPosition,
@@ -8,6 +9,7 @@ import {
   householdKernelObstacleRoster,
   resolveCameraBoom,
   stageObbToKernelObstacle,
+  stageBoxRenderTransform,
   type HouseholdKernelObstacle,
   createHouseNavigationScene,
   createHouseWallObstacles,
@@ -33,6 +35,36 @@ import {
 } from "../app/lib/frankensimCmaes";
 
 describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
+  test("Three renderer box corners agree with the stage SDF and owner frame at arbitrary yaw", () => {
+    const catalog = [
+      ...createHouseNavigationScene().obstacles,
+      ...HOUSE_STRUCTURAL_SURFACES,
+      ...armWorkbenchObstacles(0.37, "kitchen-mug"),
+      ...armWorkbenchObstacles(0.37, "living-room-remote"),
+      ...armWorkbenchObstacles(0.37, "backyard-trowel"),
+    ];
+    for (const [index, original] of catalog.entries()) {
+      const obb = { ...original, rotationYawRad: original.rotationYawRad + index * 0.173 + 0.37 };
+      const transform = stageBoxRenderTransform(obb);
+      const euler = new Euler(...transform.rotation);
+      const owner = stageObbToKernelObstacle(obb);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        const world = new Vector3(sx * obb.halfExtents[0], sy * obb.halfExtents[1], sz * obb.halfExtents[2])
+          .applyEuler(euler).add(new Vector3(...transform.position));
+        expect(distanceToOBB(world.toArray(), obb)).toBeCloseTo(0, 10);
+        const dx = world.x - owner.centerMeters[0];
+        const dy = -world.z - owner.centerMeters[1];
+        const c = Math.cos(owner.yawRad), s = Math.sin(owner.yawRad);
+        expect(Math.abs(c * dx + s * dy)).toBeCloseTo(owner.halfExtentsMeters[0], 10);
+        expect(Math.abs(-s * dx + c * dy)).toBeCloseTo(owner.halfExtentsMeters[1], 10);
+        expect(Math.abs(world.y - owner.centerMeters[2])).toBeCloseTo(owner.halfExtentsMeters[2], 10);
+      }
+    }
+    const asymmetric: OrientedBoundingBox = { id: "negative", name: "negative", center: [0, 0, 0], halfExtents: [2, 0.5, 0.2], rotationYawRad: 0.6 };
+    const wrongCorner = new Vector3(2, 0.5, 0.2).applyEuler(new Euler(0, asymmetric.rotationYawRad, 0));
+    expect(distanceToOBB(wrongCorner.toArray(), asymmetric)).toBeGreaterThan(1);
+  });
+
   test("distanceToOBB computes exact Euclidean signed distance for unrotated and rotated OBBs", () => {
     const obb: OrientedBoundingBox = {
       id: "table-1",
@@ -448,23 +480,24 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     // viewer sees.
     // The counter leads every roster as the one SUPPORT body: the surface the
     // arm works on rather than around. Everything after it is keep-out.
-    const mug = householdKernelObstacleRoster(0.2369, "kitchen-mug", 10);
-    // The surface is declared IN ADDITION to the keep-out budget, so a limit of
-    // 10 yields 10 keep-out bodies plus the counter. Declaring a table must not
-    // silently stop guarding something else.
-    expect(mug.length).toBe(11);
+    const mug = householdKernelObstacleRoster(0.2369, "kitchen-mug");
+    // All 24 rigid catalog pieces in the two drawn rooms, the goal cabinet,
+    // backsplash and support slab must be represented. A smaller capacity refuses.
+    expect(mug.length).toBe(27);
+    expect(mug.some((o) => o.name === "china-cabinet")).toBe(true);
+    expect(() => householdKernelObstacleRoster(0.2369, "kitchen-mug", 24)).toThrow("cannot represent");
     expect(mug[0].name).toBe("counter slab");
     expect(mug[0].role).toBe("support");
     expect(mug.slice(1).every((o) => o.role === "keep-out")).toBe(true);
     expect(mug[1].name).toBe("backsplash");
     expect(mug.some((o) => o.name === "side cabinet")).toBe(false);
 
-    const remote = householdKernelObstacleRoster(0.2769, "living-room-remote", 10);
+    const remote = householdKernelObstacleRoster(0.2769, "living-room-remote");
     expect(remote[0].name).toBe("counter slab");
     expect(remote[1].name).toBe("side cabinet");
     expect(remote.some((o) => o.name === "backsplash")).toBe(false);
 
-    const trowel = householdKernelObstacleRoster(0.2649, "backyard-trowel", 10);
+    const trowel = householdKernelObstacleRoster(0.2649, "backyard-trowel");
     expect(trowel[0].name).toBe("counter slab");
     expect(trowel.filter((o) => o.name === "fence post")).toHaveLength(4);
 
@@ -477,7 +510,7 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
   });
 
   test("roster furniture is ordered by distance from the arm base at the stage origin", () => {
-    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 12);
+    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug");
     const furniture = roster.slice(2); // after the counter surface and workbench box
     const d = (o: HouseholdKernelObstacle) =>
       Math.hypot(o.centerMeters[0], o.centerMeters[1], o.centerMeters[2]);
@@ -489,7 +522,7 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
   });
 
   test("schema-4 config packet is self-describing: 12 fixed words plus 8 per obstacle", () => {
-    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug", 5);
+    const roster = householdKernelObstacleRoster(0.2369, "kitchen-mug");
     const packet = buildHouseholdManipulationConfig({
       ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
       objectMassKilograms: 0.5,

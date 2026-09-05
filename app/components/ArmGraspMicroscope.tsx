@@ -4,7 +4,7 @@ import React, { useMemo, useEffect, useState } from "react";
 import * as THREE from "three";
 import { Gauge, CheckCircle2, ShieldAlert, Sparkles, Activity } from "lucide-react";
 import type { HouseholdManipulationTraceSample } from "../lib/frankensimCmaes";
-import { computeFerrariCannyGWS } from "../lib/armInverseKinematics";
+import { computeFerrariCannyGWS, IIWA_OWNER_JOINT_LIMIT_DEGREES } from "../lib/armInverseKinematics";
 
 interface ArmGraspMicroscopeProps {
   sample: HouseholdManipulationTraceSample | null;
@@ -187,21 +187,21 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
 }
 
 export interface ArmJointKinematicsStripProps {
-  jointAngles: number[];
-  dragActive?: boolean;
+  jointAngles: number[] | null;
+  probeJointAngles?: number[] | null;
 }
 
 const JOINT_SPECS = [
-  { name: "A1 Base", limit: 2.96 },
-  { name: "A2 Shoulder", limit: 2.09 },
-  { name: "A3 Arm", limit: 2.96 },
-  { name: "A4 Elbow", limit: 2.09 },
-  { name: "A5 Wrist 1", limit: 2.96 },
-  { name: "A6 Wrist 2", limit: 2.09 },
-  { name: "A7 Flange", limit: 3.05 },
+  { name: "A1 Base" },
+  { name: "A2 Shoulder" },
+  { name: "A3 Arm" },
+  { name: "A4 Elbow" },
+  { name: "A5 Wrist 1" },
+  { name: "A6 Wrist 2" },
+  { name: "A7 Flange" },
 ];
 
-export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKinematicsStripProps) {
+export function ArmJointKinematicsStrip({ jointAngles, probeJointAngles }: ArmJointKinematicsStripProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -210,11 +210,11 @@ export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKin
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-orange-400" />
           <span className="text-xs font-bold uppercase tracking-[0.16em] text-orange-300">
-            7-DoF iiwa Joint Kinematics & Mechanical Limit Telemetry
+            iiwa joint angles · measured owner poses
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {dragActive && (
+          {probeJointAngles && (
             <span className="rounded-full border border-cyan-400/30 bg-cyan-500/20 px-2 py-0.5 text-[0.62rem] font-bold uppercase text-cyan-200">
               Reach probe · auxiliary 4-joint chain
             </span>
@@ -232,11 +232,12 @@ export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKin
       {isOpen && (
         <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
           {JOINT_SPECS.map((spec, idx) => {
-            const angle = jointAngles[idx] ?? 0;
+            const angle = jointAngles?.[idx] ?? NaN;
             const deg = (angle * 180) / Math.PI;
-            const limitDeg = (spec.limit * 180) / Math.PI;
-            const absRatio = Math.min(1, Math.abs(angle) / spec.limit);
-            const isNearLimit = Math.abs(angle) >= spec.limit - 0.22;
+            const limitDeg = IIWA_OWNER_JOINT_LIMIT_DEGREES[idx];
+            const limit = limitDeg * Math.PI / 180;
+            const absRatio = Number.isFinite(angle) ? Math.min(1, Math.abs(angle) / limit) : 0;
+            const isNearLimit = Math.abs(angle) >= limit - 0.22;
 
             return (
               <div
@@ -254,8 +255,13 @@ export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKin
                 <div className={`mt-1 font-mono text-sm font-bold ${
                   isNearLimit ? "text-amber-300" : "text-white"
                 }`}>
-                  {deg >= 0 ? `+${deg.toFixed(1)}°` : `${deg.toFixed(1)}°`}
+                  {!Number.isFinite(deg) ? "Unavailable" : deg >= 0 ? `+${deg.toFixed(1)}°` : `${deg.toFixed(1)}°`}
                 </div>
+                {probeJointAngles && (
+                  <div className="mt-1 font-mono text-[0.6rem] text-cyan-300">
+                    Probe {((probeJointAngles[idx] * 180) / Math.PI).toFixed(1)}°
+                  </div>
+                )}
                 <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                   <div
                     className={`h-full rounded-full transition-all duration-75 ${
@@ -274,4 +280,3 @@ export function ArmJointKinematicsStrip({ jointAngles, dragActive }: ArmJointKin
     </div>
   );
 }
-

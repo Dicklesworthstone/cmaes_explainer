@@ -80,18 +80,23 @@ export default function HumanoidPage() {
           aria-label="Action-causal transfer check: phase prior vs legacy transformer"
         >
           <h2 className="font-display text-2xl font-bold text-white">
-            Phase prior vs legacy transformer — action-causal transfer check
+            Two architectures on the same contract — phase prior vs transformer
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
             The flagship above uses a 5,040-D linear residual policy on a
             hand-designed phase basis — a <em>strong, sample-efficient prior</em>.
-            The committed transformer is a real PPO+Muon artifact, but its
-            policy head is all zero and its superseded training stand-in moved
-            without action. The component below transfers those exact weights
-            without retraining onto the current action-causal stand-in beside a
-            live CMA-ES search. The resulting zero-distance transformer run is
-            an honest measured failure, not a learned-walking claim. Artifacts
-            remain under{" "}
+            Beside it runs a 2.9M-parameter causal transformer on the same
+            action-causal contract, where moving forward costs real actuator
+            work. Its committed PPO+Muon run never learned — reward flat across
+            all 60 iterations, checkpoint from iteration 0, and a policy head
+            exported entirely zero, so it emitted no action at all. Rather than
+            display that as a result, the shipped artifact keeps that trunk
+            byte-for-byte and fits only its 29×256 output layer to the gait
+            CMA-ES finds here, which is enough to make it walk. That is a
+            repair, not a race: the gait is CMA-ES&apos;s and the trunk is an
+            untrained initialisation, so this shows the earlier zero distance
+            was a missing output layer rather than anything about transformers.
+            Artifacts remain under{" "}
             <code className="break-all">public/robots/g1/transformer/</code>.
           </p>
           <div className="mt-6">

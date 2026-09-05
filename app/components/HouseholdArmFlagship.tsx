@@ -34,13 +34,12 @@ import {
   ARM_TABLE_WIDTH,
   armCounterSlabObstacle,
   armStageObstacles,
+  armStageFurniture,
   armWorkbenchObstacles,
   createHouseNavigationScene,
   conservativeSegmentClearanceToOBB,
   distanceToOBB,
-  projectPointOutOfOBB,
   resolveCameraBoom,
-  sweptSphereOBBEntryPoint,
   type MultiObstacleSceneConfig,
   type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
@@ -100,6 +99,7 @@ import {
   MANIPULABLE_OBJECT_PRESETS,
   computeFerrariCannyGWS,
   solveKukaIK,
+  iiwaJointAnglesFromOwnerPoses,
   computeKukaFK,
   clampArmTargetPosition,
   isTargetKukaReachable,
@@ -302,16 +302,8 @@ const LINK_SOURCE_ROWS = [
 
 const ARM_POPULATION = 12;
 const ARM_LIVE_REPLAY_INTERVAL = 16;
-// SOTA per-link clearance: must be >= the link cylinder radius (which
-// tapers from 0.07 m at the base to 0.05 m at the wrist) plus a small
-// margin so the visible link surface does not penetrate OBBs. The
-// previous constant 0.05 m was less than the link radius, so the link
-// mesh still visibly tunneled through obstacles (verified cmaes-u76s
-// regression followup).
-const ARM_LINK_RADIUS_METERS = 0.07;
+// Clearance used to tint a rendered segment, never to move an owner pose.
 const ARM_LINK_CLEARANCE_MARGIN_METERS = 0.015;
-const ARM_LINK_CLEARANCE_METERS =
-  ARM_LINK_RADIUS_METERS + ARM_LINK_CLEARANCE_MARGIN_METERS;
 function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
@@ -571,6 +563,8 @@ function ArmEnvironment({
   );
 }
 
+type ArmPlaybackSeek = { revision: number; sampleIndex: number };
+
 function ArmRig({
   trace,
   admission,
@@ -578,10 +572,9 @@ function ArmRig({
   microscopeMode,
   physicsDebug,
   targetPosition,
-  requestedSampleIndex,
+  playbackSeek,
   isPlaying,
   playbackSpeed,
-  playbackResetToken,
   onSampleIndexChange,
   onSelfCollisionChange,
 }: {
@@ -591,11 +584,10 @@ function ArmRig({
   microscopeMode: boolean;
   physicsDebug?: boolean;
   targetPosition?: [number, number, number] | null;
-  requestedSampleIndex: number;
+  playbackSeek: ArmPlaybackSeek;
   isPlaying: boolean;
   playbackSpeed: number;
-  playbackResetToken: number;
-  onSampleIndexChange: (sampleIndex: number) => void;
+  onSampleIndexChange: (sampleIndex: number, revision: number) => void;
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
 }) {
   const linkRefs = useRef<Array<THREE.Group | null>>([]);
@@ -610,45 +602,30 @@ function ArmRig({
   const playbackSeconds = useRef(0);
   const sampleIndex = useRef(0);
   const publishedSampleIndex = useRef(-1);
-  // Track the previous frame's projected link positions so swept-volume CCD
-  // catches outside-to-inside tunneling instead of teleporting the link to a
-  // deep-interior closest point.
-  const previousProjectedPositions = useRef<Array<[number, number, number]>>(
-    [],
-  );
   const [currentSample, setCurrentSample] =
     useState<HouseholdManipulationTraceSample | null>(
       () => trace.samples[0] ?? null,
     );
-  // Projected link origins published once per sample so the debug overlay
-  // draws its spheres where the rendered links are, not at the raw poses.
-  const [projectedForOverlay, setProjectedForOverlay] = useState<
+  // Publish the actual owner link origins used by both the rig and its diagnostics.
+  const [renderedForOverlay, setRenderedForOverlay] = useState<
     Array<[number, number, number]>
   >([]);
   const selfContactKeyRef = useRef("");
   const selfHotLinksRef = useRef<Set<number>>(new Set());
-  const publishedProjectedIndex = useRef(-1);
+  const publishedRenderIndex = useRef(-1);
   const sampleTimes = useMemo(
     () => trace.samples.map((sample) => sample.timeSeconds),
     [trace],
   );
   useLayoutEffect(() => {
-    playbackSeconds.current = 0;
-    sampleIndex.current = 0;
-    publishedSampleIndex.current = -1;
-    previousProjectedPositions.current = [];
-  }, [trace, playbackResetToken]);
-  useLayoutEffect(() => {
     const nextIndex = clampArmPlaybackIndex(
       trace.samples.length,
-      requestedSampleIndex,
+      playbackSeek.sampleIndex,
     );
-    if (nextIndex === sampleIndex.current) return;
     sampleIndex.current = nextIndex;
-    playbackSeconds.current = trace.samples[nextIndex]?.timeSeconds ?? 0;
+    playbackSeconds.current = nextIndex === 0 ? 0 : trace.samples[nextIndex]?.timeSeconds ?? 0;
     publishedSampleIndex.current = -1;
-    previousProjectedPositions.current = [];
-  }, [requestedSampleIndex, trace]);
+  }, [playbackSeek, trace]);
   // Boundary volumes the kernel's objective already avoids: the counter slab,
   // the task's backdrop wall, and the declared obstacle box. The checker below
   // flags visible penetrations of exactly these volumes — presentation-layer
@@ -656,12 +633,13 @@ function ArmRig({
   const boundaryBoxes = useMemo(() => {
     const scene = admission.scene;
     const supportY = scene.supportHeightMeters;
+    const counter = armCounterSlabObstacle(supportY);
     const boxes: Array<{ name: string; box: THREE.Box3 }> = [
       {
         name: "counter",
-        box: new THREE.Box3(
-          new THREE.Vector3(-1.15, supportY - 0.09, -0.825),
-          new THREE.Vector3(1.15, supportY + 0.001, 0.825),
+        box: new THREE.Box3().setFromCenterAndSize(
+          new THREE.Vector3(...counter.center),
+          new THREE.Vector3(...counter.halfExtents).multiplyScalar(2),
         ),
       },
       {
@@ -678,15 +656,6 @@ function ArmRig({
         ),
       },
     ];
-    if (admission.config.task === "kitchen-mug") {
-      boxes.push({
-        name: "backdrop",
-        box: new THREE.Box3(
-          new THREE.Vector3(-1.15, supportY - 0.02, -0.86),
-          new THREE.Vector3(1.15, supportY + 1.03, -0.78),
-        ),
-      });
-    }
     return boxes;
   }, [admission]);
 
@@ -735,9 +704,6 @@ function ArmRig({
       playbackSpeed,
       isPlaying && !reduceMotion,
     );
-    if (next.wrapped) {
-      previousProjectedPositions.current = [];
-    }
     sampleIndex.current = next.sampleIndex;
     playbackSeconds.current = next.elapsedSeconds;
     const sample: HouseholdManipulationTraceSample =
@@ -745,75 +711,24 @@ function ArmRig({
     if (publishedSampleIndex.current !== sampleIndex.current) {
       publishedSampleIndex.current = sampleIndex.current;
       setCurrentSample(sample);
-      onSampleIndexChange(sampleIndex.current);
+      onSampleIndexChange(sampleIndex.current, playbackSeek.revision);
     }
-    // SOTA PENETRATION PROJECTION (visualization-layer): the kernel's IK does
-    // not check link-vs-furniture collision, so CMA-ES can place a link
-    // inside a coffee cup / chair / wall. We compute, for each link
-    // position, the closest point on the OBB surface and snap the link
-    // mesh there. The kernel trace stays untouched; the projection is
-    // applied per-frame to the visual group + segment. See
-    // tests/householdArmCollision.test.ts for the regression that locks this
-    // behavior. Without this fix, the end effector visibly tunnels
-    // through every obstacle (verified cmaes-u76s regression).
-    const projectedPositions: Array<[number, number, number]> = new Array(
-      sample.linkPoses.length,
+    // Render the measured chain verbatim. Contact diagnostics can tint it,
+    // but may not bend the links or relocate the object behind the receipt.
+    const renderedPositions = sample.linkPoses.map((pose) =>
+      ownerPositionToThree(pose.position),
     );
     for (let link = 0; link < sample.linkPoses.length; link++) {
       const pose = sample.linkPoses[link];
-      const p = ownerPositionToThree(pose.position);
-      let qx = p[0];
-      let qy = p[1];
-      let qz = p[2];
-      let wasProjected = false;
-      for (const obb of multiObstacleScene.obstacles) {
-        const projected = projectPointOutOfOBB(
-          [qx, qy, qz],
-          obb,
-          ARM_LINK_CLEARANCE_METERS,
-        );
-        if (projected.wasInside) {
-          qx = projected.point[0];
-          qy = projected.point[1];
-          qz = projected.point[2];
-          wasProjected = true;
-        }
-      }
-      // If a previous-frame projected position exists, test the swept segment
-      // against every OBB and stop at the entry point of any detected hit.
-      const previous = previousProjectedPositions.current[link];
-      if (previous) {
-        for (const obb of multiObstacleScene.obstacles) {
-          const ccd = sweptSphereOBBEntryPoint(
-            previous,
-            [qx, qy, qz],
-            ARM_LINK_CLEARANCE_METERS,
-            obb,
-          );
-          if (ccd.wasHit && ccd.entryPoint) {
-            qx = ccd.entryPoint[0];
-            qy = ccd.entryPoint[1];
-            qz = ccd.entryPoint[2];
-            wasProjected = true;
-          }
-        }
-      }
-      projectedPositions[link] = [qx, qy, qz];
-      // Use the projected position for the rendered link group so the mesh
-      // never sits inside an obstacle. The sample data is not mutated.
       const group = linkRefs.current[link];
       if (group) {
         applyOwnerPose(group, pose);
-        if (wasProjected) group.position.set(qx, qy, qz);
       }
       if (link === 0) continue;
       const segment = segmentRefs.current[link - 1];
       if (!segment) continue;
-      // Use the projected position for the child endpoint of the segment,
-      // and the projected position of the parent so the cylinder mesh
-      // connects the two visible link groups rather than the raw sample.
-      const parent = projectedPositions[link - 1];
-      const child = projectedPositions[link];
+      const parent = renderedPositions[link - 1];
+      const child = renderedPositions[link];
       scratch.start.set(parent[0], parent[1], parent[2]);
       scratch.end.set(child[0], child[1], child[2]);
       const segmentRadius = 0.072 - (link - 1) * 0.004;
@@ -823,8 +738,8 @@ function ArmRig({
       // A housing whose swept segment cannot be certified clear of an OBB
       // is flagged, not hidden: the previous behaviour deleted the cylinder
       // and left the arm rendered with gaps, which reads as a broken mesh
-      // rather than a contact. The endpoints are already projected, so the
-      // flag marks a mid-segment graze that the point projection cannot fix.
+      // rather than a contact. The flag is a conservative visual diagnostic,
+      // separate from the owner's physical collision receipt.
       const segmentCertified = multiObstacleScene.obstacles.every((obb) => {
         if (obb.exemptFromPenalty) return true;
         const endpointLowerBound =
@@ -855,12 +770,11 @@ function ArmRig({
       segment.quaternion.copy(scratch.quaternion);
       segment.scale.set(1, length, 1);
     }
-    previousProjectedPositions.current = projectedPositions;
-    if (publishedProjectedIndex.current !== sampleIndex.current) {
-      publishedProjectedIndex.current = sampleIndex.current;
-      setProjectedForOverlay(projectedPositions.map((p) => [p[0], p[1], p[2]]));
+    if (publishedRenderIndex.current !== sampleIndex.current) {
+      publishedRenderIndex.current = sampleIndex.current;
+      setRenderedForOverlay(renderedPositions);
     }
-    // Self-collision diagnostic on the corrected chain: non-adjacent link
+    // Self-collision diagnostic on the owner chain: non-adjacent link
     // spheres that overlap are reported to the HUD and folded into the single
     // link-tint pass below. The kernel receipt has no per-pair self-contact
     // term, so this is the only place a folded elbow driven through the base
@@ -870,7 +784,7 @@ function ArmRig({
     // writer of link emissive colour (the boundary pass at the end of this
     // frame); a second writer on a different cadence left links stuck red,
     // because whichever ran last won and neither reset the other's links.
-    const selfContacts = detectArmSelfCollisions(projectedPositions, ARM_LINK_RADII);
+    const selfContacts = detectArmSelfCollisions(renderedPositions, ARM_LINK_RADII);
     const selfKey = selfContacts.map((c) => `${c.linkA}-${c.linkB}`).join(",");
     if (selfKey !== selfContactKeyRef.current) {
       selfContactKeyRef.current = selfKey;
@@ -884,36 +798,6 @@ function ArmRig({
     }
     if (objectRef.current) {
       applyOwnerPose(objectRef.current, sample.objectPose);
-      // The object must live in the same corrected world as the links.
-      // While grasped it rides with the flange: apply exactly the
-      // displacement the wrist link received from the OBB/CCD pass, so the
-      // fingers and the mug never part. Whether grasped or not, the object
-      // itself is then pushed out of any rigid OBB it entered, using half
-      // its footprint as the clearance radius.
-      const wristIndex = sample.linkPoses.length - 1;
-      if (sample.grasped && wristIndex >= 0 && projectedPositions[wristIndex]) {
-        const rawWrist = ownerPositionToThree(sample.linkPoses[wristIndex].position);
-        const wrist = projectedPositions[wristIndex];
-        objectRef.current.position.x += wrist[0] - rawWrist[0];
-        objectRef.current.position.y += wrist[1] - rawWrist[1];
-        objectRef.current.position.z += wrist[2] - rawWrist[2];
-      }
-      const objectRadius =
-        Math.max(
-          admission.scene.objectDimensionsMeters[0],
-          admission.scene.objectDimensionsMeters[1],
-        ) * 0.5;
-      for (const obb of multiObstacleScene.obstacles) {
-        if (obb.exemptFromPenalty) continue;
-        const projected = projectPointOutOfOBB(
-          [objectRef.current.position.x, objectRef.current.position.y, objectRef.current.position.z],
-          obb,
-          objectRadius,
-        );
-        if (projected.wasInside) {
-          objectRef.current.position.set(projected.point[0], projected.point[1], projected.point[2]);
-        }
-      }
     }
     const gripperGeometry = resolveRenderedGripperContactGeometry({
       commandedGripperWidthM: sample.gripperWidthMeters,
@@ -1163,7 +1047,7 @@ function ArmRig({
         obstacles={multiObstacleScene.obstacles}
         targetPosition={targetPosition ?? null}
         safeRadius={0.04}
-        projectedLinkPositions={projectedForOverlay}
+        renderedLinkPositions={renderedForOverlay}
       />
     </group>
   );
@@ -1539,7 +1423,7 @@ function ArmStage({
   sampleIndex,
   isPlaying,
   playbackSpeed,
-  playbackResetToken,
+  playbackSeek,
   onSampleIndexChange,
   dragTarget,
   onDragTargetChange,
@@ -1557,8 +1441,8 @@ function ArmStage({
   sampleIndex: number;
   isPlaying: boolean;
   playbackSpeed: number;
-  playbackResetToken: number;
-  onSampleIndexChange: (sampleIndex: number) => void;
+  playbackSeek: ArmPlaybackSeek;
+  onSampleIndexChange: (sampleIndex: number, revision: number) => void;
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
   dragTarget?: [number, number, number] | null;
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
@@ -1680,18 +1564,9 @@ function ArmStage({
         const placement = admission
           ? armTaskFurniture(admission.config.task)
           : null;
-        if (!placement) return null;
-        const obstacleName = placement.obstacle.name;
-        const goalName = placement.goal.name;
-        const pieces = CRAFTSMAN_BUNGALOW_1928.furniture.filter(
-          (f) =>
-            f.room === "kitchen" ||
-            f.room === "living room" ||
-            f.name === obstacleName ||
-            f.name === goalName,
-        );
+        const obstacleName = placement?.obstacle.name;
+        const pieces = armStageFurniture(admission?.config.task ?? "kitchen-mug");
         return pieces.map((f) => {
-          const p3 = ownerPositionToThree(f.center);
           const isObstacle = f.name === obstacleName;
           const { group: furnGroup } = buildFurniture(
             f.name,
@@ -1702,8 +1577,8 @@ function ArmStage({
           return (
             <group
               key={f.name}
-              position={[p3[0], 0, p3[2]]}
-              rotation={[0, f.rotation, 0]}
+              position={[f.center[0], 0, f.center[1]]}
+              rotation={[0, -f.rotation, 0]}
             >
               <primitive object={furnGroup} />
               {isObstacle ? (
@@ -1731,10 +1606,9 @@ function ArmStage({
           microscopeMode={microscopeMode}
           physicsDebug={physicsDebug}
           targetPosition={objectPos}
-          requestedSampleIndex={sampleIndex}
+          playbackSeek={playbackSeek}
           isPlaying={isPlaying}
           playbackSpeed={playbackSpeed}
-          playbackResetToken={playbackResetToken}
           onSampleIndexChange={onSampleIndexChange}
           onSelfCollisionChange={onSelfCollisionChange}
         />
@@ -1860,7 +1734,19 @@ export function HouseholdArmFlagship({
   const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
-  const [playbackResetToken, setPlaybackResetToken] = useState(0);
+  const [playbackSeek, setPlaybackSeek] = useState<ArmPlaybackSeek>({ revision: 0, sampleIndex: 0 });
+  const playbackRevisionRef = useRef(0);
+  const seekPlayback = useCallback((index: number) => {
+    const revision = ++playbackRevisionRef.current;
+    setPlaybackSeek({ revision, sampleIndex: index });
+    setSampleIndex(index);
+  }, []);
+  const handleSampleIndexChange = useCallback((index: number, revision: number) => {
+    // The Canvas is a separate React root. A frame queued before Restart or
+    // a scrub must not overwrite the newer command with its old position.
+    // Published positions update the HUD; only explicit seeks drive the rig.
+    if (revision === playbackRevisionRef.current) setSampleIndex(index);
+  }, []);
   const [armDragTarget, setArmDragTarget] = useState<
     [number, number, number] | null
   >(null);
@@ -1883,6 +1769,7 @@ export function HouseholdArmFlagship({
     if (!trace) return;
     const telemetryData = {
       exportTimestamp: new Date().toISOString(),
+      ownerAdmission: admission,
       task,
       family,
       generation,
@@ -1919,7 +1806,7 @@ export function HouseholdArmFlagship({
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported manipulation trajectory telemetry JSON receipt.");
-  }, [trace, task, family, generation, bestObjective]);
+  }, [trace, admission, task, family, generation, bestObjective]);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -1974,8 +1861,7 @@ export function HouseholdArmFlagship({
       } else if (message.type === "trace") {
         setTrace(message.trace);
         setAdmission(message.admission);
-        setSampleIndex(0);
-        setPlaybackResetToken((token) => token + 1);
+        seekPlayback(0);
         setIsPlaying(true);
         if (message.family === "curriculum") setCurriculumTrace(message.trace);
         setActiveTrace(message.family);
@@ -2068,7 +1954,7 @@ export function HouseholdArmFlagship({
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated]);
+  }, [workerActivated, seekPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2154,9 +2040,14 @@ export function HouseholdArmFlagship({
     void decodePolicyFragment(fragment, stagePolicy.length)
       .then((imported) => {
         if (!active) return;
-        if (imported.task !== taskRef.current) {
+        const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[])
+          .find((task) => task === imported.task);
+        if (!importedTask || imported.challenge !== "household") {
+          throw new Error("This shared policy is not for a supported household task.");
+        }
+        if (importedTask !== taskRef.current) {
           // Switch first; this effect runs again once that task's owner is up.
-          selectTaskRef.current?.(imported.task as HouseholdManipulationTask);
+          selectTaskRef.current?.(importedTask);
           return;
         }
         pendingShareRef.current = null;
@@ -2265,8 +2156,7 @@ export function HouseholdArmFlagship({
           return { accepted: false, detail: "The Arm curriculum trace is not ready." };
         }
         setTrace(curriculumTrace);
-        setSampleIndex(0);
-        setPlaybackResetToken((token) => token + 1);
+        seekPlayback(0);
         setIsPlaying(true);
         setActiveTrace("curriculum");
         setGeneration(0);
@@ -2286,7 +2176,7 @@ export function HouseholdArmFlagship({
         if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
           return { accepted: false, detail: "That Arm replay frame is unavailable." };
         }
-        setSampleIndex(command.sampleIndex);
+        seekPlayback(command.sampleIndex);
         setIsPlaying(false);
         return {
           accepted: true,
@@ -2380,6 +2270,7 @@ export function HouseholdArmFlagship({
     family,
     trace,
     curriculumTrace,
+    seekPlayback,
   ]);
 
   useEffect(() => {
@@ -2408,9 +2299,8 @@ export function HouseholdArmFlagship({
       setTask(nextTask);
       setTrace(null);
       setAdmission(null);
-      setSampleIndex(0);
+      seekPlayback(0);
       setIsPlaying(false);
-      setPlaybackResetToken((token) => token + 1);
       setCurriculumTrace(null);
       setComparison(null);
       setArmDragTarget(null);
@@ -2434,7 +2324,7 @@ export function HouseholdArmFlagship({
       setStatus(`Loading the ${TASK_COPY[nextTask].setting} benchmark…`);
       workerRef.current.postMessage({ type: "preview", task: nextTask });
     },
-    [task],
+    [task, seekPlayback],
   );
 
   const objectiveDelta =
@@ -2457,32 +2347,18 @@ export function HouseholdArmFlagship({
   const traceDuration = trace?.samples.at(-1)?.timeSeconds ?? 0;
   const playbackRunning = isPlaying && !reduceMotion;
   const activeJointAngles = useMemo(() => {
-    if (armDragTarget) {
-      return solveKukaIK(
-        armDragTarget,
-        [0, 0.4, 0, -1.2, 0, 0.8, 0],
-        [0, 0.78, 0],
-        40,
-      );
+    if (!currentSampleForHUD) return null;
+    try {
+      return iiwaJointAnglesFromOwnerPoses(currentSampleForHUD.linkPoses);
+    } catch {
+      // A changed topology must show an unavailable readout, never guessed IK.
+      return null;
     }
-    if (
-      currentSampleForHUD &&
-      currentSampleForHUD.linkPoses &&
-      currentSampleForHUD.linkPoses.length >= 8
-    ) {
-      const p7 = currentSampleForHUD.linkPoses[7].position;
-      return solveKukaIK(
-        // owner (x, y, z) -> three (x, z, -y), the same map every other
-        // conversion on this page uses; the missing negation mirrored the
-        // joint strip about Z whenever no drag target was set.
-        [p7[0], p7[2], -p7[1]],
-        [0, 0.4, 0, -1.2, 0, 0.8, 0],
-        [0, 0.78, 0],
-        30,
-      );
-    }
-    return [0, 0.4, 0, -1.2, 0, 0.8, 0];
-  }, [armDragTarget, currentSampleForHUD]);
+  }, [currentSampleForHUD]);
+  const probeJointAngles = useMemo(() => {
+    if (!armDragTarget) return null;
+    return solveKukaIK(armDragTarget, [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0.78, 0], 40);
+  }, [armDragTarget]);
 
   useEffect(() => {
     selectTaskRef.current = selectTask;
@@ -2697,7 +2573,7 @@ export function HouseholdArmFlagship({
                   </button>
                 )}
 
-                {/* Self-collision diagnostic on the corrected chain */}
+                {/* Self-collision diagnostic on the measured owner chain */}
                 {armSelfContacts.length > 0 ? (
                   <span
                     className="rounded-full border border-rose-400/80 bg-rose-950/85 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md"
@@ -2848,8 +2724,7 @@ export function HouseholdArmFlagship({
                   disabled={!trace}
                   onClick={() => {
                     setIsPlaying(false);
-                    setSampleIndex(0);
-                    setPlaybackResetToken((token) => token + 1);
+                    seekPlayback(0);
                   }}
                   className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-35"
                 >
@@ -2907,13 +2782,12 @@ export function HouseholdArmFlagship({
                     disabled={!trace}
                     onChange={(event) => {
                       setIsPlaying(false);
-                      setSampleIndex(
+                      seekPlayback(
                         clampArmPlaybackIndex(
                           trace?.samples.length ?? 0,
                           Number(event.target.value),
                         ),
                       );
-                      setPlaybackResetToken((token) => token + 1);
                     }}
                     className="relative w-full min-w-0 accent-orange-400 disabled:opacity-35"
                     title={
@@ -2982,8 +2856,8 @@ export function HouseholdArmFlagship({
                   sampleIndex={sampleIndex}
                   isPlaying={isPlaying}
                   playbackSpeed={playbackSpeed}
-                  playbackResetToken={playbackResetToken}
-                  onSampleIndexChange={setSampleIndex}
+                  playbackSeek={playbackSeek}
+                  onSampleIndexChange={handleSampleIndexChange}
                   dragTarget={armDragTarget}
                   onDragTargetChange={setArmDragTarget}
                   onCollisionChange={setArmCollisionState}
@@ -3010,7 +2884,7 @@ export function HouseholdArmFlagship({
             />
             <ArmJointKinematicsStrip
               jointAngles={activeJointAngles}
-              dragActive={Boolean(armDragTarget)}
+              probeJointAngles={probeJointAngles}
             />
           </div>
         </div>
@@ -3118,8 +2992,7 @@ export function HouseholdArmFlagship({
               onClick={() => {
                 if (!curriculumTrace) return;
                 setTrace(curriculumTrace);
-                setSampleIndex(0);
-                setPlaybackResetToken((token) => token + 1);
+                seekPlayback(0);
                 setIsPlaying(true);
                 setActiveTrace("curriculum");
                 setGeneration(0);
@@ -3462,13 +3335,11 @@ export function HouseholdArmFlagship({
               convex separation.
             </li>
             <li>
-              <strong className="text-slate-200">Owner poses, browser guard:</strong>{" "}
-              the browser receives the object plus eight world poses from the
-              kernel and draws them; it then pushes any link or object that
-              entered a house obstacle box back to that box&apos;s surface
-              (a display-side guard the kernel does not know about). The
-              joint dials and the cyan reach ghost come from a reduced
-              4-joint browser chain, not from the owner kinematics.
+              <strong className="text-slate-200">Measured poses and joints:</strong>{" "}
+              the browser draws the object and eight link poses exactly as
+              measured by the kernel. All seven joint dials use those rotations
+              and the source joint frames. The cyan reach ghost and its separate
+              probe values use an auxiliary 4-joint browser chain.
             </li>
             <li>
               <strong className="text-slate-200">Grasp test:</strong> both

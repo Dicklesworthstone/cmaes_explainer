@@ -152,7 +152,7 @@ export function PolicyExchange({
         setBusy(false);
       }
     },
-    [policy, onImport],
+    [policy, onImport, meta.kernelVersion],
   );
 
   const ready = policy !== null && !disabled;

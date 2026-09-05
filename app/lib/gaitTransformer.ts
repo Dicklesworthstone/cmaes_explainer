@@ -302,6 +302,17 @@ export class GaitTransformerPolicy {
     }));
   }
 
+  /**
+   * The final hidden state from the most recent `step`, copied.
+   *
+   * The policy head is a linear map from exactly this vector, so fitting a head
+   * offline needs these features. Read-only and unused by inference; see
+   * scripts/fit-transformer-head.ts.
+   */
+  hiddenState(): Float64Array {
+    return Float64Array.from(this.h);
+  }
+
   reset(): void {
     for (const c of this.caches) {
       c.start = 0;
@@ -413,7 +424,7 @@ export class GaitTransformerPolicy {
 }
 
 /** Default artifact path, relative to the site root. */
-export const TRANSFORMER_WEIGHTS_URL = "/robots/g1/transformer/g1-ablation-weights-v1.bin";
+export const TRANSFORMER_WEIGHTS_URL = "/robots/g1/transformer/g1-ablation-weights-v2.bin";
 
 export async function fetchDefaultTransformerWeights(): Promise<LoadedTransformerWeights> {
   const res = await fetch(TRANSFORMER_WEIGHTS_URL);

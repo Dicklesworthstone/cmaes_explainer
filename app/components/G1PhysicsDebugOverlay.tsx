@@ -21,7 +21,7 @@
 import React from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
-import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
+import { stageBoxRenderTransform, type OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
 
 // 30-link body pose-envelope radii, sized to the RobotPose rendering. These
 // are visual aids only; the drag guard uses the separate pelvis safety proxy.
@@ -123,7 +123,7 @@ export function G1PhysicsDebugOverlay({
             obb.center[1],
             obb.center[2],
           ]}
-          rotation={[0, obb.rotationYawRad, 0]}
+          rotation={stageBoxRenderTransform(obb).rotation}
         >
           <lineBasicMaterial
             color="#f43f5e"
