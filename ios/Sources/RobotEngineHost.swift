@@ -563,7 +563,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
               task != activeArmTask else { return }
         sendOwnerCommand(
             "select-task",
-            pendingDetail: "Loading the (task.title.lowercased()) physical benchmark…",
+            pendingDetail: "Loading the \(task.title.lowercased()) physical benchmark…",
             armTask: task
         )
     }
@@ -574,7 +574,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
               challenge != activeChallenge else { return }
         sendOwnerCommand(
             "select-challenge",
-            pendingDetail: "Loading the (challenge.title.lowercased()) experiment…",
+            pendingDetail: "Loading the \(challenge.title.lowercased()) experiment…",
             challenge: challenge
         )
     }
@@ -585,7 +585,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
               selectedLab == .arm || family != .full else { return }
         sendOwnerCommand(
             "select-family",
-            pendingDetail: "Selecting (family.title) for the next learning run…",
+            pendingDetail: "Selecting \(family.title) for the next learning run…",
             family: family
         )
     }

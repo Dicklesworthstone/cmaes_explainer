@@ -315,10 +315,9 @@ struct FrankenRobotsView: View {
     }
 
     private var nativeCommandBar: some View {
-        VStack(spacing: lab == .humanoid ? 7 : 0) {
-            if lab == .humanoid {
-                nativeTaskPicker
-            }
+        VStack(spacing: 7) {
+            nativeTaskPicker
+            nativeExperimentSelectors
             Group {
                 if horizontalStatusHasRoom {
                     HStack(spacing: 10) {
@@ -358,30 +357,117 @@ struct FrankenRobotsView: View {
 
     private var nativeTaskPicker: some View {
         HStack(spacing: 10) {
-            Label("PHYSICAL OBJECTIVE", systemImage: "figure.walk.motion")
+            Label("PHYSICAL OBJECTIVE", systemImage: lab.symbol)
                 .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
                 .foregroundStyle(RobotTheme.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
-            Picker(
-                "Physical objective",
-                selection: Binding(
-                    get: { engine.activeHumanoidTask },
-                    set: { engine.selectHumanoidTask($0) }
-                )
-            ) {
-                ForEach(RobotLocomotionTask.allCases) { task in
-                    Text(task.title).tag(task)
+            if lab == .humanoid {
+                Picker(
+                    "Humanoid physical objective",
+                    selection: Binding(
+                        get: { engine.activeHumanoidTask },
+                        set: { engine.selectHumanoidTask($0) }
+                    )
+                ) {
+                    ForEach(RobotLocomotionTask.allCases) { task in
+                        Text(task.title).tag(task)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("robot-native-task-picker")
+            } else {
+                Picker(
+                    "Arm physical objective",
+                    selection: Binding(
+                        get: { engine.activeArmTask },
+                        set: { engine.selectArmTask($0) }
+                    )
+                ) {
+                    ForEach(RobotManipulationTask.allCases) { task in
+                        Text(task.title).tag(task)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("robot-native-task-picker")
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 310)
-            .disabled(
-                !engine.supportsTaskSelection || engine.phase != .ready || engine.pendingCommandID != nil
-            )
-            .accessibilityIdentifier("robot-native-task-picker")
-            .accessibilityHint("Changes the owner-composed physical objective before learning starts")
         }
+        .frame(maxWidth: 520)
+        .disabled(
+            !engine.supportsTaskSelection || engine.phase != .ready || engine.pendingCommandID != nil
+        )
+        .accessibilityHint("Changes the owner-composed physical objective before learning starts")
+    }
+
+    private var nativeExperimentSelectors: some View {
+        HStack(spacing: 8) {
+            if horizontalStatusHasRoom {
+                Label("EXPERIMENT", systemImage: "slider.horizontal.3")
+                    .font(.system(size: RobotTheme.size(8), weight: .bold, design: .monospaced))
+                    .foregroundStyle(RobotTheme.secondary)
+                    .lineLimit(1)
+            }
+            if lab == .humanoid {
+                Menu {
+                    ForEach(RobotChallenge.allCases) { challenge in
+                        Button {
+                            engine.selectChallenge(challenge)
+                        } label: {
+                            if engine.activeChallenge == challenge {
+                                Label(challenge.title, systemImage: "checkmark")
+                            } else {
+                                Text(challenge.title)
+                            }
+                        }
+                        .accessibilityIdentifier("robot-challenge-\(challenge.rawValue)")
+                    }
+                } label: {
+                    Label(engine.activeChallenge.title, systemImage: "mountain.2.fill")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                }
+                .accessibilityIdentifier("robot-native-challenge-picker")
+                .accessibilityLabel("Physical challenge")
+                .accessibilityValue(engine.activeChallenge.title)
+                .disabled(
+                    engine.phase != .ready || engine.pendingCommandID != nil ||
+                        !engine.supportsChallengeSelection
+                )
+            }
+            Menu {
+                ForEach(availableOptimizerFamilies) { family in
+                    Button {
+                        engine.selectFamily(family)
+                    } label: {
+                        if engine.activeFamily == family {
+                            Label(family.title, systemImage: "checkmark")
+                        } else {
+                            Text(family.title)
+                        }
+                    }
+                    .accessibilityIdentifier("robot-family-\(family.rawValue)")
+                }
+            } label: {
+                Label(engine.activeFamily.title, systemImage: "cpu")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .accessibilityIdentifier("robot-native-family-picker")
+            .accessibilityLabel("Optimizer family")
+            .accessibilityValue(engine.activeFamily.title)
+            .disabled(
+                engine.phase != .ready || engine.pendingCommandID != nil ||
+                    !engine.supportsFamilySelection
+            )
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+        .buttonStyle(.bordered)
+        .tint(lab.accent)
+    }
+
+    private var availableOptimizerFamilies: [RobotOptimizerFamily] {
+        lab == .humanoid ? RobotOptimizerFamily.scalableCases : RobotOptimizerFamily.allCases
     }
 
     private func nativeCommandLabel(title: String) -> some View {

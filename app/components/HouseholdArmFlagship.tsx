@@ -2256,7 +2256,11 @@ export function HouseholdArmFlagship({
         if (selectedTask === task) {
           return { accepted: true, detail: `${TASK_COPY[task].title} is already active.` };
         }
-        selectTaskRef.current?.(selectedTask);
+        const selectOwnerTask = selectTaskRef.current;
+        if (!selectOwnerTask) {
+          return { accepted: false, detail: "The arm task owner is not ready." };
+        }
+        selectOwnerTask(selectedTask);
         return {
           accepted: true,
           detail: `Accepted ${TASK_COPY[selectedTask].title}; loading its physical benchmark.`,

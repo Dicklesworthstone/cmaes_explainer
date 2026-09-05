@@ -114,7 +114,9 @@ final class RobotEngineBridgeTests: XCTestCase {
             "certifiedClearanceMeters": 0.052,
             "collisionRiskIntegral": 0.0,
             "possibleCollisionTimeSeconds": 0.0,
-            "activeTask": "walking"
+            "activeTask": "walking",
+            "activeChallenge": "terrain-and-push",
+            "activeFamily": "lm-ma"
         ]))
 
         XCTAssertEqual(metrics.generation, 12)
@@ -126,6 +128,20 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertEqual(metrics.collisionRiskIntegral, 0.0)
         XCTAssertEqual(metrics.possibleCollisionTimeSeconds, 0.0)
         XCTAssertEqual(metrics.activeTask, .walking)
+        XCTAssertEqual(metrics.activeChallenge, .terrainAndPush)
+        XCTAssertEqual(metrics.activeFamily, .lmMA)
+        XCTAssertFalse(metrics.isEmpty)
+    }
+
+    func testMetricsDecodeArmExperimentIdentity() throws {
+        let metrics = try XCTUnwrap(RobotEngineMetrics(payload: [
+            "activeArmTask": "living-room-remote",
+            "activeFamily": "full"
+        ]))
+
+        XCTAssertEqual(metrics.activeArmTask, .livingRoomRemote)
+        XCTAssertEqual(metrics.activeFamily, .full)
+        XCTAssertNil(metrics.activeTask)
         XCTAssertFalse(metrics.isEmpty)
     }
 
@@ -139,7 +155,10 @@ final class RobotEngineBridgeTests: XCTestCase {
             "certifiedClearanceMeters": NSNull(),
             "collisionRiskIntegral": NSNull(),
             "possibleCollisionTimeSeconds": NSNull(),
-            "activeTask": NSNull()
+            "activeTask": NSNull(),
+            "activeArmTask": NSNull(),
+            "activeChallenge": NSNull(),
+            "activeFamily": NSNull()
         ]))
 
         XCTAssertEqual(metrics, .empty)
@@ -158,6 +177,9 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineMetrics(payload: ["collisionRiskIntegral": true]))
         XCTAssertNil(RobotEngineMetrics(payload: ["possibleCollisionTimeSeconds": -1]))
         XCTAssertNil(RobotEngineMetrics(payload: ["activeTask": "dancing"]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["activeArmTask": "garage-drill"]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["activeChallenge": "moon-gravity"]))
+        XCTAssertNil(RobotEngineMetrics(payload: ["activeFamily": "mystery-cma"]))
     }
 
     func testStatusMessageRequiresCurrentSchemaAndPositiveSequence() throws {
@@ -174,14 +196,30 @@ final class RobotEngineBridgeTests: XCTestCase {
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(lab: "foreign")))
         XCTAssertNil(RobotEngineStatusMessage(payload: statusPayload(state: "invented")))
         var taskCapability = statusPayload()
-        taskCapability["capabilities"] = ["optimize", "select-task"]
-        taskCapability["metrics"] = ["activeTask": "walking"]
+        taskCapability["capabilities"] = ["optimize", "select-task", "select-challenge", "select-family"]
+        taskCapability["metrics"] = [
+            "activeTask": "walking",
+            "activeChallenge": "flat",
+            "activeFamily": "lm-ma"
+        ]
         XCTAssertEqual(
             RobotEngineStatusMessage(payload: taskCapability)?.metrics.activeTask,
             .walking
         )
         taskCapability["lab"] = "arm"
         XCTAssertNil(RobotEngineStatusMessage(payload: taskCapability))
+        var armCapability = statusPayload(lab: "arm")
+        armCapability["capabilities"] = ["optimize", "select-task", "select-family"]
+        armCapability["metrics"] = [
+            "activeArmTask": "backyard-trowel",
+            "activeFamily": "full"
+        ]
+        let armEvent = try XCTUnwrap(RobotEngineStatusMessage(payload: armCapability))
+        XCTAssertEqual(armEvent.metrics.activeArmTask, .backyardTrowel)
+        XCTAssertEqual(armEvent.metrics.activeFamily, .full)
+        var invalidHumanoidFamily = statusPayload()
+        invalidHumanoidFamily["metrics"] = ["activeFamily": "full"]
+        XCTAssertNil(RobotEngineStatusMessage(payload: invalidHumanoidFamily))
         var malformedCapabilities = statusPayload()
         malformedCapabilities["capabilities"] = ["optimize", 1]
         XCTAssertNil(RobotEngineStatusMessage(payload: malformedCapabilities))
@@ -229,6 +267,36 @@ final class RobotEngineBridgeTests: XCTestCase {
 
         taskPayload["lab"] = "arm"
         XCTAssertNil(RobotEngineCommandAcknowledgement(payload: taskPayload))
+
+        var armTaskPayload = payload
+        armTaskPayload["commandId"] = "9B84A8A2-arm-task"
+        armTaskPayload["command"] = "select-task"
+        armTaskPayload["task"] = "living-room-remote"
+        let armTaskAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: armTaskPayload)
+        )
+        XCTAssertEqual(armTaskAcknowledgement.armTask, .livingRoomRemote)
+
+        var challengePayload = payload
+        challengePayload["commandId"] = "9B84A8A2-challenge"
+        challengePayload["lab"] = "humanoid"
+        challengePayload["command"] = "select-challenge"
+        challengePayload["challenge"] = "terrain-and-push"
+        let challengeAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: challengePayload)
+        )
+        XCTAssertEqual(challengeAcknowledgement.challenge, .terrainAndPush)
+
+        var familyPayload = payload
+        familyPayload["commandId"] = "9B84A8A2-family"
+        familyPayload["command"] = "select-family"
+        familyPayload["family"] = "full"
+        let familyAcknowledgement = try XCTUnwrap(
+            RobotEngineCommandAcknowledgement(payload: familyPayload)
+        )
+        XCTAssertEqual(familyAcknowledgement.family, .full)
+        familyPayload["lab"] = "humanoid"
+        XCTAssertNil(RobotEngineCommandAcknowledgement(payload: familyPayload))
 
         var malformed = payload
         malformed["accepted"] = "yes"

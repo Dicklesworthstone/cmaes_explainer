@@ -349,6 +349,91 @@ final class FrankenRobotsUITests: XCTestCase {
         add(screenshot)
     }
 
+    func testNativeExperimentSelectorsMutateBothEmbeddedOwners() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(engineStatus.waitForExistence(timeout: 12), app.debugDescription)
+        var ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        let challenge = app.buttons["robot-native-challenge-picker"]
+        let family = app.buttons["robot-native-family-picker"]
+        XCTAssertTrue(challenge.isHittable, app.debugDescription)
+        XCTAssertTrue(family.isHittable, app.debugDescription)
+
+        challenge.tap()
+        let terrain = app.buttons["robot-challenge-terrain-and-push"]
+        XCTAssertTrue(terrain.waitForExistence(timeout: 5), app.debugDescription)
+        terrain.tap()
+        let terrainSelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS[c] 'terrain'"),
+            object: challenge
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [terrainSelected], timeout: 8), .completed)
+        ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        family.tap()
+        let lmCMA = app.buttons["robot-family-lm-cma"]
+        XCTAssertTrue(lmCMA.waitForExistence(timeout: 5), app.debugDescription)
+        lmCMA.tap()
+        let humanoidFamilySelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'LM-CMA'"),
+            object: family
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [humanoidFamilySelected], timeout: 8), .completed)
+
+        let arm = app.segmentedControls.buttons["Robot Arm"]
+        XCTAssertTrue(arm.isHittable, app.debugDescription)
+        arm.tap()
+        ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        let taskPicker = app.segmentedControls["robot-native-task-picker"]
+        XCTAssertTrue(taskPicker.waitForExistence(timeout: 5), app.debugDescription)
+        let remote = taskPicker.buttons["Remote"]
+        XCTAssertTrue(remote.isHittable, app.debugDescription)
+        remote.tap()
+        let remoteSelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == true"),
+            object: remote
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [remoteSelected], timeout: 8), .completed)
+        ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
+            object: engineStatus
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        let armFamily = app.buttons["robot-native-family-picker"]
+        XCTAssertTrue(armFamily.isHittable, app.debugDescription)
+        armFamily.tap()
+        let fullCMA = app.buttons["robot-family-full"]
+        XCTAssertTrue(fullCMA.waitForExistence(timeout: 5), app.debugDescription)
+        fullCMA.tap()
+        let armFamilySelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == 'Full CMA-ES'"),
+            object: armFamily
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [armFamilySelected], timeout: 8), .completed)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Native owner task challenge and optimizer selectors"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations() throws {
         let device = XCUIDevice.shared
         device.orientation = .portrait
