@@ -52,7 +52,12 @@ export function armRefusalReason(point: ArmLedgerPoint): string | null {
   if (point.placed) return null;
   if (!point.everGrasped) return "never grasped the object";
   if (point.unprovenSeparationSeconds > 0) {
-    return `collision envelope · ${(point.minimumClearanceMeters * 1000).toFixed(0)} mm closest certified clearance`;
+    // Below a tenth of a millimetre the number is noise and "0 mm clearance"
+    // reads as a missing value rather than as the finding, which is that two
+    // envelopes are touching.
+    return point.minimumClearanceMeters < 1e-4
+      ? "collision envelope · envelopes in contact"
+      : `collision envelope · ${(point.minimumClearanceMeters * 1000).toFixed(1)} mm closest clearance`;
   }
   if (!point.ownerReportedPlaced) return "owner did not report a placement";
   return "browser collision re-check refused it";

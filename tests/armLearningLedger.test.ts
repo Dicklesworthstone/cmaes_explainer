@@ -84,7 +84,20 @@ describe("arm learning ledger", () => {
       }),
       512,
     );
-    expect(armRefusalReason(blocked)).toBe("collision envelope · 12 mm closest certified clearance");
+    expect(armRefusalReason(blocked)).toBe("collision envelope · 12.0 mm closest clearance");
+
+    // Touching envelopes report contact rather than "0 mm", which reads as a
+    // missing measurement instead of the finding.
+    const touching = armLedgerPoint(
+      receipt({
+        placed: false,
+        ownerReportedPlaced: true,
+        possibleCollisionTimeSeconds: 0.2,
+        minimumCertifiedClearanceMeters: 0,
+      }),
+      512,
+    );
+    expect(armRefusalReason(touching)).toBe("collision envelope · envelopes in contact");
 
     const noGrasp = armLedgerPoint(receipt({ placed: false, everGrasped: false }), 8);
     expect(armRefusalReason(noGrasp)).toBe("never grasped the object");
