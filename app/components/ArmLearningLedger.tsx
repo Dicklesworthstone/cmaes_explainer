@@ -234,7 +234,7 @@ export function ArmLearningLedger({
               ? ", and the owner now accepts the placement it previously refused"
               : ", but the owner no longer accepts the placement"
             : latest.placed
-              ? ", with the placement accepted throughout"
+              ? ", with both the initial and current placement accepted"
               : ", and the owner still refuses the placement"}
           .
         </p>
