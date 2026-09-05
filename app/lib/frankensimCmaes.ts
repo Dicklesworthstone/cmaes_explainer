@@ -1015,7 +1015,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.20";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.21";
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
 
@@ -1222,8 +1222,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-      "/wasm/fs-cmaes/v0620/fs_cmaes_viz_wasm.js",
-      "/wasm/fs-cmaes/v0620/fs_cmaes_viz_wasm_bg.wasm",
+      "/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm.js",
+      "/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm_bg.wasm",
       )) as OwnerWasmModule;
       const version =
         typeof loaded.cmaes_viz_kernel_version === "function"

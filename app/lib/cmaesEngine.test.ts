@@ -1478,16 +1478,16 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0620/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0620/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0621/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.20");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.21");
 
   const families = ["full", "separable", "lm-cma", "lm-ma"] as const;
   for (const family of families) {
@@ -1641,12 +1641,14 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   );
   expect(curriculum.ok.completedSteps).toBe(720);
   expect(curriculum.ok.terminationReason).toBe("horizon");
-  // The walking shaping score was rebalanced twice to pay for forward
-  // progress: 1.3168446135481418 -> -67.5144205651753 (v069, adding the
-  // progress reward) -> here (raising it from 120 to 200, swept against
-  // distance). Every physical quantity below is unchanged through both, which
-  // is the point: the rollout is identical, only what we ask of it moved.
-  expect(curriculum.ok.objective).toBeCloseTo(-107.87888841101605, 10);
+  // The walking shaping score was rebalanced to pay for forward progress,
+  // moving the seed's objective from 1.3168446135481418 to here. (0.6.20 raised
+  // the progress reward to 200 and reached -107.878...; it was reverted because
+  // the sweep behind it ran without the house obstacles the site declares, and
+  // measured in the browser that value walked LESS far.) Every physical
+  // quantity below is unchanged throughout: the rollout is identical, only what
+  // we ask of it moved.
+  expect(curriculum.ok.objective).toBeCloseTo(-67.5144205651753, 10);
   expect(curriculum.ok.distanceMeters).toBeCloseTo(0.32916830547315423, 12);
   expect(curriculum.ok.actuatorWorkJoules).toBeCloseTo(11796.419770004608, 7);
   expect(curriculum.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
@@ -1691,9 +1693,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
   expect(flat.ok.completedSteps).toBe(720);
   expect(flat.ok.terminationReason).toBe("horizon");
-  // Also moved by both walking rebalances (7.915509184194548 -> -59.4134... ->
-  // here). The flat-challenge physics is likewise untouched.
-  expect(flat.ok.objective).toBeCloseTo(-95.93790535621937, 10);
+  // Also moved by the walking rebalance (was 7.915509184194548). The
+  // flat-challenge physics is likewise untouched.
+  expect(flat.ok.objective).toBeCloseTo(-59.41344499020653, 10);
   expect(flat.ok.distanceMeters).toBeCloseTo(0.30837211553531235, 12);
   expect(flat.ok.actuatorWorkJoules).toBeCloseTo(11930.205416265955, 7);
   expect(flat.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
