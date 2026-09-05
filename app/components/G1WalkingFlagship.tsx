@@ -92,6 +92,12 @@ import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
+type G1PriorReplay = {
+  trace: G1TraceReceipt;
+  policy: Float64Array;
+  meta: SharedPolicyMeta;
+};
+
 type ComparisonRow = {
   family: CmaFamily;
   initialBest: number;
@@ -2060,8 +2066,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [trace, setTrace] = useState<G1TraceReceipt | null>(null);
   const [admission, setAdmission] = useState<G1Admission | null>(null);
   const [scene, setScene] = useState<G1SceneReceipt | null>(null);
-  const [stabilizerTrace, setStabilizerTrace] = useState<G1TraceReceipt | null>(null);
-  const [curriculumTrace, setCurriculumTrace] = useState<G1TraceReceipt | null>(null);
+  const [stabilizerReplay, setStabilizerReplay] = useState<G1PriorReplay | null>(null);
+  const [curriculumReplay, setCurriculumReplay] = useState<G1PriorReplay | null>(null);
+  const stabilizerTrace = stabilizerReplay?.trace ?? null;
+  const curriculumTrace = curriculumReplay?.trace ?? null;
   const [workerAvailable, setWorkerAvailable] = useState(true);
   // Measured, not assumed. Given equal wall time from the same curriculum mean,
   // LM-MA reached a better objective than LM-CMA at both radii worth using
@@ -2136,6 +2144,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
   const [currentChapter, setCurrentChapter] = useState(1);
+  const pendingChapterPriorRef = useRef<"stabilizer" | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<FrankenRobotsReceiptLens>("owner-receipt");
   const [shoveActive, setShoveActive] = useState(false);
   const [pushAngleDeg, setPushAngleDeg] = useState(90);
@@ -2145,6 +2154,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // A requested placement is a handle, not an edited physical trace. Only a
   // returned owner scene moves the robot and its receipt together.
   const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(G1_HOUSE_SEAT.offset);
+
+  const displayedMeasurement = trace && admission
+    ? learningLedgerPoint(trace, stagePolicyMeta?.generation ?? generation, admission.config.stepSeconds, admission.config.targetSpeed)
+    : null;
 
   const handleExportTelemetry = useCallback(() => {
     if (!trace) return;
@@ -2174,7 +2187,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `g1-telemetry-${task}-${challenge}-${family}-gen${generation}.json`;
+    a.download = `g1-telemetry-${task}-${challenge}-${telemetryData.family}-gen${telemetryData.generation}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported trajectory telemetry JSON receipt.");
@@ -2296,13 +2309,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   }, [busy, stopRequested, task, family, seedIndex, challenge, scene]);
 
   const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
+    pendingChapterPriorRef.current = null;
     resumedPolicyRef.current = null;
     setTask(nextTask);
     setChallenge(nextChallenge);
     setTrace(null);
     setAdmission(null);
-    setStabilizerTrace(null);
-    setCurriculumTrace(null);
+    setStabilizerReplay(null);
+    setCurriculumReplay(null);
     setGeneration(0);
     setBestObjective(null);
     setComparison(null);
@@ -2326,8 +2340,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     const offset = robotDragOffsetRef.current;
     if (!offset || inFlightRef.current) return;
     setAdmission(null);
-    setStabilizerTrace(null);
-    setCurriculumTrace(null);
+    setStabilizerReplay(null);
+    setCurriculumReplay(null);
     setComparison(null);
     setLedger([]);
     progressHistoryRef.current = [];
@@ -2368,6 +2382,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       // Exact exports must validate every physical input before any state changes.
       // Coefficient-only archives use the explicitly disclosed current default.
       const restored = g1RestoreSharedExperiment(imported);
+      pendingChapterPriorRef.current = null;
       recoveryAttemptedRef.current = true;
       taskRef.current = importedTask;
       challengeRef.current = importedChallenge;
@@ -2390,8 +2405,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setLimbOffsets({});
       setTrace(null);
       setAdmission(null);
-      setStabilizerTrace(null);
-      setCurriculumTrace(null);
+      setStabilizerReplay(null);
+      setCurriculumReplay(null);
       setComparison(null);
       progressHistoryRef.current = [];
       setProgressHistory([]);
@@ -2487,6 +2502,23 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     };
   }, [policyBaseline, handlePolicyImport]);
 
+  const selectPriorReplay = useCallback((origin: "curriculum" | "stabilizer") => {
+    const replay = origin === "curriculum" ? curriculumReplay : stabilizerReplay;
+    if (inFlightRef.current || !replay) return false;
+    setTrace(replay.trace);
+    setStagePolicy(replay.policy);
+    setStagePolicyMeta(replay.meta);
+    setActiveTrace(origin);
+    setGeneration(replay.meta.generation);
+    setBestObjective(replay.trace.objective);
+    setSampleIndex(0);
+    setIsPlaying(true);
+    setStatus(origin === "curriculum"
+      ? `${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`
+      : `Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`);
+    return true;
+  }, [curriculumReplay, stabilizerReplay, task]);
+
   useEffect(() => {
     if (!embedded) return;
     return installFrankenRobotsNativeCommandHandler("humanoid", (command) => {
@@ -2541,16 +2573,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (busy !== null || inFlightRef.current) {
           return { accepted: false, detail: "Finish or stop the current owner request first." };
         }
-        if (!curriculumTrace) {
+        if (!selectPriorReplay("curriculum")) {
           return { accepted: false, detail: "The Humanoid curriculum trace is not ready." };
         }
-        setTrace(curriculumTrace);
-        setActiveTrace("curriculum");
-        setGeneration(0);
-        setBestObjective(curriculumTrace.objective);
-        setSampleIndex(0);
-        setIsPlaying(true);
-        setStatus(`${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`);
         return { accepted: true, detail: "Accepted Humanoid curriculum replay from frame one." };
       }
       if (command.command === "play" || command.command === "pause") {
@@ -2699,11 +2724,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     seedIndex,
     searchSigma,
     trace,
-    curriculumTrace,
+    selectPriorReplay,
     selectedPreset,
     xrayMode,
     physicsDebug,
   ]);
+
+  // A chapter that changes the challenge must wait for that experiment's
+  // measured standing prior, then select its trace and coefficients together.
+  useEffect(() => {
+    if (busy !== null || !stabilizerReplay || !pendingChapterPriorRef.current) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (active && selectPriorReplay("stabilizer")) pendingChapterPriorRef.current = null;
+    });
+    return () => { active = false; };
+  }, [busy, stabilizerReplay, selectPriorReplay]);
 
   const handleSelectChapter = useCallback((ch: StoryChapter) => {
     if (inFlightRef.current) return;
@@ -2714,23 +2750,24 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     }
     if (ch.challenge !== challenge) {
       requestPreview(task, ch.challenge);
+      recoveryAttemptedRef.current = true;
+      if (ch.targetTrace === "stabilizer") pendingChapterPriorRef.current = "stabilizer";
       setSampleIndex(0);
       setIsPlaying(true);
       return;
     }
     if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
-      setTrace(stabilizerTrace);
-      setActiveTrace("stabilizer");
+      selectPriorReplay("stabilizer");
     } else if (ch.targetTrace === "curriculum" && curriculumTrace) {
-      setTrace(curriculumTrace);
-      setActiveTrace("curriculum");
+      selectPriorReplay("curriculum");
     } else if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
       setFamily(ch.targetTrace);
       requestPreview(task, ch.challenge);
+      recoveryAttemptedRef.current = true;
     }
     setSampleIndex(0);
     setIsPlaying(true);
-  }, [task, challenge, stabilizerTrace, curriculumTrace, requestPreview, setCurrentChapter, setSampleIndex]);
+  }, [task, challenge, stabilizerTrace, curriculumTrace, selectPriorReplay, requestPreview, setCurrentChapter, setSampleIndex]);
 
   const handleSelectPreset = useCallback((p: ReceiptAnalysisPreset) => {
     setSelectedPreset(p.id);
@@ -2839,8 +2876,18 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
         );
       } else if (message.type === "trace") {
+        const policyMeta: SharedPolicyMeta = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task: message.admission.config.task,
+          challenge: message.admission.config.challenge,
+          family: message.family === "curriculum" || message.family === "stabilizer"
+            ? familyRef.current : message.family,
+          sigma: sigmaRef.current,
+          generation: message.generation,
+          experiment: g1SharedExperiment(message.scene, seedIndexRef.current),
+        };
         if (message.family === "stabilizer") {
-          setStabilizerTrace(message.trace);
+          if (message.policy) setStabilizerReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
           setStatus(`Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`);
           return;
         }
@@ -2851,7 +2898,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setTask(message.admission.config.task);
         setChallenge(message.admission.config.challenge);
         setTrace(message.trace);
-        if (message.family === "curriculum") setCurriculumTrace(message.trace);
+        if (message.family === "curriculum" && message.policy) {
+          setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
+        }
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
@@ -2859,15 +2908,6 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         // optimized replay after it is measured against that. The standing
         // prior is not recorded, because the branch above returns before this
         // point — it is a different policy, not an earlier version of this one.
-        const policyMeta: SharedPolicyMeta = {
-          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-          task: message.admission.config.task,
-          challenge: message.admission.config.challenge,
-          family: message.family === "curriculum" ? familyRef.current : message.family,
-          sigma: sigmaRef.current,
-          generation: message.generation,
-          experiment: g1SharedExperiment(message.scene, seedIndexRef.current),
-        };
         if (message.policy) {
           setStagePolicy(message.policy);
           setStagePolicyMeta(policyMeta);
@@ -3774,15 +3814,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               type="button"
               disabled={busy !== null || !workerAvailable}
               onClick={() => {
-                if (!curriculumTrace) {
+                if (!selectPriorReplay("curriculum")) {
                   post({ type: "preview", task, challenge }, "preview");
-                  return;
                 }
-                setTrace(curriculumTrace);
-                setActiveTrace("curriculum");
-                setGeneration(0);
-                setBestObjective(curriculumTrace.objective);
-                setStatus(`${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`);
               }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -3792,14 +3826,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <button
               type="button"
               disabled={busy !== null || !workerAvailable || !stabilizerTrace}
-              onClick={() => {
-                if (!stabilizerTrace) return;
-                setTrace(stabilizerTrace);
-                setActiveTrace("stabilizer");
-                setGeneration(0);
-                setBestObjective(stabilizerTrace.objective);
-                setStatus(`Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`);
-              }}
+              onClick={() => { selectPriorReplay("stabilizer"); }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
@@ -3839,7 +3866,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <div className="mt-3">
               <PolicyExchange
                 policy={stagePolicy}
-                disabled={busy !== null || !workerAvailable}
+                disabled={busy !== null || !workerAvailable || !trace || !admission}
                 meta={stagePolicyMeta ?? {
                   kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
                   task,
@@ -3849,12 +3876,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   sigma: searchSigma,
                 }}
                 measured={
-                  ledger.length > 0
+                  trace && admission
                     ? {
-                        distanceMeters: ledger[ledger.length - 1].distanceMeters,
-                        speedMetersPerSecond: ledger[ledger.length - 1].speedMetersPerSecond,
-                        metersPerKilojoule: ledger[ledger.length - 1].metersPerKilojoule,
-                        energyJoules: ledger[ledger.length - 1].energyJoules,
+                        distanceMeters: displayedMeasurement?.distanceMeters ?? null,
+                        speedMetersPerSecond: displayedMeasurement?.speedMetersPerSecond ?? null,
+                        metersPerKilojoule: displayedMeasurement?.metersPerKilojoule ?? null,
+                        energyJoules: displayedMeasurement?.energyJoules ?? null,
                       }
                     : null
                 }

@@ -116,8 +116,9 @@ async function preview(
     "G1 admission"
   );
   try {
+    const stabilizerMean = evaluator.stabilizingPolicyMean();
     const stabilizerTrace = requireOk(
-      evaluator.trace(evaluator.stabilizingPolicyMean()),
+      evaluator.trace(stabilizerMean),
       "stabilizing trace"
     );
     post({
@@ -127,6 +128,7 @@ async function preview(
       scene,
       generation: 0,
       family: "stabilizer",
+      policy: stabilizerMean.slice(),
     });
     const curriculumMean = evaluator.walkingCurriculumMean();
     const curriculumTrace = requireOk(

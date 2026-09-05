@@ -20,6 +20,7 @@ import {
   decodePolicyFragment,
   policyFragmentFromHash,
   type SharedPolicy,
+  type SharedPolicyMeta,
 } from "../lib/g1PolicyShare";
 import {
   describeAge,
@@ -121,6 +122,12 @@ import {
   type HouseholdRobotPose,
 } from "../lib/frankensimCmaes";
 type ArmTraceOrigin = CmaFamily | "curriculum";
+
+type ArmPriorReplay = {
+  trace: HouseholdManipulationTraceReceipt;
+  policy: Float64Array;
+  meta: SharedPolicyMeta;
+};
 
 /** Matches the search radius armOptimizationWorker starts a session with. */
 const ARM_DEFAULT_SEARCH_SIGMA = 0.001;
@@ -1670,8 +1677,8 @@ export function HouseholdArmFlagship({
   const [trace, setTrace] = useState<HouseholdManipulationTraceReceipt | null>(
     null,
   );
-  const [curriculumTrace, setCurriculumTrace] =
-    useState<HouseholdManipulationTraceReceipt | null>(null);
+  const [curriculumReplay, setCurriculumReplay] = useState<ArmPriorReplay | null>(null);
+  const curriculumTrace = curriculumReplay?.trace ?? null;
   const [admission, setAdmission] =
     useState<HouseholdManipulationAdmission | null>(null);
   const [task, setTask] = useState<HouseholdManipulationTask>("kitchen-mug");
@@ -1682,6 +1689,7 @@ export function HouseholdArmFlagship({
   // whatever is on stage, so the arm can show what it learned and keep it.
   const [ledger, setLedger] = useState<ArmLedgerPoint[]>([]);
   const [stagePolicy, setStagePolicy] = useState<Float64Array | null>(null);
+  const [stagePolicyMeta, setStagePolicyMeta] = useState<SharedPolicyMeta | null>(null);
   const trainingStartedAtRef = useRef<number | null>(null);
   const trainingSecondsRef = useRef(0);
   const [trainingSeconds, setTrainingSeconds] = useState(0);
@@ -1771,9 +1779,9 @@ export function HouseholdArmFlagship({
       exportTimestamp: new Date().toISOString(),
       ownerAdmission: admission,
       task,
-      family,
-      generation,
-      bestObjective,
+      family: stagePolicyMeta?.family ?? family,
+      generation: stagePolicyMeta?.generation ?? generation,
+      bestObjective: trace.objective,
       placed: trace.placed,
       everGrasped: trace.everGrasped,
       finalObjectErrorMeters: trace.finalObjectErrorMeters,
@@ -1802,11 +1810,11 @@ export function HouseholdArmFlagship({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `kuka-arm-telemetry-${task}-${family}-gen${generation}.json`;
+    a.download = `kuka-arm-telemetry-${task}-${telemetryData.family}-gen${telemetryData.generation}.json`;
     a.click();
     URL.revokeObjectURL(url);
     setStatus("Exported manipulation trajectory telemetry JSON receipt.");
-  }, [trace, admission, task, family, generation, bestObjective]);
+  }, [trace, admission, task, family, generation, stagePolicyMeta]);
 
   useEffect(() => {
     if (!workerActivated) return;
@@ -1864,11 +1872,24 @@ export function HouseholdArmFlagship({
         setAdmission(message.admission);
         seekPlayback(0);
         setIsPlaying(true);
-        if (message.family === "curriculum") setCurriculumTrace(message.trace);
+        const policyMeta: SharedPolicyMeta = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task: message.admission.config.task,
+          challenge: "household",
+          family: message.family === "curriculum" ? familyRef.current : message.family,
+          sigma: sigmaRef.current,
+          generation: message.generation,
+        };
+        if (message.family === "curriculum" && message.policy) {
+          setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
+        }
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
-        if (message.policy) setStagePolicy(message.policy);
+        if (message.policy) {
+          setStagePolicy(message.policy);
+          setStagePolicyMeta(policyMeta);
+        }
         setLedger((previous) => {
           const next = appendArmLedgerPoint(
             previous,
@@ -1880,12 +1901,7 @@ export function HouseholdArmFlagship({
           if (message.policy && message.generation > 0) {
             saveTrainingSession(
               {
-                kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-                task: message.admission.config.task,
-                challenge: "household",
-                family: familyRef.current,
-                sigma: sigmaRef.current,
-                generation: message.generation,
+                ...policyMeta,
                 trainingSeconds:
                   trainingSecondsRef.current +
                   (trainingStartedAtRef.current === null
@@ -2140,7 +2156,7 @@ export function HouseholdArmFlagship({
       resumedPolicyRef.current = imported.policy;
       setTrace(null);
       setAdmission(null);
-      if (importedTask !== task) setCurriculumTrace(null);
+      if (importedTask !== task) setCurriculumReplay(null);
       setComparison(null);
       setArmDragTarget(null);
       setArmUnreachable(false);
@@ -2169,6 +2185,20 @@ export function HouseholdArmFlagship({
     setStatus("Stopping after the current physical generation…");
     workerRef.current.postMessage({ type: "stop", task, family, seedIndex });
   }, [busy, stopRequested, task, family, seedIndex]);
+
+  const selectCurriculumReplay = useCallback(() => {
+    if (inFlightRef.current || !curriculumReplay) return false;
+    setTrace(curriculumReplay.trace);
+    setStagePolicy(curriculumReplay.policy);
+    setStagePolicyMeta(curriculumReplay.meta);
+    seekPlayback(0);
+    setIsPlaying(true);
+    setActiveTrace("curriculum");
+    setGeneration(curriculumReplay.meta.generation);
+    setBestObjective(curriculumReplay.trace.objective);
+    setStatus(`${TASK_COPY[task].title} curriculum replayed from Frankensim WASM.`);
+    return true;
+  }, [curriculumReplay, seekPlayback, task]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2209,16 +2239,9 @@ export function HouseholdArmFlagship({
         if (busy !== null || inFlightRef.current) {
           return { accepted: false, detail: "Finish or stop the current owner request first." };
         }
-        if (!curriculumTrace) {
+        if (!selectCurriculumReplay()) {
           return { accepted: false, detail: "The Arm curriculum trace is not ready." };
         }
-        setTrace(curriculumTrace);
-        seekPlayback(0);
-        setIsPlaying(true);
-        setActiveTrace("curriculum");
-        setGeneration(0);
-        setBestObjective(curriculumTrace.objective);
-        setStatus(`${TASK_COPY[task].title} curriculum replayed from Frankensim WASM.`);
         return { accepted: true, detail: "Accepted Arm curriculum replay from frame one." };
       }
       if (command.command === "play" || command.command === "pause") {
@@ -2337,7 +2360,7 @@ export function HouseholdArmFlagship({
     family,
     seedIndex,
     trace,
-    curriculumTrace,
+    selectCurriculumReplay,
     seekPlayback,
     microscopeMode,
     physicsDebug,
@@ -2375,7 +2398,7 @@ export function HouseholdArmFlagship({
       setAdmission(null);
       seekPlayback(0);
       setIsPlaying(false);
-      setCurriculumTrace(null);
+      setCurriculumReplay(null);
       setComparison(null);
       setArmDragTarget(null);
       setArmUnreachable(false);
@@ -3063,18 +3086,7 @@ export function HouseholdArmFlagship({
             <button
               type="button"
               disabled={busy !== null || !workerAvailable || !curriculumTrace}
-              onClick={() => {
-                if (!curriculumTrace) return;
-                setTrace(curriculumTrace);
-                seekPlayback(0);
-                setIsPlaying(true);
-                setActiveTrace("curriculum");
-                setGeneration(0);
-                setBestObjective(curriculumTrace.objective);
-                setStatus(
-                  `${taskInfo.title} curriculum replayed from Frankensim WASM.`,
-                );
-              }}
+              onClick={() => { selectCurriculumReplay(); }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
@@ -3120,8 +3132,8 @@ export function HouseholdArmFlagship({
                 policy={stagePolicy}
                 subject="iiwa"
                 title="Keep this policy"
-                disabled={busy !== null}
-                meta={{
+                disabled={busy !== null || !workerAvailable || !trace || !admission}
+                meta={stagePolicyMeta ?? {
                   kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
                   task,
                   challenge: "household",
@@ -3130,12 +3142,12 @@ export function HouseholdArmFlagship({
                   sigma: searchSigma,
                 }}
                 measured={
-                  ledger.length > 0
+                  trace
                     ? {
-                        placementErrorMeters: ledger[ledger.length - 1].placementErrorMeters,
-                        placed: ledger[ledger.length - 1].placed,
-                        energyJoules: ledger[ledger.length - 1].energyJoules,
-                        liftMeters: ledger[ledger.length - 1].liftMeters,
+                        placementErrorMeters: trace.finalObjectErrorMeters,
+                        placed: trace.placed,
+                        energyJoules: trace.actuatorWorkJoules,
+                        liftMeters: trace.maximumLiftMeters,
                       }
                     : null
                 }

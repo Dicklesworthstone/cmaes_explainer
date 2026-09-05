@@ -41,6 +41,66 @@ const pause = (ms: number) =>
 const log = (event: string, details: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ event, ...details })}\n`);
 
+async function captureReplayExport(page: Page, out: string, name: string) {
+  const policyDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  const policyPath = join(out, `${name}.policy.json`);
+  await (await policyDownload).saveAs(policyPath);
+  const { exportedAt, ...policy } = JSON.parse(
+    await readFile(policyPath, "utf8"),
+  );
+  const telemetryDownload = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Export Telemetry", exact: true })
+    .click();
+  const download = await telemetryDownload;
+  const telemetryPath = join(out, `${name}-telemetry.json`);
+  await download.saveAs(telemetryPath);
+  const { exportTimestamp, ...telemetry } = JSON.parse(
+    await readFile(telemetryPath, "utf8"),
+  );
+  assert(exportedAt && exportTimestamp);
+  assert.equal(policy.family, telemetry.family);
+  assert.equal(policy.generation, telemetry.generation);
+  assert(
+    download
+      .suggestedFilename()
+      .includes(`${policy.family}-gen${policy.generation}`),
+  );
+  return { policy, telemetry };
+}
+
+async function nativeReplay(
+  page: Page,
+  lab: "humanoid" | "arm",
+  commandId: string,
+) {
+  const receipt = await page.evaluate(
+    ({ lab, commandId }) => {
+      const host = window as unknown as {
+        __ownerBridgeMessages: Record<string, unknown>[];
+        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+      };
+      const delivered = host.__frankenrobotsReceiveNativeCommand({
+        type: "engine.command",
+        schemaVersion: 1,
+        commandId,
+        lab,
+        command: "replay",
+      });
+      return {
+        delivered,
+        ack: host.__ownerBridgeMessages.find(
+          (message) => message.commandId === commandId,
+        ),
+      };
+    },
+    { lab, commandId },
+  );
+  assert(receipt.delivered);
+  assert.equal(receipt.ack?.accepted, true);
+}
+
 async function run() {
   const port = process.env.PORT || "3312";
   const base = process.env.BASE_URL || `http://127.0.0.1:${port}`;
@@ -563,6 +623,26 @@ async function run() {
           before,
           { timeout: 15_000 },
         );
+        const curriculumExport = await captureReplayExport(
+          ownerPage,
+          out,
+          "g1-curriculum-before-learning",
+        );
+        await ownerPage
+          .getByRole("button", { name: "Standing prior", exact: true })
+          .click();
+        const standingExport = await captureReplayExport(
+          ownerPage,
+          out,
+          "g1-standing-before-learning",
+        );
+        assert.notDeepEqual(
+          standingExport.policy.policy,
+          curriculumExport.policy.policy,
+        );
+        await ownerPage
+          .getByRole("button", { name: "Policy seed", exact: true })
+          .click();
         await ownerPage
           .getByRole("button", { name: "Start learning", exact: true })
           .click();
@@ -794,6 +874,125 @@ async function run() {
           settling,
           observed,
         });
+        await nativeReplay(
+          ownerPage,
+          "humanoid",
+          "g1-curriculum-after-learning",
+        );
+        assert.deepEqual(
+          await captureReplayExport(
+            ownerPage,
+            out,
+            "g1-native-curriculum-after-learning",
+          ),
+          curriculumExport,
+        );
+        await ownerPage
+          .getByRole("button", { name: "Standing prior", exact: true })
+          .click();
+        assert.deepEqual(
+          await captureReplayExport(
+            ownerPage,
+            out,
+            "g1-standing-after-learning",
+          ),
+          standingExport,
+        );
+        await ownerPage
+          .getByRole("button", { name: "Policy seed", exact: true })
+          .click();
+        assert.deepEqual(
+          await captureReplayExport(
+            ownerPage,
+            out,
+            "g1-web-curriculum-after-learning",
+          ),
+          curriculumExport,
+        );
+        await ownerPage
+          .getByRole("button", { name: /Chapter 2.*Test the Starting Policy/ })
+          .first()
+          .click();
+        assert.deepEqual(
+          await captureReplayExport(
+            ownerPage,
+            out,
+            "g1-story-standing-after-learning",
+          ),
+          standingExport,
+        );
+        // Selecting a prior changes the replay, not the retained optimizer.
+        await ownerPage.locator("#g1-seed").selectOption("2");
+        await ownerPage
+          .getByRole("button", { name: "Start learning", exact: true })
+          .click();
+        await ownerPage.waitForFunction(
+          (previousGeneration) => {
+            const label = Array.from(document.querySelectorAll("button"))
+              .map((button) => button.textContent ?? "")
+              .find((text) => text.includes("Stop · gen "));
+            return (
+              label &&
+              Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration
+            );
+          },
+          stopped.generation,
+          { timeout: 30_000 },
+        );
+        await ownerPage
+          .getByRole("button", { name: /^Stop · gen / })
+          .press("Enter");
+        await ownerPage
+          .getByRole("button", { name: /^Keep learning · gen / })
+          .waitFor();
+        const continuedExport = await captureReplayExport(
+          ownerPage,
+          out,
+          "g1-continued-after-prior",
+        );
+        assert(continuedExport.policy.generation > stopped.generation);
+        await ownerPage
+          .getByRole("button", { name: /Chapter 1.*The 29-Joint Robot/ })
+          .first()
+          .click();
+        await ownerPage.getByText(/Standing-only prior replayed;/).waitFor();
+        const flatChapter = await captureReplayExport(
+          ownerPage,
+          out,
+          "g1-story-flat-standing",
+        );
+        assert.equal(flatChapter.policy.challenge, "flat");
+        await ownerPage
+          .getByRole("button", { name: "Standing prior", exact: true })
+          .click();
+        assert.deepEqual(
+          await captureReplayExport(ownerPage, out, "g1-web-flat-standing"),
+          flatChapter,
+        );
+        await ownerPage
+          .getByRole("button", { name: /Chapter 2.*Test the Starting Policy/ })
+          .first()
+          .click();
+        await ownerPage.getByText(/Standing-only prior replayed;/).waitFor();
+        assert.deepEqual(
+          await captureReplayExport(
+            ownerPage,
+            out,
+            "g1-story-terrain-standing",
+          ),
+          standingExport,
+        );
+        recordResult({
+          journey: "g1-prior-selection-exports",
+          paths: [
+            "native-curriculum",
+            "web-curriculum",
+            "web-standing",
+            "story-standing",
+            "story-challenge-switch",
+          ],
+          continuedGeneration: continuedExport.policy.generation,
+        });
         await ownerPage.evaluate(() =>
           window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
         );
@@ -832,6 +1031,26 @@ async function run() {
     const armContext = await browser.newContext({
       viewport: { width: 1440, height: 1000 },
       userAgent: USER_AGENT,
+    });
+    await armContext.addInitScript(() => {
+      const host = window as unknown as {
+        __ownerBridgeMessages: Record<string, unknown>[];
+        webkit: {
+          messageHandlers: {
+            frankenrobots: {
+              postMessage: (message: Record<string, unknown>) => void;
+            };
+          };
+        };
+      };
+      host.__ownerBridgeMessages = [];
+      host.webkit = {
+        messageHandlers: {
+          frankenrobots: {
+            postMessage: (message) => host.__ownerBridgeMessages.push(message),
+          },
+        },
+      };
     });
     const armPage = await armContext.newPage();
     observe(armPage);
@@ -928,6 +1147,11 @@ async function run() {
         telemetryPath,
       });
     }
+    const armCurriculumExport = await captureReplayExport(
+      armPage,
+      out,
+      "arm-curriculum-before-learning",
+    );
     // Keep a real learned trowel policy, then open it from a mug-default tab.
     await armPage
       .getByRole("button", { name: "Start learning", exact: true })
@@ -946,6 +1170,16 @@ async function run() {
     await armPage
       .getByRole("button", { name: /^Keep learning · gen / })
       .waitFor();
+    const armLearnedExport = await captureReplayExport(
+      armPage,
+      out,
+      "arm-before-control-change",
+    );
+    await armPage.locator("#arm-family").selectOption("full");
+    assert.deepEqual(
+      await captureReplayExport(armPage, out, "arm-after-control-change"),
+      armLearnedExport,
+    );
     const armPolicyDownload = armPage.waitForEvent("download");
     await armPage
       .getByRole("button", { name: "Download", exact: true })
@@ -969,6 +1203,58 @@ async function run() {
       window.location.hash.startsWith("#zpolicy="),
     );
     const armShareUrl = armPage.url();
+    await nativeReplay(armPage, "arm", "arm-curriculum-after-learning");
+    assert.deepEqual(
+      await captureReplayExport(
+        armPage,
+        out,
+        "arm-native-curriculum-after-learning",
+      ),
+      armCurriculumExport,
+    );
+    await armPage.locator("#arm-family").selectOption(armPolicy.family);
+    await armPage
+      .getByRole("button", { name: "Start learning", exact: true })
+      .click();
+    await armPage.waitForFunction(
+      (previousGeneration) => {
+        const label = Array.from(document.querySelectorAll("button"))
+          .map((button) => button.textContent ?? "")
+          .find((text) => text.includes("Stop · gen "));
+        return (
+          label &&
+          Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration
+        );
+      },
+      armPolicy.generation,
+      { timeout: 30_000 },
+    );
+    await armPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
+    await armPage
+      .getByRole("button", { name: /^Keep learning · gen / })
+      .waitFor();
+    const continuedArm = await captureReplayExport(
+      armPage,
+      out,
+      "arm-continued-after-prior",
+    );
+    assert(continuedArm.policy.generation > armPolicy.generation);
+    await armPage
+      .getByRole("button", { name: "Curriculum", exact: true })
+      .click();
+    assert.deepEqual(
+      await captureReplayExport(
+        armPage,
+        out,
+        "arm-web-curriculum-after-learning",
+      ),
+      armCurriculumExport,
+    );
+    recordResult({
+      journey: "arm-prior-selection-exports",
+      paths: ["native-curriculum", "web-curriculum", "next-family-isolation"],
+      continuedGeneration: continuedArm.policy.generation,
+    });
     await armContext.close();
     for (const transport of ["file", "fragment"] as const) {
       const replayContext = await browser.newContext({
