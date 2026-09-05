@@ -61,6 +61,19 @@ async function run() {
   const sourceDiffSha256 = createHash("sha256").update(diff).digest("hex");
   const errors: { page: string; kind: string; message: string }[] = [];
   const results: unknown[] = [];
+  const recordResult = (result: {
+    journey: string;
+    [key: string]: unknown;
+  }) => {
+    results.push(result);
+    log("browser-journey-passed", {
+      out,
+      index: results.length,
+      journey: result.journey,
+      task: result.task,
+      changed: result.changed,
+    });
+  };
   let failure: string | null = null;
   let browser: Browser | undefined;
   let server: ChildProcess | undefined;
@@ -189,7 +202,7 @@ async function run() {
           `Wrong incumbent ${key}`,
         );
       }
-      results.push({
+      recordResult({
         journey: "hpo",
         mirrored,
         anchor,
@@ -275,7 +288,7 @@ async function run() {
       await receiptPage.screenshot({
         path: join(out, `receipts-detail-${width}.png`),
       });
-      results.push({ journey: "receipts", ...evidence });
+      recordResult({ journey: "receipts", ...evidence });
       await receiptPage.close();
     }
     for (const changed of [
@@ -582,7 +595,7 @@ async function run() {
         await (
           await downloadPromise
         ).saveAs(join(out, "g1-moved-seat-telemetry.json"));
-        results.push({
+        recordResult({
           journey: "g1-drag-start-stop-compare",
           before,
           observed,
@@ -592,7 +605,7 @@ async function run() {
       await ownerPage.screenshot({
         path: join(out, `owner-${changed ?? "valid"}.png`),
       });
-      results.push({
+      recordResult({
         journey: "owner-artifact-admission",
         changed,
         interventions,
@@ -692,7 +705,7 @@ async function run() {
       await armPage.screenshot({
         path: join(out, `arm-${task}-joint-readout.png`),
       });
-      results.push({
+      recordResult({
         journey: "arm-owner-joint-readout",
         task,
         placed,
@@ -734,7 +747,7 @@ async function run() {
         .getAttribute("aria-selected"),
       "true",
     );
-    results.push({ journey: "arm-unsupported-shared-task", refused: true });
+    recordResult({ journey: "arm-unsupported-shared-task", refused: true });
     await invalidArmContext.close();
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
