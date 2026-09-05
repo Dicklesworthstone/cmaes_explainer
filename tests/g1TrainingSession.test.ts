@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clearTrainingSession,
   decodeTrainingSession,
+  loadTrainingSession,
+  saveTrainingSession,
   describeAge,
   encodeTrainingSession,
   isResumable,
@@ -138,5 +141,62 @@ describe("G1 training session persistence", () => {
     expect(describeAge(now - 60 * 60_000, now)).toBe("1 hour ago");
     expect(describeAge(now - 5 * 3_600_000, now)).toBe("5 hours ago");
     expect(describeAge(now - 5 * 86_400_000, now)).toBe("5 days ago");
+  });
+
+  test("each experiment keeps its own slot, so one run cannot overwrite another", () => {
+    // The bug this prevents: train walking for two hours, glance at balance,
+    // train that for a minute, and the walking run is gone.
+    const store = new Map<string, string>();
+    const stub = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    };
+    const previous = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { localStorage: stub };
+    try {
+      const walking = snapshotOf({ task: "walking", generation: 4_096 });
+      const balance = snapshotOf({ task: "balance", generation: 12 });
+      expect(saveTrainingSession(walking, "g1")).toBe(true);
+      expect(saveTrainingSession(balance, "g1")).toBe(true);
+
+      // Two slots, not one.
+      expect(store.size).toBe(2);
+      const restoredWalking = loadTrainingSession(
+        walking.policy.length,
+        "g1",
+        undefined,
+        "walking",
+        walking.challenge,
+      );
+      const restoredBalance = loadTrainingSession(
+        balance.policy.length,
+        "g1",
+        undefined,
+        "balance",
+        balance.challenge,
+      );
+      expect(restoredWalking?.generation).toBe(4_096);
+      expect(restoredBalance?.generation).toBe(12);
+
+      // The arm's runs are separate from the walking robot's again.
+      saveTrainingSession(snapshotOf({ task: "kitchen-mug", challenge: "household" }), "arm");
+      expect(
+        loadTrainingSession(walking.policy.length, "g1", undefined, "walking", walking.challenge)
+          ?.generation,
+      ).toBe(4_096);
+
+      // Clearing one experiment leaves the others alone.
+      clearTrainingSession("g1", "balance", balance.challenge);
+      expect(
+        loadTrainingSession(balance.policy.length, "g1", undefined, "balance", balance.challenge),
+      ).toBeNull();
+      expect(
+        loadTrainingSession(walking.policy.length, "g1", undefined, "walking", walking.challenge)
+          ?.generation,
+      ).toBe(4_096);
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
   });
 });

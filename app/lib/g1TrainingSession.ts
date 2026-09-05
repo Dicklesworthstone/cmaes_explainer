@@ -50,7 +50,25 @@ function isWalkingLedgerPoint(point: unknown): point is LearningLedgerPoint {
   );
 }
 
-function storageKey(subject: TrainingSubject): string {
+/**
+ * One slot per EXPERIMENT, not per robot.
+ *
+ * A single slot per robot quietly destroyed work: train walking for two hours,
+ * switch to balance to look at it, train that for a minute, and the walking run
+ * is gone — overwritten by a different experiment that happens to share a
+ * robot. Runs for different tasks are different work and each keeps its own
+ * slot.
+ *
+ * The task and challenge are part of the key rather than only checked on the
+ * way out, because checking alone still lets the last writer win.
+ */
+function storageKey(subject: TrainingSubject, task: string, challenge: string): string {
+  const slug = (value: string) => value.replace(/[^a-z0-9-]+/gi, "-").toLowerCase();
+  return `cmaes.${subject}.${slug(task)}.${slug(challenge)}.training-session.v2`;
+}
+
+/** The v1 single-slot key this superseded, cleared on first write per robot. */
+function legacyStorageKey(subject: TrainingSubject): string {
   return `cmaes.${subject}.training-session.v1`;
 }
 
@@ -196,9 +214,12 @@ export function saveTrainingSession<TPoint>(
 ): boolean {
   try {
     window.localStorage.setItem(
-      storageKey(subject),
+      storageKey(subject, snapshot.task, snapshot.challenge),
       JSON.stringify(encodeTrainingSession(snapshot)),
     );
+    // The superseded single-slot entry would otherwise sit in storage forever
+    // holding a stale copy of one experiment.
+    window.localStorage.removeItem(legacyStorageKey(subject));
     return true;
   } catch {
     return false;
@@ -210,9 +231,11 @@ export function loadTrainingSession<TPoint = LearningLedgerPoint>(
   expectedPolicyLength: number,
   subject: TrainingSubject = "g1",
   isPoint?: (point: unknown) => point is TPoint,
+  task = "walking",
+  challenge = "terrain-and-push",
 ): (TrainingSessionSnapshot<TPoint> & { savedAt: number }) | null {
   try {
-    const raw = window.localStorage.getItem(storageKey(subject));
+    const raw = window.localStorage.getItem(storageKey(subject, task, challenge));
     const snapshot = isPoint
       ? decodeTrainingSession<TPoint>(raw, expectedPolicyLength, isPoint)
       : decodeTrainingSession<TPoint>(raw, expectedPolicyLength);
@@ -226,9 +249,13 @@ export function loadTrainingSession<TPoint = LearningLedgerPoint>(
 }
 
 /** Forget the saved run. Used when the operator explicitly starts over. */
-export function clearTrainingSession(subject: TrainingSubject = "g1"): void {
+export function clearTrainingSession(
+  subject: TrainingSubject = "g1",
+  task = "walking",
+  challenge = "terrain-and-push",
+): void {
   try {
-    window.localStorage.removeItem(storageKey(subject));
+    window.localStorage.removeItem(storageKey(subject, task, challenge));
   } catch {
     // Nothing to do: the run is already unreachable.
   }

@@ -2132,6 +2132,8 @@ export function HouseholdArmFlagship({
         Number.isFinite((point as ArmLedgerPoint).generation) &&
         Number.isFinite((point as ArmLedgerPoint).placementErrorMeters) &&
         Number.isFinite((point as ArmLedgerPoint).energyJoules),
+      taskRef.current,
+      "household",
     );
     if (!saved) return;
     if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, "household")) {

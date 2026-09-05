@@ -2388,6 +2388,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setActiveTrace("curriculum");
     progressHistoryRef.current = [];
     setLedger([]);
+    // Each task/challenge keeps its own saved run, so switching experiments
+    // must look for that experiment's run rather than staying with the one
+    // already attempted.
+    recoveryAttemptedRef.current = false;
+    resumedPolicyRef.current = null;
+    setRestoredNotice(null);
     setProgressHistory([]);
     setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
     post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
@@ -2494,7 +2500,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!policyBaseline || pendingShareRef.current) return;
     if (recoveryAttemptedRef.current) return;
-    const saved = loadTrainingSession(policyBaseline.length);
+    const saved = loadTrainingSession(
+      policyBaseline.length,
+      "g1",
+      undefined,
+      taskRef.current,
+      challengeRef.current,
+    );
     if (!saved) {
       recoveryAttemptedRef.current = true;
       return;
