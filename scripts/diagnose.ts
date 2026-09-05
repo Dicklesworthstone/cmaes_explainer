@@ -1,5 +1,5 @@
 // Run after bun run build, or set BASE_URL to an already running app.
-// HPO/tutorial, receipts, and owner artifact admission; not gait certification.
+// HPO, owner admission, scene placement and arm readouts; not gait certification.
 import assert from "node:assert/strict";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -18,6 +18,7 @@ import type {
 } from "../app/lib/g1OptimizationProtocol";
 import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
 import type { HouseholdRobotPose } from "../app/lib/frankensimCmaes";
+import { encodePolicyFragment } from "../app/lib/g1PolicyShare";
 
 type G1BrowserObservation = {
   requests: G1OptimizationRequest[];
@@ -656,6 +657,40 @@ async function run() {
       });
     }
     await armContext.close();
+    const invalidArmContext = await browser.newContext({
+      userAgent: USER_AGENT,
+    });
+    const invalidArmPage = await invalidArmContext.newPage();
+    observe(invalidArmPage);
+    // Structurally valid shared coefficients with unsupported task metadata
+    // must be refused before that metadata reaches the task selector.
+    const invalidArmFragment = await encodePolicyFragment(
+      new Float64Array(128),
+      {
+        kernelVersion: FRANKENSIM_OWNER_ARTIFACT.kernelVersion,
+        task: "walking",
+        challenge: "household",
+        family: "lm-ma",
+        generation: 1,
+        sigma: 0.001,
+      },
+    );
+    await invalidArmPage.goto(
+      new URL(`/frankenrobots/arm#zpolicy=${invalidArmFragment}`, base).href,
+    );
+    await invalidArmPage
+      .getByText("This shared policy is not for a supported household task.", {
+        exact: true,
+      })
+      .waitFor();
+    assert.equal(
+      await invalidArmPage
+        .getByRole("tab", { name: /^Mug/ })
+        .getAttribute("aria-selected"),
+      "true",
+    );
+    results.push({ journey: "arm-unsupported-shared-task", refused: true });
+    await invalidArmContext.close();
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
@@ -694,7 +729,7 @@ async function run() {
           errors,
           results,
           scope:
-            "Browser HPO, receipts and owner byte/source admission; excludes gait certification, device performance and independent algorithm verification",
+            "Browser HPO, receipts, owner byte/source admission, G1 placement-aware learning and arm joint readouts/share rejection; excludes gait certification, device performance and independent algorithm verification",
         },
         null,
         2,

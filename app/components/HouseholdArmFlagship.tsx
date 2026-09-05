@@ -2032,9 +2032,14 @@ export function HouseholdArmFlagship({
     void decodePolicyFragment(fragment, stagePolicy.length)
       .then((imported) => {
         if (!active) return;
-        if (imported.task !== taskRef.current) {
+        const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[])
+          .find((task) => task === imported.task);
+        if (!importedTask || imported.challenge !== "household") {
+          throw new Error("This shared policy is not for a supported household task.");
+        }
+        if (importedTask !== taskRef.current) {
           // Switch first; this effect runs again once that task's owner is up.
-          selectTaskRef.current?.(imported.task as HouseholdManipulationTask);
+          selectTaskRef.current?.(importedTask);
           return;
         }
         pendingShareRef.current = null;
@@ -3241,13 +3246,11 @@ export function HouseholdArmFlagship({
               convex separation.
             </li>
             <li>
-              <strong className="text-slate-200">Owner poses, browser guard:</strong>{" "}
-              the browser receives the object plus eight world poses from the
-              kernel and draws them; it then pushes any link or object that
-              entered a house obstacle box back to that box&apos;s surface
-              (a display-side guard the kernel does not know about). The
-              joint dials and the cyan reach ghost come from a reduced
-              4-joint browser chain, not from the owner kinematics.
+              <strong className="text-slate-200">Measured poses and joints:</strong>{" "}
+              the browser draws the object and eight link poses exactly as
+              measured by the kernel. All seven joint dials use those rotations
+              and the source joint frames. The cyan reach ghost and its separate
+              probe values use an auxiliary 4-joint browser chain.
             </li>
             <li>
               <strong className="text-slate-200">Grasp test:</strong> both
