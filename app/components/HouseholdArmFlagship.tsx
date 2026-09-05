@@ -18,6 +18,12 @@ import {
 } from "../lib/armLearningLedger";
 import type { SharedPolicy } from "../lib/g1PolicyShare";
 import {
+  describeAge,
+  isResumable,
+  loadTrainingSession,
+  saveTrainingSession,
+} from "../lib/g1TrainingSession";
+import {
   ARM_TABLE_CENTER_X,
   ARM_TABLE_DEPTH,
   ARM_TABLE_THICKNESS,
@@ -1804,6 +1810,21 @@ export function HouseholdArmFlagship({
   // the worker's own default rather than 0, because a policy exported before
   // the first generation still came from a run that would use this radius.
   const [searchSigma, setSearchSigma] = useState(ARM_DEFAULT_SEARCH_SIGMA);
+  // Policy recovered from storage, used as the mean when training restarts
+  // after a reload; and the notice telling the operator that happened.
+  const resumedPolicyRef = useRef<Float64Array | null>(null);
+  // Read inside the worker message handler, which must not re-subscribe every
+  // time a control moves.
+  const familyRef = useRef(family);
+  const sigmaRef = useRef(searchSigma);
+  const taskRef = useRef(task);
+  const recoveryAttemptedRef = useRef(false);
+  const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
+  useEffect(() => {
+    familyRef.current = family;
+    sigmaRef.current = searchSigma;
+    taskRef.current = task;
+  }, [family, searchSigma, task]);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<ArmTraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -1946,9 +1967,36 @@ export function HouseholdArmFlagship({
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
         if (message.policy) setStagePolicy(message.policy);
-        setLedger((previous) =>
-          appendArmLedgerPoint(previous, armLedgerPoint(message.trace, message.generation)),
-        );
+        setLedger((previous) => {
+          const next = appendArmLedgerPoint(
+            previous,
+            armLedgerPoint(message.trace, message.generation),
+          );
+          // Persist the run so a reload does not throw away the search. Only
+          // real search is worth recovering; generation 0 is the curriculum
+          // policy the page loads anyway.
+          if (message.policy && message.generation > 0) {
+            saveTrainingSession(
+              {
+                kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+                task: message.admission.config.task,
+                challenge: "household",
+                family: familyRef.current,
+                sigma: sigmaRef.current,
+                generation: message.generation,
+                trainingSeconds:
+                  trainingSecondsRef.current +
+                  (trainingStartedAtRef.current === null
+                    ? 0
+                    : (Date.now() - trainingStartedAtRef.current) / 1000),
+                policy: message.policy,
+                ledger: next,
+              },
+              "arm",
+            );
+          }
+          return next;
+        });
         if (message.continuing) {
           setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
           return;
@@ -2057,6 +2105,10 @@ export function HouseholdArmFlagship({
         task,
         family,
         generations: ARM_LIVE_REPLAY_INTERVAL,
+        // Only used for a session the worker does not already hold: after a
+        // reload there is none, so training picks up from the recovered policy
+        // instead of restarting at the curriculum seed.
+        resumeFrom: resumedPolicyRef.current ?? undefined,
         seedIndex,
         mode: "continue",
         continuous: true,
@@ -2064,6 +2116,42 @@ export function HouseholdArmFlagship({
       "optimize",
     );
   }, [post, task, family, seedIndex]);
+
+  // Recover a run the tab was in the middle of, once the owner has told us how
+  // long a policy is. Guarded by a ref so a re-render cannot restore twice.
+  useEffect(() => {
+    if (recoveryAttemptedRef.current || !stagePolicy) return;
+    recoveryAttemptedRef.current = true;
+    const saved = loadTrainingSession<ArmLedgerPoint>(
+      stagePolicy.length,
+      "arm",
+      (point): point is ArmLedgerPoint =>
+        !!point &&
+        typeof point === "object" &&
+        typeof (point as ArmLedgerPoint).generation === "number" &&
+        Number.isFinite((point as ArmLedgerPoint).generation) &&
+        Number.isFinite((point as ArmLedgerPoint).placementErrorMeters) &&
+        Number.isFinite((point as ArmLedgerPoint).energyJoules),
+    );
+    if (!saved) return;
+    if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, "household")) {
+      return;
+    }
+    resumedPolicyRef.current = saved.policy;
+    trainingSecondsRef.current = saved.trainingSeconds;
+    // Deferred: setting state synchronously inside an effect cascades renders.
+    queueMicrotask(() => {
+      setTrainingSeconds(saved.trainingSeconds);
+      setLedger(saved.ledger.slice());
+      setRestoredNotice(
+        `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}.`,
+      );
+    });
+    post(
+      { type: "replay", task: taskRef.current, policy: saved.policy, generation: saved.generation },
+      "preview",
+    );
+  }, [stagePolicy, post]);
 
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
@@ -2131,6 +2219,9 @@ export function HouseholdArmFlagship({
       // because it counted search spent on the task being left behind.
       setLedger([]);
       setStagePolicy(null);
+      resumedPolicyRef.current = null;
+      recoveryAttemptedRef.current = false;
+      setRestoredNotice(null);
       trainingSecondsRef.current = 0;
       trainingStartedAtRef.current = null;
       setTrainingSeconds(0);
@@ -2856,6 +2947,13 @@ export function HouseholdArmFlagship({
             ) : null}
             {error ? (
               <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p>
+            ) : null}
+            {restoredNotice ? (
+              <p className="mt-2 rounded-xl border border-cyan-300/20 bg-cyan-950/30 px-3 py-2 text-[0.66rem] leading-4 text-cyan-100">
+                {restoredNotice} Learning continues from that policy — its
+                covariance was not saved, so this is a warm restart rather than
+                a resumed search.
+              </p>
             ) : null}
             {ledger.length > 0 ? (
               <div className="mt-3">

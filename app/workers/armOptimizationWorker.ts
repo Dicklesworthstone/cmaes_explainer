@@ -35,6 +35,14 @@ type WorkerRequest =
       seedIndex: number;
       mode?: "continue" | "fresh";
       continuous?: boolean;
+      /**
+       * Start a NEW session from these coefficients instead of the curriculum
+       * mean — how a run recovered from storage continues after a reload. The
+       * CMA state itself is not serialisable, so this is a warm restart from
+       * the policy, not a resumed search. Ignored when continuing a session the
+       * worker already holds.
+       */
+      resumeFrom?: Float64Array;
     }
   | { type: "stop"; task: HouseholdManipulationTask; family: CmaFamily; seedIndex: number }
   | { type: "compare"; task: HouseholdManipulationTask; generations: number };
@@ -274,6 +282,7 @@ async function optimize(
   requestedSeedIndex: number,
   mode: "continue" | "fresh" = "continue",
   continuous = false,
+  resumeFrom?: Float64Array,
 ): Promise<void> {
   const generations = Math.max(2, Math.min(ARM_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
@@ -306,7 +315,12 @@ async function optimize(
       "household-arm admission"
     );
     const evaluationPool = new RoboticsEvaluationPool({ model: "arm", config, dimension: 128 });
-    let bestPolicy = evaluator.curriculumPolicyMean();
+    // A run recovered from storage starts from the policy it reached; a fresh
+    // one starts from the curriculum mean.
+    let bestPolicy =
+      resumeFrom && resumeFrom.length === evaluator.curriculumPolicyMean().length
+        ? Float64Array.from(resumeFrom)
+        : evaluator.curriculumPolicyMean();
     let bestObjective = requireOk(
       evaluator.evaluate(bestPolicy),
       "household-arm curriculum evaluation"
@@ -540,6 +554,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.seedIndex,
             request.mode,
             request.continuous,
+            request.resumeFrom,
           );
   const scheduled = armGate.then(() => work(), () => work()).catch((error: unknown) => {
     post({ type: "error", message: error instanceof Error ? error.message : String(error) });

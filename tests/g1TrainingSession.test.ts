@@ -6,6 +6,7 @@ import {
   isResumable,
   type TrainingSessionSnapshot,
 } from "../app/lib/g1TrainingSession";
+import type { LearningLedgerPoint } from "../app/lib/g1LearningLedger";
 
 function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingSessionSnapshot {
   return {
@@ -91,7 +92,12 @@ describe("G1 training session persistence", () => {
     expect(restored).not.toBeNull();
     expect(new Uint8Array(restored!.policy.buffer)).toEqual(new Uint8Array(signed.policy.buffer));
     const malformedLedger = { ...good, ledger: [{ generation: 1 }, null, ...good.ledger] };
-    expect(decodeTrainingSession(JSON.stringify(malformedLedger), 32)?.ledger).toEqual(good.ledger);
+    // The stored form is deliberately unknown[] — this store carries both
+    // robots' points — so the walking shape is asserted by casting here rather
+    // than by the store pretending to know it.
+    expect(decodeTrainingSession(JSON.stringify(malformedLedger), 32)?.ledger).toEqual(
+      good.ledger as LearningLedgerPoint[],
+    );
   });
 
   test("does not restore a run that never left the seed", () => {

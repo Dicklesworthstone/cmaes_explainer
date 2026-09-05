@@ -15,7 +15,44 @@
 import type { LearningLedgerPoint } from "./g1LearningLedger";
 import { MAX_POLICY_FILE_BYTES, validatePolicyMetadata, type SharedPolicyMeta } from "./g1PolicyShare";
 
-const STORAGE_KEY = "cmaes.g1.training-session.v1";
+/**
+ * Which robot a saved run belongs to.
+ *
+ * Both flagships train continuously and both deserve to survive a reload, but
+ * their runs are unrelated: they have different policies, different ledgers and
+ * different owners. One key would mean the page you visited last silently
+ * destroyed the other's overnight run.
+ */
+export type TrainingSubject = "g1" | "arm";
+
+/**
+ * The walking ledger's own point guard, and the default.
+ *
+ * A stored point that is missing a field renders as NaN on the convergence
+ * chart, so each robot validates the shape it wrote. This module defaults to
+ * the walking shape because its default subject is the walking page; the arm
+ * passes its own.
+ */
+function isWalkingLedgerPoint(point: unknown): point is LearningLedgerPoint {
+  if (!point || typeof point !== "object") return false;
+  const value = point as Record<string, unknown>;
+  return (
+    [
+      value.generation,
+      value.distanceMeters,
+      value.energyJoules,
+      value.walkSeconds,
+      value.targetSpeedMetersPerSecond,
+    ].every((entry) => typeof entry === "number" && Number.isFinite(entry)) &&
+    [value.speedMetersPerSecond, value.metersPerKilojoule, value.speedTrackingFraction].every(
+      (entry) => entry === null || (typeof entry === "number" && Number.isFinite(entry)),
+    )
+  );
+}
+
+function storageKey(subject: TrainingSubject): string {
+  return `cmaes.${subject}.training-session.v1`;
+}
 
 export interface SavedTrainingSession {
   version: 1;
@@ -31,10 +68,10 @@ export interface SavedTrainingSession {
   /** Epoch milliseconds of the last save. */
   savedAt: number;
   policy: Array<number | "-0">;
-  ledger: LearningLedgerPoint[];
+  ledger: unknown[];
 }
 
-export interface TrainingSessionSnapshot {
+export interface TrainingSessionSnapshot<TPoint = LearningLedgerPoint> {
   kernelVersion: string;
   task: SharedPolicyMeta["task"];
   challenge: SharedPolicyMeta["challenge"];
@@ -43,7 +80,12 @@ export interface TrainingSessionSnapshot {
   generation: number;
   trainingSeconds: number;
   policy: Float64Array;
-  ledger: readonly LearningLedgerPoint[];
+  /**
+   * The robot's own ledger points. Opaque to this module: a gait is measured by
+   * distance and a pick-and-place by placement error, and the store has no
+   * business knowing which. Each caller narrows what it reads back.
+   */
+  ledger: readonly TPoint[];
 }
 
 /**
@@ -52,7 +94,9 @@ export interface TrainingSessionSnapshot {
  * Split from the storage call so the shape can be tested without a DOM, and so
  * a caller can hand the same object to a file if it ever wants to.
  */
-export function encodeTrainingSession(snapshot: TrainingSessionSnapshot): SavedTrainingSession {
+export function encodeTrainingSession<TPoint>(
+  snapshot: TrainingSessionSnapshot<TPoint>,
+): SavedTrainingSession {
   return {
     version: 1,
     kernelVersion: snapshot.kernelVersion,
@@ -64,7 +108,7 @@ export function encodeTrainingSession(snapshot: TrainingSessionSnapshot): SavedT
     trainingSeconds: snapshot.trainingSeconds,
     savedAt: Date.now(),
     policy: Array.from(snapshot.policy, (value) => Object.is(value, -0) ? "-0" : value),
-    ledger: snapshot.ledger.map((point) => ({ ...point })),
+    ledger: snapshot.ledger.map((point) => ({ ...(point as object) })),
   };
 }
 
@@ -74,10 +118,13 @@ export function encodeTrainingSession(snapshot: TrainingSessionSnapshot): SavedT
  * Never throws: a corrupt or stale entry must degrade to "no saved run", not
  * break the page for everyone who visited during a bad deploy.
  */
-export function decodeTrainingSession(
+export function decodeTrainingSession<TPoint = LearningLedgerPoint>(
   raw: string | null,
   expectedPolicyLength: number,
-): TrainingSessionSnapshot | null {
+  isPoint: (point: unknown) => point is TPoint = isWalkingLedgerPoint as unknown as (
+    point: unknown,
+  ) => point is TPoint,
+): TrainingSessionSnapshot<TPoint> | null {
   if (!raw || raw.length > MAX_POLICY_FILE_BYTES) return null;
   let parsed: unknown;
   try {
@@ -108,20 +155,13 @@ export function decodeTrainingSession(
         ? saved.trainingSeconds
         : 0,
     policy: Float64Array.from(saved.policy, (value) => value === "-0" ? -0 : value),
-    ledger: Array.isArray(saved.ledger)
-      ? (saved.ledger.filter(
-          (point): point is LearningLedgerPoint =>
-            !!point && typeof point === "object" &&
-            [point.generation, point.distanceMeters, point.energyJoules, point.walkSeconds, point.targetSpeedMetersPerSecond].every(Number.isFinite) &&
-            [point.speedMetersPerSecond, point.metersPerKilojoule, point.speedTrackingFraction].every((value) => value === null || Number.isFinite(value)),
-        ) as LearningLedgerPoint[])
-      : [],
+    ledger: (Array.isArray(saved.ledger) ? saved.ledger.filter(isPoint) : []) as TPoint[],
   };
 }
 
 /** Whether a saved run can be continued by the owner this page is running. */
 export function isResumable(
-  snapshot: TrainingSessionSnapshot,
+  snapshot: TrainingSessionSnapshot<unknown>,
   kernelVersion: string,
   task: string,
   challenge: string,
@@ -150,9 +190,15 @@ export function describeAge(savedAtMs: number, nowMs = Date.now()): string {
  * Private windows, disabled site data, and a full quota all throw here, and
  * none of them are worth interrupting a training run over.
  */
-export function saveTrainingSession(snapshot: TrainingSessionSnapshot): boolean {
+export function saveTrainingSession<TPoint>(
+  snapshot: TrainingSessionSnapshot<TPoint>,
+  subject: TrainingSubject = "g1",
+): boolean {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encodeTrainingSession(snapshot)));
+    window.localStorage.setItem(
+      storageKey(subject),
+      JSON.stringify(encodeTrainingSession(snapshot)),
+    );
     return true;
   } catch {
     return false;
@@ -160,12 +206,16 @@ export function saveTrainingSession(snapshot: TrainingSessionSnapshot): boolean 
 }
 
 /** Load the saved session, or null when there is none this owner can use. */
-export function loadTrainingSession(
+export function loadTrainingSession<TPoint = LearningLedgerPoint>(
   expectedPolicyLength: number,
-): (TrainingSessionSnapshot & { savedAt: number }) | null {
+  subject: TrainingSubject = "g1",
+  isPoint?: (point: unknown) => point is TPoint,
+): (TrainingSessionSnapshot<TPoint> & { savedAt: number }) | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const snapshot = decodeTrainingSession(raw, expectedPolicyLength);
+    const raw = window.localStorage.getItem(storageKey(subject));
+    const snapshot = isPoint
+      ? decodeTrainingSession<TPoint>(raw, expectedPolicyLength, isPoint)
+      : decodeTrainingSession<TPoint>(raw, expectedPolicyLength);
     if (!snapshot || !raw) return null;
     const timestamp = (JSON.parse(raw) as SavedTrainingSession).savedAt;
     const savedAt = Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : Date.now();
@@ -176,9 +226,9 @@ export function loadTrainingSession(
 }
 
 /** Forget the saved run. Used when the operator explicitly starts over. */
-export function clearTrainingSession(): void {
+export function clearTrainingSession(subject: TrainingSubject = "g1"): void {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey(subject));
   } catch {
     // Nothing to do: the run is already unreachable.
   }
