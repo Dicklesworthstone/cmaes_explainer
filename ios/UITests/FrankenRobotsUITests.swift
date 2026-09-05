@@ -220,6 +220,17 @@ final class FrankenRobotsUITests: XCTestCase {
         let showArmControls = app.buttons["Show diagnostics and all arm controls"]
         XCTAssertTrue(showArmControls.isHittable, app.debugDescription)
         showArmControls.tap()
+        let diagnosticsVisible = [graspMicroscope, jointKinematics].map { element in
+            XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "hittable == true"),
+                object: element
+            )
+        }
+        XCTAssertEqual(
+            XCTWaiter.wait(for: diagnosticsVisible, timeout: 5),
+            .completed,
+            app.debugDescription
+        )
         XCTAssertTrue(graspMicroscope.isHittable, app.debugDescription)
         XCTAssertTrue(jointKinematics.isHittable, app.debugDescription)
 
