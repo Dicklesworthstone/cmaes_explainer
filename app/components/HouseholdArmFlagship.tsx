@@ -6,7 +6,11 @@ import {
   PerspectiveCamera,
   FlyControls,
 } from "@react-three/drei";
-import { useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
+import {
+  advanceTracePlayback,
+  clampTracePlaybackIndex,
+  useTracePlaybackPreference,
+} from "../hooks/usePrefersReducedMotion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import { ArmLearningLedger } from "./ArmLearningLedger";
@@ -176,66 +180,6 @@ type WorkerResponse =
     }
   | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
-
-export type ArmPlaybackStep = {
-  sampleIndex: number;
-  elapsedSeconds: number;
-  wrapped: boolean;
-};
-
-export function clampArmPlaybackIndex(
-  sampleCount: number,
-  requestedIndex: number,
-): number {
-  if (sampleCount <= 0 || !Number.isFinite(requestedIndex)) return 0;
-  return Math.min(sampleCount - 1, Math.max(0, Math.round(requestedIndex)));
-}
-
-export function advanceArmPlayback(
-  sampleTimes: readonly number[],
-  currentIndex: number,
-  elapsedSeconds: number,
-  deltaSeconds: number,
-  playbackSpeed: number,
-  isPlaying: boolean,
-): ArmPlaybackStep {
-  if (sampleTimes.length === 0) {
-    return { sampleIndex: 0, elapsedSeconds: 0, wrapped: false };
-  }
-
-  const safeIndex = clampArmPlaybackIndex(sampleTimes.length, currentIndex);
-  const duration = sampleTimes.at(-1) ?? 0;
-  const safeElapsed = Number.isFinite(elapsedSeconds)
-    ? Math.min(Math.max(elapsedSeconds, 0), Math.max(duration, 0))
-    : Math.max(sampleTimes[safeIndex] ?? 0, 0);
-  if (!isPlaying || !Number.isFinite(duration) || duration <= 0) {
-    return {
-      sampleIndex: safeIndex,
-      elapsedSeconds: safeElapsed,
-      wrapped: false,
-    };
-  }
-
-  const boundedDelta = Number.isFinite(deltaSeconds)
-    ? Math.min(Math.max(deltaSeconds, 0), 0.1)
-    : 0;
-  const safeSpeed = Number.isFinite(playbackSpeed)
-    ? Math.max(playbackSpeed, 0)
-    : 0;
-  let nextElapsed = safeElapsed + boundedDelta * safeSpeed;
-  const wrapped = nextElapsed > duration;
-  if (wrapped) nextElapsed %= duration;
-
-  let nextIndex = wrapped ? 0 : safeIndex;
-  if ((sampleTimes[nextIndex] ?? 0) > nextElapsed) nextIndex = 0;
-  while (
-    nextIndex + 1 < sampleTimes.length &&
-    (sampleTimes[nextIndex + 1] ?? Number.POSITIVE_INFINITY) <= nextElapsed
-  ) {
-    nextIndex += 1;
-  }
-  return { sampleIndex: nextIndex, elapsedSeconds: nextElapsed, wrapped };
-}
 
 const FAMILY_COPY: Record<
   CmaFamily,
@@ -618,12 +562,16 @@ function ArmRig({
   const rightFingerRef = useRef<THREE.Mesh | null>(null);
   const contactRingRef = useRef<THREE.Mesh | null>(null);
   const contactMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
-  const playbackSeconds = useRef(0);
-  const sampleIndex = useRef(0);
+  // The canvas is disposable; the parent retains the last displayed sample.
+  // Remount there instead of replaying the older explicit seek command.
+  const initialIndex = clampTracePlaybackIndex(trace.samples.length, displayedSampleIndex);
+  const playbackSeconds = useRef(trace.samples[initialIndex]?.timeSeconds ?? 0);
+  const sampleIndex = useRef(initialIndex);
+  const appliedSeek = useRef({ trace, playbackSeek });
   const publishedSampleIndex = useRef(-1);
   const [currentSample, setCurrentSample] =
     useState<HouseholdManipulationTraceSample | null>(
-      () => trace.samples[0] ?? null,
+      () => trace.samples[initialIndex] ?? null,
     );
   // Publish the actual owner link origins used by both the rig and its diagnostics.
   const [renderedForOverlay, setRenderedForOverlay] = useState<
@@ -637,7 +585,9 @@ function ArmRig({
     [trace],
   );
   useLayoutEffect(() => {
-    const nextIndex = clampArmPlaybackIndex(
+    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek) return;
+    appliedSeek.current = { trace, playbackSeek };
+    const nextIndex = clampTracePlaybackIndex(
       trace.samples.length,
       playbackSeek.sampleIndex,
     );
@@ -647,7 +597,7 @@ function ArmRig({
   }, [playbackSeek, trace]);
   useLayoutEffect(() => {
     if (isPlaying) return;
-    const nextIndex = clampArmPlaybackIndex(trace.samples.length, displayedSampleIndex);
+    const nextIndex = clampTracePlaybackIndex(trace.samples.length, displayedSampleIndex);
     sampleIndex.current = nextIndex;
     playbackSeconds.current = trace.samples[nextIndex]?.timeSeconds ?? 0;
     publishedSampleIndex.current = -1;
@@ -722,7 +672,7 @@ function ArmRig({
   useFrame((_, deltaSeconds) => {
     const samples = trace.samples;
     if (samples.length === 0) return;
-    const next = advanceArmPlayback(
+    const next = advanceTracePlayback(
       sampleTimes,
       sampleIndex.current,
       playbackSeconds.current,
@@ -2389,13 +2339,16 @@ export function HouseholdArmFlagship({
   useEffect(() => {
     if (!embedded) return;
     const now = performance.now();
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}:${microscopeMode}:${physicsDebug}`;
+    // Do not drop the terminal measurement or the start of the following
+    // loop when throttling intermediate native scrubber updates.
+    const terminal = Boolean(trace) && sampleIndex === (trace?.samples.length ?? 0) - 1;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}:${microscopeMode}:${physicsDebug}:${terminal}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
     if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
     nativeTraceReportAtRef.current = now;
     nativeTraceSettingsRef.current = settings;
     reportFrankenRobotsTraceState("arm", {
-      sampleIndex: trace ? clampArmPlaybackIndex(trace.samples.length, sampleIndex) : 0,
+      sampleIndex: trace ? clampTracePlaybackIndex(trace.samples.length, sampleIndex) : 0,
       sampleCount: trace?.samples.length ?? 0,
       playing: Boolean(trace) && isPlaying,
       speed: playbackSpeed,
@@ -2458,7 +2411,7 @@ export function HouseholdArmFlagship({
   const taskInfo = TASK_COPY[task];
   const traceLastIndex = Math.max(0, (trace?.samples.length ?? 1) - 1);
   const currentSampleForHUD = trace
-    ? trace.samples[clampArmPlaybackIndex(trace.samples.length, sampleIndex)]
+    ? trace.samples[clampTracePlaybackIndex(trace.samples.length, sampleIndex)]
     : null;
   const currentPlaybackTime = currentSampleForHUD?.timeSeconds ?? 0;
   const traceDuration = trace?.samples.at(-1)?.timeSeconds ?? 0;
@@ -2893,7 +2846,7 @@ export function HouseholdArmFlagship({
                     min={0}
                     max={traceLastIndex}
                     step={1}
-                    value={clampArmPlaybackIndex(
+                    value={clampTracePlaybackIndex(
                       trace?.samples.length ?? 0,
                       sampleIndex,
                     )}
@@ -2902,7 +2855,7 @@ export function HouseholdArmFlagship({
                     onChange={(event) => {
                       setIsPlaying(false);
                       seekPlayback(
-                        clampArmPlaybackIndex(
+                        clampTracePlaybackIndex(
                           trace?.samples.length ?? 0,
                           Number(event.target.value),
                         ),

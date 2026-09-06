@@ -2,7 +2,10 @@
 
 import React, { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox, Html } from "@react-three/drei";
-import { useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
+import {
+  advanceTracePlayback,
+  useTracePlaybackPreference,
+} from "../hooks/usePrefersReducedMotion";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -823,8 +826,17 @@ function RobotPlayback({
   pushImpulseNs?: number;
   positionOffset?: [number, number, number] | null;
 }) {
-  const playbackSeconds = useRef(0);
+  // Offscreen canvases unmount. Resume the parent's displayed measurement,
+  // applying an explicit seek only when it changes on this mounted rig.
+  const playbackSeconds = useRef(trace.samples[sampleIndex]?.timeSeconds ?? 0);
+  const appliedSeek = useRef({ trace, playbackSeek });
+  const sampleTimes = useMemo(
+    () => trace.samples.map((sample) => sample.timeSeconds),
+    [trace],
+  );
   useLayoutEffect(() => {
+    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek) return;
+    appliedSeek.current = { trace, playbackSeek };
     playbackSeconds.current =
       trace.samples[playbackSeek.sampleIndex]?.timeSeconds ?? 0;
   }, [trace, playbackSeek]);
@@ -835,19 +847,16 @@ function RobotPlayback({
   }, [trace, isPlaying, sampleIndex]);
   useFrame((_, deltaSeconds) => {
     if (!isPlaying || !playbackActiveRef.current || trace.samples.length < 2) return;
-    const duration = trace.samples.at(-1)?.timeSeconds ?? 0;
-    if (duration <= 0) return;
-    // Advance playback by deltaSeconds scaled by playbackSpeed
-    playbackSeconds.current = (playbackSeconds.current + Math.min(deltaSeconds, 0.1) * 0.55 * playbackSpeed) % duration;
-    const playbackTime = playbackSeconds.current;
-    let nextIndex = 0;
-    while (
-      nextIndex + 1 < trace.samples.length &&
-      trace.samples[nextIndex + 1].timeSeconds <= playbackTime
-    ) {
-      nextIndex += 1;
-    }
-    if (nextIndex !== sampleIndex) onSampleIndexChange(nextIndex, playbackSeek.revision);
+    const next = advanceTracePlayback(
+      sampleTimes,
+      sampleIndex,
+      playbackSeconds.current,
+      deltaSeconds,
+      playbackSpeed,
+      true,
+    );
+    playbackSeconds.current = next.elapsedSeconds;
+    if (next.sampleIndex !== sampleIndex) onSampleIndexChange(next.sampleIndex, playbackSeek.revision);
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
@@ -3067,7 +3076,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   useEffect(() => {
     if (!embedded) return;
     const now = performance.now();
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}:${selectedPreset}:${xrayMode}:${physicsDebug}`;
+    // Terminal and loop-start transitions must reach the native scrubber even
+    // when they occur inside the normal 100 ms intermediate-frame throttle.
+    const terminal = Boolean(trace) && sampleIndex === (trace?.samples.length ?? 0) - 1;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}:${selectedPreset}:${xrayMode}:${physicsDebug}:${terminal}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
     if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
     nativeTraceReportAtRef.current = now;

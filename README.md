@@ -57,8 +57,8 @@ Open <http://localhost:3000>.
   free object and reciprocal contact wrench and routes obstacle, object, and
   non-adjacent self checks through certified convex-query owners.
 - Arm file/link imports restore their supported task and optimizer family.
-  Further learning uses the imported coefficients and search radius with
-  Seed 1. These archives do not preserve a complete arm scene or seed.
+  Further learning starts a new search using the imported coefficients,
+  search radius and archived seed in the restored owner scene.
   Neither robot saves the full optimizer covariance, evolution paths or RNG
   state: learning from a recovered policy is a new search from that policy.
 - A separately rendered KUKA KMR mobile-base rung. A 64-ray planar scan and
@@ -103,6 +103,9 @@ not establish zero penetration or universal continuous collision safety.
 - **Playback controls:** reduced motion disables autoplay; explicit Play
   remains available on both robots. Pause, keyboard scrubbing and native
   seek commands hold the selected sample, and playback resumes from it.
+  Scrolling away releases the canvas; returning resumes from the last
+  displayed sample. Both robots apply the selected speed directly to visible
+  render time, cap long frame stalls and show the terminal pose before looping.
   Changing the system motion preference pauses playback. G1 milestones use
   the owner's actual push timing, impulse and termination reason; completing
   the rollout horizon does not assert that a goal was reached.

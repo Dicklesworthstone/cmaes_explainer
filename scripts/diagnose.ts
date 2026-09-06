@@ -534,6 +534,128 @@ async function run() {
           resumedAt > seekIndex && resumedAt < seekIndex + lastIndex / 4,
           `Resume jumped from selected frame ${seekIndex} to ${resumedAt}`,
         );
+        // The real canvas unmounts far offscreen. Its new clock must resume
+        // the last displayed frame, not the earlier explicit seek command.
+        await command("play");
+        await playbackPage.waitForFunction(
+          ({ label, start }) =>
+            Number(
+              document.querySelector<HTMLInputElement>(
+                `input[aria-label="${label}"]`,
+              )?.value,
+            ) > start,
+          { label: sliderLabel, start: resumedAt },
+        );
+        await playbackPage.evaluate(() =>
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: "instant",
+          }),
+        );
+        await playbackPage.waitForFunction(
+          () => document.querySelectorAll("canvas").length === 0,
+        );
+        const offscreenIndex = Number(await slider.inputValue());
+        assert(offscreenIndex > resumedAt);
+        await pause(600);
+        assert.equal(
+          Number(await slider.inputValue()),
+          offscreenIndex,
+          "Unmounted playback moved",
+        );
+        const remountMessageStart = await playbackPage.evaluate(
+          () =>
+            (window as unknown as { __ownerBridgeMessages: unknown[] })
+              .__ownerBridgeMessages.length,
+        );
+        await slider.scrollIntoViewIfNeeded();
+        await playbackPage.waitForFunction(
+          () => document.querySelectorAll("canvas").length > 0,
+        );
+        await playbackPage.waitForFunction(
+          ({ label, start }) =>
+            Number(
+              document.querySelector<HTMLInputElement>(
+                `input[aria-label="${label}"]`,
+              )?.value,
+            ) !== start,
+          { label: sliderLabel, start: offscreenIndex },
+        );
+        await command("pause");
+        const remountedAt = await paused();
+        const remountFrames = await playbackPage.evaluate(
+          (start) =>
+            (
+              window as unknown as {
+                __ownerBridgeMessages: Record<string, unknown>[];
+              }
+            ).__ownerBridgeMessages
+              .slice(start)
+              .filter((message) => message.type === "trace.state")
+              .map((message) => Number(message.sampleIndex)),
+          remountMessageStart,
+        );
+        assert(remountFrames.length > 0);
+        assert(
+          remountFrames.every(
+            (index) =>
+              index >= offscreenIndex && index < offscreenIndex + lastIndex / 4,
+          ),
+          `Canvas remount jumped from ${offscreenIndex}: ${remountFrames.join(",")}`,
+        );
+        assert(remountedAt > offscreenIndex);
+
+        // A loop must publish the measured terminal sample before returning
+        // to the beginning, even at the fastest supported playback speed.
+        await command("seek", { sampleIndex: lastIndex - 1 });
+        await paused(lastIndex - 1);
+        await command("set-speed", { speed: 2 });
+        const terminalMessageStart = await playbackPage.evaluate(
+          () =>
+            (window as unknown as { __ownerBridgeMessages: unknown[] })
+              .__ownerBridgeMessages.length,
+        );
+        await command("play");
+        await playbackPage.waitForFunction(
+          ({ start, lastIndex }) => {
+            const states = (
+              window as unknown as {
+                __ownerBridgeMessages: Record<string, unknown>[];
+              }
+            ).__ownerBridgeMessages
+              .slice(start)
+              .filter((message) => message.type === "trace.state");
+            const terminal = states.findIndex(
+              (state) => state.sampleIndex === lastIndex,
+            );
+            return (
+              terminal >= 0 &&
+              states
+                .slice(terminal + 1)
+                .some((state) => Number(state.sampleIndex) < lastIndex / 2)
+            );
+          },
+          { start: terminalMessageStart, lastIndex },
+        );
+        await command("pause");
+        await paused();
+        const terminalFrames = await playbackPage.evaluate(
+          (start) =>
+            (
+              window as unknown as {
+                __ownerBridgeMessages: Record<string, unknown>[];
+              }
+            ).__ownerBridgeMessages
+              .slice(start)
+              .filter((message) => message.type === "trace.state")
+              .map((message) => Number(message.sampleIndex)),
+          terminalMessageStart,
+        );
+        assert.equal(
+          terminalFrames.find((index) => index !== lastIndex - 1),
+          lastIndex,
+        );
+        await command("set-speed", { speed: 0.25 });
         await playbackPage.emulateMedia({ reducedMotion: "no-preference" });
         await paused();
         await command("play");
@@ -646,6 +768,10 @@ async function run() {
           keyboardPausedAt,
           seekIndex,
           resumedAt,
+          offscreenIndex,
+          remountedAt,
+          remountFrames,
+          terminalFrames,
           geometry,
           traceStates,
         });
