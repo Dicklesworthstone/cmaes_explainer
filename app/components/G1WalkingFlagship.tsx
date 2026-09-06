@@ -3491,6 +3491,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <button
                   type="button"
                   onClick={handleExportTelemetry}
+                  aria-label="Export Telemetry"
                   className="flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-cyan-200 backdrop-blur-md hover:bg-cyan-900/60 transition-colors"
                   title="Export full kinematic & dynamic trajectory receipt as JSON"
                 >
