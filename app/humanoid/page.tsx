@@ -158,9 +158,14 @@ export default function HumanoidPage() {
             same articulated-body physics and the same objective, in a worker on
             your machine. The kernel ships with SIMD enabled and the model is 64
             units wide and two layers deep, which is the whole reason a laptop
-            suffices. Press the button and watch the curve fall; there is no
-            fixed budget, so it runs until you stop it, and the policy it finds
-            downloads as the same artifact format the page ships.
+            suffices. It starts on flat ground, where the first improvement
+            typically lands within about ten seconds and roughly forty rollouts;
+            the harder cross-challenge run the figures above are measured on is
+            one dropdown away. There is no fixed budget, so it keeps going until
+            you stop it — on one laptop it passed{" "}
+            <strong>120% better than the tuned controller</strong> inside two
+            minutes — and the policy it finds downloads as the same artifact
+            format the page ships.
           </p>
           <div className="mt-6">
             <G1ResidualTrainer />

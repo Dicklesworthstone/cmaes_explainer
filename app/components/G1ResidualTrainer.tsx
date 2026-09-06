@@ -100,7 +100,13 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
 
 export function G1ResidualTrainer() {
   const workerRef = useRef<Worker | null>(null);
-  const [challenge, setChallenge] = useState<G1TransformerChallenge>("both");
+  // Flat by default. It is one rollout per candidate instead of two and it is
+  // the easier condition, so the curve starts falling in well under a minute
+  // rather than after several — and a search that visibly works is the whole
+  // point of putting it on the page. The harder cross-challenge run, which is
+  // what the shipped figures above are measured on, is one dropdown away and
+  // the copy says which is which.
+  const [challenge, setChallenge] = useState<G1TransformerChallenge>("flat");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -202,8 +208,8 @@ export function G1ResidualTrainer() {
             }
             className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200 disabled:opacity-50"
           >
-            <option value="both">Flat and terrain-with-push</option>
-            <option value="flat">Flat only</option>
+            <option value="flat">Flat only (fastest)</option>
+            <option value="both">Flat and terrain-with-push (harder)</option>
             <option value="terrain">Terrain-with-push only</option>
           </select>
         </label>
@@ -282,7 +288,15 @@ export function G1ResidualTrainer() {
                 <strong className="text-emerald-300">
                   {gain.toFixed(1)}% better
                 </strong>{" "}
-                than the controller it started from.
+                than the controller it started from
+                {challenge === "flat" ? (
+                  <> on flat ground, the easiest of the three conditions</>
+                ) : challenge === "terrain" ? (
+                  <> on terrain with pushes</>
+                ) : (
+                  <> across both conditions</>
+                )}
+                .
               </>
             ) : (
               "No improvement yet — the head is still at the tuned controller."
