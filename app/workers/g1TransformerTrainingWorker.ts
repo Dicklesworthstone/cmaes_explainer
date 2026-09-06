@@ -32,7 +32,12 @@ export type TrainingWorkerResponse =
   | { type: "progress"; progress: G1TransformerProgress }
   | { type: "stopped"; progress: G1TransformerProgress | null }
   | { type: "weights"; bytes: Uint8Array; progress: G1TransformerProgress }
-  | { type: "error"; error: string };
+  /**
+   * `fatal` distinguishes "the run is over" from "that one request failed".
+   * A failed export must not stop training, and must not make the page think
+   * training stopped while the worker is still pumping.
+   */
+  | { type: "error"; error: string; fatal: boolean };
 
 const scope = self as unknown as {
   onmessage: ((e: MessageEvent<TrainingWorkerRequest>) => void) | null;
@@ -60,13 +65,20 @@ function configKey(
 /** Post at most this often; a rollout is fast enough to outpace a repaint. */
 const PROGRESS_INTERVAL_MS = 250;
 
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The run cannot continue. */
 function fail(error: unknown): void {
   running = false;
   runRevision += 1;
-  scope.postMessage({
-    type: "error",
-    error: error instanceof Error ? error.message : String(error),
-  });
+  scope.postMessage({ type: "error", error: describe(error), fatal: true });
+}
+
+/** One request failed; whatever the loop is doing carries on. */
+function reportError(error: unknown): void {
+  scope.postMessage({ type: "error", error: describe(error), fatal: false });
 }
 
 async function loop(
@@ -117,7 +129,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
         progress: latest,
       });
     } catch (error) {
-      fail(error);
+      reportError(error);
     }
     return;
   }

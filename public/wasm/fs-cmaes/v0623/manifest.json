@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "b0cfa006db4d9f0b721c18e83b22064554cd28b5",
+  "sourceRevision": "012b70bb0a34052b553f2618402f0085d15f05ec",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -23,7 +23,7 @@
   },
   "assets": {
     "javascriptSha256": "0b2d0d1631e87f162143ef07d0f41783ab0b8a9d2489fa90eb3225b995d9ceab",
-    "wasmSha256": "5f2933a082dd4eb4903cf77357e0926ecab2545944bd20f992a621797f5ecea7"
+    "wasmSha256": "bb978eb2eb78e8031a0a12ff147c262614214bbc0f53799798aaa16ed5f37c87"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",

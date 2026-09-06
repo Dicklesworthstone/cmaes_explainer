@@ -958,6 +958,36 @@ async function run() {
           ),
       { start: resumeMessageStart, evaluations: resumedFrom },
     );
+    const nonfatalMessageStart = await trainingPage.evaluate(() => {
+      const host = window as unknown as {
+        __trainingWorker: Worker;
+        __trainingMessages: TrainingWorkerResponse[];
+      };
+      host.__trainingWorker.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: "error",
+            error: "Injected export failure",
+            fatal: false,
+          },
+        }),
+      );
+      return host.__trainingMessages.length;
+    });
+    await trainingPage
+      .getByRole("alert")
+      .filter({ hasText: "Injected export failure" })
+      .waitFor();
+    await stopTraining.waitFor();
+    await trainingPage.waitForFunction(
+      (start) =>
+        (
+          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
+        ).__trainingMessages
+          .slice(start)
+          .some((message) => message.type === "progress"),
+      nonfatalMessageStart,
+    );
     await stopTraining.click();
     await startTraining.waitFor();
     stoppedTraining = await trainingPage.evaluate(
@@ -986,6 +1016,10 @@ async function run() {
     assert.equal(trainedPolicy.readUInt32LE(4), 1);
     assert.equal(trainedPolicy.readUInt32LE(8), 64);
     assert(trainedPolicy.length > 64);
+    await trainingPage
+      .getByRole("alert")
+      .filter({ hasText: "Injected export failure" })
+      .waitFor({ state: "hidden" });
     await trainingPage
       .getByRole("combobox", { name: "Conditions" })
       .selectOption("terrain");
@@ -1064,6 +1098,7 @@ async function run() {
       resumedFrom,
       trainedPolicyBytes: trainedPolicy.length,
       workerFailureInjected: true,
+      nonfatalExportFailureInjected: true,
       ownerWasmCorruptionInjected: true,
       finalMessages: await trainingPage.evaluate(
         () =>

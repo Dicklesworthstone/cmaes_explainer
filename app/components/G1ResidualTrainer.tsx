@@ -80,7 +80,15 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
       aria-label={`Best objective improving from ${max.toFixed(1)} to ${min.toFixed(1)} over ${lastEval} rollouts`}
       preserveAspectRatio="none"
     >
-      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" />
+      {/* The viewBox is stretched to the container width, so without this the
+          stroke is scaled unevenly and reads thinner on the horizontal runs. */}
+      <path
+        d={path}
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="2"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -101,17 +109,22 @@ export function G1ResidualTrainer() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    fatal: boolean;
+  } | null>(null);
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
-      // The owner caches initialization failures inside its worker realm.
-      // Retry needs a new realm, including for a handled WASM-load refusal.
-      workerRef.current?.terminate();
-      workerRef.current = null;
-      startedChallengeRef.current = null;
-      setError(message.error);
-      setRunning(false);
+      setError({ message: message.error, fatal: message.fatal });
+      if (message.fatal) {
+        // The owner caches initialization failures inside its worker realm.
+        // A failed export keeps its live trainer; a fatal failure needs a new realm.
+        workerRef.current?.terminate();
+        workerRef.current = null;
+        startedChallengeRef.current = null;
+        setRunning(false);
+      }
       return;
     }
     if (message.type === "stopped") {
@@ -120,6 +133,7 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "weights") {
+      setError(null);
       const blob = new Blob([message.bytes as BlobPart], {
         type: "application/octet-stream",
       });
@@ -167,6 +181,7 @@ export function G1ResidualTrainer() {
       handleMessage({
         type: "error",
         error: error instanceof Error ? error.message : String(error),
+        fatal: true,
       });
     };
     try {
@@ -258,7 +273,7 @@ export function G1ResidualTrainer() {
         <button
           type="button"
           onClick={download}
-          disabled={!improved || error !== null}
+          disabled={!improved || Boolean(error?.fatal)}
           className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
         >
           Download policy
@@ -267,7 +282,7 @@ export function G1ResidualTrainer() {
 
       {error ? (
         <p role="alert" className="mt-4 text-sm text-rose-300">
-          {error}
+          {error.message}
         </p>
       ) : null}
 
