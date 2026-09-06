@@ -1,4 +1,8 @@
 import { describe, test, expect } from "bun:test";
+import { FRANKENSIM_OWNER_KERNEL_VERSION, type HouseholdManipulationAdmission } from "../app/lib/frankensimCmaes";
+import { armVerifySharedExperiment } from "../app/lib/g1OptimizationProtocol";
+import { householdKernelObstacleRoster } from "../app/lib/houseMultiObstacleKernel";
+import type { SharedArmExperiment } from "../app/lib/g1PolicyShare";
 
 /**
  * Integration tests for the real optimization-worker compare-family races.
@@ -101,6 +105,71 @@ function runWorkerPreview(
 }
 
 describe("armOptimizationWorker compareFamilies integration", () => {
+  test("archives the actual roster through preview, replay and learning in the real worker", async () => {
+    const worker = new Worker(new URL("./armCompareTestWorker.ts", import.meta.url).href, { type: "module" });
+    type Trace = {
+      type: "trace";
+      admission: HouseholdManipulationAdmission;
+      policy: Float64Array;
+      experiment: SharedArmExperiment;
+      sigma: number;
+      generation: number;
+      trace: unknown;
+    };
+    const request = (message: object) => new Promise<Trace>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Arm worker request timed out")), 30_000);
+      worker.onmessage = (event: MessageEvent<Trace | { type: "error"; message: string }>) => {
+        if (event.data.type === "trace") {
+          clearTimeout(timer);
+          resolve(event.data);
+        } else if (event.data.type === "error") {
+          clearTimeout(timer);
+          reject(new Error(event.data.message));
+        }
+      };
+      worker.onerror = (event) => {
+        clearTimeout(timer);
+        reject(new Error(event.message));
+      };
+      worker.postMessage(message);
+    });
+    try {
+      for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
+        const preview = await request({ type: "preview", task, seedIndex: 1 });
+        const imported = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task,
+          challenge: "household",
+          family: "lm-ma",
+          generation: 7,
+          sigma: 0.0007,
+          policy: preview.policy,
+          experiment: preview.experiment,
+        };
+        const config = {
+          ...preview.admission.config,
+          obstacles: householdKernelObstacleRoster(preview.admission.scene.supportHeightMeters, task),
+        };
+        expect(config.obstacles.length).toBe(preview.admission.scene.extraObstacleCount);
+        expect(config.obstacles.length).toBeGreaterThan(20);
+        expect(armVerifySharedExperiment(imported, config)).toEqual(preview.experiment);
+        const replay = await request({ type: "replay", imported });
+        expect(replay.trace).toEqual(preview.trace);
+        expect(replay.experiment).toEqual(preview.experiment);
+        expect(replay.sigma).toBe(imported.sigma);
+        const learned = await request({
+          type: "optimize", task, family: imported.family, generations: 2,
+          seedIndex: 1, mode: "fresh", sigma: imported.sigma, resumeFrom: imported.policy,
+        });
+        expect(learned.generation).toBe(2);
+        expect(learned.experiment).toEqual(preview.experiment);
+        expect(learned.sigma).toBeGreaterThan(0);
+      }
+    } finally {
+      worker.terminate();
+    }
+  }, { timeout: 100_000 });
+
   test(
     "runs a bounded 128-D equal-budget race across all four CMA families",
     async () => {

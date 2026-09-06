@@ -41,7 +41,7 @@ export interface PolicyExchangeProps {
    */
   measured: PolicyFile["measured"] | null;
   /** Called with an imported policy for the owner to replay. */
-  onImport: (imported: SharedPolicy) => void;
+  onImport: (imported: SharedPolicy) => void | Promise<void>;
 }
 
 type Notice = { tone: "ok" | "warn" | "error"; text: string } | null;
@@ -131,13 +131,13 @@ export function PolicyExchange({
           await file.text(),
           policy?.length ?? 5_040,
         );
-        onImport(imported);
+        await onImport(imported);
         // A policy from a different owner build is replayed rather than
         // refused, so where it came from has to be said out loud: the receipt
         // on screen is measured by THIS owner and may not match what the sender
         // saw. Silently replaying it would present their gait as ours.
         const foreign = imported.kernelVersion !== meta.kernelVersion;
-        const missingExperiment = subject === "g1" && !imported.experiment;
+        const missingExperiment = !imported.experiment;
         setNotice({
           tone: foreign || missingExperiment ? "warn" : "ok",
           text: foreign
@@ -155,7 +155,7 @@ export function PolicyExchange({
         setBusy(false);
       }
     },
-    [policy, onImport, meta.kernelVersion, subject],
+    [policy, onImport, meta.kernelVersion],
   );
 
   const ready = policy !== null && !disabled;

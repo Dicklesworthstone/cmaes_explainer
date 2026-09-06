@@ -3,10 +3,13 @@ import {
   FRANKENSIM_OWNER_ARTIFACT,
   FRANKENSIM_OWNER_KERNEL_VERSION,
   buildG1Config,
+  buildHouseholdManipulationConfig,
   type CmaFamily,
   type G1Challenge,
   type G1Task,
   type G1WalkingConfig,
+  type HouseholdManipulationConfig,
+  type HouseholdManipulationTask,
 } from "./frankensimCmaes";
 import {
   g1KernelObstacleRoster,
@@ -18,6 +21,7 @@ import {
 import {
   validatePolicyMetadata,
   type SharedG1Experiment,
+  type SharedArmExperiment,
   type SharedPolicyMeta,
 } from "./g1PolicyShare";
 
@@ -194,6 +198,9 @@ export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
   validatePolicyMetadata(meta);
   const experiment = meta.experiment;
   if (!experiment) return { seat: g1ResolveSeat(), seedIndex: 0 };
+  if (experiment.kind !== "g1") {
+    throw new Error("This experiment is not for the G1 robot.");
+  }
   if (
     meta.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
     experiment.ownerSourceRevision !==
@@ -232,6 +239,78 @@ export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
     );
   }
   return { seat, seedIndex: experiment.seedIndex };
+}
+
+/** Arm archives bind the actual owner packet, including support/keep-out roles. */
+export function armSharedExperiment(
+  config: HouseholdManipulationConfig,
+  seedIndex: number,
+): SharedArmExperiment {
+  return {
+    version: 1,
+    kind: "arm",
+    ownerSourceRevision: FRANKENSIM_OWNER_ARTIFACT.sourceRevision,
+    ownerWasmSha256: FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256,
+    inputBytes: hex(
+      g1InputBytes([], Array.from(buildHouseholdManipulationConfig(config))),
+    ),
+    seedIndex,
+  };
+}
+
+/** Narrow settings synchronously; verify the owner-resolved roster in the worker. */
+export function armRestoreSharedExperiment(meta: SharedPolicyMeta): {
+  task: HouseholdManipulationTask;
+  family: CmaFamily;
+  seedIndex: number;
+} {
+  validatePolicyMetadata(meta);
+  const task = (
+    ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const
+  ).find((candidate) => candidate === meta.task);
+  const family = (["full", "separable", "lm-cma", "lm-ma"] as const).find(
+    (candidate) => candidate === meta.family,
+  );
+  if (!task || meta.challenge !== "household" || !family) {
+    throw new Error(
+      "This policy is not for a supported household task and optimizer.",
+    );
+  }
+  const experiment = meta.experiment;
+  if (experiment) {
+    if (experiment.kind !== "arm") {
+      throw new Error("This experiment is not for the household arm.");
+    }
+    if (
+      meta.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
+      experiment.ownerSourceRevision !==
+        FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
+      experiment.ownerWasmSha256 !== FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256
+    ) {
+      throw new Error(
+        "This exact experiment requires a different owner artifact.",
+      );
+    }
+  }
+  return { task, family, seedIndex: experiment?.seedIndex ?? 0 };
+}
+
+/** Never silently substitute a changed scene, time step, material or schema. */
+export function armVerifySharedExperiment(
+  meta: SharedPolicyMeta,
+  config: HouseholdManipulationConfig,
+): SharedArmExperiment {
+  const restored = armRestoreSharedExperiment(meta);
+  const actual = armSharedExperiment(config, restored.seedIndex);
+  if (
+    config.task !== restored.task ||
+    (meta.experiment && meta.experiment.inputBytes !== actual.inputBytes)
+  ) {
+    throw new Error(
+      "This exact experiment has a different scene or owner configuration.",
+    );
+  }
+  return actual;
 }
 
 export async function g1ExperimentForSeat(

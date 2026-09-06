@@ -40,6 +40,7 @@
     "vendor",
     "ios/Engine",
     "ios/EngineWeb/.next",
+    "ios/EngineWeb/next-env.d.ts",
     "ios/EngineWeb/out",
     "ios/build"
   ]

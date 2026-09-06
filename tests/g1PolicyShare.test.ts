@@ -80,7 +80,7 @@ describe("G1 policy share codec", () => {
     for (const bad of [
       null,
       { ...EXPERIMENT, version: 2 },
-      { ...EXPERIMENT, kind: "arm" },
+      { ...EXPERIMENT, kind: "unknown-robot" },
       { ...EXPERIMENT, seedIndex: 3 },
       { ...EXPERIMENT, seedIndex: 0.5 },
       { ...EXPERIMENT, ownerSourceRevision: "foreign" },
@@ -91,11 +91,11 @@ describe("G1 policy share codec", () => {
     ]) {
       const meta = { ...META, experiment: bad } as SharedPolicyMeta;
       expect(() => encodeSharedPolicy(policy, meta)).toThrow(
-        "invalid G1 experiment",
+        "invalid robot experiment",
       );
       const file = { ...policyFileContents(policy, META), experiment: bad };
       expect(() => policyFromFileContents(JSON.stringify(file), 1)).toThrow(
-        "invalid G1 experiment",
+        "invalid robot experiment",
       );
     }
     const bytes = encodeSharedPolicy(policy, {

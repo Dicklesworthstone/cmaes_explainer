@@ -21,7 +21,9 @@ import {
   policyFragmentFromHash,
   type SharedPolicy,
   type SharedPolicyMeta,
+  type SharedArmExperiment,
 } from "../lib/g1PolicyShare";
+import { armRestoreSharedExperiment } from "../lib/g1OptimizationProtocol";
 import {
   describeAge,
   isResumable,
@@ -129,6 +131,12 @@ type ArmPriorReplay = {
   meta: SharedPolicyMeta;
 };
 
+type ArmRecoveredRun = {
+  ledger: readonly ArmLedgerPoint[];
+  trainingSeconds: number;
+  savedAt: number;
+};
+
 /** Matches the search radius armOptimizationWorker starts a session with. */
 const ARM_DEFAULT_SEARCH_SIGMA = 0.001;
 
@@ -150,6 +158,8 @@ type WorkerResponse =
       admission: HouseholdManipulationAdmission;
       generation: number;
       family: ArmTraceOrigin;
+      experiment: SharedArmExperiment;
+      sigma: number;
       continuing?: boolean;
       stopped?: boolean;
       /** Coefficients behind this trace, mirroring the worker's response. */
@@ -1704,8 +1714,13 @@ export function HouseholdArmFlagship({
   // Read inside the worker message handler, which must not re-subscribe every
   // time a control moves.
   const familyRef = useRef(family);
-  const sigmaRef = useRef(searchSigma);
   const taskRef = useRef(task);
+  const pendingImportRef = useRef<{
+    imported: SharedPolicy;
+    recovered?: ArmRecoveredRun;
+    resolve: () => void;
+    reject: (error: Error) => void;
+  } | null>(null);
   const recoveryAttemptedRef = useRef(false);
   // A policy arriving in the URL cannot be read until the owner has told us how
   // long a policy is. It waits here, and outranks whatever is in storage.
@@ -1713,13 +1728,12 @@ export function HouseholdArmFlagship({
   // Late-bound: both handlers are declared below this effect, and it must not
   // re-run every time they are recreated.
   const selectTaskRef = useRef<((task: HouseholdManipulationTask) => void) | null>(null);
-  const handlePolicyImportRef = useRef<((imported: SharedPolicy) => void) | null>(null);
+  const handlePolicyImportRef = useRef<((imported: SharedPolicy, recovered?: ArmRecoveredRun) => Promise<void>) | null>(null);
   const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
   useEffect(() => {
     familyRef.current = family;
-    sigmaRef.current = searchSigma;
     taskRef.current = task;
-  }, [family, searchSigma, task]);
+  }, [family, task]);
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<ArmTraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -1868,6 +1882,33 @@ export function HouseholdArmFlagship({
           : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
         );
       } else if (message.type === "trace") {
+        const pendingImport = pendingImportRef.current;
+        if (pendingImport) {
+          // The worker has verified the exact task configuration AND replayed
+          // the policy. Until this receipt arrived the old experiment stayed intact.
+          const restored = armRestoreSharedExperiment(pendingImport.imported);
+          if (restored.task !== taskRef.current) setCurriculumReplay(null);
+          taskRef.current = restored.task;
+          familyRef.current = restored.family;
+          setTask(restored.task);
+          setFamily(restored.family);
+          setSeedIndex(restored.seedIndex);
+          resumedPolicyRef.current = pendingImport.imported.policy;
+          setComparison(null);
+          setArmDragTarget(null);
+          setArmUnreachable(false);
+          setArmCollisionState({ isColliding: false, clearance: 1.0 });
+          trainingSecondsRef.current = pendingImport.recovered?.trainingSeconds ?? 0;
+          trainingStartedAtRef.current = null;
+          setTrainingSeconds(trainingSecondsRef.current);
+          setLedger(pendingImport.recovered?.ledger.slice() ?? []);
+          const origin = pendingImport.recovered
+            ? `Recovered your policy from ${describeAge(pendingImport.recovered.savedAt)} — generation ${message.generation.toLocaleString()}.`
+            : "Imported policy replayed on its saved task.";
+          setRestoredNotice(`${origin} ${pendingImport.imported.experiment ? "Saved scene and seed verified." : "This coefficient archive uses the current default scene and Seed 1."} Further learning starts from these coefficients with Seed ${restored.seedIndex + 1}; optimizer state is not saved.`);
+          pendingImportRef.current = null;
+          pendingImport.resolve();
+        }
         setTrace(message.trace);
         setAdmission(message.admission);
         seekPlayback(0);
@@ -1877,9 +1918,11 @@ export function HouseholdArmFlagship({
           task: message.admission.config.task,
           challenge: "household",
           family: message.family === "curriculum" ? familyRef.current : message.family,
-          sigma: sigmaRef.current,
+          sigma: message.sigma,
           generation: message.generation,
+          experiment: message.experiment,
         };
+        setSearchSigma(message.sigma);
         if (message.family === "curriculum" && message.policy) {
           setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
         }
@@ -1944,6 +1987,8 @@ export function HouseholdArmFlagship({
           setStatus("Equal-budget four-family physical race complete.");
         }
       } else {
+        pendingImportRef.current?.reject(new Error(message.message));
+        pendingImportRef.current = null;
         setError(message.message);
         setBusy(null);
         setStopRequested(false);
@@ -1955,6 +2000,8 @@ export function HouseholdArmFlagship({
     };
     optimizerWorker.onerror = (event) => {
       if (!active) return;
+      pendingImportRef.current?.reject(new Error(event.message || "The household-arm worker failed."));
+      pendingImportRef.current = null;
       setError(
         event.message ||
           "The household-arm worker failed before returning a typed result.",
@@ -1968,6 +2015,8 @@ export function HouseholdArmFlagship({
     optimizerWorker.postMessage({ type: "preview", task: "kitchen-mug" });
     return () => {
       active = false;
+      pendingImportRef.current?.reject(new Error("The household-arm worker was closed before replay completed."));
+      pendingImportRef.current = null;
       optimizerWorker.terminate();
       workerRef.current = null;
     };
@@ -2069,7 +2118,7 @@ export function HouseholdArmFlagship({
         setStatus(
           `Loaded a shared generation-${imported.generation} policy from this link. Replaying it…`,
         );
-        handlePolicyImportRef.current?.(imported);
+        return handlePolicyImportRef.current?.(imported);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -2109,25 +2158,17 @@ export function HouseholdArmFlagship({
     // Deferred: setting state synchronously inside an effect cascades renders.
     queueMicrotask(() => {
       if (!active) return;
-      try {
-        handlePolicyImportRef.current?.(saved);
-      } catch (error) {
+      void handlePolicyImportRef.current?.(saved, saved).catch((error: unknown) => {
+        if (!active) return;
         setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
-        return;
-      }
-      trainingSecondsRef.current = saved.trainingSeconds;
-      setTrainingSeconds(saved.trainingSeconds);
-      setLedger(saved.ledger.slice());
-      setRestoredNotice(
-        `Recovered your policy from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Further learning starts from these coefficients with Seed 1; optimizer state is not saved.`,
-      );
+      });
     });
     return () => { active = false; };
   }, [stagePolicy]);
 
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
-    (imported: SharedPolicy) => {
+    async (imported: SharedPolicy, recovered?: ArmRecoveredRun) => {
       // Refuse loudly while the owner is busy. `post` drops a request silently
       // when one is in flight, so without this the panel would start describing
       // the imported policy while the stage kept replaying the old one — a
@@ -2136,47 +2177,23 @@ export function HouseholdArmFlagship({
       if (!workerRef.current || inFlightRef.current) {
         throw new Error("Finish or stop the current run before loading a policy.");
       }
-      const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[])
-        .find((candidate) => candidate === imported.task);
-      const importedFamily = (["full", "separable", "lm-cma", "lm-ma"] as const)
-        .find((candidate) => candidate === imported.family);
-      if (!importedTask || imported.challenge !== "household" || !importedFamily || imported.experiment) {
-        throw new Error("This policy is not for a supported household task and optimizer.");
-      }
-      // Both transports use this transaction. File imports previously ran on
-      // whichever task happened to be selected and left learning's mean intact.
+      armRestoreSharedExperiment(imported);
+      // No task/seed/policy mutation until the worker verifies its owner-resolved
+      // roster and returns a real trace. Both transports and recovery await it.
       recoveryAttemptedRef.current = true;
-      taskRef.current = importedTask;
-      familyRef.current = importedFamily;
-      sigmaRef.current = imported.sigma;
-      setTask(importedTask);
-      setFamily(importedFamily);
-      setSeedIndex(0);
-      setSearchSigma(imported.sigma);
-      resumedPolicyRef.current = imported.policy;
-      setTrace(null);
-      setAdmission(null);
-      if (importedTask !== task) setCurriculumReplay(null);
-      setComparison(null);
-      setArmDragTarget(null);
-      setArmUnreachable(false);
-      setArmCollisionState({ isColliding: false, clearance: 1.0 });
-      seekPlayback(0);
-      setLedger([]);
-      trainingSecondsRef.current = 0;
-      trainingStartedAtRef.current = null;
-      setTrainingSeconds(0);
-      setRestoredNotice("Imported policy loaded on its saved task. Further learning starts from these coefficients with Seed 1; this archive has no saved seed or optimizer state.");
-      setStagePolicy(imported.policy);
-      post({
-        type: "replay",
-        task: importedTask,
-        family: importedFamily,
-        policy: imported.policy,
-        generation: imported.generation,
-      }, "preview");
+      await new Promise<void>((resolve, reject) => {
+        pendingImportRef.current = { imported, recovered, resolve, reject };
+        try {
+          post({ type: "replay", imported }, "preview");
+        } catch (error) {
+          pendingImportRef.current = null;
+          inFlightRef.current = false;
+          setBusy(null);
+          reject(error instanceof Error ? error : new Error("Could not send this policy to the owner."));
+        }
+      });
     },
-    [post, task, seekPlayback],
+    [post],
   );
 
   const stopContinuousOptimization = useCallback(() => {
@@ -2419,9 +2436,9 @@ export function HouseholdArmFlagship({
       setError(null);
       setBusy("preview");
       setStatus(`Loading the ${TASK_COPY[nextTask].setting} benchmark…`);
-      workerRef.current.postMessage({ type: "preview", task: nextTask });
+      workerRef.current.postMessage({ type: "preview", task: nextTask, seedIndex });
     },
-    [task, seekPlayback],
+    [task, seedIndex, seekPlayback],
   );
 
   const objectiveDelta =

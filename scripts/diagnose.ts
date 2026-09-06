@@ -1166,6 +1166,7 @@ async function run() {
       "arm-curriculum-before-learning",
     );
     // Keep a real learned trowel policy, then open it from a mug-default tab.
+    await armPage.locator("#arm-seed").selectOption("1");
     await armPage
       .getByRole("button", { name: "Start learning", exact: true })
       .click();
@@ -1189,6 +1190,7 @@ async function run() {
       "arm-before-control-change",
     );
     await armPage.locator("#arm-family").selectOption("full");
+    await armPage.locator("#arm-seed").selectOption("2");
     assert.deepEqual(
       await captureReplayExport(armPage, out, "arm-after-control-change"),
       armLearnedExport,
@@ -1202,6 +1204,11 @@ async function run() {
     const armPolicyFile = await readFile(armPolicyPath, "utf8");
     const armPolicy = policyFromFileContents(armPolicyFile, 128);
     assert(armPolicy.generation >= 2);
+    assert.equal(armPolicy.experiment?.kind, "arm");
+    assert.equal(armPolicy.experiment?.seedIndex, 1);
+    const armSavedStorage = await armPage.evaluate(() =>
+      Object.fromEntries(Object.entries(localStorage)),
+    );
     const armTelemetryDownload = armPage.waitForEvent("download");
     await armPage
       .getByRole("button", { name: "Export Telemetry", exact: true })
@@ -1226,6 +1233,7 @@ async function run() {
       armCurriculumExport,
     );
     await armPage.locator("#arm-family").selectOption(armPolicy.family);
+    await armPage.locator("#arm-seed").selectOption("1");
     await armPage
       .getByRole("button", { name: "Start learning", exact: true })
       .click();
@@ -1269,11 +1277,18 @@ async function run() {
       continuedGeneration: continuedArm.policy.generation,
     });
     await armContext.close();
-    for (const transport of ["file", "fragment"] as const) {
+    for (const transport of ["file", "fragment", "recovery"] as const) {
       const replayContext = await browser.newContext({
         viewport: { width: 1440, height: 1000 },
         userAgent: USER_AGENT,
       });
+      if (transport === "recovery") {
+        await replayContext.addInitScript((saved) => {
+          for (const [key, value] of Object.entries(saved)) {
+            localStorage.setItem(key, value);
+          }
+        }, armSavedStorage);
+      }
       type ArmObservation = {
         requests: {
           type: string;
@@ -1340,6 +1355,9 @@ async function run() {
           .locator('input[type="file"]')
           .setInputFiles(armPolicyPath);
       }
+      if (transport === "recovery") {
+        await replayPage.getByRole("tab", { name: /^Trowel/ }).click();
+      }
       await replayPage.waitForFunction(
         (generation) => {
           const observation = (
@@ -1362,7 +1380,7 @@ async function run() {
         await replayPage.locator("#arm-family").inputValue(),
         armPolicy.family,
       );
-      assert.equal(await replayPage.locator("#arm-seed").inputValue(), "0");
+      assert.equal(await replayPage.locator("#arm-seed").inputValue(), "1");
       const restoredDownload = replayPage.waitForEvent("download");
       await replayPage
         .getByRole("button", { name: "Download", exact: true })
@@ -1373,6 +1391,8 @@ async function run() {
         await readFile(restoredPath, "utf8"),
         128,
       );
+      assert.deepEqual(restored.experiment, armPolicy.experiment);
+      assert.equal(restored.sigma, armPolicy.sigma);
       assert.deepEqual(
         new Uint8Array(restored.policy.buffer),
         new Uint8Array(armPolicy.policy.buffer),
@@ -1446,7 +1466,7 @@ async function run() {
           assert.equal(request?.mode, "fresh");
           assert.equal(request?.task, armPolicy.task);
           assert.equal(request?.family, armPolicy.family);
-          assert.equal(request?.seedIndex, 0);
+          assert.equal(request?.seedIndex, 1);
           assert.equal(request?.sigma, armPolicy.sigma);
           assert.deepEqual(request?.resumeFrom, Array.from(armPolicy.policy));
           assert.equal(
@@ -1488,6 +1508,43 @@ async function run() {
           .getByRole("tab", { name: /^Trowel/ })
           .getAttribute("aria-selected"),
         "true",
+      );
+      // A different task with the original task's packet must be refused by
+      // the real worker BEFORE the UI commits task, seed, policy or measurements.
+      const beforeRefusal = await captureReplayExport(
+        replayPage,
+        out,
+        `arm-${transport}-before-refusal`,
+      );
+      const mismatchedScene = JSON.parse(armPolicyFile);
+      mismatchedScene.task = "kitchen-mug";
+      mismatchedScene.experiment.seedIndex = 2;
+      await replayPage.locator('input[type="file"]').setInputFiles({
+        name: "wrong-scene-arm.policy.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(mismatchedScene)),
+      });
+      await replayPage
+        .getByText(
+          "This exact experiment has a different scene or owner configuration.",
+          { exact: true },
+        )
+        .first()
+        .waitFor();
+      assert.equal(
+        await replayPage
+          .getByRole("tab", { name: /^Trowel/ })
+          .getAttribute("aria-selected"),
+        "true",
+      );
+      assert.equal(await replayPage.locator("#arm-seed").inputValue(), "1");
+      assert.deepEqual(
+        await captureReplayExport(
+          replayPage,
+          out,
+          `arm-${transport}-after-refusal`,
+        ),
+        beforeRefusal,
       );
       recordResult({
         journey: "arm-policy-replay",
@@ -1532,6 +1589,7 @@ async function run() {
     );
     recordResult({ journey: "arm-unsupported-shared-task", refused: true });
     await invalidArmContext.close();
+    assert.equal(results.length, 22, "A declared browser journey did not run");
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {

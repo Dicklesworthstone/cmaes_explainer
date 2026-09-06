@@ -8,22 +8,190 @@ import {
   g1ResolveSeat,
   g1SharedExperiment,
   g1RestoreSharedExperiment,
+  armRestoreSharedExperiment,
+  armSharedExperiment,
+  armVerifySharedExperiment,
 } from "../app/lib/g1OptimizationProtocol";
 import {
   buildG1Config,
   decodeG1Trace,
   FRANKENSIM_OWNER_KERNEL_VERSION,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  buildHouseholdManipulationConfig,
+  decodeHouseholdManipulationAdmission,
+  decodeHouseholdManipulationTrace,
 } from "../app/lib/frankensimCmaes";
 import {
   policyFileContents,
   policyFromFileContents,
+  encodeSharedPolicy,
+  decodeSharedPolicy,
+  encodePolicyFragment,
+  decodePolicyFragment,
 } from "../app/lib/g1PolicyShare";
+import { householdKernelObstacleRoster } from "../app/lib/houseMultiObstacleKernel";
+import {
+  encodeTrainingSession,
+  decodeTrainingSession,
+} from "../app/lib/g1TrainingSession";
+
+describe("Arm exact experiment archives", () => {
+  test("replays all three real task rosters from exact file/link/storage inputs and refuses altered experiments", async () => {
+    const owner =
+      await import("../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+    await owner.default({
+      module_or_path: await Bun.file(
+        new URL(
+          "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+          import.meta.url,
+        ),
+      ).arrayBuffer(),
+    });
+    for (const task of [
+      "kitchen-mug",
+      "living-room-remote",
+      "backyard-trowel",
+    ] as const) {
+      const bare = { ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task };
+      const probe = new owner.HouseholdManipulationVizEvaluator(
+        buildHouseholdManipulationConfig(bare),
+      );
+      let supportHeight: number;
+      try {
+        const admission = decodeHouseholdManipulationAdmission(probe.receipt());
+        if (!("ok" in admission)) throw new Error(admission.refusal.name);
+        supportHeight = admission.ok.scene.supportHeightMeters;
+      } finally {
+        probe.free();
+      }
+      const config = {
+        ...bare,
+        obstacles: householdKernelObstacleRoster(supportHeight, task),
+      };
+      const evaluator = new owner.HouseholdManipulationVizEvaluator(
+        buildHouseholdManipulationConfig(config),
+      );
+      try {
+        const policy = evaluator.curriculum_policy_mean();
+        const original = evaluator.trace(policy);
+        const decoded = decodeHouseholdManipulationTrace(original);
+        if (!("ok" in decoded)) throw new Error(decoded.refusal.name);
+        expect(decoded.ok.samples.length).toBeGreaterThan(0);
+        expect(decoded.ok.samples[0].linkPoses).toHaveLength(8);
+        const meta = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task,
+          challenge: "household",
+          family: "lm-cma",
+          generation: 2,
+          sigma: 0.001,
+          experiment: armSharedExperiment(config, 2),
+        };
+        const stored = decodeTrainingSession(
+          JSON.stringify(
+            encodeTrainingSession({
+              ...meta,
+              policy,
+              ledger: [],
+              trainingSeconds: 12,
+            }),
+          ),
+          128,
+        );
+        expect(stored).not.toBeNull();
+        const copies = [
+          policyFromFileContents(
+            JSON.stringify(policyFileContents(policy, meta)),
+            128,
+          ),
+          decodeSharedPolicy(encodeSharedPolicy(policy, meta), 128),
+          await decodePolicyFragment(
+            await encodePolicyFragment(policy, meta),
+            128,
+          ),
+          stored!,
+        ];
+        for (const copy of copies) {
+          expect(armRestoreSharedExperiment(copy)).toEqual({
+            task,
+            family: "lm-cma",
+            seedIndex: 2,
+          });
+          expect(armVerifySharedExperiment(copy, config)).toEqual(
+            meta.experiment,
+          );
+          expect(new Uint8Array(copy.policy.buffer)).toEqual(
+            new Uint8Array(policy.buffer),
+          );
+          expect(new Uint8Array(evaluator.trace(copy.policy).buffer)).toEqual(
+            new Uint8Array(original.buffer),
+          );
+          expect(() => g1RestoreSharedExperiment(copy)).toThrow(
+            "not for the G1",
+          );
+        }
+        for (const changed of [
+          { ...config, stepSeconds: 1 / 120 },
+          { ...config, durationSeconds: 5 },
+          { ...config, traceStride: 6 },
+          { ...config, objectMassKilograms: 0.5 },
+          { ...config, staticFrictionMu: 0.9 },
+          { ...config, obstacles: config.obstacles.slice().reverse() },
+          { ...config, obstacles: config.obstacles.slice(1) },
+          {
+            ...config,
+            obstacles: config.obstacles.map((obstacle, index) =>
+              index ? obstacle : { ...obstacle, role: "keep-out" as const },
+            ),
+          },
+        ])
+          expect(() => armVerifySharedExperiment(meta, changed)).toThrow(
+            "different scene or owner configuration",
+          );
+        for (const changed of [
+          { ...meta, task: "walking" },
+          { ...meta, challenge: "flat" },
+          { ...meta, family: "foreign" },
+          { ...meta, kernelVersion: "foreign" },
+          { ...meta, experiment: { ...meta.experiment, kind: "g1" as const } },
+          {
+            ...meta,
+            experiment: {
+              ...meta.experiment,
+              ownerSourceRevision: "0".repeat(40),
+            },
+          },
+          {
+            ...meta,
+            experiment: { ...meta.experiment, ownerWasmSha256: "0".repeat(64) },
+          },
+          { ...meta, experiment: { ...meta.experiment, seedIndex: 3 } },
+          {
+            ...meta,
+            experiment: {
+              ...meta.experiment,
+              inputBytes: meta.experiment.inputBytes.slice(0, -16),
+            },
+          },
+        ])
+          expect(() => armVerifySharedExperiment(changed, config)).toThrow();
+        const { experiment, ...archive } = meta;
+        expect(experiment.seedIndex).toBe(2);
+        expect(armRestoreSharedExperiment(archive).seedIndex).toBe(0);
+      } finally {
+        evaluator.free();
+      }
+    }
+  });
+});
 
 describe("G1 optimization task protocol", () => {
   test("restores the moved terrain experiment and refuses altered owner or physical inputs", async () => {
-    const original = await g1ExperimentForSeat("walking", "terrain-and-push", [
-      -2.125, -0, 1.375,
-    ]);
+    const original = await g1ExperimentForSeat(
+      "walking",
+      "terrain-and-push",
+      [-2.125, -0, 1.375],
+    );
     const meta = {
       kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
       task: "walking",

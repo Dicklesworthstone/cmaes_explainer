@@ -17,16 +17,19 @@ import {
   type HouseholdManipulationTraceReceipt,
 } from "../lib/frankensimCmaes";
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
+import {
+  armRestoreSharedExperiment,
+  armSharedExperiment,
+  armVerifySharedExperiment,
+} from "../lib/g1OptimizationProtocol";
+import type { SharedArmExperiment, SharedPolicy } from "../lib/g1PolicyShare";
 
 type WorkerRequest =
-  | { type: "preview"; task: HouseholdManipulationTask }
+  | { type: "preview"; task: HouseholdManipulationTask; seedIndex?: number }
   | {
       /** Render a policy the operator imported from a file or a share link. */
       type: "replay";
-      task: HouseholdManipulationTask;
-      family: CmaFamily;
-      policy: Float64Array;
-      generation: number;
+      imported: SharedPolicy;
     }
   | {
       type: "optimize";
@@ -69,6 +72,8 @@ type WorkerResponse =
       admission: HouseholdManipulationAdmission;
       generation: number;
       family: ArmTraceOrigin;
+      experiment: SharedArmExperiment;
+      sigma: number;
       continuing?: boolean;
       stopped?: boolean;
       /**
@@ -104,6 +109,8 @@ type ArmActiveRun = {
   bestObjective: number;
   completedGeneration: number;
   maxTotalGenerations: number;
+  sigma: number;
+  experiment: SharedArmExperiment;
 };
 // Same operator-bounded contract as G1. The owner intentionally admits the
 // evaluation budget as an exact u32. At population 12, 250 million generations
@@ -123,6 +130,11 @@ function armFreeRun(run: ArmActiveRun): void {
   }
   try {
     run.pool.free();
+  } catch {
+    // ditto
+  }
+  try {
+    run.evaluator.free();
   } catch {
     // ditto
   }
@@ -224,39 +236,42 @@ function reportParallelEvaluation(
  * would have trained it.
  */
 async function replayArmPolicy(
-  task: HouseholdManipulationTask,
-  family: CmaFamily,
-  policy: Float64Array,
-  generation: number,
+  imported: SharedPolicy,
 ): Promise<void> {
+  const { task, family } = armRestoreSharedExperiment(imported);
   post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
+  const config = await taskConfig(task);
+  const experiment = armVerifySharedExperiment(imported, config);
   const evaluator = requireOk(
-    await createFrankenSimHouseholdManipulationEvaluator(await taskConfig(task)),
+    await createFrankenSimHouseholdManipulationEvaluator(config),
     "household-arm admission"
   );
   try {
-    const trace = requireOk(evaluator.trace(policy), "imported policy trace");
+    const trace = requireOk(evaluator.trace(imported.policy), "imported policy trace");
     post({
       type: "trace",
       trace,
       admission: evaluator.admission,
-      generation,
+      generation: imported.generation,
       family,
-      policy: policy.slice(),
+      experiment,
+      sigma: imported.sigma,
+      policy: imported.policy.slice(),
     });
   } finally {
     evaluator.free();
   }
 }
 
-async function preview(task: HouseholdManipulationTask): Promise<void> {
+async function preview(task: HouseholdManipulationTask, seedIndex = 0): Promise<void> {
   post({
     type: "status",
     phase: "loading",
     detail: "Loading the pinned iiwa model and owner-composed manipulation evaluator…",
   });
+  const config = await taskConfig(task);
   const evaluator = requireOk(
-    await createFrankenSimHouseholdManipulationEvaluator(await taskConfig(task)),
+    await createFrankenSimHouseholdManipulationEvaluator(config),
     "household-arm admission"
   );
   try {
@@ -271,6 +286,8 @@ async function preview(task: HouseholdManipulationTask): Promise<void> {
       admission: evaluator.admission,
       generation: 0,
       family: "curriculum",
+      experiment: armSharedExperiment(config, seedIndex),
+      sigma: 0.001,
       policy: curriculumMean.slice(),
     });
   } finally {
@@ -342,7 +359,19 @@ async function optimize(
       }),
       "CMA admission"
     );
-    const activeRun: ArmActiveRun = { session, evaluator, pool: evaluationPool, bestPolicy, bestObjective, completedGeneration: 0, maxTotalGenerations: ARM_MAX_TOTAL_GENERATIONS };
+    const activeRun: ArmActiveRun = {
+      session,
+      evaluator,
+      pool: evaluationPool,
+      bestPolicy,
+      bestObjective,
+      completedGeneration: 0,
+      maxTotalGenerations: ARM_MAX_TOTAL_GENERATIONS,
+      sigma,
+      // The compact admission echoes timing/task and obstacle COUNT, not the
+      // full roster. Preserve the actual packet inputs used to create the owner.
+      experiment: armSharedExperiment(config, seedIndex),
+    };
     armActiveRuns.set(runKey, activeRun);
     run = activeRun;
   }
@@ -374,6 +403,7 @@ async function optimize(
       );
       completedGeneration = snapshot.generation;
       run.completedGeneration = completedGeneration;
+      run.sigma = snapshot.sigma;
       if (snapshot.best && snapshot.best.objective < run.bestObjective) {
         run.bestObjective = snapshot.best.objective;
         run.bestPolicy = snapshot.best.point.slice();
@@ -403,6 +433,8 @@ async function optimize(
           generation: completedGeneration,
           family,
           continuing: true,
+          experiment: run.experiment,
+          sigma: run.sigma,
           policy: run.bestPolicy.slice(),
         });
       }
@@ -422,6 +454,8 @@ async function optimize(
       admission: run.evaluator.admission,
       generation: completedGeneration,
       family,
+      experiment: run.experiment,
+      sigma: run.sigma,
       policy: run.bestPolicy.slice(),
       stopped,
     });
@@ -546,9 +580,9 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // IIFE cannot start until the previous task resolves.
   const work = () =>
     request.type === "replay"
-      ? replayArmPolicy(request.task, request.family, request.policy, request.generation)
+      ? replayArmPolicy(request.imported)
       : request.type === "preview"
-      ? preview(request.task)
+      ? preview(request.task, request.seedIndex)
       : request.type === "compare"
         ? compareFamilies(request.task, request.generations)
         : optimize(

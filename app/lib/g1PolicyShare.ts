@@ -71,6 +71,17 @@ export interface SharedG1Experiment {
   seedIndex: number;
 }
 
+export interface SharedArmExperiment {
+  version: 1;
+  kind: "arm";
+  ownerSourceRevision: string;
+  ownerWasmSha256: string;
+  /** Exact little-endian f64 owner config, including ordered obstacle roles. */
+  inputBytes: string;
+  /** Selects the declared Philox seeds 0x41524d31 through 0x41524d33. */
+  seedIndex: number;
+}
+
 export interface SharedPolicyMeta {
   /** Owner kernel the policy was trained against, e.g. "fs-cmaes-viz-wasm 0.6.19". */
   kernelVersion: string;
@@ -88,7 +99,7 @@ export interface SharedPolicyMeta {
   /** Search radius the run used. */
   sigma: number;
   /** Present for exact experiment replay; absent on archival coefficient-only policies. */
-  experiment?: SharedG1Experiment;
+  experiment?: SharedG1Experiment | SharedArmExperiment;
 }
 
 export interface SharedPolicy extends SharedPolicyMeta {
@@ -168,7 +179,7 @@ export function validatePolicyMetadata(
       !experiment ||
       typeof experiment !== "object" ||
       experiment.version !== 1 ||
-      experiment.kind !== "g1" ||
+      (experiment.kind !== "g1" && experiment.kind !== "arm") ||
       typeof experiment.ownerSourceRevision !== "string" ||
       !/^[0-9a-f]{40}$/.test(experiment.ownerSourceRevision) ||
       typeof experiment.ownerWasmSha256 !== "string" ||
@@ -182,7 +193,7 @@ export function validatePolicyMetadata(
       experiment.seedIndex < 0 ||
       experiment.seedIndex > 2
     ) {
-      throw new Error("policy share: invalid G1 experiment");
+      throw new Error("policy share: invalid robot experiment");
     }
   }
 }
