@@ -33,11 +33,11 @@ function unwrap<T>(
 }
 
 const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js"
+  "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js"
 );
 const ownerBytes = await Bun.file(
   new URL(
-    "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+    "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
     import.meta.url,
   ),
 ).arrayBuffer();
@@ -105,7 +105,7 @@ function receiptWithoutSamples(receipt: G1TraceReceipt): G1ObjectiveReceipt {
   return objective;
 }
 
-describe("G1 v0622 owner trace safety envelope", () => {
+describe("G1 v0623 owner trace safety envelope", () => {
   test("emits finite, bounded, 30-link world poses", () => {
     expect(curriculumTrace.samples.length).toBeGreaterThanOrEqual(5);
     assertFiniteBoundedOwnerTrace(curriculumTrace);

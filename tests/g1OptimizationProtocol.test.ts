@@ -38,11 +38,11 @@ import {
 describe("Arm exact experiment archives", () => {
   test("replays all three real task rosters from exact file/link/storage inputs and refuses altered experiments", async () => {
     const owner =
-      await import("../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
         new URL(
-          "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
           import.meta.url,
         ),
       ).arrayBuffer(),
@@ -356,11 +356,11 @@ describe("G1 optimization task protocol", () => {
 
   test("replays the disclosed scene packets through the actual shipped owner", async () => {
     const owner =
-      await import("../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
         new URL(
-          "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
           import.meta.url,
         ),
       ).arrayBuffer(),

@@ -142,7 +142,7 @@ describe("FrankenRobots engine exporter safety boundary", () => {
 
   test("native export accepts the real owner and refuses changed manifest, glue and WASM bytes", async () => {
     const root = mkdtempSync(join(tmpdir(), "frankenrobots-owner-test-"));
-    const relativeOwner = "wasm/fs-cmaes/v0622";
+    const relativeOwner = "wasm/fs-cmaes/v0623";
     const shippedOwner = fileURLToPath(
       new URL(`../public/${relativeOwner}`, import.meta.url),
     );
@@ -151,7 +151,7 @@ describe("FrankenRobots engine exporter safety boundary", () => {
         cmd: [
           "zsh",
           "-c",
-          'source "$1"; OWNER_RUNTIME_DIR=v0622; verify_owner_artifact "$2"',
+          'source "$1"; OWNER_RUNTIME_DIR=v0623; verify_owner_artifact "$2"',
           "verify-owner",
           scriptFilePath,
           engine,
