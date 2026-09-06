@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "37e24d745f6623bed70c5f9598f1089096de0243",
+  "sourceRevision": "b0cfa006db4d9f0b721c18e83b22064554cd28b5",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -23,7 +23,7 @@
   },
   "assets": {
     "javascriptSha256": "0b2d0d1631e87f162143ef07d0f41783ab0b8a9d2489fa90eb3225b995d9ceab",
-    "wasmSha256": "a71b9d00326216e8ab0350447fd1a964b2e991d336fafab920e4f4cb34ad0bea"
+    "wasmSha256": "5f2933a082dd4eb4903cf77357e0926ecab2545944bd20f992a621797f5ecea7"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",
@@ -186,7 +186,7 @@
     "browserResidualTrainer": {
       "exported": "G1TransformerTrainerSession",
       "searchedParams": 960,
-      "optimizer": "LM-CMA (fs-dfo) with IPOP restarts",
+      "optimizer": "LM-CMA (fs-dfo) with IPOP restarts after 25 stalled generations",
       "granularity": "one rollout per pump()",
       "objective": "the walking owner's own multi-factor objective, the same scalar CMA-ES minimises",
       "baseline": "zero policy head, which on a residual policy is exactly the tuned controller"

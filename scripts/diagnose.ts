@@ -42,19 +42,32 @@ const pause = (ms: number) =>
 const log = (event: string, details: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ event, ...details })}\n`);
 
+async function downloadTelemetry(page: Page) {
+  const stageControls = page.locator('button[aria-controls="g1-hud-controls"]');
+  if (
+    (await stageControls.count()) &&
+    (await stageControls.getAttribute("aria-expanded")) === "false"
+  ) {
+    await stageControls.click();
+  }
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Export Telemetry", exact: true }).click(),
+  ]);
+  return download;
+}
+
 async function captureReplayExport(page: Page, out: string, name: string) {
-  const policyDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download", exact: true }).click();
+  const [policyDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download", exact: true }).click(),
+  ]);
   const policyPath = join(out, `${name}.policy.json`);
-  await (await policyDownload).saveAs(policyPath);
+  await policyDownload.saveAs(policyPath);
   const { exportedAt, ...policy } = JSON.parse(
     await readFile(policyPath, "utf8"),
   );
-  const telemetryDownload = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Export Telemetry", exact: true })
-    .click();
-  const download = await telemetryDownload;
+  const download = await downloadTelemetry(page);
   const telemetryPath = join(out, `${name}-telemetry.json`);
   await download.saveAs(telemetryPath);
   const { exportTimestamp, ...telemetry } = JSON.parse(
@@ -908,7 +921,7 @@ async function run() {
     );
     await stopTraining.click();
     await startTraining.waitFor();
-    const stoppedTraining = await trainingPage.evaluate(
+    let stoppedTraining = await trainingPage.evaluate(
       () =>
         (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
           .__trainingMessages,
@@ -927,6 +940,52 @@ async function run() {
       stoppedTraining.length,
       "Training continued after the stopped acknowledgement",
     );
+    const stoppedProgress = stoppedTraining.at(-1);
+    assert(stoppedProgress?.type === "stopped" && stoppedProgress.progress);
+    const resumedFrom = stoppedProgress.progress.evaluations;
+    const resumeMessageStart = stoppedTraining.length;
+    await startTraining.click();
+    await trainingPage.waitForFunction(
+      ({ start, evaluations }) =>
+        (
+          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
+        ).__trainingMessages
+          .slice(start)
+          .some(
+            (message) =>
+              message.type === "progress" &&
+              message.progress.evaluations > evaluations,
+          ),
+      { start: resumeMessageStart, evaluations: resumedFrom },
+    );
+    await stopTraining.click();
+    await startTraining.waitFor();
+    stoppedTraining = await trainingPage.evaluate(
+      () =>
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
+          .__trainingMessages,
+    );
+    const resumedProgress = stoppedTraining
+      .slice(resumeMessageStart)
+      .find((message) => message.type === "progress");
+    assert.equal(
+      resumedProgress?.progress.evaluations,
+      resumedFrom,
+      "Resume restarted the search",
+    );
+    const [trainedPolicyDownload] = await Promise.all([
+      trainingPage.waitForEvent("download"),
+      trainingPage
+        .getByRole("button", { name: "Download policy", exact: true })
+        .click(),
+    ]);
+    const trainedPolicyPath = join(out, "trained-residual.fsgt");
+    await trainedPolicyDownload.saveAs(trainedPolicyPath);
+    const trainedPolicy = await readFile(trainedPolicyPath);
+    assert.equal(trainedPolicy.subarray(0, 4).toString(), "FSGT");
+    assert.equal(trainedPolicy.readUInt32LE(4), 1);
+    assert.equal(trainedPolicy.readUInt32LE(8), 64);
+    assert(trainedPolicy.length > 64);
     await trainingPage
       .getByRole("combobox", { name: "Conditions" })
       .selectOption("terrain");
@@ -1002,6 +1061,8 @@ async function run() {
       heldTrainingWasm,
       stoppedMessageCount,
       stoppedTraining,
+      resumedFrom,
+      trainedPolicyBytes: trainedPolicy.length,
       workerFailureInjected: true,
       ownerWasmCorruptionInjected: true,
       finalMessages: await trainingPage.evaluate(
@@ -1368,12 +1429,8 @@ async function run() {
           await sceneElement.getAttribute("data-g1-scene-digest"),
           stopped.scene.digest,
         );
-        const downloadPromise = ownerPage.waitForEvent("download");
-        await ownerPage
-          .getByRole("button", { name: "Export Telemetry", exact: true })
-          .click();
         await (
-          await downloadPromise
+          await downloadTelemetry(ownerPage)
         ).saveAs(join(out, "g1-moved-seat-telemetry.json"));
         const originalTelemetry = JSON.parse(
           await readFile(join(out, "g1-moved-seat-telemetry.json"), "utf8"),
@@ -1476,15 +1533,12 @@ async function run() {
             new Uint8Array(originalPolicy.policy.buffer),
           );
           assert.deepEqual(replayed.experiment, originalPolicy.experiment);
-          const replayTelemetryDownload = replayPage.waitForEvent("download");
-          await replayPage
-            .getByRole("button", { name: "Export Telemetry", exact: true })
-            .click();
+          const replayTelemetryDownload = await downloadTelemetry(replayPage);
           const telemetryPath = join(
             out,
             `g1-${transport}-restored-telemetry.json`,
           );
-          await (await replayTelemetryDownload).saveAs(telemetryPath);
+          await replayTelemetryDownload.saveAs(telemetryPath);
           const replayTelemetry = JSON.parse(
             await readFile(telemetryPath, "utf8"),
           );
@@ -1742,12 +1796,9 @@ async function run() {
       await armPage
         .getByRole("button", { name: "Restart arm trace", exact: true })
         .click();
-      const downloadPromise = armPage.waitForEvent("download");
-      await armPage
-        .getByRole("button", { name: "Export Telemetry", exact: true })
-        .click();
+      const telemetryDownload = await downloadTelemetry(armPage);
       const telemetryPath = join(out, `arm-${task}-telemetry.json`);
-      await (await downloadPromise).saveAs(telemetryPath);
+      await telemetryDownload.saveAs(telemetryPath);
       const telemetry = await Bun.file(telemetryPath).json();
       assert.equal(telemetry.task, task);
       assert.equal(
@@ -1887,12 +1938,9 @@ async function run() {
     const armSavedStorage = await armPage.evaluate(() =>
       Object.fromEntries(Object.entries(localStorage)),
     );
-    const armTelemetryDownload = armPage.waitForEvent("download");
-    await armPage
-      .getByRole("button", { name: "Export Telemetry", exact: true })
-      .click();
+    const armTelemetryDownload = await downloadTelemetry(armPage);
     const armTelemetryPath = join(out, "arm-learned-trowel-telemetry.json");
-    await (await armTelemetryDownload).saveAs(armTelemetryPath);
+    await armTelemetryDownload.saveAs(armTelemetryPath);
     const armTelemetry = JSON.parse(await readFile(armTelemetryPath, "utf8"));
     await armPage
       .getByRole("button", { name: "Share link", exact: true })
@@ -2075,15 +2123,12 @@ async function run() {
         new Uint8Array(restored.policy.buffer),
         new Uint8Array(armPolicy.policy.buffer),
       );
-      const restoredTelemetryDownload = replayPage.waitForEvent("download");
-      await replayPage
-        .getByRole("button", { name: "Export Telemetry", exact: true })
-        .click();
+      const restoredTelemetryDownload = await downloadTelemetry(replayPage);
       const restoredTelemetryPath = join(
         out,
         `arm-${transport}-restored-telemetry.json`,
       );
-      await (await restoredTelemetryDownload).saveAs(restoredTelemetryPath);
+      await restoredTelemetryDownload.saveAs(restoredTelemetryPath);
       const restoredTelemetry = JSON.parse(
         await readFile(restoredTelemetryPath, "utf8"),
       );

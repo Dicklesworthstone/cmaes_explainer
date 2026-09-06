@@ -127,11 +127,13 @@ export function RealPhysicsResidual() {
       </p>
       <p className="mt-3 text-sm leading-6 text-slate-400">
         Only the {receipt.searchedParams}-parameter output layer moves. Letting
-        the search touch more of the network makes it{" "}
-        <em>worse</em> at equal budget — 38,016 parameters scored 33.3% and all
-        77,696 scored 21.1%, against 46.3% for the head alone. More capacity is
-        not more capability when every evaluation costs a physics rollout.
-        Weights and receipts ship under{" "}
+        the search touch more of the network makes it <em>worse</em>, and not
+        for want of trying: on the same two challenges the head scored 46.3%
+        from 9,600 evaluations, while 38,016 parameters scored 33.3% from
+        14,000 and all 77,696 scored 21.1% from 14,800. The larger scopes were
+        given more search, not less, and still lost. More capacity is not more
+        capability when every evaluation costs a physics rollout. Weights and
+        receipts ship under{" "}
         <code className="break-all">public/robots/g1/transformer/</code>.
       </p>
     </div>
