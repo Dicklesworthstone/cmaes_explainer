@@ -42,6 +42,23 @@ const scope = self as unknown as {
 let trainer: FrankenSimG1TransformerTrainer | null = null;
 let running = false;
 let latest: G1TransformerProgress | null = null;
+/**
+ * Set while a trainer is being constructed. `running` only becomes true once
+ * construction resolves, so guarding on it alone let two rapid starts both pass:
+ * the second would free the trainer the first loop was still pumping.
+ */
+let starting = false;
+/** Config the live trainer was built for, so an unchanged restart can resume. */
+let activeKey: string | null = null;
+
+function configKey(request: Extract<TrainingWorkerRequest, { type: "start" }>): string {
+  return [
+    request.challenge,
+    request.durationSeconds,
+    request.sigma,
+    request.seed,
+  ].join(":");
+}
 
 /** Post at most this often; a rollout is fast enough to outpace a repaint. */
 const PROGRESS_INTERVAL_MS = 250;
@@ -96,7 +113,19 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     }
     return;
   }
-  if (running) return;
+  if (running || starting) return;
+  const key = configKey(request);
+  // Resuming the same configuration keeps everything already learned. A run
+  // left going for an hour must not be thrown away because someone pressed
+  // stop and start again.
+  if (trainer && activeKey === key) {
+    latest = trainer.progress();
+    scope.postMessage({ type: "progress", progress: latest });
+    running = true;
+    void loop();
+    return;
+  }
+  starting = true;
   createFrankenSimG1TransformerTrainer({
     challenge: request.challenge,
     durationSeconds: request.durationSeconds,
@@ -106,10 +135,15 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     .then((created) => {
       trainer?.free();
       trainer = created;
+      activeKey = key;
+      starting = false;
       latest = created.progress();
       scope.postMessage({ type: "progress", progress: latest });
       running = true;
       return loop();
     })
-    .catch(fail);
+    .catch((error: unknown) => {
+      starting = false;
+      fail(error);
+    });
 };

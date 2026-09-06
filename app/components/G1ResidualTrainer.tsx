@@ -100,6 +100,8 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
 
 export function G1ResidualTrainer() {
   const workerRef = useRef<Worker | null>(null);
+  /** Condition the live worker was started for; see `start`. */
+  const startedChallengeRef = useRef<G1TransformerChallenge | null>(null);
   // Flat by default. It is one rollout per candidate instead of two and it is
   // the easier condition, so the curve starts falling in well under a minute
   // rather than after several — and a search that visibly works is the whole
@@ -131,8 +133,12 @@ export function G1ResidualTrainer() {
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `g1-residual-${Math.round(message.progress.evaluations)}-evals.bin`;
+      document.body.append(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      anchor.remove();
+      // Revoking in the same tick cancels the download in some browsers: the
+      // fetch of the blob URL has not started when the object is released.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       return;
     }
     setProgress(message.progress);
@@ -145,8 +151,11 @@ export function G1ResidualTrainer() {
             objective: message.progress.bestObjective,
           },
         ];
+        // Thin uniformly instead of dropping the oldest points. A run left
+        // going for hours has its entire story in the early plunge; slicing
+        // the tail would eventually show nothing but a flat line.
         return next.length > MAX_CURVE_POINTS
-          ? next.slice(next.length - MAX_CURVE_POINTS)
+          ? next.filter((_point, index) => index % 2 === 0)
           : next;
       });
     }
@@ -160,7 +169,10 @@ export function G1ResidualTrainer() {
   }, []);
 
   const post = (request: TrainingWorkerRequest) => {
+    // Only a start is worth spinning a worker up for; stop and export against
+    // a worker that never existed would just bounce back as an error.
     if (!workerRef.current) {
+      if (request.type !== "start") return;
       workerRef.current = spawnTrainingWorker(handleMessage);
     }
     workerRef.current.postMessage(request);
@@ -168,8 +180,14 @@ export function G1ResidualTrainer() {
 
   const start = () => {
     setError(null);
-    setCurve([]);
-    setProgress(null);
+    // The worker resumes an unchanged configuration rather than rebuilding,
+    // so the curve must survive a stop/start too. Only a different condition
+    // starts a genuinely new search, and only then is the old curve stale.
+    if (startedChallengeRef.current !== challenge) {
+      setCurve([]);
+      setProgress(null);
+      startedChallengeRef.current = challenge;
+    }
     setRunning(true);
     post({
       type: "start",

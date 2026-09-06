@@ -248,6 +248,14 @@ const G1_LIVE_REPLAY_INTERVAL = 32;
 const TERRAIN_ABOVE_FLOOR_M = 0.006;
 /** Wireframe overlay offset above the terrain solid [m]. */
 const TERRAIN_WIREFRAME_OFFSET_M = 0.003;
+/**
+ * Peak of the terrain displacement field as a multiple of its amplitude. The
+ * squared sine peaks at 1 and the third-harmonic modulation adds a further
+ * fifth, so a crest reaches 1.2 x amplitude — not amplitude. Anything that
+ * needs to clear the terrain must use this, or it clears only the shallow
+ * cases and gets swallowed by the deep ones.
+ */
+const TERRAIN_PEAK_FACTOR = 1.2;
 
 const G1_LINK_RADIUS_METERS = 0.105;
 const G1_LINK_CLEARANCE_MARGIN_METERS = 0.015;
@@ -433,7 +441,10 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
       const sine = Math.sin(wavenumber * x);
       positions.setY(
         vertex,
-        amplitude * sine * sine * (1 + 0.2 * Math.sin(3 * ownerY))
+        amplitude *
+          sine *
+          sine *
+          (1 + (TERRAIN_PEAK_FACTOR - 1) * Math.sin(3 * ownerY))
       );
     }
     positions.needsUpdate = true;
@@ -2037,8 +2048,9 @@ function RobotStage({
         safeRadius={0.32}
         groundProjectionY={
           TERRAIN_ABOVE_FLOOR_M +
+          TERRAIN_WIREFRAME_OFFSET_M +
           (admission?.config.challenge === "terrain-and-push"
-            ? admission.terrainAmplitudeMeters
+            ? TERRAIN_PEAK_FACTOR * admission.terrainAmplitudeMeters
             : 0) +
           0.02
         }
@@ -2218,6 +2230,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     { type: "progress" }
   > | null>(null);
   const progressFlushRef = useRef<number | null>(null);
+  // Drop a progress message that has not been rendered yet. Every run reset
+  // must call this: a queued flush would otherwise repaint the previous run's
+  // generation and objective over the freshly cleared state.
+  const discardPendingProgress = useCallback(() => {
+    if (progressFlushRef.current !== null) {
+      window.clearTimeout(progressFlushRef.current);
+      progressFlushRef.current = null;
+    }
+    pendingProgressRef.current = null;
+  }, []);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -2436,6 +2458,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setComparison(null);
     setActiveTrace("curriculum");
     progressHistoryRef.current = [];
+    discardPendingProgress();
     setLedger([]);
     // Each task/challenge keeps its own saved run, so switching experiments
     // must look for that experiment's run rather than staying with the one
@@ -2446,7 +2469,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setProgressHistory([]);
     setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
     post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
-  }, [post, seekPlayback, resetPlayback]);
+  }, [post, seekPlayback, resetPlayback, discardPendingProgress]);
 
   // Keep the last measured robot in place until the owner answers for the
   // requested position. A refusal leaves that previous trace intact.
@@ -2459,6 +2482,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setComparison(null);
     setLedger([]);
     progressHistoryRef.current = [];
+    discardPendingProgress();
     setProgressHistory([]);
     resumedPolicyRef.current = null;
     post(
@@ -2470,7 +2494,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       },
       "preview",
     );
-  }, [post]);
+  }, [post, discardPendingProgress]);
 
   /** Replay a policy the operator brought in, from a file or a share link. */
   const handlePolicyImport = useCallback(
@@ -2525,6 +2549,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setCurriculumReplay(null);
       setComparison(null);
       progressHistoryRef.current = [];
+      discardPendingProgress();
       setProgressHistory([]);
       setLedger([]);
       trainingSecondsRef.current = 0;
@@ -2546,7 +2571,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         "preview",
       );
     },
-    [post, seekPlayback, resetPlayback],
+    [post, seekPlayback, resetPlayback, discardPendingProgress],
   );
 
   // A policy can arrive in the URL before the owner has loaded. Stash the

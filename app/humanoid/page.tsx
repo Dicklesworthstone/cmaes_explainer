@@ -164,8 +164,11 @@ export default function HumanoidPage() {
             one dropdown away. There is no fixed budget, so it keeps going until
             you stop it — on one laptop it passed{" "}
             <strong>120% better than the tuned controller</strong> inside two
-            minutes — and the policy it finds downloads as the same artifact
-            format the page ships.
+            minutes — and the policy it finds downloads as an FSGT weights
+            file. It is a 64-wide, two-layer model, so it is deliberately not
+            interchangeable with the 256-wide artifact the comparison above
+            loads; that loader pins its audited architecture and refuses
+            anything else, which is the point of the audit.
           </p>
           <div className="mt-6">
             <G1ResidualTrainer />
