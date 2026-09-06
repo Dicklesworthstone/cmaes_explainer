@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { G1WalkingFlagship } from "../components/G1WalkingFlagship";
 import { PolicyAblationComparison } from "../components/PolicyAblationComparison";
+import { RealPhysicsResidual } from "../components/RealPhysicsResidual";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
@@ -105,6 +106,30 @@ export default function HumanoidPage() {
           </p>
           <div className="mt-6">
             <PolicyAblationComparison />
+          </div>
+        </section>
+
+        <section
+          id="real-physics-residual"
+          className="mx-auto mt-16 max-w-5xl"
+          aria-label="Transformer residual measured on real G1 physics"
+        >
+          <h2 className="font-display text-2xl font-bold text-white">
+            The same transformer, measured on the real robot
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+            Everything above is measured in the stand-in, and a stand-in whose
+            forward speed is a formula can only ever settle an argument about
+            the formula. So the same architecture was searched against the owner
+            the flagship actually runs — articulated-body dynamics, real
+            contact, and the identical objective CMA-ES minimises in the demo at
+            the top of this page. The transformer contributes a residual on top
+            of the tuned controller and its output layer starts at zero, so the
+            search <em>begins</em> at that controller&apos;s exact behaviour and
+            has to earn every step from there.
+          </p>
+          <div className="mt-6">
+            <RealPhysicsResidual />
           </div>
         </section>
 

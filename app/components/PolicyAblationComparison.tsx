@@ -26,11 +26,12 @@ function spawnAblationWorker(onMessage: (msg: AblationWorkerResponse) => void): 
  * walking explainer. MEASURED contract (cmaes-ablation-real):
  *   1. CMA-ES side — a real live search (105-param phase-basis linear
  *      policy, 2,400 rollouts on G1TrainEnv) re-run per seed selection.
- *   2. Transformer side — the committed native-Rust artifact is inferred in
- *      a worker and transferred without retraining onto the current
- *      action-causal stand-in. Its legacy training environment self-propelled
- *      under zero action, so the contract mismatch is a measured failure, not
- *      presented as a learned-locomotion success.
+ *   2. Transformer side — the native-Rust artifact is inferred in a worker.
+ *      Its committed PPO+Muon run exported an all-zero policy head, which on
+ *      an action-causal contract means no action and no motion. The shipped
+ *      artifact keeps that trunk frozen and refits only the output layer
+ *      (scripts/fit-transformer-head.ts, then scripts/train-transformer-head.ts),
+ *      so what this card shows is a working policy, not a transfer failure.
  * Known limits, disclosed in-card: the stand-in env models no push,
  * joint-limit, or slip telemetry, so those rows read "—".
  */

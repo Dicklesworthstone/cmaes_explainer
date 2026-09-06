@@ -1,0 +1,13 @@
+{
+  "searchedParams": 960,
+  "episodes": 8101,
+  "challenge": "Flat",
+  "durationSeconds": 1.5,
+  "tunedControllerObjective": -59.41344499020653,
+  "tunedControllerDistanceMeters": 0.30837211553531235,
+  "residualObjective": -86.60493071864894,
+  "residualDistanceMeters": 0.4742039480178339,
+  "residualCompletedSteps": 720,
+  "headL2Norm": 0.00009363844,
+  "wallclockSeconds": 332.7
+}
