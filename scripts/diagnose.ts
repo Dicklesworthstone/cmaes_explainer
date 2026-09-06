@@ -859,7 +859,7 @@ async function run() {
       let interventions = 0;
       if (changed) {
         await ownerContext.route(
-          `**/wasm/fs-cmaes/v0622/${changed}`,
+          `**/wasm/fs-cmaes/v0623/${changed}`,
           async (route) => {
             const response = await route.fetch();
             assert(

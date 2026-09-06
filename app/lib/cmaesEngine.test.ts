@@ -8,7 +8,7 @@ import {
   runRandomSearch,
 } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
-import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0622/manifest.json";
+import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0623/manifest.json";
 import {
   CMAES_VISUALIZATION_F_TARGET,
   DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -1523,23 +1523,23 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
   const wasm =
-    await import("../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+    await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+      "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
       import.meta.url,
     ),
   ).arrayBuffer();
   const javascriptBytes = await Bun.file(
     new URL(
-      "../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js",
+      "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js",
       import.meta.url,
     ),
   ).arrayBuffer();
   await verifyOwnerArtifacts(ownerArtifactManifest, javascriptBytes, wasmBytes);
   await wasm.default({ module_or_path: wasmBytes });
 
-  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.22");
+  expect(wasm.cmaes_viz_kernel_version()).toBe("fs-cmaes-viz-wasm 0.6.23");
   verifyOwnerRuntimeIdentity(
     ownerArtifactManifest,
     wasm.cmaes_viz_kernel_version(),

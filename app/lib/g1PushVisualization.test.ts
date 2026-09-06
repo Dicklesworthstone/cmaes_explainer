@@ -28,11 +28,11 @@ const OWNER_PULSE: G1PushVisualizationInput = {
 describe("resolveG1PushVisualization", () => {
   test("timeline labels the actual owner push and termination on real flat and pushed traces", async () => {
     const owner =
-      await import("../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+      await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
         new URL(
-          "../../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+          "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
           import.meta.url,
         ),
       ).arrayBuffer(),

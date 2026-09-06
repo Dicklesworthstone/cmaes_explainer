@@ -133,7 +133,7 @@ because its dense covariance would require 25,401,600 entries.
 
 ## Versioned WebAssembly
 
-The tutorial uses `v041`; the robot flagships use `v0622`. Earlier artifacts
+The tutorial uses `v041`; the robot flagships use `v0623`. Earlier artifacts
 remain available for historical comparisons:
 
 - `public/wasm/fs-cmaes/v041/` is the complete-trajectory-compatible kernel for
@@ -184,7 +184,7 @@ remain available for historical comparisons:
   the living-room placement the curriculum is unchanged; seated inside the
   sofa it terminates at step 1.
 
-- `public/wasm/fs-cmaes/v0622/` exposes the controller layout through G1
+- `public/wasm/fs-cmaes/v0623/` exposes the controller layout through G1
   schema 9: 29 physical actuators, 30 links, 15 learned rows, 14 reflex joints,
   exact 15/30/60 curriculum coordinate membership, and fixed arm-gate times.
   CMA schema 2 and household-arm schema 4 remain distinct contracts. Its

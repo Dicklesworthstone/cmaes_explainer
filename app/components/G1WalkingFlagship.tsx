@@ -3719,7 +3719,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 </p>
                 <a
                   className="text-cyan-300 underline underline-offset-2"
-                  href="/wasm/fs-cmaes/v0622/manifest.json"
+                  href="/wasm/fs-cmaes/v0623/manifest.json"
                   target="_blank"
                   rel="noreferrer"
                 >

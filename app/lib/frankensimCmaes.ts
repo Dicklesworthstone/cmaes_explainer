@@ -1,5 +1,5 @@
 import type { HouseholdKernelObstacle } from "./houseMultiObstacleKernel";
-import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0622/manifest.json";
+import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0623/manifest.json";
 
 /**
  * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
@@ -1167,7 +1167,7 @@ const ARM_TRACE_SAMPLE_WORDS = 67;
 const ARM_ADMISSION_WORDS = 40;
 const ARM_RECEIPT_WORDS = 22;
 
-export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.22";
+export const FRANKENSIM_OWNER_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.6.23";
 export const FRANKENSIM_OWNER_ARTIFACT = ownerArtifactManifest;
 
 export type CmaFamily = "full" | "separable" | "lm-cma" | "lm-ma";
@@ -1365,6 +1365,21 @@ type OwnerWasmModule = WasmModule & {
   HouseholdManipulationVizEvaluator?: new (
     config: Float64Array,
   ) => RawManipulationEvaluator;
+  G1TransformerTrainerSession?: new (
+    challenge: number,
+    durationSeconds: number,
+    sigma: number,
+    seed: number,
+  ) => RawG1TransformerTrainer;
+};
+
+/** Raw wasm handle for the in-browser residual trainer (kernel >= 0.6.23). */
+type RawG1TransformerTrainer = {
+  pump: () => Float64Array;
+  progress: () => Float64Array;
+  best_head: () => Float64Array;
+  export_weights: () => Uint8Array;
+  free?: () => void;
 };
 
 let ownerModule: OwnerWasmModule | null = null;
@@ -1376,8 +1391,8 @@ export function initFrankenSimOwnerKernel(): Promise<OwnerKernelStatus> {
   ownerLoadPromise = (async (): Promise<OwnerKernelStatus> => {
     try {
       const loaded = (await loadWasmModule(
-        "/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js",
-        "/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+        "/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js",
+        "/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
         ownerArtifactManifest,
       )) as OwnerWasmModule;
       const version =
@@ -2524,6 +2539,130 @@ export async function createFrankenSimG1WalkingEvaluator(
     return decoded;
   }
   return { ok: new FrankenSimG1WalkingEvaluator(raw, decoded.ok) };
+}
+
+/** Which conditions a trained candidate must satisfy. */
+export type G1TransformerChallenge = "flat" | "terrain" | "both";
+
+const G1_TRANSFORMER_CHALLENGE_CODE: Record<G1TransformerChallenge, number> = {
+  flat: 0,
+  terrain: 1,
+  both: 2,
+};
+
+/** One decoded progress packet from the in-browser residual trainer. */
+export interface G1TransformerProgress {
+  /** "running" mid-generation, "generation" when the distribution updated. */
+  status: "running" | "generation" | "stopped";
+  generation: number;
+  evaluations: number;
+  bestObjective: number;
+  bestDistanceMeters: number;
+  /** The tuned controller: this policy before the search moved it. */
+  baselineObjective: number;
+  baselineDistanceMeters: number;
+  restarts: number;
+  population: number;
+  lastObjective: number;
+  lastDistanceMeters: number;
+  lastCompletedSteps: number;
+}
+
+const TRAINER_PACKET_WORDS = 12;
+
+function decodeTrainerPacket(packet: Float64Array): G1TransformerProgress {
+  if (packet.length !== TRAINER_PACKET_WORDS) {
+    throw new Error(
+      `trainer packet must carry ${TRAINER_PACKET_WORDS} words, received ${packet.length}`,
+    );
+  }
+  const status =
+    packet[0] === 1 ? "generation" : packet[0] === 2 ? "stopped" : "running";
+  return {
+    status,
+    generation: packet[1],
+    evaluations: packet[2],
+    bestObjective: packet[3],
+    bestDistanceMeters: packet[4],
+    baselineObjective: packet[5],
+    baselineDistanceMeters: packet[6],
+    restarts: packet[7],
+    population: packet[8],
+    lastObjective: packet[9],
+    lastDistanceMeters: packet[10],
+    lastCompletedSteps: packet[11],
+  };
+}
+
+/**
+ * In-browser training of the transformer's residual head against the real
+ * walking owner.
+ *
+ * Each `pump` is exactly one physics rollout, so a caller can keep a progress
+ * bar honest and stop between candidates. The head starts at zero, which on a
+ * residual policy is the tuned controller itself, so `baselineObjective` is
+ * this policy before the search touched it rather than a separate run.
+ */
+export class FrankenSimG1TransformerTrainer {
+  private raw: RawG1TransformerTrainer | null;
+
+  constructor(raw: RawG1TransformerTrainer) {
+    this.raw = raw;
+  }
+
+  private handle(): RawG1TransformerTrainer {
+    if (!this.raw) throw new Error("trainer has been released");
+    return this.raw;
+  }
+
+  /** Advance by one rollout. */
+  pump(): G1TransformerProgress {
+    return decodeTrainerPacket(this.handle().pump());
+  }
+
+  /** Current progress without advancing. */
+  progress(): G1TransformerProgress {
+    return decodeTrainerPacket(this.handle().progress());
+  }
+
+  /** The best policy head found so far. */
+  bestHead(): Float64Array {
+    return this.handle().best_head();
+  }
+
+  /** The best policy so far as an FSGT artifact, ready to download or share. */
+  exportWeights(): Uint8Array {
+    return this.handle().export_weights();
+  }
+
+  free(): void {
+    this.raw?.free?.();
+    this.raw = null;
+  }
+}
+
+export async function createFrankenSimG1TransformerTrainer(options: {
+  challenge?: G1TransformerChallenge;
+  durationSeconds?: number;
+  sigma?: number;
+  seed?: number;
+} = {}): Promise<FrankenSimG1TransformerTrainer> {
+  const status = await initFrankenSimOwnerKernel();
+  const Trainer = ownerModule?.G1TransformerTrainerSession;
+  if (status.source !== "wasm" || !Trainer) {
+    throw new Error(
+      status.error ??
+        "Frankensim owner kernel does not expose the residual trainer",
+    );
+  }
+  return new FrankenSimG1TransformerTrainer(
+    new Trainer(
+      G1_TRANSFORMER_CHALLENGE_CODE[options.challenge ?? "both"],
+      options.durationSeconds ?? 1.5,
+      options.sigma ?? 0.002,
+      options.seed ?? 20260906,
+    ),
+  );
 }
 
 export type HouseholdManipulationTask =

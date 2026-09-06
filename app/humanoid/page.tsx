@@ -3,6 +3,7 @@ import Link from "next/link";
 import { G1WalkingFlagship } from "../components/G1WalkingFlagship";
 import { PolicyAblationComparison } from "../components/PolicyAblationComparison";
 import { RealPhysicsResidual } from "../components/RealPhysicsResidual";
+import { G1ResidualTrainer } from "../components/G1ResidualTrainer";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 
@@ -140,6 +141,29 @@ export default function HumanoidPage() {
           </p>
           <div className="mt-6">
             <RealPhysicsResidual />
+          </div>
+        </section>
+
+        <section
+          id="train-residual"
+          className="mx-auto mt-16 max-w-5xl"
+          aria-label="Train the transformer residual in this browser"
+        >
+          <h2 className="font-display text-2xl font-bold text-white">
+            Now run that search yourself
+          </h2>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+            Everything above reports a search that already finished. This runs
+            it here: the same LM-CMA over the same 960 parameters, against the
+            same articulated-body physics and the same objective, in a worker on
+            your machine. The kernel ships with SIMD enabled and the model is 64
+            units wide and two layers deep, which is the whole reason a laptop
+            suffices. Press the button and watch the curve fall; there is no
+            fixed budget, so it runs until you stop it, and the policy it finds
+            downloads as the same artifact format the page ships.
+          </p>
+          <div className="mt-6">
+            <G1ResidualTrainer />
           </div>
         </section>
 
