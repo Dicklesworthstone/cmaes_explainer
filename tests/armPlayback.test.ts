@@ -93,11 +93,11 @@ describe("shared robot trace playback", () => {
 
   test("honors all four speeds and shows terminal poses on five real owner traces", async () => {
     const owner =
-      await import("../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm.js");
+      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
         new URL(
-          "../public/wasm/fs-cmaes/v0622/fs_cmaes_viz_wasm_bg.wasm",
+          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
           import.meta.url,
         ),
       ).arrayBuffer(),
