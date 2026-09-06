@@ -12,6 +12,7 @@ import {
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
 import { FRANKENSIM_OWNER_ARTIFACT } from "../app/lib/frankensimCmaes";
+import type { TrainingWorkerResponse } from "../app/workers/g1TransformerTrainingWorker";
 import type {
   G1OptimizationRequest,
   G1SceneReceipt,
@@ -563,6 +564,20 @@ async function run() {
           offscreenIndex,
           "Unmounted playback moved",
         );
+        assert.equal(
+          await playbackPage.evaluate(
+            () =>
+              (
+                window as unknown as {
+                  __ownerBridgeMessages: Record<string, unknown>[];
+                }
+              ).__ownerBridgeMessages
+                .filter((message) => message.type === "trace.state")
+                .at(-1)?.sampleIndex,
+          ),
+          offscreenIndex,
+          "Native playback missed the last frame before Canvas unmounted",
+        );
         const remountMessageStart = await playbackPage.evaluate(
           () =>
             (window as unknown as { __ownerBridgeMessages: unknown[] })
@@ -778,6 +793,227 @@ async function run() {
         await playbackContext.close();
       }
     }
+    // Hold the real trainer's WASM response across Stop, then exercise a new
+    // real run and recovery from an explicitly injected worker failure.
+    const trainingContext = await browser.newContext({
+      userAgent: USER_AGENT,
+      reducedMotion: "reduce",
+    });
+    await trainingContext.addInitScript(() => {
+      const host = window as unknown as {
+        __trainingMessages: TrainingWorkerResponse[];
+        __trainingWorker: Worker | null;
+        __trainingWorkerCount: number;
+      };
+      host.__trainingMessages = [];
+      host.__trainingWorker = null;
+      host.__trainingWorkerCount = 0;
+      const post = Worker.prototype.postMessage;
+      const seen = new WeakSet<Worker>();
+      Worker.prototype.postMessage = function (
+        this: Worker,
+        message: unknown,
+        transferOrOptions?: Transferable[] | StructuredSerializeOptions,
+      ) {
+        if (
+          (message as { type?: string })?.type === "start" &&
+          !seen.has(this)
+        ) {
+          seen.add(this);
+          host.__trainingWorker = this;
+          host.__trainingWorkerCount += 1;
+          this.addEventListener(
+            "message",
+            (event: MessageEvent<TrainingWorkerResponse>) => {
+              host.__trainingMessages.push(event.data);
+            },
+          );
+        }
+        return Reflect.apply(post, this, [message, transferOrOptions]);
+      };
+    });
+    const trainingPage = await trainingContext.newPage();
+    trainingPage.setDefaultTimeout(30_000);
+    observe(trainingPage);
+    await trainingPage.goto(new URL("/humanoid", base).href);
+    const startTraining = trainingPage.getByRole("button", {
+      name: "Train in this browser",
+      exact: true,
+    });
+    const stopTraining = trainingPage.getByRole("button", {
+      name: "Stop training",
+      exact: true,
+    });
+    await startTraining.scrollIntoViewIfNeeded();
+    let releaseTrainingWasm!: () => void;
+    const trainingWasmGate = new Promise<void>((resolve) => {
+      releaseTrainingWasm = resolve;
+    });
+    let heldTrainingWasm = 0;
+    let corruptNextTrainingWasm = false;
+    const trainingWasmPattern =
+      "**/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm";
+    await trainingPage.route(trainingWasmPattern, async (route) => {
+      heldTrainingWasm += 1;
+      await trainingWasmGate;
+      if (corruptNextTrainingWasm) {
+        corruptNextTrainingWasm = false;
+        await route.fulfill({
+          contentType: "application/wasm",
+          body: "Deliberately corrupted trainer WASM for the recovery test",
+        });
+        return;
+      }
+      await route.continue();
+    });
+    await startTraining.click();
+    const holdDeadline = Date.now() + 30_000;
+    while (!heldTrainingWasm && Date.now() < holdDeadline) await pause(25);
+    assert(heldTrainingWasm > 0, "The actual trainer WASM load was not held");
+    await stopTraining.click();
+    await startTraining.waitFor();
+    const canceledTraining = await trainingPage.evaluate(
+      () =>
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
+          .__trainingMessages,
+    );
+    assert.deepEqual(canceledTraining, [{ type: "stopped", progress: null }]);
+    const stoppedMessageCount = canceledTraining.length;
+    const loadedTrainingWasm = trainingPage.waitForResponse((response) =>
+      response.url().endsWith("/fs_cmaes_viz_wasm_bg.wasm"),
+    );
+    releaseTrainingWasm();
+    await (await loadedTrainingWasm).finished();
+    await pause(1000);
+    assert.equal(
+      await trainingPage.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __trainingMessages: TrainingWorkerResponse[];
+            }
+          ).__trainingMessages.length,
+      ),
+      stoppedMessageCount,
+      "A canceled trainer published progress after Stop",
+    );
+    await startTraining.click();
+    await trainingPage.waitForFunction(() =>
+      (
+        window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
+      ).__trainingMessages.some(
+        (message) =>
+          message.type === "progress" && message.progress.generation >= 2,
+      ),
+    );
+    await stopTraining.click();
+    await startTraining.waitFor();
+    const stoppedTraining = await trainingPage.evaluate(
+      () =>
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
+          .__trainingMessages,
+    );
+    assert.equal(stoppedTraining.at(-1)?.type, "stopped");
+    await pause(600);
+    assert.equal(
+      await trainingPage.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __trainingMessages: TrainingWorkerResponse[];
+            }
+          ).__trainingMessages.length,
+      ),
+      stoppedTraining.length,
+      "Training continued after the stopped acknowledgement",
+    );
+    await trainingPage
+      .getByRole("combobox", { name: "Conditions" })
+      .selectOption("terrain");
+    await trainingPage
+      .getByRole("table", {
+        name: "Training results: flat ground",
+        exact: true,
+      })
+      .waitFor();
+    await trainingPage
+      .getByRole("combobox", { name: "Conditions" })
+      .selectOption("flat");
+    // Fault injection only: owner calculations above and below remain real.
+    await trainingPage.evaluate(() => {
+      const worker = (window as unknown as { __trainingWorker: Worker })
+        .__trainingWorker;
+      worker.terminate();
+      worker.dispatchEvent(
+        new ErrorEvent("error", {
+          message: "Injected training worker failure",
+          cancelable: true,
+        }),
+      );
+    });
+    await trainingPage
+      .getByRole("alert")
+      .filter({ hasText: "Injected training worker failure" })
+      .waitFor();
+    // A handled owner-load refusal also poisons that realm's cached loader.
+    // Restoring valid bytes must permit retry without reloading the page.
+    corruptNextTrainingWasm = true;
+    await startTraining.click();
+    await trainingPage
+      .getByRole("alert")
+      .filter({ hasText: /SHA-256|hash|digest/i })
+      .waitFor();
+    await startTraining.waitFor();
+    assert.equal(
+      await trainingPage
+        .getByRole("button", { name: "Download policy", exact: true })
+        .isDisabled(),
+      true,
+    );
+    await startTraining.click();
+    await trainingPage.waitForFunction(
+      (count) =>
+        (
+          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
+        ).__trainingMessages
+          .slice(count)
+          .some(
+            (message) =>
+              message.type === "progress" && message.progress.evaluations > 0,
+          ),
+      stoppedTraining.length,
+    );
+    assert.equal(
+      await trainingPage.evaluate(
+        () =>
+          (window as unknown as { __trainingWorkerCount: number })
+            .__trainingWorkerCount,
+      ),
+      3,
+      "Retry must create a live replacement worker",
+    );
+    await stopTraining.click();
+    await startTraining.waitFor();
+    await trainingPage.screenshot({
+      path: join(out, "trainer-stop-retry.png"),
+    });
+    recordResult({
+      journey: "trainer-stop-retry",
+      heldTrainingWasm,
+      stoppedMessageCount,
+      stoppedTraining,
+      workerFailureInjected: true,
+      ownerWasmCorruptionInjected: true,
+      finalMessages: await trainingPage.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __trainingMessages: TrainingWorkerResponse[];
+            }
+          ).__trainingMessages,
+      ),
+    });
+    await trainingContext.close();
     for (const changed of [
       null,
       "manifest.json",
@@ -2031,7 +2267,7 @@ async function run() {
     );
     recordResult({ journey: "arm-unsupported-shared-task", refused: true });
     await invalidArmContext.close();
-    assert.equal(results.length, 28, "A declared browser journey did not run");
+    assert.equal(results.length, 29, "A declared browser journey did not run");
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
@@ -2048,8 +2284,12 @@ async function run() {
           const messages = await page.evaluate(() => {
             const host = window as unknown as {
               __ownerBridgeMessages?: Record<string, unknown>[];
+              __trainingMessages?: TrainingWorkerResponse[];
             };
-            return host.__ownerBridgeMessages ?? [];
+            return [
+              ...(host.__ownerBridgeMessages ?? []),
+              ...(host.__trainingMessages ?? []),
+            ];
           });
           failedPages.push({ url: page.url(), messages });
         } catch (captureError) {

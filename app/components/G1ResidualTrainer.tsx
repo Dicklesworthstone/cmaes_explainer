@@ -36,20 +36,6 @@ interface CurvePoint {
   objective: number;
 }
 
-function spawnTrainingWorker(
-  onMessage: (msg: TrainingWorkerResponse) => void,
-): Worker {
-  const worker = new Worker(
-    new URL("../workers/g1TransformerTrainingWorker.ts", import.meta.url),
-  );
-  worker.onmessage = (e: MessageEvent<TrainingWorkerResponse>) =>
-    onMessage(e.data);
-  // A worker-level error means the script itself failed: the loop is gone.
-  worker.onerror = (e) =>
-    onMessage({ type: "error", error: e.message || "worker error", fatal: true });
-  return worker;
-}
-
 /** Improvement on an objective where lower is better. */
 function gainPercent(baseline: number, best: number): number {
   if (!Number.isFinite(baseline) || baseline === 0) return 0;
@@ -81,7 +67,7 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
   const path = points
     .map((point, index) => {
       const x = ((point.evaluations - firstEval) / evalSpan) * width;
-      // Lower objective is better, so a falling value must rise on screen.
+      // Plot objective on a conventional vertical axis: improvement falls.
       const y = pad + plot - ((point.objective - min) / span) * plot;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     })
@@ -118,18 +104,27 @@ export function G1ResidualTrainer() {
   // what the shipped figures above are measured on, is one dropdown away and
   // the copy says which is which.
   const [challenge, setChallenge] = useState<G1TransformerChallenge>("flat");
+  const [runChallenge, setRunChallenge] =
+    useState<G1TransformerChallenge>("flat");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    fatal: boolean;
+  } | null>(null);
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
-      setError(message.error);
-      // A failed export leaves the run untouched; only a fatal error means
-      // the loop has stopped. Clearing `running` here regardless would show
-      // "Train in this browser" while the worker was still training.
-      if (message.fatal) setRunning(false);
+      setError({ message: message.error, fatal: message.fatal });
+      if (message.fatal) {
+        // The owner caches initialization failures inside its worker realm.
+        // A failed export keeps its live trainer; a fatal failure needs a new realm.
+        workerRef.current?.terminate();
+        workerRef.current = null;
+        startedChallengeRef.current = null;
+        setRunning(false);
+      }
       return;
     }
     if (message.type === "stopped") {
@@ -138,6 +133,7 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "weights") {
+      setError(null);
       const blob = new Blob([message.bytes as BlobPart], {
         type: "application/octet-stream",
       });
@@ -181,17 +177,46 @@ export function G1ResidualTrainer() {
   }, []);
 
   const post = (request: TrainingWorkerRequest) => {
-    // Only a start is worth spinning a worker up for; stop and export against
-    // a worker that never existed would just bounce back as an error.
-    if (!workerRef.current) {
-      if (request.type !== "start") return;
-      workerRef.current = spawnTrainingWorker(handleMessage);
+    const failWorker = (error: unknown) => {
+      handleMessage({
+        type: "error",
+        error: error instanceof Error ? error.message : String(error),
+        fatal: true,
+      });
+    };
+    try {
+      if (!workerRef.current) {
+        if (request.type !== "start") return;
+        const worker = new Worker(
+          new URL("../workers/g1TransformerTrainingWorker.ts", import.meta.url),
+        );
+        workerRef.current = worker;
+        worker.onmessage = (event: MessageEvent<TrainingWorkerResponse>) => {
+          if (workerRef.current === worker) handleMessage(event.data);
+        };
+        worker.onerror = (event) => {
+          event.preventDefault();
+          if (workerRef.current === worker) {
+            failWorker(new Error(event.message || "Training worker failed."));
+          }
+        };
+        worker.onmessageerror = () => {
+          if (workerRef.current === worker) {
+            failWorker(
+              new Error("The training worker response could not be read."),
+            );
+          }
+        };
+      }
+      workerRef.current.postMessage(request);
+    } catch (error) {
+      failWorker(error);
     }
-    workerRef.current.postMessage(request);
   };
 
   const start = () => {
     setError(null);
+    setRunChallenge(challenge);
     // The worker resumes an unchanged configuration rather than rebuilding,
     // so the curve must survive a stop/start too. Only a different condition
     // starts a genuinely new search, and only then is the old curve stale.
@@ -216,7 +241,9 @@ export function G1ResidualTrainer() {
   const gain = progress
     ? gainPercent(progress.baselineObjective, progress.bestObjective)
     : 0;
-  const improved = progress ? progress.bestObjective < progress.baselineObjective : false;
+  const improved = progress
+    ? progress.bestObjective < progress.baselineObjective
+    : false;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
@@ -246,7 +273,7 @@ export function G1ResidualTrainer() {
         <button
           type="button"
           onClick={download}
-          disabled={!improved}
+          disabled={!improved || Boolean(error?.fatal)}
           className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
         >
           Download policy
@@ -254,7 +281,9 @@ export function G1ResidualTrainer() {
       </div>
 
       {error ? (
-        <p className="mt-4 text-sm text-rose-300">{error}</p>
+        <p role="alert" className="mt-4 text-sm text-rose-300">
+          {error.message}
+        </p>
       ) : null}
 
       <div className="mt-5">
@@ -262,8 +291,13 @@ export function G1ResidualTrainer() {
       </div>
 
       <table className="mt-5 w-full text-left text-sm text-slate-300">
-        <caption className="sr-only">
-          Live training progress against the tuned controller
+        <caption className="pb-2 text-left text-xs text-slate-400">
+          Training results:{" "}
+          {runChallenge === "flat"
+            ? "flat ground"
+            : runChallenge === "terrain"
+              ? "terrain with pushes"
+              : "flat ground and terrain with pushes"}
         </caption>
         <thead>
           <tr className="text-xs uppercase tracking-wide text-slate-500">
@@ -319,9 +353,9 @@ export function G1ResidualTrainer() {
                   {gain.toFixed(1)}% better
                 </strong>{" "}
                 than the controller it started from
-                {challenge === "flat" ? (
+                {runChallenge === "flat" ? (
                   <> on flat ground, the easiest of the three conditions</>
-                ) : challenge === "terrain" ? (
+                ) : runChallenge === "terrain" ? (
                   <> on terrain with pushes</>
                 ) : (
                   <> across both conditions</>

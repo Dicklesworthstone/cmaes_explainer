@@ -2342,23 +2342,30 @@ export function HouseholdArmFlagship({
     // Do not drop the terminal measurement or the start of the following
     // loop when throttling intermediate native scrubber updates.
     const terminal = Boolean(trace) && sampleIndex === (trace?.samples.length ?? 0) - 1;
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}:${microscopeMode}:${physicsDebug}:${terminal}`;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraMode}:${microscopeMode}:${physicsDebug}:${terminal}:${playbackSeek.revision}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
-    if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
-    nativeTraceReportAtRef.current = now;
-    nativeTraceSettingsRef.current = settings;
-    reportFrankenRobotsTraceState("arm", {
-      sampleIndex: trace ? clampTracePlaybackIndex(trace.samples.length, sampleIndex) : 0,
-      sampleCount: trace?.samples.length ?? 0,
-      playing: Boolean(trace) && isPlaying,
-      speed: playbackSpeed,
-      camera: cameraMode,
-      overlays: [
-        ...(microscopeMode ? (["friction-cones"] as const) : []),
-        ...(physicsDebug ? (["physics-debug"] as const) : []),
-      ],
-    });
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode, microscopeMode, physicsDebug]);
+    const report = () => {
+      nativeTraceReportAtRef.current = performance.now();
+      nativeTraceSettingsRef.current = settings;
+      reportFrankenRobotsTraceState("arm", {
+        sampleIndex: trace ? clampTracePlaybackIndex(trace.samples.length, sampleIndex) : 0,
+        sampleCount: trace?.samples.length ?? 0,
+        playing: Boolean(trace) && isPlaying,
+        speed: playbackSpeed,
+        camera: cameraMode,
+        overlays: [
+          ...(microscopeMode ? (["friction-cones"] as const) : []),
+          ...(physicsDebug ? (["physics-debug"] as const) : []),
+        ],
+      });
+    };
+    const remaining = 100 - (now - nativeTraceReportAtRef.current);
+    if (!settingsChanged && trace && isPlaying && remaining > 0) {
+      const timer = window.setTimeout(report, remaining);
+      return () => window.clearTimeout(timer);
+    }
+    report();
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode, microscopeMode, physicsDebug, playbackSeek.revision]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {
