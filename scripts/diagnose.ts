@@ -354,6 +354,304 @@ async function run() {
       recordResult({ journey: "receipts", ...evidence });
       await receiptPage.close();
     }
+    for (const width of [320, 390, 1440]) {
+      for (const lab of ["humanoid", "arm"] as const) {
+        const playbackContext = await browser.newContext({
+          viewport: { width, height: 1000 },
+          reducedMotion: "reduce",
+          hasTouch: width < 1440,
+          userAgent: USER_AGENT,
+        });
+        await playbackContext.addInitScript(() => {
+          const host = window as unknown as {
+            __ownerBridgeMessages: Record<string, unknown>[];
+            webkit: {
+              messageHandlers: {
+                frankenrobots: {
+                  postMessage: (message: Record<string, unknown>) => void;
+                };
+              };
+            };
+          };
+          host.__ownerBridgeMessages = [];
+          host.webkit = {
+            messageHandlers: {
+              frankenrobots: {
+                postMessage: (message) =>
+                  host.__ownerBridgeMessages.push(message),
+              },
+            },
+          };
+        });
+        const playbackPage = await playbackContext.newPage();
+        playbackPage.setDefaultTimeout(30_000);
+        observe(playbackPage);
+        await playbackPage.goto(new URL(`/frankenrobots/${lab}`, base).href);
+        const sliderLabel =
+          lab === "arm"
+            ? "Arm trace position"
+            : "Simulation playback frame scrubber";
+        const playLabel = lab === "arm" ? "Play arm trace" : "Play simulation";
+        const pauseLabel =
+          lab === "arm" ? "Pause arm trace" : "Pause simulation playback";
+        const slider = playbackPage.getByRole("slider", {
+          name: sliderLabel,
+          exact: true,
+        });
+        await slider.waitFor();
+        await playbackPage.waitForFunction((label) => {
+          const input = document.querySelector<HTMLInputElement>(
+            `input[aria-label="${label}"]`,
+          );
+          return input && !input.disabled && Number(input.max) > 2;
+        }, sliderLabel);
+        const lastIndex = Number(await slider.getAttribute("max"));
+        assert(lastIndex > 2, "A real multi-frame owner trace must load");
+        let commandNumber = 0;
+        const command = async (
+          kind: string,
+          args: Record<string, unknown> = {},
+        ) => {
+          const receipt = await playbackPage.evaluate(
+            ({ lab, kind, args, id }) => {
+              const host = window as unknown as {
+                __ownerBridgeMessages: Record<string, unknown>[];
+                __frankenrobotsReceiveNativeCommand: (
+                  payload: unknown,
+                ) => boolean;
+              };
+              const delivered = host.__frankenrobotsReceiveNativeCommand({
+                type: "engine.command",
+                schemaVersion: 1,
+                lab,
+                command: kind,
+                commandId: id,
+                ...args,
+              });
+              return {
+                delivered,
+                ack: host.__ownerBridgeMessages.find(
+                  (message) => message.commandId === id,
+                ),
+              };
+            },
+            { lab, kind, args, id: `playback-${width}-${++commandNumber}` },
+          );
+          assert(receipt.delivered);
+          assert.equal(receipt.ack?.accepted, true, JSON.stringify(receipt));
+        };
+        const paused = async (index?: number) => {
+          await playbackPage
+            .getByRole("button", { name: playLabel, exact: true })
+            .waitFor();
+          await playbackPage.waitForFunction(() => {
+            const host = window as unknown as {
+              __ownerBridgeMessages: Record<string, unknown>[];
+            };
+            return (
+              host.__ownerBridgeMessages
+                .filter((message) => message.type === "trace.state")
+                .at(-1)?.playing === false
+            );
+          });
+          const before = Number(await slider.inputValue());
+          if (index !== undefined) assert.equal(before, index);
+          await pause(600);
+          assert.equal(
+            Number(await slider.inputValue()),
+            before,
+            "Paused playback moved",
+          );
+          const reportedIndex = await playbackPage.evaluate(() => {
+            const host = window as unknown as {
+              __ownerBridgeMessages: Record<string, unknown>[];
+            };
+            return host.__ownerBridgeMessages
+              .filter((message) => message.type === "trace.state")
+              .at(-1)?.sampleIndex;
+          });
+          assert.equal(reportedIndex, before, "Native and web frames disagree");
+          return before;
+        };
+        await paused(0);
+        assert.equal(
+          await playbackPage
+            .getByRole("button", { name: playLabel, exact: true })
+            .isEnabled(),
+          true,
+        );
+        await playbackPage
+          .getByRole("button", { name: playLabel, exact: true })
+          .focus();
+        await playbackPage.keyboard.press("Space");
+        await playbackPage.waitForFunction(
+          (label) =>
+            Number(
+              document.querySelector<HTMLInputElement>(
+                `input[aria-label="${label}"]`,
+              )?.value,
+            ) > 0,
+          sliderLabel,
+        );
+        assert.equal(
+          await playbackPage
+            .getByRole("button", { name: pauseLabel, exact: true })
+            .count(),
+          1,
+        );
+        await playbackPage.keyboard.press("Space");
+        const keyboardPausedAt = await paused();
+        assert(keyboardPausedAt > 0);
+        await slider.focus();
+        await playbackPage.keyboard.press("Home");
+        await playbackPage.keyboard.press("ArrowRight");
+        await paused(1);
+        assert.equal(
+          await slider.evaluate((node) => node === document.activeElement),
+          true,
+        );
+        assert.match(
+          (await slider.getAttribute("aria-valuetext")) ?? "",
+          /Time .*seconds/,
+        );
+        const seekIndex = Math.floor(lastIndex / 2);
+        await command("seek", { sampleIndex: seekIndex });
+        await paused(seekIndex);
+        await command("set-speed", { speed: 0.25 });
+        await command("play");
+        await playbackPage.waitForFunction(
+          ({ label, start }) =>
+            Number(
+              document.querySelector<HTMLInputElement>(
+                `input[aria-label="${label}"]`,
+              )?.value,
+            ) !== start,
+          { label: sliderLabel, start: seekIndex },
+        );
+        await command("pause");
+        const resumedAt = await paused();
+        assert(
+          resumedAt > seekIndex && resumedAt < seekIndex + lastIndex / 4,
+          `Resume jumped from selected frame ${seekIndex} to ${resumedAt}`,
+        );
+        await playbackPage.emulateMedia({ reducedMotion: "no-preference" });
+        await paused();
+        await command("play");
+        await playbackPage
+          .getByRole("button", { name: pauseLabel, exact: true })
+          .waitFor();
+        await playbackPage.emulateMedia({ reducedMotion: "reduce" });
+        await paused();
+        await command("replay");
+        await paused(0);
+        const nextTask = lab === "arm" ? "living-room-remote" : "balance";
+        await command("select-task", { task: nextTask });
+        await playbackPage.waitForFunction(
+          ({ task, lab }) => {
+            const host = window as unknown as {
+              __ownerBridgeMessages: Record<string, unknown>[];
+            };
+            const status = host.__ownerBridgeMessages
+              .filter((message) => message.type === "engine.status")
+              .at(-1);
+            return (
+              status?.state === "ready" &&
+              (status.metrics as Record<string, unknown>)?.[
+                lab === "arm" ? "activeArmTask" : "activeTask"
+              ] === task
+            );
+          },
+          { task: nextTask, lab },
+        );
+        await paused(0);
+        if (width < 1440) {
+          await playbackPage
+            .getByRole("button", { name: playLabel, exact: true })
+            .tap();
+          await playbackPage.waitForFunction((label) => {
+            const input = document.querySelector<HTMLInputElement>(
+              `input[aria-label="${label}"]`,
+            );
+            return Number(input?.value) > 0;
+          }, sliderLabel);
+          await playbackPage
+            .getByRole("button", { name: pauseLabel, exact: true })
+            .tap();
+          await paused();
+        }
+        const panel = playbackPage.getByRole("group", {
+          name:
+            lab === "arm" ? "Arm trace playback" : "Simulation trace playback",
+          exact: true,
+        });
+        const geometry = await panel
+          .locator("button,input,select")
+          .evaluateAll((nodes) =>
+            nodes.map((node) => {
+              const box = node.getBoundingClientRect();
+              return {
+                label: node.getAttribute("aria-label"),
+                width: box.width,
+                height: box.height,
+                left: box.left,
+                right: box.right,
+              };
+            }),
+          );
+        for (const control of geometry) {
+          assert(
+            control.width >= 44 && control.height >= 44,
+            JSON.stringify(control),
+          );
+          assert(
+            control.left >= 0 && control.right <= width,
+            JSON.stringify(control),
+          );
+        }
+        if (lab === "humanoid") {
+          const milestones = await playbackPage
+            .getByRole("list", { name: "Measured trace milestones" })
+            .innerText();
+          assert(!milestones.includes("push"), "Flat balance invented a push");
+          assert(
+            !milestones.includes("Goal Reached"),
+            "Completing a horizon is not reaching a goal",
+          );
+        }
+        await slider.focus();
+        await playbackPage.screenshot({
+          path: join(out, `playback-${lab}-${width}.png`),
+        });
+        await panel.screenshot({
+          path: join(out, `playback-${lab}-${width}-controls.png`),
+        });
+        const traceStates = await playbackPage.evaluate(() => {
+          const host = window as unknown as {
+            __ownerBridgeMessages: Record<string, unknown>[];
+          };
+          return host.__ownerBridgeMessages.filter(
+            (message) => message.type === "trace.state",
+          );
+        });
+        assert(
+          traceStates.some(
+            (state) => state.playing === true && Number(state.sampleIndex) > 0,
+          ),
+        );
+        recordResult({
+          journey: "reduced-motion-playback",
+          lab,
+          width,
+          lastIndex,
+          keyboardPausedAt,
+          seekIndex,
+          resumedAt,
+          geometry,
+          traceStates,
+        });
+        await playbackContext.close();
+      }
+    }
     for (const changed of [
       null,
       "manifest.json",
@@ -1184,6 +1482,24 @@ async function run() {
     await armPage
       .getByRole("button", { name: /^Keep learning · gen / })
       .waitFor();
+    // The readout inspection above paused playback. Fresh owner generations
+    // must not override that explicit choice while learning continues.
+    assert.equal(
+      await armPage
+        .getByRole("button", { name: "Play arm trace", exact: true })
+        .count(),
+      1,
+    );
+    const pausedAfterLearning = await armPage.evaluate(() => {
+      const host = window as unknown as {
+        __ownerBridgeMessages: Record<string, unknown>[];
+      };
+      return host.__ownerBridgeMessages
+        .filter((message) => message.type === "trace.state")
+        .at(-1);
+    });
+    assert.equal(pausedAfterLearning?.playing, false);
+    assert.equal(pausedAfterLearning?.sampleIndex, 0);
     const armLearnedExport = await captureReplayExport(
       armPage,
       out,
@@ -1589,7 +1905,7 @@ async function run() {
     );
     recordResult({ journey: "arm-unsupported-shared-task", refused: true });
     await invalidArmContext.close();
-    assert.equal(results.length, 22, "A declared browser journey did not run");
+    assert.equal(results.length, 28, "A declared browser journey did not run");
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
@@ -1597,6 +1913,31 @@ async function run() {
       error instanceof Error ? error.stack || error.message : String(error);
     process.exitCode = 1;
     log("browser-journeys-failed", { out, failure });
+    // Preserve the active journey's native-boundary messages on failure,
+    // including a failed readiness wait before recordResult was reached.
+    const failedPages = [];
+    for (const context of browser?.contexts() ?? []) {
+      for (const page of context.pages()) {
+        try {
+          const messages = await page.evaluate(() => {
+            const host = window as unknown as {
+              __ownerBridgeMessages?: Record<string, unknown>[];
+            };
+            return host.__ownerBridgeMessages ?? [];
+          });
+          failedPages.push({ url: page.url(), messages });
+        } catch (captureError) {
+          failedPages.push({
+            url: page.url(),
+            captureError: String(captureError),
+          });
+        }
+      }
+    }
+    await writeFile(
+      join(out, "failed-journey-messages.json"),
+      JSON.stringify(failedPages, null, 2),
+    );
   } finally {
     try {
       await browser?.close();

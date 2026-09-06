@@ -100,6 +100,12 @@ not establish zero penetration or universal continuous collision safety.
   insufficient packet capacity is refused. All seven iiwa joint dials derive
   from the source-ordered owner link rotations. Restart and scrubbing seek
   the measured trace; an older playback frame cannot undo a newer seek.
+- **Playback controls:** reduced motion disables autoplay; explicit Play
+  remains available on both robots. Pause, keyboard scrubbing and native
+  seek commands hold the selected sample, and playback resumes from it.
+  Changing the system motion preference pauses playback. G1 milestones use
+  the owner's actual push timing, impulse and termination reason; completing
+  the rollout horizon does not assert that a goal was reached.
 - **Placement probes and debug views:** OBB clamps bound requested targets,
   and the auxiliary arm reach probe uses a reduced IK model. Their markers,
   clearance readouts and wireframes are diagnostics, not certification of

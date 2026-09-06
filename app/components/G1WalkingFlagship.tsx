@@ -2,10 +2,10 @@
 
 import React, { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox, Html } from "@react-three/drei";
-import { useReducedMotion } from "framer-motion";
+import { useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
 import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
 import { useInView } from "../hooks/useScrollSpy";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
@@ -790,15 +790,18 @@ function robotHeading(trace: G1TraceReceipt, sampleIndex: number): [number, numb
   return [forward.x / len, forward.z / len];
 }
 
+type G1PlaybackSeek = { revision: number; sampleIndex: number };
+
 function RobotPlayback({
   trace,
   admission,
-  reduceMotion,
   meshState,
   xrayMode,
   isPlaying,
+  playbackActiveRef,
   playbackSpeed,
   sampleIndex,
+  playbackSeek,
   onSampleIndexChange,
   shoveActive,
   pushAngleDeg = 90,
@@ -807,21 +810,31 @@ function RobotPlayback({
 }: {
   trace: G1TraceReceipt;
   admission: G1Admission | null;
-  reduceMotion: boolean;
   meshState: G1MeshState;
   xrayMode: boolean;
   isPlaying: boolean;
+  playbackActiveRef: { readonly current: boolean };
   playbackSpeed: number;
   sampleIndex: number;
-  onSampleIndexChange: (idx: number) => void;
+  playbackSeek: G1PlaybackSeek;
+  onSampleIndexChange: (idx: number, revision: number) => void;
   shoveActive: boolean;
   pushAngleDeg?: number;
   pushImpulseNs?: number;
   positionOffset?: [number, number, number] | null;
 }) {
   const playbackSeconds = useRef(0);
+  useLayoutEffect(() => {
+    playbackSeconds.current =
+      trace.samples[playbackSeek.sampleIndex]?.timeSeconds ?? 0;
+  }, [trace, playbackSeek]);
+  useLayoutEffect(() => {
+    if (!isPlaying) {
+      playbackSeconds.current = trace.samples[sampleIndex]?.timeSeconds ?? 0;
+    }
+  }, [trace, isPlaying, sampleIndex]);
   useFrame((_, deltaSeconds) => {
-    if (reduceMotion || !isPlaying || trace.samples.length < 2) return;
+    if (!isPlaying || !playbackActiveRef.current || trace.samples.length < 2) return;
     const duration = trace.samples.at(-1)?.timeSeconds ?? 0;
     if (duration <= 0) return;
     // Advance playback by deltaSeconds scaled by playbackSpeed
@@ -834,7 +847,7 @@ function RobotPlayback({
     ) {
       nextIndex += 1;
     }
-    if (nextIndex !== sampleIndex) onSampleIndexChange(nextIndex);
+    if (nextIndex !== sampleIndex) onSampleIndexChange(nextIndex, playbackSeek.revision);
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
@@ -1840,7 +1853,6 @@ function G1ClearanceBeam({ readout }: { readout: NearestObstacleReadout | null }
 function RobotStage({
   trace,
   admission,
-  reduceMotion,
   meshState,
   xrayMode,
   physicsDebug,
@@ -1850,8 +1862,10 @@ function RobotStage({
   showRoof,
   activeRouteId,
   isPlaying,
+  playbackActiveRef,
   playbackSpeed,
   sampleIndex,
+  playbackSeek,
   onSampleIndexChange,
   shoveActive,
   pushAngleDeg = 90,
@@ -1867,7 +1881,6 @@ function RobotStage({
 }: {
   trace: G1TraceReceipt | null;
   admission: G1Admission | null;
-  reduceMotion: boolean;
   meshState: G1MeshState;
   xrayMode: boolean;
   physicsDebug: boolean;
@@ -1877,9 +1890,11 @@ function RobotStage({
   showRoof?: boolean;
   activeRouteId?: string;
   isPlaying: boolean;
+  playbackActiveRef: { readonly current: boolean };
   playbackSpeed: number;
   sampleIndex: number;
-  onSampleIndexChange: (idx: number) => void;
+  playbackSeek: G1PlaybackSeek;
+  onSampleIndexChange: (idx: number, revision: number) => void;
   shoveActive: boolean;
   pushAngleDeg?: number;
   pushImpulseNs?: number;
@@ -1966,12 +1981,13 @@ function RobotStage({
           key={`${trace.objective}:${trace.distanceMeters}:${trace.samples.length}`}
           trace={trace}
           admission={admission}
-          reduceMotion={reduceMotion}
           meshState={meshState}
           xrayMode={xrayMode}
           isPlaying={isPlaying}
+          playbackActiveRef={playbackActiveRef}
           playbackSpeed={playbackSpeed}
           sampleIndex={sampleIndex}
+          playbackSeek={playbackSeek}
           onSampleIndexChange={onSampleIndexChange}
           shoveActive={shoveActive}
           pushAngleDeg={pushAngleDeg}
@@ -2042,7 +2058,8 @@ function stageSceneHint(
 
 
 export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } = {}) {
-  const reduceMotion = useReducedMotion() ?? false;
+  const { reduceMotion, isPlaying, setIsPlaying, resetPlayback, playbackActiveRef } =
+    useTracePlaybackPreference();
   // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
   // keeps it warm while approaching (see WingViz rationale).
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -2138,9 +2155,21 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint" | "fly">(
     embedded ? "follow" : "orbit",
   );
-  const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
   const [sampleIndex, setSampleIndex] = useState(0);
+  const [playbackSeek, setPlaybackSeek] = useState<G1PlaybackSeek>({ revision: 0, sampleIndex: 0 });
+  const playbackRevisionRef = useRef(0);
+  const seekPlayback = useCallback((index: number) => {
+    const revision = ++playbackRevisionRef.current;
+    setPlaybackSeek({ revision, sampleIndex: index });
+    setSampleIndex(index);
+  }, []);
+  const handleSampleIndexChange = useCallback((index: number, revision: number) => {
+    // A frame from the separate Canvas root cannot undo a newer seek.
+    setSampleIndex((current) =>
+      revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
+    );
+  }, [playbackActiveRef]);
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
   const [currentChapter, setCurrentChapter] = useState(1);
@@ -2315,6 +2344,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setChallenge(nextChallenge);
     setTrace(null);
     setAdmission(null);
+    seekPlayback(0);
+    resetPlayback();
     setStabilizerReplay(null);
     setCurriculumReplay(null);
     setGeneration(0);
@@ -2332,7 +2363,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setProgressHistory([]);
     setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
     post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
-  }, [post]);
+  }, [post, seekPlayback, resetPlayback]);
 
   // Keep the last measured robot in place until the owner answers for the
   // requested position. A refusal leaves that previous trace intact.
@@ -2405,6 +2436,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setLimbOffsets({});
       setTrace(null);
       setAdmission(null);
+      seekPlayback(0);
+      resetPlayback();
       setStabilizerReplay(null);
       setCurriculumReplay(null);
       setComparison(null);
@@ -2430,7 +2463,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         "preview",
       );
     },
-    [post],
+    [post, seekPlayback, resetPlayback],
   );
 
   // A policy can arrive in the URL before the owner has loaded. Stash the
@@ -2511,13 +2544,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setActiveTrace(origin);
     setGeneration(replay.meta.generation);
     setBestObjective(replay.trace.objective);
-    setSampleIndex(0);
-    setIsPlaying(true);
+    seekPlayback(0);
+    resetPlayback();
     setStatus(origin === "curriculum"
       ? `${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`
       : `Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`);
     return true;
-  }, [curriculumReplay, stabilizerReplay, task]);
+  }, [curriculumReplay, stabilizerReplay, task, seekPlayback, resetPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2590,7 +2623,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
           return { accepted: false, detail: "That Humanoid replay frame is unavailable." };
         }
-        setSampleIndex(command.sampleIndex);
+        seekPlayback(command.sampleIndex);
         setIsPlaying(false);
         return {
           accepted: true,
@@ -2728,6 +2761,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     selectedPreset,
     xrayMode,
     physicsDebug,
+    seekPlayback,
+    setIsPlaying,
   ]);
 
   // A chapter that changes the challenge must wait for that experiment's
@@ -2752,8 +2787,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       requestPreview(task, ch.challenge);
       recoveryAttemptedRef.current = true;
       if (ch.targetTrace === "stabilizer") pendingChapterPriorRef.current = "stabilizer";
-      setSampleIndex(0);
-      setIsPlaying(true);
+      seekPlayback(0);
+      resetPlayback();
       return;
     }
     if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
@@ -2765,9 +2800,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       requestPreview(task, ch.challenge);
       recoveryAttemptedRef.current = true;
     }
-    setSampleIndex(0);
-    setIsPlaying(true);
-  }, [task, challenge, stabilizerTrace, curriculumTrace, selectPriorReplay, requestPreview, setCurrentChapter, setSampleIndex]);
+    seekPlayback(0);
+    resetPlayback();
+  }, [task, challenge, stabilizerTrace, curriculumTrace, selectPriorReplay, requestPreview, seekPlayback, resetPlayback]);
 
   const handleSelectPreset = useCallback((p: ReceiptAnalysisPreset) => {
     setSelectedPreset(p.id);
@@ -2898,6 +2933,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         setTask(message.admission.config.task);
         setChallenge(message.admission.config.challenge);
         setTrace(message.trace);
+        seekPlayback(0);
         if (message.family === "curriculum" && message.policy) {
           setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
         }
@@ -3000,7 +3036,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated]);
+  }, [workerActivated, seekPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -3523,7 +3559,6 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <RobotStage
                   trace={trace}
                   admission={admission}
-                  reduceMotion={reduceMotion}
                   meshState={meshState}
                   xrayMode={xrayMode}
                   physicsDebug={physicsDebug}
@@ -3533,9 +3568,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   showRoof={showRoof}
                   activeRouteId={activeRouteId}
                   isPlaying={isPlaying}
+                  playbackActiveRef={playbackActiveRef}
                   playbackSpeed={playbackSpeed}
                   sampleIndex={sampleIndex}
-                  onSampleIndexChange={setSampleIndex}
+                  playbackSeek={playbackSeek}
+                  onSampleIndexChange={handleSampleIndexChange}
                   shoveActive={shoveActive}
                   pushAngleDeg={pushAngleDeg}
                   pushImpulseNs={pushImpulseNs}
@@ -3585,17 +3622,26 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           {/* 2. Interactive Timeline & Milestone Scrubber */}
           <G1TimelineScrubber
             trace={trace}
+            pushStartSeconds={admission?.config.challenge === "terrain-and-push" ? admission.pushStartSeconds : null}
             currentSampleIndex={sampleIndex}
             isPlaying={isPlaying}
             playbackSpeed={playbackSpeed}
             onTogglePlay={() => setIsPlaying(!isPlaying)}
-            onSeekIndex={setSampleIndex}
+            onSeekIndex={(index) => {
+              setIsPlaying(false);
+              seekPlayback(index);
+            }}
             onSetSpeed={setPlaybackSpeed}
             onReset={() => {
-              setSampleIndex(0);
+              seekPlayback(0);
               setIsPlaying(false);
             }}
           />
+          {reduceMotion ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Autoplay is off. Play the trace or inspect individual frames with the slider and step buttons.
+            </p>
+          ) : null}
 
           {/* 3. 1928 Sears Craftsman Whole-House Architectural Inspector */}
           {!xrayMode && (

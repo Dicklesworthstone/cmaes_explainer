@@ -6,7 +6,7 @@ import {
   PerspectiveCamera,
   FlyControls,
 } from "@react-three/drei";
-import { useReducedMotion } from "framer-motion";
+import { useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
 import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { buildFurniture } from "../lib/houseFurniture";
 import { ArmLearningLedger } from "./ArmLearningLedger";
@@ -585,24 +585,26 @@ type ArmPlaybackSeek = { revision: number; sampleIndex: number };
 function ArmRig({
   trace,
   admission,
-  reduceMotion,
   microscopeMode,
   physicsDebug,
   targetPosition,
   playbackSeek,
+  displayedSampleIndex,
   isPlaying,
+  playbackActiveRef,
   playbackSpeed,
   onSampleIndexChange,
   onSelfCollisionChange,
 }: {
   trace: HouseholdManipulationTraceReceipt;
   admission: HouseholdManipulationAdmission;
-  reduceMotion: boolean;
   microscopeMode: boolean;
   physicsDebug?: boolean;
   targetPosition?: [number, number, number] | null;
   playbackSeek: ArmPlaybackSeek;
+  displayedSampleIndex: number;
   isPlaying: boolean;
+  playbackActiveRef: { readonly current: boolean };
   playbackSpeed: number;
   onSampleIndexChange: (sampleIndex: number, revision: number) => void;
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
@@ -643,6 +645,13 @@ function ArmRig({
     playbackSeconds.current = nextIndex === 0 ? 0 : trace.samples[nextIndex]?.timeSeconds ?? 0;
     publishedSampleIndex.current = -1;
   }, [playbackSeek, trace]);
+  useLayoutEffect(() => {
+    if (isPlaying) return;
+    const nextIndex = clampArmPlaybackIndex(trace.samples.length, displayedSampleIndex);
+    sampleIndex.current = nextIndex;
+    playbackSeconds.current = trace.samples[nextIndex]?.timeSeconds ?? 0;
+    publishedSampleIndex.current = -1;
+  }, [trace, isPlaying, displayedSampleIndex]);
   // Boundary volumes the kernel's objective already avoids: the counter slab,
   // the task's backdrop wall, and the declared obstacle box. The checker below
   // flags visible penetrations of exactly these volumes — presentation-layer
@@ -719,7 +728,7 @@ function ArmRig({
       playbackSeconds.current,
       deltaSeconds,
       playbackSpeed,
-      isPlaying && !reduceMotion,
+      isPlaying && playbackActiveRef.current,
     );
     sampleIndex.current = next.sampleIndex;
     playbackSeconds.current = next.elapsedSeconds;
@@ -1434,11 +1443,11 @@ function ArmReachPreview({
 function ArmStage({
   trace,
   admission,
-  reduceMotion,
   microscopeMode,
   cameraMode,
   sampleIndex,
   isPlaying,
+  playbackActiveRef,
   playbackSpeed,
   playbackSeek,
   onSampleIndexChange,
@@ -1452,11 +1461,11 @@ function ArmStage({
 }: {
   trace: HouseholdManipulationTraceReceipt | null;
   admission: HouseholdManipulationAdmission | null;
-  reduceMotion: boolean;
   microscopeMode: boolean;
   cameraMode: ArmCameraMode;
   sampleIndex: number;
   isPlaying: boolean;
+  playbackActiveRef: { readonly current: boolean };
   playbackSpeed: number;
   playbackSeek: ArmPlaybackSeek;
   onSampleIndexChange: (sampleIndex: number, revision: number) => void;
@@ -1619,12 +1628,13 @@ function ArmStage({
           key={`${admission.config.task}:${trace.objective}:${trace.samples.length}`}
           trace={trace}
           admission={admission}
-          reduceMotion={reduceMotion}
           microscopeMode={microscopeMode}
           physicsDebug={physicsDebug}
           targetPosition={objectPos}
           playbackSeek={playbackSeek}
+          displayedSampleIndex={sampleIndex}
           isPlaying={isPlaying}
+          playbackActiveRef={playbackActiveRef}
           playbackSpeed={playbackSpeed}
           onSampleIndexChange={onSampleIndexChange}
           onSelfCollisionChange={onSelfCollisionChange}
@@ -1658,17 +1668,8 @@ function ArmStage({
 export function HouseholdArmFlagship({
   embedded = false,
 }: { embedded?: boolean } = {}) {
-  const requestedReducedMotion = useReducedMotion() ?? false;
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (active) setReduceMotion(requestedReducedMotion);
-    });
-    return () => {
-      active = false;
-    };
-  }, [requestedReducedMotion]);
+  const { reduceMotion, isPlaying, setIsPlaying, resetPlayback, playbackActiveRef } =
+    useTracePlaybackPreference();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const diagnosticsRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, {
@@ -1752,7 +1753,6 @@ export function HouseholdArmFlagship({
   const [microscopeMode, setMicroscopeMode] = useState(false);
   const [cameraMode, setCameraMode] = useState<ArmCameraMode>("studio");
   const [sampleIndex, setSampleIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
   const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
@@ -1767,8 +1767,10 @@ export function HouseholdArmFlagship({
     // The Canvas is a separate React root. A frame queued before Restart or
     // a scrub must not overwrite the newer command with its old position.
     // Published positions update the HUD; only explicit seeks drive the rig.
-    if (revision === playbackRevisionRef.current) setSampleIndex(index);
-  }, []);
+    setSampleIndex((current) =>
+      revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
+    );
+  }, [playbackActiveRef]);
   const [armDragTarget, setArmDragTarget] = useState<
     [number, number, number] | null
   >(null);
@@ -1907,12 +1909,12 @@ export function HouseholdArmFlagship({
             : "Imported policy replayed on its saved task.";
           setRestoredNotice(`${origin} ${pendingImport.imported.experiment ? "Saved scene and seed verified." : "This coefficient archive uses the current default scene and Seed 1."} Further learning starts from these coefficients with Seed ${restored.seedIndex + 1}; optimizer state is not saved.`);
           pendingImportRef.current = null;
+          resetPlayback();
           pendingImport.resolve();
         }
         setTrace(message.trace);
         setAdmission(message.admission);
         seekPlayback(0);
-        setIsPlaying(true);
         const policyMeta: SharedPolicyMeta = {
           kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
           task: message.admission.config.task,
@@ -2020,7 +2022,7 @@ export function HouseholdArmFlagship({
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated, seekPlayback]);
+  }, [workerActivated, seekPlayback, resetPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2209,13 +2211,13 @@ export function HouseholdArmFlagship({
     setStagePolicy(curriculumReplay.policy);
     setStagePolicyMeta(curriculumReplay.meta);
     seekPlayback(0);
-    setIsPlaying(true);
+    resetPlayback();
     setActiveTrace("curriculum");
     setGeneration(curriculumReplay.meta.generation);
     setBestObjective(curriculumReplay.trace.objective);
     setStatus(`${TASK_COPY[task].title} curriculum replayed from Frankensim WASM.`);
     return true;
-  }, [curriculumReplay, seekPlayback, task]);
+  }, [curriculumReplay, seekPlayback, task, resetPlayback]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -2381,6 +2383,7 @@ export function HouseholdArmFlagship({
     seekPlayback,
     microscopeMode,
     physicsDebug,
+    setIsPlaying,
   ]);
 
   useEffect(() => {
@@ -2414,7 +2417,7 @@ export function HouseholdArmFlagship({
       setTrace(null);
       setAdmission(null);
       seekPlayback(0);
-      setIsPlaying(false);
+      resetPlayback();
       setCurriculumReplay(null);
       setComparison(null);
       setArmDragTarget(null);
@@ -2438,7 +2441,7 @@ export function HouseholdArmFlagship({
       setStatus(`Loading the ${TASK_COPY[nextTask].setting} benchmark…`);
       workerRef.current.postMessage({ type: "preview", task: nextTask, seedIndex });
     },
-    [task, seedIndex, seekPlayback],
+    [task, seedIndex, seekPlayback, resetPlayback],
   );
 
   const objectiveDelta =
@@ -2459,7 +2462,7 @@ export function HouseholdArmFlagship({
     : null;
   const currentPlaybackTime = currentSampleForHUD?.timeSeconds ?? 0;
   const traceDuration = trace?.samples.at(-1)?.timeSeconds ?? 0;
-  const playbackRunning = isPlaying && !reduceMotion;
+  const playbackRunning = Boolean(trace) && isPlaying;
   const activeJointAngles = useMemo(() => {
     if (!currentSampleForHUD) return null;
     try {
@@ -2827,9 +2830,10 @@ export function HouseholdArmFlagship({
                   : "Orange links connect source-ordered iiwa joint frames. The amber/green flange ring is owner pad force and grasp state; the cyan cones display Coulomb friction boundaries."}
               </span>
               <div
-                className={`pointer-events-auto flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-slate-950/88 text-slate-200 shadow-lg backdrop-blur-md ${
+                className={`pointer-events-auto flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-950/88 text-slate-200 shadow-lg backdrop-blur-md sm:flex-nowrap ${
                   embedded ? "w-full px-2 py-1.5" : "px-2.5 py-2"
                 }`}
+                role="group"
                 aria-label="Arm trace playback"
               >
                 <button
@@ -2840,7 +2844,7 @@ export function HouseholdArmFlagship({
                     setIsPlaying(false);
                     seekPlayback(0);
                   }}
-                  className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-35"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-35"
                 >
                   <SkipBack className="h-3.5 w-3.5" />
                 </button>
@@ -2849,12 +2853,12 @@ export function HouseholdArmFlagship({
                   aria-label={
                     playbackRunning ? "Pause arm trace" : "Play arm trace"
                   }
-                  disabled={!trace || reduceMotion}
-                  onClick={() => setIsPlaying((playing) => !playing)}
-                  className="rounded-lg p-1.5 text-orange-200 transition hover:bg-orange-400/15 hover:text-orange-100 disabled:opacity-35"
+                  disabled={!trace}
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1.5 text-orange-200 transition hover:bg-orange-400/15 hover:text-orange-100 disabled:opacity-35"
                   title={
                     reduceMotion
-                      ? "Reduce Motion is on; seek the trace manually."
+                      ? "Autoplay is off. Play the trace or inspect it with the position slider."
                       : undefined
                   }
                 >
@@ -2864,7 +2868,7 @@ export function HouseholdArmFlagship({
                     <Play className="h-3.5 w-3.5" />
                   )}
                 </button>
-                <div className="relative min-w-0 flex-1 sm:w-32 sm:flex-none">
+                <div className="relative order-last min-w-16 basis-full sm:order-none sm:w-32 sm:basis-auto">
                   {/* Grasp phase band: the owner receipt's first-grasp time and
                       grasp duration, drawn under the scrubber so the viewer
                       can see when the pads were engaged along the 6 s trace. */}
@@ -2894,6 +2898,7 @@ export function HouseholdArmFlagship({
                       sampleIndex,
                     )}
                     disabled={!trace}
+                    aria-valuetext={`Time ${currentPlaybackTime.toFixed(2)} seconds, sample ${sampleIndex + 1} of ${trace?.samples.length ?? 0}`}
                     onChange={(event) => {
                       setIsPlaying(false);
                       seekPlayback(
@@ -2903,7 +2908,7 @@ export function HouseholdArmFlagship({
                         ),
                       );
                     }}
-                    className="relative w-full min-w-0 accent-orange-400 disabled:opacity-35"
+                    className="relative h-11 w-full min-w-0 accent-orange-400 disabled:opacity-35"
                     title={
                       trace && trace.graspDurationSeconds > 0
                         ? `Green band: pads engaged ${number(trace.firstGraspTimeSeconds, 2)}–${number(trace.firstGraspTimeSeconds + trace.graspDurationSeconds, 2)} s`
@@ -2925,7 +2930,7 @@ export function HouseholdArmFlagship({
                   onChange={(event) =>
                     setPlaybackSpeed(Number(event.target.value) as FrankenRobotsPlaybackSpeed)
                   }
-                  className="shrink-0 rounded-lg border border-white/10 bg-slate-900 px-1.5 py-1 text-[0.65rem] font-bold text-slate-200"
+                  className="min-h-11 min-w-11 shrink-0 rounded-lg border border-white/10 bg-slate-900 px-1.5 py-1 text-[0.65rem] font-bold text-slate-200"
                 >
                   <option value={0.25}>0.25×</option>
                   <option value={0.5}>0.5×</option>
@@ -2934,7 +2939,7 @@ export function HouseholdArmFlagship({
                 </select>
                 {reduceMotion ? (
                   <span className="sr-only">
-                    Reduce Motion is on; use the position slider.
+                    Autoplay is off. Play the trace or inspect it with the position slider.
                   </span>
                 ) : null}
               </div>
@@ -2964,11 +2969,11 @@ export function HouseholdArmFlagship({
                 <ArmStage
                   trace={trace}
                   admission={admission}
-                  reduceMotion={reduceMotion}
                   microscopeMode={microscopeMode}
                   cameraMode={cameraMode}
                   sampleIndex={sampleIndex}
                   isPlaying={isPlaying}
+                  playbackActiveRef={playbackActiveRef}
                   playbackSpeed={playbackSpeed}
                   playbackSeek={playbackSeek}
                   onSampleIndexChange={handleSampleIndexChange}
