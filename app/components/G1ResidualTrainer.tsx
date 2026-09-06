@@ -44,8 +44,9 @@ function spawnTrainingWorker(
   );
   worker.onmessage = (e: MessageEvent<TrainingWorkerResponse>) =>
     onMessage(e.data);
+  // A worker-level error means the script itself failed: the loop is gone.
   worker.onerror = (e) =>
-    onMessage({ type: "error", error: e.message || "worker error" });
+    onMessage({ type: "error", error: e.message || "worker error", fatal: true });
   return worker;
 }
 
@@ -93,7 +94,15 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
       aria-label={`Best objective improving from ${max.toFixed(1)} to ${min.toFixed(1)} over ${lastEval} rollouts`}
       preserveAspectRatio="none"
     >
-      <path d={path} fill="none" stroke="#34d399" strokeWidth="2" />
+      {/* The viewBox is stretched to the container width, so without this the
+          stroke is scaled unevenly and reads thinner on the horizontal runs. */}
+      <path
+        d={path}
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="2"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
@@ -117,7 +126,10 @@ export function G1ResidualTrainer() {
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
       setError(message.error);
-      setRunning(false);
+      // A failed export leaves the run untouched; only a fatal error means
+      // the loop has stopped. Clearing `running` here regardless would show
+      // "Train in this browser" while the worker was still training.
+      if (message.fatal) setRunning(false);
       return;
     }
     if (message.type === "stopped") {
