@@ -36,19 +36,6 @@ interface CurvePoint {
   objective: number;
 }
 
-function spawnTrainingWorker(
-  onMessage: (msg: TrainingWorkerResponse) => void,
-): Worker {
-  const worker = new Worker(
-    new URL("../workers/g1TransformerTrainingWorker.ts", import.meta.url),
-  );
-  worker.onmessage = (e: MessageEvent<TrainingWorkerResponse>) =>
-    onMessage(e.data);
-  worker.onerror = (e) =>
-    onMessage({ type: "error", error: e.message || "worker error" });
-  return worker;
-}
-
 /** Improvement on an objective where lower is better. */
 function gainPercent(baseline: number, best: number): number {
   if (!Number.isFinite(baseline) || baseline === 0) return 0;
@@ -80,7 +67,7 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
   const path = points
     .map((point, index) => {
       const x = ((point.evaluations - firstEval) / evalSpan) * width;
-      // Lower objective is better, so a falling value must rise on screen.
+      // Plot objective on a conventional vertical axis: improvement falls.
       const y = pad + plot - ((point.objective - min) / span) * plot;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     })
@@ -107,6 +94,8 @@ export function G1ResidualTrainer() {
   // what the shipped figures above are measured on, is one dropdown away and
   // the copy says which is which.
   const [challenge, setChallenge] = useState<G1TransformerChallenge>("flat");
+  const [runChallenge, setRunChallenge] =
+    useState<G1TransformerChallenge>("flat");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -114,6 +103,10 @@ export function G1ResidualTrainer() {
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
+      // The owner caches initialization failures inside its worker realm.
+      // Retry needs a new realm, including for a handled WASM-load refusal.
+      workerRef.current?.terminate();
+      workerRef.current = null;
       setError(message.error);
       setRunning(false);
       return;
@@ -160,16 +153,46 @@ export function G1ResidualTrainer() {
   }, []);
 
   const post = (request: TrainingWorkerRequest) => {
-    if (!workerRef.current) {
-      workerRef.current = spawnTrainingWorker(handleMessage);
+    const failWorker = (error: unknown) => {
+      handleMessage({
+        type: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    };
+    try {
+      if (!workerRef.current) {
+        const worker = new Worker(
+          new URL("../workers/g1TransformerTrainingWorker.ts", import.meta.url),
+        );
+        workerRef.current = worker;
+        worker.onmessage = (event: MessageEvent<TrainingWorkerResponse>) => {
+          if (workerRef.current === worker) handleMessage(event.data);
+        };
+        worker.onerror = (event) => {
+          event.preventDefault();
+          if (workerRef.current === worker) {
+            failWorker(new Error(event.message || "Training worker failed."));
+          }
+        };
+        worker.onmessageerror = () => {
+          if (workerRef.current === worker) {
+            failWorker(
+              new Error("The training worker response could not be read."),
+            );
+          }
+        };
+      }
+      workerRef.current.postMessage(request);
+    } catch (error) {
+      failWorker(error);
     }
-    workerRef.current.postMessage(request);
   };
 
   const start = () => {
     setError(null);
     setCurve([]);
     setProgress(null);
+    setRunChallenge(challenge);
     setRunning(true);
     post({
       type: "start",
@@ -186,7 +209,9 @@ export function G1ResidualTrainer() {
   const gain = progress
     ? gainPercent(progress.baselineObjective, progress.bestObjective)
     : 0;
-  const improved = progress ? progress.bestObjective < progress.baselineObjective : false;
+  const improved = progress
+    ? progress.bestObjective < progress.baselineObjective
+    : false;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
@@ -216,7 +241,7 @@ export function G1ResidualTrainer() {
         <button
           type="button"
           onClick={download}
-          disabled={!improved}
+          disabled={!improved || error !== null}
           className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
         >
           Download policy
@@ -224,7 +249,9 @@ export function G1ResidualTrainer() {
       </div>
 
       {error ? (
-        <p className="mt-4 text-sm text-rose-300">{error}</p>
+        <p role="alert" className="mt-4 text-sm text-rose-300">
+          {error}
+        </p>
       ) : null}
 
       <div className="mt-5">
@@ -232,8 +259,13 @@ export function G1ResidualTrainer() {
       </div>
 
       <table className="mt-5 w-full text-left text-sm text-slate-300">
-        <caption className="sr-only">
-          Live training progress against the tuned controller
+        <caption className="pb-2 text-left text-xs text-slate-400">
+          Training results:{" "}
+          {runChallenge === "flat"
+            ? "flat ground"
+            : runChallenge === "terrain"
+              ? "terrain with pushes"
+              : "flat ground and terrain with pushes"}
         </caption>
         <thead>
           <tr className="text-xs uppercase tracking-wide text-slate-500">
@@ -289,9 +321,9 @@ export function G1ResidualTrainer() {
                   {gain.toFixed(1)}% better
                 </strong>{" "}
                 than the controller it started from
-                {challenge === "flat" ? (
+                {runChallenge === "flat" ? (
                   <> on flat ground, the easiest of the three conditions</>
-                ) : challenge === "terrain" ? (
+                ) : runChallenge === "terrain" ? (
                   <> on terrain with pushes</>
                 ) : (
                   <> across both conditions</>

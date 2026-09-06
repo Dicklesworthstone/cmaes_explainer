@@ -42,27 +42,35 @@ const scope = self as unknown as {
 let trainer: FrankenSimG1TransformerTrainer | null = null;
 let running = false;
 let latest: G1TransformerProgress | null = null;
+let runRevision = 0;
 
 /** Post at most this often; a rollout is fast enough to outpace a repaint. */
 const PROGRESS_INTERVAL_MS = 250;
 
 function fail(error: unknown): void {
   running = false;
+  runRevision += 1;
   scope.postMessage({
     type: "error",
     error: error instanceof Error ? error.message : String(error),
   });
 }
 
-async function loop(): Promise<void> {
+async function loop(
+  activeTrainer: FrankenSimG1TransformerTrainer,
+  revision: number,
+): Promise<void> {
   let lastPost = 0;
-  while (running && trainer) {
-    const progress = trainer.pump();
+  while (running && revision === runRevision) {
+    const progress = activeTrainer.pump();
     latest = progress;
     const now = Date.now();
     // Always report a closed generation: that is when the distribution moved,
     // and it is the event a learning curve is actually made of.
-    if (progress.status === "generation" || now - lastPost >= PROGRESS_INTERVAL_MS) {
+    if (
+      progress.status === "generation" ||
+      now - lastPost >= PROGRESS_INTERVAL_MS
+    ) {
       lastPost = now;
       scope.postMessage({ type: "progress", progress });
     }
@@ -80,6 +88,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
   const request = event.data;
   if (request.type === "stop") {
     running = false;
+    runRevision += 1;
     scope.postMessage({ type: "stopped", progress: latest });
     return;
   }
@@ -97,6 +106,13 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     return;
   }
   if (running) return;
+  // Claim the run before loading WASM. Stop cancels this initialization as
+  // well as a pumping loop, and a later Start receives a different revision.
+  running = true;
+  const revision = ++runRevision;
+  trainer?.free();
+  trainer = null;
+  latest = null;
   createFrankenSimG1TransformerTrainer({
     challenge: request.challenge,
     durationSeconds: request.durationSeconds,
@@ -104,12 +120,16 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     seed: request.seed,
   })
     .then((created) => {
-      trainer?.free();
+      if (revision !== runRevision) {
+        created.free();
+        return;
+      }
       trainer = created;
       latest = created.progress();
       scope.postMessage({ type: "progress", progress: latest });
-      running = true;
-      return loop();
+      return loop(created, revision);
     })
-    .catch(fail);
+    .catch((error: unknown) => {
+      if (revision === runRevision) fail(error);
+    });
 };

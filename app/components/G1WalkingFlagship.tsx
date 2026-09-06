@@ -3160,24 +3160,33 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     // Terminal and loop-start transitions must reach the native scrubber even
     // when they occur inside the normal 100 ms intermediate-frame throttle.
     const terminal = Boolean(trace) && sampleIndex === (trace?.samples.length ?? 0) - 1;
-    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}:${selectedPreset}:${xrayMode}:${physicsDebug}:${terminal}`;
+    const settings = `${trace?.samples.length ?? 0}:${isPlaying}:${playbackSpeed}:${cameraView}:${selectedPreset}:${xrayMode}:${physicsDebug}:${terminal}:${playbackSeek.revision}`;
     const settingsChanged = settings !== nativeTraceSettingsRef.current;
-    if (!settingsChanged && trace && isPlaying && now - nativeTraceReportAtRef.current < 100) return;
-    nativeTraceReportAtRef.current = now;
-    nativeTraceSettingsRef.current = settings;
-    reportFrankenRobotsTraceState("humanoid", {
-      sampleIndex: trace ? Math.min(sampleIndex, Math.max(0, trace.samples.length - 1)) : 0,
-      sampleCount: trace?.samples.length ?? 0,
-      playing: Boolean(trace) && isPlaying,
-      speed: playbackSpeed,
-      camera: cameraView,
-      receiptLens: selectedPreset,
-      overlays: [
-        ...(xrayMode ? (["xray"] as const) : []),
-        ...(physicsDebug ? (["physics-debug"] as const) : []),
-      ],
-    });
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView, selectedPreset, xrayMode, physicsDebug]);
+    const report = () => {
+      nativeTraceReportAtRef.current = performance.now();
+      nativeTraceSettingsRef.current = settings;
+      reportFrankenRobotsTraceState("humanoid", {
+        sampleIndex: trace ? Math.min(sampleIndex, Math.max(0, trace.samples.length - 1)) : 0,
+        sampleCount: trace?.samples.length ?? 0,
+        playing: Boolean(trace) && isPlaying,
+        speed: playbackSpeed,
+        camera: cameraView,
+        receiptLens: selectedPreset,
+        overlays: [
+          ...(xrayMode ? (["xray"] as const) : []),
+          ...(physicsDebug ? (["physics-debug"] as const) : []),
+        ],
+      });
+    };
+    const remaining = 100 - (now - nativeTraceReportAtRef.current);
+    if (!settingsChanged && trace && isPlaying && remaining > 0) {
+      // Deliver the final pending position even if scrolling unmounts Canvas.
+      // A newer state or route unmount cancels this older report.
+      const timer = window.setTimeout(report, remaining);
+      return () => window.clearTimeout(timer);
+    }
+    report();
+  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView, selectedPreset, xrayMode, physicsDebug, playbackSeek.revision]);
 
   const curriculumObjectiveDelta = trace && curriculumTrace
     ? curriculumTrace.objective - trace.objective
