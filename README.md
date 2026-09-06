@@ -37,10 +37,13 @@ Open <http://localhost:3000>.
   owner experiment, including the same terrain and push. The search starts from a disclosed 105-coordinate walking
   curriculum (15 standing biases, 30 phase terms, and 60 inertial-feedback
   terms), then leaves all 5,040 coordinates free to adapt.
-- Lossless G1 policy files and private fragment links carry the evaluated
-  placement, exact owner configuration, owner source/WASM identity and seed.
+- Lossless G1 and household-arm policy files and private fragment links carry
+  the exact owner configuration, owner source/WASM identity and seed, including
+  G1 placement and the arm's full ordered obstacle roster and body roles.
   Imports restore those inputs or refuse an incompatible experiment before
-  changing the run. Saved G1 policies retain that experiment across reloads.
+  changing the run. Saved policies retain that experiment across reloads.
+  Arm imports finish owner replay before replacing the active experiment;
+  a refused import leaves its task, seed, policy and measurements intact.
   Older coefficient-only files are explicitly re-evaluated in the current
   default scene with Seed 1.
 - The low-dimensional visual lab, whose Rust kernel is admitted only after
