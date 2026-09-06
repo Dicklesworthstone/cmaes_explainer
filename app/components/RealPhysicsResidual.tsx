@@ -1,3 +1,4 @@
+import flatReceipt from "../../public/robots/g1/transformer/g1-real-physics-flat-receipt.json";
 import receipt from "../../public/robots/g1/transformer/g1-real-physics-receipt.json";
 
 /**
@@ -15,29 +16,49 @@ import receipt from "../../public/robots/g1/transformer/g1-real-physics-receipt.
  * accepted step is therefore a measured improvement over the shipped
  * controller rather than a comparison between two differently-tuned things.
  *
- * Values come from the committed receipt, so the copy cannot drift away from
- * the artifact it describes.
+ * The headline pair is scored on BOTH challenges, flat and terrain-with-push,
+ * averaged. The flat-only receipt is kept beside it because that is the
+ * condition the earlier hand-rolled search reported, and quoting a
+ * flat-only number as though it were the general one is the exact
+ * apples-to-oranges move this card exists to avoid.
+ *
+ * Values come from the committed receipts, so the copy cannot drift away from
+ * the artifacts it describes.
  */
+
+/** Percentage improvement on an objective where lower is better. */
+function gain(base: number, tuned: number): number {
+  return (100 * (base - tuned)) / Math.abs(base);
+}
+
 export function RealPhysicsResidual() {
-  const gainPct =
-    (100 * (receipt.tunedControllerObjective - receipt.residualObjective)) /
-    Math.abs(receipt.tunedControllerObjective);
-  const distancePct =
+  const objectiveGain = gain(
+    receipt.tunedControllerObjective,
+    receipt.residualObjective,
+  );
+  const distanceGain =
     (100 *
       (receipt.residualDistanceMeters - receipt.tunedControllerDistanceMeters)) /
     receipt.tunedControllerDistanceMeters;
+  const flatGain = gain(
+    flatReceipt.tunedControllerObjective,
+    flatReceipt.residualObjective,
+  );
+
   const rows = [
     {
       label: "Tuned controller (5,040-D phase residual)",
       objective: receipt.tunedControllerObjective,
       distance: receipt.tunedControllerDistanceMeters,
       steps: 720,
+      highlight: false,
     },
     {
       label: "Transformer residual on top of it",
       objective: receipt.residualObjective,
       distance: receipt.residualDistanceMeters,
       steps: receipt.residualCompletedSteps,
+      highlight: true,
     },
   ];
 
@@ -45,7 +66,8 @@ export function RealPhysicsResidual() {
     <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
       <table className="w-full text-left text-sm text-slate-300">
         <caption className="sr-only">
-          Transformer residual versus the tuned controller on real G1 physics
+          Transformer residual versus the tuned controller on real G1 physics,
+          averaged over flat and terrain-with-push
         </caption>
         <thead>
           <tr className="text-xs uppercase tracking-wide text-slate-500">
@@ -64,10 +86,10 @@ export function RealPhysicsResidual() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {rows.map((row) => (
             <tr
               key={row.label}
-              className={index === 1 ? "font-semibold text-emerald-300" : ""}
+              className={row.highlight ? "font-semibold text-emerald-300" : ""}
             >
               <th scope="row" className="py-2 pr-4 font-normal">
                 {row.label}
@@ -84,20 +106,33 @@ export function RealPhysicsResidual() {
         </tbody>
       </table>
       <p className="mt-4 text-sm leading-6 text-slate-400">
-        Lower objective is better. The residual improves the tuned controller by{" "}
-        <strong className="text-emerald-300">{gainPct.toFixed(1)}%</strong> on
-        the owner&apos;s own verdict and walks{" "}
+        Lower objective is better. Averaged over both challenges the residual
+        improves the tuned controller by{" "}
         <strong className="text-emerald-300">
-          {distancePct.toFixed(0)}% further
+          {objectiveGain.toFixed(1)}%
         </strong>{" "}
-        without falling, after {receipt.episodes.toLocaleString()} episodes and{" "}
-        {Math.round(receipt.wallclockSeconds)} s on one CPU core — no GPU. Only
-        the {receipt.searchedParams}-parameter output layer is searched; the
-        trunk stays frozen. Weights and receipt:{" "}
-        <code className="break-all">
-          public/robots/g1/transformer/g1-real-physics-residual.bin
-        </code>
-        .
+        on the owner&apos;s own verdict and walks{" "}
+        <strong className="text-emerald-300">
+          {distanceGain.toFixed(0)}% further
+        </strong>{" "}
+        without falling, from{" "}
+        {receipt.evaluations.toLocaleString()} evaluations in{" "}
+        {Math.round(receipt.wallclockSeconds)} s on ten CPU cores — no GPU and
+        no backprop, which you cannot run through a contact solver anyway. The
+        optimiser is this project&apos;s own {receipt.optimizer}, restarted{" "}
+        {receipt.restarts} times. On flat ground alone the same search reaches{" "}
+        <strong className="text-emerald-300">{flatGain.toFixed(0)}%</strong> and{" "}
+        {flatReceipt.residualDistanceMeters.toFixed(2)} m; that is the easier
+        condition, so the cross-challenge figure is the one quoted above.
+      </p>
+      <p className="mt-3 text-sm leading-6 text-slate-400">
+        Only the {receipt.searchedParams}-parameter output layer moves. Letting
+        the search touch more of the network makes it{" "}
+        <em>worse</em> at equal budget — 38,016 parameters scored 33.3% and all
+        77,696 scored 21.1%, against 46.3% for the head alone. More capacity is
+        not more capability when every evaluation costs a physics rollout.
+        Weights and receipts ship under{" "}
+        <code className="break-all">public/robots/g1/transformer/</code>.
       </p>
     </div>
   );

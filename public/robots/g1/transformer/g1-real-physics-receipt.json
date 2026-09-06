@@ -1,13 +1,16 @@
 {
+  "optimizer": "LM-CMA with IPOP restarts (fs-dfo)",
+  "scope": "Head",
   "searchedParams": 960,
-  "episodes": 8101,
-  "challenge": "Flat",
+  "population": 24,
+  "restarts": 6,
+  "evaluations": 39504,
+  "challenges": 2,
   "durationSeconds": 1.5,
-  "tunedControllerObjective": -59.41344499020653,
-  "tunedControllerDistanceMeters": 0.30837211553531235,
-  "residualObjective": -86.60493071864894,
-  "residualDistanceMeters": 0.4742039480178339,
+  "tunedControllerObjective": -63.463932777690914,
+  "tunedControllerDistanceMeters": 0.31877021050423326,
+  "residualObjective": -114.81508274027702,
+  "residualDistanceMeters": 0.49954188590874715,
   "residualCompletedSteps": 720,
-  "headL2Norm": 0.00009363844,
-  "wallclockSeconds": 332.7
+  "wallclockSeconds": 753.9
 }

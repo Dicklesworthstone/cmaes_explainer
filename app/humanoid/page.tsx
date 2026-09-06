@@ -128,6 +128,16 @@ export default function HumanoidPage() {
             search <em>begins</em> at that controller&apos;s exact behaviour and
             has to earn every step from there.
           </p>
+          <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+            The search itself is the thing this site is about: LM-CMA from{" "}
+            <code>fs-dfo</code>, the same optimizer family the flagship offers,
+            with IPOP restarts because a converged run spends its remaining
+            budget standing still. A whole generation is one parallel batch
+            across every core. That combination replaced a hand-rolled
+            evolution strategy and moved the flat-ground result from a 45.8%
+            improvement over the tuned controller to 191.5%, using a fifth of
+            the wall-clock time.
+          </p>
           <div className="mt-6">
             <RealPhysicsResidual />
           </div>
