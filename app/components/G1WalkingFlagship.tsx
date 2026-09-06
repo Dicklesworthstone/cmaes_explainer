@@ -2035,6 +2035,13 @@ function RobotStage({
         obstacles={houseSceneData.obstacles}
         pelvisPosition={displayedPelvisThree}
         safeRadius={0.32}
+        groundProjectionY={
+          TERRAIN_ABOVE_FLOOR_M +
+          (admission?.config.challenge === "terrain-and-push"
+            ? admission.terrainAmplitudeMeters
+            : 0) +
+          0.02
+        }
       />
     </Canvas>
   );
@@ -2042,6 +2049,47 @@ function RobotStage({
 
 function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
+/**
+ * Reduce the full convergence history to a bounded window for React.
+ *
+ * Head (oldest), body (log-spaced middle) and tail (newest) so a 30k-generation
+ * run shows roughly equal resolution per decade. Lifted out of the message
+ * handler so the flush path can call it once per repaint instead of once per
+ * generation.
+ */
+/**
+ * How often progress may re-render the stage [ms]. Fast enough that the
+ * generation counter still reads as live, slow enough that a search running at
+ * several generations a second cannot monopolise the main thread while someone
+ * is scrolling or dragging the robot.
+ */
+const PROGRESS_FLUSH_MS = 200;
+
+const CONVERGENCE_WINDOW = 200;
+const CONVERGENCE_HEAD = 10;
+const CONVERGENCE_TAIL = 10;
+
+function downsampleConvergence(full: ConvergencePoint[]): ConvergencePoint[] {
+  if (full.length <= CONVERGENCE_WINDOW) return [...full];
+  const n = full.length;
+  const kept: ConvergencePoint[] = [];
+  for (let k = 0; k < CONVERGENCE_HEAD; k++) kept.push(full[k]);
+  const bodyCount = CONVERGENCE_WINDOW - CONVERGENCE_HEAD - CONVERGENCE_TAIL;
+  const bodyStart = CONVERGENCE_HEAD;
+  const bodyEnd = n - CONVERGENCE_TAIL;
+  if (bodyCount > 0 && bodyEnd > bodyStart) {
+    const lo = Math.log(bodyStart + 1);
+    const hi = Math.log(bodyEnd);
+    for (let k = 0; k < bodyCount; k++) {
+      const t = bodyCount > 1 ? k / (bodyCount - 1) : 0;
+      const idx = Math.round(Math.exp(lo + t * (hi - lo))) - 1;
+      kept.push(full[Math.max(0, Math.min(n - 1, idx))]);
+    }
+  }
+  for (let k = 0; k < CONVERGENCE_TAIL; k++) kept.push(full[n - CONVERGENCE_TAIL + k]);
+  return kept;
 }
 
 function stageSceneHint(
@@ -2082,6 +2130,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     once: true,
   });
   const [meshState, retryMeshes] = useG1Meshes(shouldLoadMeshes);
+  // "Rig ready" is a one-off confirmation, not a status worth a permanent
+  // corner of the viewport. Fade it out a few seconds after it lands and
+  // leave the stage clear.
+  // Starts shown and is only ever hidden, from the timer callback: setting it
+  // true in the effect body would be a render-phase state write, and the
+  // banner has nothing to say once it has been read.
+  const [rigReadyDismissed, setRigReadyDismissed] = useState(false);
+  useEffect(() => {
+    if (meshState.phase !== "ready") return;
+    const timer = window.setTimeout(() => setRigReadyDismissed(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [meshState.phase]);
+  const rigReadyVisible = meshState.phase === "ready" && !rigReadyDismissed;
   const workerActivated = shouldLoadMeshes;
   const workerRef = useRef<Worker | null>(null);
   // Synchronous in-flight gate. React state (busy) updates
@@ -2149,12 +2210,25 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const resumedPolicyRef = useRef<Float64Array | null>(null);
   const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
   const progressHistoryRef = useRef<ConvergencePoint[]>([]);
+  // Latest unrendered progress message and its scheduled flush. Generations
+  // arrive faster than a reader can perceive; rendering each one re-rendered
+  // the stage mid-scroll.
+  const pendingProgressRef = useRef<Extract<
+    WorkerResponse,
+    { type: "progress" }
+  > | null>(null);
+  const progressFlushRef = useRef<number | null>(null);
   const [progressHistory, setProgressHistory] = useState<ConvergencePoint[]>([]);
   const [activeTrace, setActiveTrace] = useState<G1TraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
   // The Craftsman estate is now first-class on both surfaces. X-ray remains
   // one tap away, but embedded/native users should not silently miss the
   // rooms, lighting, and architectural inspector added to the flagship.
+  // The stage is the product; the chrome is not. Everything except the trace
+  // label and the camera picker now hides behind one control, collapsed by
+  // default, and the camera picker itself collapses on phones where the band
+  // was wrapping into three rows over the robot.
+  const [hudExpanded, setHudExpanded] = useState(false);
   const [xrayMode, setXrayMode] = useState(false);
   const [physicsDebug, setPhysicsDebug] = useState(false);
   const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
@@ -2843,6 +2917,33 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       };
     }
     workerRef.current = optimizerWorker;
+    // Apply the most recent progress message. Called at most once every
+    // PROGRESS_FLUSH_MS while training, and immediately before any
+    // non-progress message so a queued flush can never write a stale
+    // generation over a completed run's final numbers.
+    const flushProgress = () => {
+      if (progressFlushRef.current !== null) {
+        window.clearTimeout(progressFlushRef.current);
+        progressFlushRef.current = null;
+      }
+      const message = pendingProgressRef.current;
+      if (!message || !active) return;
+      pendingProgressRef.current = null;
+      if (trainingStartedAtRef.current !== null) {
+        setTrainingSeconds(
+          trainingSecondsRef.current +
+            (Date.now() - trainingStartedAtRef.current) / 1000,
+        );
+      }
+      setGeneration(message.generation);
+      setBestObjective(message.bestObjective);
+      setProgressHistory(downsampleConvergence(progressHistoryRef.current));
+      setStatus(message.continuous
+        ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
+        : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
+      );
+    };
+
     optimizerWorker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       // FOURTH INSTANCE: the effect re-runs in strict mode and on
       // dependency changes. The previous worker is terminated in the
@@ -2854,6 +2955,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       // confusing "state update on an unmounted component" warnings.
       if (!active) return;
       const message = event.data;
+      // Ordering: a queued progress flush must land before the message that
+      // supersedes it, or the run's final generation gets overwritten.
+      if (message.type !== "progress") flushProgress();
       if (message.type === "status") {
         setStatus(message.detail);
       } else if (message.type === "progress") {
@@ -2861,64 +2965,36 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (trainingStartedAtRef.current === null) {
           trainingStartedAtRef.current = Date.now();
         }
-        setTrainingSeconds(
-          trainingSecondsRef.current + (Date.now() - trainingStartedAtRef.current) / 1000,
-        );
-        setGeneration(message.generation);
-        setBestObjective(message.bestObjective);
-        setProgressHistory((_prev) => {
-          // The full history lives in the ref; we downsample it here and
-          // hand React a 200-point window. The ref grows monotonically; the
-          // state is bounded.
-          const HISTORY_CAP = 200;
-          const HEAD = 10;
-          const TAIL = 10;
-          const point: ConvergencePoint = {
-            generation: message.generation,
-            bestObjective: message.bestObjective,
-            sigma: message.sigma,
-          };
-          progressHistoryRef.current.push(point);
-          // Training runs until the operator stops it, so this ref is not
-          // bounded by a budget: at a couple of generations a second an
-          // overnight run would accumulate hundreds of thousands of points.
-          // Halve it by uniform decimation when it gets large. Each point
-          // carries its own generation, so thinning changes the resolution of
-          // the convergence plot and nothing else.
-          const HISTORY_REF_CAP = 20_000;
-          if (progressHistoryRef.current.length > HISTORY_REF_CAP) {
-            progressHistoryRef.current = progressHistoryRef.current.filter(
-              (_point, index) => index % 2 === 0,
-            );
-          }
-          const full = progressHistoryRef.current;
-          if (full.length <= HISTORY_CAP) return [...full];
-          // Head (oldest HEAD points), body (log-spaced middle), tail
-          // (newest TAIL points). The body uses log spacing so a 30k-gen
-          // run shows roughly equal resolution per decade: gens 0-10, 10-100,
-          // 100-1k, 1k-10k, 10k-30k.
-          const n = full.length;
-          const kept: ConvergencePoint[] = [];
-          for (let k = 0; k < HEAD; k++) kept.push(full[k]);
-          const bodyCount = HISTORY_CAP - HEAD - TAIL;
-          const bodyStart = HEAD;
-          const bodyEnd = n - TAIL;
-          if (bodyCount > 0 && bodyEnd > bodyStart) {
-            const lo = Math.log(bodyStart + 1);
-            const hi = Math.log(bodyEnd);
-            for (let k = 0; k < bodyCount; k++) {
-              const t = bodyCount > 1 ? k / (bodyCount - 1) : 0;
-              const idx = Math.round(Math.exp(lo + t * (hi - lo))) - 1;
-              kept.push(full[Math.max(0, Math.min(n - 1, idx))]);
-            }
-          }
-          for (let k = 0; k < TAIL; k++) kept.push(full[n - TAIL + k]);
-          return kept;
+        // Record every generation in the ref — that history is the receipt —
+        // but do NOT re-render for each one. Generations can arrive several
+        // times a second, and each one used to fire five state updates plus an
+        // O(n) resample, re-rendering the whole stage (Canvas included) while
+        // the reader is trying to scroll. The ref write is cheap; the React
+        // work is coalesced onto one flush below.
+        progressHistoryRef.current.push({
+          generation: message.generation,
+          bestObjective: message.bestObjective,
+          sigma: message.sigma,
         });
-        setStatus(message.continuous
-          ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
-          : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
-        );
+        // Training runs until the operator stops it, so this ref is not
+        // bounded by a budget: at a couple of generations a second an
+        // overnight run would accumulate hundreds of thousands of points.
+        // Halve it by uniform decimation when it gets large. Each point
+        // carries its own generation, so thinning changes the resolution of
+        // the convergence plot and nothing else.
+        const HISTORY_REF_CAP = 20_000;
+        if (progressHistoryRef.current.length > HISTORY_REF_CAP) {
+          progressHistoryRef.current = progressHistoryRef.current.filter(
+            (_point, index) => index % 2 === 0,
+          );
+        }
+        pendingProgressRef.current = message;
+        if (progressFlushRef.current === null) {
+          progressFlushRef.current = window.setTimeout(
+            flushProgress,
+            PROGRESS_FLUSH_MS,
+          );
+        }
       } else if (message.type === "trace") {
         const policyMeta: SharedPolicyMeta = {
           kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
@@ -3042,6 +3118,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     optimizerWorker.postMessage({ type: "preview", task: "walking", challenge: "flat" } satisfies G1OptimizationRequest);
     return () => {
       active = false;
+      if (progressFlushRef.current !== null) {
+        window.clearTimeout(progressFlushRef.current);
+        progressFlushRef.current = null;
+      }
+      pendingProgressRef.current = null;
       optimizerWorker.terminate();
       workerRef.current = null;
     };
@@ -3191,11 +3272,30 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             >
             {/* Top Badges & Interactive Mode Bar */}
             <div className="flex flex-wrap gap-2 pointer-events-auto">
-              <span className="max-sm:hidden rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
-                owner poses · 480 Hz terrain physics
-              </span>
               <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
                 {TRACE_TITLES[activeTrace]}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setHudExpanded(!hudExpanded)}
+                aria-expanded={hudExpanded}
+                aria-controls="g1-hud-controls"
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  hudExpanded
+                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100"
+                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                }`}
+                title="Show or hide the stage controls"
+              >
+                <Wrench className="h-3.5 w-3.5" />
+                {hudExpanded ? "Hide controls" : "Controls"}
+              </button>
+
+              {hudExpanded ? (
+              <>
+              <span className="max-sm:hidden rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
+                owner poses · 480 Hz terrain physics
               </span>
 
               {/* Render Mode Toggle: Photo-Real vs X-Ray */}
@@ -3447,12 +3547,24 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   📏 {liveClearance.distance.toFixed(2)} m · {liveClearance.obstacleName}
                 </span>
               ) : null}
+              </>
+              ) : null}
             </div>
 
             {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
-            <div className="flex flex-wrap items-center gap-2 pointer-events-auto self-start">
-              {/* Lighting Atmosphere Selector */}
-              <div className="flex items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md">
+            <div
+              id="g1-hud-controls"
+              className="flex flex-wrap items-center gap-2 pointer-events-auto self-start"
+            >
+              {/* Lighting Atmosphere Selector. Cosmetic only — it changes the
+                  sky and exposure, never the physics or the receipt — so it
+                  lives behind the controls disclosure rather than occupying
+                  the top band by default. */}
+              <div
+                className={`items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md ${
+                  hudExpanded ? "flex" : "hidden"
+                }`}
+              >
                 {(
                   [
                     { id: "afternoon-sun", label: "Day", icon: Sun },
@@ -3481,8 +3593,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 })}
               </div>
 
-              {/* Camera Perspective Selector */}
-              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md">
+              {/* Camera Perspective Selector. Five buttons is most of a phone's
+                  width, so below sm it joins the disclosure; on wider screens
+                  it stays out as primary navigation. */}
+              <div
+                className={`items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex ${
+                  hudExpanded ? "flex" : "hidden"
+                }`}
+              >
                 {(
                   [
                     { id: "orbit", label: "Orbit", icon: Camera },
@@ -3523,7 +3641,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </div>
             ) : null}
             {meshState.phase === "ready" ? (
-              <div className="pointer-events-none absolute left-5 top-16 z-10" role="status" aria-live="polite">
+              <div
+                // The top band stacks into two rows on phones, so top-16 sat on
+                // the controls button; clear it below sm and keep the tighter
+                // offset once the band is a single row.
+                className={`pointer-events-none absolute left-5 top-24 z-10 transition-opacity duration-700 sm:top-16 ${
+                  rigReadyVisible ? "opacity-100" : "opacity-0"
+                }`}
+                role="status"
+                aria-live="polite"
+                aria-hidden={!rigReadyVisible}
+              >
                 <span className="rounded-xl border border-emerald-300/20 bg-emerald-950/70 px-3 py-2 text-[0.7rem] text-emerald-100 backdrop-blur-md">
                   Real Unitree G1 rig ready · {Object.keys(meshState.geometries).length} mesh parts decoded
                 </span>

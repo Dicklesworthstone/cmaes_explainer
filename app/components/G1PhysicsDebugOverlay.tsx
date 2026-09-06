@@ -69,6 +69,13 @@ export interface G1PhysicsDebugOverlayProps {
   obstacles: OrientedBoundingBox[];
   pelvisPosition: [number, number, number];
   safeRadius?: number;
+  /**
+   * Height for the ground projection [m]. The floor sits at y = -0.005 but
+   * the terrain challenge raises the walking surface by an owner-reported
+   * amplitude, and a fixed 2 cm ring was being swallowed by the crests: the
+   * caller passes a height that clears whatever surface is actually there.
+   */
+  groundProjectionY?: number;
 }
 
 export function G1PhysicsDebugOverlay({
@@ -77,6 +84,7 @@ export function G1PhysicsDebugOverlay({
   obstacles,
   pelvisPosition,
   safeRadius = 0.32,
+  groundProjectionY = 0.03,
 }: G1PhysicsDebugOverlayProps) {
   // Hooks remain unconditional so toggling the overlay cannot change hook
   // order. Disabled renders allocate no Three.js edge geometry.
@@ -136,7 +144,7 @@ export function G1PhysicsDebugOverlay({
 
       {/* 4. Ground projection of the safety sphere */}
       <mesh
-        position={[pelvisPosition[0], 0.02, pelvisPosition[2]]}
+        position={[pelvisPosition[0], groundProjectionY, pelvisPosition[2]]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <ringGeometry args={[safeRadius, safeRadius + 0.04, 32]} />
@@ -146,6 +154,12 @@ export function G1PhysicsDebugOverlay({
           opacity={0.6}
           side={THREE.DoubleSide}
           depthWrite={false}
+          // Height alone stops the ring being buried; the polygon offset stops
+          // the remaining near-coplanar case from flickering when the camera
+          // grazes the floor and depth precision collapses.
+          polygonOffset
+          polygonOffsetFactor={-2}
+          polygonOffsetUnits={-2}
         />
       </mesh>
     </group>
