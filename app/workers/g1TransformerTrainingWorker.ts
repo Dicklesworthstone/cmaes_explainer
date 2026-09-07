@@ -30,7 +30,8 @@ export type TrainingWorkerRequest =
     }
   | { type: "stop" }
   | { type: "export" }
-  | { type: "trace" };
+  | { type: "trace" }
+  | { type: "head" };
 
 export type TrainingWorkerResponse =
   /**
@@ -57,6 +58,7 @@ export type TrainingWorkerResponse =
    * training stopped while the worker is still pumping.
    */
   | { type: "resumed"; adopted: boolean }
+  | { type: "head"; head: Float64Array; progress: G1TransformerProgress }
   | { type: "error"; error: string; fatal: boolean };
 
 const scope = self as unknown as {
@@ -152,6 +154,19 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     running = false;
     runRevision += 1;
     scope.postMessage({ type: "stopped", progress: latest });
+    return;
+  }
+  if (request.type === "head") {
+    try {
+      if (!trainer || !latest) throw new Error("no trained policy yet");
+      scope.postMessage({
+        type: "head",
+        head: trainer.bestHead(),
+        progress: latest,
+      });
+    } catch (error) {
+      reportError(error);
+    }
     return;
   }
   if (request.type === "trace") {

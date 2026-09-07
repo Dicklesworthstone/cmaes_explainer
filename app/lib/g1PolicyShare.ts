@@ -561,3 +561,131 @@ export function policyFromFileContents(
   validatePolicy(policy);
   return { ...(file as SharedPolicyMeta), policy };
 }
+
+// ─── Sharing a trained transformer residual ─────────────────────────────────
+//
+// A different object from the 5,040-D controller above, and deliberately a
+// separate codec rather than a widened one: the payload is a 960-parameter
+// transformer output layer, and the only reason it fits in a URL at all is
+// that the trunk is deterministic in the kernel's fixed seed, so the head is
+// the entire learned part. Encoding it through the controller's schema would
+// mean inventing a task, family and generation it does not have.
+
+const RESIDUAL_MAGIC = 0x48523147; // "G1RH"
+const RESIDUAL_VERSION = 1;
+/** magic, version, condition, headLength, evaluations, objective, baseline. */
+const RESIDUAL_HEADER_BYTES = 4 + 4 + 4 + 4 + 4 + 8 + 8;
+const RESIDUAL_CONDITIONS = ["flat", "terrain", "both"] as const;
+
+export type ResidualShareCondition = (typeof RESIDUAL_CONDITIONS)[number];
+
+export interface SharedResidual {
+  head: Float64Array;
+  condition: ResidualShareCondition;
+  evaluations: number;
+  objective: number;
+  baselineObjective: number;
+}
+
+function encodeSharedResidual(residual: SharedResidual): Uint8Array {
+  const bytes = new Uint8Array(
+    RESIDUAL_HEADER_BYTES + residual.head.length * 4,
+  );
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, RESIDUAL_MAGIC, true);
+  view.setUint32(4, RESIDUAL_VERSION, true);
+  view.setUint32(8, RESIDUAL_CONDITIONS.indexOf(residual.condition), true);
+  view.setUint32(12, residual.head.length, true);
+  view.setUint32(16, Math.max(0, Math.round(residual.evaluations)), true);
+  view.setFloat64(20, residual.objective, true);
+  view.setFloat64(28, residual.baselineObjective, true);
+  // f32 for the head: the search writes it into f32 weights anyway, so the
+  // extra precision would be discarded on arrival and would double the link.
+  for (let i = 0; i < residual.head.length; i++) {
+    view.setFloat32(RESIDUAL_HEADER_BYTES + i * 4, residual.head[i], true);
+  }
+  return bytes;
+}
+
+function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
+  if (bytes.length < RESIDUAL_HEADER_BYTES) {
+    throw new Error("This shared policy link is too short to be complete.");
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint32(0, true) !== RESIDUAL_MAGIC) {
+    throw new Error("This link does not carry a trained policy.");
+  }
+  if (view.getUint32(4, true) !== RESIDUAL_VERSION) {
+    throw new Error("This shared policy was made by a different version.");
+  }
+  const condition = RESIDUAL_CONDITIONS[view.getUint32(8, true)];
+  if (!condition) throw new Error("This shared policy names no condition.");
+  const length = view.getUint32(12, true);
+  if (bytes.length !== RESIDUAL_HEADER_BYTES + length * 4) {
+    // The usual cause is a chat client truncating a long URL, not corruption.
+    throw new Error(
+      "This shared policy link is incomplete — it was probably shortened in transit.",
+    );
+  }
+  const head = new Float64Array(length);
+  for (let i = 0; i < length; i++) {
+    head[i] = view.getFloat32(RESIDUAL_HEADER_BYTES + i * 4, true);
+  }
+  if (!head.every((value) => Number.isFinite(value))) {
+    throw new Error("This shared policy contains values that are not numbers.");
+  }
+  return {
+    head,
+    condition,
+    evaluations: view.getUint32(16, true),
+    objective: view.getFloat64(20, true),
+    baselineObjective: view.getFloat64(28, true),
+  };
+}
+
+/** The `zresidual` fragment value: deflate-raw inside base64url. */
+export async function encodeResidualFragment(
+  residual: SharedResidual,
+): Promise<string> {
+  const raw = encodeSharedResidual(residual);
+  if (typeof CompressionStream === "undefined") return base64UrlEncode(raw);
+  return base64UrlEncode(await pipeBytes(raw, CompressionStream, "deflate-raw"));
+}
+
+/** Read a `zresidual` fragment value. */
+export async function decodeResidualFragment(
+  fragment: string,
+): Promise<SharedResidual> {
+  const bytes = base64UrlDecode(fragment);
+  const looksRaw =
+    bytes.length >= 4 &&
+    new DataView(bytes.buffer, bytes.byteOffset).getUint32(0, true) ===
+      RESIDUAL_MAGIC;
+  if (looksRaw || typeof DecompressionStream === "undefined") {
+    return decodeSharedResidual(bytes);
+  }
+  let inflated: Uint8Array;
+  try {
+    inflated = await pipeBytes(bytes, DecompressionStream, "deflate-raw");
+  } catch {
+    throw new Error(
+      "This shared policy link could not be read — it was probably shortened in transit.",
+    );
+  }
+  return decodeSharedResidual(inflated);
+}
+
+export function residualShareUrl(
+  origin: string,
+  pathname: string,
+  fragment: string,
+): string {
+  return `${origin}${pathname}#zresidual=${fragment}`;
+}
+
+/** Read a residual fragment out of a location hash, if one is present. */
+export function residualFragmentFromHash(hash: string): string | null {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!raw.includes("=")) return null;
+  return new URLSearchParams(raw).get("zresidual");
+}

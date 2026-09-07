@@ -12,6 +12,13 @@ import type {
   G1TransformerChallenge,
   G1TransformerProgress,
 } from "../lib/frankensimCmaes";
+import {
+  decodeResidualFragment,
+  encodeResidualFragment,
+  residualFragmentFromHash,
+  residualShareUrl,
+  type SharedResidual,
+} from "../lib/g1PolicyShare";
 import type {
   TrainingWorkerRequest,
   TrainingWorkerResponse,
@@ -218,9 +225,13 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
 function GaitPaths({
   trained,
   baseline,
+  condition,
+  stale,
 }: {
   trained: G1TraceReceipt;
   baseline: G1TraceReceipt;
+  condition: G1TransformerChallenge;
+  stale: boolean;
 }) {
   const width = 640;
   const height = 150;
@@ -280,13 +291,31 @@ function GaitPaths({
         />
       </svg>
       <figcaption className="mt-2 text-xs leading-5 text-slate-500">
-        Pelvis height against forward travel through one 1.5 s rollout, from the
-        owner&apos;s own trace.{" "}
+        Pelvis height against forward travel through one 1.5 s rollout{" "}
+        {condition === "terrain" ? "on terrain with pushes" : "on flat ground"},
+        from the owner&apos;s own trace.{" "}
         <span className="text-emerald-300">Solid green</span> is the policy you
         trained ({trained.distanceMeters.toFixed(3)} m);{" "}
         <span className="text-slate-400">dashed grey</span> is the tuned
         controller it started from ({baseline.distanceMeters.toFixed(3)} m).
         Vertical scale is exaggerated to the range walked.
+        {condition === "both" ? (
+          <>
+            {" "}
+            A rollout is one condition, so this is the flat leg of the pair this
+            run averages — which is why its distance differs from the averaged
+            figure in the table.
+          </>
+        ) : null}
+        {stale ? (
+          <>
+            {" "}
+            <strong className="text-amber-300">
+              The search has improved since this was drawn
+            </strong>{" "}
+            — show the gait again to see the current best.
+          </>
+        ) : null}
       </figcaption>
     </figure>
   );
@@ -312,6 +341,8 @@ export function G1ResidualTrainer() {
    * the dependency array is written.
    */
   const runChallengeRef = useRef<G1TransformerChallenge>("flat");
+  /** Whether the live run was seeded from a link rather than a local save. */
+  const seededFromLinkRef = useRef(false);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -323,9 +354,19 @@ export function G1ResidualTrainer() {
   const [gait, setGait] = useState<{
     trained: G1TraceReceipt;
     baseline: G1TraceReceipt;
+    /** The condition this rollout was taken under, not the current dropdown. */
+    condition: G1TransformerChallenge;
+    /** The incumbent objective when it was drawn, to detect a stale plot. */
+    capturedObjective: number;
   } | null>(null);
   const [gaitPending, setGaitPending] = useState(false);
   const [resumeNotice, setResumeNotice] = useState<string | null>(null);
+  const [shareState, setShareState] = useState<{
+    url: string;
+    copied: boolean;
+  } | null>(null);
+  /** A policy someone sent by link, offered exactly like a local checkpoint. */
+  const [sharedRun, setSharedRun] = useState<SharedResidual | null>(null);
   /**
    * A head recovered from a previous visit, offered as a resume. Read through
    * an external store rather than an effect: localStorage does not exist while
@@ -336,7 +377,21 @@ export function G1ResidualTrainer() {
     savedRunsSnapshot,
     () => EMPTY_SAVED_RUNS,
   );
-  const savedHead = savedRuns[challenge] ?? null;
+  const localSave = savedRuns[challenge] ?? null;
+  // A visitor who followed a link came for that policy; show it rather than
+  // whatever this browser happens to have lying around for the same condition.
+  const shared =
+    sharedRun && sharedRun.condition === challenge ? sharedRun : null;
+  const savedHead: SavedRun | null = shared
+    ? {
+        challenge: shared.condition,
+        head: Array.from(shared.head),
+        objective: shared.objective,
+        baselineObjective: shared.baselineObjective,
+        evaluations: shared.evaluations,
+        savedAt: 0,
+      }
+    : localSave;
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
@@ -358,16 +413,57 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "resumed") {
+      const source = seededFromLinkRef.current
+        ? "the shared policy"
+        : "your saved policy";
       setResumeNotice(
         message.adopted
-          ? "Resumed from your saved policy."
-          : "The saved policy did not beat the tuned controller, so this run starts fresh.",
+          ? `Loaded ${source} and continuing from it.`
+          : `${seededFromLinkRef.current ? "The shared" : "The saved"} policy did not beat the tuned controller here, so this run starts fresh.`,
       );
+      return;
+    }
+    if (message.type === "head") {
+      setError(null);
+      void encodeResidualFragment({
+        head: message.head,
+        condition: runChallengeRef.current,
+        evaluations: message.progress.evaluations,
+        objective: message.progress.bestObjective,
+        baselineObjective: message.progress.baselineObjective,
+      })
+        .then(async (fragment) => {
+          const url = residualShareUrl(
+            window.location.origin,
+            window.location.pathname,
+            fragment,
+          );
+          try {
+            await navigator.clipboard.writeText(url);
+            setShareState({ url, copied: true });
+          } catch {
+            // Clipboard access is denied in plenty of ordinary situations;
+            // showing the link is a working fallback, not a failure.
+            setShareState({ url, copied: false });
+          }
+        })
+        .catch((cause: unknown) => {
+          setError({
+            message:
+              cause instanceof Error ? cause.message : "Could not build a link.",
+            fatal: false,
+          });
+        });
       return;
     }
     if (message.type === "trace") {
       setError(null);
-      setGait({ trained: message.trained, baseline: message.baseline });
+      setGait({
+        trained: message.trained,
+        baseline: message.baseline,
+        condition: runChallengeRef.current,
+        capturedObjective: message.progress.bestObjective,
+      });
       setGaitPending(false);
       return;
     }
@@ -422,6 +518,35 @@ export function G1ResidualTrainer() {
     return () => {
       workerRef.current?.terminate();
       workerRef.current = null;
+    };
+  }, []);
+
+  // A shared policy arrives in the hash, so it never reaches a server. Decoding
+  // is async, and the result lands from the promise rather than the effect body.
+  useEffect(() => {
+    const fragment = residualFragmentFromHash(window.location.hash);
+    if (!fragment) return;
+    let live = true;
+    void decodeResidualFragment(fragment)
+      .then((shared) => {
+        if (!live) return;
+        setSharedRun(shared);
+        // Select the condition it was trained for, or the offer would sit
+        // behind a dropdown the visitor has no reason to touch.
+        setChallenge(shared.condition);
+      })
+      .catch((cause: unknown) => {
+        if (!live) return;
+        setError({
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "This shared policy link could not be read.",
+          fatal: false,
+        });
+      });
+    return () => {
+      live = false;
     };
   }, []);
 
@@ -485,7 +610,12 @@ export function G1ResidualTrainer() {
     // trained on flat ground is not a head for terrain, and the owner would
     // refuse it anyway.
     const resumable = savedHead;
+    seededFromLinkRef.current = Boolean(shared);
     setResumeNotice(null);
+    // The link has done its job once a run starts from it. Leaving it ranked
+    // above the local checkpoint would mean every later reload dragged the
+    // reader back to the shared policy, discarding their own better run.
+    if (shared) setSharedRun(null);
     post({
       type: "start",
       challenge,
@@ -500,6 +630,10 @@ export function G1ResidualTrainer() {
 
   const stop = () => post({ type: "stop" });
   const download = () => post({ type: "export" });
+  const share = () => {
+    setShareState(null);
+    post({ type: "head" });
+  };
   const showGait = () => {
     setGaitPending(true);
     post({ type: "trace" });
@@ -547,6 +681,14 @@ export function G1ResidualTrainer() {
         </button>
         <button
           type="button"
+          onClick={share}
+          disabled={!improved || Boolean(error?.fatal)}
+          className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
+        >
+          Copy share link
+        </button>
+        <button
+          type="button"
           onClick={download}
           disabled={!improved || Boolean(error?.fatal)}
           className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
@@ -565,13 +707,19 @@ export function G1ResidualTrainer() {
         <p className="mt-4 text-sm text-slate-400">{resumeNotice}</p>
       ) : savedHead && !running ? (
         <p className="mt-4 text-sm text-slate-400">
-          A run from{" "}
-          {new Date(savedHead.savedAt).toLocaleString(undefined, {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}{" "}
-          is saved in this browser —{" "}
-          {savedHead.evaluations.toLocaleString()} rollouts, reaching{" "}
+          {shared ? (
+            <>Someone shared a policy with you in this link</>
+          ) : (
+            <>
+              A run from{" "}
+              {new Date(savedHead.savedAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}{" "}
+              is saved in this browser
+            </>
+          )}{" "}
+          — {savedHead.evaluations.toLocaleString()} rollouts, reaching{" "}
           <strong className="text-emerald-300">
             {gainPercent(
               savedHead.baselineObjective,
@@ -579,7 +727,18 @@ export function G1ResidualTrainer() {
             ).toFixed(1)}
             %
           </strong>{" "}
-          better than the tuned controller. Starting will continue from it.
+          better than the tuned controller. Starting will{" "}
+          {shared ? "load and continue it" : "continue from it"}; the owner
+          re-runs it here and will say so if it does not hold up.
+        </p>
+      ) : null}
+
+      {shareState ? (
+        <p className="mt-3 break-all text-xs text-slate-400">
+          {shareState.copied
+            ? "Share link copied to your clipboard: "
+            : "Share link (copy it manually — the clipboard was not available): "}
+          <span className="text-slate-300">{shareState.url}</span>
         </p>
       ) : null}
 
@@ -588,7 +747,13 @@ export function G1ResidualTrainer() {
       </div>
 
       {gait ? (
-        <GaitPaths trained={gait.trained} baseline={gait.baseline} />
+        <GaitPaths
+          trained={gait.trained}
+          baseline={gait.baseline}
+          condition={gait.condition}
+          // Lower is better, so any drop means the plot is of an older policy.
+          stale={Boolean(progress && progress.bestObjective < gait.capturedObjective)}
+        />
       ) : null}
 
       <table className="mt-5 w-full text-left text-sm text-slate-300">

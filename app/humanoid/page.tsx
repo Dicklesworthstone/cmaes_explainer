@@ -168,7 +168,12 @@ export default function HumanoidPage() {
             file. It is a 64-wide, two-layer model, so it is deliberately not
             interchangeable with the 256-wide artifact the comparison above
             loads; that loader pins its audited architecture and refuses
-            anything else, which is the point of the audit.
+            anything else, which is the point of the audit. A run also survives
+            a reload, and the policy fits in a link: only the 960 trained
+            parameters travel, because the rest of the network is fixed by the
+            kernel&apos;s own seed. They ride in the URL fragment, so the policy
+            never reaches a server, and whoever opens it has the owner re-run it
+            on their own machine before believing the number.
           </p>
           <div className="mt-6">
             <G1ResidualTrainer />
