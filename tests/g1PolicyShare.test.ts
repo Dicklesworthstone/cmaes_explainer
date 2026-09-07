@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   decodePolicyFragment,
+  decodeResidualFragment,
   decodeSharedPolicy,
   encodePolicyFragment,
+  encodeResidualFragment,
+  type SharedResidual,
   encodeSharedPolicy,
   policyFileContents,
   policyFragmentFromHash,
@@ -20,6 +23,75 @@ const META: SharedPolicyMeta = {
   generation: 352,
   sigma: 0.0005,
 };
+
+describe("trained residual links", () => {
+  const residual: SharedResidual = {
+    head: Float64Array.from({ length: 960 }, (_, i) => Math.sin(i) * 0.002),
+    condition: "flat",
+    evaluations: 49,
+    objective: -109.5,
+    baselineObjective: -59.4,
+  };
+
+  // Independent wire construction verifies the decoder, without relying on
+  // the encoder to reject the same malformed input first.
+  function wire(edit: (view: DataView) => void = () => {}): string {
+    const bytes = new Uint8Array(36 + 960 * 4);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, 0x48523147, true);
+    view.setUint32(4, 1, true);
+    view.setUint32(12, 960, true);
+    view.setUint32(16, 49, true);
+    view.setFloat64(20, -109.5, true);
+    view.setFloat64(28, -59.4, true);
+    edit(view);
+    return Buffer.from(bytes).toString("base64url");
+  }
+
+  test("preserves the model's f32 head and measurements for every condition", async () => {
+    for (const condition of ["flat", "terrain", "both"] as const) {
+      const original = { ...residual, condition };
+      const decoded = await decodeResidualFragment(
+        await encodeResidualFragment(original),
+      );
+      expect(decoded).toEqual({
+        ...original,
+        head: original.head.map(Math.fround),
+      });
+    }
+    expect((await decodeResidualFragment(wire())).head.length).toBe(960);
+  });
+
+  test("refuses malformed heads and measurements on encode", async () => {
+    for (const invalid of [
+      { head: new Float64Array(0) },
+      { head: new Float64Array(959) },
+      { head: new Float64Array(960).fill(NaN) },
+      { head: new Float64Array(960).fill(Number.MAX_VALUE) },
+      { objective: NaN },
+      { baselineObjective: Infinity },
+      { evaluations: -1 },
+      { evaluations: 1.5 },
+      { evaluations: 0x1_0000_0000 },
+    ]) {
+      await expect(
+        encodeResidualFragment({ ...residual, ...invalid }),
+      ).rejects.toThrow();
+    }
+  });
+
+  test("refuses malformed wire metadata before offering a shared policy", async () => {
+    for (const edit of [
+      (view: DataView) => view.setUint32(12, 0, true),
+      (view: DataView) => view.setUint32(8, 3, true),
+      (view: DataView) => view.setFloat64(20, NaN, true),
+      (view: DataView) => view.setFloat64(28, Infinity, true),
+      (view: DataView) => view.setFloat32(36, Infinity, true),
+    ]) {
+      await expect(decodeResidualFragment(wire(edit))).rejects.toThrow();
+    }
+  });
+});
 const EXPERIMENT: SharedG1Experiment = {
   version: 1,
   kind: "g1",
@@ -379,5 +451,20 @@ describe("G1 policy share codec", () => {
         2,
       ),
     ).toThrow(/not a finite number/);
+  });
+});
+
+describe("residual head width", () => {
+  test("the codec and the kernel agree on how wide a head is", async () => {
+    // Two modules each name this number: the share codec validates payloads
+    // against it, and the trainer boundary rejects heads that do not match.
+    // They are declared separately so the codec stays independent of the wasm
+    // loader, which means nothing but this stops them drifting apart — and a
+    // drift would reject every legitimate policy with a misleading reason.
+    const { RESIDUAL_HEAD_LENGTH } = await import("../app/lib/g1PolicyShare");
+    const { G1_RESIDUAL_HEAD_LENGTH } = await import(
+      "../app/lib/frankensimCmaes"
+    );
+    expect(RESIDUAL_HEAD_LENGTH).toBe(G1_RESIDUAL_HEAD_LENGTH);
   });
 });

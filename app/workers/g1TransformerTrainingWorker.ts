@@ -31,7 +31,7 @@ export type TrainingWorkerRequest =
   | { type: "stop" }
   | { type: "export" }
   | { type: "trace" }
-  | { type: "head" };
+  | { type: "head"; requestId: number };
 
 export type TrainingWorkerResponse =
   /**
@@ -44,7 +44,12 @@ export type TrainingWorkerResponse =
       progress: G1TransformerProgress;
       bestHead?: Float64Array;
     }
-  | { type: "stopped"; progress: G1TransformerProgress | null }
+  | {
+      type: "stopped";
+      progress: G1TransformerProgress | null;
+      /** Present when there is a policy worth checkpointing at the boundary. */
+      bestHead?: Float64Array;
+    }
   | { type: "weights"; bytes: Uint8Array; progress: G1TransformerProgress }
   | {
       type: "trace";
@@ -64,7 +69,13 @@ export type TrainingWorkerResponse =
       objective: number;
       baselineObjective: number;
     }
-  | { type: "head"; head: Float64Array; progress: G1TransformerProgress }
+  | {
+      type: "head";
+      /** Echoed so the page can discard a superseded share request. */
+      requestId: number;
+      head: Float64Array;
+      progress: G1TransformerProgress;
+    }
   | { type: "error"; error: string; fatal: boolean };
 
 const scope = self as unknown as {
@@ -104,6 +115,20 @@ function fail(error: unknown): void {
   running = false;
   runRevision += 1;
   scope.postMessage({ type: "error", error: describe(error), fatal: true });
+}
+
+/**
+ * Stop is a persistence boundary, even before the periodic checkpoint: the
+ * work between the last checkpoint and the stop is otherwise lost.
+ */
+function reportStopped(): void {
+  scope.postMessage({
+    type: "stopped",
+    progress: latest,
+    ...(trainer && latest && latest.bestObjective < latest.baselineObjective
+      ? { bestHead: trainer.bestHead() }
+      : {}),
+  });
 }
 
 /**
@@ -167,7 +192,7 @@ async function loop(
     }
     if (progress.status === "stopped") {
       running = false;
-      scope.postMessage({ type: "stopped", progress });
+      reportStopped();
       return;
     }
     // Yield so a stop message is delivered between rollouts.
@@ -180,7 +205,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
   if (request.type === "stop") {
     running = false;
     runRevision += 1;
-    scope.postMessage({ type: "stopped", progress: latest });
+    reportStopped();
     return;
   }
   if (request.type === "head") {
@@ -188,6 +213,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
       if (!trainer || !latest) throw new Error("no trained policy yet");
       scope.postMessage({
         type: "head",
+        requestId: request.requestId,
         head: trainer.bestHead(),
         progress: latest,
       });

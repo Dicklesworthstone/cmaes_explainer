@@ -20,6 +20,7 @@ import type {
 import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
 import type { HouseholdRobotPose } from "../app/lib/frankensimCmaes";
 import {
+  decodeResidualFragment,
   encodePolicyFragment,
   policyFromFileContents,
 } from "../app/lib/g1PolicyShare";
@@ -942,9 +943,100 @@ async function run() {
     );
     const stoppedProgress = stoppedTraining.at(-1);
     assert(stoppedProgress?.type === "stopped" && stoppedProgress.progress);
+    const checkpoint = await trainingPage.evaluate(() =>
+      JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null"),
+    );
+    assert.equal(
+      checkpoint.flat.objective,
+      stoppedProgress.progress.bestObjective,
+    );
+    assert.equal(checkpoint.flat.head.length, 960);
+    assert.deepEqual(
+      checkpoint.flat.head,
+      Object.values(stoppedProgress.bestHead ?? {}),
+    );
+    // A delayed checkpoint from a worse run must preserve the actual saved
+    // winner. Only this incoming message is synthetic; the save came from Stop.
+    const preservedCheckpoint = await trainingPage.evaluate(() => {
+      const host = window as unknown as {
+        __trainingWorker: Worker;
+        __trainingMessages: TrainingWorkerResponse[];
+      };
+      const stopped = host.__trainingMessages.at(-1);
+      if (stopped?.type !== "stopped" || !stopped.progress)
+        throw new Error("No stopped run");
+      const before = localStorage.getItem("cmaes.g1-residual-run.v1");
+      host.__trainingWorker.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: "progress",
+            progress: {
+              ...stopped.progress,
+              bestObjective: stopped.progress.bestObjective + 1,
+            },
+            bestHead: new Float64Array(960),
+          },
+        }),
+      );
+      return before === localStorage.getItem("cmaes.g1-residual-run.v1");
+    });
+    assert(preservedCheckpoint, "A worse checkpoint replaced the saved winner");
     const resumedFrom = stoppedProgress.progress.evaluations;
-    const resumeMessageStart = stoppedTraining.length;
+    await trainingPage
+      .getByRole("button", { name: "Show the gait", exact: true })
+      .click();
+    await trainingPage
+      .getByRole("img", { name: /^Pelvis path over one rollout/ })
+      .waitFor();
+    // Delay clipboard completion to exercise an old share settling after Start.
+    // The URL itself is encoded from the actual owner's trained head.
+    await trainingPage.evaluate(() => {
+      const host = window as unknown as {
+        __sharedResidualUrl?: string;
+        __releaseClipboard?: () => void;
+      };
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (url: string) => {
+            host.__sharedResidualUrl = url;
+            await new Promise<void>((resolve) => {
+              host.__releaseClipboard = resolve;
+            });
+          },
+        },
+      });
+    });
+    await trainingPage
+      .getByRole("button", { name: "Copy share link", exact: true })
+      .click();
+    await trainingPage.waitForFunction(() =>
+      Boolean(
+        (window as unknown as { __sharedResidualUrl?: string })
+          .__sharedResidualUrl,
+      ),
+    );
+    const sharedResidualUrl = await trainingPage.evaluate(
+      () =>
+        (window as unknown as { __sharedResidualUrl: string })
+          .__sharedResidualUrl,
+    );
+    const sharedResidual = await decodeResidualFragment(
+      new URL(sharedResidualUrl).hash.slice("#zresidual=".length),
+    );
+    assert.equal(sharedResidual.head.length, 960);
+    assert.equal(sharedResidual.condition, "flat");
+    const resumeMessageStart = await trainingPage.evaluate(
+      () =>
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
+          .__trainingMessages.length,
+    );
     await startTraining.click();
+    await trainingPage.evaluate(() =>
+      (
+        window as unknown as { __releaseClipboard: () => void }
+      ).__releaseClipboard(),
+    );
     await trainingPage.waitForFunction(
       ({ start, evaluations }) =>
         (
@@ -957,6 +1049,13 @@ async function run() {
               message.progress.evaluations > evaluations,
           ),
       { start: resumeMessageStart, evaluations: resumedFrom },
+    );
+    assert.equal(
+      await trainingPage
+        .getByText("Share link copied to your clipboard:")
+        .count(),
+      0,
+      "A stale share reappeared after Start",
     );
     const nonfatalMessageStart = await trainingPage.evaluate(() => {
       const host = window as unknown as {
@@ -1097,6 +1196,11 @@ async function run() {
       stoppedTraining,
       resumedFrom,
       trainedPolicyBytes: trainedPolicy.length,
+      stoppedCheckpointObjective: checkpoint.flat.objective,
+      worseCheckpointInjected: true,
+      preservedCheckpoint,
+      delayedClipboardInjected: true,
+      sharedResidualObjective: sharedResidual.objective,
       workerFailureInjected: true,
       nonfatalExportFailureInjected: true,
       ownerWasmCorruptionInjected: true,
@@ -1110,6 +1214,141 @@ async function run() {
       ),
     });
     await trainingContext.close();
+    const sharedContext = await browser.newContext({
+      userAgent: USER_AGENT,
+      reducedMotion: "reduce",
+    });
+    const sharedPage = await sharedContext.newPage();
+    observe(sharedPage);
+    await sharedPage.goto(sharedResidualUrl);
+    await sharedPage
+      .getByText("Someone shared a policy with you in this link")
+      .waitFor();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .click();
+    await sharedPage
+      .getByText(/^Loaded the shared policy; this machine scores it /)
+      .waitFor();
+    await sharedPage
+      .getByRole("button", { name: "Stop training", exact: true })
+      .click();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .waitFor();
+    const sharedCheckpoint = await sharedPage.evaluate(() =>
+      JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null"),
+    );
+    assert(
+      sharedCheckpoint.flat.objective <= sharedResidual.objective,
+      "The shared head did not retain its measured objective",
+    );
+    // A stale stored score must be corrected by the owner's actual re-score;
+    // otherwise it could prevent any future real checkpoint from being saved.
+    await sharedPage.evaluate(() => {
+      const key = "cmaes.g1-residual-run.v1";
+      const saved = JSON.parse(localStorage.getItem(key) ?? "null");
+      saved.flat.objective = -1e9;
+      localStorage.setItem(key, JSON.stringify(saved));
+    });
+    await sharedPage.reload();
+    await sharedPage.getByText("is saved in this browser").waitFor();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .click();
+    await sharedPage
+      .getByText(/^Loaded your saved policy; this machine scores it /)
+      .waitFor();
+    await sharedPage
+      .getByRole("button", { name: "Stop training", exact: true })
+      .click();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .waitFor();
+    const reassessedObjective = await sharedPage.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null")
+          .flat.objective,
+    );
+    assert(
+      reassessedObjective > -1e9,
+      "The stale checkpoint claim survived owner re-scoring",
+    );
+    assert(reassessedObjective <= sharedCheckpoint.flat.objective);
+    const shippedButton = sharedPage.getByRole("button", {
+      name: "Start from the shipped policy",
+      exact: true,
+    });
+    await shippedButton.click();
+    const shippedNotice = sharedPage.getByText(
+      /^Loaded the shipped policy; this machine scores it /,
+    );
+    await shippedNotice.waitFor();
+    const shippedScoreNotice = await shippedNotice.innerText();
+    await sharedPage
+      .getByRole("button", { name: "Stop training", exact: true })
+      .click();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .waitFor();
+    let releaseShippedDownload!: () => void;
+    const shippedDownloadGate = new Promise<void>((resolve) => {
+      releaseShippedDownload = resolve;
+    });
+    let shippedDownloadHeld = false;
+    const shippedPattern =
+      "**/robots/g1/transformer/g1-real-physics-residual-flat.bin";
+    await sharedPage.route(shippedPattern, async (route) => {
+      shippedDownloadHeld = true;
+      await shippedDownloadGate;
+      await route.continue();
+    });
+    await shippedButton.click();
+    const shippedHoldDeadline = Date.now() + 30_000;
+    while (!shippedDownloadHeld && Date.now() < shippedHoldDeadline)
+      await pause(25);
+    assert(
+      shippedDownloadHeld,
+      "The real shipped policy download was not held",
+    );
+    await sharedPage
+      .getByRole("combobox", { name: "Conditions" })
+      .selectOption("terrain");
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .click();
+    const shippedResponse = sharedPage.waitForResponse((response) =>
+      response.url().endsWith("g1-real-physics-residual-flat.bin"),
+    );
+    releaseShippedDownload();
+    await (await shippedResponse).finished();
+    await pause(200);
+    assert.equal(
+      await sharedPage
+        .getByRole("combobox", { name: "Conditions" })
+        .inputValue(),
+      "terrain",
+      "A stale shipped download replaced the newer run",
+    );
+    await sharedPage
+      .getByRole("button", { name: "Stop training", exact: true })
+      .click();
+    await sharedPage
+      .getByRole("button", { name: "Train in this browser", exact: true })
+      .waitFor();
+    await sharedPage.screenshot({
+      path: join(out, "trainer-shared-checkpoint.png"),
+    });
+    recordResult({
+      journey: "trainer-shared-checkpoint",
+      sharedObjective: sharedResidual.objective,
+      restoredObjective: sharedCheckpoint.flat.objective,
+      staleStoredScoreInjected: true,
+      reassessedObjective,
+      shippedScoreNotice,
+      delayedShippedDownloadInjected: true,
+    });
+    await sharedContext.close();
     for (const changed of [
       null,
       "manifest.json",
