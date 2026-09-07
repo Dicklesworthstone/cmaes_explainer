@@ -31,7 +31,7 @@ export type TrainingWorkerRequest =
   | { type: "stop" }
   | { type: "export" }
   | { type: "trace" }
-  | { type: "head" };
+  | { type: "head"; requestId: number };
 
 export type TrainingWorkerResponse =
   /**
@@ -44,7 +44,11 @@ export type TrainingWorkerResponse =
       progress: G1TransformerProgress;
       bestHead?: Float64Array;
     }
-  | { type: "stopped"; progress: G1TransformerProgress | null }
+  | {
+      type: "stopped";
+      progress: G1TransformerProgress | null;
+      bestHead?: Float64Array;
+    }
   | { type: "weights"; bytes: Uint8Array; progress: G1TransformerProgress }
   | {
       type: "trace";
@@ -64,7 +68,12 @@ export type TrainingWorkerResponse =
       objective: number;
       baselineObjective: number;
     }
-  | { type: "head"; head: Float64Array; progress: G1TransformerProgress }
+  | {
+      type: "head";
+      requestId: number;
+      head: Float64Array;
+      progress: G1TransformerProgress;
+    }
   | { type: "error"; error: string; fatal: boolean };
 
 const scope = self as unknown as {
@@ -111,6 +120,17 @@ function reportError(error: unknown): void {
   scope.postMessage({ type: "error", error: describe(error), fatal: false });
 }
 
+/** Stop is a persistence boundary, even before the periodic checkpoint. */
+function reportStopped(): void {
+  scope.postMessage({
+    type: "stopped",
+    progress: latest,
+    ...(trainer && latest && latest.bestObjective < latest.baselineObjective
+      ? { bestHead: trainer.bestHead() }
+      : {}),
+  });
+}
+
 async function loop(
   activeTrainer: FrankenSimG1TransformerTrainer,
   revision: number,
@@ -146,7 +166,7 @@ async function loop(
     }
     if (progress.status === "stopped") {
       running = false;
-      scope.postMessage({ type: "stopped", progress });
+      reportStopped();
       return;
     }
     // Yield so a stop message is delivered between rollouts.
@@ -159,7 +179,11 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
   if (request.type === "stop") {
     running = false;
     runRevision += 1;
-    scope.postMessage({ type: "stopped", progress: latest });
+    try {
+      reportStopped();
+    } catch (error) {
+      fail(error);
+    }
     return;
   }
   if (request.type === "head") {
@@ -167,6 +191,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
       if (!trainer || !latest) throw new Error("no trained policy yet");
       scope.postMessage({
         type: "head",
+        requestId: request.requestId,
         head: trainer.bestHead(),
         progress: latest,
       });
@@ -182,8 +207,10 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
       // poses retained they are the most expensive thing this worker does.
       const trained = trainer.trace(true);
       const baseline = trainer.trace(false);
-      if ("refusal" in trained) throw new Error(`trained rollout refused: ${trained.refusal.name}`);
-      if ("refusal" in baseline) throw new Error(`baseline rollout refused: ${baseline.refusal.name}`);
+      if ("refusal" in trained)
+        throw new Error(`trained rollout refused: ${trained.refusal.name}`);
+      if ("refusal" in baseline)
+        throw new Error(`baseline rollout refused: ${baseline.refusal.name}`);
       scope.postMessage({
         type: "trace",
         trained: trained.ok,
