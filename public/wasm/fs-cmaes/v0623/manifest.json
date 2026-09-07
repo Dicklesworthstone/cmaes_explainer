@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "a88aa94089d778ea9a6b535ee96355e4caaff3b8",
+  "sourceRevision": "2ffe96ca50f3b3c8ccd9a7549f12a3acfaf1ad28",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -22,8 +22,8 @@
     "diagnostics": "This build differs from v0622's in ways that are recorded here rather than glossed. (1) It was produced locally on macOS via wasm-pack, not by the Linux worker recipe, so no rawWasmSha256 pre-bindgen receipt is claimed and the byte-for-byte reproduction path of earlier versions does not apply. (2) It was built from a git worktree pinned to asupersync 05eb37c3 because that dependency's HEAD does not compile: supervision.rs calls ChildRegion::close_with_outcome and ::cancel_with_budget, which do not exist. (3) It is the first kernel built with the g1-learned feature and with simd128 enabled; that feature adds G1TransformerTrainerSession and is why the wasm exports changed. Despite the added trainer the artifact is 422 KB against 0.6.22's 441 KB. Dead-code diagnostics remain warnings, as before."
   },
   "assets": {
-    "javascriptSha256": "879370ebcba62fd5ce58858bf95330d7277dc238826dd2cd32e2f1f622429fb8",
-    "wasmSha256": "326b1973954e02b4dcd6930ebaa2062f7c98dd8e46b732742c1477588b2cd3d9"
+    "javascriptSha256": "6cf83ea5167ba1ba448e16a943a14ee8060ae610f8709628fea374f934837456",
+    "wasmSha256": "1c6929260ea1cdd537d86402ca19b4d3dad5d45782d256466f106a1e78f9b923"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",
@@ -190,7 +190,8 @@
       "granularity": "one rollout per pump()",
       "objective": "the walking owner's own multi-factor objective, the same scalar CMA-ES minimises",
       "baseline": "zero policy head, which on a residual policy is exactly the tuned controller",
-      "playback": "trace_packet(use_best) returns the standard packed G1 trace for the best policy or the tuned controller"
+      "playback": "trace_packet(use_best) returns the standard packed G1 trace for the best policy or the tuned controller",
+      "resume": "seed_head(head) re-scores a saved head and adopts it only if it beats the tuned controller"
     }
   }
 }

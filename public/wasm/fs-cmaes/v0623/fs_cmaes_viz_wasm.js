@@ -138,6 +138,18 @@ export class G1TransformerTrainerSession {
         return v1;
     }
     /**
+     * Resume from a head saved earlier. Returns false if the width is
+     * wrong or the head does not beat the tuned controller.
+     * @param {Float64Array} head
+     * @returns {boolean}
+     */
+    seed_head(head) {
+        const ptr0 = passArrayF64ToWasm0(head, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.g1transformertrainersession_seed_head(this.__wbg_ptr, ptr0, len0);
+        return ret !== 0;
+    }
+    /**
      * A packed G1 trace of the best policy (`use_best`) or of the tuned
      * controller it started from, for playback on the existing stage.
      * @param {boolean} use_best

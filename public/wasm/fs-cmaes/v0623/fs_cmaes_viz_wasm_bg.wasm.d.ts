@@ -16,6 +16,7 @@ export const g1transformertrainersession_export_weights: (a: number) => [number,
 export const g1transformertrainersession_new: (a: number, b: number, c: number, d: number) => number;
 export const g1transformertrainersession_progress: (a: number) => [number, number];
 export const g1transformertrainersession_pump: (a: number) => [number, number];
+export const g1transformertrainersession_seed_head: (a: number, b: number, c: number) => number;
 export const g1transformertrainersession_trace_packet: (a: number, b: number) => [number, number];
 export const g1walkingvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
 export const g1walkingvizevaluator_evaluate_population: (a: number, b: number, c: number) => [number, number];

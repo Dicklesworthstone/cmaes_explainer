@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type {
   G1TraceReceipt,
   G1TransformerChallenge,
@@ -31,6 +37,91 @@ import type {
 
 /** Points kept for the curve; a long run would otherwise grow without bound. */
 const MAX_CURVE_POINTS = 240;
+
+/**
+ * Where a run in progress is kept between visits.
+ *
+ * Only the 960-parameter head is stored: the trunk is deterministic in the
+ * kernel's fixed seed, so the head is the entire learned part. At four bytes a
+ * parameter that is under 4 KB, well inside any storage quota, and it means an
+ * accidental refresh costs nothing.
+ */
+const SAVED_RUN_KEY = "cmaes.g1-residual-run.v1";
+
+interface SavedRun {
+  challenge: G1TransformerChallenge;
+  head: number[];
+  objective: number;
+  baselineObjective: number;
+  evaluations: number;
+  savedAt: number;
+}
+
+function readSavedRun(): SavedRun | null {
+  try {
+    const raw = window.localStorage.getItem(SAVED_RUN_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const run = parsed as Partial<SavedRun>;
+    if (
+      !Array.isArray(run.head) ||
+      run.head.length === 0 ||
+      !run.head.every((value) => Number.isFinite(value)) ||
+      typeof run.objective !== "number" ||
+      typeof run.evaluations !== "number"
+    ) {
+      return null;
+    }
+    return run as SavedRun;
+  } catch {
+    // Private windows and disabled storage both throw; a missing save is not
+    // an error worth telling anyone about.
+    return null;
+  }
+}
+
+/** Fired after a checkpoint so a subscriber in this tab re-reads it. */
+const SAVED_RUN_EVENT = "cmaes:g1-residual-run";
+
+function writeSavedRun(run: SavedRun): void {
+  try {
+    window.localStorage.setItem(SAVED_RUN_KEY, JSON.stringify(run));
+    window.dispatchEvent(new Event(SAVED_RUN_EVENT));
+  } catch {
+    // Quota or a private window. Losing the save is survivable; breaking the
+    // training loop over it is not.
+  }
+}
+
+// The snapshot must be referentially stable or React re-renders forever, so
+// the parsed value is cached against the raw string it came from.
+let cachedRaw: string | null = null;
+let cachedRun: SavedRun | null = null;
+
+function savedRunSnapshot(): SavedRun | null {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(SAVED_RUN_KEY);
+  } catch {
+    raw = null;
+  }
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    cachedRun = readSavedRun();
+  }
+  return cachedRun;
+}
+
+function subscribeSavedRun(onChange: () => void): () => void {
+  window.addEventListener(SAVED_RUN_EVENT, onChange);
+  // Another tab training the same policy also updates the save.
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(SAVED_RUN_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
 
 interface CurvePoint {
   evaluations: number;
@@ -195,6 +286,13 @@ export function G1ResidualTrainer() {
   const [challenge, setChallenge] = useState<G1TransformerChallenge>("flat");
   const [runChallenge, setRunChallenge] =
     useState<G1TransformerChallenge>("flat");
+  /**
+   * The condition the live run was started for, readable from the worker's
+   * message handler. That handler is captured once when the worker is spawned,
+   * so reading `runChallenge` inside it would pin the value at mount however
+   * the dependency array is written.
+   */
+  const runChallengeRef = useRef<G1TransformerChallenge>("flat");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -208,6 +306,17 @@ export function G1ResidualTrainer() {
     baseline: G1TraceReceipt;
   } | null>(null);
   const [gaitPending, setGaitPending] = useState(false);
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
+  /**
+   * A head recovered from a previous visit, offered as a resume. Read through
+   * an external store rather than an effect: localStorage does not exist while
+   * server-rendering, and it keeps updating as checkpoints are written.
+   */
+  const savedHead = useSyncExternalStore(
+    subscribeSavedRun,
+    savedRunSnapshot,
+    () => null,
+  );
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
@@ -226,6 +335,14 @@ export function G1ResidualTrainer() {
     if (message.type === "stopped") {
       setRunning(false);
       if (message.progress) setProgress(message.progress);
+      return;
+    }
+    if (message.type === "resumed") {
+      setResumeNotice(
+        message.adopted
+          ? "Resumed from your saved policy."
+          : "The saved policy did not beat the tuned controller, so this run starts fresh.",
+      );
       return;
     }
     if (message.type === "trace") {
@@ -252,6 +369,16 @@ export function G1ResidualTrainer() {
       return;
     }
     setProgress(message.progress);
+    if (message.bestHead && message.bestHead.length > 0) {
+      writeSavedRun({
+        challenge: runChallengeRef.current,
+        head: Array.from(message.bestHead),
+        objective: message.progress.bestObjective,
+        baselineObjective: message.progress.baselineObjective,
+        evaluations: message.progress.evaluations,
+        savedAt: Date.now(),
+      });
+    }
     if (message.progress.status === "generation") {
       setCurve((previous) => {
         const next = [
@@ -277,6 +404,8 @@ export function G1ResidualTrainer() {
       workerRef.current = null;
     };
   }, []);
+
+
 
   const post = (request: TrainingWorkerRequest) => {
     const failWorker = (error: unknown) => {
@@ -319,6 +448,7 @@ export function G1ResidualTrainer() {
   const start = () => {
     setError(null);
     setRunChallenge(challenge);
+    runChallengeRef.current = challenge;
     // The worker resumes an unchanged configuration rather than rebuilding,
     // so the curve must survive a stop/start too. Only a different condition
     // starts a genuinely new search, and only then is the old curve stale.
@@ -331,12 +461,20 @@ export function G1ResidualTrainer() {
       startedChallengeRef.current = challenge;
     }
     setRunning(true);
+    // Resume only a checkpoint from the same condition: a head trained on flat
+    // ground is not a head for terrain, and the owner would refuse it anyway.
+    const resumable =
+      savedHead && savedHead.challenge === challenge ? savedHead : null;
+    setResumeNotice(null);
     post({
       type: "start",
       challenge,
       durationSeconds: 1.5,
       sigma: 0.002,
       seed: 20260906,
+      ...(resumable
+        ? { initialHead: Float64Array.from(resumable.head) }
+        : {}),
     });
   };
 
@@ -400,6 +538,37 @@ export function G1ResidualTrainer() {
       {error ? (
         <p role="alert" className="mt-4 text-sm text-rose-300">
           {error.message}
+        </p>
+      ) : null}
+
+      {resumeNotice ? (
+        <p className="mt-4 text-sm text-slate-400">{resumeNotice}</p>
+      ) : savedHead && !running ? (
+        <p className="mt-4 text-sm text-slate-400">
+          A run from{" "}
+          {new Date(savedHead.savedAt).toLocaleString(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}{" "}
+          is saved in this browser —{" "}
+          {savedHead.evaluations.toLocaleString()} rollouts, reaching{" "}
+          <strong className="text-emerald-300">
+            {gainPercent(
+              savedHead.baselineObjective,
+              savedHead.objective,
+            ).toFixed(1)}
+            %
+          </strong>{" "}
+          better than the tuned controller on{" "}
+          {savedHead.challenge === "flat"
+            ? "flat ground"
+            : savedHead.challenge === "terrain"
+              ? "terrain with pushes"
+              : "both conditions"}
+          .{" "}
+          {savedHead.challenge === challenge
+            ? "Starting will continue from it."
+            : "Select that condition to continue from it."}
         </p>
       ) : null}
 

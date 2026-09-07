@@ -25,13 +25,24 @@ export type TrainingWorkerRequest =
       durationSeconds: number;
       sigma: number;
       seed: number;
+      /** A head saved from an earlier session, to resume rather than restart. */
+      initialHead?: Float64Array;
     }
   | { type: "stop" }
   | { type: "export" }
   | { type: "trace" };
 
 export type TrainingWorkerResponse =
-  | { type: "progress"; progress: G1TransformerProgress }
+  /**
+   * `bestHead` rides along only occasionally: it is 960 numbers and the page
+   * needs it purely to checkpoint, so sending it with every progress message
+   * would be several kilobytes a second for nothing.
+   */
+  | {
+      type: "progress";
+      progress: G1TransformerProgress;
+      bestHead?: Float64Array;
+    }
   | { type: "stopped"; progress: G1TransformerProgress | null }
   | { type: "weights"; bytes: Uint8Array; progress: G1TransformerProgress }
   | {
@@ -45,6 +56,7 @@ export type TrainingWorkerResponse =
    * A failed export must not stop training, and must not make the page think
    * training stopped while the worker is still pumping.
    */
+  | { type: "resumed"; adopted: boolean }
   | { type: "error"; error: string; fatal: boolean };
 
 const scope = self as unknown as {
@@ -72,6 +84,8 @@ function configKey(
 
 /** Post at most this often; a rollout is fast enough to outpace a repaint. */
 const PROGRESS_INTERVAL_MS = 250;
+/** How often the best head rides along so the page can checkpoint it. */
+const CHECKPOINT_INTERVAL_MS = 20_000;
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -97,6 +111,7 @@ async function loop(
   latest = activeTrainer.progress();
   scope.postMessage({ type: "progress", progress: latest });
   let lastPost = 0;
+  let lastCheckpoint = Date.now();
   while (running && revision === runRevision) {
     const progress = activeTrainer.pump();
     latest = progress;
@@ -108,7 +123,18 @@ async function loop(
       now - lastPost >= PROGRESS_INTERVAL_MS
     ) {
       lastPost = now;
-      scope.postMessage({ type: "progress", progress });
+      // Checkpoint only on a closed generation, and only occasionally: the
+      // head is meaningful between generations, not mid-population.
+      const checkpoint =
+        progress.status === "generation" &&
+        progress.bestObjective < progress.baselineObjective &&
+        now - lastCheckpoint >= CHECKPOINT_INTERVAL_MS;
+      if (checkpoint) lastCheckpoint = now;
+      scope.postMessage({
+        type: "progress",
+        progress,
+        ...(checkpoint ? { bestHead: activeTrainer.bestHead() } : {}),
+      });
     }
     if (progress.status === "stopped") {
       running = false;
@@ -193,6 +219,13 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
       }
       trainer = created;
       activeKey = key;
+      if (request.initialHead && request.initialHead.length > 0) {
+        // Report whether the save was actually adopted. Silently continuing
+        // from the tuned controller while the reader believes their hour of
+        // training was restored is the worst available outcome.
+        const adopted = created.seedHead(request.initialHead);
+        scope.postMessage({ type: "resumed", adopted });
+      }
       return loop(created, revision);
     })
     .catch((error: unknown) => {

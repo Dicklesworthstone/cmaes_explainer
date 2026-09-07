@@ -1380,6 +1380,7 @@ type RawG1TransformerTrainer = {
   best_head: () => Float64Array;
   export_weights: () => Uint8Array;
   trace_packet: (useBest: boolean) => Float64Array;
+  seed_head: (head: Float64Array) => boolean;
   free?: () => void;
 };
 
@@ -2634,6 +2635,18 @@ export class FrankenSimG1TransformerTrainer {
   /** The best policy so far as an FSGT artifact, ready to download or share. */
   exportWeights(): Uint8Array {
     return this.handle().export_weights();
+  }
+
+  /**
+   * Resume from a head saved earlier.
+   *
+   * The owner re-scores it rather than trusting the objective that came with
+   * it, and refuses anything that does not actually beat the tuned
+   * controller, so a stale save cannot install itself as the incumbent.
+   * Returns whether it was adopted.
+   */
+  seedHead(head: Float64Array): boolean {
+    return this.handle().seed_head(head);
   }
 
   /**
