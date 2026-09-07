@@ -576,6 +576,7 @@ const RESIDUAL_VERSION = 1;
 /** magic, version, condition, headLength, evaluations, objective, baseline. */
 const RESIDUAL_HEADER_BYTES = 4 + 4 + 4 + 4 + 4 + 8 + 8;
 const RESIDUAL_CONDITIONS = ["flat", "terrain", "both"] as const;
+export const RESIDUAL_HEAD_LENGTH = 960;
 
 export type ResidualShareCondition = (typeof RESIDUAL_CONDITIONS)[number];
 
@@ -588,6 +589,7 @@ export interface SharedResidual {
 }
 
 function encodeSharedResidual(residual: SharedResidual): Uint8Array {
+  validateResidual(residual);
   const bytes = new Uint8Array(
     RESIDUAL_HEADER_BYTES + residual.head.length * 4,
   );
@@ -596,7 +598,7 @@ function encodeSharedResidual(residual: SharedResidual): Uint8Array {
   view.setUint32(4, RESIDUAL_VERSION, true);
   view.setUint32(8, RESIDUAL_CONDITIONS.indexOf(residual.condition), true);
   view.setUint32(12, residual.head.length, true);
-  view.setUint32(16, Math.max(0, Math.round(residual.evaluations)), true);
+  view.setUint32(16, residual.evaluations, true);
   view.setFloat64(20, residual.objective, true);
   view.setFloat64(28, residual.baselineObjective, true);
   // f32 for the head: the search writes it into f32 weights anyway, so the
@@ -605,6 +607,27 @@ function encodeSharedResidual(residual: SharedResidual): Uint8Array {
     view.setFloat32(RESIDUAL_HEADER_BYTES + i * 4, residual.head[i], true);
   }
   return bytes;
+}
+
+function validateResidual(residual: SharedResidual): void {
+  if (
+    !RESIDUAL_CONDITIONS.includes(residual.condition) ||
+    residual.head.length !== RESIDUAL_HEAD_LENGTH ||
+    !residual.head.every((value) => Number.isFinite(Math.fround(value)))
+  ) {
+    throw new Error(
+      "This shared policy must contain 960 finite model parameters.",
+    );
+  }
+  if (
+    !Number.isFinite(residual.objective) ||
+    !Number.isFinite(residual.baselineObjective) ||
+    !Number.isInteger(residual.evaluations) ||
+    residual.evaluations < 0 ||
+    residual.evaluations > 0xffff_ffff
+  ) {
+    throw new Error("This shared policy contains invalid measurements.");
+  }
 }
 
 function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
@@ -621,6 +644,11 @@ function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
   const condition = RESIDUAL_CONDITIONS[view.getUint32(8, true)];
   if (!condition) throw new Error("This shared policy names no condition.");
   const length = view.getUint32(12, true);
+  if (length !== RESIDUAL_HEAD_LENGTH) {
+    throw new Error(
+      "This shared policy must contain 960 finite model parameters.",
+    );
+  }
   if (bytes.length !== RESIDUAL_HEADER_BYTES + length * 4) {
     // The usual cause is a chat client truncating a long URL, not corruption.
     throw new Error(
@@ -631,16 +659,15 @@ function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
   for (let i = 0; i < length; i++) {
     head[i] = view.getFloat32(RESIDUAL_HEADER_BYTES + i * 4, true);
   }
-  if (!head.every((value) => Number.isFinite(value))) {
-    throw new Error("This shared policy contains values that are not numbers.");
-  }
-  return {
+  const residual: SharedResidual = {
     head,
     condition,
     evaluations: view.getUint32(16, true),
     objective: view.getFloat64(20, true),
     baselineObjective: view.getFloat64(28, true),
   };
+  validateResidual(residual);
+  return residual;
 }
 
 /** The `zresidual` fragment value: deflate-raw inside base64url. */
@@ -649,7 +676,9 @@ export async function encodeResidualFragment(
 ): Promise<string> {
   const raw = encodeSharedResidual(residual);
   if (typeof CompressionStream === "undefined") return base64UrlEncode(raw);
-  return base64UrlEncode(await pipeBytes(raw, CompressionStream, "deflate-raw"));
+  return base64UrlEncode(
+    await pipeBytes(raw, CompressionStream, "deflate-raw"),
+  );
 }
 
 /** Read a `zresidual` fragment value. */
