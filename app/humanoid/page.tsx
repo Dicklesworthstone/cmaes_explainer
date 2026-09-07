@@ -134,10 +134,15 @@ export default function HumanoidPage() {
             <code>fs-dfo</code>, the same optimizer family the flagship offers,
             with IPOP restarts because a converged run spends its remaining
             budget standing still. A whole generation is one parallel batch
-            across every core. That combination replaced a hand-rolled
-            evolution strategy and moved the flat-ground result from a 45.8%
-            improvement over the tuned controller to 191.5%, using a fifth of
-            the wall-clock time.
+            across every core. That combination replaced a hand-rolled evolution
+            strategy which, on the arithmetic of the day, reached a 45.8%
+            improvement over the tuned controller on flat ground in eighty
+            times the wall-clock time. The search reaches{" "}
+            <strong>165.4%</strong> there now. The two figures are not strictly
+            comparable — the transcendentals underneath them changed in
+            between, for the reason given below — but the wall-clock difference
+            and the change in kind are real, and the current number is the one
+            the panel below will reproduce on your own machine.
           </p>
           <div className="mt-6">
             <RealPhysicsResidual />

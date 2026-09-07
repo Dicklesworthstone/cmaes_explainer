@@ -127,25 +127,28 @@ export function RealPhysicsResidual() {
       </p>
       <p className="mt-3 text-sm leading-6 text-slate-400">
         Only the {receipt.searchedParams}-parameter output layer moves in the
-        policy above, but that is not because a wider search does worse. On the
-        same two challenges at a matched budget, the output layer reached 54.7%,
-        the final transformer block — 38,016 parameters — reached{" "}
-        <strong>71.8%</strong>, and turning all 77,696 loose reached 43.2%. The
-        middle scope wins: enough capacity to change how the features are
-        computed, few enough parameters that a rollout-priced search can still
-        cover them. Re-running the first two at 45,000 evaluations, more than
-        three times the budget, returned the same two figures to the digit —
-        they had converged, so this is a ceiling rather than a snapshot. The output layer is what
-        ships because it is what the in-browser trainer below can resume from —
-        a wider policy carries a different trunk, so its head alone means
-        nothing.
+        policy above, and how much of the network is worth searching turns out
+        to depend on what it is being asked to do. Across both challenges at a
+        matched budget the output layer reached 54.7%, the final transformer
+        block — 38,016 parameters — reached <strong>71.8%</strong>, and turning
+        all 77,696 loose reached 43.2%. On flat ground alone the order
+        reverses: the output layer reaches <strong>165.4%</strong> and walks
+        1.06 m, while the final block manages 155.2% and only 0.62 m. Extra
+        capacity earns its keep on the harder pair and costs distance on the
+        easy one, so there is no single answer here to how big a policy should
+        be — only a measured one per task. Re-running the output layer and the
+        block at 45,000 evaluations, more than three times the budget, returned
+        the same figures to the digit: these are ceilings, not snapshots.
       </p>
       <p className="mt-3 text-sm leading-6 text-slate-400">
-        An earlier version of this card reported the opposite, from a sweep run
-        before the transformer&apos;s arithmetic was made portable across
-        targets. Those numbers were measured against host maths that the
-        browser did not share, and they did not survive re-measurement. Weights
-        and receipts ship under{" "}
+        The output layer is what ships, because it wins the condition the
+        in-browser trainer starts on and is the only scope that trainer can
+        resume: a wider policy carries its own trunk, so its head alone means
+        nothing without it. An earlier version of this card claimed a wider
+        search simply does worse, from a sweep run before the
+        transformer&apos;s arithmetic was made portable across targets. Those
+        numbers were measured against host maths the browser did not share and
+        did not survive re-measurement. Weights and receipts ship under{" "}
         <code className="break-all">public/robots/g1/transformer/</code>.
       </p>
     </div>
