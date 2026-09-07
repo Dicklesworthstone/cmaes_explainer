@@ -13,6 +13,7 @@
 import {
   createFrankenSimG1TransformerTrainer,
   type FrankenSimG1TransformerTrainer,
+  type G1TraceReceipt,
   type G1TransformerChallenge,
   type G1TransformerProgress,
 } from "../lib/frankensimCmaes";
@@ -26,12 +27,19 @@ export type TrainingWorkerRequest =
       seed: number;
     }
   | { type: "stop" }
-  | { type: "export" };
+  | { type: "export" }
+  | { type: "trace" };
 
 export type TrainingWorkerResponse =
   | { type: "progress"; progress: G1TransformerProgress }
   | { type: "stopped"; progress: G1TransformerProgress | null }
   | { type: "weights"; bytes: Uint8Array; progress: G1TransformerProgress }
+  | {
+      type: "trace";
+      trained: G1TraceReceipt;
+      baseline: G1TraceReceipt;
+      progress: G1TransformerProgress;
+    }
   /**
    * `fatal` distinguishes "the run is over" from "that one request failed".
    * A failed export must not stop training, and must not make the page think
@@ -118,6 +126,26 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
     running = false;
     runRevision += 1;
     scope.postMessage({ type: "stopped", progress: latest });
+    return;
+  }
+  if (request.type === "trace") {
+    try {
+      if (!trainer || !latest) throw new Error("no trained policy yet");
+      // Two extra rollouts, taken here rather than on the main thread: with
+      // poses retained they are the most expensive thing this worker does.
+      const trained = trainer.trace(true);
+      const baseline = trainer.trace(false);
+      if ("refusal" in trained) throw new Error(`trained rollout refused: ${trained.refusal.name}`);
+      if ("refusal" in baseline) throw new Error(`baseline rollout refused: ${baseline.refusal.name}`);
+      scope.postMessage({
+        type: "trace",
+        trained: trained.ok,
+        baseline: baseline.ok,
+        progress: latest,
+      });
+    } catch (error) {
+      reportError(error);
+    }
     return;
   }
   if (request.type === "export") {

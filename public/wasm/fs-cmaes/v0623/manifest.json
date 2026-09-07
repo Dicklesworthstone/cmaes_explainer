@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "012b70bb0a34052b553f2618402f0085d15f05ec",
+  "sourceRevision": "a88aa94089d778ea9a6b535ee96355e4caaff3b8",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -22,8 +22,8 @@
     "diagnostics": "This build differs from v0622's in ways that are recorded here rather than glossed. (1) It was produced locally on macOS via wasm-pack, not by the Linux worker recipe, so no rawWasmSha256 pre-bindgen receipt is claimed and the byte-for-byte reproduction path of earlier versions does not apply. (2) It was built from a git worktree pinned to asupersync 05eb37c3 because that dependency's HEAD does not compile: supervision.rs calls ChildRegion::close_with_outcome and ::cancel_with_budget, which do not exist. (3) It is the first kernel built with the g1-learned feature and with simd128 enabled; that feature adds G1TransformerTrainerSession and is why the wasm exports changed. Despite the added trainer the artifact is 422 KB against 0.6.22's 441 KB. Dead-code diagnostics remain warnings, as before."
   },
   "assets": {
-    "javascriptSha256": "0b2d0d1631e87f162143ef07d0f41783ab0b8a9d2489fa90eb3225b995d9ceab",
-    "wasmSha256": "bb978eb2eb78e8031a0a12ff147c262614214bbc0f53799798aaa16ed5f37c87"
+    "javascriptSha256": "879370ebcba62fd5ce58858bf95330d7277dc238826dd2cd32e2f1f622429fb8",
+    "wasmSha256": "326b1973954e02b4dcd6930ebaa2062f7c98dd8e46b732742c1477588b2cd3d9"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",
@@ -189,7 +189,8 @@
       "optimizer": "LM-CMA (fs-dfo) with IPOP restarts after 25 stalled generations",
       "granularity": "one rollout per pump()",
       "objective": "the walking owner's own multi-factor objective, the same scalar CMA-ES minimises",
-      "baseline": "zero policy head, which on a residual policy is exactly the tuned controller"
+      "baseline": "zero policy head, which on a residual policy is exactly the tuned controller",
+      "playback": "trace_packet(use_best) returns the standard packed G1 trace for the best policy or the tuned controller"
     }
   }
 }

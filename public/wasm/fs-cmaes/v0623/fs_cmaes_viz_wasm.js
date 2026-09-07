@@ -137,6 +137,18 @@ export class G1TransformerTrainerSession {
         wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
         return v1;
     }
+    /**
+     * A packed G1 trace of the best policy (`use_best`) or of the tuned
+     * controller it started from, for playback on the existing stage.
+     * @param {boolean} use_best
+     * @returns {Float64Array}
+     */
+    trace_packet(use_best) {
+        const ret = wasm.g1transformertrainersession_trace_packet(this.__wbg_ptr, use_best);
+        var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+        return v1;
+    }
 }
 if (Symbol.dispose) G1TransformerTrainerSession.prototype[Symbol.dispose] = G1TransformerTrainerSession.prototype.free;
 

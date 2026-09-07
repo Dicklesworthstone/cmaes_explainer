@@ -1379,6 +1379,7 @@ type RawG1TransformerTrainer = {
   progress: () => Float64Array;
   best_head: () => Float64Array;
   export_weights: () => Uint8Array;
+  trace_packet: (useBest: boolean) => Float64Array;
   free?: () => void;
 };
 
@@ -2633,6 +2634,18 @@ export class FrankenSimG1TransformerTrainer {
   /** The best policy so far as an FSGT artifact, ready to download or share. */
   exportWeights(): Uint8Array {
     return this.handle().export_weights();
+  }
+
+  /**
+   * A playable rollout of the best policy so far, or of the tuned controller
+   * it started from, decoded into the same trace the flagship renders.
+   *
+   * `useBest: false` is not a cached baseline — it is a fresh rollout of the
+   * zero head, which on a residual policy is the tuned controller itself, so
+   * the two traces are directly comparable.
+   */
+  trace(useBest: boolean): PackedResult<G1TraceReceipt> {
+    return decodeG1Trace(this.handle().trace_packet(useBest));
   }
 
   free(): void {

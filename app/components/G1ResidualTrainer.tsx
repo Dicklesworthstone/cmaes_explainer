@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  G1TraceReceipt,
   G1TransformerChallenge,
   G1TransformerProgress,
 } from "../lib/frankensimCmaes";
@@ -93,6 +94,94 @@ function LearningCurve({ points }: { points: CurvePoint[] }) {
   );
 }
 
+/**
+ * Side view of the pelvis through one rollout: forward travel against height.
+ *
+ * A falling objective is an abstraction. This is the thing the number was
+ * standing in for — the same rollout the receipt was computed from, with the
+ * tuned controller drawn underneath so the difference is visible rather than
+ * asserted. Both paths come from the owner's own trace, not from a
+ * reconstruction.
+ *
+ * The owner frame is x-forward, z-up, so the plot reads x against z.
+ */
+function GaitPaths({
+  trained,
+  baseline,
+}: {
+  trained: G1TraceReceipt;
+  baseline: G1TraceReceipt;
+}) {
+  const width = 640;
+  const height = 150;
+  const pad = 12;
+
+  const pelvis = (trace: G1TraceReceipt) =>
+    trace.samples
+      .map((sample) => sample.linkPoses[0]?.position)
+      .filter((position): position is [number, number, number] =>
+        Boolean(position),
+      )
+      .map((position) => ({ forward: position[0], up: position[2] }));
+
+  const trainedPath = pelvis(trained);
+  const basePath = pelvis(baseline);
+  if (trainedPath.length < 2 || basePath.length < 2) return null;
+
+  const all = [...trainedPath, ...basePath];
+  const minX = Math.min(...all.map((p) => p.forward));
+  const maxX = Math.max(...all.map((p) => p.forward));
+  const minY = Math.min(...all.map((p) => p.up));
+  const maxY = Math.max(...all.map((p) => p.up));
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const toPath = (points: { forward: number; up: number }[]) =>
+    points
+      .map((point, index) => {
+        const x = pad + ((point.forward - minX) / spanX) * (width - pad * 2);
+        const y =
+          height - pad - ((point.up - minY) / spanY) * (height - pad * 2);
+        return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+
+  return (
+    <figure className="mt-5">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-40 w-full rounded-lg border border-slate-800 bg-slate-950/60"
+        role="img"
+        aria-label={`Pelvis path over one rollout. Trained policy travels ${trained.distanceMeters.toFixed(3)} metres; the tuned controller travels ${baseline.distanceMeters.toFixed(3)} metres.`}
+      >
+        <path
+          d={toPath(basePath)}
+          fill="none"
+          stroke="#64748b"
+          strokeWidth="2"
+          strokeDasharray="5 4"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path
+          d={toPath(trainedPath)}
+          fill="none"
+          stroke="#34d399"
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <figcaption className="mt-2 text-xs leading-5 text-slate-500">
+        Pelvis height against forward travel through one 1.5 s rollout, from the
+        owner&apos;s own trace.{" "}
+        <span className="text-emerald-300">Solid green</span> is the policy you
+        trained ({trained.distanceMeters.toFixed(3)} m);{" "}
+        <span className="text-slate-400">dashed grey</span> is the tuned
+        controller it started from ({baseline.distanceMeters.toFixed(3)} m).
+        Vertical scale is exaggerated to the range walked.
+      </figcaption>
+    </figure>
+  );
+}
+
 export function G1ResidualTrainer() {
   const workerRef = useRef<Worker | null>(null);
   /** Condition the live worker was started for; see `start`. */
@@ -113,10 +202,17 @@ export function G1ResidualTrainer() {
     message: string;
     fatal: boolean;
   } | null>(null);
+  /** The rollout the receipt was computed from, once the reader asks to see it. */
+  const [gait, setGait] = useState<{
+    trained: G1TraceReceipt;
+    baseline: G1TraceReceipt;
+  } | null>(null);
+  const [gaitPending, setGaitPending] = useState(false);
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
       setError({ message: message.error, fatal: message.fatal });
+      setGaitPending(false);
       if (message.fatal) {
         // The owner caches initialization failures inside its worker realm.
         // A failed export keeps its live trainer; a fatal failure needs a new realm.
@@ -130,6 +226,12 @@ export function G1ResidualTrainer() {
     if (message.type === "stopped") {
       setRunning(false);
       if (message.progress) setProgress(message.progress);
+      return;
+    }
+    if (message.type === "trace") {
+      setError(null);
+      setGait({ trained: message.trained, baseline: message.baseline });
+      setGaitPending(false);
       return;
     }
     if (message.type === "weights") {
@@ -223,6 +325,9 @@ export function G1ResidualTrainer() {
     if (startedChallengeRef.current !== challenge) {
       setCurve([]);
       setProgress(null);
+      // A gait drawn from the previous condition describes a different
+      // experiment; keeping it on screen beside new numbers would be a lie.
+      setGait(null);
       startedChallengeRef.current = challenge;
     }
     setRunning(true);
@@ -237,6 +342,10 @@ export function G1ResidualTrainer() {
 
   const stop = () => post({ type: "stop" });
   const download = () => post({ type: "export" });
+  const showGait = () => {
+    setGaitPending(true);
+    post({ type: "trace" });
+  };
 
   const gain = progress
     ? gainPercent(progress.baselineObjective, progress.bestObjective)
@@ -272,6 +381,14 @@ export function G1ResidualTrainer() {
         </label>
         <button
           type="button"
+          onClick={showGait}
+          disabled={!improved || gaitPending || Boolean(error?.fatal)}
+          className="rounded-md border border-emerald-500/50 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400 disabled:opacity-40"
+        >
+          {gaitPending ? "Rolling out…" : "Show the gait"}
+        </button>
+        <button
+          type="button"
           onClick={download}
           disabled={!improved || Boolean(error?.fatal)}
           className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
@@ -289,6 +406,10 @@ export function G1ResidualTrainer() {
       <div className="mt-5">
         <LearningCurve points={curve} />
       </div>
+
+      {gait ? (
+        <GaitPaths trained={gait.trained} baseline={gait.baseline} />
+      ) : null}
 
       <table className="mt-5 w-full text-left text-sm text-slate-300">
         <caption className="pb-2 text-left text-xs text-slate-400">

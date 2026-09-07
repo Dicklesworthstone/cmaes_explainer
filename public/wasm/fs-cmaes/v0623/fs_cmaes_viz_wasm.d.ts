@@ -59,6 +59,11 @@ export class G1TransformerTrainerSession {
      * packet.
      */
     pump(): Float64Array;
+    /**
+     * A packed G1 trace of the best policy (`use_best`) or of the tuned
+     * controller it started from, for playback on the existing stage.
+     */
+    trace_packet(use_best: boolean): Float64Array;
 }
 
 /**
@@ -162,6 +167,7 @@ export interface InitOutput {
     readonly g1transformertrainersession_new: (a: number, b: number, c: number, d: number) => number;
     readonly g1transformertrainersession_progress: (a: number) => [number, number];
     readonly g1transformertrainersession_pump: (a: number) => [number, number];
+    readonly g1transformertrainersession_trace_packet: (a: number, b: number) => [number, number];
     readonly g1walkingvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
     readonly g1walkingvizevaluator_evaluate_population: (a: number, b: number, c: number) => [number, number];
     readonly g1walkingvizevaluator_new: (a: number, b: number) => number;
