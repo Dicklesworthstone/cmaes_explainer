@@ -307,11 +307,28 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(humanoid.exists)
 
         // Exercise the real supersession path: WKWebView reports cancellation
-        // for each route after the next route has already begun loading.
+        // for each route after the next route has already begun loading. Wait
+        // only for the native control to acknowledge each tap; owner readiness
+        // takes much longer, so every following tap still supersedes an
+        // in-flight route while a dropped interaction remains a hard failure.
+        func assertSelectionAcknowledged(_ element: XCUIElement) {
+            let settled = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in element.isSelected },
+                object: element
+            )
+            XCTAssertEqual(
+                XCTWaiter.wait(for: [settled], timeout: 5),
+                .completed,
+                app.debugDescription
+            )
+        }
+
         arm.tap()
+        assertSelectionAcknowledged(arm)
         humanoid.tap()
+        assertSelectionAcknowledged(humanoid)
         arm.tap()
-        XCTAssertTrue(arm.isSelected)
+        assertSelectionAcknowledged(arm)
         XCTAssertTrue(stage.waitForExistence(timeout: 12))
 
         let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
