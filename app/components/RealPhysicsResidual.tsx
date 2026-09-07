@@ -128,12 +128,14 @@ export function RealPhysicsResidual() {
       <p className="mt-3 text-sm leading-6 text-slate-400">
         Only the {receipt.searchedParams}-parameter output layer moves in the
         policy above, but that is not because a wider search does worse. On the
-        same two challenges at a matched budget of roughly 13,800 evaluations,
-        the output layer reached 54.7%, the final transformer block — 38,016
-        parameters — reached <strong>71.8%</strong>, and turning all 77,696
-        loose reached 43.2%. The middle scope wins: enough capacity to change
-        how the features are computed, few enough parameters that a
-        rollout-priced search can still cover them. The output layer is what
+        same two challenges at a matched budget, the output layer reached 54.7%,
+        the final transformer block — 38,016 parameters — reached{" "}
+        <strong>71.8%</strong>, and turning all 77,696 loose reached 43.2%. The
+        middle scope wins: enough capacity to change how the features are
+        computed, few enough parameters that a rollout-priced search can still
+        cover them. Re-running the first two at 45,000 evaluations, more than
+        three times the budget, returned the same two figures to the digit —
+        they had converged, so this is a ceiling rather than a snapshot. The output layer is what
         ships because it is what the in-browser trainer below can resume from —
         a wider policy carries a different trunk, so its head alone means
         nothing.
