@@ -378,20 +378,27 @@ export function G1ResidualTrainer() {
     () => EMPTY_SAVED_RUNS,
   );
   const localSave = savedRuns[challenge] ?? null;
-  // A visitor who followed a link came for that policy; show it rather than
-  // whatever this browser happens to have lying around for the same condition.
-  const shared =
+  const sharedForCondition =
     sharedRun && sharedRun.condition === challenge ? sharedRun : null;
-  const savedHead: SavedRun | null = shared
+  const sharedAsSave: SavedRun | null = sharedForCondition
     ? {
-        challenge: shared.condition,
-        head: Array.from(shared.head),
-        objective: shared.objective,
-        baselineObjective: shared.baselineObjective,
-        evaluations: shared.evaluations,
+        challenge: sharedForCondition.condition,
+        head: Array.from(sharedForCondition.head),
+        objective: sharedForCondition.objective,
+        baselineObjective: sharedForCondition.baselineObjective,
+        evaluations: sharedForCondition.evaluations,
         savedAt: 0,
       }
-    : localSave;
+    : null;
+  // Offer whichever policy is actually better, not whichever arrived last.
+  // A visitor who followed a link came for that policy, but once they have
+  // trained past it their own run must not be shouted down by the link every
+  // time the page reloads — and the link stays in the address bar.
+  const preferShared =
+    sharedAsSave !== null &&
+    (localSave === null || sharedAsSave.objective < localSave.objective);
+  const savedHead: SavedRun | null = preferShared ? sharedAsSave : localSave;
+  const shared = preferShared;
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
@@ -610,12 +617,9 @@ export function G1ResidualTrainer() {
     // trained on flat ground is not a head for terrain, and the owner would
     // refuse it anyway.
     const resumable = savedHead;
-    seededFromLinkRef.current = Boolean(shared);
+    seededFromLinkRef.current = shared;
     setResumeNotice(null);
-    // The link has done its job once a run starts from it. Leaving it ranked
-    // above the local checkpoint would mean every later reload dragged the
-    // reader back to the shared policy, discarding their own better run.
-    if (shared) setSharedRun(null);
+    setShareState(null);
     post({
       type: "start",
       challenge,
