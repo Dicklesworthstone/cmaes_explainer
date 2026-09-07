@@ -5,6 +5,48 @@ final class FrankenRobotsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    private func revealHumanoidStageControls(in app: XCUIApplication) {
+        let toggle = app.buttons.matching(
+            NSPredicate(format: "label ==[c] 'Controls' OR label ==[c] 'Hide controls'")
+        ).firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 8), app.debugDescription)
+        if toggle.label.caseInsensitiveCompare("Controls") == .orderedSame {
+            XCTAssertTrue(toggle.isHittable, app.debugDescription)
+            toggle.tap()
+            let hideControls = app.buttons.matching(
+                NSPredicate(format: "label ==[c] 'Hide controls'")
+            ).firstMatch
+            XCTAssertTrue(hideControls.waitForExistence(timeout: 5), app.debugDescription)
+        }
+    }
+
+    private func tapVisibleMenuItem(
+        _ item: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval = 5
+    ) {
+        XCTAssertTrue(item.waitForExistence(timeout: timeout), app.debugDescription)
+        if item.isHittable {
+            item.tap()
+            return
+        }
+
+        // SwiftUI Menu items can be visibly inside the system menu while XCUI
+        // reports them as non-hittable. Prove the item is on screen, then tap
+        // its rendered center so the journey still exercises the named action.
+        let frame = item.frame
+        XCTAssertFalse(frame.isEmpty, app.debugDescription)
+        let appFrame = app.frame
+        XCTAssertTrue(frame.intersects(appFrame), app.debugDescription)
+        let renderedCenter = app.coordinate(
+            withNormalizedOffset: CGVector(
+                dx: (frame.midX - appFrame.minX) / appFrame.width,
+                dy: (frame.midY - appFrame.minY) / appFrame.height
+            )
+        )
+        renderedCenter.tap()
+    }
+
     func testReadinessWatchdogFailsClosedThenRetryRecovers() throws {
         let app = XCUIApplication()
         app.launchEnvironment["FROBOTS_FORCE_READINESS_TIMEOUT_ONCE"] = "1"
@@ -157,6 +199,7 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [humanoidReady], timeout: 55), .completed)
 
+        revealHumanoidStageControls(in: app)
         let pushPreview = app.buttons["Configure display-only push-vector preview"]
         let followCamera = app.buttons["Follow"]
         XCTAssertTrue(pushPreview.waitForExistence(timeout: 12), app.debugDescription)
@@ -215,7 +258,7 @@ final class FrankenRobotsUITests: XCTestCase {
             NSPredicate(format: "label CONTAINS[c] 'Tactile Grasp Microscope'")
         ).firstMatch
         let jointKinematics = app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS[c] '7-DoF iiwa Joint Kinematics'")
+            NSPredicate(format: "label CONTAINS[c] 'IIWA JOINT ANGLES'")
         ).firstMatch
         let showArmControls = app.buttons["Show diagnostics and all arm controls"]
         XCTAssertTrue(showArmControls.isHittable, app.debugDescription)
@@ -367,9 +410,8 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(family.isHittable, app.debugDescription)
 
         challenge.tap()
-        let terrain = app.buttons["robot-challenge-terrain-and-push"]
-        XCTAssertTrue(terrain.waitForExistence(timeout: 5), app.debugDescription)
-        terrain.tap()
+        let terrain = app.buttons["robot-challenge-terrain-and-push"].firstMatch
+        tapVisibleMenuItem(terrain, in: app)
         let terrainSelected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value CONTAINS[c] 'terrain'"),
             object: challenge
@@ -382,9 +424,8 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
         family.tap()
-        let lmCMA = app.buttons["robot-family-lm-cma"]
-        XCTAssertTrue(lmCMA.waitForExistence(timeout: 5), app.debugDescription)
-        lmCMA.tap()
+        let lmCMA = app.buttons["robot-family-lm-cma"].firstMatch
+        tapVisibleMenuItem(lmCMA, in: app)
         let humanoidFamilySelected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 'LM-CMA'"),
             object: family
@@ -394,18 +435,16 @@ final class FrankenRobotsUITests: XCTestCase {
         let runSetup = app.buttons["robot-native-run-setup"]
         XCTAssertTrue(runSetup.isHittable, app.debugDescription)
         runSetup.tap()
-        let seedTwo = app.buttons["robot-seed-1"]
-        XCTAssertTrue(seedTwo.waitForExistence(timeout: 5), app.debugDescription)
-        seedTwo.tap()
+        let seedTwo = app.buttons["robot-seed-1"].firstMatch
+        tapVisibleMenuItem(seedTwo, in: app)
         var setupReflected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value CONTAINS[c] 'Seed 2'"),
             object: runSetup
         )
         XCTAssertEqual(XCTWaiter.wait(for: [setupReflected], timeout: 8), .completed)
         runSetup.tap()
-        let measuredSigma = app.buttons["robot-sigma-measured"]
-        XCTAssertTrue(measuredSigma.waitForExistence(timeout: 5), app.debugDescription)
-        measuredSigma.tap()
+        let measuredSigma = app.buttons["robot-sigma-measured"].firstMatch
+        tapVisibleMenuItem(measuredSigma, in: app)
         setupReflected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value CONTAINS[c] '0.001'"),
             object: runSetup
@@ -440,9 +479,8 @@ final class FrankenRobotsUITests: XCTestCase {
         let armFamily = app.buttons["robot-native-family-picker"]
         XCTAssertTrue(armFamily.isHittable, app.debugDescription)
         armFamily.tap()
-        let fullCMA = app.buttons["robot-family-full"]
-        XCTAssertTrue(fullCMA.waitForExistence(timeout: 5), app.debugDescription)
-        fullCMA.tap()
+        let fullCMA = app.buttons["robot-family-full"].firstMatch
+        tapVisibleMenuItem(fullCMA, in: app)
         let armFamilySelected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 'Full CMA-ES'"),
             object: armFamily
@@ -452,9 +490,8 @@ final class FrankenRobotsUITests: XCTestCase {
         let armRunSetup = app.buttons["robot-native-run-setup"]
         XCTAssertTrue(armRunSetup.isHittable, app.debugDescription)
         armRunSetup.tap()
-        let seedThree = app.buttons["robot-seed-2"]
-        XCTAssertTrue(seedThree.waitForExistence(timeout: 5), app.debugDescription)
-        seedThree.tap()
+        let seedThree = app.buttons["robot-seed-2"].firstMatch
+        tapVisibleMenuItem(seedThree, in: app)
         setupReflected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 'Seed 3'"),
             object: armRunSetup
@@ -502,8 +539,18 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 8), .completed)
 
-        timeline.adjust(toNormalizedSliderPosition: 0.6)
         let receipt = app.descendants(matching: .any)["robot-native-command-detail"]
+        let pauseAccepted = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'paused'"),
+            object: receipt
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [pauseAccepted], timeout: 8), .completed)
+
+        let currentPosition = String(describing: timeline.value)
+        let targetPosition = currentPosition.localizedCaseInsensitiveContains("frame 1 of")
+            ? 0.75
+            : 0.0
+        timeline.adjust(toNormalizedSliderPosition: targetPosition)
         let sought = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'moved to frame'"),
             object: receipt
@@ -511,9 +558,8 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [sought], timeout: 8), .completed)
 
         speed.tap()
-        let halfSpeed = app.buttons["robot-speed-0.5"]
-        XCTAssertTrue(halfSpeed.waitForExistence(timeout: 5), app.debugDescription)
-        halfSpeed.tap()
+        let halfSpeed = app.buttons["robot-speed-0.5"].firstMatch
+        tapVisibleMenuItem(halfSpeed, in: app)
         let slowed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == '0.5×'"),
             object: speed
@@ -521,9 +567,8 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [slowed], timeout: 8), .completed)
 
         camera.tap()
-        let blueprint = app.buttons["robot-camera-blueprint"]
-        XCTAssertTrue(blueprint.waitForExistence(timeout: 5), app.debugDescription)
-        blueprint.tap()
+        let blueprint = app.buttons["robot-camera-blueprint"].firstMatch
+        tapVisibleMenuItem(blueprint, in: app)
         let mapped = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 'Map'"),
             object: camera
@@ -550,9 +595,8 @@ final class FrankenRobotsUITests: XCTestCase {
 
         XCTAssertTrue(camera.waitForExistence(timeout: 5), app.debugDescription)
         camera.tap()
-        let microscope = app.buttons["robot-camera-microscope"]
-        XCTAssertTrue(microscope.waitForExistence(timeout: 5), app.debugDescription)
-        microscope.tap()
+        let microscope = app.buttons["robot-camera-microscope"].firstMatch
+        tapVisibleMenuItem(microscope, in: app)
         let focused = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == 'Grasp Focus'"),
             object: camera
@@ -576,9 +620,8 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(menu.waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertTrue(menu.isEnabled)
         menu.tap()
-        let item = app.buttons["robot-overlay-\(identifier)"]
-        XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
-        item.tap()
+        let item = app.buttons["robot-overlay-\(identifier)"].firstMatch
+        tapVisibleMenuItem(item, in: app)
         let reflected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value CONTAINS[c] %@", expectedValue),
             object: menu
@@ -675,6 +718,14 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
+        let openFullLab = app.buttons["robot-open-full-lab"]
+        XCTAssertTrue(openFullLab.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(openFullLab.isHittable, app.debugDescription)
+        openFullLab.tap()
+
+        let workspace = app.webViews["robot-full-lab-workspace"].firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 12), app.debugDescription)
+
         let playbackButton = app.buttons.matching(
             NSPredicate(format: "label == 'Play arm trace' OR label == 'Pause arm trace'")
         ).firstMatch
@@ -698,7 +749,19 @@ final class FrankenRobotsUITests: XCTestCase {
 
         restartButton.tap()
         let startPosition = String(describing: positionSlider.value)
-        XCTAssertTrue(positionSlider.isHittable)
+        for _ in 0..<3 {
+            if positionSlider.isHittable {
+                break
+            }
+            let scrollStart = workspace.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.98, dy: 0.80)
+            )
+            let scrollEnd = workspace.coordinate(
+                withNormalizedOffset: CGVector(dx: 0.98, dy: 0.40)
+            )
+            scrollStart.press(forDuration: 0.1, thenDragTo: scrollEnd)
+        }
+        XCTAssertTrue(positionSlider.isHittable, app.debugDescription)
         let seekEnd = positionSlider.coordinate(
             withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)
         )
@@ -808,10 +871,8 @@ final class FrankenRobotsUITests: XCTestCase {
         var weightedSumLabels = Set<String>()
         for lens in lenses {
             nativeLensMenu.tap()
-            let menuItem = app.buttons[lens.menuItem]
-            XCTAssertTrue(menuItem.waitForExistence(timeout: 5), app.debugDescription)
-            XCTAssertTrue(menuItem.isHittable)
-            menuItem.tap()
+            let menuItem = app.buttons[lens.menuItem].firstMatch
+            tapVisibleMenuItem(menuItem, in: app)
 
             XCTAssertTrue(app.descendants(matching: .any).matching(
                 NSPredicate(format: "label CONTAINS[c] %@", lens.status)
@@ -857,6 +918,7 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 20), app.debugDescription)
         let originalKernelLabel = kernelReceipt.label
 
+        revealHumanoidStageControls(in: app)
         let configure = app.buttons["Configure display-only push-vector preview"]
         XCTAssertTrue(configure.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(configure.isHittable)
@@ -887,10 +949,11 @@ final class FrankenRobotsUITests: XCTestCase {
         disclosureScreenshot.lifetime = .keepAlways
         add(disclosureScreenshot)
 
-        let preview = app.buttons[
-            "Preview display-only push vector: 45 newton-seconds at 270 degrees"
-        ]
+        let preview = app.buttons.matching(
+            NSPredicate(format: "label == 'Preview vector only'")
+        ).firstMatch
         XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(preview.isHittable, app.debugDescription)
         preview.tap()
 
         let status = app.descendants(matching: .any).matching(

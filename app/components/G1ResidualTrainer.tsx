@@ -21,7 +21,6 @@ import {
   encodeResidualFragment,
   residualFragmentFromHash,
   residualShareUrl,
-  RESIDUAL_HEAD_LENGTH,
   type SharedResidual,
 } from "../lib/g1PolicyShare";
 import type {
@@ -54,9 +53,9 @@ const MAX_CURVE_POINTS = 240;
  * Where a run in progress is kept between visits.
  *
  * Only the 960-parameter head is stored: the trunk is deterministic in the
- * kernel's fixed seed, so the head is the entire learned part. JSON checkpoints
- * are written periodically and on Stop; a reload can lose work since the last
- * checkpoint. Resuming restores the policy, not the optimizer's full state.
+ * kernel's fixed seed, so the head is the entire learned part. At four bytes a
+ * parameter that is under 4 KB, well inside any storage quota, and it means an
+ * accidental refresh costs nothing.
  */
 const SAVED_RUN_KEY = "cmaes.g1-residual-run.v1";
 
@@ -91,27 +90,21 @@ type SavedRuns = Partial<Record<G1TransformerChallenge, SavedRun>>;
 
 const EMPTY_SAVED_RUNS: SavedRuns = {};
 
-function isSavedRun(
-  value: unknown,
-  condition: G1TransformerChallenge,
-): value is SavedRun {
+function isSavedRun(value: unknown): value is SavedRun {
   if (!value || typeof value !== "object") return false;
   const run = value as Partial<SavedRun>;
   return (
     Array.isArray(run.head) &&
-    run.challenge === condition &&
-    run.head.length === RESIDUAL_HEAD_LENGTH &&
-    run.head.every(
-      (entry) =>
-        typeof entry === "number" && Number.isFinite(Math.fround(entry)),
-    ) &&
-    Number.isFinite(run.objective) &&
-    Number.isFinite(run.baselineObjective) &&
-    Number.isSafeInteger(run.evaluations) &&
-    (run.evaluations ?? -1) >= 0 &&
-    Number.isFinite(run.savedAt) &&
-    (run.savedAt ?? -1) >= 0 &&
-    (run.savedAt ?? Infinity) <= 8.64e15
+    run.head.length > 0 &&
+    run.head.every((entry) => Number.isFinite(entry)) &&
+    typeof run.objective === "number" &&
+    typeof run.baselineObjective === "number" &&
+    typeof run.evaluations === "number" &&
+    typeof run.savedAt === "number" &&
+    // A head from a different model width cannot be seeded at all. Dropping it
+    // here keeps the owner from refusing it later, where the only message
+    // available would wrongly say it failed to beat the controller.
+    run.head.length === G1_RESIDUAL_HEAD_LENGTH
   );
 }
 
@@ -123,7 +116,7 @@ function parseSavedRuns(raw: string | null): SavedRuns {
     const runs: SavedRuns = {};
     for (const condition of ["flat", "terrain", "both"] as const) {
       const candidate = (parsed as Record<string, unknown>)[condition];
-      if (isSavedRun(candidate, condition)) runs[condition] = candidate;
+      if (isSavedRun(candidate)) runs[condition] = candidate;
     }
     return runs;
   } catch {
@@ -136,17 +129,11 @@ function parseSavedRuns(raw: string | null): SavedRuns {
 /** Fired after a checkpoint so a subscriber in this tab re-reads it. */
 const SAVED_RUN_EVENT = "cmaes:g1-residual-run";
 
-function writeSavedRun(run: SavedRun, reassessedHead: number[] | null): void {
+function writeSavedRun(run: SavedRun): void {
   try {
-    const existing = parseSavedRuns(window.localStorage.getItem(SAVED_RUN_KEY));
-    const previous = existing[run.challenge];
-    // The owner re-scores a seed. Refresh that exact checkpoint's stale claim,
-    // while retaining a different, better checkpoint already in storage.
-    const reassessedPrevious =
-      reassessedHead !== null &&
-      previous?.head.every((value, index) => value === reassessedHead[index]);
-    if (previous && !reassessedPrevious && previous.objective <= run.objective)
-      return;
+    const existing = parseSavedRuns(
+      window.localStorage.getItem(SAVED_RUN_KEY),
+    );
     window.localStorage.setItem(
       SAVED_RUN_KEY,
       JSON.stringify({ ...existing, [run.challenge]: run }),
@@ -381,10 +368,6 @@ export function G1ResidualTrainer() {
   const runChallengeRef = useRef<G1TransformerChallenge>("flat");
   /** Where the live run's seed came from, so a notice can name it correctly. */
   const seedSourceRef = useRef<"save" | "link" | "shipped">("save");
-  const seededHeadRef = useRef<number[] | null>(null);
-  const reassessedHeadRef = useRef<number[] | null>(null);
-  const shareRevisionRef = useRef(0);
-  const selectionRevisionRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -448,7 +431,6 @@ export function G1ResidualTrainer() {
       setError({ message: message.error, fatal: message.fatal });
       setGaitPending(false);
       if (message.fatal) {
-        shareRevisionRef.current += 1;
         // The owner caches initialization failures inside its worker realm.
         // A failed export keeps its live trainer; a fatal failure needs a new realm.
         workerRef.current?.terminate();
@@ -459,25 +441,11 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "stopped") {
-      if (message.progress && message.bestHead) {
-        writeSavedRun(
-          {
-            challenge: runChallengeRef.current,
-            head: Array.from(message.bestHead),
-            objective: message.progress.bestObjective,
-            baselineObjective: message.progress.baselineObjective,
-            evaluations: message.progress.evaluations,
-            savedAt: Date.now(),
-          },
-          reassessedHeadRef.current,
-        );
-      }
       setRunning(false);
       if (message.progress) setProgress(message.progress);
       return;
     }
     if (message.type === "resumed") {
-      reassessedHeadRef.current = seededHeadRef.current;
       const source =
         seedSourceRef.current === "link"
           ? "the shared policy"
@@ -500,8 +468,6 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "head") {
-      const revision = message.requestId;
-      if (revision !== shareRevisionRef.current) return;
       setError(null);
       void encodeResidualFragment({
         head: message.head,
@@ -511,7 +477,6 @@ export function G1ResidualTrainer() {
         baselineObjective: message.progress.baselineObjective,
       })
         .then(async (fragment) => {
-          if (revision !== shareRevisionRef.current) return;
           const url = residualShareUrl(
             window.location.origin,
             window.location.pathname,
@@ -519,22 +484,17 @@ export function G1ResidualTrainer() {
           );
           try {
             await navigator.clipboard.writeText(url);
-            if (revision !== shareRevisionRef.current) return;
             setShareState({ url, copied: true });
           } catch {
-            if (revision !== shareRevisionRef.current) return;
             // Clipboard access is denied in plenty of ordinary situations;
             // showing the link is a working fallback, not a failure.
             setShareState({ url, copied: false });
           }
         })
         .catch((cause: unknown) => {
-          if (revision !== shareRevisionRef.current) return;
           setError({
             message:
-              cause instanceof Error
-                ? cause.message
-                : "Could not build a link.",
+              cause instanceof Error ? cause.message : "Could not build a link.",
             fatal: false,
           });
         });
@@ -570,17 +530,14 @@ export function G1ResidualTrainer() {
     }
     setProgress(message.progress);
     if (message.bestHead && message.bestHead.length > 0) {
-      writeSavedRun(
-        {
-          challenge: runChallengeRef.current,
-          head: Array.from(message.bestHead),
-          objective: message.progress.bestObjective,
-          baselineObjective: message.progress.baselineObjective,
-          evaluations: message.progress.evaluations,
-          savedAt: Date.now(),
-        },
-        reassessedHeadRef.current,
-      );
+      writeSavedRun({
+        challenge: runChallengeRef.current,
+        head: Array.from(message.bestHead),
+        objective: message.progress.bestObjective,
+        baselineObjective: message.progress.baselineObjective,
+        evaluations: message.progress.evaluations,
+        savedAt: Date.now(),
+      });
     }
     if (message.progress.status === "generation") {
       setCurve((previous) => {
@@ -603,8 +560,6 @@ export function G1ResidualTrainer() {
 
   useEffect(() => {
     return () => {
-      shareRevisionRef.current += 1;
-      selectionRevisionRef.current += 1;
       workerRef.current?.terminate();
       workerRef.current = null;
     };
@@ -615,7 +570,6 @@ export function G1ResidualTrainer() {
   useEffect(() => {
     const fragment = residualFragmentFromHash(window.location.hash);
     if (!fragment) return;
-    const selectionRevision = selectionRevisionRef.current;
     let live = true;
     void decodeResidualFragment(fragment)
       .then((shared) => {
@@ -630,9 +584,7 @@ export function G1ResidualTrainer() {
         setSharedRun(shared);
         // Select the condition it was trained for, or the offer would sit
         // behind a dropdown the visitor has no reason to touch.
-        if (selectionRevision === selectionRevisionRef.current) {
-          setChallenge(shared.condition);
-        }
+        setChallenge(shared.condition);
       })
       .catch((cause: unknown) => {
         if (!live) return;
@@ -648,6 +600,8 @@ export function G1ResidualTrainer() {
       live = false;
     };
   }, []);
+
+
 
   const post = (request: TrainingWorkerRequest) => {
     const failWorker = (error: unknown) => {
@@ -698,9 +652,6 @@ export function G1ResidualTrainer() {
     condition: G1TransformerChallenge,
     seed: { head: Float64Array; source: "save" | "link" | "shipped" } | null,
   ) => {
-    shareRevisionRef.current += 1;
-    selectionRevisionRef.current += 1;
-    setShippedPending(false);
     setError(null);
     setRunChallenge(condition);
     runChallengeRef.current = condition;
@@ -717,8 +668,6 @@ export function G1ResidualTrainer() {
     }
     setRunning(true);
     seedSourceRef.current = seed?.source ?? "save";
-    seededHeadRef.current = seed ? Array.from(seed.head) : null;
-    reassessedHeadRef.current = null;
     setResumeNotice(null);
     setShareState(null);
     post({
@@ -757,36 +706,25 @@ export function G1ResidualTrainer() {
    * anyone starting out a far better place to search from than zero.
    */
   const startFromShipped = () => {
-    const revision = ++selectionRevisionRef.current;
     setError(null);
     setShippedPending(true);
     fetch(SHIPPED_POLICY_URL)
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(
-            `Could not load the shipped policy (${response.status}).`,
-          );
+          throw new Error(`Could not load the shipped policy (${response.status}).`);
         }
         const head = residualHeadFromArtifact(await response.arrayBuffer());
-        if (revision !== selectionRevisionRef.current) return;
         if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
           throw new Error(
             `The shipped policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
           );
         }
         setShippedPending(false);
-        // This explicit replacement must not resume the old same-config
-        // optimizer and silently ignore the supplied shipped head.
-        workerRef.current?.terminate();
-        workerRef.current = null;
-        startedChallengeRef.current = null;
-        setGaitPending(false);
         setChallenge(SHIPPED_POLICY_CONDITION);
         setSharedRun(null);
         beginRun(SHIPPED_POLICY_CONDITION, { head, source: "shipped" });
       })
       .catch((cause: unknown) => {
-        if (revision !== selectionRevisionRef.current) return;
         setShippedPending(false);
         setError({
           message:
@@ -799,9 +737,8 @@ export function G1ResidualTrainer() {
   };
 
   const share = () => {
-    const requestId = ++shareRevisionRef.current;
     setShareState(null);
-    post({ type: "head", requestId });
+    post({ type: "head" });
   };
   const showGait = () => {
     setGaitPending(true);
@@ -830,11 +767,9 @@ export function G1ResidualTrainer() {
           <select
             value={challenge}
             disabled={running}
-            onChange={(event) => {
-              selectionRevisionRef.current += 1;
-              setShippedPending(false);
-              setChallenge(event.target.value as G1TransformerChallenge);
-            }}
+            onChange={(event) =>
+              setChallenge(event.target.value as G1TransformerChallenge)
+            }
             className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200 disabled:opacity-50"
           >
             <option value="flat">Flat only (fastest)</option>
@@ -883,11 +818,9 @@ export function G1ResidualTrainer() {
         </p>
       ) : null}
 
-      {resumeNotice && runChallenge === challenge ? (
+      {resumeNotice ? (
         <p className="mt-4 text-sm text-slate-400">{resumeNotice}</p>
-      ) : savedHead &&
-        !running &&
-        (!progress || runChallenge !== challenge || error?.fatal) ? (
+      ) : savedHead && !running ? (
         <p className="mt-4 text-sm text-slate-400">
           {shared ? (
             <>Someone shared a policy with you in this link</>
@@ -934,9 +867,7 @@ export function G1ResidualTrainer() {
           baseline={gait.baseline}
           condition={gait.condition}
           // Lower is better, so any drop means the plot is of an older policy.
-          stale={Boolean(
-            progress && progress.bestObjective < gait.capturedObjective,
-          )}
+          stale={Boolean(progress && progress.bestObjective < gait.capturedObjective)}
         />
       ) : null}
 

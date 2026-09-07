@@ -846,7 +846,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
 
-    let webView: WKWebView
+    @Published private(set) var webView: WKWebView
 
     private var server: LoopbackEngineServer?
     private var baseURL: URL?
@@ -878,25 +878,45 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 #endif
 
     override init() {
+        webView = Self.makeWebView()
+        super.init()
+        installBridge(on: webView)
+
+        Task { [weak self] in
+            await self?.start()
+        }
+    }
+
+    private static func makeWebView() -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.websiteDataStore = .nonPersistent()
-        webView = WKWebView(frame: .zero, configuration: configuration)
-        super.init()
-        scriptMessageHandler.delegate = self
-        configuration.userContentController.add(scriptMessageHandler, name: "frankenrobots")
-        webView.navigationDelegate = self
+        let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.keyboardDismissMode = .interactive
+        return webView
+    }
 
-        Task { [weak self] in
-            await self?.start()
-        }
+    private func installBridge(on webView: WKWebView) {
+        scriptMessageHandler.delegate = self
+        webView.configuration.userContentController.add(scriptMessageHandler, name: "frankenrobots")
+        webView.navigationDelegate = self
+    }
+
+    private func replaceFailedWebView() {
+        let failedWebView = webView
+        failedWebView.navigationDelegate = nil
+        failedWebView.stopLoading()
+        failedWebView.configuration.userContentController.removeScriptMessageHandler(forName: "frankenrobots")
+
+        let replacement = Self.makeWebView()
+        installBridge(on: replacement)
+        webView = replacement
     }
 
     func select(_ lab: RobotLab) {
@@ -905,15 +925,14 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     func reload() {
-        resetBridgeState()
-        if webView.url == nil {
-            loadSelectedLab()
-        } else {
-            phase = .loading
-            detail = "Reloading the \(selectedLab.title.lowercased()) engine…"
-            activeNavigation = webView.reloadFromOrigin()
-            armReadinessTimeout(for: selectedLab)
-        }
+        // A WKWebView whose content process or owner worker has failed can
+        // remain attached to the dead worker even after a fresh navigation.
+        // Replace the failed execution container before loading the same local
+        // route so recovery cannot inherit poisoned process state.
+        cancelReadinessTimeout()
+        activeNavigation = nil
+        replaceFailedWebView()
+        loadSelectedLab()
     }
 
     func optimize() {

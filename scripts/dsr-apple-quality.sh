@@ -61,9 +61,16 @@ fi
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
+  -parallel-testing-enabled NO \
+  CODE_SIGNING_ALLOWED=NO build-for-testing
+
+/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+  -destination "platform=iOS Simulator,id=$iphone_id" \
+  -derivedDataPath "$build_root/derived-data" \
   -resultBundlePath "$build_root/frankenrobots-iphone-recovery.xcresult" \
   -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO test \
+  CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testWebContentTerminationFailsClosedThenRetryRecovers
 
 # A WebContent lifecycle failure is destructive by definition. Run the rest of
@@ -75,7 +82,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -derivedDataPath "$build_root/derived-data" \
   -resultBundlePath "$build_root/frankenrobots-iphone-ui.xcresult" \
   -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO test \
+  CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testReadinessWatchdogFailsClosedThenRetryRecovers \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testAppearanceTogglePersistsLightModeAcrossLaunches \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testFullLabWorkspaceExposesCompleteHumanoidAndArmControls \
@@ -92,7 +99,14 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
+  -parallel-testing-enabled NO \
+  CODE_SIGNING_ALLOWED=NO build-for-testing
+
+/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+  -destination "platform=iOS Simulator,id=$ipad_id" \
+  -derivedDataPath "$build_root/derived-data" \
   -resultBundlePath "$build_root/frankenrobots-ipad-ui.xcresult" \
   -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO test \
+  CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations

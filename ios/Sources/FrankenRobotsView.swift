@@ -13,6 +13,13 @@ struct FrankenRobotsView: View {
     @State private var showingReceiptExporter = false
     @State private var receiptExportError: String?
     @State private var scrubIndex: Double?
+    @State private var showingChallengeSelection = false
+    @State private var showingFamilySelection = false
+    @State private var showingRunSetupSelection = false
+    @State private var showingSpeedSelection = false
+    @State private var showingCameraSelection = false
+    @State private var showingReceiptLensSelection = false
+    @State private var showingOverlaySelection = false
 
     init() {
 #if DEBUG
@@ -311,6 +318,7 @@ struct FrankenRobotsView: View {
             RobotPanel(accent: lab.accent) {
                 ZStack {
                     RobotEngineWebView(webView: engine.webView)
+                        .id(ObjectIdentifier(engine.webView))
                         .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
 
                     if case let .failed(message) = engine.phase {
@@ -420,7 +428,18 @@ struct FrankenRobotsView: View {
                     .lineLimit(1)
             }
             if lab == .humanoid {
-                Menu {
+                Button {
+                    showingChallengeSelection = true
+                } label: {
+                    Label(engine.activeChallenge.title, systemImage: "mountain.2.fill")
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                }
+                .confirmationDialog(
+                    "Physical challenge",
+                    isPresented: $showingChallengeSelection,
+                    titleVisibility: .visible
+                ) {
                     ForEach(RobotChallenge.allCases) { challenge in
                         Button {
                             engine.selectChallenge(challenge)
@@ -433,10 +452,6 @@ struct FrankenRobotsView: View {
                         }
                         .accessibilityIdentifier("robot-challenge-\(challenge.rawValue)")
                     }
-                } label: {
-                    Label(engine.activeChallenge.title, systemImage: "mountain.2.fill")
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.76)
                 }
                 .accessibilityIdentifier("robot-native-challenge-picker")
                 .accessibilityLabel("Physical challenge")
@@ -446,7 +461,18 @@ struct FrankenRobotsView: View {
                         !engine.supportsChallengeSelection
                 )
             }
-            Menu {
+            Button {
+                showingFamilySelection = true
+            } label: {
+                Label(engine.activeFamily.title, systemImage: "cpu")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .confirmationDialog(
+                "Optimizer family",
+                isPresented: $showingFamilySelection,
+                titleVisibility: .visible
+            ) {
                 ForEach(availableOptimizerFamilies) { family in
                     Button {
                         engine.selectFamily(family)
@@ -459,10 +485,6 @@ struct FrankenRobotsView: View {
                     }
                     .accessibilityIdentifier("robot-family-\(family.rawValue)")
                 }
-            } label: {
-                Label(engine.activeFamily.title, systemImage: "cpu")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
             }
             .accessibilityIdentifier("robot-native-family-picker")
             .accessibilityLabel("Optimizer family")
@@ -484,7 +506,22 @@ struct FrankenRobotsView: View {
     }
 
     private var runSetupMenu: some View {
-        Menu {
+        Button {
+            showingRunSetupSelection = true
+        } label: {
+            ViewThatFits(in: .horizontal) {
+                Label(runSetupValue, systemImage: "dial.medium")
+                Label("Run setup", systemImage: "dial.medium")
+                Image(systemName: "dial.medium")
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .confirmationDialog(
+            "Owner run setup",
+            isPresented: $showingRunSetupSelection,
+            titleVisibility: .visible
+        ) {
             Section("Declared Philox seed") {
                 ForEach(0..<3, id: \.self) { index in
                     Button {
@@ -517,14 +554,6 @@ struct FrankenRobotsView: View {
                     }
                 }
             }
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                Label(runSetupValue, systemImage: "dial.medium")
-                Label("Run setup", systemImage: "dial.medium")
-                Image(systemName: "dial.medium")
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
         }
         .accessibilityIdentifier("robot-native-run-setup")
         .accessibilityLabel("Owner run setup")
@@ -606,7 +635,18 @@ struct FrankenRobotsView: View {
                     .frame(minWidth: 58)
             }
 
-            Menu {
+            Button {
+                showingSpeedSelection = true
+            } label: {
+                Text(engine.activePlaybackSpeed.title)
+                    .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
+                    .frame(minHeight: 38)
+            }
+            .confirmationDialog(
+                "Replay speed",
+                isPresented: $showingSpeedSelection,
+                titleVisibility: .visible
+            ) {
                 ForEach(RobotPlaybackSpeed.allCases) { speed in
                     Button {
                         engine.selectPlaybackSpeed(speed)
@@ -619,10 +659,6 @@ struct FrankenRobotsView: View {
                     }
                     .accessibilityIdentifier("robot-speed-\(speed.rawValue)")
                 }
-            } label: {
-                Text(engine.activePlaybackSpeed.title)
-                    .font(.system(size: RobotTheme.size(8.5), weight: .bold, design: .monospaced))
-                    .frame(minHeight: 38)
             }
             .accessibilityIdentifier("robot-native-speed")
             .accessibilityLabel("Replay speed")
@@ -632,7 +668,20 @@ struct FrankenRobotsView: View {
                     engine.pendingCommandID != nil
             )
 
-            Menu {
+            Button {
+                showingCameraSelection = true
+            } label: {
+                ViewThatFits(in: .horizontal) {
+                    Label(engine.activeCamera.title, systemImage: "camera.fill")
+                    Image(systemName: "camera.fill")
+                }
+                .frame(minWidth: 28, minHeight: 38)
+            }
+            .confirmationDialog(
+                "Robot camera",
+                isPresented: $showingCameraSelection,
+                titleVisibility: .visible
+            ) {
                 ForEach(RobotCameraMode.available(for: lab)) { camera in
                     Button {
                         engine.selectCamera(camera)
@@ -645,12 +694,6 @@ struct FrankenRobotsView: View {
                     }
                     .accessibilityIdentifier("robot-camera-\(camera.rawValue)")
                 }
-            } label: {
-                ViewThatFits(in: .horizontal) {
-                    Label(engine.activeCamera.title, systemImage: "camera.fill")
-                    Image(systemName: "camera.fill")
-                }
-                .frame(minWidth: 28, minHeight: 38)
             }
             .accessibilityIdentifier("robot-native-camera")
             .accessibilityLabel("Robot camera")
@@ -738,7 +781,18 @@ struct FrankenRobotsView: View {
     }
 
     private var receiptLensMenu: some View {
-        Menu {
+        Button {
+            showingReceiptLensSelection = true
+        } label: {
+            Label("Receipt lenses", systemImage: "slider.horizontal.3")
+                .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+                .lineLimit(1)
+        }
+        .confirmationDialog(
+            "Receipt analysis lens",
+            isPresented: $showingReceiptLensSelection,
+            titleVisibility: .visible
+        ) {
             ForEach(RobotReceiptLens.allCases) { lens in
                 Button {
                     engine.selectReceiptLens(lens)
@@ -751,10 +805,6 @@ struct FrankenRobotsView: View {
                 }
                 .accessibilityIdentifier("robot-receipt-lens-\(lens.rawValue)")
             }
-        } label: {
-            Label("Receipt lenses", systemImage: "slider.horizontal.3")
-                .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
-                .lineLimit(1)
         }
         .buttonStyle(.bordered)
         .tint(lab.accent)
@@ -769,7 +819,21 @@ struct FrankenRobotsView: View {
     }
 
     private var overlayMenu: some View {
-        Menu {
+        Button {
+            showingOverlaySelection = true
+        } label: {
+            ViewThatFits(in: .horizontal) {
+                Label("Overlays", systemImage: "square.3.layers.3d")
+                Image(systemName: "square.3.layers.3d")
+            }
+            .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
+            .frame(minWidth: 28, minHeight: 38)
+        }
+        .confirmationDialog(
+            "Robot visualization overlays",
+            isPresented: $showingOverlaySelection,
+            titleVisibility: .visible
+        ) {
             ForEach(RobotOverlayMode.available(for: lab)) { overlay in
                 let enabled = engine.activeOverlays.contains(overlay)
                 Button {
@@ -783,13 +847,6 @@ struct FrankenRobotsView: View {
                 }
                 .accessibilityIdentifier("robot-overlay-\(overlay.rawValue)")
             }
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                Label("Overlays", systemImage: "square.3.layers.3d")
-                Image(systemName: "square.3.layers.3d")
-            }
-            .font(.system(size: RobotTheme.size(9), weight: .bold, design: .rounded))
-            .frame(minWidth: 28, minHeight: 38)
         }
         .buttonStyle(.bordered)
         .tint(lab.accent)
@@ -852,6 +909,7 @@ struct FrankenRobotsView: View {
         RobotPanel(accent: lab.accent) {
             ZStack {
                 RobotEngineWebView(webView: engine.webView)
+                    .id(ObjectIdentifier(engine.webView))
                     .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
 
                 if case let .failed(message) = engine.phase {
