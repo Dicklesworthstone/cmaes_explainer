@@ -2586,7 +2586,7 @@ async function run() {
     );
     recordResult({ journey: "arm-unsupported-shared-task", refused: true });
     await invalidArmContext.close();
-    assert.equal(results.length, 29, "A declared browser journey did not run");
+    assert.equal(results.length, 30, "A declared browser journey did not run");
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
