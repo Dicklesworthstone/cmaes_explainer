@@ -176,19 +176,21 @@ export default function HumanoidPage() {
             on their own machine before believing the number.
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            That re-run is not a formality. A policy carries its objective with
-            it, and the objective is a claim about the machine that measured it:
-            the flat policy offered here scores −173.17 natively and −80.92 in
-            this kernel — still well clear of the controller&apos;s −59.41, but
-            less than half the improvement — and the stronger cross-challenge
-            policy the card above reports does not survive the crossing at all:
-            −114.82 natively, and here it simply falls. Same weights, same source, a
-            different compilation target, and arithmetic that differs in the
-            last bits; 720 steps of contact-rich dynamics is enough to turn that
-            into a different trajectory. So the owner re-measures every policy
-            it is handed and refuses the ones that do not hold up, and every
-            figure in the panel is what <em>your</em> machine measured rather
-            than what someone else&apos;s did.
+            A policy trained on the workstation scores the same here, to the
+            digit. That took fixing. The physics owner was already identical on
+            both targets, but the transformer called the host&apos;s{" "}
+            <code>exp</code>, <code>tanh</code>, <code>sin</code>,{" "}
+            <code>cos</code> and <code>powf</code>; macOS and the WebAssembly
+            build ship different implementations of those, and 720 steps of
+            contact-rich dynamics turns a last-bit disagreement into a different
+            trajectory — a policy that walked on one machine fell over on the
+            other. Routing those five through the same Rust implementation
+            everywhere closed it: the shipped policy reproduces here at{" "}
+            <strong>−157.68085560636536</strong> and{" "}
+            <strong>1.0565011518224396 m</strong>, the digits the workstation
+            recorded. The owner still re-measures every policy it is handed, so
+            every figure in the panel is what <em>your</em> machine measured —
+            it now simply agrees.
           </p>
           <div className="mt-6">
             <G1ResidualTrainer />
