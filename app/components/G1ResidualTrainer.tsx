@@ -57,27 +57,40 @@ interface SavedRun {
   savedAt: number;
 }
 
-function readSavedRun(): SavedRun | null {
+/** One checkpoint per condition: trying terrain must not destroy a flat run. */
+type SavedRuns = Partial<Record<G1TransformerChallenge, SavedRun>>;
+
+const EMPTY_SAVED_RUNS: SavedRuns = {};
+
+function isSavedRun(value: unknown): value is SavedRun {
+  if (!value || typeof value !== "object") return false;
+  const run = value as Partial<SavedRun>;
+  return (
+    Array.isArray(run.head) &&
+    run.head.length > 0 &&
+    run.head.every((entry) => Number.isFinite(entry)) &&
+    typeof run.objective === "number" &&
+    typeof run.baselineObjective === "number" &&
+    typeof run.evaluations === "number" &&
+    typeof run.savedAt === "number"
+  );
+}
+
+function parseSavedRuns(raw: string | null): SavedRuns {
+  if (!raw) return EMPTY_SAVED_RUNS;
   try {
-    const raw = window.localStorage.getItem(SAVED_RUN_KEY);
-    if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return null;
-    const run = parsed as Partial<SavedRun>;
-    if (
-      !Array.isArray(run.head) ||
-      run.head.length === 0 ||
-      !run.head.every((value) => Number.isFinite(value)) ||
-      typeof run.objective !== "number" ||
-      typeof run.evaluations !== "number"
-    ) {
-      return null;
+    if (!parsed || typeof parsed !== "object") return EMPTY_SAVED_RUNS;
+    const runs: SavedRuns = {};
+    for (const condition of ["flat", "terrain", "both"] as const) {
+      const candidate = (parsed as Record<string, unknown>)[condition];
+      if (isSavedRun(candidate)) runs[condition] = candidate;
     }
-    return run as SavedRun;
+    return runs;
   } catch {
-    // Private windows and disabled storage both throw; a missing save is not
-    // an error worth telling anyone about.
-    return null;
+    // A save written by an older build, or hand-edited. Ignoring it loses a
+    // checkpoint; trusting it would seed the search with nonsense.
+    return EMPTY_SAVED_RUNS;
   }
 }
 
@@ -86,7 +99,13 @@ const SAVED_RUN_EVENT = "cmaes:g1-residual-run";
 
 function writeSavedRun(run: SavedRun): void {
   try {
-    window.localStorage.setItem(SAVED_RUN_KEY, JSON.stringify(run));
+    const existing = parseSavedRuns(
+      window.localStorage.getItem(SAVED_RUN_KEY),
+    );
+    window.localStorage.setItem(
+      SAVED_RUN_KEY,
+      JSON.stringify({ ...existing, [run.challenge]: run }),
+    );
     window.dispatchEvent(new Event(SAVED_RUN_EVENT));
   } catch {
     // Quota or a private window. Losing the save is survivable; breaking the
@@ -97,9 +116,9 @@ function writeSavedRun(run: SavedRun): void {
 // The snapshot must be referentially stable or React re-renders forever, so
 // the parsed value is cached against the raw string it came from.
 let cachedRaw: string | null = null;
-let cachedRun: SavedRun | null = null;
+let cachedRuns: SavedRuns = EMPTY_SAVED_RUNS;
 
-function savedRunSnapshot(): SavedRun | null {
+function savedRunsSnapshot(): SavedRuns {
   let raw: string | null = null;
   try {
     raw = window.localStorage.getItem(SAVED_RUN_KEY);
@@ -108,9 +127,9 @@ function savedRunSnapshot(): SavedRun | null {
   }
   if (raw !== cachedRaw) {
     cachedRaw = raw;
-    cachedRun = readSavedRun();
+    cachedRuns = parseSavedRuns(raw);
   }
-  return cachedRun;
+  return cachedRuns;
 }
 
 function subscribeSavedRun(onChange: () => void): () => void {
@@ -312,11 +331,12 @@ export function G1ResidualTrainer() {
    * an external store rather than an effect: localStorage does not exist while
    * server-rendering, and it keeps updating as checkpoints are written.
    */
-  const savedHead = useSyncExternalStore(
+  const savedRuns = useSyncExternalStore(
     subscribeSavedRun,
-    savedRunSnapshot,
-    () => null,
+    savedRunsSnapshot,
+    () => EMPTY_SAVED_RUNS,
   );
+  const savedHead = savedRuns[challenge] ?? null;
 
   const handleMessage = useCallback((message: TrainingWorkerResponse) => {
     if (message.type === "error") {
@@ -461,10 +481,10 @@ export function G1ResidualTrainer() {
       startedChallengeRef.current = challenge;
     }
     setRunning(true);
-    // Resume only a checkpoint from the same condition: a head trained on flat
-    // ground is not a head for terrain, and the owner would refuse it anyway.
-    const resumable =
-      savedHead && savedHead.challenge === challenge ? savedHead : null;
+    // savedHead is already the checkpoint for the selected condition; a head
+    // trained on flat ground is not a head for terrain, and the owner would
+    // refuse it anyway.
+    const resumable = savedHead;
     setResumeNotice(null);
     post({
       type: "start",
@@ -559,16 +579,7 @@ export function G1ResidualTrainer() {
             ).toFixed(1)}
             %
           </strong>{" "}
-          better than the tuned controller on{" "}
-          {savedHead.challenge === "flat"
-            ? "flat ground"
-            : savedHead.challenge === "terrain"
-              ? "terrain with pushes"
-              : "both conditions"}
-          .{" "}
-          {savedHead.challenge === challenge
-            ? "Starting will continue from it."
-            : "Select that condition to continue from it."}
+          better than the tuned controller. Starting will continue from it.
         </p>
       ) : null}
 
