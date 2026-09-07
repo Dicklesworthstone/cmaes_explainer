@@ -33,7 +33,8 @@ simulator_json="$(xcrun simctl list devices available --json)"
 iphone_id="${FROBOTS_IPHONE_SIMULATOR_ID:-$(
   jq -r '
     [.devices[][] | select(.name | contains("iPhone"))] as $devices
-    | (($devices | map(select(.name | test("^FrankenRobots iPhone"; "i"))))
+    | (($devices | map(select(.name | test("^FrankenRobots DSR iPhone"; "i"))))
+        + ($devices | map(select(.name | test("^FrankenRobots iPhone"; "i"))))
         + ($devices | map(select((.name | test("FrankenRobots"; "i")) and .state == "Booted")))
         + ($devices | map(select(.name | test("FrankenRobots"; "i"))))
         + ($devices | map(select(.state == "Booted")))
@@ -44,7 +45,8 @@ iphone_id="${FROBOTS_IPHONE_SIMULATOR_ID:-$(
 ipad_id="${FROBOTS_IPAD_SIMULATOR_ID:-$(
   jq -r '
     [.devices[][] | select(.name | contains("iPad"))] as $devices
-    | (($devices | map(select(.name | test("^FrankenRobots iPad"; "i"))))
+    | (($devices | map(select(.name | test("^FrankenRobots DSR iPad"; "i"))))
+        + ($devices | map(select(.name | test("^FrankenRobots iPad"; "i"))))
         + ($devices | map(select((.name | test("FrankenRobots"; "i")) and .state == "Booted")))
         + ($devices | map(select(.name | test("FrankenRobots"; "i"))))
         + ($devices | map(select(.state == "Booted")))
@@ -56,6 +58,12 @@ if [[ -z "$iphone_id" || -z "$ipad_id" ]]; then
   echo "FrankenRobots DSR requires one available iPhone and one available iPad Simulator" >&2
   exit 1
 fi
+
+# Xcode can finish a build before a shutdown Simulator is ready, then wait for
+# an XCTest runner that never materializes. Boot the dedicated destination and
+# wait for SpringBoard/data migration before asking Xcode to build or launch.
+/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+xcrun simctl bootstatus "$iphone_id" -b
 
 /Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
@@ -94,6 +102,9 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testArmModeSwitchExposesWorkingKMRRoute \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ReceiptLensesReweightAnalysisWithoutChangingOwnerKernel \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ManualPushIsDisclosedAsPreviewWithoutChangingOwnerReceipt
+
+/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+xcrun simctl bootstatus "$ipad_id" -b
 
 /Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
