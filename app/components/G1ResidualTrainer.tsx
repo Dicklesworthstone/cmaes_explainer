@@ -762,6 +762,43 @@ export function G1ResidualTrainer() {
    * makes it checkable — the owner re-runs it on this machine — and gives
    * anyone starting out a far better place to search from than zero.
    */
+  /**
+   * Replace the live run with a policy that arrived asynchronously.
+   *
+   * The shipped-policy fetch and the file picker both land here. They were
+   * written separately and immediately drifted — only one of them checked
+   * whether the reader had moved on while the bytes were loading — so the
+   * decision about what a late arrival may do lives in exactly one place.
+   */
+  const adoptLoadedPolicy = (
+    revision: number,
+    buffer: ArrayBuffer,
+    condition: G1TransformerChallenge,
+    // Passed, not inferred from the condition: the shipped policy's condition
+    // is also a perfectly ordinary choice for a file, and a file announced as
+    // "the shipped policy" would be a plain lie about where it came from.
+    source: "shipped" | "file",
+    describe: (parameters: number) => string,
+  ) => {
+    const head = residualHeadFromArtifact(buffer);
+    // Dropped rather than applied: the reader has since started something
+    // else, and hijacking it with a stale load would be worse than nothing.
+    if (revision !== selectionRevisionRef.current) return;
+    if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
+      throw new Error(describe(head.length));
+    }
+    setShippedPending(false);
+    // An explicit replacement must not be absorbed by a resume of the
+    // same-settings run, which would ignore the head just loaded.
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    startedChallengeRef.current = null;
+    setGaitPending(false);
+    setChallenge(condition);
+    setSharedRun(null);
+    beginRun(condition, { head, source });
+  };
+
   const startFromShipped = () => {
     const revision = ++selectionRevisionRef.current;
     setError(null);
@@ -769,25 +806,18 @@ export function G1ResidualTrainer() {
     fetch(SHIPPED_POLICY_URL)
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`Could not load the shipped policy (${response.status}).`);
-        }
-        const head = residualHeadFromArtifact(await response.arrayBuffer());
-        if (revision !== selectionRevisionRef.current) return;
-        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
           throw new Error(
-            `The shipped policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+            `Could not load the shipped policy (${response.status}).`,
           );
         }
-        setShippedPending(false);
-        // An explicit replacement must not be absorbed by a resume of the
-        // same-settings run, which would ignore the head just fetched.
-        workerRef.current?.terminate();
-        workerRef.current = null;
-        startedChallengeRef.current = null;
-        setGaitPending(false);
-        setChallenge(SHIPPED_POLICY_CONDITION);
-        setSharedRun(null);
-        beginRun(SHIPPED_POLICY_CONDITION, { head, source: "shipped" });
+        adoptLoadedPolicy(
+          revision,
+          await response.arrayBuffer(),
+          SHIPPED_POLICY_CONDITION,
+          "shipped",
+          (parameters) =>
+            `The shipped policy has ${parameters} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+        );
       })
       .catch((cause: unknown) => {
         if (revision !== selectionRevisionRef.current) return;
@@ -812,19 +842,22 @@ export function G1ResidualTrainer() {
    * not beat the controller, which is exactly what such a head would do.
    */
   const loadPolicyFile = (file: File) => {
+    const revision = ++selectionRevisionRef.current;
     setError(null);
     file
       .arrayBuffer()
       .then((buffer) => {
-        const head = residualHeadFromArtifact(buffer);
-        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
-          throw new Error(
-            `That policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
-          );
-        }
-        beginRun(challenge, { head, source: "file" });
+        adoptLoadedPolicy(
+          revision,
+          buffer,
+          challenge,
+          "file",
+          (parameters) =>
+            `That policy has ${parameters} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+        );
       })
       .catch((cause: unknown) => {
+        if (revision !== selectionRevisionRef.current) return;
         setError({
           message:
             cause instanceof Error
