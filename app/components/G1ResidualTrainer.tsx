@@ -128,11 +128,20 @@ function parseSavedRuns(raw: string | null): SavedRuns {
 /** Fired after a checkpoint so a subscriber in this tab re-reads it. */
 const SAVED_RUN_EVENT = "cmaes:g1-residual-run";
 
-function writeSavedRun(run: SavedRun): void {
+function writeSavedRun(run: SavedRun, reassessedHead: number[] | null): void {
   try {
-    const existing = parseSavedRuns(
-      window.localStorage.getItem(SAVED_RUN_KEY),
-    );
+    const existing = parseSavedRuns(window.localStorage.getItem(SAVED_RUN_KEY));
+    const previous = existing[run.challenge];
+    // Seeding re-scores a policy on THIS machine, and the new score can be
+    // worse than the one stored beside it. Refresh that particular
+    // checkpoint's stale claim, but never let it overwrite a different,
+    // genuinely better checkpoint that is already here.
+    const reassessedPrevious =
+      reassessedHead !== null &&
+      previous?.head.every((value, index) => value === reassessedHead[index]);
+    if (previous && !reassessedPrevious && previous.objective <= run.objective) {
+      return;
+    }
     window.localStorage.setItem(
       SAVED_RUN_KEY,
       JSON.stringify({ ...existing, [run.challenge]: run }),
@@ -444,11 +453,27 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "stopped") {
+      if (message.progress && message.bestHead) {
+        writeSavedRun(
+          {
+            challenge: runChallengeRef.current,
+            head: Array.from(message.bestHead),
+            objective: message.progress.bestObjective,
+            baselineObjective: message.progress.baselineObjective,
+            evaluations: message.progress.evaluations,
+            savedAt: Date.now(),
+          },
+          reassessedHeadRef.current,
+        );
+      }
       setRunning(false);
       if (message.progress) setProgress(message.progress);
       return;
     }
     if (message.type === "resumed") {
+      // The owner has now re-scored the seed, so the checkpoint it came from
+      // may legitimately be rewritten with the score measured here.
+      reassessedHeadRef.current = seededHeadRef.current;
       const source =
         seedSourceRef.current === "link"
           ? "the shared policy"
@@ -475,6 +500,8 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "head") {
+      const revision = message.requestId;
+      if (revision !== shareRevisionRef.current) return;
       setError(null);
       void encodeResidualFragment({
         head: message.head,
@@ -484,6 +511,7 @@ export function G1ResidualTrainer() {
         baselineObjective: message.progress.baselineObjective,
       })
         .then(async (fragment) => {
+          if (revision !== shareRevisionRef.current) return;
           const url = residualShareUrl(
             window.location.origin,
             window.location.pathname,
@@ -491,14 +519,17 @@ export function G1ResidualTrainer() {
           );
           try {
             await navigator.clipboard.writeText(url);
+            if (revision !== shareRevisionRef.current) return;
             setShareState({ url, copied: true });
           } catch {
+            if (revision !== shareRevisionRef.current) return;
             // Clipboard access is denied in plenty of ordinary situations;
             // showing the link is a working fallback, not a failure.
             setShareState({ url, copied: false });
           }
         })
         .catch((cause: unknown) => {
+          if (revision !== shareRevisionRef.current) return;
           setError({
             message:
               cause instanceof Error ? cause.message : "Could not build a link.",
@@ -537,14 +568,17 @@ export function G1ResidualTrainer() {
     }
     setProgress(message.progress);
     if (message.bestHead && message.bestHead.length > 0) {
-      writeSavedRun({
-        challenge: runChallengeRef.current,
-        head: Array.from(message.bestHead),
-        objective: message.progress.bestObjective,
-        baselineObjective: message.progress.baselineObjective,
-        evaluations: message.progress.evaluations,
-        savedAt: Date.now(),
-      });
+      writeSavedRun(
+        {
+          challenge: runChallengeRef.current,
+          head: Array.from(message.bestHead),
+          objective: message.progress.bestObjective,
+          baselineObjective: message.progress.baselineObjective,
+          evaluations: message.progress.evaluations,
+          savedAt: Date.now(),
+        },
+        reassessedHeadRef.current,
+      );
     }
     if (message.progress.status === "generation") {
       setCurve((previous) => {
@@ -567,6 +601,9 @@ export function G1ResidualTrainer() {
 
   useEffect(() => {
     return () => {
+      // Anything still in flight belongs to a component that is going away.
+      shareRevisionRef.current += 1;
+      selectionRevisionRef.current += 1;
       workerRef.current?.terminate();
       workerRef.current = null;
     };
@@ -577,6 +614,7 @@ export function G1ResidualTrainer() {
   useEffect(() => {
     const fragment = residualFragmentFromHash(window.location.hash);
     if (!fragment) return;
+    const selectionRevision = selectionRevisionRef.current;
     let live = true;
     void decodeResidualFragment(fragment)
       .then((shared) => {
@@ -590,8 +628,11 @@ export function G1ResidualTrainer() {
         }
         setSharedRun(shared);
         // Select the condition it was trained for, or the offer would sit
-        // behind a dropdown the visitor has no reason to touch.
-        setChallenge(shared.condition);
+        // behind a dropdown the visitor has no reason to touch — unless the
+        // reader has already chosen one themselves.
+        if (selectionRevision === selectionRevisionRef.current) {
+          setChallenge(shared.condition);
+        }
       })
       .catch((cause: unknown) => {
         if (!live) return;
@@ -662,6 +703,10 @@ export function G1ResidualTrainer() {
       source: "save" | "link" | "shipped" | "file";
     } | null,
   ) => {
+    // A run supersedes any share or policy fetch still resolving.
+    shareRevisionRef.current += 1;
+    selectionRevisionRef.current += 1;
+    setShippedPending(false);
     setError(null);
     setRunChallenge(condition);
     runChallengeRef.current = condition;
@@ -678,6 +723,8 @@ export function G1ResidualTrainer() {
     }
     setRunning(true);
     seedSourceRef.current = seed?.source ?? "save";
+    seededHeadRef.current = seed ? Array.from(seed.head) : null;
+    reassessedHeadRef.current = null;
     setResumeNotice(null);
     setShareState(null);
     post({
@@ -715,26 +762,65 @@ export function G1ResidualTrainer() {
    * makes it checkable — the owner re-runs it on this machine — and gives
    * anyone starting out a far better place to search from than zero.
    */
+  /**
+   * Replace the live run with a policy that arrived asynchronously.
+   *
+   * The shipped-policy fetch and the file picker both land here. They were
+   * written separately and immediately drifted — only one of them checked
+   * whether the reader had moved on while the bytes were loading — so the
+   * decision about what a late arrival may do lives in exactly one place.
+   */
+  const adoptLoadedPolicy = (
+    revision: number,
+    buffer: ArrayBuffer,
+    condition: G1TransformerChallenge,
+    // Passed, not inferred from the condition: the shipped policy's condition
+    // is also a perfectly ordinary choice for a file, and a file announced as
+    // "the shipped policy" would be a plain lie about where it came from.
+    source: "shipped" | "file",
+    describe: (parameters: number) => string,
+  ) => {
+    const head = residualHeadFromArtifact(buffer);
+    // Dropped rather than applied: the reader has since started something
+    // else, and hijacking it with a stale load would be worse than nothing.
+    if (revision !== selectionRevisionRef.current) return;
+    if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
+      throw new Error(describe(head.length));
+    }
+    setShippedPending(false);
+    // An explicit replacement must not be absorbed by a resume of the
+    // same-settings run, which would ignore the head just loaded.
+    workerRef.current?.terminate();
+    workerRef.current = null;
+    startedChallengeRef.current = null;
+    setGaitPending(false);
+    setChallenge(condition);
+    setSharedRun(null);
+    beginRun(condition, { head, source });
+  };
+
   const startFromShipped = () => {
+    const revision = ++selectionRevisionRef.current;
     setError(null);
     setShippedPending(true);
     fetch(SHIPPED_POLICY_URL)
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`Could not load the shipped policy (${response.status}).`);
-        }
-        const head = residualHeadFromArtifact(await response.arrayBuffer());
-        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
           throw new Error(
-            `The shipped policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+            `Could not load the shipped policy (${response.status}).`,
           );
         }
-        setShippedPending(false);
-        setChallenge(SHIPPED_POLICY_CONDITION);
-        setSharedRun(null);
-        beginRun(SHIPPED_POLICY_CONDITION, { head, source: "shipped" });
+        adoptLoadedPolicy(
+          revision,
+          await response.arrayBuffer(),
+          SHIPPED_POLICY_CONDITION,
+          "shipped",
+          (parameters) =>
+            `The shipped policy has ${parameters} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+        );
       })
       .catch((cause: unknown) => {
+        if (revision !== selectionRevisionRef.current) return;
         setShippedPending(false);
         setError({
           message:
@@ -756,19 +842,22 @@ export function G1ResidualTrainer() {
    * not beat the controller, which is exactly what such a head would do.
    */
   const loadPolicyFile = (file: File) => {
+    const revision = ++selectionRevisionRef.current;
     setError(null);
     file
       .arrayBuffer()
       .then((buffer) => {
-        const head = residualHeadFromArtifact(buffer);
-        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
-          throw new Error(
-            `That policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
-          );
-        }
-        beginRun(challenge, { head, source: "file" });
+        adoptLoadedPolicy(
+          revision,
+          buffer,
+          challenge,
+          "file",
+          (parameters) =>
+            `That policy has ${parameters} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+        );
       })
       .catch((cause: unknown) => {
+        if (revision !== selectionRevisionRef.current) return;
         setError({
           message:
             cause instanceof Error
@@ -780,8 +869,9 @@ export function G1ResidualTrainer() {
   };
 
   const share = () => {
+    const requestId = ++shareRevisionRef.current;
     setShareState(null);
-    post({ type: "head" });
+    post({ type: "head", requestId });
   };
   const showGait = () => {
     setGaitPending(true);
@@ -810,9 +900,13 @@ export function G1ResidualTrainer() {
           <select
             value={challenge}
             disabled={running}
-            onChange={(event) =>
-              setChallenge(event.target.value as G1TransformerChallenge)
-            }
+            onChange={(event) => {
+              // Choosing a condition abandons a shipped-policy fetch aimed at
+              // the previous one.
+              selectionRevisionRef.current += 1;
+              setShippedPending(false);
+              setChallenge(event.target.value as G1TransformerChallenge);
+            }}
             className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200 disabled:opacity-50"
           >
             <option value="flat">Flat only (fastest)</option>
