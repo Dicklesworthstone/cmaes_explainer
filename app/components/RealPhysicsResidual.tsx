@@ -126,14 +126,24 @@ export function RealPhysicsResidual() {
         condition, so the cross-challenge figure is the one quoted above.
       </p>
       <p className="mt-3 text-sm leading-6 text-slate-400">
-        Only the {receipt.searchedParams}-parameter output layer moves. Letting
-        the search touch more of the network makes it <em>worse</em>, and not
-        for want of trying: on the same two challenges the head scored 46.3%
-        from 9,600 evaluations, while 38,016 parameters scored 33.3% from
-        14,000 and all 77,696 scored 21.1% from 14,800. The larger scopes were
-        given more search, not less, and still lost. More capacity is not more
-        capability when every evaluation costs a physics rollout. Weights and
-        receipts ship under{" "}
+        Only the {receipt.searchedParams}-parameter output layer moves in the
+        policy above, but that is not because a wider search does worse. On the
+        same two challenges at a matched budget of roughly 13,800 evaluations,
+        the output layer reached 54.7%, the final transformer block — 38,016
+        parameters — reached <strong>71.8%</strong>, and turning all 77,696
+        loose reached 43.2%. The middle scope wins: enough capacity to change
+        how the features are computed, few enough parameters that a
+        rollout-priced search can still cover them. The output layer is what
+        ships because it is what the in-browser trainer below can resume from —
+        a wider policy carries a different trunk, so its head alone means
+        nothing.
+      </p>
+      <p className="mt-3 text-sm leading-6 text-slate-400">
+        An earlier version of this card reported the opposite, from a sweep run
+        before the transformer&apos;s arithmetic was made portable across
+        targets. Those numbers were measured against host maths that the
+        browser did not share, and they did not survive re-measurement. Weights
+        and receipts ship under{" "}
         <code className="break-all">public/robots/g1/transformer/</code>.
       </p>
     </div>

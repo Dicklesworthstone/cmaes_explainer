@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "184b384eac0d33a6a396518c03fc37436da6dc2d",
+  "sourceRevision": "5d216c034d282a5898babab1519ced83bcb7272a",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -23,7 +23,7 @@
   },
   "assets": {
     "javascriptSha256": "0a40a5bb1e50b695e2cd3bb16aed6529272717038df189ca4a3a66ffdcde1ae2",
-    "wasmSha256": "8b317a4a4d2cd32d1749e9f7562ab42bf9440aaf85331d0885a662e018f23ac3"
+    "wasmSha256": "2ff89400c6048ece46d2bf59c21d06aeb0c2f44594fca9b58459367488b12d96"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",
@@ -191,7 +191,8 @@
       "objective": "the walking owner's own multi-factor objective, the same scalar CMA-ES minimises",
       "baseline": "zero policy head, which on a residual policy is exactly the tuned controller",
       "playback": "trace_packet(use_best) returns the standard packed G1 trace for the best policy or the tuned controller",
-      "resume": "seed_head(head) re-scores a saved head and adopts it only if it beats the tuned controller"
+      "resume": "seed_head(head) re-scores a saved head and adopts it only if it beats the tuned controller",
+      "portableArithmetic": "The transformer routes exp/tanh/sin/cos/powf through the libm crate rather than the host, so a policy trained natively scores the same here: baseline and distance agree to every digit and the objective to the 14th."
     }
   }
 }

@@ -3,14 +3,14 @@
   "scope": "Head",
   "searchedParams": 960,
   "population": 24,
-  "restarts": 6,
-  "evaluations": 39504,
+  "restarts": 7,
+  "evaluations": 44952,
   "challenges": 2,
   "durationSeconds": 1.5,
   "tunedControllerObjective": -63.463932777690914,
   "tunedControllerDistanceMeters": 0.31877021050423326,
-  "residualObjective": -114.81508274027702,
-  "residualDistanceMeters": 0.49954188590874715,
+  "residualObjective": -98.18346120120565,
+  "residualDistanceMeters": 0.5036484200720385,
   "residualCompletedSteps": 720,
-  "wallclockSeconds": 753.9
+  "wallclockSeconds": 759.3
 }

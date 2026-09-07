@@ -106,6 +106,27 @@ function fail(error: unknown): void {
   scope.postMessage({ type: "error", error: describe(error), fatal: true });
 }
 
+/**
+ * Apply a head found elsewhere and report what this machine scored it.
+ *
+ * Shared by the fresh-trainer and resume paths: seeding is not something one
+ * of them may quietly skip.
+ */
+function reportSeeded(
+  target: FrankenSimG1TransformerTrainer,
+  head: Float64Array,
+): void {
+  const objective = target.seedHead(head);
+  const progress = target.progress();
+  latest = progress;
+  scope.postMessage({
+    type: "resumed",
+    adopted: objective < progress.baselineObjective,
+    objective,
+    baselineObjective: progress.baselineObjective,
+  });
+}
+
 /** One request failed; whatever the loop is doing carries on. */
 function reportError(error: unknown): void {
   scope.postMessage({ type: "error", error: describe(error), fatal: false });
@@ -218,6 +239,18 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
   // left going for an hour must not be thrown away because someone pressed
   // stop and start again.
   if (trainer && activeKey === key) {
+    // A seed still has to be applied here. Resuming without it meant that
+    // loading a shipped or shared policy after any run on the same settings
+    // silently did nothing at all: no seeding, and no notice saying so.
+    if (request.initialHead && request.initialHead.length > 0) {
+      try {
+        reportSeeded(trainer, request.initialHead);
+      } catch (error) {
+        running = false;
+        fail(error);
+        return;
+      }
+    }
     void loop(trainer, revision).catch((error: unknown) => {
       if (revision === runRevision) fail(error);
     });
@@ -244,14 +277,7 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
         // Report whether the save was actually adopted. Silently continuing
         // from the tuned controller while the reader believes their hour of
         // training was restored is the worst available outcome.
-        const objective = created.seedHead(request.initialHead);
-        const progress = created.progress();
-        scope.postMessage({
-          type: "resumed",
-          adopted: objective < progress.baselineObjective,
-          objective,
-          baselineObjective: progress.baselineObjective,
-        });
+        reportSeeded(created, request.initialHead);
       }
       return loop(created, revision);
     })

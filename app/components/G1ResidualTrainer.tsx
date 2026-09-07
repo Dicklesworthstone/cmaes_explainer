@@ -60,17 +60,16 @@ const MAX_CURVE_POINTS = 240;
 const SAVED_RUN_KEY = "cmaes.g1-residual-run.v1";
 
 /**
- * The residual this site offers as a starting point, trained natively against
- * the real owner on flat ground.
+ * The residual this site offers as a starting point: trained on flat ground
+ * against the real owner, and reproducing here to the digit.
  *
- * Deliberately the FLAT policy and not the stronger cross-challenge one the
- * card above reports. That policy scores -114.82 natively and 199,068 here —
- * it falls. Same weights, same source, a different compilation target: the
- * arithmetic differs in the last bits, and terrain-with-push is contact-rich
- * enough to turn that into a different trajectory. The flat policy is far from
- * the edge of stability and reproduces, which is why it is the one offered.
- * The owner re-runs whichever it is given and refuses anything that does not
- * hold up here, so this cannot silently ship a policy that does not work.
+ * Flat rather than the cross-challenge policy because this is a starting
+ * point, and the fastest condition is the one worth handing someone. Both now
+ * transfer exactly — the transformer's transcendentals go through the same
+ * implementation on every target — where previously a natively trained policy
+ * could fall over in a browser. The owner re-runs whatever it is given and
+ * refuses anything that does not hold up here, so this cannot silently ship a
+ * policy that does not work.
  */
 const SHIPPED_POLICY_URL =
   "/robots/g1/transformer/g1-real-physics-residual-flat.bin";
