@@ -57,7 +57,13 @@ export type TrainingWorkerResponse =
    * A failed export must not stop training, and must not make the page think
    * training stopped while the worker is still pumping.
    */
-  | { type: "resumed"; adopted: boolean }
+  | {
+      type: "resumed";
+      adopted: boolean;
+      /** What the seeded head actually scored on this machine. */
+      objective: number;
+      baselineObjective: number;
+    }
   | { type: "head"; head: Float64Array; progress: G1TransformerProgress }
   | { type: "error"; error: string; fatal: boolean };
 
@@ -238,8 +244,14 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
         // Report whether the save was actually adopted. Silently continuing
         // from the tuned controller while the reader believes their hour of
         // training was restored is the worst available outcome.
-        const adopted = created.seedHead(request.initialHead);
-        scope.postMessage({ type: "resumed", adopted });
+        const objective = created.seedHead(request.initialHead);
+        const progress = created.progress();
+        scope.postMessage({
+          type: "resumed",
+          adopted: objective < progress.baselineObjective,
+          objective,
+          baselineObjective: progress.baselineObjective,
+        });
       }
       return loop(created, revision);
     })

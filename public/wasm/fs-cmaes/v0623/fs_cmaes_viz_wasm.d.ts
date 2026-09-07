@@ -60,10 +60,11 @@ export class G1TransformerTrainerSession {
      */
     pump(): Float64Array;
     /**
-     * Resume from a head saved earlier. Returns false if the width is
-     * wrong or the head does not beat the tuned controller.
+     * Resume from a head saved earlier. Returns the objective it scored
+     * here; `f64::MAX` means the width was wrong or it did not complete.
+     * It is adopted only if it beats this machine's tuned controller.
      */
-    seed_head(head: Float64Array): boolean;
+    seed_head(head: Float64Array): number;
     /**
      * A packed G1 trace of the best policy (`use_best`) or of the tuned
      * controller it started from, for playback on the existing stage.

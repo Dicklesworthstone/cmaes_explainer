@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "kernelVersion": "fs-cmaes-viz-wasm 0.6.23",
-  "sourceRevision": "2ffe96ca50f3b3c8ccd9a7549f12a3acfaf1ad28",
+  "sourceRevision": "184b384eac0d33a6a396518c03fc37436da6dc2d",
   "schemas": {
     "cma": 2,
     "g1": 9,
@@ -22,8 +22,8 @@
     "diagnostics": "This build differs from v0622's in ways that are recorded here rather than glossed. (1) It was produced locally on macOS via wasm-pack, not by the Linux worker recipe, so no rawWasmSha256 pre-bindgen receipt is claimed and the byte-for-byte reproduction path of earlier versions does not apply. (2) It was built from a git worktree pinned to asupersync 05eb37c3 because that dependency's HEAD does not compile: supervision.rs calls ChildRegion::close_with_outcome and ::cancel_with_budget, which do not exist. (3) It is the first kernel built with the g1-learned feature and with simd128 enabled; that feature adds G1TransformerTrainerSession and is why the wasm exports changed. Despite the added trainer the artifact is 422 KB against 0.6.22's 441 KB. Dead-code diagnostics remain warnings, as before."
   },
   "assets": {
-    "javascriptSha256": "6cf83ea5167ba1ba448e16a943a14ee8060ae610f8709628fea374f934837456",
-    "wasmSha256": "1c6929260ea1cdd537d86402ca19b4d3dad5d45782d256466f106a1e78f9b923"
+    "javascriptSha256": "0a40a5bb1e50b695e2cd3bb16aed6529272717038df189ca4a3a66ffdcde1ae2",
+    "wasmSha256": "8b317a4a4d2cd32d1749e9f7562ab42bf9440aaf85331d0885a662e018f23ac3"
   },
   "g1": {
     "sourceUrdfRevision": "7d6075f7f58588b189b940130e3edab3c839b2df",

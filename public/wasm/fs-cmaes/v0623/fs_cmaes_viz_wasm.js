@@ -138,16 +138,17 @@ export class G1TransformerTrainerSession {
         return v1;
     }
     /**
-     * Resume from a head saved earlier. Returns false if the width is
-     * wrong or the head does not beat the tuned controller.
+     * Resume from a head saved earlier. Returns the objective it scored
+     * here; `f64::MAX` means the width was wrong or it did not complete.
+     * It is adopted only if it beats this machine's tuned controller.
      * @param {Float64Array} head
-     * @returns {boolean}
+     * @returns {number}
      */
     seed_head(head) {
         const ptr0 = passArrayF64ToWasm0(head, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.g1transformertrainersession_seed_head(this.__wbg_ptr, ptr0, len0);
-        return ret !== 0;
+        return ret;
     }
     /**
      * A packed G1 trace of the best policy (`use_best`) or of the tuned

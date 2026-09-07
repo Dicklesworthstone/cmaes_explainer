@@ -1380,7 +1380,7 @@ type RawG1TransformerTrainer = {
   best_head: () => Float64Array;
   export_weights: () => Uint8Array;
   trace_packet: (useBest: boolean) => Float64Array;
-  seed_head: (head: Float64Array) => boolean;
+  seed_head: (head: Float64Array) => number;
   free?: () => void;
 };
 
@@ -2642,10 +2642,11 @@ export class FrankenSimG1TransformerTrainer {
    *
    * The owner re-scores it rather than trusting the objective that came with
    * it, and refuses anything that does not actually beat the tuned
-   * controller, so a stale save cannot install itself as the incumbent.
-   * Returns whether it was adopted.
+   * controller HERE, so a stale save — or a policy trained on another
+   * machine — cannot install itself as the incumbent. Returns the objective
+   * it actually scored; Number.MAX_VALUE means it could not be run at all.
    */
-  seedHead(head: Float64Array): boolean {
+  seedHead(head: Float64Array): number {
     return this.handle().seed_head(head);
   }
 
@@ -2665,6 +2666,82 @@ export class FrankenSimG1TransformerTrainer {
     this.raw?.free?.();
     this.raw = null;
   }
+}
+
+/** Parameters in the residual output layer the browser trainer searches. */
+export const G1_RESIDUAL_HEAD_LENGTH = 960;
+
+/**
+ * Pull the residual output layer out of an FSGT artifact.
+ *
+ * The site ships a policy trained natively against the real owner, and until
+ * now nothing in the browser could do anything with it. The head is the whole
+ * learned part — the trunk is fixed by the kernel's seed — so extracting it is
+ * enough to hand that policy to the trainer as a starting point.
+ *
+ * Deliberately not `loadGaitTransformerWeights`: that loader audits the
+ * 256-wide ablation architecture and refuses anything else, which is correct
+ * for the artifact it guards and wrong for this one.
+ */
+export function residualHeadFromArtifact(buffer: ArrayBuffer): Float64Array {
+  const view = new DataView(buffer);
+  if (buffer.byteLength < 48) {
+    throw new Error("residual artifact is too short to carry a header");
+  }
+  const magic = String.fromCharCode(
+    view.getUint8(0),
+    view.getUint8(1),
+    view.getUint8(2),
+    view.getUint8(3),
+  );
+  if (magic !== "FSGT") {
+    throw new Error(`residual artifact has magic ${magic}, expected FSGT`);
+  }
+  const layoutVersion = view.getUint32(4, true);
+  if (layoutVersion !== 1) {
+    throw new Error(`residual artifact layout ${layoutVersion} is not supported`);
+  }
+  let offset = 8;
+  const dims: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    dims.push(view.getUint32(offset, true));
+    offset += 4;
+  }
+  const [dModel, , , , , nLayers, , , , nOutputs] = dims;
+  const arrayCount = view.getUint32(offset, true);
+  offset += 4;
+  // embed, then nine arrays per layer, then the final norm, then the head.
+  const headIndex = 1 + nLayers * 9 + 1;
+  if (arrayCount <= headIndex) {
+    throw new Error("residual artifact carries no policy head");
+  }
+  for (let index = 0; index < arrayCount; index++) {
+    if (offset + 4 > buffer.byteLength) {
+      throw new Error("residual artifact ended inside its array table");
+    }
+    const length = view.getUint32(offset, true);
+    offset += 4;
+    if (offset + length * 4 > buffer.byteLength) {
+      throw new Error("residual artifact declares an array past its end");
+    }
+    if (index === headIndex) {
+      if (length !== nOutputs * dModel) {
+        throw new Error(
+          `policy head is ${length} values, expected ${nOutputs * dModel}`,
+        );
+      }
+      const head = new Float64Array(length);
+      for (let i = 0; i < length; i++) {
+        head[i] = view.getFloat32(offset + i * 4, true);
+      }
+      if (!head.every((value) => Number.isFinite(value))) {
+        throw new Error("policy head contains values that are not numbers");
+      }
+      return head;
+    }
+    offset += length * 4;
+  }
+  throw new Error("residual artifact carries no policy head");
 }
 
 export async function createFrankenSimG1TransformerTrainer(options: {

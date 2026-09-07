@@ -7,6 +7,10 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
+import {
+  G1_RESIDUAL_HEAD_LENGTH,
+  residualHeadFromArtifact,
+} from "../lib/frankensimCmaes";
 import type {
   G1TraceReceipt,
   G1TransformerChallenge,
@@ -55,6 +59,23 @@ const MAX_CURVE_POINTS = 240;
  */
 const SAVED_RUN_KEY = "cmaes.g1-residual-run.v1";
 
+/**
+ * The residual this site offers as a starting point, trained natively against
+ * the real owner on flat ground.
+ *
+ * Deliberately the FLAT policy and not the stronger cross-challenge one the
+ * card above reports. That policy scores -114.82 natively and 199,068 here —
+ * it falls. Same weights, same source, a different compilation target: the
+ * arithmetic differs in the last bits, and terrain-with-push is contact-rich
+ * enough to turn that into a different trajectory. The flat policy is far from
+ * the edge of stability and reproduces, which is why it is the one offered.
+ * The owner re-runs whichever it is given and refuses anything that does not
+ * hold up here, so this cannot silently ship a policy that does not work.
+ */
+const SHIPPED_POLICY_URL =
+  "/robots/g1/transformer/g1-real-physics-residual-flat.bin";
+const SHIPPED_POLICY_CONDITION: G1TransformerChallenge = "flat";
+
 interface SavedRun {
   challenge: G1TransformerChallenge;
   head: number[];
@@ -79,7 +100,11 @@ function isSavedRun(value: unknown): value is SavedRun {
     typeof run.objective === "number" &&
     typeof run.baselineObjective === "number" &&
     typeof run.evaluations === "number" &&
-    typeof run.savedAt === "number"
+    typeof run.savedAt === "number" &&
+    // A head from a different model width cannot be seeded at all. Dropping it
+    // here keeps the owner from refusing it later, where the only message
+    // available would wrongly say it failed to beat the controller.
+    run.head.length === G1_RESIDUAL_HEAD_LENGTH
   );
 }
 
@@ -341,8 +366,8 @@ export function G1ResidualTrainer() {
    * the dependency array is written.
    */
   const runChallengeRef = useRef<G1TransformerChallenge>("flat");
-  /** Whether the live run was seeded from a link rather than a local save. */
-  const seededFromLinkRef = useRef(false);
+  /** Where the live run's seed came from, so a notice can name it correctly. */
+  const seedSourceRef = useRef<"save" | "link" | "shipped">("save");
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -360,6 +385,7 @@ export function G1ResidualTrainer() {
     capturedObjective: number;
   } | null>(null);
   const [gaitPending, setGaitPending] = useState(false);
+  const [shippedPending, setShippedPending] = useState(false);
   const [resumeNotice, setResumeNotice] = useState<string | null>(null);
   const [shareState, setShareState] = useState<{
     url: string;
@@ -420,13 +446,24 @@ export function G1ResidualTrainer() {
       return;
     }
     if (message.type === "resumed") {
-      const source = seededFromLinkRef.current
-        ? "the shared policy"
-        : "your saved policy";
+      const source =
+        seedSourceRef.current === "link"
+          ? "the shared policy"
+          : seedSourceRef.current === "shipped"
+            ? "the shipped policy"
+            : "your saved policy";
+      const subject =
+        seedSourceRef.current === "link"
+          ? "The shared"
+          : seedSourceRef.current === "shipped"
+            ? "The shipped"
+            : "The saved";
       setResumeNotice(
         message.adopted
-          ? `Loaded ${source} and continuing from it.`
-          : `${seededFromLinkRef.current ? "The shared" : "The saved"} policy did not beat the tuned controller here, so this run starts fresh.`,
+          ? `Loaded ${source}; this machine scores it ${message.objective.toFixed(2)} against the controller's ${message.baselineObjective.toFixed(2)}, and the search continues from there.`
+          : message.objective >= Number.MAX_VALUE
+            ? `${subject} policy could not be run here at all, so this run starts fresh.`
+            : `${subject} policy scores ${message.objective.toFixed(2)} on this machine against the controller's ${message.baselineObjective.toFixed(2)}, so it was not adopted and this run starts fresh.`,
       );
       return;
     }
@@ -537,6 +574,13 @@ export function G1ResidualTrainer() {
     void decodeResidualFragment(fragment)
       .then((shared) => {
         if (!live) return;
+        if (shared.head.length !== G1_RESIDUAL_HEAD_LENGTH) {
+          // Refusing it later would report "did not beat the controller",
+          // which would be the wrong reason.
+          throw new Error(
+            `This shared policy has ${shared.head.length} parameters; this version searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+          );
+        }
         setSharedRun(shared);
         // Select the condition it was trained for, or the offer would sit
         // behind a dropdown the visitor has no reason to touch.
@@ -597,43 +641,101 @@ export function G1ResidualTrainer() {
     }
   };
 
-  const start = () => {
+  /**
+   * Begin a run on `condition`, optionally seeded from a head found earlier.
+   *
+   * Takes both explicitly rather than reading state: the shipped-policy button
+   * changes condition and starts in the same tick, and `challenge` would still
+   * hold the previous value when the request was posted.
+   */
+  const beginRun = (
+    condition: G1TransformerChallenge,
+    seed: { head: Float64Array; source: "save" | "link" | "shipped" } | null,
+  ) => {
     setError(null);
-    setRunChallenge(challenge);
-    runChallengeRef.current = challenge;
+    setRunChallenge(condition);
+    runChallengeRef.current = condition;
     // The worker resumes an unchanged configuration rather than rebuilding,
     // so the curve must survive a stop/start too. Only a different condition
     // starts a genuinely new search, and only then is the old curve stale.
-    if (startedChallengeRef.current !== challenge) {
+    if (startedChallengeRef.current !== condition) {
       setCurve([]);
       setProgress(null);
       // A gait drawn from the previous condition describes a different
       // experiment; keeping it on screen beside new numbers would be a lie.
       setGait(null);
-      startedChallengeRef.current = challenge;
+      startedChallengeRef.current = condition;
     }
     setRunning(true);
-    // savedHead is already the checkpoint for the selected condition; a head
-    // trained on flat ground is not a head for terrain, and the owner would
-    // refuse it anyway.
-    const resumable = savedHead;
-    seededFromLinkRef.current = shared;
+    seedSourceRef.current = seed?.source ?? "save";
     setResumeNotice(null);
     setShareState(null);
     post({
       type: "start",
-      challenge,
+      challenge: condition,
       durationSeconds: 1.5,
       sigma: 0.002,
       seed: 20260906,
-      ...(resumable
-        ? { initialHead: Float64Array.from(resumable.head) }
-        : {}),
+      ...(seed ? { initialHead: seed.head } : {}),
     });
+  };
+
+  const start = () => {
+    // savedHead is already the offer for the selected condition; a head
+    // trained on flat ground is not a head for terrain, and the owner would
+    // refuse it anyway.
+    beginRun(
+      challenge,
+      savedHead
+        ? {
+            head: Float64Array.from(savedHead.head),
+            source: shared ? "link" : "save",
+          }
+        : null,
+    );
   };
 
   const stop = () => post({ type: "stop" });
   const download = () => post({ type: "export" });
+  /**
+   * Continue from the policy this site ships.
+   *
+   * The card above reports a residual trained natively against the real owner,
+   * and the browser had no way to do anything with that claim. Loading it here
+   * makes it checkable — the owner re-runs it on this machine — and gives
+   * anyone starting out a far better place to search from than zero.
+   */
+  const startFromShipped = () => {
+    setError(null);
+    setShippedPending(true);
+    fetch(SHIPPED_POLICY_URL)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Could not load the shipped policy (${response.status}).`);
+        }
+        const head = residualHeadFromArtifact(await response.arrayBuffer());
+        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
+          throw new Error(
+            `The shipped policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+          );
+        }
+        setShippedPending(false);
+        setChallenge(SHIPPED_POLICY_CONDITION);
+        setSharedRun(null);
+        beginRun(SHIPPED_POLICY_CONDITION, { head, source: "shipped" });
+      })
+      .catch((cause: unknown) => {
+        setShippedPending(false);
+        setError({
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "Could not load the shipped policy.",
+          fatal: false,
+        });
+      });
+  };
+
   const share = () => {
     setShareState(null);
     post({ type: "head" });
@@ -682,6 +784,15 @@ export function G1ResidualTrainer() {
           className="rounded-md border border-emerald-500/50 px-3 py-2 text-sm text-emerald-200 hover:border-emerald-400 disabled:opacity-40"
         >
           {gaitPending ? "Rolling out…" : "Show the gait"}
+        </button>
+        <button
+          type="button"
+          onClick={startFromShipped}
+          disabled={running || shippedPending}
+          className="rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400 disabled:opacity-40"
+          title="Load the residual this site ships and keep searching from it"
+        >
+          {shippedPending ? "Loading…" : "Start from the shipped policy"}
         </button>
         <button
           type="button"
