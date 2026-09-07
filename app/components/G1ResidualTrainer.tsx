@@ -366,7 +366,11 @@ export function G1ResidualTrainer() {
    */
   const runChallengeRef = useRef<G1TransformerChallenge>("flat");
   /** Where the live run's seed came from, so a notice can name it correctly. */
-  const seedSourceRef = useRef<"save" | "link" | "shipped">("save");
+  const seedSourceRef = useRef<"save" | "link" | "shipped" | "file">("save");
+  const seededHeadRef = useRef<number[] | null>(null);
+  const reassessedHeadRef = useRef<number[] | null>(null);
+  const shareRevisionRef = useRef(0);
+  const selectionRevisionRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<G1TransformerProgress | null>(null);
   const [curve, setCurve] = useState<CurvePoint[]>([]);
@@ -450,13 +454,17 @@ export function G1ResidualTrainer() {
           ? "the shared policy"
           : seedSourceRef.current === "shipped"
             ? "the shipped policy"
-            : "your saved policy";
+            : seedSourceRef.current === "file"
+              ? "the policy file"
+              : "your saved policy";
       const subject =
         seedSourceRef.current === "link"
           ? "The shared"
           : seedSourceRef.current === "shipped"
             ? "The shipped"
-            : "The saved";
+            : seedSourceRef.current === "file"
+              ? "That policy file"
+              : "The saved";
       setResumeNotice(
         message.adopted
           ? `Loaded ${source}; this machine scores it ${message.objective.toFixed(2)} against the controller's ${message.baselineObjective.toFixed(2)}, and the search continues from there.`
@@ -649,7 +657,10 @@ export function G1ResidualTrainer() {
    */
   const beginRun = (
     condition: G1TransformerChallenge,
-    seed: { head: Float64Array; source: "save" | "link" | "shipped" } | null,
+    seed: {
+      head: Float64Array;
+      source: "save" | "link" | "shipped" | "file";
+    } | null,
   ) => {
     setError(null);
     setRunChallenge(condition);
@@ -735,6 +746,39 @@ export function G1ResidualTrainer() {
       });
   };
 
+  /**
+   * Load a policy file the reader downloaded — from here, or from someone else.
+   *
+   * Download without a way back in is a dead end: the artifact is the same FSGT
+   * layout this panel exports, so it should be openable. A file carrying a
+   * different trunk would have a head that means nothing here, and it does not
+   * need a special check — the owner re-runs it and refuses anything that does
+   * not beat the controller, which is exactly what such a head would do.
+   */
+  const loadPolicyFile = (file: File) => {
+    setError(null);
+    file
+      .arrayBuffer()
+      .then((buffer) => {
+        const head = residualHeadFromArtifact(buffer);
+        if (head.length !== G1_RESIDUAL_HEAD_LENGTH) {
+          throw new Error(
+            `That policy has ${head.length} parameters; this kernel searches ${G1_RESIDUAL_HEAD_LENGTH}.`,
+          );
+        }
+        beginRun(challenge, { head, source: "file" });
+      })
+      .catch((cause: unknown) => {
+        setError({
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "That file could not be read as a policy.",
+          fatal: false,
+        });
+      });
+  };
+
   const share = () => {
     setShareState(null);
     post({ type: "head" });
@@ -793,6 +837,21 @@ export function G1ResidualTrainer() {
         >
           {shippedPending ? "Loading…" : "Start from the shipped policy"}
         </button>
+        <label className="cursor-pointer rounded-md border border-slate-600 px-3 py-2 text-sm text-slate-200 hover:border-slate-400">
+          Load a policy file
+          <input
+            type="file"
+            accept=".bin,application/octet-stream"
+            className="sr-only"
+            disabled={running}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // Clear the input so picking the same file twice still fires.
+              event.target.value = "";
+              if (file) loadPolicyFile(file);
+            }}
+          />
+        </label>
         <button
           type="button"
           onClick={share}
