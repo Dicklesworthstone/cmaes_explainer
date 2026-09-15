@@ -313,15 +313,24 @@ final class FrankenRobotsUITests: XCTestCase {
         let workspace = app.webViews.firstMatch
         XCTAssertTrue(workspace.waitForExistence(timeout: 12), app.debugDescription)
 
-        let trainerPanel = app.buttons["Train a residual"]
+        let trainerPanel = app.switches.matching(
+            NSPredicate(format: "label BEGINSWITH[c] 'Train a residual'")
+        ).firstMatch
         XCTAssertTrue(trainerPanel.waitForExistence(timeout: 55), app.debugDescription)
         revealInWebWorkspace(trainerPanel, workspace: workspace)
         XCTAssertTrue(trainerPanel.isHittable, app.debugDescription)
 
-        XCTAssertTrue(app.buttons["Policy showdown"].exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["Real-physics residual"].exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["Training the trainer"].exists, app.debugDescription)
-        XCTAssertTrue(app.buttons["FrankenSim frontier"].exists, app.debugDescription)
+        for label in [
+            "Policy showdown",
+            "Real-physics residual",
+            "Training the trainer",
+            "FrankenSim frontier",
+        ] {
+            let panel = app.switches.matching(
+                NSPredicate(format: "label BEGINSWITH[c] %@", label)
+            ).firstMatch
+            XCTAssertTrue(panel.exists, app.debugDescription)
+        }
 
         trainerPanel.tap()
 
