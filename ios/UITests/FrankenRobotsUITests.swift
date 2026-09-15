@@ -648,11 +648,14 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [slowed], timeout: 8), .completed)
 
+        let humanoidCameraSelection = (camera.value as? String) == "Map"
+            ? (identifier: "robot-camera-follow", value: "Follow")
+            : (identifier: "robot-camera-blueprint", value: "Map")
         camera.tap()
-        let blueprint = app.buttons["robot-camera-blueprint"].firstMatch
-        tapVisibleMenuItem(blueprint, in: app)
+        let humanoidCamera = app.buttons[humanoidCameraSelection.identifier].firstMatch
+        tapVisibleMenuItem(humanoidCamera, in: app)
         let mapped = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == 'Map'"),
+            predicate: NSPredicate(format: "value == %@", humanoidCameraSelection.value),
             object: camera
         )
         XCTAssertEqual(XCTWaiter.wait(for: [mapped], timeout: 8), .completed)
@@ -676,11 +679,14 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
         XCTAssertTrue(camera.waitForExistence(timeout: 5), app.debugDescription)
+        let armCameraSelection = (camera.value as? String) == "Grasp Focus"
+            ? (identifier: "robot-camera-overhead", value: "Top")
+            : (identifier: "robot-camera-microscope", value: "Grasp Focus")
         camera.tap()
-        let microscope = app.buttons["robot-camera-microscope"].firstMatch
-        tapVisibleMenuItem(microscope, in: app)
+        let armCamera = app.buttons[armCameraSelection.identifier].firstMatch
+        tapVisibleMenuItem(armCamera, in: app)
         let focused = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == 'Grasp Focus'"),
+            predicate: NSPredicate(format: "value == %@", armCameraSelection.value),
             object: camera
         )
         XCTAssertEqual(XCTWaiter.wait(for: [focused], timeout: 8), .completed)
