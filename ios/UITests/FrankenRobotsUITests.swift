@@ -796,6 +796,16 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(arm.waitForExistence(timeout: 5))
         arm.tap()
 
+        let armSelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in arm.isSelected },
+            object: arm
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [armSelected], timeout: 5),
+            .completed,
+            app.debugDescription
+        )
+
         let engineStatus = app.descendants(matching: .any)["robot-engine-status"]
         XCTAssertTrue(engineStatus.waitForExistence(timeout: 5))
         let settled = XCTNSPredicateExpectation(
@@ -805,6 +815,14 @@ final class FrankenRobotsUITests: XCTestCase {
             object: engineStatus
         )
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
+
+        // A previously ready G1 owner can satisfy the generic status predicate
+        // before SwiftUI has finished replacing its route. Require a control
+        // that exists only in the arm owner before opening the complete lab.
+        XCTAssertTrue(
+            app.buttons["KMR Mobile Base"].waitForExistence(timeout: 55),
+            app.debugDescription
+        )
 
         let openFullLab = app.buttons["robot-open-full-lab"]
         XCTAssertTrue(openFullLab.waitForExistence(timeout: 5), app.debugDescription)
