@@ -4,6 +4,8 @@ import {
   installFrankenRobotsNativeCommandHandler,
   reportFrankenRobotsEngineState,
   reportFrankenRobotsTraceState,
+  type FrankenRobotsLab,
+  type FrankenRobotsNativeCommand,
 } from "./frankenrobotsBridge";
 
 describe("FrankenRobots native command contract", () => {
@@ -347,6 +349,88 @@ describe("FrankenRobots native command contract", () => {
       expect(receive(commands[0])).toBe(true);
       expect(invocations).toBe(commands.length);
       cleanup();
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("binds retries and collisions for every native mutation kind", () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const messages: Record<string, unknown>[] = [];
+    const fakeWindow = {
+      webkit: {
+        messageHandlers: {
+          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+        },
+      },
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    const cases: ReadonlyArray<{
+      lab: FrankenRobotsLab;
+      command: Omit<FrankenRobotsNativeCommand, "commandId">;
+    }> = [
+      { lab: "humanoid", command: { ...valid, command: "optimize" } },
+      { lab: "humanoid", command: { ...valid, command: "stop" } },
+      { lab: "humanoid", command: { ...valid, command: "select-task", task: "stepping" } },
+      {
+        lab: "humanoid",
+        command: { ...valid, command: "select-challenge", challenge: "terrain-and-push" },
+      },
+      { lab: "arm", command: { ...valid, lab: "arm", command: "select-family", family: "full" } },
+      { lab: "humanoid", command: { ...valid, command: "replay" } },
+      { lab: "humanoid", command: { ...valid, command: "play" } },
+      { lab: "humanoid", command: { ...valid, command: "pause" } },
+      { lab: "humanoid", command: { ...valid, command: "seek", sampleIndex: 17 } },
+      { lab: "humanoid", command: { ...valid, command: "set-speed", speed: 2 } },
+      { lab: "arm", command: { ...valid, lab: "arm", command: "set-camera", camera: "overhead" } },
+      {
+        lab: "humanoid",
+        command: { ...valid, command: "select-receipt-lens", receiptLens: "cautious-monk" },
+      },
+      {
+        lab: "arm",
+        command: {
+          ...valid,
+          lab: "arm",
+          command: "set-overlay",
+          overlay: "friction-cones",
+          enabled: true,
+        },
+      },
+      { lab: "arm", command: { ...valid, lab: "arm", command: "set-seed", seedIndex: 2 } },
+      { lab: "humanoid", command: { ...valid, command: "set-sigma", sigma: 0.004 } },
+    ];
+
+    try {
+      for (const [index, item] of cases.entries()) {
+        let invocations = 0;
+        const cleanup = installFrankenRobotsNativeCommandHandler(item.lab, () => {
+          invocations += 1;
+          return { accepted: true, detail: `Accepted ${item.command.command}.` };
+        });
+        const receive = (fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }).__frankenrobotsReceiveNativeCommand;
+        const command = { ...item.command, commandId: `mutation-${index}` };
+        const collision = {
+          ...valid,
+          lab: item.lab,
+          commandId: `mutation-${index}`,
+          command: item.command.command === "stop" ? "optimize" : "stop",
+        } as const;
+
+        expect(receive(command)).toBe(true);
+        expect(receive(command)).toBe(true);
+        expect(receive(collision)).toBe(true);
+        expect(invocations).toBe(1);
+        expect(messages.at(-1)).toMatchObject({
+          commandId: `mutation-${index}`,
+          accepted: false,
+          detail: "The command ID is already bound to a different typed mutation.",
+        });
+        cleanup();
+      }
     } finally {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");
