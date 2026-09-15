@@ -9,6 +9,21 @@ mkdir -p "$build_root"
 sbh check --need 20G "$build_root"
 command -v xcodegen >/dev/null
 command -v jq >/dev/null
+
+audio_safety=/Users/jemanuel/.local/bin/ensure-simulator-audio-safe
+prepare_simulator_audio() {
+  local attempt
+  for attempt in 1 2 3; do
+    if "$audio_safety" prepare; then
+      return 0
+    fi
+    if [[ "$attempt" -lt 3 ]]; then
+      sleep 1
+    fi
+  done
+  return 1
+}
+
 xcodegen generate --spec project.yml
 git diff --exit-code -- FrankenRobots.xcodeproj Sources/Info.plist
 git ls-files -z -- '*.swift' | xargs -0 xcrun swiftc -parse
@@ -16,7 +31,7 @@ plutil -lint Sources/Info.plist
 plutil -lint Sources/PrivacyInfo.xcprivacy
 plutil -lint FrankenRobots.entitlements
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$build_root/derived-data" \
@@ -28,7 +43,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
 
 # Discover concrete devices only after proving the Simulator audio fence. Give
 # dedicated FrankenRobots devices priority while retaining a portable fallback.
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 simulator_json="$(xcrun simctl list devices available --json)"
 iphone_id="${FROBOTS_IPHONE_SIMULATOR_ID:-$(
   jq -r '
@@ -62,17 +77,17 @@ fi
 # Xcode can finish a build before a shutdown Simulator is ready, then wait for
 # an XCTest runner that never materializes. Boot the dedicated destination and
 # wait for SpringBoard/data migration before asking Xcode to build or launch.
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcrun simctl bootstatus "$iphone_id" -b
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
@@ -84,7 +99,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
 # A WebContent lifecycle failure is destructive by definition. Run the rest of
 # the long-lived UI journeys in a fresh test invocation so accumulated WebKit
 # pressure cannot consume the shipping readiness deadline before fault injection.
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
@@ -104,17 +119,17 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ReceiptLensesReweightAnalysisWithoutChangingOwnerKernel \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ManualPushIsDisclosedAsPreviewWithoutChangingOwnerReceipt
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcrun simctl bootstatus "$ipad_id" -b
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
-/Users/jemanuel/.local/bin/ensure-simulator-audio-safe prepare
+prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
