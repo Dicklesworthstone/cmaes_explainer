@@ -47,6 +47,16 @@ final class FrankenRobotsUITests: XCTestCase {
         renderedCenter.tap()
     }
 
+    private func revealInWebWorkspace(
+        _ element: XCUIElement,
+        workspace: XCUIElement,
+        swipes: Int = 24
+    ) {
+        for _ in 0..<swipes where !element.isHittable {
+            workspace.swipeUp()
+        }
+    }
+
     func testReadinessWatchdogFailsClosedThenRetryRecovers() throws {
         let app = XCUIApplication()
         app.launchEnvironment["FROBOTS_FORCE_READINESS_TIMEOUT_ONCE"] = "1"
@@ -290,6 +300,44 @@ final class FrankenRobotsUITests: XCTestCase {
             app.descendants(matching: .any)["robot-stage"].waitForExistence(timeout: 5),
             app.debugDescription
         )
+    }
+
+    func testFullLabRestoresOriginalResidualReceiptAndTrainer() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let openFullLab = app.buttons["robot-open-full-lab"]
+        XCTAssertTrue(openFullLab.waitForExistence(timeout: 12), app.debugDescription)
+        openFullLab.tap()
+
+        let workspace = app.webViews.firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 12), app.debugDescription)
+
+        let trainerPanel = app.buttons["Train a residual"]
+        XCTAssertTrue(trainerPanel.waitForExistence(timeout: 55), app.debugDescription)
+        revealInWebWorkspace(trainerPanel, workspace: workspace)
+        XCTAssertTrue(trainerPanel.isHittable, app.debugDescription)
+
+        XCTAssertTrue(app.buttons["Policy showdown"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["Real-physics residual"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["Training the trainer"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["FrankenSim frontier"].exists, app.debugDescription)
+
+        trainerPanel.tap()
+
+        let train = app.buttons["Train in this browser"]
+        XCTAssertTrue(train.waitForExistence(timeout: 12), app.debugDescription)
+        revealInWebWorkspace(train, workspace: workspace, swipes: 8)
+        XCTAssertTrue(train.isHittable, app.debugDescription)
+        XCTAssertTrue(app.buttons["Start from the shipped policy"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["Copy share link"].exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["Download policy"].exists, app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Load a policy file"].exists, app.debugDescription)
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Original residual trainer restored in complete native lab"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     func testSwitchesBetweenFocusedLabs() throws {

@@ -94,6 +94,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testReadinessWatchdogFailsClosedThenRetryRecovers \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testAppearanceTogglePersistsLightModeAcrossLaunches \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testFullLabWorkspaceExposesCompleteHumanoidAndArmControls \
+  -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testFullLabRestoresOriginalResidualReceiptAndTrainer \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testSwitchesBetweenFocusedLabs \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testNativeContinuousLearningStartsAndStopsThroughEmbeddedOwner \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testNativeExperimentSelectorsMutateBothEmbeddedOwners \

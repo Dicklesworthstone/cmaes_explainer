@@ -1,11 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { BrainCircuit, ChartNoAxesCombined, FlaskConical, Network } from "lucide-react";
+import {
+  BrainCircuit,
+  ChartNoAxesCombined,
+  Dumbbell,
+  FlaskConical,
+  Network,
+  Play,
+} from "lucide-react";
+import { G1ResidualTrainer } from "./G1ResidualTrainer";
 import { HpoTrainer } from "./HpoTrainer";
 import { PolicyAblationComparison } from "./PolicyAblationComparison";
+import { RealPhysicsResidual } from "./RealPhysicsResidual";
 
-type ResearchPanel = "policies" | "trainer" | "frontier";
+type ResearchPanel =
+  | "policies"
+  | "residual-receipt"
+  | "residual-trainer"
+  | "trainer"
+  | "frontier";
 
 const PANELS: Array<{
   id: ResearchPanel;
@@ -18,6 +32,18 @@ const PANELS: Array<{
     label: "Policy showdown",
     detail: "Measured phase-prior vs trained transformer receipts",
     icon: ChartNoAxesCombined,
+  },
+  {
+    id: "residual-receipt",
+    label: "Real-physics residual",
+    detail: "Transformer improvements measured by the same G1 owner",
+    icon: Dumbbell,
+  },
+  {
+    id: "residual-trainer",
+    label: "Train a residual",
+    detail: "Run LM-CMA, resume, import, download, and share a policy",
+    icon: Play,
   },
   {
     id: "trainer",
@@ -58,7 +84,7 @@ export function FrankenRobotsResearchAnnex() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {PANELS.map((panel) => {
           const Icon = panel.icon;
           const selected = active === panel.id;
@@ -87,6 +113,29 @@ export function FrankenRobotsResearchAnnex() {
       {active === "policies" ? (
         <div className="mt-6">
           <PolicyAblationComparison />
+        </div>
+      ) : null}
+      {active === "residual-receipt" ? (
+        <div className="mt-6">
+          <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-300">
+            This is the original humanoid page&apos;s source-bound comparison:
+            the transformer residual and tuned controller are both re-scored by
+            the same articulated G1 physics owner, with the committed receipt
+            kept beside the weights.
+          </p>
+          <RealPhysicsResidual />
+        </div>
+      ) : null}
+      {active === "residual-trainer" ? (
+        <div className="mt-6">
+          <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-300">
+            Run the original page&apos;s live 960-parameter residual search on
+            this device. Runs persist separately by condition; you can resume a
+            checkpoint, start from the shipped policy, import or download
+            weights, and share a policy in a URL fragment that never reaches a
+            server.
+          </p>
+          <G1ResidualTrainer />
         </div>
       ) : null}
       {active === "trainer" ? (
