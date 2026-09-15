@@ -13,12 +13,15 @@ command -v jq >/dev/null
 audio_safety=/Users/jemanuel/.local/bin/ensure-simulator-audio-safe
 prepare_simulator_audio() {
   local attempt
-  for attempt in 1 2 3; do
+  # bootstatus can return before SpringBoard's late audio processes have joined
+  # the aggregate tap. Keep the fence strict, but allow that bounded startup
+  # convergence instead of turning a correct cold boot into a false failure.
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
     if "$audio_safety" prepare; then
       return 0
     fi
-    if [[ "$attempt" -lt 3 ]]; then
-      sleep 1
+    if [[ "$attempt" -lt 10 ]]; then
+      sleep 2
     fi
   done
   return 1
