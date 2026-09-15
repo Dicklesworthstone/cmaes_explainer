@@ -93,11 +93,30 @@ const nextSequenceByLab: Record<FrankenRobotsLab, number> = {
 // of an already-accepted command cannot start a second optimization run.
 const commandOutcomesByLab: Record<
   FrankenRobotsLab,
-  Map<string, FrankenRobotsCommandResult>
+  Map<string, { signature: string; result: FrankenRobotsCommandResult }>
 > = {
   humanoid: new Map(),
   arm: new Map(),
 };
+
+function commandSignature(command: FrankenRobotsNativeCommand): string {
+  return JSON.stringify([
+    command.schemaVersion,
+    command.lab,
+    command.command,
+    command.task ?? null,
+    command.challenge ?? null,
+    command.family ?? null,
+    command.sampleIndex ?? null,
+    command.speed ?? null,
+    command.camera ?? null,
+    command.receiptLens ?? null,
+    command.overlay ?? null,
+    command.enabled ?? null,
+    command.seedIndex ?? null,
+    command.sigma ?? null,
+  ]);
+}
 
 const COMMAND_ENVELOPE_KEYS = new Set([
   "type",
@@ -382,8 +401,17 @@ export function installFrankenRobotsNativeCommandHandler(
     const command = decodeFrankenRobotsNativeCommand(payload, lab);
     if (!command) return false;
 
-    let result = outcomes.get(command.commandId);
-    if (!result) {
+    const signature = commandSignature(command);
+    const stored = outcomes.get(command.commandId);
+    let result: FrankenRobotsCommandResult;
+    if (stored && stored.signature !== signature) {
+      result = {
+        accepted: false,
+        detail: "The command ID is already bound to a different typed mutation.",
+      };
+    } else if (stored) {
+      result = stored.result;
+    } else {
       try {
         result = handler(command);
       } catch (error) {
@@ -395,8 +423,7 @@ export function installFrankenRobotsNativeCommandHandler(
       if (!result.detail.trim()) {
         result = { accepted: false, detail: "The command handler returned no receipt detail." };
       }
-      outcomes.set(command.commandId, result);
-      if (outcomes.size > 32) outcomes.delete(outcomes.keys().next().value as string);
+      outcomes.set(command.commandId, { signature, result });
     }
 
     postNativeMessage(lab, {

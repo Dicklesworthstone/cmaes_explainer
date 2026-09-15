@@ -265,6 +265,94 @@ describe("FrankenRobots native command contract", () => {
     }
   });
 
+  test("refuses a command ID collision without executing the different mutation", () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const messages: Record<string, unknown>[] = [];
+    const fakeWindow = {
+      webkit: {
+        messageHandlers: {
+          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+        },
+      },
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    let invocations = 0;
+    try {
+      const cleanup = installFrankenRobotsNativeCommandHandler("humanoid", () => {
+        invocations += 1;
+        return { accepted: true, detail: "Owner mutation accepted." };
+      });
+      const receive = (fakeWindow as typeof fakeWindow & {
+        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+      }).__frankenrobotsReceiveNativeCommand;
+      const first = { ...valid, commandId: "collision-one" } as const;
+      const conflicting = {
+        ...valid,
+        commandId: "collision-one",
+        command: "select-task",
+        task: "walking",
+      } as const;
+
+      expect(receive(first)).toBe(true);
+      expect(receive(conflicting)).toBe(true);
+      expect(receive(first)).toBe(true);
+      expect(invocations).toBe(1);
+      expect(messages[1]).toMatchObject({
+        type: "engine.command.ack",
+        commandId: "collision-one",
+        command: "select-task",
+        accepted: false,
+        detail: "The command ID is already bound to a different typed mutation.",
+      });
+      expect(messages[2]).toMatchObject({
+        type: "engine.command.ack",
+        commandId: "collision-one",
+        command: "optimize",
+        accepted: true,
+        detail: "Owner mutation accepted.",
+      });
+      cleanup();
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  test("keeps the first receipt idempotent beyond the former 32-command window", () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const fakeWindow = {
+      webkit: {
+        messageHandlers: {
+          frankenrobots: { postMessage: (_message: Record<string, unknown>) => {} },
+        },
+      },
+    };
+    Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+    let invocations = 0;
+    try {
+      const cleanup = installFrankenRobotsNativeCommandHandler("arm", () => {
+        invocations += 1;
+        return { accepted: true, detail: "Owner mutation accepted." };
+      });
+      const receive = (fakeWindow as typeof fakeWindow & {
+        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+      }).__frankenrobotsReceiveNativeCommand;
+      const commands = Array.from({ length: 40 }, (_, index) => ({
+        ...valid,
+        commandId: `long-route-${index}`,
+        lab: "arm",
+      }));
+
+      for (const command of commands) expect(receive(command)).toBe(true);
+      expect(receive(commands[0])).toBe(true);
+      expect(invocations).toBe(commands.length);
+      cleanup();
+    } finally {
+      if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
   test("reports an owner refusal as delivered and preserves its typed receipt", () => {
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     const messages: Record<string, unknown>[] = [];
