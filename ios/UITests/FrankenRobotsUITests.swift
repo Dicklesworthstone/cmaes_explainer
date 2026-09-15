@@ -620,16 +620,24 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [pauseAccepted], timeout: 8), .completed)
 
-        let currentPosition = String(describing: timeline.value)
-        let targetPosition = currentPosition.localizedCaseInsensitiveContains("frame 1 of")
-            ? 0.75
-            : 0.0
-        timeline.adjust(toNormalizedSliderPosition: targetPosition)
-        let sought = XCTNSPredicateExpectation(
+        // Seek to one endpoint, then the other if the trace was already there.
+        // Parsing XCUIElement.value is not portable: iOS has emitted both a
+        // localized time phrase and a frame phrase for this same slider.
+        timeline.adjust(toNormalizedSliderPosition: 1.0)
+        var sought = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'moved to frame'"),
             object: receipt
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [sought], timeout: 8), .completed)
+        var seekResult = XCTWaiter.wait(for: [sought], timeout: 4)
+        if seekResult != .completed {
+            timeline.adjust(toNormalizedSliderPosition: 0.0)
+            sought = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "label CONTAINS[c] 'moved to frame'"),
+                object: receipt
+            )
+            seekResult = XCTWaiter.wait(for: [sought], timeout: 8)
+        }
+        XCTAssertEqual(seekResult, .completed)
 
         speed.tap()
         let halfSpeed = app.buttons["robot-speed-0.5"].firstMatch
