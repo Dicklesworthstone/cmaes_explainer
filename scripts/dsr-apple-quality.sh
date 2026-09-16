@@ -7,6 +7,8 @@ cd "$repo_root/ios"
 build_root="${FRANKEN_APPLE_BUILD_ROOT:-${DSR_QUALITY_RUN_DIR:-$repo_root/ios/build/dsr-apple-quality}}"
 mkdir -p "$build_root"
 sbh check --need 20G "$build_root"
+result_root="${FRANKEN_APPLE_RESULT_ROOT:-$build_root}"
+mkdir -p "$result_root"
 
 # CoreSimulator cannot install an app bundle directly from every network
 # filesystem accepted for large DerivedData trees. Keep compilation artifacts
@@ -113,7 +115,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
-  -resultBundlePath "$build_root/frankenrobots-iphone-recovery.xcresult" \
+  -resultBundlePath "$result_root/frankenrobots-iphone-recovery.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testWebContentTerminationFailsClosedThenRetryRecovers
@@ -126,7 +128,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
-  -resultBundlePath "$build_root/frankenrobots-iphone-ui.xcresult" \
+  -resultBundlePath "$result_root/frankenrobots-iphone-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testReadinessWatchdogFailsClosedThenRetryRecovers \
@@ -158,7 +160,7 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
-  -resultBundlePath "$build_root/frankenrobots-ipad-ui.xcresult" \
+  -resultBundlePath "$result_root/frankenrobots-ipad-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testIPadArmSafetyReceiptsAndJSONExporterInBothOrientations
