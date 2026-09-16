@@ -7,6 +7,16 @@ cd "$repo_root/ios"
 build_root="${FRANKEN_APPLE_BUILD_ROOT:-${DSR_QUALITY_RUN_DIR:-$repo_root/ios/build/dsr-apple-quality}}"
 mkdir -p "$build_root"
 sbh check --need 20G "$build_root"
+
+# CoreSimulator cannot install an app bundle directly from every network
+# filesystem accepted for large DerivedData trees. Keep compilation artifacts
+# on the spacious build volume while allowing signed/installable products to
+# land on local APFS when the caller provides an explicit product root.
+xcode_product_settings=()
+if [[ -n "${FRANKEN_APPLE_PRODUCT_ROOT:-}" ]]; then
+  mkdir -p "$FRANKEN_APPLE_PRODUCT_ROOT"
+  xcode_product_settings+=("SYMROOT=$FRANKEN_APPLE_PRODUCT_ROOT")
+fi
 command -v xcodegen >/dev/null
 command -v jq >/dev/null
 
@@ -43,10 +53,12 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   CODE_SIGNING_ALLOWED=NO build
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination 'platform=macOS,variant=Mac Catalyst' \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   CODE_SIGNING_ALLOWED=NO test -only-testing:FrankenRobotsTests
 
 # Discover concrete devices only after proving the Simulator audio fence. Give
@@ -92,6 +104,7 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
@@ -99,6 +112,7 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   -resultBundlePath "$build_root/frankenrobots-iphone-recovery.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
@@ -111,6 +125,7 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   -resultBundlePath "$build_root/frankenrobots-iphone-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
@@ -134,6 +149,7 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
@@ -141,6 +157,7 @@ prepare_simulator_audio
 xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
+  "${xcode_product_settings[@]}" \
   -resultBundlePath "$build_root/frankenrobots-ipad-ui.xcresult" \
   -parallel-testing-enabled NO \
   CODE_SIGNING_ALLOWED=NO test-without-building \
