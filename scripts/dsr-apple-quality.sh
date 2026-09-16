@@ -29,6 +29,11 @@ prepare_simulator_audio() {
 
 xcodegen generate --spec project.yml
 git diff --exit-code -- FrankenRobots.xcodeproj Sources/Info.plist
+display_name="$(plutil -extract CFBundleDisplayName raw Sources/Info.plist)"
+if [[ "$display_name" != "Robot Lab" ]]; then
+  echo "Robot Lab identity drift: expected CFBundleDisplayName=Robot Lab, got '$display_name'" >&2
+  exit 1
+fi
 git ls-files -z -- '*.swift' | xargs -0 xcrun swiftc -parse
 plutil -lint Sources/Info.plist
 plutil -lint Sources/PrivacyInfo.xcprivacy
