@@ -5,6 +5,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root/ios"
 
 build_root="${FRANKEN_APPLE_BUILD_ROOT:-${DSR_QUALITY_RUN_DIR:-$repo_root/ios/build/dsr-apple-quality}}"
+test_timeout_seconds="${FRANKEN_APPLE_TEST_TIMEOUT_SECONDS:-1200}"
+timeout_bin="${FRANKEN_APPLE_TIMEOUT_BIN:-/opt/homebrew/bin/timeout}"
 mkdir -p "$build_root"
 sbh check --need 20G "$build_root"
 result_root="${FRANKEN_APPLE_RESULT_ROOT:-$build_root}"
@@ -21,6 +23,10 @@ if [[ -n "${FRANKEN_APPLE_PRODUCT_ROOT:-}" ]]; then
 fi
 command -v xcodegen >/dev/null
 command -v jq >/dev/null
+if [[ ! -x "$timeout_bin" ]]; then
+  echo "FrankenRobots DSR requires GNU timeout at '$timeout_bin'" >&2
+  exit 1
+fi
 
 audio_safety=/Users/jemanuel/.local/bin/ensure-simulator-audio-safe
 prepare_simulator_audio() {
@@ -62,7 +68,8 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
   CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination 'platform=macOS,variant=Mac Catalyst' \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
@@ -105,10 +112,12 @@ fi
 # an XCTest runner that never materializes. Boot the dedicated destination and
 # wait for SpringBoard/data migration before asking Xcode to build or launch.
 prepare_simulator_audio
+xcrun simctl boot "$iphone_id" 2>/dev/null || true
 xcrun simctl bootstatus "$iphone_id" -b
 
 prepare_simulator_audio
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
@@ -116,7 +125,8 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
 prepare_simulator_audio
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
@@ -129,7 +139,8 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
 # the long-lived UI journeys in a fresh test invocation so accumulated WebKit
 # pressure cannot consume the shipping readiness deadline before fault injection.
 prepare_simulator_audio
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$iphone_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
@@ -150,10 +161,12 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -only-testing:FrankenRobotsUITests/FrankenRobotsUITests/testG1ManualPushIsDisclosedAsPreviewWithoutChangingOwnerReceipt
 
 prepare_simulator_audio
+xcrun simctl boot "$ipad_id" 2>/dev/null || true
 xcrun simctl bootstatus "$ipad_id" -b
 
 prepare_simulator_audio
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
@@ -161,7 +174,8 @@ xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   CODE_SIGNING_ALLOWED=NO build-for-testing
 
 prepare_simulator_audio
-xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
+"$timeout_bin" --signal=TERM --kill-after=30s "${test_timeout_seconds}s" \
+  xcodebuild -project FrankenRobots.xcodeproj -scheme FrankenRobots \
   -destination "platform=iOS Simulator,id=$ipad_id" \
   -derivedDataPath "$build_root/derived-data" \
   "${xcode_product_settings[@]}" \
