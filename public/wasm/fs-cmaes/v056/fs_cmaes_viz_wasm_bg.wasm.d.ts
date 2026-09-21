@@ -9,7 +9,11 @@ export const cmaesvizsession_new: (a: number, b: number) => number;
 export const cmaesvizsession_receipt: (a: number) => [number, number];
 export const cmaesvizsession_tell: (a: number, b: number, c: number) => [number, number];
 export const g1walkingvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
-export const g1walkingvizevaluator_evaluate_population: (a: number, b: number, c: number) => [number, number];
+export const g1walkingvizevaluator_evaluate_population: (
+  a: number,
+  b: number,
+  c: number,
+) => [number, number];
 export const g1walkingvizevaluator_new: (a: number, b: number) => number;
 export const g1walkingvizevaluator_receipt: (a: number) => [number, number];
 export const g1walkingvizevaluator_trace: (a: number, b: number, c: number) => [number, number];

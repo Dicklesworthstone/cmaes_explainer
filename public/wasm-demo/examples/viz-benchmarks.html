@@ -286,6 +286,7 @@
   <script type="module">
     const bundle = (localStorage.getItem('cmaes-bundle') === 'pkg-par') ? 'pkg-par' : 'pkg';
     const { default: init, WasmCmaes } = await import(`../${bundle}/cmaes_wasm.js`);
+
     import * as THREE from "three";
     import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
@@ -400,12 +401,12 @@ function f(x) {
         title: "Levy",
         f: (x) => {
           const w = x.map((xi) => 1 + (xi - 1) / 4);
-          const term1 = Math.pow(Math.sin(Math.PI * w[0]), 2);
+          const term1 = Math.sin(Math.PI * w[0]) ** 2;
           let sum = 0;
           for (let i = 0; i < w.length - 1; i++) {
-            sum += Math.pow(w[i] - 1, 2) * (1 + 10 * Math.pow(Math.sin(Math.PI * w[i] + 1), 2));
+            sum += (w[i] - 1) ** 2 * (1 + 10 * Math.sin(Math.PI * w[i] + 1) ** 2);
           }
-          const term3 = Math.pow(w[w.length - 1] - 1, 2) * (1 + Math.pow(Math.sin(2 * Math.PI * w[w.length - 1]), 2));
+          const term3 = (w[w.length - 1] - 1) ** 2 * (1 + Math.sin(2 * Math.PI * w[w.length - 1]) ** 2);
           return term1 + sum + term3;
         },
         x0: [1.5, -1.5],
@@ -415,7 +416,7 @@ function f(x) {
         f: (x) => {
           const sum1 = x.reduce((s, xi) => s + xi * xi, 0);
           const sum2 = x.reduce((s, xi, i) => s + 0.5 * (i + 1) * xi, 0);
-          return sum1 + Math.pow(sum2, 2) + Math.pow(sum2, 4);
+          return sum1 + sum2 ** 2 + sum2 ** 4;
         },
         x0: [2.0, -2.0],
       },

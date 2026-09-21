@@ -39,7 +39,14 @@ export function lenia_rgba_ptr(): number;
 /**
  * Additively seed a hollow gaussian ring at (cx, cy) in grid cells.
  */
-export function lenia_seed_ring(cx: number, cy: number, radius: number, ring_frac: number, width: number, intensity: number): void;
+export function lenia_seed_ring(
+  cx: number,
+  cy: number,
+  radius: number,
+  ring_frac: number,
+  width: number,
+  intensity: number,
+): void;
 
 /**
  * Freeze the current display field (box-averaged to eval resolution) as
@@ -61,20 +68,27 @@ export function lenia_version(): string;
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-    readonly memory: WebAssembly.Memory;
-    readonly lenia_clear: () => void;
-    readonly lenia_eval: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly lenia_init: (a: number, b: number, c: number) => [number, number];
-    readonly lenia_render: () => void;
-    readonly lenia_rgba_len: () => number;
-    readonly lenia_rgba_ptr: () => number;
-    readonly lenia_seed_ring: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
-    readonly lenia_snapshot_eval: () => void;
-    readonly lenia_step: (a: number, b: number, c: number, d: number) => [number, number];
-    readonly lenia_version: () => [number, number];
-    readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-    readonly __wbindgen_start: () => void;
+  readonly memory: WebAssembly.Memory;
+  readonly lenia_clear: () => void;
+  readonly lenia_eval: (a: number, b: number, c: number, d: number) => [number, number];
+  readonly lenia_init: (a: number, b: number, c: number) => [number, number];
+  readonly lenia_render: () => void;
+  readonly lenia_rgba_len: () => number;
+  readonly lenia_rgba_ptr: () => number;
+  readonly lenia_seed_ring: (
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ) => void;
+  readonly lenia_snapshot_eval: () => void;
+  readonly lenia_step: (a: number, b: number, c: number, d: number) => [number, number];
+  readonly lenia_version: () => [number, number];
+  readonly __wbindgen_externrefs: WebAssembly.Table;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+  readonly __wbindgen_start: () => void;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;
@@ -97,4 +111,9 @@ export function initSync(module: { module: SyncInitInput } | SyncInitInput): Ini
  *
  * @returns {Promise<InitOutput>}
  */
-export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;
+export default function __wbg_init(
+  module_or_path?:
+    | { module_or_path: InitInput | Promise<InitInput> }
+    | InitInput
+    | Promise<InitInput>,
+): Promise<InitOutput>;

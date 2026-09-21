@@ -7,10 +7,10 @@
  * @returns {Float64Array}
  */
 export function anytimebo(max_iters, delta, alpha) {
-    const ret = wasm.anytimebo(max_iters, delta, alpha);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.anytimebo(max_iters, delta, alpha);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -20,10 +20,10 @@ export function anytimebo(max_iters, delta, alpha) {
  * @returns {Float64Array}
  */
 export function autodiff_derivatives(xmin, xmax, samples) {
-    const ret = wasm.autodiff_derivatives(xmin, xmax, samples);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.autodiff_derivatives(xmin, xmax, samples);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -31,10 +31,10 @@ export function autodiff_derivatives(xmin, xmax, samples) {
  * @returns {Float64Array}
  */
 export function betti_shapes(shape) {
-    const ret = wasm.betti_shapes(shape);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.betti_shapes(shape);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -43,10 +43,10 @@ export function betti_shapes(shape) {
  * @returns {Float64Array}
  */
 export function chebyshev_fit(kind, samples) {
-    const ret = wasm.chebyshev_fit(kind, samples);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.chebyshev_fit(kind, samples);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -54,10 +54,10 @@ export function chebyshev_fit(kind, samples) {
  * @returns {Float64Array}
  */
 export function chebyshev_spectrum(kind) {
-    const ret = wasm.chebyshev_spectrum(kind);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.chebyshev_spectrum(kind);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -66,10 +66,10 @@ export function chebyshev_spectrum(kind) {
  * @returns {Float64Array}
  */
 export function cmaes_trace(seed, gens) {
-    const ret = wasm.cmaes_trace(seed, gens);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.cmaes_trace(seed, gens);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -78,10 +78,10 @@ export function cmaes_trace(seed, gens) {
  * @returns {Float64Array}
  */
 export function compensated_sum(count, log10_big) {
-    const ret = wasm.compensated_sum(count, log10_big);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.compensated_sum(count, log10_big);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -91,10 +91,10 @@ export function compensated_sum(count, log10_big) {
  * @returns {Float64Array}
  */
 export function cutfem_quadtree(base, target, radius) {
-    const ret = wasm.cutfem_quadtree(base, target, radius);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.cutfem_quadtree(base, target, radius);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -103,10 +103,10 @@ export function cutfem_quadtree(base, target, radius) {
  * @returns {Float64Array}
  */
 export function cyclic_symmetry(n, stiffness) {
-    const ret = wasm.cyclic_symmetry(n, stiffness);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.cyclic_symmetry(n, stiffness);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -114,16 +114,16 @@ export function cyclic_symmetry(n, stiffness) {
  * @returns {string}
  */
 export function engine() {
-    let deferred1_0;
-    let deferred1_1;
-    try {
-        const ret = wasm.engine();
-        deferred1_0 = ret[0];
-        deferred1_1 = ret[1];
-        return getStringFromWasm0(ret[0], ret[1]);
-    } finally {
-        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
-    }
+  let deferred1_0;
+  let deferred1_1;
+  try {
+    const ret = wasm.engine();
+    deferred1_0 = ret[0];
+    deferred1_1 = ret[1];
+    return getStringFromWasm0(ret[0], ret[1]);
+  } finally {
+    wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+  }
 }
 
 /**
@@ -134,10 +134,10 @@ export function engine() {
  * @returns {Float64Array}
  */
 export function ffd_deform(grid, controls, amp, mode) {
-    const ret = wasm.ffd_deform(grid, controls, amp, mode);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.ffd_deform(grid, controls, amp, mode);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -146,10 +146,10 @@ export function ffd_deform(grid, controls, amp, mode) {
  * @returns {Float64Array}
  */
 export function fft_power_spectrum(n, seed) {
-    const ret = wasm.fft_power_spectrum(n, seed);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.fft_power_spectrum(n, seed);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -158,10 +158,10 @@ export function fft_power_spectrum(n, seed) {
  * @returns {Float64Array}
  */
 export function finite_difference_error(x0, steps) {
-    const ret = wasm.finite_difference_error(x0, steps);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.finite_difference_error(x0, steps);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -170,10 +170,10 @@ export function finite_difference_error(x0, steps) {
  * @returns {Float64Array}
  */
 export function flowcert(steps, tol) {
-    const ret = wasm.flowcert(steps, tol);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.flowcert(steps, tol);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -182,10 +182,10 @@ export function flowcert(steps, tol) {
  * @returns {Float64Array}
  */
 export function fluid_frames(n, frames) {
-    const ret = wasm.fluid_frames(n, frames);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.fluid_frames(n, frames);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -195,10 +195,10 @@ export function fluid_frames(n, frames) {
  * @returns {Float64Array}
  */
 export function fluttercert(lo, hi, steps) {
-    const ret = wasm.fluttercert(lo, hi, steps);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.fluttercert(lo, hi, steps);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -207,10 +207,10 @@ export function fluttercert(lo, hi, steps) {
  * @returns {Float64Array}
  */
 export function ga_motor_orbit(n_points, steps) {
-    const ret = wasm.ga_motor_orbit(n_points, steps);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.ga_motor_orbit(n_points, steps);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -219,10 +219,10 @@ export function ga_motor_orbit(n_points, steps) {
  * @returns {Float64Array}
  */
 export function gp_regression(n_train, samples) {
-    const ret = wasm.gp_regression(n_train, samples);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.gp_regression(n_train, samples);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -231,10 +231,10 @@ export function gp_regression(n_train, samples) {
  * @returns {Float64Array}
  */
 export function grammarforge(match_tol, simplify_radius_threshold) {
-    const ret = wasm.grammarforge(match_tol, simplify_radius_threshold);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.grammarforge(match_tol, simplify_radius_threshold);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -245,10 +245,10 @@ export function grammarforge(match_tol, simplify_radius_threshold) {
  * @returns {Float64Array}
  */
 export function gray_scott_frames(n, frames, feed, kill) {
-    const ret = wasm.gray_scott_frames(n, frames, feed, kill);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.gray_scott_frames(n, frames, feed, kill);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -258,10 +258,10 @@ export function gray_scott_frames(n, frames, feed, kill) {
  * @returns {Float64Array}
  */
 export function heat_frames(n, frames, steps_per_frame) {
-    const ret = wasm.heat_frames(n, frames, steps_per_frame);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.heat_frames(n, frames, steps_per_frame);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -269,10 +269,10 @@ export function heat_frames(n, frames, steps_per_frame) {
  * @returns {Float64Array}
  */
 export function hodge_decomposition(shape) {
-    const ret = wasm.hodge_decomposition(shape);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.hodge_decomposition(shape);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -281,10 +281,10 @@ export function hodge_decomposition(shape) {
  * @returns {Float64Array}
  */
 export function krylov_convergence(n, maxit) {
-    const ret = wasm.krylov_convergence(n, maxit);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.krylov_convergence(n, maxit);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -293,10 +293,10 @@ export function krylov_convergence(n, maxit) {
  * @returns {Float64Array}
  */
 export function laplacian_modes(n, k) {
-    const ret = wasm.laplacian_modes(n, k);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.laplacian_modes(n, k);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -306,10 +306,10 @@ export function laplacian_modes(n, k) {
  * @returns {Float64Array}
  */
 export function lorenz_points(steps, dt, rho) {
-    const ret = wasm.lorenz_points(steps, dt, rho);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.lorenz_points(steps, dt, rho);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -322,10 +322,10 @@ export function lorenz_points(steps, dt, rho) {
  * @returns {Float64Array}
  */
 export function mandelbrot_certified(w, h, cx, cy, scale, maxiter) {
-    const ret = wasm.mandelbrot_certified(w, h, cx, cy, scale, maxiter);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.mandelbrot_certified(w, h, cx, cy, scale, maxiter);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -335,10 +335,10 @@ export function mandelbrot_certified(w, h, cx, cy, scale, maxiter) {
  * @returns {Float64Array}
  */
 export function marching_cubes(res, kind, iso) {
-    const ret = wasm.marching_cubes(res, kind, iso);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.marching_cubes(res, kind, iso);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -348,10 +348,10 @@ export function marching_cubes(res, kind, iso) {
  * @returns {Float64Array}
  */
 export function metamatcert(n, points, rmax) {
-    const ret = wasm.metamatcert(n, points, rmax);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.metamatcert(n, points, rmax);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -362,10 +362,10 @@ export function metamatcert(n, points, rmax) {
  * @returns {Float64Array}
  */
 export function navier_stokes_cavity(cells, frames, re, steps_per_frame) {
-    const ret = wasm.navier_stokes_cavity(cells, frames, re, steps_per_frame);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.navier_stokes_cavity(cells, frames, re, steps_per_frame);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -375,10 +375,10 @@ export function navier_stokes_cavity(cells, frames, re, steps_per_frame) {
  * @returns {Float64Array}
  */
 export function neuroshape(lift, ring_r, inner) {
-    const ret = wasm.neuroshape(lift, ring_r, inner);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.neuroshape(lift, ring_r, inner);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -387,10 +387,10 @@ export function neuroshape(lift, ring_r, inner) {
  * @returns {Float64Array}
  */
 export function optimal_transport(n, epsilon) {
-    const ret = wasm.optimal_transport(n, epsilon);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.optimal_transport(n, epsilon);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -402,10 +402,10 @@ export function optimal_transport(n, epsilon) {
  * @returns {Float64Array}
  */
 export function orr_sommerfeld_curve(alpha, n, re_min, re_max, steps) {
-    const ret = wasm.orr_sommerfeld_curve(alpha, n, re_min, re_max, steps);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.orr_sommerfeld_curve(alpha, n, re_min, re_max, steps);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -415,8 +415,8 @@ export function orr_sommerfeld_curve(alpha, n, re_min, re_max, steps) {
  * @returns {number}
  */
 export function orr_sommerfeld_max_growth(re, alpha, n) {
-    const ret = wasm.orr_sommerfeld_max_growth(re, alpha, n);
-    return ret;
+  const ret = wasm.orr_sommerfeld_max_growth(re, alpha, n);
+  return ret;
 }
 
 /**
@@ -424,10 +424,10 @@ export function orr_sommerfeld_max_growth(re, alpha, n) {
  * @returns {Float64Array}
  */
 export function poisson2d(n) {
-    const ret = wasm.poisson2d(n);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.poisson2d(n);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -437,10 +437,10 @@ export function poisson2d(n) {
  * @returns {Float64Array}
  */
 export function proofrobust(alpha, sigma, n) {
-    const ret = wasm.proofrobust(alpha, sigma, n);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.proofrobust(alpha, sigma, n);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -449,10 +449,10 @@ export function proofrobust(alpha, sigma, n) {
  * @returns {Float64Array}
  */
 export function qmc_vs_mc(max_log2, seed) {
-    const ret = wasm.qmc_vs_mc(max_log2, seed);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.qmc_vs_mc(max_log2, seed);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -462,10 +462,10 @@ export function qmc_vs_mc(max_log2, seed) {
  * @returns {Float64Array}
  */
 export function randomized_svd(n, rank, seed) {
-    const ret = wasm.randomized_svd(n, rank, seed);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.randomized_svd(n, rank, seed);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -473,10 +473,10 @@ export function randomized_svd(n, rank, seed) {
  * @returns {Float64Array}
  */
 export function robust_hull(radius) {
-    const ret = wasm.robust_hull(radius);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.robust_hull(radius);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -484,10 +484,10 @@ export function robust_hull(radius) {
  * @returns {Float64Array}
  */
 export function run_frame(seed) {
-    const ret = wasm.run_frame(seed);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.run_frame(seed);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -495,10 +495,10 @@ export function run_frame(seed) {
  * @returns {Float64Array}
  */
 export function run_ornithoid(seed) {
-    const ret = wasm.run_ornithoid(seed);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.run_ornithoid(seed);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -506,10 +506,10 @@ export function run_ornithoid(seed) {
  * @returns {Float64Array}
  */
 export function run_vessel(lip_x1000) {
-    const ret = wasm.run_vessel(lip_x1000);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.run_vessel(lip_x1000);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -519,10 +519,10 @@ export function run_vessel(lip_x1000) {
  * @returns {Float64Array}
  */
 export function schedule_campaign(windtunnel_latency, design_b_mean, stop_threshold) {
-    const ret = wasm.schedule_campaign(windtunnel_latency, design_b_mean, stop_threshold);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.schedule_campaign(windtunnel_latency, design_b_mean, stop_threshold);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -532,10 +532,10 @@ export function schedule_campaign(windtunnel_latency, design_b_mean, stop_thresh
  * @returns {Float64Array}
  */
 export function sdf_volume(res, kind, t) {
-    const ret = wasm.sdf_volume(res, kind, t);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.sdf_volume(res, kind, t);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -545,10 +545,10 @@ export function sdf_volume(res, kind, t) {
  * @returns {Float64Array}
  */
 export function sensorforge(threshold, max_sensors, b_prior_mean) {
-    const ret = wasm.sensorforge(threshold, max_sensors, b_prior_mean);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.sensorforge(threshold, max_sensors, b_prior_mean);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -557,10 +557,10 @@ export function sensorforge(threshold, max_sensors, b_prior_mean) {
  * @returns {Float64Array}
  */
 export function symplectic_vs_euler(steps, dt) {
-    const ret = wasm.symplectic_vs_euler(steps, dt);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.symplectic_vs_euler(steps, dt);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -570,10 +570,10 @@ export function symplectic_vs_euler(steps, dt) {
  * @returns {Float64Array}
  */
 export function taylor_bound(center, radius, order) {
-    const ret = wasm.taylor_bound(center, radius, order);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.taylor_bound(center, radius, order);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -584,10 +584,10 @@ export function taylor_bound(center, radius, order) {
  * @returns {Float64Array}
  */
 export function topopt_frames(nx, ny, iters, volfrac) {
-    const ret = wasm.topopt_frames(nx, ny, iters, volfrac);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.topopt_frames(nx, ny, iters, volfrac);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -597,10 +597,10 @@ export function topopt_frames(nx, ny, iters, volfrac) {
  * @returns {Float64Array}
  */
 export function trusspath(nx, ny, gap_tol) {
-    const ret = wasm.trusspath(nx, ny, gap_tol);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.trusspath(nx, ny, gap_tol);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 
 /**
@@ -610,162 +610,173 @@ export function trusspath(nx, ny, gap_tol) {
  * @returns {Float64Array}
  */
 export function wave2d_frames(n, frames, steps_per_frame) {
-    const ret = wasm.wave2d_frames(n, frames, steps_per_frame);
-    var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
-    return v1;
+  const ret = wasm.wave2d_frames(n, frames, steps_per_frame);
+  var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+  wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+  return v1;
 }
 function __wbg_get_imports() {
-    const import0 = {
-        __proto__: null,
-        __wbg___wbindgen_throw_344f42d3211c4765: function(arg0, arg1) {
-            throw new Error(getStringFromWasm0(arg0, arg1));
-        },
-        __wbindgen_init_externref_table: function() {
-            const table = wasm.__wbindgen_externrefs;
-            const offset = table.grow(4);
-            table.set(0, undefined);
-            table.set(offset + 0, undefined);
-            table.set(offset + 1, null);
-            table.set(offset + 2, true);
-            table.set(offset + 3, false);
-        },
-    };
-    return {
-        __proto__: null,
-        "./fs_wasm_bg.js": import0,
-    };
+  const import0 = {
+    __proto__: null,
+    __wbg___wbindgen_throw_344f42d3211c4765: (arg0, arg1) => {
+      throw new Error(getStringFromWasm0(arg0, arg1));
+    },
+    __wbindgen_init_externref_table: () => {
+      const table = wasm.__wbindgen_externrefs;
+      const offset = table.grow(4);
+      table.set(0, undefined);
+      table.set(offset + 0, undefined);
+      table.set(offset + 1, null);
+      table.set(offset + 2, true);
+      table.set(offset + 3, false);
+    },
+  };
+  return {
+    __proto__: null,
+    "./fs_wasm_bg.js": import0,
+  };
 }
 
 function getArrayF64FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
+  ptr = ptr >>> 0;
+  return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
 }
 
 let cachedFloat64ArrayMemory0 = null;
 function getFloat64ArrayMemory0() {
-    if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
-        cachedFloat64ArrayMemory0 = new Float64Array(wasm.memory.buffer);
-    }
-    return cachedFloat64ArrayMemory0;
+  if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
+    cachedFloat64ArrayMemory0 = new Float64Array(wasm.memory.buffer);
+  }
+  return cachedFloat64ArrayMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {
-    return decodeText(ptr >>> 0, len);
+  return decodeText(ptr >>> 0, len);
 }
 
 let cachedUint8ArrayMemory0 = null;
 function getUint8ArrayMemory0() {
-    if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
-        cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
-    }
-    return cachedUint8ArrayMemory0;
+  if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
+    cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
+  }
+  return cachedUint8ArrayMemory0;
 }
 
-let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
+let cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
 cachedTextDecoder.decode();
 const MAX_SAFARI_DECODE_BYTES = 2146435072;
 let numBytesDecoded = 0;
 function decodeText(ptr, len) {
-    numBytesDecoded += len;
-    if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
-        cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
-        cachedTextDecoder.decode();
-        numBytesDecoded = len;
-    }
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
+  numBytesDecoded += len;
+  if (numBytesDecoded >= MAX_SAFARI_DECODE_BYTES) {
+    cachedTextDecoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true });
+    cachedTextDecoder.decode();
+    numBytesDecoded = len;
+  }
+  return cachedTextDecoder.decode(getUint8ArrayMemory0().subarray(ptr, ptr + len));
 }
 
 let wasmModule, wasmInstance, wasm;
 function __wbg_finalize_init(instance, module) {
-    wasmInstance = instance;
-    wasm = instance.exports;
-    wasmModule = module;
-    cachedFloat64ArrayMemory0 = null;
-    cachedUint8ArrayMemory0 = null;
-    wasm.__wbindgen_start();
-    return wasm;
+  wasmInstance = instance;
+  wasm = instance.exports;
+  wasmModule = module;
+  cachedFloat64ArrayMemory0 = null;
+  cachedUint8ArrayMemory0 = null;
+  wasm.__wbindgen_start();
+  return wasm;
 }
 
 async function __wbg_load(module, imports) {
-    if (typeof Response === 'function' && module instanceof Response) {
-        if (typeof WebAssembly.instantiateStreaming === 'function') {
-            try {
-                return await WebAssembly.instantiateStreaming(module, imports);
-            } catch (e) {
-                const validResponse = module.ok && expectedResponseType(module.type);
+  if (typeof Response === "function" && module instanceof Response) {
+    if (typeof WebAssembly.instantiateStreaming === "function") {
+      try {
+        return await WebAssembly.instantiateStreaming(module, imports);
+      } catch (e) {
+        const validResponse = module.ok && expectedResponseType(module.type);
 
-                if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
-                    console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);
-
-                } else { throw e; }
-            }
-        }
-
-        const bytes = await module.arrayBuffer();
-        return await WebAssembly.instantiate(bytes, imports);
-    } else {
-        const instance = await WebAssembly.instantiate(module, imports);
-
-        if (instance instanceof WebAssembly.Instance) {
-            return { instance, module };
+        if (validResponse && module.headers.get("Content-Type") !== "application/wasm") {
+          console.warn(
+            "`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n",
+            e,
+          );
         } else {
-            return instance;
+          throw e;
         }
+      }
     }
 
-    function expectedResponseType(type) {
-        switch (type) {
-            case 'basic': case 'cors': case 'default': return true;
-        }
-        return false;
+    const bytes = await module.arrayBuffer();
+    return await WebAssembly.instantiate(bytes, imports);
+  } else {
+    const instance = await WebAssembly.instantiate(module, imports);
+
+    if (instance instanceof WebAssembly.Instance) {
+      return { instance, module };
+    } else {
+      return instance;
     }
+  }
+
+  function expectedResponseType(type) {
+    switch (type) {
+      case "basic":
+      case "cors":
+      case "default":
+        return true;
+    }
+    return false;
+  }
 }
 
 function initSync(module) {
-    if (wasm !== undefined) return wasm;
+  if (wasm !== undefined) return wasm;
 
-
-    if (module !== undefined) {
-        if (Object.getPrototypeOf(module) === Object.prototype) {
-            ({module} = module)
-        } else {
-            console.warn('using deprecated parameters for `initSync()`; pass a single object instead')
-        }
+  if (module !== undefined) {
+    if (Object.getPrototypeOf(module) === Object.prototype) {
+      ({ module } = module);
+    } else {
+      console.warn("using deprecated parameters for `initSync()`; pass a single object instead");
     }
+  }
 
-    const imports = __wbg_get_imports();
-    if (!(module instanceof WebAssembly.Module)) {
-        module = new WebAssembly.Module(module);
-    }
-    const instance = new WebAssembly.Instance(module, imports);
-    return __wbg_finalize_init(instance, module);
+  const imports = __wbg_get_imports();
+  if (!(module instanceof WebAssembly.Module)) {
+    module = new WebAssembly.Module(module);
+  }
+  const instance = new WebAssembly.Instance(module, imports);
+  return __wbg_finalize_init(instance, module);
 }
 
 async function __wbg_init(module_or_path) {
-    if (wasm !== undefined) return wasm;
+  if (wasm !== undefined) return wasm;
 
-
-    if (module_or_path !== undefined) {
-        if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
-            ({module_or_path} = module_or_path)
-        } else {
-            console.warn('using deprecated parameters for the initialization function; pass a single object instead')
-        }
+  if (module_or_path !== undefined) {
+    if (Object.getPrototypeOf(module_or_path) === Object.prototype) {
+      ({ module_or_path } = module_or_path);
+    } else {
+      console.warn(
+        "using deprecated parameters for the initialization function; pass a single object instead",
+      );
     }
+  }
 
-    if (module_or_path === undefined) {
-        module_or_path = new URL('fs_wasm_bg.wasm', import.meta.url);
-    }
-    const imports = __wbg_get_imports();
+  if (module_or_path === undefined) {
+    module_or_path = new URL("fs_wasm_bg.wasm", import.meta.url);
+  }
+  const imports = __wbg_get_imports();
 
-    if (typeof module_or_path === 'string' || (typeof Request === 'function' && module_or_path instanceof Request) || (typeof URL === 'function' && module_or_path instanceof URL)) {
-        module_or_path = fetch(module_or_path);
-    }
+  if (
+    typeof module_or_path === "string" ||
+    (typeof Request === "function" && module_or_path instanceof Request) ||
+    (typeof URL === "function" && module_or_path instanceof URL)
+  ) {
+    module_or_path = fetch(module_or_path);
+  }
 
-    const { instance, module } = await __wbg_load(await module_or_path, imports);
+  const { instance, module } = await __wbg_load(await module_or_path, imports);
 
-    return __wbg_finalize_init(instance, module);
+  return __wbg_finalize_init(instance, module);
 }
 
-export { initSync, __wbg_init as default };
+export { __wbg_init as default, initSync };

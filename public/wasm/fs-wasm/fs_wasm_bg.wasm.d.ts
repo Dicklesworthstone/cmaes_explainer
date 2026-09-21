@@ -31,11 +31,24 @@ export const gray_scott_frames: (a: number, b: number, c: number, d: number) => 
 export const heat_frames: (a: number, b: number, c: number) => [number, number];
 export const laplacian_modes: (a: number, b: number) => [number, number];
 export const lorenz_points: (a: number, b: number, c: number) => [number, number];
-export const mandelbrot_certified: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+export const mandelbrot_certified: (
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+  f: number,
+) => [number, number];
 export const marching_cubes: (a: number, b: number, c: number) => [number, number];
 export const metamatcert: (a: number, b: number, c: number) => [number, number];
 export const neuroshape: (a: number, b: number, c: number) => [number, number];
-export const orr_sommerfeld_curve: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const orr_sommerfeld_curve: (
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  e: number,
+) => [number, number];
 export const orr_sommerfeld_max_growth: (a: number, b: number, c: number) => number;
 export const poisson2d: (a: number) => [number, number];
 export const proofrobust: (a: number, b: number, c: number) => [number, number];

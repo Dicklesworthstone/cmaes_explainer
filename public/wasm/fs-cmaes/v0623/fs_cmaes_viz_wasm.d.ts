@@ -6,24 +6,24 @@
  * `receipt()` for admission or a typed refusal packet.
  */
 export class CmaesVizSession {
-    free(): void;
-    [Symbol.dispose](): void;
-    /**
-     * Return one complete row-major candidate population.
-     */
-    ask(): Float64Array;
-    /**
-     * Create a session from one packed configuration.
-     */
-    constructor(config: Float64Array);
-    /**
-     * Return admission and the current compact snapshot.
-     */
-    receipt(): Float64Array;
-    /**
-     * Tell one packed objective payload and return the updated snapshot.
-     */
-    tell(objectives: Float64Array): Float64Array;
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Return one complete row-major candidate population.
+   */
+  ask(): Float64Array;
+  /**
+   * Create a session from one packed configuration.
+   */
+  constructor(config: Float64Array);
+  /**
+   * Return admission and the current compact snapshot.
+   */
+  receipt(): Float64Array;
+  /**
+   * Tell one packed objective payload and return the updated snapshot.
+   */
+  tell(objectives: Float64Array): Float64Array;
 }
 
 /**
@@ -36,40 +36,40 @@ export class CmaesVizSession {
  * backpropagate through a contact solver.
  */
 export class G1TransformerTrainerSession {
-    free(): void;
-    [Symbol.dispose](): void;
-    /**
-     * The best policy head found so far.
-     */
-    best_head(): Float64Array;
-    /**
-     * The best policy so far in the FSGT layout, ready to download.
-     */
-    export_weights(): Uint8Array;
-    /**
-     * `challenge`: 0 flat, 1 terrain-with-push, anything else averages both.
-     */
-    constructor(challenge: number, duration_s: number, sigma: number, seed: number);
-    /**
-     * Current progress without advancing the search.
-     */
-    progress(): Float64Array;
-    /**
-     * Advance the search by exactly one rollout and return a progress
-     * packet.
-     */
-    pump(): Float64Array;
-    /**
-     * Resume from a head saved earlier. Returns the objective it scored
-     * here; `f64::MAX` means the width was wrong or it did not complete.
-     * It is adopted only if it beats this machine's tuned controller.
-     */
-    seed_head(head: Float64Array): number;
-    /**
-     * A packed G1 trace of the best policy (`use_best`) or of the tuned
-     * controller it started from, for playback on the existing stage.
-     */
-    trace_packet(use_best: boolean): Float64Array;
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * The best policy head found so far.
+   */
+  best_head(): Float64Array;
+  /**
+   * The best policy so far in the FSGT layout, ready to download.
+   */
+  export_weights(): Uint8Array;
+  /**
+   * `challenge`: 0 flat, 1 terrain-with-push, anything else averages both.
+   */
+  constructor(challenge: number, duration_s: number, sigma: number, seed: number);
+  /**
+   * Current progress without advancing the search.
+   */
+  progress(): Float64Array;
+  /**
+   * Advance the search by exactly one rollout and return a progress
+   * packet.
+   */
+  pump(): Float64Array;
+  /**
+   * Resume from a head saved earlier. Returns the objective it scored
+   * here; `f64::MAX` means the width was wrong or it did not complete.
+   * It is adopted only if it beats this machine's tuned controller.
+   */
+  seed_head(head: Float64Array): number;
+  /**
+   * A packed G1 trace of the best policy (`use_best`) or of the tuned
+   * controller it started from, for playback on the existing stage.
+   */
+  trace_packet(use_best: boolean): Float64Array;
 }
 
 /**
@@ -78,36 +78,36 @@ export class G1TransformerTrainerSession {
  * refusal packet.
  */
 export class G1WalkingVizEvaluator {
-    free(): void;
-    [Symbol.dispose](): void;
-    /**
-     * Evaluate one 5,040-D policy without retaining link poses.
-     */
-    evaluate(parameters: Float64Array): Float64Array;
-    /**
-     * Evaluate a flat complete population in one boundary call.
-     */
-    evaluate_population(parameters: Float64Array): Float64Array;
-    /**
-     * Create an evaluator from one packed experiment configuration.
-     */
-    constructor(config: Float64Array);
-    /**
-     * Return admitted controls and exact render-layout dimensions.
-     */
-    receipt(): Float64Array;
-    /**
-     * Return the disclosed sparse 5,040-D stabilizing curriculum mean.
-     */
-    stabilizing_policy_mean(): Float64Array;
-    /**
-     * Evaluate one policy and return decimated owner-derived link poses.
-     */
-    trace(parameters: Float64Array): Float64Array;
-    /**
-     * Return the disclosed sparse 5,040-D walking curriculum mean.
-     */
-    walking_curriculum_mean(): Float64Array;
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Evaluate one 5,040-D policy without retaining link poses.
+   */
+  evaluate(parameters: Float64Array): Float64Array;
+  /**
+   * Evaluate a flat complete population in one boundary call.
+   */
+  evaluate_population(parameters: Float64Array): Float64Array;
+  /**
+   * Create an evaluator from one packed experiment configuration.
+   */
+  constructor(config: Float64Array);
+  /**
+   * Return admitted controls and exact render-layout dimensions.
+   */
+  receipt(): Float64Array;
+  /**
+   * Return the disclosed sparse 5,040-D stabilizing curriculum mean.
+   */
+  stabilizing_policy_mean(): Float64Array;
+  /**
+   * Evaluate one policy and return decimated owner-derived link poses.
+   */
+  trace(parameters: Float64Array): Float64Array;
+  /**
+   * Return the disclosed sparse 5,040-D walking curriculum mean.
+   */
+  walking_curriculum_mean(): Float64Array;
 }
 
 /**
@@ -116,32 +116,32 @@ export class G1WalkingVizEvaluator {
  * refusal packet.
  */
 export class HouseholdManipulationVizEvaluator {
-    free(): void;
-    [Symbol.dispose](): void;
-    /**
-     * Return the disclosed source-feasible 128-D curriculum mean.
-     */
-    curriculum_policy_mean(): Float64Array;
-    /**
-     * Evaluate one 128-D policy without retaining object/link poses.
-     */
-    evaluate(parameters: Float64Array): Float64Array;
-    /**
-     * Evaluate a flat complete population in one boundary call.
-     */
-    evaluate_population(parameters: Float64Array): Float64Array;
-    /**
-     * Create an evaluator from one packed experiment configuration.
-     */
-    constructor(config: Float64Array);
-    /**
-     * Return admitted controls, scene data, and render-layout dimensions.
-     */
-    receipt(): Float64Array;
-    /**
-     * Evaluate one policy and return decimated owner-derived poses.
-     */
-    trace(parameters: Float64Array): Float64Array;
+  free(): void;
+  [Symbol.dispose](): void;
+  /**
+   * Return the disclosed source-feasible 128-D curriculum mean.
+   */
+  curriculum_policy_mean(): Float64Array;
+  /**
+   * Evaluate one 128-D policy without retaining object/link poses.
+   */
+  evaluate(parameters: Float64Array): Float64Array;
+  /**
+   * Evaluate a flat complete population in one boundary call.
+   */
+  evaluate_population(parameters: Float64Array): Float64Array;
+  /**
+   * Create an evaluator from one packed experiment configuration.
+   */
+  constructor(config: Float64Array);
+  /**
+   * Return admitted controls, scene data, and render-layout dimensions.
+   */
+  receipt(): Float64Array;
+  /**
+   * Evaluate one policy and return decimated owner-derived poses.
+   */
+  trace(parameters: Float64Array): Float64Array;
 }
 
 /**
@@ -157,41 +157,59 @@ export function cmaes_viz_source_revision(): string;
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-    readonly memory: WebAssembly.Memory;
-    readonly __wbg_cmaesvizsession_free: (a: number, b: number) => void;
-    readonly __wbg_g1transformertrainersession_free: (a: number, b: number) => void;
-    readonly __wbg_g1walkingvizevaluator_free: (a: number, b: number) => void;
-    readonly __wbg_householdmanipulationvizevaluator_free: (a: number, b: number) => void;
-    readonly cmaes_viz_kernel_version: () => [number, number];
-    readonly cmaes_viz_source_revision: () => [number, number];
-    readonly cmaesvizsession_ask: (a: number) => [number, number];
-    readonly cmaesvizsession_new: (a: number, b: number) => number;
-    readonly cmaesvizsession_receipt: (a: number) => [number, number];
-    readonly cmaesvizsession_tell: (a: number, b: number, c: number) => [number, number];
-    readonly g1transformertrainersession_best_head: (a: number) => [number, number];
-    readonly g1transformertrainersession_export_weights: (a: number) => [number, number];
-    readonly g1transformertrainersession_new: (a: number, b: number, c: number, d: number) => number;
-    readonly g1transformertrainersession_progress: (a: number) => [number, number];
-    readonly g1transformertrainersession_pump: (a: number) => [number, number];
-    readonly g1transformertrainersession_seed_head: (a: number, b: number, c: number) => number;
-    readonly g1transformertrainersession_trace_packet: (a: number, b: number) => [number, number];
-    readonly g1walkingvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
-    readonly g1walkingvizevaluator_evaluate_population: (a: number, b: number, c: number) => [number, number];
-    readonly g1walkingvizevaluator_new: (a: number, b: number) => number;
-    readonly g1walkingvizevaluator_receipt: (a: number) => [number, number];
-    readonly g1walkingvizevaluator_stabilizing_policy_mean: (a: number) => [number, number];
-    readonly g1walkingvizevaluator_trace: (a: number, b: number, c: number) => [number, number];
-    readonly g1walkingvizevaluator_walking_curriculum_mean: (a: number) => [number, number];
-    readonly householdmanipulationvizevaluator_curriculum_policy_mean: (a: number) => [number, number];
-    readonly householdmanipulationvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
-    readonly householdmanipulationvizevaluator_evaluate_population: (a: number, b: number, c: number) => [number, number];
-    readonly householdmanipulationvizevaluator_new: (a: number, b: number) => number;
-    readonly householdmanipulationvizevaluator_receipt: (a: number) => [number, number];
-    readonly householdmanipulationvizevaluator_trace: (a: number, b: number, c: number) => [number, number];
-    readonly __wbindgen_externrefs: WebAssembly.Table;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
-    readonly __wbindgen_malloc: (a: number, b: number) => number;
-    readonly __wbindgen_start: () => void;
+  readonly memory: WebAssembly.Memory;
+  readonly __wbg_cmaesvizsession_free: (a: number, b: number) => void;
+  readonly __wbg_g1transformertrainersession_free: (a: number, b: number) => void;
+  readonly __wbg_g1walkingvizevaluator_free: (a: number, b: number) => void;
+  readonly __wbg_householdmanipulationvizevaluator_free: (a: number, b: number) => void;
+  readonly cmaes_viz_kernel_version: () => [number, number];
+  readonly cmaes_viz_source_revision: () => [number, number];
+  readonly cmaesvizsession_ask: (a: number) => [number, number];
+  readonly cmaesvizsession_new: (a: number, b: number) => number;
+  readonly cmaesvizsession_receipt: (a: number) => [number, number];
+  readonly cmaesvizsession_tell: (a: number, b: number, c: number) => [number, number];
+  readonly g1transformertrainersession_best_head: (a: number) => [number, number];
+  readonly g1transformertrainersession_export_weights: (a: number) => [number, number];
+  readonly g1transformertrainersession_new: (a: number, b: number, c: number, d: number) => number;
+  readonly g1transformertrainersession_progress: (a: number) => [number, number];
+  readonly g1transformertrainersession_pump: (a: number) => [number, number];
+  readonly g1transformertrainersession_seed_head: (a: number, b: number, c: number) => number;
+  readonly g1transformertrainersession_trace_packet: (a: number, b: number) => [number, number];
+  readonly g1walkingvizevaluator_evaluate: (a: number, b: number, c: number) => [number, number];
+  readonly g1walkingvizevaluator_evaluate_population: (
+    a: number,
+    b: number,
+    c: number,
+  ) => [number, number];
+  readonly g1walkingvizevaluator_new: (a: number, b: number) => number;
+  readonly g1walkingvizevaluator_receipt: (a: number) => [number, number];
+  readonly g1walkingvizevaluator_stabilizing_policy_mean: (a: number) => [number, number];
+  readonly g1walkingvizevaluator_trace: (a: number, b: number, c: number) => [number, number];
+  readonly g1walkingvizevaluator_walking_curriculum_mean: (a: number) => [number, number];
+  readonly householdmanipulationvizevaluator_curriculum_policy_mean: (
+    a: number,
+  ) => [number, number];
+  readonly householdmanipulationvizevaluator_evaluate: (
+    a: number,
+    b: number,
+    c: number,
+  ) => [number, number];
+  readonly householdmanipulationvizevaluator_evaluate_population: (
+    a: number,
+    b: number,
+    c: number,
+  ) => [number, number];
+  readonly householdmanipulationvizevaluator_new: (a: number, b: number) => number;
+  readonly householdmanipulationvizevaluator_receipt: (a: number) => [number, number];
+  readonly householdmanipulationvizevaluator_trace: (
+    a: number,
+    b: number,
+    c: number,
+  ) => [number, number];
+  readonly __wbindgen_externrefs: WebAssembly.Table;
+  readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+  readonly __wbindgen_malloc: (a: number, b: number) => number;
+  readonly __wbindgen_start: () => void;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;
@@ -214,4 +232,9 @@ export function initSync(module: { module: SyncInitInput } | SyncInitInput): Ini
  *
  * @returns {Promise<InitOutput>}
  */
-export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;
+export default function __wbg_init(
+  module_or_path?:
+    | { module_or_path: InitInput | Promise<InitInput> }
+    | InitInput
+    | Promise<InitInput>,
+): Promise<InitOutput>;
