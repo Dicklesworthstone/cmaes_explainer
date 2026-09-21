@@ -1,6 +1,6 @@
 const doctorConfig = {
   ignore: {
-    paths: ["public/**", "tmp/**"]
+    paths: ["public/**", "tmp/**"],
   },
   rules: {
     "react-doctor/react-compiler-no-manual-memoization": "off",
@@ -24,8 +24,8 @@ const doctorConfig = {
     "react-doctor/no-eval": "off",
     "react-doctor/no-impure-call-at-module-scope": "off",
     "react-doctor/three-require-frame-delta": "off",
-    "react-doctor/no-array-index-as-key": "off"
-  }
+    "react-doctor/no-array-index-as-key": "off",
+  },
 };
 
 export default doctorConfig;

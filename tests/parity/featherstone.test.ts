@@ -30,19 +30,29 @@ import {
   assertDeterministic,
   flattenNumeric,
   maxAbsDiff,
-  parityHarness,
   type ParityCase,
+  parityHarness,
 } from "./parityHarness";
 
 type Featherstone2Link = [
-  number, number, number, // end-effector x, y, theta
-  number, number,         // center of mass x, y
-  number, number,         // linear momentum x, y
+  number,
+  number,
+  number, // end-effector x, y, theta
+  number,
+  number, // center of mass x, y
+  number,
+  number, // linear momentum x, y
 ];
 
 function reference2LinkFeatherstone(
-  q1: number, q2: number, q1d: number, q2d: number,
-  L1: number, L2: number, m1: number, m2: number,
+  q1: number,
+  q2: number,
+  q1d: number,
+  q2d: number,
+  L1: number,
+  L2: number,
+  m1: number,
+  m2: number,
 ): Featherstone2Link {
   const ex = L1 * Math.cos(q1) + L2 * Math.cos(q1 + q2);
   const ey = L1 * Math.sin(q1) + L2 * Math.sin(q1 + q2);
@@ -63,7 +73,20 @@ function reference2LinkFeatherstone(
   return [ex, ey, etheta, comX, comY, px, py];
 }
 
-type Ur6Result = [number, number, number, number, number, number, number, number, number, number, number, number];
+type Ur6Result = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
 
 function reference6DofUrDh(
   jointAngles: readonly [number, number, number, number, number, number],
@@ -79,10 +102,22 @@ function reference6DofUrDh(
     const ct = Math.cos(theta);
     const st = Math.sin(theta);
     const Ai: number[] = [
-      ct, -st * ca, st * sa, a[i] * ct,
-      st, ct * ca, -ct * sa, a[i] * st,
-      0, sa, ca, d[i],
-      0, 0, 0, 1,
+      ct,
+      -st * ca,
+      st * sa,
+      a[i] * ct,
+      st,
+      ct * ca,
+      -ct * sa,
+      a[i] * st,
+      0,
+      sa,
+      ca,
+      d[i],
+      0,
+      0,
+      0,
+      1,
     ];
     const next: number[] = new Array(16).fill(0);
     for (let row = 0; row < 4; row++) {
@@ -143,9 +178,7 @@ const featherstoneCases: Array<ParityCase<unknown, unknown>> = [
       m1: 1.0,
       m2: 0.6,
     },
-    ts: reference2LinkFeatherstone(
-      Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6,
-    ),
+    ts: reference2LinkFeatherstone(Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6),
     kernel: undefined,
     tolerance: 1e-9,
   },
@@ -179,23 +212,21 @@ describe("parity: Featherstone articulated-body dynamics (kernel vs analytical o
   test("determinism: TS reference is deterministic", () => {
     assertDeterministic<void, Featherstone2Link>(
       "2-link-featherstone",
-      () => reference2LinkFeatherstone(
-        Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6,
-      ),
+      () => reference2LinkFeatherstone(Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6),
       undefined,
     );
   });
 
   test("missing dynamics kernel answers cannot certify conformance", () => {
     for (const testCase of featherstoneCases) {
-      expect(() => parityHarness("featherstone", [testCase])).toThrow("missing required kernel answer");
+      expect(() => parityHarness("featherstone", [testCase])).toThrow(
+        "missing required kernel answer",
+      );
     }
   });
 
   test("analytical oracle: 2-link planar FK end-effector pose", () => {
-    const ts = reference2LinkFeatherstone(
-      Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6,
-    );
+    const ts = reference2LinkFeatherstone(Math.PI / 4, Math.PI / 6, 0.1, -0.05, 0.4, 0.3, 1.0, 0.6);
     expect(ts[0]).toBeGreaterThan(0.3);
     expect(ts[0]).toBeLessThan(0.4);
     expect(ts[1]).toBeGreaterThan(0.4);

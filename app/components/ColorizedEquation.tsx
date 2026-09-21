@@ -6,19 +6,15 @@
  */
 "use client";
 
-import {
-  ChevronDown,
-  ChevronUp,
-  Info,
-  RotateCcw,
-  Sparkles,
-  Copy,
-  Check
-} from "lucide-react";
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { LatexRenderer } from "./LatexRenderer";
-import type { ColorizedEquation as ColorizedEquationModel, EquationVariable } from "../types/equation";
+import { Check, ChevronDown, ChevronUp, Copy, Info, RotateCcw, Sparkles } from "lucide-react";
+import type React from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { COLOR_STYLES, prepareInteractiveLatex } from "../lib/colorPalette";
+import type {
+  ColorizedEquation as ColorizedEquationModel,
+  EquationVariable,
+} from "../types/equation";
+import { LatexRenderer } from "./LatexRenderer";
 
 interface ColorizedEquationProps {
   equation: ColorizedEquationModel;
@@ -35,7 +31,7 @@ export function ColorizedEquation({
 }: ColorizedEquationProps) {
   const compId = useId().replace(/:/g, "");
   const [activeVarId, setActiveVarId] = useState<string | null>(
-    initialActiveVariableId ?? (equation.variables[0]?.id || null)
+    initialActiveVariableId ?? (equation.variables[0]?.id || null),
   );
   const [pinnedVarId, setPinnedVarId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
@@ -87,7 +83,7 @@ export function ColorizedEquation({
         const id = dataVarEl.getAttribute("data-var");
         if (id) {
           const match = equation.variables.find(
-            (v) => v.id === id || v.id.toLowerCase() === id.toLowerCase()
+            (v) => v.id === id || v.id.toLowerCase() === id.toLowerCase(),
           );
           if (match) return match.id;
         }
@@ -101,7 +97,7 @@ export function ColorizedEquation({
           if (cls.startsWith("eq-term-") && cls !== "eq-term-active") {
             const candidate = cls.replace("eq-term-", "");
             const match = equation.variables.find(
-              (v) => v.id === candidate || v.id.toLowerCase() === candidate.toLowerCase()
+              (v) => v.id === candidate || v.id.toLowerCase() === candidate.toLowerCase(),
             );
             if (match) return match.id;
           }
@@ -110,7 +106,7 @@ export function ColorizedEquation({
 
       return null;
     },
-    [equation.variables]
+    [equation.variables],
   );
 
   // Interactive formula event delegation: hover on any KaTeX term inside equation
@@ -121,7 +117,7 @@ export function ColorizedEquation({
         setActiveVarId(varId);
       }
     },
-    [getVariableIdFromElement]
+    [getVariableIdFromElement],
   );
 
   // Interactive formula event delegation: click on any KaTeX term inside equation
@@ -132,7 +128,7 @@ export function ColorizedEquation({
         handleSelectVar(varId, true);
       }
     },
-    [getVariableIdFromElement, handleSelectVar]
+    [getVariableIdFromElement, handleSelectVar],
   );
 
   // Sync active CSS classes inside KaTeX DOM when activeVarId changes
@@ -148,7 +144,7 @@ export function ColorizedEquation({
 
     if (activeVarId) {
       const activeTerms = container.querySelectorAll(
-        `[data-var="${activeVarId}"], .eq-term-${activeVarId}`
+        `[data-var="${activeVarId}"], .eq-term-${activeVarId}`,
       );
       activeTerms.forEach((el) => {
         el.classList.add("eq-term-active");
@@ -254,7 +250,9 @@ export function ColorizedEquation({
 
           <div className="mt-3 text-[0.7rem] font-mono text-slate-500 flex items-center justify-center gap-1.5">
             <Sparkles className="h-3 w-3 text-amber-400" />
-            <span>Hover or click any colored variable in the equation to inspect its physical meaning</span>
+            <span>
+              Hover or click any colored variable in the equation to inspect its physical meaning
+            </span>
           </div>
         </div>
 

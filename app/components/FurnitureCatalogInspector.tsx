@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
+import React, { useMemo, useState } from "react";
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../lib/furnitureTaxonomy";
+import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
 
 export function FurnitureCatalogInspector() {
   const [selectedRoom, setSelectedRoom] = useState<string>("all");
@@ -42,11 +42,14 @@ export function FurnitureCatalogInspector() {
         <div>
           <h2 className="text-base font-bold text-cyan-400">Furniture Catalog & Spec Inspector</h2>
           <p className="text-xs text-neutral-400">
-            {CRAFTSMAN_BUNGALOW_1928.model} ({CRAFTSMAN_BUNGALOW_1928.catalogYear}) • {CRAFTSMAN_BUNGALOW_1928.furniture.length} Parameterized Pieces
+            {CRAFTSMAN_BUNGALOW_1928.model} ({CRAFTSMAN_BUNGALOW_1928.catalogYear}) •{" "}
+            {CRAFTSMAN_BUNGALOW_1928.furniture.length} Parameterized Pieces
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="furniture-room-filter" className="text-xs text-neutral-400">Room:</label>
+          <label htmlFor="furniture-room-filter" className="text-xs text-neutral-400">
+            Room:
+          </label>
           <select
             id="furniture-room-filter"
             className="min-h-11 max-w-full bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
@@ -55,7 +58,9 @@ export function FurnitureCatalogInspector() {
           >
             {rooms.map((r) => (
               <option key={r} value={r}>
-                {r === "all" ? `All Rooms (${CRAFTSMAN_BUNGALOW_1928.furniture.length})` : r.toUpperCase()}
+                {r === "all"
+                  ? `All Rooms (${CRAFTSMAN_BUNGALOW_1928.furniture.length})`
+                  : r.toUpperCase()}
               </option>
             ))}
           </select>
@@ -90,8 +95,12 @@ export function FurnitureCatalogInspector() {
         {/* Middle Column: Geometric Envelopes & Placement */}
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-300">Spatial Bounding Envelope</span>
-            <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-cyan-400">OBB Envelope</span>
+            <span className="text-xs font-semibold text-neutral-300">
+              Spatial Bounding Envelope
+            </span>
+            <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-cyan-400">
+              OBB Envelope
+            </span>
           </div>
 
           <div className="space-y-2 text-xs">
@@ -109,7 +118,9 @@ export function FurnitureCatalogInspector() {
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Height (Y):</span>
-              <span className="text-neutral-200 font-semibold">{activePiece.height.toFixed(2)} m</span>
+              <span className="text-neutral-200 font-semibold">
+                {activePiece.height.toFixed(2)} m
+              </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Yaw Orientation:</span>
@@ -119,7 +130,9 @@ export function FurnitureCatalogInspector() {
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Material Binding:</span>
-              <span className="text-amber-400 font-semibold">{activePiece.materialId ?? "quarter-sawn-oak"}</span>
+              <span className="text-amber-400 font-semibold">
+                {activePiece.materialId ?? "quarter-sawn-oak"}
+              </span>
             </div>
           </div>
 
@@ -131,7 +144,9 @@ export function FurnitureCatalogInspector() {
         {/* Right Column: Physical Dynamics & Articulation Spec */}
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-300">Physical Inertia & Articulation</span>
+            <span className="text-xs font-semibold text-neutral-300">
+              Physical Inertia & Articulation
+            </span>
             <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-emerald-400">
               {kindDefaults.shape}
             </span>
@@ -145,7 +160,8 @@ export function FurnitureCatalogInspector() {
             <div className="flex justify-between text-neutral-400">
               <span>Center of Mass CoG:</span>
               <span className="text-neutral-200 font-semibold">
-                [{kindDefaults.defaultCoG.x}, {kindDefaults.defaultCoG.y}, {kindDefaults.defaultCoG.z}]
+                [{kindDefaults.defaultCoG.x}, {kindDefaults.defaultCoG.y},{" "}
+                {kindDefaults.defaultCoG.z}]
               </span>
             </div>
             <div className="flex justify-between text-neutral-400">
@@ -156,14 +172,18 @@ export function FurnitureCatalogInspector() {
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Fragility / Risk:</span>
-              <span className={kindDefaults.breakable ? "text-rose-400 font-bold" : "text-neutral-300"}>
+              <span
+                className={kindDefaults.breakable ? "text-rose-400 font-bold" : "text-neutral-300"}
+              >
                 {kindDefaults.risk.toUpperCase()}
               </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Articulation Pattern:</span>
               <span className="text-purple-400 font-semibold">
-                {kindDefaults.articulation ? `${kindDefaults.articulation.joints.length} joint(s)` : "Rigid Body"}
+                {kindDefaults.articulation
+                  ? `${kindDefaults.articulation.joints.length} joint(s)`
+                  : "Rigid Body"}
               </span>
             </div>
           </div>
@@ -173,8 +193,12 @@ export function FurnitureCatalogInspector() {
               <div className="text-purple-300 font-bold">Joint Graph:</div>
               {kindDefaults.articulation.joints.map((j) => (
                 <div key={j.name} className="flex justify-between">
-                  <span>{j.name} ({j.type}):</span>
-                  <span>[{j.limits.min}, {j.limits.max}]</span>
+                  <span>
+                    {j.name} ({j.type}):
+                  </span>
+                  <span>
+                    [{j.limits.min}, {j.limits.max}]
+                  </span>
                 </div>
               ))}
             </div>

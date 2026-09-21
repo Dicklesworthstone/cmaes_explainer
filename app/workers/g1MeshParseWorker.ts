@@ -30,10 +30,7 @@ type Msg = {
 type Out =
   | {
       type: "ok";
-      geometries: Record<
-        string,
-        { positions: Float32Array; normals: Float32Array }
-      >;
+      geometries: Record<string, { positions: Float32Array; normals: Float32Array }>;
     }
   | { type: "error"; error: string };
 
@@ -117,11 +114,7 @@ function computeSmoothNormals(positions: Float32Array): Float32Array {
   return normals;
 }
 
-function rotateX(
-  positions: Float32Array,
-  normals: Float32Array,
-  rad: number,
-): void {
+function rotateX(positions: Float32Array, normals: Float32Array, rad: number): void {
   // Rotation around X: y' = y cos − z sin, z' = y sin + z cos. Normals use the
   // same matrix (no translation).
   const c = Math.cos(rad);

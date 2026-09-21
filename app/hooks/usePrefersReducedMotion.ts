@@ -1,7 +1,7 @@
 "use client";
 
-import { useMediaQuery } from "./useMediaQuery";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useMediaQuery } from "./useMediaQuery";
 
 export type TracePlaybackStep = {
   sampleIndex: number;
@@ -9,10 +9,7 @@ export type TracePlaybackStep = {
   wrapped: boolean;
 };
 
-export function clampTracePlaybackIndex(
-  sampleCount: number,
-  requestedIndex: number,
-): number {
+export function clampTracePlaybackIndex(sampleCount: number, requestedIndex: number): number {
   if (sampleCount <= 0 || !Number.isFinite(requestedIndex)) return 0;
   return Math.min(sampleCount - 1, Math.max(0, Math.round(requestedIndex)));
 }
@@ -44,12 +41,8 @@ export function advanceTracePlayback(
 
   // Bound a stalled render frame; returning to the page must not fast-forward
   // through the experiment. Speed scales visible render time directly.
-  const boundedDelta = Number.isFinite(deltaSeconds)
-    ? Math.min(Math.max(deltaSeconds, 0), 0.1)
-    : 0;
-  const safeSpeed = Number.isFinite(playbackSpeed)
-    ? Math.max(playbackSpeed, 0)
-    : 0;
+  const boundedDelta = Number.isFinite(deltaSeconds) ? Math.min(Math.max(deltaSeconds, 0), 0.1) : 0;
+  const safeSpeed = Number.isFinite(playbackSpeed) ? Math.max(playbackSpeed, 0) : 0;
   let nextElapsed = safeElapsed + boundedDelta * safeSpeed;
   // Always show the measured terminal pose, including when a frame crosses
   // the horizon. Only a subsequent frame may start the next loop.
@@ -89,8 +82,7 @@ export function useTracePlaybackPreference() {
   if (choice.reduceMotion !== reduceMotion) {
     setChoice({ reduceMotion, playing: false });
   }
-  const isPlaying =
-    choice.reduceMotion === reduceMotion && (choice.playing ?? !reduceMotion);
+  const isPlaying = choice.reduceMotion === reduceMotion && (choice.playing ?? !reduceMotion);
   // Canvas has a separate React root. Stop its old frame callback immediately,
   // rather than waiting for the new isPlaying prop to reach that root.
   const playbackActiveRef = useRef(isPlaying);

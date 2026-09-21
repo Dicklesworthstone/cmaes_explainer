@@ -156,13 +156,15 @@ export class SafetyFilterRecoveryManager {
     }
 
     // Check if we can satisfy with bounded Tier 1 slack relaxation
-    if (maxViolation <= this.config.maxSlack && this.consecutiveRelaxedFrames < this.config.stallLimitFrames) {
+    if (
+      maxViolation <= this.config.maxSlack &&
+      this.consecutiveRelaxedFrames < this.config.stallLimitFrames
+    ) {
       this.consecutiveRelaxedFrames++;
       this.currentState = "relaxed-slack";
 
       // Project minimally along worst gradient
-      const gradNormSq =
-        worstGradient[0] ** 2 + worstGradient[1] ** 2 + worstGradient[2] ** 2;
+      const gradNormSq = worstGradient[0] ** 2 + worstGradient[1] ** 2 + worstGradient[2] ** 2;
       const scale = gradNormSq > 1e-6 ? maxViolation / gradNormSq : 0.0;
 
       const safeControl: [number, number, number] = [
@@ -180,7 +182,10 @@ export class SafetyFilterRecoveryManager {
     }
 
     // Case 2 or 3: Excessive violation or sustained stall -> Trigger Reflex or Retreat
-    if (this.safeHistory.length > 0 && this.consecutiveRelaxedFrames >= this.config.stallLimitFrames) {
+    if (
+      this.safeHistory.length > 0 &&
+      this.consecutiveRelaxedFrames >= this.config.stallLimitFrames
+    ) {
       // Tier 3: Retreat towards most recent verified safe waypoint
       this.currentState = "recent-safe-retreat";
       const target = this.safeHistory[this.safeHistory.length - 1];

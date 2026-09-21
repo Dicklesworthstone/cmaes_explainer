@@ -1,21 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import {
-  clearTrainingSession,
-  decodeTrainingSession,
-  loadTrainingSession,
-  saveTrainingSession,
-  describeAge,
-  encodeTrainingSession,
-  isResumable,
-  type TrainingSessionSnapshot,
-} from "../app/lib/g1TrainingSession";
+import { FRANKENSIM_OWNER_KERNEL_VERSION } from "../app/lib/frankensimCmaes";
 import type { LearningLedgerPoint } from "../app/lib/g1LearningLedger";
 import {
   g1ExperimentForSeat,
-  g1SharedExperiment,
   g1RestoreSharedExperiment,
+  g1SharedExperiment,
 } from "../app/lib/g1OptimizationProtocol";
-import { FRANKENSIM_OWNER_KERNEL_VERSION } from "../app/lib/frankensimCmaes";
+import {
+  clearTrainingSession,
+  decodeTrainingSession,
+  describeAge,
+  encodeTrainingSession,
+  isResumable,
+  loadTrainingSession,
+  saveTrainingSession,
+  type TrainingSessionSnapshot,
+} from "../app/lib/g1TrainingSession";
 
 function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingSessionSnapshot {
   return {
@@ -45,11 +45,7 @@ function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingS
 
 describe("G1 training session persistence", () => {
   test("keeps the exact moved experiment and seed alongside recovered policy bits", async () => {
-    const { scene } = await g1ExperimentForSeat(
-      "walking",
-      "terrain-and-push",
-      [-2, 0, 1],
-    );
+    const { scene } = await g1ExperimentForSeat("walking", "terrain-and-push", [-2, 0, 1]);
     const snapshot = snapshotOf({
       kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
       experiment: g1SharedExperiment(scene, 2),
@@ -58,9 +54,7 @@ describe("G1 training session persistence", () => {
     const saved = encodeTrainingSession(snapshot);
     const restored = decodeTrainingSession(JSON.stringify(saved), 3)!;
     expect(restored.experiment).toEqual(snapshot.experiment);
-    expect(new Uint8Array(restored.policy.buffer)).toEqual(
-      new Uint8Array(snapshot.policy.buffer),
-    );
+    expect(new Uint8Array(restored.policy.buffer)).toEqual(new Uint8Array(snapshot.policy.buffer));
     expect(g1RestoreSharedExperiment(restored)).toEqual({
       seat: [-2, 0, 1],
       seedIndex: 2,
@@ -111,23 +105,24 @@ describe("G1 training session persistence", () => {
   test("rejects invalid search metadata and preserves signed zero", () => {
     const good = encodeTrainingSession(snapshotOf());
     for (const broken of [
-      { sigma: null }, { sigma: -1 }, { generation: 1.5 },
+      { sigma: null },
+      { sigma: -1 },
+      { generation: 1.5 },
       // Structurally impossible provenance is still refused here.
-      { task: "" }, { challenge: "   " },
-    ]) expect(decodeTrainingSession(JSON.stringify({ ...good, ...broken }), 32)).toBeNull();
+      { task: "" },
+      { challenge: "   " },
+    ])
+      expect(decodeTrainingSession(JSON.stringify({ ...good, ...broken }), 32)).toBeNull();
 
     // A well-formed run for a task this owner does not run is NOT refused by
     // the decoder — the format carries manipulation policies too, so it cannot
     // whitelist walking's vocabulary. It is refused where that actually
     // matters, by isResumable, which is asserted in its own test above.
-    const foreign = decodeTrainingSession(
-      JSON.stringify({ ...good, task: "kitchen-mug" }),
-      32,
-    );
+    const foreign = decodeTrainingSession(JSON.stringify({ ...good, task: "kitchen-mug" }), 32);
     expect(foreign).not.toBeNull();
-    expect(
-      isResumable(foreign!, foreign!.kernelVersion, "walking", foreign!.challenge),
-    ).toBe(false);
+    expect(isResumable(foreign!, foreign!.kernelVersion, "walking", foreign!.challenge)).toBe(
+      false,
+    );
     const signed = snapshotOf({ policy: Float64Array.of(-0, 1e-20, Number.MIN_VALUE) });
     const restored = decodeTrainingSession(JSON.stringify(encodeTrainingSession(signed)), 3);
     expect(restored).not.toBeNull();

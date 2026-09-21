@@ -27,14 +27,14 @@
 // KMR base frame used by the IK layer).
 
 import { useMemo } from "react";
+import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
 import {
-  defaultKmrMaterialSet,
   buildKmrBaseMesh,
+  defaultKmrMaterialSet,
   KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
   type KmrGeometryConfig,
 } from "../lib/kmrGeometry";
-import { scanLidar, KUKA_KMR_IIWA_LIDAR_DEFAULT } from "../lib/kmrLidar";
-import type { OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
+import { KUKA_KMR_IIWA_LIDAR_DEFAULT, scanLidar } from "../lib/kmrLidar";
 import type { WaypointPath } from "../lib/kmrWaypointNav";
 
 export interface KmrBase3DProps {
@@ -57,10 +57,7 @@ const SCAN_RING_OUTER_M = 0.6;
 export function KmrBase3D(props: KmrBase3DProps) {
   const cfg = props.config ?? KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
   const materials = useMemo(() => defaultKmrMaterialSet(), []);
-  const baseMesh = useMemo(
-    () => buildKmrBaseMesh(cfg, materials),
-    [cfg, materials],
-  );
+  const baseMesh = useMemo(() => buildKmrBaseMesh(cfg, materials), [cfg, materials]);
 
   // LiDAR scan as a procedural ring of colored dots at the KMR's
   // mounting plate height, sampled in the KMR's local frame.
@@ -76,12 +73,7 @@ export function KmrBase3D(props: KmrBase3DProps) {
       // (1 to 3 m), green for far (more than 3 m). Standard LiDAR
       // visualization convention.
       const range = r.rangeMeters;
-      const color =
-        range < 1.0
-          ? "#ef4444"
-          : range < 3.0
-            ? "#f59e0b"
-            : "#22c55e";
+      const color = range < 1.0 ? "#ef4444" : range < 3.0 ? "#f59e0b" : "#22c55e";
       return { key: i, x, y, z: cfg.mountingPlateHeightMeters + 0.06, color };
     });
   }, [cfg, props.obstacles]);
@@ -107,13 +99,7 @@ export function KmrBase3D(props: KmrBase3DProps) {
         // in the local frame; the KMR mesh has its yaw axis aligned with
         // the world +x by default. The yaw rotation is applied to the
         // scan dots and the planned path below.
-        return (
-          <primitive
-            key={i}
-            object={child}
-            position={[props.xMeters, props.yMeters, 0]}
-          />
-        );
+        return <primitive key={i} object={child} position={[props.xMeters, props.yMeters, 0]} />;
       })}
       {scanDots.map((dot) => {
         const p = localToWorld(dot.x, dot.y, dot.z);
@@ -139,7 +125,6 @@ export function KmrBase3D(props: KmrBase3DProps) {
                 pos.setXYZ(i, p.x, p.y, p.z);
               }
               pos.count = pts.length;
-              
             }}
           />
           <lineBasicMaterial color="#22d3ee" />

@@ -131,11 +131,10 @@ export function computeMultiFactorObjective(
   //     heading / speed error / work-per-meter: positive weight on a
   //     non-negative integral; positive contribution = penalty.
   // CMA-ES minimizes the weighted sum; larger = worse rollout.
-   // Magnitudes are tuned so a standing prior (no motion, no contact) and a
-   // walking curriculum mean both produce finite, comparable weighted values;
-   // the *ratio* between channels is the new "is it doing what we want" signal.
-  const safe = (x: number, fallback: number): number =>
-    Number.isFinite(x) ? x : fallback;
+  // Magnitudes are tuned so a standing prior (no motion, no contact) and a
+  // walking curriculum mean both produce finite, comparable weighted values;
+  // the *ratio* between channels is the new "is it doing what we want" signal.
+  const safe = (x: number, fallback: number): number => (Number.isFinite(x) ? x : fallback);
   const resolvedWeight = (key: keyof MultiFactorWeights): number =>
     safe(
       weightOverrides[key] ?? DEFAULT_MULTI_FACTOR_WEIGHTS[key],
@@ -159,7 +158,7 @@ export function computeMultiFactorObjective(
   const lastSample = receipt.samples[receipt.samples.length - 1];
   const duration = Math.max(
     safe(lastSample?.timeSeconds ?? config.durationSeconds, config.durationSeconds),
-    1e-6
+    1e-6,
   );
   const horizon = Math.max(safe(config.durationSeconds / config.stepSeconds, 1), 1);
   const meanFwdSpeed = safe(receipt.distanceMeters, 0) / duration;

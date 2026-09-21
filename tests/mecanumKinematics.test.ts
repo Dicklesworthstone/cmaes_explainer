@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS } from "../app/lib/kmrGeometry";
 import {
   applyMecanumLimits,
   forwardMecanum,
@@ -6,7 +7,6 @@ import {
   KUKA_KMR_IIWA_LIMITS,
   type MecanumCommand,
 } from "../app/lib/mecanumKinematics";
-import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS } from "../app/lib/kmrGeometry";
 
 const cfg = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
 const r = cfg.wheelDiameterMeters / 2.0;
@@ -115,10 +115,7 @@ describe("Mecanum inverse kinematics (KMR iiwa)", () => {
   test("applyMecanumLimits clamps the angular speed", () => {
     const cmd: MecanumCommand = { vX: 0, vY: 0, omega: 10.0 };
     const limited = applyMecanumLimits(cmd, KUKA_KMR_IIWA_LIMITS);
-    expect(limited.omega).toBeCloseTo(
-      KUKA_KMR_IIWA_LIMITS.maxAngularRadPerSec,
-      12,
-    );
+    expect(limited.omega).toBeCloseTo(KUKA_KMR_IIWA_LIMITS.maxAngularRadPerSec, 12);
     expect(limited.vX).toBe(0);
     expect(limited.vY).toBe(0);
   });

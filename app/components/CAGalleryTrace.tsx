@@ -1,34 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
-  Sparkles,
-  Play,
-  Pause,
-  RotateCcw,
-  Sliders,
   Activity,
+  Atom,
   Compass,
   Flame,
+  Info,
   MousePointer2,
-  Atom,
+  Pause,
+  Play,
+  RotateCcw,
+  Sliders,
+  Sparkles,
   Zap,
-  Info
 } from "lucide-react";
-import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
-import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInView } from "../hooks/useScrollSpy";
-import { LatexRenderer } from "./LatexRenderer";
+import { type CMAESGenerationStateND, CMAESOptimizerND } from "../lib/cmaesEngineND";
 import {
   initFrankenSimLenia,
-  leniaInit,
   leniaClear,
-  leniaSeedRing,
-  leniaStep,
+  leniaEval,
   leniaImageData,
+  leniaInit,
+  leniaSeedRing,
   leniaSnapshotEval,
-  leniaEval
+  leniaStep,
 } from "../lib/frankensimLenia";
+import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
+import { LatexRenderer } from "./LatexRenderer";
 
 // ============================================================================
 // 1. Simulation Constants & Precomputed Concentric Lenia Kernel
@@ -62,7 +62,11 @@ interface KernelOffset {
 }
 
 // Precompute radial donut kernel K(r) = exp(-((r - r0)^2) / (2*sigma_k^2))
-function buildLeniaKernel(radius = 5, r0 = 0.5, sigmaK = 0.18): { offsets: KernelOffset[]; totalWeight: number } {
+function buildLeniaKernel(
+  radius = 5,
+  r0 = 0.5,
+  sigmaK = 0.18,
+): { offsets: KernelOffset[]; totalWeight: number } {
   const offsets: KernelOffset[] = [];
   let totalWeight = 0;
 
@@ -98,28 +102,31 @@ const ORGANISM_PRESETS: OrganismPreset[] = [
     id: "orbium",
     name: "Orbium-Inspired Soliton",
     category: "Soliton",
-    description: "Self-stabilizing localized wave packet inspired by Lenia's Orbium. (True gliding needs Orbium's exact asymmetric seed pattern; this symmetric seed pulses in place.)",
+    description:
+      "Self-stabilizing localized wave packet inspired by Lenia's Orbium. (True gliding needs Orbium's exact asymmetric seed pattern; this symmetric seed pulses in place.)",
     mu: 0.152,
     sigma: 0.038,
-    dt: 0.22
+    dt: 0.22,
   },
   {
     id: "mitosis",
     name: "Gemini Mitosis",
     category: "Replicator",
-    description: "Oscillating organic membrane that continuously undergoes symmetrical cellular division.",
+    description:
+      "Oscillating organic membrane that continuously undergoes symmetrical cellular division.",
     mu: 0.274,
     sigma: 0.044,
-    dt: 0.24
+    dt: 0.24,
   },
   {
     id: "biolattice",
     name: "Turing Bio-Lattice",
     category: "Morphogenesis",
-    description: "Dynamic self-organizing organic labyrinth forming labyrinthine vascular networks.",
+    description:
+      "Dynamic self-organizing organic labyrinth forming labyrinthine vascular networks.",
     mu: 0.365,
     sigma: 0.062,
-    dt: 0.20
+    dt: 0.2,
   },
   {
     id: "gyre",
@@ -128,8 +135,8 @@ const ORGANISM_PRESETS: OrganismPreset[] = [
     description: "Swarm of micro-solitons with non-linear flocking and fluidic hydrodynamics.",
     mu: 0.218,
     sigma: 0.036,
-    dt: 0.25
-  }
+    dt: 0.25,
+  },
 ];
 
 // Continuous Lenia Physics Step
@@ -139,7 +146,7 @@ function stepLeniaContinuous(
   kernel: { offsets: KernelOffset[]; totalWeight: number },
   mu: number,
   sigma: number,
-  dt = 0.22
+  dt = 0.22,
 ): { entropy: number; mass: number } {
   const invSigma = 1 / Math.max(1e-4, sigma);
   const invWeight = 1 / kernel.totalWeight;
@@ -237,7 +244,7 @@ export function CAGalleryTrace() {
             if (dist <= radius) {
               const x = (Math.round(cx) + dx + GRID_SIZE) % GRID_SIZE;
               const y = (Math.round(cy) + dy + GRID_SIZE) % GRID_SIZE;
-              const ring = Math.exp(-Math.pow((dist - radius * 0.55) / 2.2, 2));
+              const ring = Math.exp(-(((dist - radius * 0.55) / 2.2) ** 2));
               arr[y * GRID_SIZE + x] = Math.min(1.0, arr[y * GRID_SIZE + x] + ring * intensity);
             }
           }
@@ -247,7 +254,7 @@ export function CAGalleryTrace() {
       seed(GRID_SIZE * 0.65, GRID_SIZE * 0.55, 10, 0.9);
       return arr;
     })(),
-    next: new Float32Array(GRID_SIZE * GRID_SIZE)
+    next: new Float32Array(GRID_SIZE * GRID_SIZE),
   });
 
   // Seed a hollow gaussian ring (soliton seed) into the JS fallback field.
@@ -260,7 +267,7 @@ export function CAGalleryTrace() {
           const x = (Math.round(cx) + dx + GRID_SIZE) % GRID_SIZE;
           const y = (Math.round(cy) + dy + GRID_SIZE) % GRID_SIZE;
           // Hollow gaussian ring pattern (soliton seed)
-          const ring = Math.exp(-Math.pow((dist - radius * 0.55) / 2.2, 2));
+          const ring = Math.exp(-(((dist - radius * 0.55) / 2.2) ** 2));
           arr[y * GRID_SIZE + x] = Math.min(1.0, arr[y * GRID_SIZE + x] + ring * intensity);
         }
       }
@@ -271,14 +278,21 @@ export function CAGalleryTrace() {
   // field's grid cells; the wasm ring width scales with the field the same
   // way the kernel radius does, so seeds keep their morphology at 256².
   const seedRingAny = useCallback(
-    (engineKind: LeniaEngine, size: number, cx: number, cy: number, radius: number, intensity: number) => {
+    (
+      engineKind: LeniaEngine,
+      size: number,
+      cx: number,
+      cy: number,
+      radius: number,
+      intensity: number,
+    ) => {
       if (engineKind === "wasm") {
         leniaSeedRing(cx, cy, radius, 0.55, 2.2 * (size / GRID_SIZE), intensity);
       } else {
         injectOrganismJs(cx, cy, radius, intensity);
       }
     },
-    [injectOrganismJs]
+    [injectOrganismJs],
   );
 
   // Preset seed geometry, expressed relative to the field size so the same
@@ -316,7 +330,7 @@ export function CAGalleryTrace() {
         }
       }
     },
-    [seedRingAny]
+    [seedRingAny],
   );
 
   // Reset grid with iconic soliton seeds
@@ -329,7 +343,7 @@ export function CAGalleryTrace() {
       setDt(p.dt);
       seedPresetInto(p.id, engine, gridSize);
     },
-    [seedPresetInto, engine, gridSize]
+    [seedPresetInto, engine, gridSize],
   );
 
   // Bring up the FrankenSim FFT kernel; on success move the field to 256²
@@ -425,7 +439,9 @@ export function CAGalleryTrace() {
         } else {
           // Bioluminescent continuous spectrum:
           // Low: Cyan/Teal (#06b6d4) -> Mid: Electric Amethyst (#a855f7) -> High: Golden Sunburst (#fbbf24) -> Core: White (#ffffff)
-          let r = 0, g = 0, b = 0;
+          let r = 0,
+            g = 0,
+            b = 0;
 
           if (v < 0.35) {
             const t = v / 0.35;
@@ -523,14 +539,16 @@ export function CAGalleryTrace() {
       setOptimizerError(
         engine === "pending"
           ? "CMA-ES search is waiting for the FrankenSim WASM evaluation kernel."
-          : "CMA-ES search is unavailable because the WASM evaluation kernel did not load; the TypeScript field remains interactive."
+          : "CMA-ES search is unavailable because the WASM evaluation kernel did not load; the TypeScript field remains interactive.",
       );
       return;
     }
 
     leniaSnapshotEval();
     if (leniaEval(mu, sigma, dt, 1) === null) {
-      setOptimizerError("The WASM evaluator refused its preflight score, so optimization was not started.");
+      setOptimizerError(
+        "The WASM evaluator refused its preflight score, so optimization was not started.",
+      );
       return;
     }
 
@@ -551,9 +569,9 @@ export function CAGalleryTrace() {
     // Optimize continuous parameters in normalized [0, 1]^3 space
     const optimizer = new CMAESOptimizerND(
       (zVec) => {
-        const mVal = 0.10 + zVec[0] * 0.32;
-        const sVal = 0.015 + zVec[1] * 0.060;
-        const dtVal = 0.10 + zVec[2] * 0.25;
+        const mVal = 0.1 + zVec[0] * 0.32;
+        const sVal = 0.015 + zVec[1] * 0.06;
+        const dtVal = 0.1 + zVec[2] * 0.25;
 
         // Kernel-side rollout of the same objective: mean over 18 steps of
         // (interface - 2|mass - 0.25|).
@@ -564,14 +582,14 @@ export function CAGalleryTrace() {
       {
         dim: 3,
         initialMean: [
-          Math.max(0, Math.min(1, (mu - 0.10) / 0.32)),
-          Math.max(0, Math.min(1, (sigma - 0.015) / 0.060)),
-          Math.max(0, Math.min(1, (dt - 0.10) / 0.25))
+          Math.max(0, Math.min(1, (mu - 0.1) / 0.32)),
+          Math.max(0, Math.min(1, (sigma - 0.015) / 0.06)),
+          Math.max(0, Math.min(1, (dt - 0.1) / 0.25)),
         ],
         initialSigma: 0.22,
         lambda: 12,
-        bounds: [0.0, 1.0]
-      }
+        bounds: [0.0, 1.0],
+      },
     );
 
     let g = 0;
@@ -590,9 +608,9 @@ export function CAGalleryTrace() {
         return;
       }
       const displayedVector = g >= maxG ? state.bestX : state.mean;
-      const newMu = 0.10 + displayedVector[0] * 0.32;
-      const newSigma = 0.015 + displayedVector[1] * 0.060;
-      const newDt = 0.10 + displayedVector[2] * 0.25;
+      const newMu = 0.1 + displayedVector[0] * 0.32;
+      const newSigma = 0.015 + displayedVector[1] * 0.06;
+      const newDt = 0.1 + displayedVector[2] * 0.25;
 
       setMu(newMu);
       setSigma(newSigma);
@@ -641,7 +659,8 @@ export function CAGalleryTrace() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Evolving growth-rule parameters (μ, σ, Δt) for soliton morphogenesis with CMA-ES; the convolution kernel itself stays fixed
+              Evolving growth-rule parameters (μ, σ, Δt) for soliton morphogenesis with CMA-ES; the
+              convolution kernel itself stays fixed
             </p>
           </div>
         </div>
@@ -678,7 +697,9 @@ export function CAGalleryTrace() {
                   {p.category}
                 </span>
               </div>
-              <p className="text-[0.68rem] text-slate-400 line-clamp-2 leading-relaxed">{p.description}</p>
+              <p className="text-[0.68rem] text-slate-400 line-clamp-2 leading-relaxed">
+                {p.description}
+              </p>
             </button>
           );
         })}
@@ -717,15 +738,19 @@ export function CAGalleryTrace() {
                     isDraggingRef.current = false;
                   }}
                   onTouchStart={(e) => {
-                    if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                    if (e.touches[0])
+                      handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
                   }}
                   onTouchMove={(e) => {
-                    if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                    if (e.touches[0])
+                      handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
                   }}
                 />
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-pink-300 backdrop-blur-md">
                   Lenia 2D Cellular PDE ·{" "}
-                  {engine === "wasm" ? `FrankenSim WASM FFT ${gridSize}²` : `TS engine ${gridSize}²`}
+                  {engine === "wasm"
+                    ? `FrankenSim WASM FFT ${gridSize}²`
+                    : `TS engine ${gridSize}²`}
                 </div>
               </div>
 
@@ -762,10 +787,12 @@ export function CAGalleryTrace() {
                   isDraggingRef.current = false;
                 }}
                 onTouchStart={(e) => {
-                  if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                  if (e.touches[0])
+                    handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
                 }}
                 onTouchMove={(e) => {
-                  if (e.touches[0]) handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
+                  if (e.touches[0])
+                    handleCanvasInteraction(e.touches[0].clientX, e.touches[0].clientY);
                 }}
               />
 
@@ -823,7 +850,11 @@ export function CAGalleryTrace() {
                 onClick={() => setIsPlaying(!isPlaying)}
                 className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs flex items-center gap-2 transition-[background-color] border border-white/10"
               >
-                {isPlaying ? <Pause className="h-3.5 w-3.5 text-amber-400" /> : <Play className="h-3.5 w-3.5 text-emerald-400" />}
+                {isPlaying ? (
+                  <Pause className="h-3.5 w-3.5 text-amber-400" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 text-emerald-400" />
+                )}
                 <span>{isPlaying ? "Pause Simulation" : "Resume"}</span>
               </button>
               <button
@@ -840,7 +871,9 @@ export function CAGalleryTrace() {
               <button
                 onClick={() => setBrushMode("pulse")}
                 className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-[background-color,color] ${
-                  brushMode === "pulse" ? "bg-pink-500 text-white font-bold" : "bg-slate-900 text-slate-400"
+                  brushMode === "pulse"
+                    ? "bg-pink-500 text-white font-bold"
+                    : "bg-slate-900 text-slate-400"
                 }`}
               >
                 Soliton Ring
@@ -848,7 +881,9 @@ export function CAGalleryTrace() {
               <button
                 onClick={() => setBrushMode("seed")}
                 className={`px-2.5 py-1 rounded-lg text-[0.68rem] transition-[background-color,color] ${
-                  brushMode === "seed" ? "bg-pink-500 text-white font-bold" : "bg-slate-900 text-slate-400"
+                  brushMode === "seed"
+                    ? "bg-pink-500 text-white font-bold"
+                    : "bg-slate-900 text-slate-400"
                 }`}
               >
                 Dense Core
@@ -863,16 +898,22 @@ export function CAGalleryTrace() {
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-pink-300">
               <span className="flex items-center gap-1.5">
                 <Sliders className="h-3.5 w-3.5 text-pink-400" />
-                <span>Growth Function <LatexRenderer math="G(u; \mu, \sigma)" block={false} /></span>
+                <span>
+                  Growth Function <LatexRenderer math="G(u; \mu, \sigma)" block={false} />
+                </span>
               </span>
-              <span className="font-mono text-slate-500 text-[0.68rem]">Kernel K(r): Concentric Donut</span>
+              <span className="font-mono text-slate-500 text-[0.68rem]">
+                Kernel K(r): Concentric Donut
+              </span>
             </div>
 
             {/* Growth Center (mu) */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>Growth Center (</span><LatexRenderer math="\mu" block={false} /><span>)</span>
+                  <span>Growth Center (</span>
+                  <LatexRenderer math="\mu" block={false} />
+                  <span>)</span>
                 </span>
                 <span className="text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded border border-pink-500/20">
                   {mu.toFixed(3)}
@@ -895,7 +936,9 @@ export function CAGalleryTrace() {
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>Growth Width (</span><LatexRenderer math="\sigma" block={false} /><span>)</span>
+                  <span>Growth Width (</span>
+                  <LatexRenderer math="\sigma" block={false} />
+                  <span>)</span>
                 </span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {sigma.toFixed(3)}
@@ -918,7 +961,9 @@ export function CAGalleryTrace() {
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>Simulation Step (<LatexRenderer math="\Delta t" block={false} />)</span>
+                  <span>
+                    Simulation Step (<LatexRenderer math="\Delta t" block={false} />)
+                  </span>
                 </span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {dt.toFixed(2)}
@@ -945,7 +990,12 @@ export function CAGalleryTrace() {
               <span>Why CMA-ES Excels on Morphodynamic Landscapes</span>
             </div>
             <p className="leading-relaxed text-slate-300">
-              Continuous artificial life exists strictly inside chaotic, narrow parameter corridors. The update rule itself is smooth, but the fitness (does a pattern survive?) is a discontinuous functional of a chaotic rollout (18 steps per evaluation here), so gradients through it explode or vanish into uselessness. CMA-ES needs only rank comparisons, adapting its covariance ellipsoid to follow the razor-thin boundary of living emergence.
+              Continuous artificial life exists strictly inside chaotic, narrow parameter corridors.
+              The update rule itself is smooth, but the fitness (does a pattern survive?) is a
+              discontinuous functional of a chaotic rollout (18 steps per evaluation here), so
+              gradients through it explode or vanish into uselessness. CMA-ES needs only rank
+              comparisons, adapting its covariance ellipsoid to follow the razor-thin boundary of
+              living emergence.
             </p>
           </div>
 
@@ -962,11 +1012,16 @@ export function CAGalleryTrace() {
             }`}
           >
             <Sparkles className="h-4 w-4" />
-            <span>{isOptimizing ? "Halt Morphodynamic Evolution" : "Evolve Self-Stabilizing Solitons with CMA-ES"}</span>
+            <span>
+              {isOptimizing
+                ? "Halt Morphodynamic Evolution"
+                : "Evolve Self-Stabilizing Solitons with CMA-ES"}
+            </span>
           </button>
           {(optimizerError || engine !== "wasm") && (
             <p className="text-xs text-amber-300" role="status">
-              {optimizerError ?? "CMA-ES search will unlock when the FrankenSim WASM evaluator is ready."}
+              {optimizerError ??
+                "CMA-ES search will unlock when the FrankenSim WASM evaluator is ready."}
             </p>
           )}
         </div>

@@ -1,38 +1,38 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { useInView } from "../hooks/useScrollSpy";
-import { LatexRenderer } from "./LatexRenderer";
 import {
-  Play,
-  Pause,
-  RotateCcw,
-  FastForward,
-  Sparkles,
-  Sliders,
-  Compass,
   Activity,
-  Layers,
   BarChart3,
-  Flame,
-  Globe2,
+  ChevronRight,
+  Compass,
   Cpu,
   ExternalLink,
-  ChevronRight,
-  TrendingDown
+  FastForward,
+  Flame,
+  Globe2,
+  Layers,
+  Pause,
+  Play,
+  RotateCcw,
+  Sliders,
+  Sparkles,
+  TrendingDown,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInView } from "../hooks/useScrollSpy";
 import {
+  type BaselineStepState,
   BENCHMARKS,
-  BenchmarkFunction,
+  type BenchmarkFunction,
+  type CMAESGenerationState,
   CMAESOptimizer,
-  CMAESGenerationState,
-  runGradientDescent,
   runAdamOptimizer,
+  runGradientDescent,
   runRandomSearch,
-  BaselineStepState
 } from "../lib/cmaesEngine";
-import { buildHeatmapCanvas, HeatmapFieldId } from "../lib/frankensimHeatmap";
+import { buildHeatmapCanvas, type HeatmapFieldId } from "../lib/frankensimHeatmap";
+import { LatexRenderer } from "./LatexRenderer";
 
 export function WasmDemo() {
   const [selectedBenchId, setSelectedBenchId] = useState<string>("rosenbrock");
@@ -69,7 +69,7 @@ export function WasmDemo() {
       lambda: 16,
       activeCMA: true,
       noiseLevel: 0.0,
-      bounds: bench.domain
+      bounds: bench.domain,
     });
     return { optimizer, state: optimizer.step() };
   });
@@ -79,31 +79,34 @@ export function WasmDemo() {
   const lossCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Initialize optimizer instance helper
-  const createOptimizerState = useCallback((
-    bench: BenchmarkFunction,
-    start: [number, number],
-    sigma: number,
-    popSize: number,
-    active: boolean,
-    noise: number,
-    compare: boolean
-  ) => {
-    const opt = new CMAESOptimizer(bench.eval, {
-      dim: 2,
-      initialMean: [start[0], start[1]],
-      initialSigma: sigma,
-      lambda: popSize,
-      activeCMA: active,
-      noiseLevel: noise,
-      bounds: bench.domain
-    });
-    optimizerRef.current = opt;
-    const initialStep = opt.step();
-    const gd = compare ? runGradientDescent(bench.eval, start, 40, 0.005) : [];
-    const adam = compare ? runAdamOptimizer(bench.eval, start, 40, 0.05) : [];
-    const rs = compare ? runRandomSearch(bench.eval, bench.domain, 40 * popSize) : [];
-    return { initialStep, gd, adam, rs };
-  }, []);
+  const createOptimizerState = useCallback(
+    (
+      bench: BenchmarkFunction,
+      start: [number, number],
+      sigma: number,
+      popSize: number,
+      active: boolean,
+      noise: number,
+      compare: boolean,
+    ) => {
+      const opt = new CMAESOptimizer(bench.eval, {
+        dim: 2,
+        initialMean: [start[0], start[1]],
+        initialSigma: sigma,
+        lambda: popSize,
+        activeCMA: active,
+        noiseLevel: noise,
+        bounds: bench.domain,
+      });
+      optimizerRef.current = opt;
+      const initialStep = opt.step();
+      const gd = compare ? runGradientDescent(bench.eval, start, 40, 0.005) : [];
+      const adam = compare ? runAdamOptimizer(bench.eval, start, 40, 0.05) : [];
+      const rs = compare ? runRandomSearch(bench.eval, bench.domain, 40 * popSize) : [];
+      return { initialStep, gd, adam, rs };
+    },
+    [],
+  );
 
   const [history, setHistory] = useState<CMAESGenerationState[]>([initialRun.state]);
 
@@ -120,7 +123,7 @@ export function WasmDemo() {
         lambda,
         activeCMA,
         noiseLevel,
-        bounds: currentBench.domain
+        bounds: currentBench.domain,
       });
     }
     return optimizerRef.current;
@@ -136,13 +139,22 @@ export function WasmDemo() {
       lambda,
       activeCMA,
       noiseLevel,
-      compareMode
+      compareMode,
     );
     setHistory([initialStep]);
     setGdHistory(gd);
     setAdamHistory(adam);
     setRsHistory(rs);
-  }, [createOptimizerState, currentBench, startPoint, initialSigma, lambda, activeCMA, noiseLevel, compareMode]);
+  }, [
+    createOptimizerState,
+    currentBench,
+    startPoint,
+    initialSigma,
+    lambda,
+    activeCMA,
+    noiseLevel,
+    compareMode,
+  ]);
 
   // Handle benchmark change
   const handleSelectBench = (benchId: string) => {
@@ -158,7 +170,7 @@ export function WasmDemo() {
       lambda,
       activeCMA,
       noiseLevel,
-      compareMode
+      compareMode,
     );
     setHistory([initialStep]);
     setGdHistory(gd);
@@ -184,7 +196,7 @@ export function WasmDemo() {
         16,
         true,
         noiseLevel,
-        compareMode
+        compareMode,
       );
       setHistory([initialStep]);
       setGdHistory(gd);
@@ -205,7 +217,7 @@ export function WasmDemo() {
         24,
         true,
         noiseLevel,
-        compareMode
+        compareMode,
       );
       setHistory([initialStep]);
       setGdHistory(gd);
@@ -226,7 +238,7 @@ export function WasmDemo() {
         16,
         true,
         noiseLevel,
-        compareMode
+        compareMode,
       );
       setHistory([initialStep]);
       setGdHistory(gd);
@@ -247,7 +259,7 @@ export function WasmDemo() {
         20,
         true,
         noiseLevel,
-        compareMode
+        compareMode,
       );
       setHistory([initialStep]);
       setGdHistory(gd);
@@ -298,7 +310,7 @@ export function WasmDemo() {
       ackley: "ackley",
       cigar: "cigar-y1000",
       himmelblau: "himmelblau",
-      step_ridge: "step-ridge"
+      step_ridge: "step-ridge",
     };
     const fieldId = fieldByBench[currentBench.id];
     if (!fieldId) return;
@@ -313,7 +325,7 @@ export function WasmDemo() {
       ymax: dMax,
       norm: { mode: "log10eps", k: 4 },
       ramp: { r0: 6, rk: 18, g0: 16, gk: 85, b0: 32, bk: 130 },
-      fallbackField: currentBench.eval
+      fallbackField: currentBench.eval,
     }).then((canvas) => {
       if (live && canvas) bgCanvasRef.current = canvas;
     });
@@ -566,7 +578,7 @@ export function WasmDemo() {
     const maxEvals = Math.max(
       60 * lambda,
       ...history.map((s) => s.evalCount),
-      ...(compareMode && gdHistory ? gdHistory.map((s) => s.evalCount) : [1])
+      ...(compareMode && gdHistory ? gdHistory.map((s) => s.evalCount) : [1]),
     );
     const toPxX = (evals: number) => (evals / maxEvals) * (W - 70) + 50;
     const toPxY = (logLoss: number) => {
@@ -644,9 +656,10 @@ export function WasmDemo() {
     <div ref={containerRef} className="space-y-8">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
-          Test CMA-ES live against classical benchmark test functions. Watch the covariance matrix adapt its principal axes,
-          observe cumulative step-size adaptation (σ grows on aligned steps and shrinks on oscillating ones), and compare its
-          convergence rate against finite-difference gradient descent.
+          Test CMA-ES live against classical benchmark test functions. Watch the covariance matrix
+          adapt its principal axes, observe cumulative step-size adaptation (σ grows on aligned
+          steps and shrinks on oscillating ones), and compare its convergence rate against
+          finite-difference gradient descent.
         </p>
       </div>
 
@@ -690,7 +703,9 @@ export function WasmDemo() {
           <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/70 px-5 py-3 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-bold text-white">wasm_cmaes Benchmark Suite (SIMD / Rayon)</span>
+              <span className="font-bold text-white">
+                wasm_cmaes Benchmark Suite (SIMD / Rayon)
+              </span>
             </div>
             <a
               href="/wasm-demo/examples/viz-benchmarks.html"
@@ -718,15 +733,29 @@ export function WasmDemo() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-sky-950/40 via-indigo-950/20 to-purple-950/30 border border-sky-500/20 shadow-inner">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
-              <span className="text-xs font-bold text-white font-display">Instant Stress-Test Presets:</span>
+              <span className="text-xs font-bold text-white font-display">
+                Instant Stress-Test Presets:
+              </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
               {[
-                { id: "rosenbrock", label: "🍌 Ill-Conditioned Canyon", tip: "Curved narrow valley" },
-                { id: "rastrigin", label: "🏔️ Regular Multimodal Grid", tip: "Many local minima around a global funnel" },
-                { id: "cigar", label: "⚡ Extreme Curvature Ratio (1000:1)", tip: "Level-set axis ratio √1000 ≈ 31.6:1" },
-                { id: "ackley", label: "🎯 Sharp Funnel", tip: "Flat outer plateau" }
+                {
+                  id: "rosenbrock",
+                  label: "🍌 Ill-Conditioned Canyon",
+                  tip: "Curved narrow valley",
+                },
+                {
+                  id: "rastrigin",
+                  label: "🏔️ Regular Multimodal Grid",
+                  tip: "Many local minima around a global funnel",
+                },
+                {
+                  id: "cigar",
+                  label: "⚡ Extreme Curvature Ratio (1000:1)",
+                  tip: "Level-set axis ratio √1000 ≈ 31.6:1",
+                },
+                { id: "ackley", label: "🎯 Sharp Funnel", tip: "Flat outer plateau" },
               ].map((p) => (
                 <button
                   key={p.id}
@@ -768,7 +797,11 @@ export function WasmDemo() {
                     if (e.target.checked && gdHistory.length === 0) {
                       const gd = runGradientDescent(currentBench.eval, startPoint, 40, 0.005);
                       const adam = runAdamOptimizer(currentBench.eval, startPoint, 40, 0.05);
-                      const rs = runRandomSearch(currentBench.eval, currentBench.domain, 40 * lambda);
+                      const rs = runRandomSearch(
+                        currentBench.eval,
+                        currentBench.domain,
+                        40 * lambda,
+                      );
                       setGdHistory(gd);
                       setAdamHistory(adam);
                       setRsHistory(rs);
@@ -818,7 +851,10 @@ export function WasmDemo() {
                     const [dMin, dMax] = currentBench.domain;
                     const newX = Math.max(dMin, Math.min(dMax, startPoint[0] + dx));
                     const newY = Math.max(dMin, Math.min(dMax, startPoint[1] + dy));
-                    const newStart: [number, number] = [parseFloat(newX.toFixed(2)), parseFloat(newY.toFixed(2))];
+                    const newStart: [number, number] = [
+                      parseFloat(newX.toFixed(2)),
+                      parseFloat(newY.toFixed(2)),
+                    ];
                     setStartPoint(newStart);
                     setIsPlaying(false);
                     const { initialStep, gd, adam, rs } = createOptimizerState(
@@ -828,7 +864,7 @@ export function WasmDemo() {
                       lambda,
                       activeCMA,
                       noiseLevel,
-                      compareMode
+                      compareMode,
                     );
                     setHistory([initialStep]);
                     setGdHistory(gd);
@@ -842,7 +878,10 @@ export function WasmDemo() {
                     const [dMin, dMax] = currentBench.domain;
                     const nx = (px / rect.width) * (dMax - dMin) + dMin;
                     const ny = ((rect.height - py) / rect.height) * (dMax - dMin) + dMin;
-                    const newStart: [number, number] = [parseFloat(nx.toFixed(2)), parseFloat(ny.toFixed(2))];
+                    const newStart: [number, number] = [
+                      parseFloat(nx.toFixed(2)),
+                      parseFloat(ny.toFixed(2)),
+                    ];
                     setStartPoint(newStart);
                     setIsPlaying(false);
                     const { initialStep, gd, adam, rs } = createOptimizerState(
@@ -852,7 +891,7 @@ export function WasmDemo() {
                       lambda,
                       activeCMA,
                       noiseLevel,
-                      compareMode
+                      compareMode,
                     );
                     setHistory([initialStep]);
                     setGdHistory(gd);
@@ -873,7 +912,9 @@ export function WasmDemo() {
                   <div className="absolute bottom-3 right-3 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[0.68rem] font-mono shadow-2xl pointer-events-none flex items-center gap-2">
                     <span className="text-slate-400">Best:</span>
                     <span className="text-emerald-400 font-bold">
-                      {latestState.bestFitness < 1e-3 ? latestState.bestFitness.toExponential(2) : latestState.bestFitness.toFixed(3)}
+                      {latestState.bestFitness < 1e-3
+                        ? latestState.bestFitness.toExponential(2)
+                        : latestState.bestFitness.toFixed(3)}
                     </span>
                   </div>
                 )}
@@ -890,7 +931,11 @@ export function WasmDemo() {
                         : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
                     }`}
                   >
-                    {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    {isPlaying ? (
+                      <Pause className="h-3.5 w-3.5" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
                     <span>{isPlaying ? "Pause" : "Run Optimization"}</span>
                   </button>
 
@@ -921,14 +966,16 @@ export function WasmDemo() {
                     {[
                       { label: "Slow", ms: 650 },
                       { label: "Normal", ms: 350 },
-                      { label: "Fast", ms: 120 }
+                      { label: "Fast", ms: 120 },
                     ].map((s) => (
                       <button
                         key={s.ms}
                         type="button"
                         onClick={() => setSpeedMs(s.ms)}
                         className={`px-1.5 py-0.5 rounded text-[0.65rem] transition-colors ${
-                          speedMs === s.ms ? "bg-sky-500 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                          speedMs === s.ms
+                            ? "bg-sky-500 text-white font-bold"
+                            : "text-slate-400 hover:text-slate-200"
                         }`}
                       >
                         {s.label}
@@ -958,7 +1005,12 @@ export function WasmDemo() {
                   </div>
                 </div>
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-inner bg-[#030712]">
-                  <canvas ref={lossCanvasRef} width={840} height={400} className="w-full h-auto block" />
+                  <canvas
+                    ref={lossCanvasRef}
+                    width={840}
+                    height={400}
+                    className="w-full h-auto block"
+                  />
                 </div>
               </div>
 
@@ -996,7 +1048,7 @@ export function WasmDemo() {
                         newL,
                         activeCMA,
                         noiseLevel,
-                        compareMode
+                        compareMode,
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
@@ -1035,7 +1087,7 @@ export function WasmDemo() {
                         lambda,
                         activeCMA,
                         noiseLevel,
-                        compareMode
+                        compareMode,
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
@@ -1074,7 +1126,7 @@ export function WasmDemo() {
                         lambda,
                         activeCMA,
                         newN,
-                        compareMode
+                        compareMode,
                       );
                       setHistory([initialStep]);
                       setGdHistory(gd);
@@ -1100,14 +1152,19 @@ export function WasmDemo() {
                   <div>
                     <h4 className="text-sm font-bold text-white font-display flex items-center gap-2">
                       <span>Live Simulation Internal Algebraic State</span>
-                      <span className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
-                        isPlaying ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse" : "bg-slate-800 border-white/10 text-slate-400"
-                      }`}>
+                      <span
+                        className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
+                          isPlaying
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse"
+                            : "bg-slate-800 border-white/10 text-slate-400"
+                        }`}
+                      >
                         {isPlaying ? "Running CMA-ES" : "Paused / Stepping"}
                       </span>
                     </h4>
                     <p className="text-[0.7rem] text-slate-400">
-                      Real-time covariance eigensystem, evolution path momentum, and step-size adaptation
+                      Real-time covariance eigensystem, evolution path momentum, and step-size
+                      adaptation
                     </p>
                   </div>
                 </div>
@@ -1146,7 +1203,9 @@ export function WasmDemo() {
                     {latestState.sigma.toFixed(3)}
                   </div>
                   <div className="text-[0.68rem] text-slate-400 font-mono">
-                    <LatexRenderer math="\|p_\sigma\|" block={false} /> = {Math.hypot(latestState.pSigma[0], latestState.pSigma[1]).toFixed(2)} (vs <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
+                    <LatexRenderer math="\|p_\sigma\|" block={false} /> ={" "}
+                    {Math.hypot(latestState.pSigma[0], latestState.pSigma[1]).toFixed(2)} (vs{" "}
+                    <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
                   </div>
                 </div>
 
@@ -1160,7 +1219,8 @@ export function WasmDemo() {
                     {latestState.conditionNumber.toFixed(1)} : 1
                   </div>
                   <div className="text-[0.68rem] text-slate-400 font-mono">
-                    <LatexRenderer math="\theta" block={false} /> = {((latestState.ellipseAngle * 180) / Math.PI).toFixed(0)}° orientation
+                    <LatexRenderer math="\theta" block={false} /> ={" "}
+                    {((latestState.ellipseAngle * 180) / Math.PI).toFixed(0)}° orientation
                   </div>
                 </div>
 
@@ -1171,10 +1231,13 @@ export function WasmDemo() {
                     <LatexRenderer math="p_c" block={false} />
                   </div>
                   <div className="font-mono text-rose-300 text-sm font-semibold">
-                    <LatexRenderer math="\|p_c\|" block={false} /> = {Math.hypot(latestState.pC[0], latestState.pC[1]).toFixed(2)}
+                    <LatexRenderer math="\|p_c\|" block={false} /> ={" "}
+                    {Math.hypot(latestState.pC[0], latestState.pC[1]).toFixed(2)}
                   </div>
                   <div className="text-[0.68rem] text-slate-400">
-                    {activeCMA ? "Rank-1 + rank-μ, negative weights on the worst" : "Rank-1 + rank-μ CMA"}
+                    {activeCMA
+                      ? "Rank-1 + rank-μ, negative weights on the worst"
+                      : "Rank-1 + rank-μ CMA"}
                   </div>
                 </div>
 
@@ -1185,7 +1248,9 @@ export function WasmDemo() {
                     <LatexRenderer math="f_{\text{best}}" block={false} />
                   </div>
                   <div className="font-mono text-sky-300 text-sm font-semibold">
-                    {latestState.bestFitness < 1e-4 ? latestState.bestFitness.toExponential(3) : latestState.bestFitness.toFixed(4)}
+                    {latestState.bestFitness < 1e-4
+                      ? latestState.bestFitness.toExponential(3)
+                      : latestState.bestFitness.toFixed(4)}
                   </div>
                   <div className="text-[0.68rem] text-slate-400 font-mono">
                     Optimum: {currentBench.optimumValue.toFixed(1)}

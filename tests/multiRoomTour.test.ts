@@ -56,7 +56,7 @@ describe("Multi-Room Cinematic 3D Fly-Through Tour Engine", () => {
           snap.cameraPosition[1] - prev.cameraPosition[1],
           snap.cameraPosition[2] - prev.cameraPosition[2],
         );
-        expect(stepDist).toBeLessThan(0.20);
+        expect(stepDist).toBeLessThan(0.2);
       }
     }
   });

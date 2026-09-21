@@ -18,7 +18,7 @@
 //   - Ames et al., "Control Barrier Functions: Theory and Applications" (IEEE ECC 2019)
 //   - Jo, Zhang, Yang, Luo, "Geometry-Aware Control Barrier Functions", ICRA 2026
 
-import { type RiskClass } from "./furnitureTaxonomy";
+import type { RiskClass } from "./furnitureTaxonomy";
 
 export interface ObstacleRiskProfile {
   center: [number, number, number];
@@ -110,7 +110,8 @@ export function computeAdaptiveSafetyMargin(
   // Approach angle factor: - (v_rel . normal) / speed
   let angleFactor = minAngle;
   if (speed > 1e-4) {
-    const dotApproach = -(rvx * surfaceNormal[0] + rvy * surfaceNormal[1] + rvz * surfaceNormal[2]) / speed;
+    const dotApproach =
+      -(rvx * surfaceNormal[0] + rvy * surfaceNormal[1] + rvz * surfaceNormal[2]) / speed;
     if (dotApproach > 0) {
       angleFactor = Math.max(minAngle, dotApproach);
     }

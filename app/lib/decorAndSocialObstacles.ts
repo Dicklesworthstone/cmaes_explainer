@@ -18,17 +18,9 @@
 //   - Ferrer, Garrell, & Sanfeliu, "Robot Companion: A Social-Aware Navigational Framework" (IROS 2014)
 //   - Mavrogiannis et al., "Core Challenges of Socially Compliant Robot Navigation" (ACM Trans. HRI 2023)
 
-export type DecorKind =
-  | "potted-plant"
-  | "floor-lamp"
-  | "picture-frame"
-  | "table-vase";
+export type DecorKind = "potted-plant" | "floor-lamp" | "picture-frame" | "table-vase";
 
-export type SilhouetteKind =
-  | "pedestrian-standing"
-  | "pedestrian-walking"
-  | "pet-dog"
-  | "pet-cat";
+export type SilhouetteKind = "pedestrian-standing" | "pedestrian-walking" | "pet-dog" | "pet-cat";
 
 export interface DecorObjectSpec {
   id: string;
@@ -55,7 +47,10 @@ export interface SilhouetteAgent {
 
 const GRAVITY = 9.81;
 
-export const DEFAULT_SILHOUETTE_PROFILES: Record<SilhouetteKind, Omit<SilhouetteAgent, "id" | "position">> = {
+export const DEFAULT_SILHOUETTE_PROFILES: Record<
+  SilhouetteKind,
+  Omit<SilhouetteAgent, "id" | "position">
+> = {
   "pedestrian-standing": {
     kind: "pedestrian-standing",
     velocity: [0.0, 0.0],
@@ -69,9 +64,9 @@ export const DEFAULT_SILHOUETTE_PROFILES: Record<SilhouetteKind, Omit<Silhouette
     kind: "pedestrian-walking",
     velocity: [0.8, 0.0],
     headingYaw: 0.0,
-    comfortRadius: 0.90,
-    sigmaFront: 1.40, // Larger forward comfort zone when moving
-    sigmaSide: 0.70,
+    comfortRadius: 0.9,
+    sigmaFront: 1.4, // Larger forward comfort zone when moving
+    sigmaSide: 0.7,
     amplitude: 12.0,
   },
   "pet-dog": {
@@ -79,17 +74,17 @@ export const DEFAULT_SILHOUETTE_PROFILES: Record<SilhouetteKind, Omit<Silhouette
     velocity: [0.5, 0.0],
     headingYaw: 0.0,
     comfortRadius: 0.55,
-    sigmaFront: 0.90,
-    sigmaSide: 0.50,
+    sigmaFront: 0.9,
+    sigmaSide: 0.5,
     amplitude: 7.0,
   },
   "pet-cat": {
     kind: "pet-cat",
     velocity: [0.0, 0.0],
     headingYaw: 0.0,
-    comfortRadius: 0.40,
-    sigmaFront: 0.60,
-    sigmaSide: 0.40,
+    comfortRadius: 0.4,
+    sigmaFront: 0.6,
+    sigmaSide: 0.4,
     amplitude: 5.0,
   },
 };
@@ -120,7 +115,7 @@ export function createDecorObject(
     case "potted-plant":
       defaultMass = 8.0;
       defaultBaseR = 0.16;
-      defaultHeight = 0.90;
+      defaultHeight = 0.9;
       isFragile = false;
       break;
     case "table-vase":
@@ -132,7 +127,7 @@ export function createDecorObject(
     case "picture-frame":
       defaultMass = 1.5;
       defaultBaseR = 0.05;
-      defaultHeight = 0.50;
+      defaultHeight = 0.5;
       isFragile = true;
       break;
   }

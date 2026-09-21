@@ -7,10 +7,7 @@
 //   3. spawn-safe (findClearSpawnPosition) — the arm target cannot
 //      spawn inside the table on the first trace load.
 import { describe, expect, test } from "bun:test";
-import {
-  clampArmTargetPosition,
-  isTargetKukaReachable,
-} from "../app/lib/armInverseKinematics";
+import { clampArmTargetPosition, isTargetKukaReachable } from "../app/lib/armInverseKinematics";
 import {
   createSceneFromHouseFurniture,
   distanceToOBB,
@@ -36,11 +33,7 @@ describe("arm target clamp — the arm cannot be placed inside a surface", () =>
   test("a target inside a piece of furniture is pushed to clearance", () => {
     if (obstacles.length === 0) return;
     const target = obstacles[0];
-    const interior: [number, number, number] = [
-      target.center[0],
-      tableHeight,
-      target.center[2],
-    ];
+    const interior: [number, number, number] = [target.center[0], tableHeight, target.center[2]];
     const { clampedTarget, isColliding } = clampArmTargetPosition(
       interior,
       obstacles,
@@ -87,11 +80,7 @@ describe("end-to-end — the arm target chain provably cannot tunnel", () => {
     // Pick any OBB and place the target at its center. The clamp must
     // push the result out so the target is not still inside the OBB.
     const target = obstacles[0];
-    const interior: [number, number, number] = [
-      target.center[0],
-      tableHeight,
-      target.center[2],
-    ];
+    const interior: [number, number, number] = [target.center[0], tableHeight, target.center[2]];
     const { clampedTarget, isColliding } = clampArmTargetPosition(
       interior,
       obstacles,
@@ -151,9 +140,7 @@ describe("clampArmTargetPosition — yawed OBB regression (cmaes-pvz followup)",
     );
     expect(isColliding).toBe(false);
     // After projection, the target must clear the chair by the margin.
-    expect(distanceToOBB(clampedTarget, yawedChair)).toBeGreaterThanOrEqual(
-      safeRadius - 1e-6,
-    );
+    expect(distanceToOBB(clampedTarget, yawedChair)).toBeGreaterThanOrEqual(safeRadius - 1e-6);
     // The Y coordinate must have been updated (the chair is tall enough
     // to push the target above the original Y).
     expect(clampedTarget[1]).toBeGreaterThan(target[1]);

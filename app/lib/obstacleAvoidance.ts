@@ -15,7 +15,7 @@
  * - Ericson, "Real-Time Collision Detection", Morgan Kaufmann 2005.
  */
 
-import { FurnitureKind } from "./furnitureTaxonomy";
+import type { FurnitureKind } from "./furnitureTaxonomy";
 
 export interface Vector3D {
   x: number;
@@ -76,7 +76,7 @@ export interface QPSolveResult {
  */
 export function computeObbSdf(
   point: [number, number, number],
-  obstacle: Obstacle3D
+  obstacle: Obstacle3D,
 ): { distance: number; normal: [number, number, number] } {
   const [px, py, pz] = point;
   const [ox, oy, oz] = obstacle.center;
@@ -100,11 +100,7 @@ export function computeObbSdf(
   const qy = Math.abs(ly) - hy;
   const qz = Math.abs(lz) - hz;
 
-  const outsideDist = Math.hypot(
-    Math.max(qx, 0),
-    Math.max(qy, 0),
-    Math.max(qz, 0)
-  );
+  const outsideDist = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0));
   const insideDist = Math.min(Math.max(qx, Math.max(qy, qz)), 0);
   const distance = outsideDist + insideDist;
 
@@ -155,7 +151,7 @@ export function solveCbfQp(
   b: number[], // Constraints RHS (numConstraints)
   uMin: number[],
   uMax: number[],
-  config: CBFConfig = DEFAULT_CBF_CONFIG
+  config: CBFConfig = DEFAULT_CBF_CONFIG,
 ): QPSolveResult {
   const dim = uNom.length;
   const m = A.length;
@@ -225,7 +221,7 @@ export function solveCbfQp(
             if (A[k][i] !== 0) {
               safeAction[i] = Math.max(
                 uMin[i],
-                Math.min(uMax[i], safeAction[i] - actualDeltaLambda * A[k][i])
+                Math.min(uMax[i], safeAction[i] - actualDeltaLambda * A[k][i]),
               );
             }
           }
@@ -285,7 +281,7 @@ export function solveCbfQp(
 export function buildWholeBodyCbfConstraints(
   links: RobotLinkState[],
   obstacles: Obstacle3D[],
-  config: CBFConfig = DEFAULT_CBF_CONFIG
+  config: CBFConfig = DEFAULT_CBF_CONFIG,
 ): { A: number[][]; b: number[]; minClearance: number } {
   const A: number[][] = [];
   const b: number[] = [];
@@ -355,7 +351,7 @@ export function applySafetyFilter(
   obstacles: Obstacle3D[],
   uMin: number[],
   uMax: number[],
-  config: CBFConfig = DEFAULT_CBF_CONFIG
+  config: CBFConfig = DEFAULT_CBF_CONFIG,
 ): QPSolveResult {
   const { A, b, minClearance } = buildWholeBodyCbfConstraints(links, obstacles, config);
   const result = solveCbfQp(uNom, A, b, uMin, uMax, config);
@@ -369,9 +365,14 @@ export function applySafetyFilter(
  * when obstacles are removed (Anti-Reward-Hacking property).
  */
 export function evaluateObstacleObjective(
-  trajectoryStates: Array<{ links: RobotLinkState[]; action: number[]; safeAction: number[]; slack: number }>,
+  trajectoryStates: Array<{
+    links: RobotLinkState[];
+    action: number[];
+    safeAction: number[];
+    slack: number;
+  }>,
   obstacles: Obstacle3D[],
-  config: CBFConfig = DEFAULT_CBF_CONFIG
+  config: CBFConfig = DEFAULT_CBF_CONFIG,
 ): {
   totalPenalty: number;
   minClearance: number;

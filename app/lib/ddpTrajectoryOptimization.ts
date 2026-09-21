@@ -14,12 +14,12 @@
  * - Carlos Mastalli et al., "Crocoddyl: An Efficient and Versatile Framework for Multi-Contact Optimal Control", ICRA 2020.
  */
 
+import type { DifferentiableSdfNode } from "./differentiableSdf";
 import {
-  MultibodyTree,
   forwardDynamicsABA,
+  type MultibodyTree,
   stepMultibodyDynamics,
 } from "./featherstoneDynamics";
-import { DifferentiableSdfNode } from "./differentiableSdf";
 
 export interface DDPConfig {
   horizonSteps: number; // T (e.g. 50 timesteps)
@@ -87,7 +87,7 @@ function invertSymmetricMatrix(A: number[][]): number[][] {
     aug[i] = aug[maxRow];
     aug[maxRow] = tmp;
 
-    const pivot = Math.abs(aug[i][i]) > 1e-9 ? aug[i][i] : (aug[i][i] < 0 ? -1e-9 : 1e-9);
+    const pivot = Math.abs(aug[i][i]) > 1e-9 ? aug[i][i] : aug[i][i] < 0 ? -1e-9 : 1e-9;
     for (let j = 0; j < 2 * n; j++) aug[i][j] /= pivot;
 
     for (let k = 0; k < n; k++) {
@@ -155,7 +155,7 @@ export function evalDynamics(
   tree: MultibodyTree,
   x: number[], // [q, qDot]
   u: number[], // [tau]
-  dt: number
+  dt: number,
 ): number[] {
   const numLinks = tree.links.length;
   const q = x.slice(0, numLinks);
@@ -173,7 +173,7 @@ export function linearizeDynamics(
   x: number[],
   u: number[],
   dt: number,
-  eps: number = 1e-4
+  eps: number = 1e-4,
 ): { A: number[][]; B: number[][] } {
   const nx = x.length;
   const nu = u.length;
@@ -223,7 +223,7 @@ export function evaluateTrajectoryCost(
   controls: number[][],
   targetState: number[],
   weights: DDPWeights,
-  obstacles?: DifferentiableSdfNode[]
+  obstacles?: DifferentiableSdfNode[],
 ): number {
   const T = controls.length;
   const nx = targetState.length;
@@ -283,7 +283,7 @@ export function solveDDP(
   initialControls: number[][],
   weights: DDPWeights,
   config: DDPConfig = DEFAULT_DDP_CONFIG,
-  obstacles?: DifferentiableSdfNode[]
+  obstacles?: DifferentiableSdfNode[],
 ): DDPResult {
   const T = config.horizonSteps;
   const nx = x0.length;
@@ -303,9 +303,9 @@ export function solveDDP(
   const initialCost = currentCost;
 
   let mu = config.regularizationInit;
-  let feedforwardGains: number[][] = Array.from({ length: T }, () => new Array(nu).fill(0));
-  let feedbackGains: number[][][] = Array.from({ length: T }, () =>
-    Array.from({ length: nu }, () => new Array(nx).fill(0))
+  const feedforwardGains: number[][] = Array.from({ length: T }, () => new Array(nu).fill(0));
+  const feedbackGains: number[][][] = Array.from({ length: T }, () =>
+    Array.from({ length: nu }, () => new Array(nx).fill(0)),
   );
 
   let iter = 0;
@@ -325,7 +325,7 @@ export function solveDDP(
       Vxx[i][i] = wTerm;
     }
 
-    let backwardPassOk = true;
+    const backwardPassOk = true;
     expectedCostReduction = 0;
 
     for (let t = T - 1; t >= 0; t--) {
@@ -364,13 +364,13 @@ export function solveDDP(
       // Q_xx = l_xx + A^T * V_xx * A
       const AT_Vxx_A = matMul(matTranspose(A), matMul(Vxx, A));
       const Qxx: number[][] = Array.from({ length: nx }, (_, r) =>
-        Array.from({ length: nx }, (_, c) => lxx[r][c] + AT_Vxx_A[r][c])
+        Array.from({ length: nx }, (_, c) => lxx[r][c] + AT_Vxx_A[r][c]),
       );
 
       // Q_uu = l_uu + B^T * V_xx * B + \mu * I
       const BT_Vxx_B = matMul(matTranspose(B), matMul(Vxx, B));
       const Quu: number[][] = Array.from({ length: nu }, (_, r) =>
-        Array.from({ length: nu }, (_, c) => luu[r][c] + BT_Vxx_B[r][c] + (r === c ? mu : 0))
+        Array.from({ length: nu }, (_, c) => luu[r][c] + BT_Vxx_B[r][c] + (r === c ? mu : 0)),
       );
 
       // Q_ux = B^T * V_xx * A
@@ -434,7 +434,7 @@ export function solveDDP(
           if (config.controlLimits) {
             uVal = Math.max(
               config.controlLimits.min[i],
-              Math.min(config.controlLimits.max[i], uVal)
+              Math.min(config.controlLimits.max[i], uVal),
             );
           }
           return uVal;
@@ -444,7 +444,13 @@ export function solveDDP(
         newStates[t + 1] = evalDynamics(tree, newStates[t], utNew, dt);
       }
 
-      const newCost = evaluateTrajectoryCost(newStates, newControls, targetState, weights, obstacles);
+      const newCost = evaluateTrajectoryCost(
+        newStates,
+        newControls,
+        targetState,
+        weights,
+        obstacles,
+      );
 
       if (newCost < currentCost) {
         currentCost = newCost;

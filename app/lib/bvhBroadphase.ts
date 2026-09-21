@@ -18,7 +18,7 @@
 //   - Lauterbach et al., "Fast BVH Construction on GPUs" (Eurographics 2009)
 
 import * as THREE from "three";
-import { type OBB } from "./houseFurniture";
+import type { OBB } from "./houseFurniture";
 
 export interface AABB {
   min: [number, number, number];
@@ -122,11 +122,7 @@ export class BVH {
           min: [minX, minY, minZ],
           max: [maxX, maxY, maxZ],
         },
-        center: [
-          (minX + maxX) * 0.5,
-          (minY + maxY) * 0.5,
-          (minZ + maxZ) * 0.5,
-        ],
+        center: [(minX + maxX) * 0.5, (minY + maxY) * 0.5, (minZ + maxZ) * 0.5],
         data: {
           a: [vA.x, vA.y, vA.z],
           b: [vB.x, vB.y, vB.z],
@@ -164,7 +160,11 @@ export class BVH {
     // Find best split using binned SAH
     const split = this.findBestSAHSplit(start, count, nodeAabb);
 
-    if (split.cost >= count * this.sahIntersectionCost || split.leftCount === 0 || split.rightCount === 0) {
+    if (
+      split.cost >= count * this.sahIntersectionCost ||
+      split.leftCount === 0 ||
+      split.rightCount === 0
+    ) {
       // Not worth splitting; make leaf
       this.nodes[nodeIndex].leftChild = -1;
       this.nodes[nodeIndex].rightChild = -1;
@@ -182,8 +182,12 @@ export class BVH {
   }
 
   private computeBounds(start: number, count: number): AABB {
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    let minX = Infinity,
+      minY = Infinity,
+      minZ = Infinity;
+    let maxX = -Infinity,
+      maxY = -Infinity,
+      maxZ = -Infinity;
 
     for (let i = 0; i < count; i++) {
       const primIdx = this.primitiveIndices[start + i];
@@ -233,10 +237,18 @@ export class BVH {
 
         let leftCount = 0;
         let rightCount = 0;
-        let lMinX = Infinity, lMinY = Infinity, lMinZ = Infinity;
-        let lMaxX = -Infinity, lMaxY = -Infinity, lMaxZ = -Infinity;
-        let rMinX = Infinity, rMinY = Infinity, rMinZ = Infinity;
-        let rMaxX = -Infinity, rMaxY = -Infinity, rMaxZ = -Infinity;
+        let lMinX = Infinity,
+          lMinY = Infinity,
+          lMinZ = Infinity;
+        let lMaxX = -Infinity,
+          lMaxY = -Infinity,
+          lMaxZ = -Infinity;
+        let rMinX = Infinity,
+          rMinY = Infinity,
+          rMinZ = Infinity;
+        let rMaxX = -Infinity,
+          rMaxY = -Infinity,
+          rMaxZ = -Infinity;
 
         for (let i = 0; i < count; i++) {
           const primIdx = this.primitiveIndices[start + i];
@@ -264,10 +276,17 @@ export class BVH {
 
         if (leftCount === 0 || rightCount === 0) continue;
 
-        const leftArea = this.calculateSurfaceArea({ min: [lMinX, lMinY, lMinZ], max: [lMaxX, lMaxY, lMaxZ] });
-        const rightArea = this.calculateSurfaceArea({ min: [rMinX, rMinY, rMinZ], max: [rMaxX, rMaxY, rMaxZ] });
+        const leftArea = this.calculateSurfaceArea({
+          min: [lMinX, lMinY, lMinZ],
+          max: [lMaxX, lMaxY, lMaxZ],
+        });
+        const rightArea = this.calculateSurfaceArea({
+          min: [rMinX, rMinY, rMinZ],
+          max: [rMaxX, rMaxY, rMaxZ],
+        });
 
-        const cost = this.sahTraversalCost +
+        const cost =
+          this.sahTraversalCost +
           (leftArea / parentArea) * leftCount * this.sahIntersectionCost +
           (rightArea / parentArea) * rightCount * this.sahIntersectionCost;
 
@@ -290,7 +309,12 @@ export class BVH {
     };
   }
 
-  private partitionPrimitives(start: number, count: number, axis: number, splitPos: number): number {
+  private partitionPrimitives(
+    start: number,
+    count: number,
+    axis: number,
+    splitPos: number,
+  ): number {
     let l = start;
     let r = start + count - 1;
 
@@ -358,7 +382,10 @@ export class BVH {
   /**
    * Query all primitive IDs overlapping a query AABB.
    */
-  public queryAABB(queryMin: [number, number, number], queryMax: [number, number, number]): number[] {
+  public queryAABB(
+    queryMin: [number, number, number],
+    queryMax: [number, number, number],
+  ): number[] {
     const results: number[] = [];
     if (this.nodes.length === 0) return results;
 
@@ -369,9 +396,12 @@ export class BVH {
 
       // AABB overlap test
       if (
-        node.aabbMin[0] > queryMax[0] || node.aabbMax[0] < queryMin[0] ||
-        node.aabbMin[1] > queryMax[1] || node.aabbMax[1] < queryMin[1] ||
-        node.aabbMin[2] > queryMax[2] || node.aabbMax[2] < queryMin[2]
+        node.aabbMin[0] > queryMax[0] ||
+        node.aabbMax[0] < queryMin[0] ||
+        node.aabbMin[1] > queryMax[1] ||
+        node.aabbMax[1] < queryMin[1] ||
+        node.aabbMin[2] > queryMax[2] ||
+        node.aabbMax[2] < queryMin[2]
       ) {
         continue;
       }
@@ -382,9 +412,14 @@ export class BVH {
           const primIdx = this.primitiveIndices[node.primitiveOffset + i];
           const prim = this.primitives[primIdx];
           if (
-            !(prim.aabb.min[0] > queryMax[0] || prim.aabb.max[0] < queryMin[0] ||
-              prim.aabb.min[1] > queryMax[1] || prim.aabb.max[1] < queryMin[1] ||
-              prim.aabb.min[2] > queryMax[2] || prim.aabb.max[2] < queryMin[2])
+            !(
+              prim.aabb.min[0] > queryMax[0] ||
+              prim.aabb.max[0] < queryMin[0] ||
+              prim.aabb.min[1] > queryMax[1] ||
+              prim.aabb.max[1] < queryMin[1] ||
+              prim.aabb.min[2] > queryMax[2] ||
+              prim.aabb.max[2] < queryMin[2]
+            )
           ) {
             results.push(prim.id);
           }
@@ -428,9 +463,12 @@ export class BVH {
       const node = this.nodes[idx];
 
       if (
-        node.aabbMin[0] > queryMax[0] || node.aabbMax[0] < queryMin[0] ||
-        node.aabbMin[1] > queryMax[1] || node.aabbMax[1] < queryMin[1] ||
-        node.aabbMin[2] > queryMax[2] || node.aabbMax[2] < queryMin[2]
+        node.aabbMin[0] > queryMax[0] ||
+        node.aabbMax[0] < queryMin[0] ||
+        node.aabbMin[1] > queryMax[1] ||
+        node.aabbMax[1] < queryMin[1] ||
+        node.aabbMin[2] > queryMax[2] ||
+        node.aabbMax[2] < queryMin[2]
       ) {
         continue;
       }
@@ -455,7 +493,11 @@ export class BVH {
   /**
    * Raycast through the BVH returning sorted intersection hits.
    */
-  public raycast(origin: [number, number, number], direction: [number, number, number], maxDist = Infinity): RaycastHit[] {
+  public raycast(
+    origin: [number, number, number],
+    direction: [number, number, number],
+    maxDist = Infinity,
+  ): RaycastHit[] {
     const hits: RaycastHit[] = [];
     if (this.nodes.length === 0) return hits;
 

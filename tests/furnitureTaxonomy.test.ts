@@ -21,9 +21,9 @@ import {
   ALL_FURNITURE_FAMILIES,
   ALL_FURNITURE_KINDS,
   FURNITURE_KIND_DEFAULTS,
-  GENERIC_BOX_FALLBACK,
-  furnitureKindDefaults,
   type FurnitureKind,
+  furnitureKindDefaults,
+  GENERIC_BOX_FALLBACK,
 } from "../app/lib/furnitureTaxonomy";
 
 const ALLOWED_FRICTION: Record<string, true> = {
@@ -135,9 +135,7 @@ describe("furnitureTaxonomy", () => {
   });
 
   test("at least one rolling kind exists (cmaes-feat-fg5-rolling)", () => {
-    const rolling = ALL_FURNITURE_KINDS.filter(
-      (k) => FURNITURE_KIND_DEFAULTS[k].rolls
-    );
+    const rolling = ALL_FURNITURE_KINDS.filter((k) => FURNITURE_KIND_DEFAULTS[k].rolls);
     expect(rolling.length).toBeGreaterThanOrEqual(3);
     // Specifically: bar-stool, plate, glass, mug, bottle.
     expect(rolling).toContain("bar-stool");
@@ -147,7 +145,7 @@ describe("furnitureTaxonomy", () => {
 
   test("at least one articulating kind exists (cmaes-feat-fg3-articulation)", () => {
     const articulating = ALL_FURNITURE_KINDS.filter(
-      (k) => FURNITURE_KIND_DEFAULTS[k].articulation.joints.length > 0
+      (k) => FURNITURE_KIND_DEFAULTS[k].articulation.joints.length > 0,
     );
     expect(articulating.length).toBeGreaterThanOrEqual(10);
   });
@@ -155,24 +153,19 @@ describe("furnitureTaxonomy", () => {
   test("at least one appliance has a door (cmaes-feat-fg7-appliances)", () => {
     const appliancesWithDoors = ALL_FURNITURE_KINDS.filter((k) => {
       const d = FURNITURE_KIND_DEFAULTS[k];
-      return (
-        d.family === "appliances" &&
-        d.articulation.joints.some((j) => j.name === "door")
-      );
+      return d.family === "appliances" && d.articulation.joints.some((j) => j.name === "door");
     });
     expect(appliancesWithDoors.length).toBeGreaterThanOrEqual(3);
   });
 
   test("at least one soft kind exists (cmaes-feat-fg6-soft)", () => {
-    const soft = ALL_FURNITURE_KINDS.filter(
-      (k) => FURNITURE_KIND_DEFAULTS[k].risk === "soft"
-    );
+    const soft = ALL_FURNITURE_KINDS.filter((k) => FURNITURE_KIND_DEFAULTS[k].risk === "soft");
     expect(soft.length).toBeGreaterThanOrEqual(2);
   });
 
   test("at least one fragile kind exists", () => {
     const fragile = ALL_FURNITURE_KINDS.filter(
-      (k) => FURNITURE_KIND_DEFAULTS[k].risk === "fragile"
+      (k) => FURNITURE_KIND_DEFAULTS[k].risk === "fragile",
     );
     expect(fragile.length).toBeGreaterThanOrEqual(3);
   });

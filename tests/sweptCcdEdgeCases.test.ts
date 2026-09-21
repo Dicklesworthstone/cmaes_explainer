@@ -11,8 +11,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   distanceToOBB,
-  sweptSphereOBBEntryPoint,
   type OrientedBoundingBox,
+  sweptSphereOBBEntryPoint,
 } from "../app/lib/houseMultiObstacleKernel";
 
 describe("sweptSphereOBBEntryPoint edge cases (SOTA contract)", () => {
@@ -39,10 +39,7 @@ describe("sweptSphereOBBEntryPoint edge cases (SOTA contract)", () => {
     // The entry point must be on the +X face (entry side, not -X).
     // The +X face is at x = obb.center[0] + obb.halfExtents[0] = 0.05.
     expect(r.entryPoint[0]).toBeGreaterThan(obb.center[0]);
-    expect(r.entryPoint[0]).toBeCloseTo(
-      obb.center[0] + obb.halfExtents[0] + radius,
-      6,
-    );
+    expect(r.entryPoint[0]).toBeCloseTo(obb.center[0] + obb.halfExtents[0] + radius, 6);
     // And the link must be at the requested clearance from the OBB.
     expect(distanceToOBB(r.entryPoint, obb)).toBeCloseTo(radius, 6);
   });
@@ -56,12 +53,7 @@ describe("sweptSphereOBBEntryPoint edge cases (SOTA contract)", () => {
       rotationYawRad: 0,
       exemptFromPenalty: false,
     };
-    const r = sweptSphereOBBEntryPoint(
-      [2, 0, 0],
-      [3, 0, 0],
-      0.025,
-      obb,
-    );
+    const r = sweptSphereOBBEntryPoint([2, 0, 0], [3, 0, 0], 0.025, obb);
     expect(r.wasHit).toBe(false);
     expect(r.entryPoint).toBeUndefined();
   });

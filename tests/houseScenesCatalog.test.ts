@@ -15,9 +15,8 @@
 //   - At least one rolling kind, one breakable kind, one fragile kind.
 
 import { describe, expect, test } from "bun:test";
-
-import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../app/lib/houseScenes";
 import { ALL_FURNITURE_KINDS } from "../app/lib/furnitureTaxonomy";
+import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../app/lib/houseScenes";
 import { ALL_PBR_MATERIAL_CLASSES } from "../app/lib/pbrPipeline";
 
 const ROOM_NAMES = new Set(CRAFTSMAN_BUNGALOW_1928.rooms.map((r) => r.name));
@@ -159,7 +158,7 @@ describe("houseScenes catalog (cmaes-feat-fg4-catalog-data)", () => {
 
   test("small kitchen objects have explicit fragility thresholds", () => {
     const fragilePieces = CRAFTSMAN_BUNGALOW_1928.furniture.filter(
-      (f: HouseFurniture) => f.fragility !== undefined
+      (f: HouseFurniture) => f.fragility !== undefined,
     );
     expect(fragilePieces.length).toBeGreaterThanOrEqual(3);
     for (const f of fragilePieces) {
@@ -170,7 +169,7 @@ describe("houseScenes catalog (cmaes-feat-fg4-catalog-data)", () => {
 
   test("articulation specs are well-formed where present", () => {
     const articulating = CRAFTSMAN_BUNGALOW_1928.furniture.filter(
-      (f: HouseFurniture) => f.articulation && f.articulation.length > 0
+      (f: HouseFurniture) => f.articulation && f.articulation.length > 0,
     );
     expect(articulating.length).toBeGreaterThanOrEqual(2); // wardrobe, toilet at minimum
     for (const f of articulating) {

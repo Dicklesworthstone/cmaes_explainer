@@ -1,6 +1,6 @@
 "use client";
 
-import { Cpu, Palette, Workflow, Sparkles, BrainCircuit, Bot, Layers } from "lucide-react";
+import { Bot, BrainCircuit, Cpu, Layers, Palette, Sparkles, Workflow } from "lucide-react";
 import { CAGalleryTrace } from "./CAGalleryTrace";
 import { LatexRenderer } from "./LatexRenderer";
 
@@ -34,7 +34,13 @@ export function DLHybrids() {
             <span>NAS & Hyperparameter Curricula</span>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Encode learning rate schedules, dropout probabilities, normalization epsilons, and discrete layer topologies into a unified <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-xs inline-block"><LatexRenderer math="[0, 1]^n" block={false} /></span> box. CMA-ES learns which parameter interactions matter without backprop through training loops.
+            Encode learning rate schedules, dropout probabilities, normalization epsilons, and
+            discrete layer topologies into a unified{" "}
+            <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-xs inline-block">
+              <LatexRenderer math="[0, 1]^n" block={false} />
+            </span>{" "}
+            box. CMA-ES learns which parameter interactions matter without backprop through training
+            loops.
           </p>
           <ul className="space-y-1.5 text-xs text-slate-400 list-disc pl-4 marker:text-sky-400">
             <li>Vectorized ask/tell loops for massive cluster parallelism.</li>
@@ -48,12 +54,21 @@ export function DLHybrids() {
             <span>Latent Exploration & Artificial Life</span>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Searching non-differentiable generative spaces: continuous cellular automata convolution kernels, latent prompt embeddings, and discrete tool-calling agent policies.
+            Searching non-differentiable generative spaces: continuous cellular automata convolution
+            kernels, latent prompt embeddings, and discrete tool-calling agent policies.
           </p>
           <ul className="space-y-1.5 text-xs text-slate-400 list-disc pl-4 marker:text-purple-400">
-            <li>Optimize aesthetic scores, spatial structure metrics, or human feedback rewards.</li>
-            <li>Rank-based selection shrugs off warped reward scales; escaping local basins is the job of population sizing and IPOP/BIPOP restarts.</li>
-            <li>Full-covariance CMA-ES is practical up to a few thousand dimensions; larger latents call for sep-CMA-ES or low-rank variants.</li>
+            <li>
+              Optimize aesthetic scores, spatial structure metrics, or human feedback rewards.
+            </li>
+            <li>
+              Rank-based selection shrugs off warped reward scales; escaping local basins is the job
+              of population sizing and IPOP/BIPOP restarts.
+            </li>
+            <li>
+              Full-covariance CMA-ES is practical up to a few thousand dimensions; larger latents
+              call for sep-CMA-ES or low-rank variants.
+            </li>
           </ul>
         </div>
       </div>

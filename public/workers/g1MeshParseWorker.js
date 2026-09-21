@@ -21,10 +21,7 @@ function parseBinarySTL(buffer) {
     for (let value = 0; value < 9; value += 1) {
       // Each 50-byte record starts with a 12-byte normal. Vertex data begins
       // immediately after it; the final two bytes are the attribute count.
-      positions[triangle * 9 + value] = view.getFloat32(
-        record + 12 + value * 4,
-        true,
-      );
+      positions[triangle * 9 + value] = view.getFloat32(record + 12 + value * 4, true);
     }
   }
   return positions;

@@ -1,17 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import {
-  createZeroSpatial,
-  spatialCrossMotion,
-  spatialCrossForce,
-  eulerToRotationMatrix,
   buildSpatialInertia,
-  multiplyInertiaVector,
+  computeMechanicalEnergy,
+  createZeroSpatial,
+  eulerToRotationMatrix,
   forwardDynamicsABA,
   inverseDynamicsRNEA,
-  computeMechanicalEnergy,
-  stepMultibodyDynamics,
   type MultibodyTree,
+  multiplyInertiaVector,
   type RigidBodyLink,
+  spatialCrossForce,
+  spatialCrossMotion,
+  stepMultibodyDynamics,
 } from "../app/lib/featherstoneDynamics";
 
 describe("Featherstone Articulated Body Dynamics (ABA & RNEA)", () => {
@@ -144,8 +144,8 @@ describe("Featherstone Articulated Body Dynamics (ABA & RNEA)", () => {
   // call) on a 2020 laptop, vs the textbook target of 50µs per
   // call (orders of magnitude gap). The next epic (cmaes-featherstone-perf)
   // should pass an `out` parameter through the helpers so they write
- // into pre-allocated arrays; the current threshold is a CI-realism
- // floor, NOT a correctness check.
+  // into pre-allocated arrays; the current threshold is a CI-realism
+  // floor, NOT a correctness check.
   //
   // Until that epic lands, this test asserts a realistic floor: 15ms
   // per call (= 1.5s for 100 calls), with a TODO pointing at the

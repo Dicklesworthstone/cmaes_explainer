@@ -150,7 +150,10 @@ export class MultiBodySleepManager {
   /**
    * Evaluates kinetic energy and updates sleeping state for all registered bodies.
    */
-  public updateSleepStates(dt = 1 / 60, timeSeconds = 0.0): {
+  public updateSleepStates(
+    dt = 1 / 60,
+    timeSeconds = 0.0,
+  ): {
     sleepingCount: number;
     awakeCount: number;
   } {
@@ -164,15 +167,11 @@ export class MultiBodySleepManager {
       }
 
       // Compute total kinetic energy
-      const vSq =
-        body.velocity[0] ** 2 + body.velocity[1] ** 2 + body.velocity[2] ** 2;
+      const vSq = body.velocity[0] ** 2 + body.velocity[1] ** 2 + body.velocity[2] ** 2;
       const omegaSq =
-        body.angularVelocity[0] ** 2 +
-        body.angularVelocity[1] ** 2 +
-        body.angularVelocity[2] ** 2;
+        body.angularVelocity[0] ** 2 + body.angularVelocity[1] ** 2 + body.angularVelocity[2] ** 2;
 
-      const eKinetic =
-        0.5 * body.massKg * vSq + 0.5 * body.momentOfInertia * omegaSq;
+      const eKinetic = 0.5 * body.massKg * vSq + 0.5 * body.momentOfInertia * omegaSq;
 
       if (eKinetic < this.config.energyThresholdJoules) {
         body.lowEnergyDwellSeconds += dt;

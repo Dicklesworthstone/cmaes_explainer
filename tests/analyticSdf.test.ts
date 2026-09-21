@@ -68,9 +68,7 @@ describe("Analytic Signed Distance Functions (SDF)", () => {
     //      0, 1, 0,
     //     -1, 0, 0]
     const rotY90: [number, number, number, number, number, number, number, number, number] = [
-      0, 0, 1,
-      0, 1, 0,
-      -1, 0, 0,
+      0, 0, 1, 0, 1, 0, -1, 0, 0,
     ];
 
     // Point along +Z (which is local +X after rotation)
@@ -132,8 +130,10 @@ describe("Analytic Signed Distance Functions (SDF)", () => {
       rows: 2,
       cols: 2,
       heights: new Float32Array([
-        0, 2,  // row 0: (0,0)->0, (10,0)->2
-        0, 2,  // row 1: (0,10)->0, (10,10)->2
+        0,
+        2, // row 0: (0,0)->0, (10,0)->2
+        0,
+        2, // row 1: (0,10)->0, (10,10)->2
       ]),
     };
 

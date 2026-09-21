@@ -1,12 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,12 +13,7 @@ const globalsCss = readFileSync(
   "utf8",
 );
 const benchmarkGallery = readFileSync(
-  fileURLToPath(
-    new URL(
-      "../public/wasm-demo/examples/viz-benchmarks.html",
-      import.meta.url,
-    ),
-  ),
+  fileURLToPath(new URL("../public/wasm-demo/examples/viz-benchmarks.html", import.meta.url)),
   "utf8",
 );
 
@@ -60,9 +49,7 @@ async function runManifestVerification(directory: string, digest: string) {
 }
 
 async function resolveOwnerRuntimeDirectory(ownerVersion: string) {
-  const outputDirectory = mkdtempSync(
-    join(tmpdir(), "frankenrobots-runtime-dir-test-"),
-  );
+  const outputDirectory = mkdtempSync(join(tmpdir(), "frankenrobots-runtime-dir-test-"));
   const stdoutPath = join(outputDirectory, "stdout.txt");
   const stderrPath = join(outputDirectory, "stderr.txt");
   const process = Bun.spawn({
@@ -113,12 +100,8 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   });
 
   test("requires clean source receipts and validates the shipped capability payload", () => {
-    expect(script).toContain(
-      "SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)",
-    );
-    expect(script).toContain(
-      'FRANKENSIM_COMMIT=$(verify_owner_artifact "$PROJECT_ROOT/public")',
-    );
+    expect(script).toContain("SOURCE_DIRTY=$(git status --porcelain --untracked-files=normal)");
+    expect(script).toContain('FRANKENSIM_COMMIT=$(verify_owner_artifact "$PROJECT_ROOT/public")');
     expect(script).not.toContain("FRANKENSIM_ROOT");
     expect(script).toContain("verifyOwnerArtifacts");
     expect(script).toContain("verifyOwnerRuntimeIdentity");
@@ -132,9 +115,7 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   });
 
   test("maps the full owner-kernel contract to its versioned runtime directory", async () => {
-    const result = await resolveOwnerRuntimeDirectory(
-      "fs-cmaes-viz-wasm 0.6.13",
-    );
+    const result = await resolveOwnerRuntimeDirectory("fs-cmaes-viz-wasm 0.6.13");
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe("v0613\n");
     expect(result.stderr).toBe("");
@@ -143,9 +124,7 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   test("native export accepts the real owner and refuses changed manifest, glue and WASM bytes", async () => {
     const root = mkdtempSync(join(tmpdir(), "frankenrobots-owner-test-"));
     const relativeOwner = "wasm/fs-cmaes/v0623";
-    const shippedOwner = fileURLToPath(
-      new URL(`../public/${relativeOwner}`, import.meta.url),
-    );
+    const shippedOwner = fileURLToPath(new URL(`../public/${relativeOwner}`, import.meta.url));
     const invoke = async (engine: string) => {
       const child = Bun.spawn({
         cmd: [
@@ -202,23 +181,17 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   });
 
   test("refuses an owner-kernel contract without an exact semver suffix", async () => {
-    const result = await resolveOwnerRuntimeDirectory(
-      "fs-cmaes-viz-wasm latest",
-    );
+    const result = await resolveOwnerRuntimeDirectory("fs-cmaes-viz-wasm latest");
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toContain(
-      "owner kernel version has no valid semantic-version suffix",
-    );
+    expect(result.stderr).toContain("owner kernel version has no valid semantic-version suffix");
   });
 
   test("preserves an existing engine at a printed rollback path during explicit activation", () => {
     expect(script).toContain('if [[ "$MODE" == "stage" ]]');
     expect(script).toContain("--activate-stage PATH");
     expect(script).toContain("--expect-manifest-sha256");
-    expect(script).toContain(
-      'local rollback_engine="$STAGE_PARENT/previous-Engine"',
-    );
+    expect(script).toContain('local rollback_engine="$STAGE_PARENT/previous-Engine"');
     expect(script).toContain('mv "$current_engine" "$rollback_engine"');
     expect(script).toContain("Previous engine preserved for rollback");
     expect(script).toContain("--allow-unverified-existing");
@@ -226,46 +199,25 @@ describe("FrankenRobots engine exporter safety boundary", () => {
 
   test("accepts an unchanged stage only with its reviewed manifest digest", async () => {
     const fixture = manifestFixture();
-    const exitCode = await runManifestVerification(
-      fixture.directory,
-      fixture.digest,
-    );
+    const exitCode = await runManifestVerification(fixture.directory, fixture.digest);
     expect(exitCode).toBe(0);
   });
 
   test("rejects payload tampering after review", async () => {
     const fixture = manifestFixture();
-    writeFileSync(
-      join(fixture.directory, "payload.txt"),
-      "changed after review\n",
-    );
-    const exitCode = await runManifestVerification(
-      fixture.directory,
-      fixture.digest,
-    );
+    writeFileSync(join(fixture.directory, "payload.txt"), "changed after review\n");
+    const exitCode = await runManifestVerification(fixture.directory, fixture.digest);
     expect(exitCode).toBe(1);
   });
 
   test("rejects a manifest replacement after review", async () => {
     const fixture = manifestFixture();
-    writeFileSync(
-      join(fixture.directory, "unlisted.txt"),
-      "new unreviewed bytes\n",
-    );
+    writeFileSync(join(fixture.directory, "unlisted.txt"), "new unreviewed bytes\n");
     const updatedManifest =
-      readFileSync(
-        join(fixture.directory, "engine-content-sha256.txt"),
-        "utf8",
-      ) +
+      readFileSync(join(fixture.directory, "engine-content-sha256.txt"), "utf8") +
       `${createHash("sha256").update("new unreviewed bytes\n").digest("hex")}  ./unlisted.txt\n`;
-    writeFileSync(
-      join(fixture.directory, "engine-content-sha256.txt"),
-      updatedManifest,
-    );
-    const exitCode = await runManifestVerification(
-      fixture.directory,
-      fixture.digest,
-    );
+    writeFileSync(join(fixture.directory, "engine-content-sha256.txt"), updatedManifest);
+    const exitCode = await runManifestVerification(fixture.directory, fixture.digest);
     expect(exitCode).toBe(1);
   });
 });

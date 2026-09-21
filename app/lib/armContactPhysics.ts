@@ -111,7 +111,8 @@ export function resolveRenderedGripperContactGeometry({
     graspHalfWidthM + fingerPadThicknessM * 0.5 + clearanceMarginM,
   );
   const palmCenterOffsetM = objectHalfHeightM + palmHeightM * 0.5 + clearanceMarginM;
-  const wristHousingCenterOffsetM = palmCenterOffsetM + palmHeightM * 0.5 + wristHousingHeightM * 0.5;
+  const wristHousingCenterOffsetM =
+    palmCenterOffsetM + palmHeightM * 0.5 + wristHousingHeightM * 0.5;
   const fingerClearanceM = fingerCenterHalfWidthM - fingerPadThicknessM * 0.5 - graspHalfWidthM;
   const palmClearanceM = palmCenterOffsetM - palmHeightM * 0.5 - objectHalfHeightM;
   const wristClearanceM = wristHousingCenterOffsetM - wristHousingHeightM * 0.5 - objectHalfHeightM;
@@ -189,8 +190,8 @@ export function resolveArmObjectContact({
   const normalForceN = isGraspedIntent
     ? Math.max(8.5, penetrationDepthM * contactStiffnessNPerM)
     : penetrationDepthM > 0
-    ? penetrationDepthM * contactStiffnessNPerM
-    : 0;
+      ? penetrationDepthM * contactStiffnessNPerM
+      : 0;
 
   // 3. HEURISTIC FRICTION-SUPPORT SCORE
   const mu = hull.frictionCoeff;
@@ -207,7 +208,7 @@ export function resolveArmObjectContact({
   // The palm box must not plunge into the top rim of the mug when directly overhead.
   const horizontalDistM = Math.hypot(
     rawEndEffectorPos[0] - rawObjectPos[0],
-    rawEndEffectorPos[2] - rawObjectPos[2]
+    rawEndEffectorPos[2] - rawObjectPos[2],
   );
   const isDirectlyAboveObject = horizontalDistM <= hull.radiusM + 0.04;
   const objectTopRimYM = rawObjectPos[1] + hull.heightM * 0.5;

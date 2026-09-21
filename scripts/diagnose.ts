@@ -1,29 +1,26 @@
 // Run after bun run build, or set BASE_URL to an already running app.
 // HPO, owner admission, scene placement and arm readouts; not gait certification.
 import assert from "node:assert/strict";
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { chromium, type Browser, type Page } from "playwright";
+import { type Browser, chromium, type Page } from "playwright";
+import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
 import {
   CmaesHyperparameterOptimizer,
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
-import { FRANKENSIM_OWNER_ARTIFACT } from "../app/lib/frankensimCmaes";
-import type { TrainingWorkerResponse } from "../app/workers/g1TransformerTrainingWorker";
-import type {
-  G1OptimizationRequest,
-  G1SceneReceipt,
-} from "../app/lib/g1OptimizationProtocol";
-import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
 import type { HouseholdRobotPose } from "../app/lib/frankensimCmaes";
+import { FRANKENSIM_OWNER_ARTIFACT } from "../app/lib/frankensimCmaes";
+import type { G1OptimizationRequest, G1SceneReceipt } from "../app/lib/g1OptimizationProtocol";
 import {
   decodeResidualFragment,
   encodePolicyFragment,
   policyFromFileContents,
 } from "../app/lib/g1PolicyShare";
+import type { TrainingWorkerResponse } from "../app/workers/g1TransformerTrainingWorker";
 
 type G1BrowserObservation = {
   requests: G1OptimizationRequest[];
@@ -38,8 +35,7 @@ type G1BrowserObservation = {
 };
 
 const USER_AGENT = "OpenAI File Downloader, XaiImageApiFetch/1.0";
-const pause = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const log = (event: string, details: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ event, ...details })}\n`);
 
@@ -65,31 +61,19 @@ async function captureReplayExport(page: Page, out: string, name: string) {
   ]);
   const policyPath = join(out, `${name}.policy.json`);
   await policyDownload.saveAs(policyPath);
-  const { exportedAt, ...policy } = JSON.parse(
-    await readFile(policyPath, "utf8"),
-  );
+  const { exportedAt, ...policy } = JSON.parse(await readFile(policyPath, "utf8"));
   const download = await downloadTelemetry(page);
   const telemetryPath = join(out, `${name}-telemetry.json`);
   await download.saveAs(telemetryPath);
-  const { exportTimestamp, ...telemetry } = JSON.parse(
-    await readFile(telemetryPath, "utf8"),
-  );
+  const { exportTimestamp, ...telemetry } = JSON.parse(await readFile(telemetryPath, "utf8"));
   assert(exportedAt && exportTimestamp);
   assert.equal(policy.family, telemetry.family);
   assert.equal(policy.generation, telemetry.generation);
-  assert(
-    download
-      .suggestedFilename()
-      .includes(`${policy.family}-gen${policy.generation}`),
-  );
+  assert(download.suggestedFilename().includes(`${policy.family}-gen${policy.generation}`));
   return { policy, telemetry };
 }
 
-async function nativeReplay(
-  page: Page,
-  lab: "humanoid" | "arm",
-  commandId: string,
-) {
+async function nativeReplay(page: Page, lab: "humanoid" | "arm", commandId: string) {
   const receipt = await page.evaluate(
     ({ lab, commandId }) => {
       const host = window as unknown as {
@@ -105,9 +89,7 @@ async function nativeReplay(
       });
       return {
         delivered,
-        ack: host.__ownerBridgeMessages.find(
-          (message) => message.commandId === commandId,
-        ),
+        ack: host.__ownerBridgeMessages.find((message) => message.commandId === commandId),
       };
     },
     { lab, commandId },
@@ -120,10 +102,7 @@ async function run() {
   const port = process.env.PORT || "3312";
   const base = process.env.BASE_URL || `http://127.0.0.1:${port}`;
   const timeout = Number(process.env.READINESS_TIMEOUT_MS || "60000");
-  assert(
-    Number.isSafeInteger(timeout) && timeout > 0,
-    "Invalid readiness timeout",
-  );
+  assert(Number.isSafeInteger(timeout) && timeout > 0, "Invalid readiness timeout");
   const root = process.env.RUN_DIR || "tmp/ui-smoke";
   await mkdir(root, { recursive: true });
   const out = await mkdtemp(join(root, "diagnose-"));
@@ -139,10 +118,7 @@ async function run() {
   const sourceDiffSha256 = createHash("sha256").update(diff).digest("hex");
   const errors: { page: string; kind: string; message: string }[] = [];
   const results: unknown[] = [];
-  const recordResult = (result: {
-    journey: string;
-    [key: string]: unknown;
-  }) => {
+  const recordResult = (result: { journey: string; [key: string]: unknown }) => {
     results.push(result);
     log("browser-journey-passed", {
       out,
@@ -165,20 +141,15 @@ async function run() {
       if (message.type() === "error") record("console", message.text());
     });
     page.on("requestfailed", (request) =>
-      record(
-        "requestfailed",
-        `${request.url()}: ${request.failure()?.errorText}`,
-      ),
+      record("requestfailed", `${request.url()}: ${request.failure()?.errorText}`),
     );
   };
 
   try {
     if (!process.env.BASE_URL) {
-      server = spawn(
-        "bun",
-        ["run", "start", "--port", port, "--hostname", "127.0.0.1"],
-        { stdio: ["ignore", "pipe", "pipe"] },
-      );
+      server = spawn("bun", ["run", "start", "--port", port, "--hostname", "127.0.0.1"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       server.stdout?.pipe(serverLog, { end: false });
       server.stderr?.pipe(serverLog, { end: false });
       server.on("error", (error) => {
@@ -196,9 +167,7 @@ async function run() {
       try {
         const response = await fetch(base, {
           headers: { "User-Agent": USER_AGENT },
-          signal: AbortSignal.timeout(
-            Math.min(2000, Math.max(1, deadline - Date.now())),
-          ),
+          signal: AbortSignal.timeout(Math.min(2000, Math.max(1, deadline - Date.now()))),
         });
         ready = response.ok;
         lastReadinessError = `HTTP ${response.status}`;
@@ -231,44 +200,27 @@ async function run() {
     const section = page.locator("#hpo-trainer");
     for (const mirrored of [false, true]) {
       if (mirrored) await section.getByLabel(/Mirrored sampling/).check();
-      await section
-        .getByRole("button", { name: "Run 1 generation", exact: true })
-        .click();
+      await section.getByRole("button", { name: "Run 1 generation", exact: true }).click();
       await page.waitForFunction(() =>
-        document
-          .querySelector("#hpo-trainer")
-          ?.textContent?.includes("Run 1 generation"),
+        document.querySelector("#hpo-trainer")?.textContent?.includes("Run 1 generation"),
       );
       const count = mirrored ? 16 : 8;
       assert(
-        new RegExp(`Inner rollouts\\s+${count}\\b`, "i").test(
-          await section.innerText(),
-        ),
+        new RegExp(`Inner rollouts\\s+${count}\\b`, "i").test(await section.innerText()),
         "Wrong rollout count",
       );
-      const rows = await section
-        .getByTestId("hpo-best-param")
-        .allTextContents();
+      const rows = await section.getByTestId("hpo-best-param").allTextContents();
       assert.equal(rows.length, 8);
       assert(
         rows.every((row) => !row.endsWith("-")),
         "Missing incumbent values",
       );
-      await section
-        .getByRole("button", { name: "Copy history", exact: true })
-        .click();
-      await section
-        .getByRole("status")
-        .filter({ hasText: "History copied." })
-        .waitFor();
-      const exported = JSON.parse(
-        await page.evaluate(() => navigator.clipboard.readText()),
-      );
-      const expected = new CmaesHyperparameterOptimizer(
-        G1_TRAINING_HYPERPARAMETERS,
-        0x47315040,
-        { mirroredSampling: mirrored },
-      ).stepGeneration();
+      await section.getByRole("button", { name: "Copy history", exact: true }).click();
+      await section.getByRole("status").filter({ hasText: "History copied." }).waitFor();
+      const exported = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+      const expected = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 0x47315040, {
+        mirroredSampling: mirrored,
+      }).stepGeneration();
       assert.equal(exported.result.evaluationsCount, count);
       assert(
         Math.abs(exported.result.bestFitness - expected.bestFitness) < 1e-9,
@@ -292,10 +244,7 @@ async function run() {
     await section.screenshot({ path: join(out, "hpo.png") });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await page.waitForTimeout(300);
-    assert(
-      await page.evaluate(() => scrollY < 50),
-      "Hash target trapped navigation",
-    );
+    assert(await page.evaluate(() => scrollY < 50), "Hash target trapped navigation");
     await page.evaluate(() => {
       location.hash = "no-gradients";
     });
@@ -319,30 +268,22 @@ async function run() {
       });
       observe(receiptPage);
       await receiptPage.goto(new URL("/receipts", base).href);
-      await receiptPage
-        .getByRole("heading", { name: "Physics receipts", exact: true })
-        .waitFor();
+      await receiptPage.getByRole("heading", { name: "Physics receipts", exact: true }).waitFor();
       const evidence = await receiptPage.evaluate(() => ({
         width: innerWidth,
         scrollWidth: document.documentElement.scrollWidth,
         verified: document.body.innerText.includes("VERIFIED"),
-        regions: [
-          ...document.querySelectorAll<HTMLElement>("[role=region]"),
-        ].map((element) => ({
+        regions: [...document.querySelectorAll<HTMLElement>("[role=region]")].map((element) => ({
           label: element.getAttribute("aria-label"),
           width: element.clientWidth,
           scrollWidth: element.scrollWidth,
           tabIndex: element.tabIndex,
         })),
       }));
-      assert(
-        evidence.scrollWidth <= width,
-        "Receipt page overflows the viewport",
-      );
+      assert(evidence.scrollWidth <= width, "Receipt page overflows the viewport");
       assert(!evidence.verified, "Editorial rubric claims verification");
       assert(
-        evidence.regions.length >= 2 &&
-          evidence.regions.every((region) => region.tabIndex === 0),
+        evidence.regions.length >= 2 && evidence.regions.every((region) => region.tabIndex === 0),
         "Receipt tables lack keyboard access",
       );
       await receiptPage
@@ -392,8 +333,7 @@ async function run() {
           host.webkit = {
             messageHandlers: {
               frankenrobots: {
-                postMessage: (message) =>
-                  host.__ownerBridgeMessages.push(message),
+                postMessage: (message) => host.__ownerBridgeMessages.push(message),
               },
             },
           };
@@ -403,37 +343,27 @@ async function run() {
         observe(playbackPage);
         await playbackPage.goto(new URL(`/frankenrobots/${lab}`, base).href);
         const sliderLabel =
-          lab === "arm"
-            ? "Arm trace position"
-            : "Simulation playback frame scrubber";
+          lab === "arm" ? "Arm trace position" : "Simulation playback frame scrubber";
         const playLabel = lab === "arm" ? "Play arm trace" : "Play simulation";
-        const pauseLabel =
-          lab === "arm" ? "Pause arm trace" : "Pause simulation playback";
+        const pauseLabel = lab === "arm" ? "Pause arm trace" : "Pause simulation playback";
         const slider = playbackPage.getByRole("slider", {
           name: sliderLabel,
           exact: true,
         });
         await slider.waitFor();
         await playbackPage.waitForFunction((label) => {
-          const input = document.querySelector<HTMLInputElement>(
-            `input[aria-label="${label}"]`,
-          );
+          const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
           return input && !input.disabled && Number(input.max) > 2;
         }, sliderLabel);
         const lastIndex = Number(await slider.getAttribute("max"));
         assert(lastIndex > 2, "A real multi-frame owner trace must load");
         let commandNumber = 0;
-        const command = async (
-          kind: string,
-          args: Record<string, unknown> = {},
-        ) => {
+        const command = async (kind: string, args: Record<string, unknown> = {}) => {
           const receipt = await playbackPage.evaluate(
             ({ lab, kind, args, id }) => {
               const host = window as unknown as {
                 __ownerBridgeMessages: Record<string, unknown>[];
-                __frankenrobotsReceiveNativeCommand: (
-                  payload: unknown,
-                ) => boolean;
+                __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
               };
               const delivered = host.__frankenrobotsReceiveNativeCommand({
                 type: "engine.command",
@@ -445,9 +375,7 @@ async function run() {
               });
               return {
                 delivered,
-                ack: host.__ownerBridgeMessages.find(
-                  (message) => message.commandId === id,
-                ),
+                ack: host.__ownerBridgeMessages.find((message) => message.commandId === id),
               };
             },
             { lab, kind, args, id: `playback-${width}-${++commandNumber}` },
@@ -456,27 +384,20 @@ async function run() {
           assert.equal(receipt.ack?.accepted, true, JSON.stringify(receipt));
         };
         const paused = async (index?: number) => {
-          await playbackPage
-            .getByRole("button", { name: playLabel, exact: true })
-            .waitFor();
+          await playbackPage.getByRole("button", { name: playLabel, exact: true }).waitFor();
           await playbackPage.waitForFunction(() => {
             const host = window as unknown as {
               __ownerBridgeMessages: Record<string, unknown>[];
             };
             return (
-              host.__ownerBridgeMessages
-                .filter((message) => message.type === "trace.state")
-                .at(-1)?.playing === false
+              host.__ownerBridgeMessages.filter((message) => message.type === "trace.state").at(-1)
+                ?.playing === false
             );
           });
           const before = Number(await slider.inputValue());
           if (index !== undefined) assert.equal(before, index);
           await pause(600);
-          assert.equal(
-            Number(await slider.inputValue()),
-            before,
-            "Paused playback moved",
-          );
+          assert.equal(Number(await slider.inputValue()), before, "Paused playback moved");
           const reportedIndex = await playbackPage.evaluate(() => {
             const host = window as unknown as {
               __ownerBridgeMessages: Record<string, unknown>[];
@@ -490,28 +411,20 @@ async function run() {
         };
         await paused(0);
         assert.equal(
-          await playbackPage
-            .getByRole("button", { name: playLabel, exact: true })
-            .isEnabled(),
+          await playbackPage.getByRole("button", { name: playLabel, exact: true }).isEnabled(),
           true,
         );
-        await playbackPage
-          .getByRole("button", { name: playLabel, exact: true })
-          .focus();
+        await playbackPage.getByRole("button", { name: playLabel, exact: true }).focus();
         await playbackPage.keyboard.press("Space");
         await playbackPage.waitForFunction(
           (label) =>
             Number(
-              document.querySelector<HTMLInputElement>(
-                `input[aria-label="${label}"]`,
-              )?.value,
+              document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.value,
             ) > 0,
           sliderLabel,
         );
         assert.equal(
-          await playbackPage
-            .getByRole("button", { name: pauseLabel, exact: true })
-            .count(),
+          await playbackPage.getByRole("button", { name: pauseLabel, exact: true }).count(),
           1,
         );
         await playbackPage.keyboard.press("Space");
@@ -521,14 +434,8 @@ async function run() {
         await playbackPage.keyboard.press("Home");
         await playbackPage.keyboard.press("ArrowRight");
         await paused(1);
-        assert.equal(
-          await slider.evaluate((node) => node === document.activeElement),
-          true,
-        );
-        assert.match(
-          (await slider.getAttribute("aria-valuetext")) ?? "",
-          /Time .*seconds/,
-        );
+        assert.equal(await slider.evaluate((node) => node === document.activeElement), true);
+        assert.match((await slider.getAttribute("aria-valuetext")) ?? "", /Time .*seconds/);
         const seekIndex = Math.floor(lastIndex / 2);
         await command("seek", { sampleIndex: seekIndex });
         await paused(seekIndex);
@@ -537,9 +444,7 @@ async function run() {
         await playbackPage.waitForFunction(
           ({ label, start }) =>
             Number(
-              document.querySelector<HTMLInputElement>(
-                `input[aria-label="${label}"]`,
-              )?.value,
+              document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.value,
             ) !== start,
           { label: sliderLabel, start: seekIndex },
         );
@@ -555,9 +460,7 @@ async function run() {
         await playbackPage.waitForFunction(
           ({ label, start }) =>
             Number(
-              document.querySelector<HTMLInputElement>(
-                `input[aria-label="${label}"]`,
-              )?.value,
+              document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.value,
             ) > start,
           { label: sliderLabel, start: resumedAt },
         );
@@ -567,17 +470,11 @@ async function run() {
             behavior: "instant",
           }),
         );
-        await playbackPage.waitForFunction(
-          () => document.querySelectorAll("canvas").length === 0,
-        );
+        await playbackPage.waitForFunction(() => document.querySelectorAll("canvas").length === 0);
         const offscreenIndex = Number(await slider.inputValue());
         assert(offscreenIndex > resumedAt);
         await pause(600);
-        assert.equal(
-          Number(await slider.inputValue()),
-          offscreenIndex,
-          "Unmounted playback moved",
-        );
+        assert.equal(Number(await slider.inputValue()), offscreenIndex, "Unmounted playback moved");
         assert.equal(
           await playbackPage.evaluate(
             () =>
@@ -594,19 +491,15 @@ async function run() {
         );
         const remountMessageStart = await playbackPage.evaluate(
           () =>
-            (window as unknown as { __ownerBridgeMessages: unknown[] })
-              .__ownerBridgeMessages.length,
+            (window as unknown as { __ownerBridgeMessages: unknown[] }).__ownerBridgeMessages
+              .length,
         );
         await slider.scrollIntoViewIfNeeded();
-        await playbackPage.waitForFunction(
-          () => document.querySelectorAll("canvas").length > 0,
-        );
+        await playbackPage.waitForFunction(() => document.querySelectorAll("canvas").length > 0);
         await playbackPage.waitForFunction(
           ({ label, start }) =>
             Number(
-              document.querySelector<HTMLInputElement>(
-                `input[aria-label="${label}"]`,
-              )?.value,
+              document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)?.value,
             ) !== start,
           { label: sliderLabel, start: offscreenIndex },
         );
@@ -627,8 +520,7 @@ async function run() {
         assert(remountFrames.length > 0);
         assert(
           remountFrames.every(
-            (index) =>
-              index >= offscreenIndex && index < offscreenIndex + lastIndex / 4,
+            (index) => index >= offscreenIndex && index < offscreenIndex + lastIndex / 4,
           ),
           `Canvas remount jumped from ${offscreenIndex}: ${remountFrames.join(",")}`,
         );
@@ -641,8 +533,8 @@ async function run() {
         await command("set-speed", { speed: 2 });
         const terminalMessageStart = await playbackPage.evaluate(
           () =>
-            (window as unknown as { __ownerBridgeMessages: unknown[] })
-              .__ownerBridgeMessages.length,
+            (window as unknown as { __ownerBridgeMessages: unknown[] }).__ownerBridgeMessages
+              .length,
         );
         await command("play");
         await playbackPage.waitForFunction(
@@ -654,14 +546,10 @@ async function run() {
             ).__ownerBridgeMessages
               .slice(start)
               .filter((message) => message.type === "trace.state");
-            const terminal = states.findIndex(
-              (state) => state.sampleIndex === lastIndex,
-            );
+            const terminal = states.findIndex((state) => state.sampleIndex === lastIndex);
             return (
               terminal >= 0 &&
-              states
-                .slice(terminal + 1)
-                .some((state) => Number(state.sampleIndex) < lastIndex / 2)
+              states.slice(terminal + 1).some((state) => Number(state.sampleIndex) < lastIndex / 2)
             );
           },
           { start: terminalMessageStart, lastIndex },
@@ -688,9 +576,7 @@ async function run() {
         await playbackPage.emulateMedia({ reducedMotion: "no-preference" });
         await paused();
         await command("play");
-        await playbackPage
-          .getByRole("button", { name: pauseLabel, exact: true })
-          .waitFor();
+        await playbackPage.getByRole("button", { name: pauseLabel, exact: true }).waitFor();
         await playbackPage.emulateMedia({ reducedMotion: "reduce" });
         await paused();
         await command("replay");
@@ -716,48 +602,33 @@ async function run() {
         );
         await paused(0);
         if (width < 1440) {
-          await playbackPage
-            .getByRole("button", { name: playLabel, exact: true })
-            .tap();
+          await playbackPage.getByRole("button", { name: playLabel, exact: true }).tap();
           await playbackPage.waitForFunction((label) => {
-            const input = document.querySelector<HTMLInputElement>(
-              `input[aria-label="${label}"]`,
-            );
+            const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
             return Number(input?.value) > 0;
           }, sliderLabel);
-          await playbackPage
-            .getByRole("button", { name: pauseLabel, exact: true })
-            .tap();
+          await playbackPage.getByRole("button", { name: pauseLabel, exact: true }).tap();
           await paused();
         }
         const panel = playbackPage.getByRole("group", {
-          name:
-            lab === "arm" ? "Arm trace playback" : "Simulation trace playback",
+          name: lab === "arm" ? "Arm trace playback" : "Simulation trace playback",
           exact: true,
         });
-        const geometry = await panel
-          .locator("button,input,select")
-          .evaluateAll((nodes) =>
-            nodes.map((node) => {
-              const box = node.getBoundingClientRect();
-              return {
-                label: node.getAttribute("aria-label"),
-                width: box.width,
-                height: box.height,
-                left: box.left,
-                right: box.right,
-              };
-            }),
-          );
+        const geometry = await panel.locator("button,input,select").evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return {
+              label: node.getAttribute("aria-label"),
+              width: box.width,
+              height: box.height,
+              left: box.left,
+              right: box.right,
+            };
+          }),
+        );
         for (const control of geometry) {
-          assert(
-            control.width >= 44 && control.height >= 44,
-            JSON.stringify(control),
-          );
-          assert(
-            control.left >= 0 && control.right <= width,
-            JSON.stringify(control),
-          );
+          assert(control.width >= 44 && control.height >= 44, JSON.stringify(control));
+          assert(control.left >= 0 && control.right <= width, JSON.stringify(control));
         }
         if (lab === "humanoid") {
           const milestones = await playbackPage
@@ -780,14 +651,10 @@ async function run() {
           const host = window as unknown as {
             __ownerBridgeMessages: Record<string, unknown>[];
           };
-          return host.__ownerBridgeMessages.filter(
-            (message) => message.type === "trace.state",
-          );
+          return host.__ownerBridgeMessages.filter((message) => message.type === "trace.state");
         });
         assert(
-          traceStates.some(
-            (state) => state.playing === true && Number(state.sampleIndex) > 0,
-          ),
+          traceStates.some((state) => state.playing === true && Number(state.sampleIndex) > 0),
         );
         recordResult({
           journey: "reduced-motion-playback",
@@ -829,19 +696,13 @@ async function run() {
         message: unknown,
         transferOrOptions?: Transferable[] | StructuredSerializeOptions,
       ) {
-        if (
-          (message as { type?: string })?.type === "start" &&
-          !seen.has(this)
-        ) {
+        if ((message as { type?: string })?.type === "start" && !seen.has(this)) {
           seen.add(this);
           host.__trainingWorker = this;
           host.__trainingWorkerCount += 1;
-          this.addEventListener(
-            "message",
-            (event: MessageEvent<TrainingWorkerResponse>) => {
-              host.__trainingMessages.push(event.data);
-            },
-          );
+          this.addEventListener("message", (event: MessageEvent<TrainingWorkerResponse>) => {
+            host.__trainingMessages.push(event.data);
+          });
         }
         return Reflect.apply(post, this, [message, transferOrOptions]);
       };
@@ -865,8 +726,7 @@ async function run() {
     });
     let heldTrainingWasm = 0;
     let corruptNextTrainingWasm = false;
-    const trainingWasmPattern =
-      "**/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm";
+    const trainingWasmPattern = "**/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm";
     await trainingPage.route(trainingWasmPattern, async (route) => {
       heldTrainingWasm += 1;
       await trainingWasmGate;
@@ -888,8 +748,7 @@ async function run() {
     await startTraining.waitFor();
     const canceledTraining = await trainingPage.evaluate(
       () =>
-        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
-          .__trainingMessages,
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages,
     );
     assert.deepEqual(canceledTraining, [{ type: "stopped", progress: null }]);
     const stoppedMessageCount = canceledTraining.length;
@@ -916,16 +775,14 @@ async function run() {
       (
         window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
       ).__trainingMessages.some(
-        (message) =>
-          message.type === "progress" && message.progress.generation >= 2,
+        (message) => message.type === "progress" && message.progress.generation >= 2,
       ),
     );
     await stopTraining.click();
     await startTraining.waitFor();
     let stoppedTraining = await trainingPage.evaluate(
       () =>
-        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
-          .__trainingMessages,
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages,
     );
     assert.equal(stoppedTraining.at(-1)?.type, "stopped");
     await pause(600);
@@ -946,15 +803,9 @@ async function run() {
     const checkpoint = await trainingPage.evaluate(() =>
       JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null"),
     );
-    assert.equal(
-      checkpoint.flat.objective,
-      stoppedProgress.progress.bestObjective,
-    );
+    assert.equal(checkpoint.flat.objective, stoppedProgress.progress.bestObjective);
     assert.equal(checkpoint.flat.head.length, 960);
-    assert.deepEqual(
-      checkpoint.flat.head,
-      Object.values(stoppedProgress.bestHead ?? {}),
-    );
+    assert.deepEqual(checkpoint.flat.head, Object.values(stoppedProgress.bestHead ?? {}));
     // A delayed checkpoint from a worse run must preserve the actual saved
     // winner. Only this incoming message is synthetic; the save came from Stop.
     const preservedCheckpoint = await trainingPage.evaluate(() => {
@@ -963,8 +814,7 @@ async function run() {
         __trainingMessages: TrainingWorkerResponse[];
       };
       const stopped = host.__trainingMessages.at(-1);
-      if (stopped?.type !== "stopped" || !stopped.progress)
-        throw new Error("No stopped run");
+      if (stopped?.type !== "stopped" || !stopped.progress) throw new Error("No stopped run");
       const before = localStorage.getItem("cmaes.g1-residual-run.v1");
       host.__trainingWorker.dispatchEvent(
         new MessageEvent("message", {
@@ -982,12 +832,8 @@ async function run() {
     });
     assert(preservedCheckpoint, "A worse checkpoint replaced the saved winner");
     const resumedFrom = stoppedProgress.progress.evaluations;
-    await trainingPage
-      .getByRole("button", { name: "Show the gait", exact: true })
-      .click();
-    await trainingPage
-      .getByRole("img", { name: /^Pelvis path over one rollout/ })
-      .waitFor();
+    await trainingPage.getByRole("button", { name: "Show the gait", exact: true }).click();
+    await trainingPage.getByRole("img", { name: /^Pelvis path over one rollout/ }).waitFor();
     // Delay clipboard completion to exercise an old share settling after Start.
     // The URL itself is encoded from the actual owner's trained head.
     await trainingPage.evaluate(() => {
@@ -1007,19 +853,12 @@ async function run() {
         },
       });
     });
-    await trainingPage
-      .getByRole("button", { name: "Copy share link", exact: true })
-      .click();
+    await trainingPage.getByRole("button", { name: "Copy share link", exact: true }).click();
     await trainingPage.waitForFunction(() =>
-      Boolean(
-        (window as unknown as { __sharedResidualUrl?: string })
-          .__sharedResidualUrl,
-      ),
+      Boolean((window as unknown as { __sharedResidualUrl?: string }).__sharedResidualUrl),
     );
     const sharedResidualUrl = await trainingPage.evaluate(
-      () =>
-        (window as unknown as { __sharedResidualUrl: string })
-          .__sharedResidualUrl,
+      () => (window as unknown as { __sharedResidualUrl: string }).__sharedResidualUrl,
     );
     const sharedResidual = await decodeResidualFragment(
       new URL(sharedResidualUrl).hash.slice("#zresidual=".length),
@@ -1028,32 +867,24 @@ async function run() {
     assert.equal(sharedResidual.condition, "flat");
     const resumeMessageStart = await trainingPage.evaluate(
       () =>
-        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
-          .__trainingMessages.length,
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages
+          .length,
     );
     await startTraining.click();
     await trainingPage.evaluate(() =>
-      (
-        window as unknown as { __releaseClipboard: () => void }
-      ).__releaseClipboard(),
+      (window as unknown as { __releaseClipboard: () => void }).__releaseClipboard(),
     );
     await trainingPage.waitForFunction(
       ({ start, evaluations }) =>
-        (
-          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
-        ).__trainingMessages
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages
           .slice(start)
           .some(
-            (message) =>
-              message.type === "progress" &&
-              message.progress.evaluations > evaluations,
+            (message) => message.type === "progress" && message.progress.evaluations > evaluations,
           ),
       { start: resumeMessageStart, evaluations: resumedFrom },
     );
     assert.equal(
-      await trainingPage
-        .getByText("Share link copied to your clipboard:")
-        .count(),
+      await trainingPage.getByText("Share link copied to your clipboard:").count(),
       0,
       "A stale share reappeared after Start",
     );
@@ -1073,16 +904,11 @@ async function run() {
       );
       return host.__trainingMessages.length;
     });
-    await trainingPage
-      .getByRole("alert")
-      .filter({ hasText: "Injected export failure" })
-      .waitFor();
+    await trainingPage.getByRole("alert").filter({ hasText: "Injected export failure" }).waitFor();
     await stopTraining.waitFor();
     await trainingPage.waitForFunction(
       (start) =>
-        (
-          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
-        ).__trainingMessages
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages
           .slice(start)
           .some((message) => message.type === "progress"),
       nonfatalMessageStart,
@@ -1091,22 +917,15 @@ async function run() {
     await startTraining.waitFor();
     stoppedTraining = await trainingPage.evaluate(
       () =>
-        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] })
-          .__trainingMessages,
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages,
     );
     const resumedProgress = stoppedTraining
       .slice(resumeMessageStart)
       .find((message) => message.type === "progress");
-    assert.equal(
-      resumedProgress?.progress.evaluations,
-      resumedFrom,
-      "Resume restarted the search",
-    );
+    assert.equal(resumedProgress?.progress.evaluations, resumedFrom, "Resume restarted the search");
     const [trainedPolicyDownload] = await Promise.all([
       trainingPage.waitForEvent("download"),
-      trainingPage
-        .getByRole("button", { name: "Download policy", exact: true })
-        .click(),
+      trainingPage.getByRole("button", { name: "Download policy", exact: true }).click(),
     ]);
     const trainedPolicyPath = join(out, "trained-residual.fsgt");
     await trainedPolicyDownload.saveAs(trainedPolicyPath);
@@ -1119,22 +938,17 @@ async function run() {
       .getByRole("alert")
       .filter({ hasText: "Injected export failure" })
       .waitFor({ state: "hidden" });
-    await trainingPage
-      .getByRole("combobox", { name: "Conditions" })
-      .selectOption("terrain");
+    await trainingPage.getByRole("combobox", { name: "Conditions" }).selectOption("terrain");
     await trainingPage
       .getByRole("table", {
         name: "Training results: flat ground",
         exact: true,
       })
       .waitFor();
-    await trainingPage
-      .getByRole("combobox", { name: "Conditions" })
-      .selectOption("flat");
+    await trainingPage.getByRole("combobox", { name: "Conditions" }).selectOption("flat");
     // Fault injection only: owner calculations above and below remain real.
     await trainingPage.evaluate(() => {
-      const worker = (window as unknown as { __trainingWorker: Worker })
-        .__trainingWorker;
+      const worker = (window as unknown as { __trainingWorker: Worker }).__trainingWorker;
       worker.terminate();
       worker.dispatchEvent(
         new ErrorEvent("error", {
@@ -1157,29 +971,20 @@ async function run() {
       .waitFor();
     await startTraining.waitFor();
     assert.equal(
-      await trainingPage
-        .getByRole("button", { name: "Download policy", exact: true })
-        .isDisabled(),
+      await trainingPage.getByRole("button", { name: "Download policy", exact: true }).isDisabled(),
       true,
     );
     await startTraining.click();
     await trainingPage.waitForFunction(
       (count) =>
-        (
-          window as unknown as { __trainingMessages: TrainingWorkerResponse[] }
-        ).__trainingMessages
+        (window as unknown as { __trainingMessages: TrainingWorkerResponse[] }).__trainingMessages
           .slice(count)
-          .some(
-            (message) =>
-              message.type === "progress" && message.progress.evaluations > 0,
-          ),
+          .some((message) => message.type === "progress" && message.progress.evaluations > 0),
       stoppedTraining.length,
     );
     assert.equal(
       await trainingPage.evaluate(
-        () =>
-          (window as unknown as { __trainingWorkerCount: number })
-            .__trainingWorkerCount,
+        () => (window as unknown as { __trainingWorkerCount: number }).__trainingWorkerCount,
       ),
       3,
       "Retry must create a live replacement worker",
@@ -1221,21 +1026,11 @@ async function run() {
     const sharedPage = await sharedContext.newPage();
     observe(sharedPage);
     await sharedPage.goto(sharedResidualUrl);
-    await sharedPage
-      .getByText("Someone shared a policy with you in this link")
-      .waitFor();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .click();
-    await sharedPage
-      .getByText(/^Loaded the shared policy; this machine scores it /)
-      .waitFor();
-    await sharedPage
-      .getByRole("button", { name: "Stop training", exact: true })
-      .click();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .waitFor();
+    await sharedPage.getByText("Someone shared a policy with you in this link").waitFor();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).click();
+    await sharedPage.getByText(/^Loaded the shared policy; this machine scores it /).waitFor();
+    await sharedPage.getByRole("button", { name: "Stop training", exact: true }).click();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).waitFor();
     const sharedCheckpoint = await sharedPage.evaluate(() =>
       JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null"),
     );
@@ -1253,27 +1048,14 @@ async function run() {
     });
     await sharedPage.reload();
     await sharedPage.getByText("is saved in this browser").waitFor();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .click();
-    await sharedPage
-      .getByText(/^Loaded your saved policy; this machine scores it /)
-      .waitFor();
-    await sharedPage
-      .getByRole("button", { name: "Stop training", exact: true })
-      .click();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .waitFor();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).click();
+    await sharedPage.getByText(/^Loaded your saved policy; this machine scores it /).waitFor();
+    await sharedPage.getByRole("button", { name: "Stop training", exact: true }).click();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).waitFor();
     const reassessedObjective = await sharedPage.evaluate(
-      () =>
-        JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null")
-          .flat.objective,
+      () => JSON.parse(localStorage.getItem("cmaes.g1-residual-run.v1") ?? "null").flat.objective,
     );
-    assert(
-      reassessedObjective > -1e9,
-      "The stale checkpoint claim survived owner re-scoring",
-    );
+    assert(reassessedObjective > -1e9, "The stale checkpoint claim survived owner re-scoring");
     assert(reassessedObjective <= sharedCheckpoint.flat.objective);
     const shippedButton = sharedPage.getByRole("button", {
       name: "Start from the shipped policy",
@@ -1285,19 +1067,14 @@ async function run() {
     );
     await shippedNotice.waitFor();
     const shippedScoreNotice = await shippedNotice.innerText();
-    await sharedPage
-      .getByRole("button", { name: "Stop training", exact: true })
-      .click();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .waitFor();
+    await sharedPage.getByRole("button", { name: "Stop training", exact: true }).click();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).waitFor();
     let releaseShippedDownload!: () => void;
     const shippedDownloadGate = new Promise<void>((resolve) => {
       releaseShippedDownload = resolve;
     });
     let shippedDownloadHeld = false;
-    const shippedPattern =
-      "**/robots/g1/transformer/g1-real-physics-residual-flat.bin";
+    const shippedPattern = "**/robots/g1/transformer/g1-real-physics-residual-flat.bin";
     await sharedPage.route(shippedPattern, async (route) => {
       shippedDownloadHeld = true;
       await shippedDownloadGate;
@@ -1305,18 +1082,10 @@ async function run() {
     });
     await shippedButton.click();
     const shippedHoldDeadline = Date.now() + 30_000;
-    while (!shippedDownloadHeld && Date.now() < shippedHoldDeadline)
-      await pause(25);
-    assert(
-      shippedDownloadHeld,
-      "The real shipped policy download was not held",
-    );
-    await sharedPage
-      .getByRole("combobox", { name: "Conditions" })
-      .selectOption("terrain");
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .click();
+    while (!shippedDownloadHeld && Date.now() < shippedHoldDeadline) await pause(25);
+    assert(shippedDownloadHeld, "The real shipped policy download was not held");
+    await sharedPage.getByRole("combobox", { name: "Conditions" }).selectOption("terrain");
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).click();
     const shippedResponse = sharedPage.waitForResponse((response) =>
       response.url().endsWith("g1-real-physics-residual-flat.bin"),
     );
@@ -1324,18 +1093,12 @@ async function run() {
     await (await shippedResponse).finished();
     await pause(200);
     assert.equal(
-      await sharedPage
-        .getByRole("combobox", { name: "Conditions" })
-        .inputValue(),
+      await sharedPage.getByRole("combobox", { name: "Conditions" }).inputValue(),
       "terrain",
       "A stale shipped download replaced the newer run",
     );
-    await sharedPage
-      .getByRole("button", { name: "Stop training", exact: true })
-      .click();
-    await sharedPage
-      .getByRole("button", { name: "Train in this browser", exact: true })
-      .waitFor();
+    await sharedPage.getByRole("button", { name: "Stop training", exact: true }).click();
+    await sharedPage.getByRole("button", { name: "Train in this browser", exact: true }).waitFor();
     await sharedPage.screenshot({
       path: join(out, "trainer-shared-checkpoint.png"),
     });
@@ -1392,9 +1155,7 @@ async function run() {
           const request = message as G1OptimizationRequest;
           if (
             request &&
-            ["preview", "optimize", "stop", "replay", "compare"].includes(
-              request.type,
-            ) &&
+            ["preview", "optimize", "stop", "replay", "compare"].includes(request.type) &&
             ["walking", "stepping", "balance"].includes(request.task)
           ) {
             host.__g1Observation.requests.push(structuredClone(request));
@@ -1421,34 +1182,27 @@ async function run() {
         host.webkit = {
           messageHandlers: {
             frankenrobots: {
-              postMessage: (payload) =>
-                host.__ownerBridgeMessages.push(payload),
+              postMessage: (payload) => host.__ownerBridgeMessages.push(payload),
             },
           },
         };
       });
       let interventions = 0;
       if (changed) {
-        await ownerContext.route(
-          `**/wasm/fs-cmaes/v0623/${changed}`,
-          async (route) => {
-            const response = await route.fetch();
-            assert(
-              response.ok(),
-              `Could not fetch owner ${changed} for intervention`,
-            );
-            let body = await response.body();
-            if (changed === "manifest.json") {
-              const manifest = JSON.parse(body.toString("utf8"));
-              manifest.sourceRevision = "0".repeat(40);
-              body = Buffer.from(JSON.stringify(manifest));
-            } else {
-              body[0] ^= 1;
-            }
-            interventions++;
-            await route.fulfill({ response, body });
-          },
-        );
+        await ownerContext.route(`**/wasm/fs-cmaes/v0623/${changed}`, async (route) => {
+          const response = await route.fetch();
+          assert(response.ok(), `Could not fetch owner ${changed} for intervention`);
+          let body = await response.body();
+          if (changed === "manifest.json") {
+            const manifest = JSON.parse(body.toString("utf8"));
+            manifest.sourceRevision = "0".repeat(40);
+            body = Buffer.from(JSON.stringify(manifest));
+          } else {
+            body[0] ^= 1;
+          }
+          interventions++;
+          await route.fulfill({ response, body });
+        });
       }
       const ownerPage = await ownerContext.newPage();
       observe(ownerPage);
@@ -1462,21 +1216,14 @@ async function run() {
             : changed.endsWith(".js")
               ? "JavaScript SHA-256 mismatch"
               : "WASM SHA-256 mismatch";
-        const alert = ownerPage
-          .getByRole("alert")
-          .filter({ hasText: expected });
+        const alert = ownerPage.getByRole("alert").filter({ hasText: expected });
         await alert.waitFor({ state: "visible", timeout: 60_000 });
         evidence = await alert.innerText();
         assert(interventions > 0, "No owner bytes were changed");
         assert(
-          await ownerPage
-            .getByRole("button", { name: "Start learning", exact: true })
-            .isDisabled(),
+          await ownerPage.getByRole("button", { name: "Start learning", exact: true }).isDisabled(),
         );
-        assert.equal(
-          await ownerPage.getByTestId("g1-owner-admission").count(),
-          0,
-        );
+        assert.equal(await ownerPage.getByTestId("g1-owner-admission").count(), 0);
         const bridge = await ownerPage.evaluate(() => {
           const host = window as unknown as {
             __ownerBridgeMessages: Record<string, unknown>[];
@@ -1493,17 +1240,9 @@ async function run() {
         });
         assert(bridge.delivered, "Native command never reached the handler");
         const latestMessages = bridge.messages.slice().reverse();
-        const ack = latestMessages.find(
-          (message) => message.type === "engine.command.ack",
-        );
-        assert.equal(
-          ack?.accepted,
-          false,
-          "Native start admitted a foreign owner",
-        );
-        const state = latestMessages.find(
-          (message) => message.type === "engine.status",
-        );
+        const ack = latestMessages.find((message) => message.type === "engine.command.ack");
+        assert.equal(ack?.accepted, false, "Native start admitted a foreign owner");
+        const state = latestMessages.find((message) => message.type === "engine.status");
         assert.equal(state?.state, "failed");
         assert(String(state?.detail).includes(expected));
         nativeRefusal = bridge;
@@ -1513,9 +1252,7 @@ async function run() {
         });
         await summary.waitFor({ timeout: 60_000 });
         await summary.click();
-        evidence = await ownerPage
-          .getByTestId("g1-owner-admission")
-          .innerText();
+        evidence = await ownerPage.getByTestId("g1-owner-admission").innerText();
         assert.match(evidence, /29 physical actuators, 30 links/);
         assert.match(evidence, /15 learned rows and 14 reflex-controlled/);
         assert.match(
@@ -1523,15 +1260,9 @@ async function run() {
           /15 standing biases, 30 phase coefficients and 60 inertial-feedback/,
         );
         assert.match(evidence, /0\.323 to 0\.968 physical seconds/);
-        assert(
-          evidence.includes(
-            FRANKENSIM_OWNER_ARTIFACT.sourceRevision.slice(0, 12),
-          ),
-        );
+        assert(evidence.includes(FRANKENSIM_OWNER_ARTIFACT.sourceRevision.slice(0, 12)));
         await summary.click();
-        await ownerPage
-          .getByRole("radio", { name: "Terrain + push", exact: true })
-          .click();
+        await ownerPage.getByRole("radio", { name: "Terrain + push", exact: true }).click();
         await ownerPage.locator("#g1-seed").selectOption("2");
         await ownerPage.setViewportSize({ width: 1440, height: 1000 });
         await ownerPage
@@ -1546,9 +1277,7 @@ async function run() {
             exact: true,
           })
           .click();
-        await ownerPage.evaluate(() =>
-          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
-        );
+        await ownerPage.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
         const sceneElement = ownerPage.locator("[data-g1-scene-digest]");
         const before = await sceneElement.getAttribute("data-g1-scene-digest");
         // Follow the actual projected handle, which moves with the camera.
@@ -1582,8 +1311,7 @@ async function run() {
                 };
                 const previous = settling.at(-1);
                 stable =
-                  previous &&
-                  Math.hypot(grab.x - previous.x, grab.y - previous.y) < 0.25
+                  previous && Math.hypot(grab.x - previous.x, grab.y - previous.y) < 0.25
                     ? stable + 1
                     : 0;
                 settling.push(grab);
@@ -1623,34 +1351,23 @@ async function run() {
           out,
           "g1-curriculum-before-learning",
         );
-        await ownerPage
-          .getByRole("button", { name: "Standing prior", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Standing prior", exact: true }).click();
         const standingExport = await captureReplayExport(
           ownerPage,
           out,
           "g1-standing-before-learning",
         );
-        assert.notDeepEqual(
-          standingExport.policy.policy,
-          curriculumExport.policy.policy,
-        );
-        await ownerPage
-          .getByRole("button", { name: "Policy seed", exact: true })
-          .click();
-        await ownerPage
-          .getByRole("button", { name: "Start learning", exact: true })
-          .click();
+        assert.notDeepEqual(standingExport.policy.policy, curriculumExport.policy.policy);
+        await ownerPage.getByRole("button", { name: "Policy seed", exact: true }).click();
+        await ownerPage.getByRole("button", { name: "Start learning", exact: true }).click();
         await ownerPage.waitForFunction(
           () =>
-            (window as unknown as { __g1Observation: G1BrowserObservation })
-              .__g1Observation.progress > 0,
+            (window as unknown as { __g1Observation: G1BrowserObservation }).__g1Observation
+              .progress > 0,
           null,
           { timeout: 30_000 },
         );
-        await ownerPage
-          .getByRole("button", { name: /^Stop · gen / })
-          .press("Enter");
+        await ownerPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
         await ownerPage.waitForFunction(
           () =>
             (
@@ -1667,15 +1384,13 @@ async function run() {
           .click();
         await ownerPage.waitForFunction(
           () =>
-            (window as unknown as { __g1Observation: G1BrowserObservation })
-              .__g1Observation.comparisons === 1,
+            (window as unknown as { __g1Observation: G1BrowserObservation }).__g1Observation
+              .comparisons === 1,
           null,
           { timeout: 30_000 },
         );
         const observed = await ownerPage.evaluate(
-          () =>
-            (window as unknown as { __g1Observation: G1BrowserObservation })
-              .__g1Observation,
+          () => (window as unknown as { __g1Observation: G1BrowserObservation }).__g1Observation,
         );
         const moved = observed.requests
           .slice()
@@ -1683,54 +1398,33 @@ async function run() {
           .find((request) => request.type === "preview" && request.seat);
         assert(moved?.seat, "No owner request followed the visible drag");
         for (const type of ["optimize", "stop", "compare"]) {
-          const request = observed.requests.find(
-            (request) => request.type === type,
-          );
-          assert.deepEqual(
-            request?.seat,
-            moved.seat,
-            `${type} used a different placement`,
-          );
+          const request = observed.requests.find((request) => request.type === type);
+          assert.deepEqual(request?.seat, moved.seat, `${type} used a different placement`);
         }
         const stopped = observed.traces.find((trace) => trace.stopped);
-        assert(
-          stopped && stopped.generation > 0,
-          "No real optimized replay followed Stop",
-        );
+        assert(stopped && stopped.generation > 0, "No real optimized replay followed Stop");
         assert.deepEqual(stopped.scene.seat, moved.seat);
         assert.notEqual(stopped.scene.digest, before);
-        assert.equal(
-          await sceneElement.getAttribute("data-g1-scene-digest"),
-          stopped.scene.digest,
+        assert.equal(await sceneElement.getAttribute("data-g1-scene-digest"), stopped.scene.digest);
+        await (await downloadTelemetry(ownerPage)).saveAs(
+          join(out, "g1-moved-seat-telemetry.json"),
         );
-        await (
-          await downloadTelemetry(ownerPage)
-        ).saveAs(join(out, "g1-moved-seat-telemetry.json"));
         const originalTelemetry = JSON.parse(
           await readFile(join(out, "g1-moved-seat-telemetry.json"), "utf8"),
         );
         // Controls for the next search must not rewrite the measured policy's seed.
         await ownerPage.locator("#g1-seed").selectOption("0");
         const policyDownload = ownerPage.waitForEvent("download");
-        await ownerPage
-          .getByRole("button", { name: "Download", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Download", exact: true }).click();
         const policyPath = join(out, "g1-moved-experiment.policy.json");
         await (await policyDownload).saveAs(policyPath);
         const originalFile = await readFile(policyPath, "utf8");
         const originalPolicy = policyFromFileContents(originalFile, 5_040);
-        assert(
-          originalPolicy.experiment,
-          "Export omitted the exact experiment",
-        );
+        assert(originalPolicy.experiment, "Export omitted the exact experiment");
         assert.equal(originalPolicy.challenge, "terrain-and-push");
         assert.equal(originalPolicy.experiment.seedIndex, 2);
-        await ownerPage
-          .getByRole("button", { name: "Share link", exact: true })
-          .click();
-        await ownerPage.waitForFunction(() =>
-          window.location.hash.startsWith("#zpolicy="),
-        );
+        await ownerPage.getByRole("button", { name: "Share link", exact: true }).click();
+        await ownerPage.waitForFunction(() => window.location.hash.startsWith("#zpolicy="));
         const shareUrl = ownerPage.url();
         // Fresh storage/context for each transport: defaults cannot hide missing metadata.
         for (const transport of ["file", "fragment", "recovery"] as const) {
@@ -1741,9 +1435,7 @@ async function run() {
           const replayPage = await replayContext.newPage();
           observe(replayPage);
           await replayPage.goto(
-            transport === "fragment"
-              ? shareUrl
-              : new URL("/frankenrobots/humanoid", base).href,
+            transport === "fragment" ? shareUrl : new URL("/frankenrobots/humanoid", base).href,
           );
           await replayPage
             .getByText("Owner controller and source", { exact: true })
@@ -1755,9 +1447,7 @@ async function run() {
                 .getAttribute("aria-checked"),
               "true",
             );
-            await replayPage
-              .locator('input[type="file"]')
-              .setInputFiles(policyPath);
+            await replayPage.locator('input[type="file"]').setInputFiles(policyPath);
           }
           if (transport === "recovery") {
             await replayPage.waitForFunction(
@@ -1772,9 +1462,7 @@ async function run() {
             await replayPage
               .getByText("Owner controller and source", { exact: true })
               .waitFor({ timeout: 60_000 });
-            await replayPage
-              .getByRole("radio", { name: "Terrain + push", exact: true })
-              .click();
+            await replayPage.getByRole("radio", { name: "Terrain + push", exact: true }).click();
             await replayPage.getByText(/Recovered your run from/).waitFor();
           }
           await replayPage.waitForFunction(
@@ -1793,33 +1481,21 @@ async function run() {
             "true",
           );
           const replayDownload = replayPage.waitForEvent("download");
-          await replayPage
-            .getByRole("button", { name: "Download", exact: true })
-            .click();
+          await replayPage.getByRole("button", { name: "Download", exact: true }).click();
           const replayPath = join(out, `g1-${transport}-restored.policy.json`);
           await (await replayDownload).saveAs(replayPath);
-          const replayed = policyFromFileContents(
-            await readFile(replayPath, "utf8"),
-            5_040,
-          );
+          const replayed = policyFromFileContents(await readFile(replayPath, "utf8"), 5_040);
           assert.deepEqual(
             new Uint8Array(replayed.policy.buffer),
             new Uint8Array(originalPolicy.policy.buffer),
           );
           assert.deepEqual(replayed.experiment, originalPolicy.experiment);
           const replayTelemetryDownload = await downloadTelemetry(replayPage);
-          const telemetryPath = join(
-            out,
-            `g1-${transport}-restored-telemetry.json`,
-          );
+          const telemetryPath = join(out, `g1-${transport}-restored-telemetry.json`);
           await replayTelemetryDownload.saveAs(telemetryPath);
-          const replayTelemetry = JSON.parse(
-            await readFile(telemetryPath, "utf8"),
-          );
-          const { exportTimestamp: originalTime, ...originalMeasurement } =
-            originalTelemetry;
-          const { exportTimestamp: replayTime, ...replayMeasurement } =
-            replayTelemetry;
+          const replayTelemetry = JSON.parse(await readFile(telemetryPath, "utf8"));
+          const { exportTimestamp: originalTime, ...originalMeasurement } = originalTelemetry;
+          const { exportTimestamp: replayTime, ...replayMeasurement } = replayTelemetry;
           assert(originalTime && replayTime);
           assert.deepEqual(
             replayMeasurement,
@@ -1835,15 +1511,12 @@ async function run() {
             buffer: Buffer.from(JSON.stringify(incompatible)),
           });
           await replayPage
-            .getByText(
-              "This exact experiment requires a different owner artifact.",
-              { exact: true },
-            )
+            .getByText("This exact experiment requires a different owner artifact.", {
+              exact: true,
+            })
             .waitFor();
           assert.equal(
-            await replayPage
-              .locator("[data-g1-scene-digest]")
-              .getAttribute("data-g1-scene-digest"),
+            await replayPage.locator("[data-g1-scene-digest]").getAttribute("data-g1-scene-digest"),
             stopped.scene.digest,
           );
           assert.equal(await replayPage.locator("#g1-seed").inputValue(), "2");
@@ -1862,39 +1535,19 @@ async function run() {
           settling,
           observed,
         });
-        await nativeReplay(
-          ownerPage,
-          "humanoid",
-          "g1-curriculum-after-learning",
-        );
+        await nativeReplay(ownerPage, "humanoid", "g1-curriculum-after-learning");
         assert.deepEqual(
-          await captureReplayExport(
-            ownerPage,
-            out,
-            "g1-native-curriculum-after-learning",
-          ),
+          await captureReplayExport(ownerPage, out, "g1-native-curriculum-after-learning"),
           curriculumExport,
         );
-        await ownerPage
-          .getByRole("button", { name: "Standing prior", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Standing prior", exact: true }).click();
         assert.deepEqual(
-          await captureReplayExport(
-            ownerPage,
-            out,
-            "g1-standing-after-learning",
-          ),
+          await captureReplayExport(ownerPage, out, "g1-standing-after-learning"),
           standingExport,
         );
-        await ownerPage
-          .getByRole("button", { name: "Policy seed", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Policy seed", exact: true }).click();
         assert.deepEqual(
-          await captureReplayExport(
-            ownerPage,
-            out,
-            "g1-web-curriculum-after-learning",
-          ),
+          await captureReplayExport(ownerPage, out, "g1-web-curriculum-after-learning"),
           curriculumExport,
         );
         await ownerPage
@@ -1902,37 +1555,24 @@ async function run() {
           .first()
           .click();
         assert.deepEqual(
-          await captureReplayExport(
-            ownerPage,
-            out,
-            "g1-story-standing-after-learning",
-          ),
+          await captureReplayExport(ownerPage, out, "g1-story-standing-after-learning"),
           standingExport,
         );
         // Selecting a prior changes the replay, not the retained optimizer.
         await ownerPage.locator("#g1-seed").selectOption("2");
-        await ownerPage
-          .getByRole("button", { name: "Start learning", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Start learning", exact: true }).click();
         await ownerPage.waitForFunction(
           (previousGeneration) => {
             const label = Array.from(document.querySelectorAll("button"))
               .map((button) => button.textContent ?? "")
               .find((text) => text.includes("Stop · gen "));
-            return (
-              label &&
-              Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration
-            );
+            return label && Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration;
           },
           stopped.generation,
           { timeout: 30_000 },
         );
-        await ownerPage
-          .getByRole("button", { name: /^Stop · gen / })
-          .press("Enter");
-        await ownerPage
-          .getByRole("button", { name: /^Keep learning · gen / })
-          .waitFor();
+        await ownerPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
+        await ownerPage.getByRole("button", { name: /^Keep learning · gen / }).waitFor();
         const continuedExport = await captureReplayExport(
           ownerPage,
           out,
@@ -1944,15 +1584,9 @@ async function run() {
           .first()
           .click();
         await ownerPage.getByText(/Standing-only prior replayed;/).waitFor();
-        const flatChapter = await captureReplayExport(
-          ownerPage,
-          out,
-          "g1-story-flat-standing",
-        );
+        const flatChapter = await captureReplayExport(ownerPage, out, "g1-story-flat-standing");
         assert.equal(flatChapter.policy.challenge, "flat");
-        await ownerPage
-          .getByRole("button", { name: "Standing prior", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Standing prior", exact: true }).click();
         assert.deepEqual(
           await captureReplayExport(ownerPage, out, "g1-web-flat-standing"),
           flatChapter,
@@ -1963,11 +1597,7 @@ async function run() {
           .click();
         await ownerPage.getByText(/Standing-only prior replayed;/).waitFor();
         assert.deepEqual(
-          await captureReplayExport(
-            ownerPage,
-            out,
-            "g1-story-terrain-standing",
-          ),
+          await captureReplayExport(ownerPage, out, "g1-story-terrain-standing"),
           standingExport,
         );
         recordResult({
@@ -1981,18 +1611,14 @@ async function run() {
           ],
           continuedGeneration: continuedExport.policy.generation,
         });
-        await ownerPage.evaluate(() =>
-          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
-        );
+        await ownerPage.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
         // Scrolling to the controls unmounts the expensive offscreen stage.
         // A fresh canvas can have a valid context before its scene is mounted.
         await handleLabel.waitFor({ state: "visible" });
         await ownerPage.evaluate(
           () =>
             new Promise<void>((resolve) =>
-              requestAnimationFrame(() =>
-                requestAnimationFrame(() => resolve()),
-              ),
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
             ),
         );
         assert(
@@ -2002,17 +1628,13 @@ async function run() {
           }),
           "The G1 renderer lost its WebGL context",
         );
-        await ownerPage
-          .getByRole("button", { name: "Map", exact: true })
-          .click();
+        await ownerPage.getByRole("button", { name: "Map", exact: true }).click();
         assert.deepEqual(
           await captureReplayExport(ownerPage, out, "g1-overhead-standing"),
           standingExport,
           "Changing the inspection camera changed the measured experiment",
         );
-        await ownerPage.evaluate(() =>
-          window.scrollTo({ top: 0, left: 0, behavior: "instant" }),
-        );
+        await ownerPage.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: "instant" }));
         await handleLabel.waitFor({ state: "visible" });
       }
       await ownerPage.screenshot({
@@ -2067,23 +1689,14 @@ async function run() {
         );
         return slider && Number(slider.value) > 0;
       });
-      await armPage
-        .getByRole("button", { name: "Restart arm trace", exact: true })
-        .click();
+      await armPage.getByRole("button", { name: "Restart arm trace", exact: true }).click();
       const telemetryDownload = await downloadTelemetry(armPage);
       const telemetryPath = join(out, `arm-${task}-telemetry.json`);
       await telemetryDownload.saveAs(telemetryPath);
       const telemetry = await Bun.file(telemetryPath).json();
       assert.equal(telemetry.task, task);
-      assert.equal(
-        telemetry.placed,
-        placed,
-        `${task} benchmark outcome changed`,
-      );
-      assert.equal(
-        telemetry.ownerAdmission.scene.extraObstacleCount,
-        bodyCount,
-      );
+      assert.equal(telemetry.placed, placed, `${task} benchmark outcome changed`);
+      assert.equal(telemetry.ownerAdmission.scene.extraObstacleCount, bodyCount);
       const measuredReadouts = [];
       for (const sampleIndex of [0, telemetry.samples.length - 1, 0]) {
         if (measuredReadouts.length > 0) {
@@ -2097,9 +1710,7 @@ async function run() {
           );
           return slider && Number(slider.value) === expectedIndex;
         }, sampleIndex);
-        await armPage
-          .getByRole("button", { name: "Play arm trace", exact: true })
-          .waitFor();
+        await armPage.getByRole("button", { name: "Play arm trace", exact: true }).waitFor();
         const poses = telemetry.samples[sampleIndex].linkPoses.map(
           (pose: { quaternion: HouseholdRobotPose["quaternionWxyz"] }) => ({
             quaternionWxyz: pose.quaternion,
@@ -2115,10 +1726,7 @@ async function run() {
           "A6 Wrist 2",
           "A7 Flange",
         ].entries()) {
-          const card = armPage
-            .getByText(name, { exact: true })
-            .locator("..")
-            .locator("..");
+          const card = armPage.getByText(name, { exact: true }).locator("..").locator("..");
           const degrees = (angles[index] * 180) / Math.PI;
           const expected = `${degrees >= 0 ? "+" : ""}${degrees.toFixed(1)}°`;
           const actual = await card.innerText();
@@ -2152,9 +1760,7 @@ async function run() {
     );
     // Keep a real learned trowel policy, then open it from a mug-default tab.
     await armPage.locator("#arm-seed").selectOption("1");
-    await armPage
-      .getByRole("button", { name: "Start learning", exact: true })
-      .click();
+    await armPage.getByRole("button", { name: "Start learning", exact: true }).click();
     await armPage.waitForFunction(
       () => {
         const label = Array.from(document.querySelectorAll("button"))
@@ -2166,32 +1772,22 @@ async function run() {
       { timeout: 30_000 },
     );
     await armPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
-    await armPage
-      .getByRole("button", { name: /^Keep learning · gen / })
-      .waitFor();
+    await armPage.getByRole("button", { name: /^Keep learning · gen / }).waitFor();
     // The readout inspection above paused playback. Fresh owner generations
     // must not override that explicit choice while learning continues.
     assert.equal(
-      await armPage
-        .getByRole("button", { name: "Play arm trace", exact: true })
-        .count(),
+      await armPage.getByRole("button", { name: "Play arm trace", exact: true }).count(),
       1,
     );
     const pausedAfterLearning = await armPage.evaluate(() => {
       const host = window as unknown as {
         __ownerBridgeMessages: Record<string, unknown>[];
       };
-      return host.__ownerBridgeMessages
-        .filter((message) => message.type === "trace.state")
-        .at(-1);
+      return host.__ownerBridgeMessages.filter((message) => message.type === "trace.state").at(-1);
     });
     assert.equal(pausedAfterLearning?.playing, false);
     assert.equal(pausedAfterLearning?.sampleIndex, 0);
-    const armLearnedExport = await captureReplayExport(
-      armPage,
-      out,
-      "arm-before-control-change",
-    );
+    const armLearnedExport = await captureReplayExport(armPage, out, "arm-before-control-change");
     await armPage.locator("#arm-family").selectOption("full");
     await armPage.locator("#arm-seed").selectOption("2");
     assert.deepEqual(
@@ -2199,9 +1795,7 @@ async function run() {
       armLearnedExport,
     );
     const armPolicyDownload = armPage.waitForEvent("download");
-    await armPage
-      .getByRole("button", { name: "Download", exact: true })
-      .click();
+    await armPage.getByRole("button", { name: "Download", exact: true }).click();
     const armPolicyPath = join(out, "arm-learned-trowel.policy.json");
     await (await armPolicyDownload).saveAs(armPolicyPath);
     const armPolicyFile = await readFile(armPolicyPath, "utf8");
@@ -2216,59 +1810,34 @@ async function run() {
     const armTelemetryPath = join(out, "arm-learned-trowel-telemetry.json");
     await armTelemetryDownload.saveAs(armTelemetryPath);
     const armTelemetry = JSON.parse(await readFile(armTelemetryPath, "utf8"));
-    await armPage
-      .getByRole("button", { name: "Share link", exact: true })
-      .click();
-    await armPage.waitForFunction(() =>
-      window.location.hash.startsWith("#zpolicy="),
-    );
+    await armPage.getByRole("button", { name: "Share link", exact: true }).click();
+    await armPage.waitForFunction(() => window.location.hash.startsWith("#zpolicy="));
     const armShareUrl = armPage.url();
     await nativeReplay(armPage, "arm", "arm-curriculum-after-learning");
     assert.deepEqual(
-      await captureReplayExport(
-        armPage,
-        out,
-        "arm-native-curriculum-after-learning",
-      ),
+      await captureReplayExport(armPage, out, "arm-native-curriculum-after-learning"),
       armCurriculumExport,
     );
     await armPage.locator("#arm-family").selectOption(armPolicy.family);
     await armPage.locator("#arm-seed").selectOption("1");
-    await armPage
-      .getByRole("button", { name: "Start learning", exact: true })
-      .click();
+    await armPage.getByRole("button", { name: "Start learning", exact: true }).click();
     await armPage.waitForFunction(
       (previousGeneration) => {
         const label = Array.from(document.querySelectorAll("button"))
           .map((button) => button.textContent ?? "")
           .find((text) => text.includes("Stop · gen "));
-        return (
-          label &&
-          Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration
-        );
+        return label && Number(label.match(/Stop · gen (\d+)/)?.[1]) > previousGeneration;
       },
       armPolicy.generation,
       { timeout: 30_000 },
     );
     await armPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
-    await armPage
-      .getByRole("button", { name: /^Keep learning · gen / })
-      .waitFor();
-    const continuedArm = await captureReplayExport(
-      armPage,
-      out,
-      "arm-continued-after-prior",
-    );
+    await armPage.getByRole("button", { name: /^Keep learning · gen / }).waitFor();
+    const continuedArm = await captureReplayExport(armPage, out, "arm-continued-after-prior");
     assert(continuedArm.policy.generation > armPolicy.generation);
-    await armPage
-      .getByRole("button", { name: "Curriculum", exact: true })
-      .click();
+    await armPage.getByRole("button", { name: "Curriculum", exact: true }).click();
     assert.deepEqual(
-      await captureReplayExport(
-        armPage,
-        out,
-        "arm-web-curriculum-after-learning",
-      ),
+      await captureReplayExport(armPage, out, "arm-web-curriculum-after-learning"),
       armCurriculumExport,
     );
     recordResult({
@@ -2311,14 +1880,10 @@ async function run() {
             super(url, options);
             if (options?.name !== "frankensim-household-arm-optimizer") return;
             const nativePost = this.postMessage.bind(this);
-            this.postMessage = (
-              message: ArmObservation["requests"][number],
-            ) => {
+            this.postMessage = (message: ArmObservation["requests"][number]) => {
               host.__armObservation.requests.push({
                 ...message,
-                ...(message.resumeFrom
-                  ? { resumeFrom: Array.from(message.resumeFrom) }
-                  : {}),
+                ...(message.resumeFrom ? { resumeFrom: Array.from(message.resumeFrom) } : {}),
               });
               nativePost(message);
             };
@@ -2341,56 +1906,37 @@ async function run() {
       const replayPage = await replayContext.newPage();
       observe(replayPage);
       await replayPage.goto(
-        transport === "fragment"
-          ? armShareUrl
-          : new URL("/frankenrobots/arm", base).href,
+        transport === "fragment" ? armShareUrl : new URL("/frankenrobots/arm", base).href,
       );
-      await replayPage
-        .getByRole("button", { name: "Download", exact: true })
-        .waitFor();
+      await replayPage.getByRole("button", { name: "Download", exact: true }).waitFor();
       if (transport === "file") {
         await replayPage.locator("#arm-family").selectOption("full");
         await replayPage.locator("#arm-seed").selectOption("2");
-        await replayPage
-          .locator('input[type="file"]')
-          .setInputFiles(armPolicyPath);
+        await replayPage.locator('input[type="file"]').setInputFiles(armPolicyPath);
       }
       if (transport === "recovery") {
         await replayPage.getByRole("tab", { name: /^Trowel/ }).click();
       }
       await replayPage.waitForFunction(
         (generation) => {
-          const observation = (
-            window as unknown as { __armObservation: ArmObservation }
-          ).__armObservation;
-          return observation.traces.some(
-            (trace) => trace.generation === generation,
-          );
+          const observation = (window as unknown as { __armObservation: ArmObservation })
+            .__armObservation;
+          return observation.traces.some((trace) => trace.generation === generation);
         },
         armPolicy.generation,
         { timeout: 30_000 },
       );
       assert.equal(
-        await replayPage
-          .getByRole("tab", { name: /^Trowel/ })
-          .getAttribute("aria-selected"),
+        await replayPage.getByRole("tab", { name: /^Trowel/ }).getAttribute("aria-selected"),
         "true",
       );
-      assert.equal(
-        await replayPage.locator("#arm-family").inputValue(),
-        armPolicy.family,
-      );
+      assert.equal(await replayPage.locator("#arm-family").inputValue(), armPolicy.family);
       assert.equal(await replayPage.locator("#arm-seed").inputValue(), "1");
       const restoredDownload = replayPage.waitForEvent("download");
-      await replayPage
-        .getByRole("button", { name: "Download", exact: true })
-        .click();
+      await replayPage.getByRole("button", { name: "Download", exact: true }).click();
       const restoredPath = join(out, `arm-${transport}-restored.policy.json`);
       await (await restoredDownload).saveAs(restoredPath);
-      const restored = policyFromFileContents(
-        await readFile(restoredPath, "utf8"),
-        128,
-      );
+      const restored = policyFromFileContents(await readFile(restoredPath, "utf8"), 128);
       assert.deepEqual(restored.experiment, armPolicy.experiment);
       assert.equal(restored.sigma, armPolicy.sigma);
       assert.deepEqual(
@@ -2398,18 +1944,11 @@ async function run() {
         new Uint8Array(armPolicy.policy.buffer),
       );
       const restoredTelemetryDownload = await downloadTelemetry(replayPage);
-      const restoredTelemetryPath = join(
-        out,
-        `arm-${transport}-restored-telemetry.json`,
-      );
+      const restoredTelemetryPath = join(out, `arm-${transport}-restored-telemetry.json`);
       await restoredTelemetryDownload.saveAs(restoredTelemetryPath);
-      const restoredTelemetry = JSON.parse(
-        await readFile(restoredTelemetryPath, "utf8"),
-      );
-      const { exportTimestamp: originalTime, ...originalMeasurement } =
-        armTelemetry;
-      const { exportTimestamp: restoredTime, ...restoredMeasurement } =
-        restoredTelemetry;
+      const restoredTelemetry = JSON.parse(await readFile(restoredTelemetryPath, "utf8"));
+      const { exportTimestamp: originalTime, ...originalMeasurement } = armTelemetry;
+      const { exportTimestamp: restoredTime, ...restoredMeasurement } = restoredTelemetry;
       assert(originalTime && restoredTime);
       assert.deepEqual(restoredMeasurement, originalMeasurement);
       if (transport === "file") {
@@ -2418,44 +1957,34 @@ async function run() {
           if (cycle > 0) {
             const traceCount = await replayPage.evaluate(
               () =>
-                (window as unknown as { __armObservation: ArmObservation })
-                  .__armObservation.traces.length,
+                (window as unknown as { __armObservation: ArmObservation }).__armObservation.traces
+                  .length,
             );
-            await replayPage
-              .locator('input[type="file"]')
-              .setInputFiles(armPolicyPath);
+            await replayPage.locator('input[type="file"]').setInputFiles(armPolicyPath);
             await replayPage.waitForFunction(
               (count) =>
-                (window as unknown as { __armObservation: ArmObservation })
-                  .__armObservation.traces.length > count,
+                (window as unknown as { __armObservation: ArmObservation }).__armObservation.traces
+                  .length > count,
               traceCount,
             );
           }
           const before = await replayPage.evaluate(
             () =>
-              (window as unknown as { __armObservation: ArmObservation })
-                .__armObservation.progress.length,
+              (window as unknown as { __armObservation: ArmObservation }).__armObservation.progress
+                .length,
           );
-          await replayPage
-            .getByRole("button", { name: /^Keep learning · gen / })
-            .click();
+          await replayPage.getByRole("button", { name: /^Keep learning · gen / }).click();
           await replayPage.waitForFunction(
             (count) =>
-              (window as unknown as { __armObservation: ArmObservation })
-                .__armObservation.progress.length > count,
+              (window as unknown as { __armObservation: ArmObservation }).__armObservation.progress
+                .length > count,
             before,
             { timeout: 30_000 },
           );
-          await replayPage
-            .getByRole("button", { name: /^Stop · gen / })
-            .press("Enter");
-          await replayPage
-            .getByRole("button", { name: /^Keep learning · gen / })
-            .waitFor();
+          await replayPage.getByRole("button", { name: /^Stop · gen / }).press("Enter");
+          await replayPage.getByRole("button", { name: /^Keep learning · gen / }).waitFor();
           const observation = await replayPage.evaluate(
-            () =>
-              (window as unknown as { __armObservation: ArmObservation })
-                .__armObservation,
+            () => (window as unknown as { __armObservation: ArmObservation }).__armObservation,
           );
           const request = observation.requests
             .filter((request) => request.type === "optimize")
@@ -2476,15 +2005,11 @@ async function run() {
         }
       }
       const observation = await replayPage.evaluate(
-        () =>
-          (window as unknown as { __armObservation: ArmObservation })
-            .__armObservation,
+        () => (window as unknown as { __armObservation: ArmObservation }).__armObservation,
       );
       assert(
         observation.traces.some(
-          (trace) =>
-            trace.family === armPolicy.family &&
-            trace.generation === armPolicy.generation,
+          (trace) => trace.family === armPolicy.family && trace.generation === armPolicy.generation,
         ),
       );
       const unsupported = JSON.parse(armPolicyFile);
@@ -2495,15 +2020,12 @@ async function run() {
         buffer: Buffer.from(JSON.stringify(unsupported)),
       });
       await replayPage
-        .getByText(
-          "This policy is not for a supported household task and optimizer.",
-          { exact: true },
-        )
+        .getByText("This policy is not for a supported household task and optimizer.", {
+          exact: true,
+        })
         .waitFor();
       assert.equal(
-        await replayPage
-          .getByRole("tab", { name: /^Trowel/ })
-          .getAttribute("aria-selected"),
+        await replayPage.getByRole("tab", { name: /^Trowel/ }).getAttribute("aria-selected"),
         "true",
       );
       // A different task with the original task's packet must be refused by
@@ -2522,25 +2044,18 @@ async function run() {
         buffer: Buffer.from(JSON.stringify(mismatchedScene)),
       });
       await replayPage
-        .getByText(
-          "This exact experiment has a different scene or owner configuration.",
-          { exact: true },
-        )
+        .getByText("This exact experiment has a different scene or owner configuration.", {
+          exact: true,
+        })
         .first()
         .waitFor();
       assert.equal(
-        await replayPage
-          .getByRole("tab", { name: /^Trowel/ })
-          .getAttribute("aria-selected"),
+        await replayPage.getByRole("tab", { name: /^Trowel/ }).getAttribute("aria-selected"),
         "true",
       );
       assert.equal(await replayPage.locator("#arm-seed").inputValue(), "1");
       assert.deepEqual(
-        await captureReplayExport(
-          replayPage,
-          out,
-          `arm-${transport}-after-refusal`,
-        ),
+        await captureReplayExport(replayPage, out, `arm-${transport}-after-refusal`),
         beforeRefusal,
       );
       recordResult({
@@ -2559,17 +2074,14 @@ async function run() {
     observe(invalidArmPage);
     // Structurally valid shared coefficients with unsupported task metadata
     // must be refused before that metadata reaches the task selector.
-    const invalidArmFragment = await encodePolicyFragment(
-      new Float64Array(128),
-      {
-        kernelVersion: FRANKENSIM_OWNER_ARTIFACT.kernelVersion,
-        task: "walking",
-        challenge: "household",
-        family: "lm-ma",
-        generation: 1,
-        sigma: 0.001,
-      },
-    );
+    const invalidArmFragment = await encodePolicyFragment(new Float64Array(128), {
+      kernelVersion: FRANKENSIM_OWNER_ARTIFACT.kernelVersion,
+      task: "walking",
+      challenge: "household",
+      family: "lm-ma",
+      generation: 1,
+      sigma: 0.001,
+    });
     await invalidArmPage.goto(
       new URL(`/frankenrobots/arm#zpolicy=${invalidArmFragment}`, base).href,
     );
@@ -2579,9 +2091,7 @@ async function run() {
       })
       .waitFor();
     assert.equal(
-      await invalidArmPage
-        .getByRole("tab", { name: /^Mug/ })
-        .getAttribute("aria-selected"),
+      await invalidArmPage.getByRole("tab", { name: /^Mug/ }).getAttribute("aria-selected"),
       "true",
     );
     recordResult({ journey: "arm-unsupported-shared-task", refused: true });
@@ -2590,8 +2100,7 @@ async function run() {
     assert.deepEqual(errors, [], "Browser errors occurred");
     log("browser-journeys-passed", { out, journeys: results.length });
   } catch (error) {
-    failure =
-      error instanceof Error ? error.stack || error.message : String(error);
+    failure = error instanceof Error ? error.stack || error.message : String(error);
     process.exitCode = 1;
     log("browser-journeys-failed", { out, failure });
     // Preserve the active journey's native-boundary messages on failure,
@@ -2605,10 +2114,7 @@ async function run() {
               __ownerBridgeMessages?: Record<string, unknown>[];
               __trainingMessages?: TrainingWorkerResponse[];
             };
-            return [
-              ...(host.__ownerBridgeMessages ?? []),
-              ...(host.__trainingMessages ?? []),
-            ];
+            return [...(host.__ownerBridgeMessages ?? []), ...(host.__trainingMessages ?? [])];
           });
           failedPages.push({ url: page.url(), messages });
         } catch (captureError) {
@@ -2627,9 +2133,7 @@ async function run() {
     try {
       await browser?.close();
     } catch (error) {
-      failure = [failure, `Browser cleanup failed: ${String(error)}`]
-        .filter(Boolean)
-        .join("\n");
+      failure = [failure, `Browser cleanup failed: ${String(error)}`].filter(Boolean).join("\n");
       process.exitCode = 1;
     }
     if (server && server.exitCode === null && server.signalCode === null) {
@@ -2638,8 +2142,7 @@ async function run() {
         new Promise<void>((resolve) => server?.once("exit", () => resolve())),
         pause(3000),
       ]);
-      if (server.exitCode === null && server.signalCode === null)
-        server.kill("SIGKILL");
+      if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
     }
     serverLog.end();
     await writeFile(

@@ -1,5 +1,5 @@
-import { G1WalkingFlagship } from "../../../../../app/components/G1WalkingFlagship";
 import { FrankenRobotsResearchAnnex } from "../../../../../app/components/FrankenRobotsResearchAnnex";
+import { G1WalkingFlagship } from "../../../../../app/components/G1WalkingFlagship";
 
 export default function HumanoidEnginePage() {
   return (

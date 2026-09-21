@@ -24,7 +24,14 @@ export interface LeniaKernelStatus {
 type WasmModule = {
   lenia_init?: (size: number, evalSize: number, relRadius: number) => string;
   lenia_clear?: () => void;
-  lenia_seed_ring?: (cx: number, cy: number, radius: number, ringFrac: number, width: number, intensity: number) => void;
+  lenia_seed_ring?: (
+    cx: number,
+    cy: number,
+    radius: number,
+    ringFrac: number,
+    width: number,
+    intensity: number,
+  ) => void;
   lenia_step?: (mu: number, sigma: number, dt: number, steps: number) => string;
   lenia_render?: () => void;
   lenia_rgba_ptr?: () => number;
@@ -72,7 +79,10 @@ export function initFrankenSimLenia(): Promise<LeniaKernelStatus> {
   if (loadPromise) return loadPromise;
   loadPromise = (async (): Promise<LeniaKernelStatus> => {
     try {
-      const mod = await loadWasmModule("/wasm/fs-lenia/fs_lenia_wasm.js", "/wasm/fs-lenia/fs_lenia_wasm_bg.wasm");
+      const mod = await loadWasmModule(
+        "/wasm/fs-lenia/fs_lenia_wasm.js",
+        "/wasm/fs-lenia/fs_lenia_wasm_bg.wasm",
+      );
       const required: (keyof WasmModule)[] = [
         "lenia_init",
         "lenia_clear",
@@ -82,7 +92,7 @@ export function initFrankenSimLenia(): Promise<LeniaKernelStatus> {
         "lenia_rgba_ptr",
         "lenia_rgba_len",
         "lenia_snapshot_eval",
-        "lenia_eval"
+        "lenia_eval",
       ];
       for (const name of required) {
         if (typeof mod[name] !== "function") {
@@ -96,13 +106,19 @@ export function initFrankenSimLenia(): Promise<LeniaKernelStatus> {
       const version = typeof mod.lenia_version === "function" ? mod.lenia_version() : null;
       return { source: "wasm", kernelVersion: version, error: null };
     } catch (err) {
-      return { source: "ts-fallback", kernelVersion: null, error: err instanceof Error ? err.message : String(err) };
+      return {
+        source: "ts-fallback",
+        kernelVersion: null,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   })();
   return loadPromise;
 }
 
-function callJson(fn: (() => string) | undefined): { ok?: Record<string, number>; refusal?: { code: string } } | null {
+function callJson(
+  fn: (() => string) | undefined,
+): { ok?: Record<string, number>; refusal?: { code: string } } | null {
   if (!fn) return null;
   try {
     return JSON.parse(fn());
@@ -125,12 +141,24 @@ export function leniaClear(): void {
   leniaModule?.lenia_clear?.();
 }
 
-export function leniaSeedRing(cx: number, cy: number, radius: number, ringFrac: number, width: number, intensity: number): void {
+export function leniaSeedRing(
+  cx: number,
+  cy: number,
+  radius: number,
+  ringFrac: number,
+  width: number,
+  intensity: number,
+): void {
   leniaModule?.lenia_seed_ring?.(cx, cy, radius, ringFrac, width, intensity);
 }
 
 /** Advance the field; returns the last step's metrics or null on failure. */
-export function leniaStep(mu: number, sigma: number, dt: number, steps: number): { interface: number; mass: number } | null {
+export function leniaStep(
+  mu: number,
+  sigma: number,
+  dt: number,
+  steps: number,
+): { interface: number; mass: number } | null {
   const mod = leniaModule;
   if (!mod?.lenia_step) return null;
   const parsed = callJson(() => mod.lenia_step!(mu, sigma, dt, steps));

@@ -1,24 +1,36 @@
 import { describe, expect, test } from "bun:test";
+import { runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
 import {
+  GaitTransformerPolicy,
+  type LoadedTransformerWeights,
+  loadGaitTransformerWeights,
+} from "../app/lib/gaitTransformer";
+import {
+  type AblationPairResult,
   loadAblationInputs,
   parseTrainReceipt,
   runMeasuredAblation,
-  type AblationPairResult,
   type TransformerTrainReceipt,
 } from "../app/lib/policyAblationComparison";
-import {
-  GaitTransformerPolicy,
-  loadGaitTransformerWeights,
-  type LoadedTransformerWeights,
-} from "../app/lib/gaitTransformer";
-import { runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
 
 /** The artifact the site actually serves. */
-const WEIGHTS_PATH = new URL("../public/robots/g1/transformer/g1-ablation-weights-v3.bin", import.meta.url);
+const WEIGHTS_PATH = new URL(
+  "../public/robots/g1/transformer/g1-ablation-weights-v3.bin",
+  import.meta.url,
+);
 /** The original export, kept so the repair it needed stays documented. */
-const LEGACY_WEIGHTS_PATH = new URL("../public/robots/g1/transformer/g1-ablation-weights-v1.bin", import.meta.url);
-const RECEIPT_PATH = new URL("../public/robots/g1/transformer/g1-ablation-train-receipt.json", import.meta.url);
-const GOLDEN_PATH = new URL("../public/robots/g1/transformer/g1-ablation-golden.json", import.meta.url);
+const LEGACY_WEIGHTS_PATH = new URL(
+  "../public/robots/g1/transformer/g1-ablation-weights-v1.bin",
+  import.meta.url,
+);
+const RECEIPT_PATH = new URL(
+  "../public/robots/g1/transformer/g1-ablation-train-receipt.json",
+  import.meta.url,
+);
+const GOLDEN_PATH = new URL(
+  "../public/robots/g1/transformer/g1-ablation-golden.json",
+  import.meta.url,
+);
 
 /**
  * The binary weight artifact is produced by frankensim
@@ -37,7 +49,9 @@ async function fileExists(path: URL): Promise<boolean> {
 }
 
 const artifactsPresent =
-  (await fileExists(WEIGHTS_PATH)) && (await fileExists(RECEIPT_PATH)) && (await fileExists(GOLDEN_PATH));
+  (await fileExists(WEIGHTS_PATH)) &&
+  (await fileExists(RECEIPT_PATH)) &&
+  (await fileExists(GOLDEN_PATH));
 const testIfArtifacts: typeof test = artifactsPresent ? test : test.skip;
 
 interface GoldenCase {
@@ -62,7 +76,11 @@ async function loadAblationFixtures(): Promise<AblationFixtures> {
   const weightsBuf = await Bun.file(WEIGHTS_PATH).arrayBuffer();
   const receiptRaw: unknown = await Bun.file(RECEIPT_PATH).json();
   const golden: GoldenFile = await Bun.file(GOLDEN_PATH).json();
-  return { weights: loadGaitTransformerWeights(weightsBuf), receipt: parseTrainReceipt(receiptRaw), golden };
+  return {
+    weights: loadGaitTransformerWeights(weightsBuf),
+    receipt: parseTrainReceipt(receiptRaw),
+    golden,
+  };
 }
 
 /**
@@ -73,7 +91,7 @@ async function loadAblationFixtures(): Promise<AblationFixtures> {
  */
 function goldenObsRow(position: number): number[] {
   let state = 0xa5a55a5a1234abcdn;
-  const f64Two31 = Math.pow(2, 31);
+  const f64Two31 = 2 ** 31;
   const row: number[] = new Array(42);
   for (let t = 0; t <= position; t++) {
     for (let i = 0; i < 42; i++) {
@@ -98,13 +116,16 @@ describe("GaitTransformer weights loader (fail-closed)", () => {
     expect(() => loadGaitTransformerWeights(poisoned.buffer)).toThrow(/magic/);
   });
 
-  testIfArtifacts("accepts the shipped weight file (audited 4-layer GQA architecture)", async () => {
-    const buf = await Bun.file(WEIGHTS_PATH).arrayBuffer();
-    const weights = loadGaitTransformerWeights(buf);
-    expect(weights.config.dModel).toBe(256);
-    expect(weights.config.nLayers).toBe(4);
-    expect(weights.config.kvDim).toBe(128);
-  });
+  testIfArtifacts(
+    "accepts the shipped weight file (audited 4-layer GQA architecture)",
+    async () => {
+      const buf = await Bun.file(WEIGHTS_PATH).arrayBuffer();
+      const weights = loadGaitTransformerWeights(buf);
+      expect(weights.config.dModel).toBe(256);
+      expect(weights.config.nLayers).toBe(4);
+      expect(weights.config.kvDim).toBe(128);
+    },
+  );
 
   test("rejects foreign architectures even when internally consistent", () => {
     // Craft a header with the right magic/version but wrong dims (the
@@ -165,8 +186,14 @@ describe("transformer training receipt boundary", () => {
     const secondRaw = validReceipt();
     secondRaw.training.samplesConsumed = 12_345;
 
-    const first = await loadAblationInputs(async () => weights.slice(0), async () => firstRaw);
-    const second = await loadAblationInputs(async () => weights.slice(0), async () => secondRaw);
+    const first = await loadAblationInputs(
+      async () => weights.slice(0),
+      async () => firstRaw,
+    );
+    const second = await loadAblationInputs(
+      async () => weights.slice(0),
+      async () => secondRaw,
+    );
 
     expect(first.trainReceipt.samplesConsumed).toBe(8_596);
     expect(second.trainReceipt.samplesConsumed).toBe(12_345);
@@ -242,32 +269,33 @@ describe("Measured ablation engine", () => {
     expect(legacy.embed.some((w) => w !== 0)).toBe(true);
   });
 
-  testIfArtifacts("the shipped transformer moves the robot, and does real work doing it", async () => {
-    const { weights, receipt } = await loadAblationFixtures();
-    const { transformerReceipt } = runMeasuredAblation({ weights, trainReceipt: receipt }, 7);
+  testIfArtifacts(
+    "the shipped transformer moves the robot, and does real work doing it",
+    async () => {
+      const { weights, receipt } = await loadAblationFixtures();
+      const { transformerReceipt } = runMeasuredAblation({ weights, trainReceipt: receipt }, 7);
 
-    // The committed v1 export had an all-zero policy head, so tanh(0 . h) = 0
-    // for every actuator and the robot could not move; the 7.8 m in its receipt
-    // came from a legacy stand-in that granted target speed regardless of
-    // action. The shipped v2 artifact keeps that trunk byte-for-byte and adds a
-    // head fitted by ridge regression to the CMA-ES phase-prior gait, so it now
-    // walks — and unlike the legacy number, it spends actuator work to do it.
-    expect(receipt.rustGreedy720.distanceMeters).toBeGreaterThan(0.0);
-    expect(transformerReceipt.distanceTraveledMeters).toBeGreaterThan(4.0);
-    expect(transformerReceipt.averageSpeedMps).toBeGreaterThan(0.0);
-    expect(transformerReceipt.actuatorWorkJoules).toBeGreaterThan(0.0);
-    expect(transformerReceipt.trainedOnEvaluationContract).toBe(false);
-    expect(transformerReceipt.trainingEnvironmentContract).toBe(
-      "legacy-self-propelled-standin-v1",
-    );
-    expect(transformerReceipt.evaluationEnvironmentContract).toBe(
-      "action-causal-standin-v2",
-    );
-    expect(transformerReceipt.survivalRatePercent).toBeCloseTo(
-      (receipt.rustGreedy720.completedSteps / 720) * 100,
-      9,
-    );
-  });
+      // The committed v1 export had an all-zero policy head, so tanh(0 . h) = 0
+      // for every actuator and the robot could not move; the 7.8 m in its receipt
+      // came from a legacy stand-in that granted target speed regardless of
+      // action. The shipped v2 artifact keeps that trunk byte-for-byte and adds a
+      // head fitted by ridge regression to the CMA-ES phase-prior gait, so it now
+      // walks — and unlike the legacy number, it spends actuator work to do it.
+      expect(receipt.rustGreedy720.distanceMeters).toBeGreaterThan(0.0);
+      expect(transformerReceipt.distanceTraveledMeters).toBeGreaterThan(4.0);
+      expect(transformerReceipt.averageSpeedMps).toBeGreaterThan(0.0);
+      expect(transformerReceipt.actuatorWorkJoules).toBeGreaterThan(0.0);
+      expect(transformerReceipt.trainedOnEvaluationContract).toBe(false);
+      expect(transformerReceipt.trainingEnvironmentContract).toBe(
+        "legacy-self-propelled-standin-v1",
+      );
+      expect(transformerReceipt.evaluationEnvironmentContract).toBe("action-causal-standin-v2");
+      expect(transformerReceipt.survivalRatePercent).toBeCloseTo(
+        (receipt.rustGreedy720.completedSteps / 720) * 100,
+        9,
+      );
+    },
+  );
 
   test("CMA-ES side matches the standalone evaluator contract", async () => {
     if (!artifactsPresent) return; // artifact-gated; absence is loud elsewhere
@@ -275,6 +303,9 @@ describe("Measured ablation engine", () => {
     const { weights, receipt } = await loadAblationFixtures();
     const { cmaesReceipt } = runMeasuredAblation({ weights, trainReceipt: receipt }, 42);
     expect(cmaesReceipt.trainingSamplesRequired).toBe(standalone.receipt.trainingSamplesRequired);
-    expect(cmaesReceipt.distanceTraveledMeters).toBeCloseTo(standalone.finalMetrics.distanceTraveledMeters, 12);
+    expect(cmaesReceipt.distanceTraveledMeters).toBeCloseTo(
+      standalone.finalMetrics.distanceTraveledMeters,
+      12,
+    );
   }, 15000);
 });

@@ -1,17 +1,34 @@
 import { describe, expect, test } from "bun:test";
-import { LiveCmaesOptimizer } from "../app/lib/liveCmaesHousehold";
 import { CMAESOptimizerND } from "../app/lib/cmaesEngineND";
+import { LiveCmaesOptimizer } from "../app/lib/liveCmaesHousehold";
 import { generateVisitorModeClip, VISITOR_CLIP_KEYFRAMES } from "../app/lib/visitorModeClip";
 
 describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   test("household search matches shared CMA state on a rotated nonseparable objective", () => {
-    const objective = (x: number[]) => 80 * (x[0] + 2 * x[1] - 0.8) ** 2 + (2 * x[0] - x[1] + 0.3) ** 2 + 3 * x[2] ** 2;
-    const shared = new CMAESOptimizerND(objective, { dim: 3, lambda: 8, initialMean: [0, 0, 0], initialSigma: 0.5, seed: 41, repairStrategy: "none" });
-    const live = new LiveCmaesOptimizer({ ownerId: "test", name: "rotated ellipsoid", dimension: 3, populationSize: 8, initialSigma: 0.5, seed: 41 });
+    const objective = (x: number[]) =>
+      80 * (x[0] + 2 * x[1] - 0.8) ** 2 + (2 * x[0] - x[1] + 0.3) ** 2 + 3 * x[2] ** 2;
+    const shared = new CMAESOptimizerND(objective, {
+      dim: 3,
+      lambda: 8,
+      initialMean: [0, 0, 0],
+      initialSigma: 0.5,
+      seed: 41,
+      repairStrategy: "none",
+    });
+    const live = new LiveCmaesOptimizer({
+      ownerId: "test",
+      name: "rotated ellipsoid",
+      dimension: 3,
+      populationSize: 8,
+      initialSigma: 0.5,
+      seed: 41,
+    });
     for (let generation = 1; generation <= 30; generation++) {
       const points = live.samplePopulation();
       const expected = shared.step();
-      expect(points).toEqual([...expected.samples].sort((a, b) => a.id - b.id).map((sample) => sample.x));
+      expect(points).toEqual(
+        [...expected.samples].sort((a, b) => a.id - b.id).map((sample) => sample.x),
+      );
       live.tellEvaluations(points, points.map(objective));
       const actual = live.state;
       expect(actual.mean).toEqual(expected.mean);
@@ -28,13 +45,22 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   });
 
   test("invalid and reordered tells leave the pending generation available for a correct retry", () => {
-    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "identity", dimension: 2, populationSize: 4 });
+    const optimizer = new LiveCmaesOptimizer({
+      ownerId: "test",
+      name: "identity",
+      dimension: 2,
+      populationSize: 4,
+    });
     expect(() => optimizer.tellEvaluations([], [])).toThrow("Ask");
     const points = optimizer.samplePopulation();
     const before = optimizer.state;
     expect(() => optimizer.samplePopulation()).toThrow("pending");
-    expect(() => optimizer.tellEvaluations(points.slice(1), [1, 2, 3])).toThrow("complete population");
-    expect(() => optimizer.tellEvaluations([...points].reverse(), [1, 2, 3, 4])).toThrow("coordinates or order");
+    expect(() => optimizer.tellEvaluations(points.slice(1), [1, 2, 3])).toThrow(
+      "complete population",
+    );
+    expect(() => optimizer.tellEvaluations([...points].reverse(), [1, 2, 3, 4])).toThrow(
+      "coordinates or order",
+    );
     expect(() => optimizer.tellEvaluations(points, [1, NaN, 2, 3])).toThrow("NaN");
     expect(() => optimizer.tellEvaluations(points, [1, -Infinity, 2, 3])).toThrow("-Infinity");
     expect(optimizer.state).toEqual(before);
@@ -48,7 +74,14 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   });
 
   test("evolution paths agree with an independent two-dimensional inverse-square-root formula", () => {
-    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "analytic whitening", dimension: 2, populationSize: 8, seed: 31, initialSigma: 0.5 });
+    const optimizer = new LiveCmaesOptimizer({
+      ownerId: "test",
+      name: "analytic whitening",
+      dimension: 2,
+      populationSize: 8,
+      seed: 31,
+      initialSigma: 0.5,
+    });
     const raw = Array.from({ length: 4 }, (_, i) => Math.log(4.5) - Math.log(i + 1));
     const sum = raw.reduce((a, b) => a + b, 0);
     const weights = raw.map((w) => w / sum);
@@ -60,17 +93,29 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
       const before = optimizer.state;
       const points = optimizer.samplePopulation();
       const values = points.map((x) => 100 * (x[0] + x[1] - 1) ** 2 + (x[0] - x[1]) ** 2);
-      const ranked = points.map((point, i) => ({ point, value: values[i] })).sort((a, b) => a.value - b.value);
-      const mean = [0, 1].map((axis) => weights.reduce((total, w, i) => total + w * ranked[i].point[axis], 0));
+      const ranked = points
+        .map((point, i) => ({ point, value: values[i] }))
+        .sort((a, b) => a.value - b.value);
+      const mean = [0, 1].map((axis) =>
+        weights.reduce((total, w, i) => total + w * ranked[i].point[axis], 0),
+      );
       const y = mean.map((v, i) => (v - before.mean[i]) / before.sigma);
       const [[a, b], [, d]] = before.covariance;
       // For SPD 2x2 C: C^-1/2 = sqrt(tr(C)+2sqrt(det(C))) * (C+sqrt(det(C))I)^-1.
       const rootDet = Math.sqrt(a * d - b * b);
       const scale = Math.sqrt(a + d + 2 * rootDet) / ((a + rootDet) * (d + rootDet) - b * b);
-      const whitened = [scale * ((d + rootDet) * y[0] - b * y[1]), scale * ((a + rootDet) * y[1] - b * y[0])];
-      const ps = whitened.map((v, i) => (1 - cs) * before.evolutionPathSigma[i] + Math.sqrt(cs * (2 - cs) * muEff) * v);
-      const hs = Math.hypot(...ps) / Math.sqrt(1 - (1 - cs) ** (2 * generation)) / chi < 1.4 + 2 / 3 ? 1 : 0;
-      const pc = y.map((v, i) => (1 - cc) * before.evolutionPathC[i] + hs * Math.sqrt(cc * (2 - cc) * muEff) * v);
+      const whitened = [
+        scale * ((d + rootDet) * y[0] - b * y[1]),
+        scale * ((a + rootDet) * y[1] - b * y[0]),
+      ];
+      const ps = whitened.map(
+        (v, i) => (1 - cs) * before.evolutionPathSigma[i] + Math.sqrt(cs * (2 - cs) * muEff) * v,
+      );
+      const hs =
+        Math.hypot(...ps) / Math.sqrt(1 - (1 - cs) ** (2 * generation)) / chi < 1.4 + 2 / 3 ? 1 : 0;
+      const pc = y.map(
+        (v, i) => (1 - cc) * before.evolutionPathC[i] + hs * Math.sqrt(cc * (2 - cc) * muEff) * v,
+      );
       optimizer.tellEvaluations(points, values);
       for (let i = 0; i < 2; i++) {
         expect(optimizer.state.evolutionPathSigma[i]).toBeCloseTo(ps[i], 11);
@@ -81,16 +126,27 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   });
 
   test("monotone fitness transforms and tied scores preserve the same distribution", () => {
-    const options = { ownerId: "test", name: "rank invariance", dimension: 3, populationSize: 8, seed: 72 };
+    const options = {
+      ownerId: "test",
+      name: "rank invariance",
+      dimension: 3,
+      populationSize: 8,
+      seed: 72,
+    };
     const a = new LiveCmaesOptimizer(options);
     const b = new LiveCmaesOptimizer(options);
     for (let generation = 0; generation < 12; generation++) {
       const x = a.samplePopulation();
       const y = b.samplePopulation();
       expect(x).toEqual(y);
-      const f = x.map((point, index) => generation % 3 === 0 ? index % 2 : point.reduce((sum, value) => sum + value * value, 0));
+      const f = x.map((point, index) =>
+        generation % 3 === 0 ? index % 2 : point.reduce((sum, value) => sum + value * value, 0),
+      );
       a.tellEvaluations(x, f);
-      b.tellEvaluations(y, f.map((value) => 3 * value + 7));
+      b.tellEvaluations(
+        y,
+        f.map((value) => 3 * value + 7),
+      );
       expect(a.state.mean).toEqual(b.state.mean);
       expect(a.state.covariance).toEqual(b.state.covariance);
       expect(a.state.sigma).toBe(b.state.sigma);
@@ -98,7 +154,14 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   });
 
   test("a stale batch is refused even when floating-point rounding makes all coordinates coincide", () => {
-    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "tiny sigma", dimension: 2, populationSize: 4, initialMean: [1e10, 1e10], initialSigma: 1e-16 });
+    const optimizer = new LiveCmaesOptimizer({
+      ownerId: "test",
+      name: "tiny sigma",
+      dimension: 2,
+      populationSize: 4,
+      initialMean: [1e10, 1e10],
+      initialSigma: 1e-16,
+    });
     const old = optimizer.samplePopulation();
     optimizer.tellEvaluations(old, [1, 2, 3, 4]);
     const current = optimizer.samplePopulation();
@@ -109,7 +172,13 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
   });
 
   test("antithetic candidates keep directional information on a linear objective", () => {
-    const optimizer = new LiveCmaesOptimizer({ ownerId: "test", name: "linear", dimension: 2, populationSize: 16, seed: 9 });
+    const optimizer = new LiveCmaesOptimizer({
+      ownerId: "test",
+      name: "linear",
+      dimension: 2,
+      populationSize: 16,
+      seed: 9,
+    });
     const points = optimizer.samplePopulation(true);
     for (let i = 0; i < points.length; i += 2) {
       expect(points[i][0] + points[i + 1][0]).toBe(0);

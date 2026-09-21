@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type ArmLedgerPoint,
   appendArmLedgerPoint,
-  armRefusalReason,
   armAccuracyImprovement,
   armEnergyImprovement,
   armLedgerPoint,
-  type ArmLedgerPoint,
+  armRefusalReason,
 } from "../app/lib/armLearningLedger";
 
 function receipt(overrides: Partial<Parameters<typeof armLedgerPoint>[0]> = {}) {
@@ -62,10 +62,7 @@ describe("arm learning ledger", () => {
     expect(armEnergyImprovement(seed, cheaper)).toBeCloseTo(2, 10);
     // Spending less energy by failing is not an improvement, and must not be
     // reported as one.
-    const failedCheaply = armLedgerPoint(
-      receipt({ actuatorWorkJoules: 50, placed: false }),
-      64,
-    );
+    const failedCheaply = armLedgerPoint(receipt({ actuatorWorkJoules: 50, placed: false }), 64);
     expect(armEnergyImprovement(seed, failedCheaply)).toBeNull();
     const failedSeed = armLedgerPoint(receipt({ placed: false }), 0);
     expect(armEnergyImprovement(failedSeed, cheaper)).toBeNull();
@@ -102,18 +99,12 @@ describe("arm learning ledger", () => {
     const noGrasp = armLedgerPoint(receipt({ placed: false, everGrasped: false }), 8);
     expect(armRefusalReason(noGrasp)).toBe("never grasped the object");
 
-    const ownerRefused = armLedgerPoint(
-      receipt({ placed: false, ownerReportedPlaced: false }),
-      8,
-    );
+    const ownerRefused = armLedgerPoint(receipt({ placed: false, ownerReportedPlaced: false }), 8);
     expect(armRefusalReason(ownerRefused)).toBe("owner did not report a placement");
 
     // The browser's fail-closed re-check disagreeing with the owner is its own
     // distinct case, and must not be reported as one of the others.
-    const browserRefused = armLedgerPoint(
-      receipt({ placed: false, ownerReportedPlaced: true }),
-      8,
-    );
+    const browserRefused = armLedgerPoint(receipt({ placed: false, ownerReportedPlaced: true }), 8);
     expect(armRefusalReason(browserRefused)).toBe("browser collision re-check refused it");
 
     // A placement the owner accepted has no refusal to explain.

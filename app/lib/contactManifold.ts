@@ -39,11 +39,7 @@ export interface RigidBodyState {
   angularVelocity: [number, number, number];
   mass: number;
   invMass: number;
-  invInertiaWorld: [
-    [number, number, number],
-    [number, number, number],
-    [number, number, number]
-  ];
+  invInertiaWorld: [[number, number, number], [number, number, number], [number, number, number]];
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +53,9 @@ export function computeTangentBasis(normal: [number, number, number]): {
   const [nx, ny, nz] = normal;
 
   // Choose orthogonal vector not parallel to normal
-  let ox = 0, oy = 1, oz = 0;
+  let ox = 0,
+    oy = 1,
+    oz = 0;
   if (Math.abs(ny) > 0.9) {
     ox = 1;
     oy = 0;
@@ -113,7 +111,9 @@ export function collideSphereSphere(
     };
   }
 
-  let nx = 0, ny = 1, nz = 0;
+  let nx = 0,
+    ny = 1,
+    nz = 0;
   if (dist > 1e-8) {
     nx = dx / dist;
     ny = dy / dist;
@@ -183,9 +183,10 @@ export function collideSphereBox(
   const dist = Math.hypot(dx, dy, dz);
 
   // Check if center is inside box
-  const isInside = Math.abs(relX) <= boxHalfExtents[0] &&
-                   Math.abs(relY) <= boxHalfExtents[1] &&
-                   Math.abs(relZ) <= boxHalfExtents[2];
+  const isInside =
+    Math.abs(relX) <= boxHalfExtents[0] &&
+    Math.abs(relY) <= boxHalfExtents[1] &&
+    Math.abs(relZ) <= boxHalfExtents[2];
 
   if (!isInside && dist >= sphereRadius) {
     return {
@@ -197,7 +198,9 @@ export function collideSphereBox(
     };
   }
 
-  let nx = 0, ny = 1, nz = 0;
+  let nx = 0,
+    ny = 1,
+    nz = 0;
   let penetration = 0;
 
   if (isInside) {
@@ -286,7 +289,9 @@ export function collideBoxBox(
   }
 
   // Find minimum penetration axis
-  let nx = 0, ny = 0, nz = 0;
+  let nx = 0,
+    ny = 0,
+    nz = 0;
   let minPen = px;
 
   if (px <= py && px <= pz) {

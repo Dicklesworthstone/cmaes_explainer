@@ -13,7 +13,11 @@
  */
 
 import type { LearningLedgerPoint } from "./g1LearningLedger";
-import { MAX_POLICY_FILE_BYTES, validatePolicyMetadata, type SharedPolicyMeta } from "./g1PolicyShare";
+import {
+  MAX_POLICY_FILE_BYTES,
+  type SharedPolicyMeta,
+  validatePolicyMetadata,
+} from "./g1PolicyShare";
 
 /**
  * Which robot a saved run belongs to.
@@ -128,7 +132,7 @@ export function encodeTrainingSession<TPoint>(
     generation: snapshot.generation,
     trainingSeconds: snapshot.trainingSeconds,
     savedAt: Date.now(),
-    policy: Array.from(snapshot.policy, (value) => Object.is(value, -0) ? "-0" : value),
+    policy: Array.from(snapshot.policy, (value) => (Object.is(value, -0) ? "-0" : value)),
     ledger: snapshot.ledger.map((point) => ({ ...(point as object) })),
   };
 }
@@ -157,7 +161,11 @@ export function decodeTrainingSession<TPoint = LearningLedgerPoint>(
   const saved = parsed as Partial<SavedTrainingSession>;
   if (saved.version !== 1) return null;
   if (!Array.isArray(saved.policy) || saved.policy.length !== expectedPolicyLength) return null;
-  if (!saved.policy.every((value) => value === "-0" || (typeof value === "number" && Number.isFinite(value)))) {
+  if (
+    !saved.policy.every(
+      (value) => value === "-0" || (typeof value === "number" && Number.isFinite(value)),
+    )
+  ) {
     return null;
   }
   if (typeof saved.generation !== "number" || !Number.isInteger(saved.generation)) return null;
@@ -173,10 +181,12 @@ export function decodeTrainingSession<TPoint = LearningLedgerPoint>(
     experiment: parsed.experiment,
     generation: saved.generation,
     trainingSeconds:
-      typeof saved.trainingSeconds === "number" && Number.isFinite(saved.trainingSeconds) && saved.trainingSeconds >= 0
+      typeof saved.trainingSeconds === "number" &&
+      Number.isFinite(saved.trainingSeconds) &&
+      saved.trainingSeconds >= 0
         ? saved.trainingSeconds
         : 0,
-    policy: Float64Array.from(saved.policy, (value) => value === "-0" ? -0 : value),
+    policy: Float64Array.from(saved.policy, (value) => (value === "-0" ? -0 : value)),
     ledger: (Array.isArray(saved.ledger) ? saved.ledger.filter(isPoint) : []) as TPoint[],
   };
 }

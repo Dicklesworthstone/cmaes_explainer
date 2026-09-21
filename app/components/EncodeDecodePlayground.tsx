@@ -1,9 +1,18 @@
 "use client";
 
-import { createMulberry32 } from "../lib/cmaesEngine";
+import {
+  ArrowRight,
+  Binary,
+  CheckCircle2,
+  Cpu,
+  Gauge,
+  Layers,
+  Shuffle,
+  Sparkles,
+} from "lucide-react";
 
 import { useMemo, useRef, useState } from "react";
-import { Layers, Shuffle, Sparkles, Cpu, Binary, Gauge, ArrowRight, CheckCircle2 } from "lucide-react";
+import { createMulberry32 } from "../lib/cmaesEngine";
 import { LatexRenderer } from "./LatexRenderer";
 
 const activations = ["SwiGLU", "GELU", "ReLU", "Mish"] as const;
@@ -30,7 +39,10 @@ export function EncodeDecodePlayground() {
     // 3. Discrete layer count
     const minLayers = 6;
     const maxLayers = 48;
-    const layers = Math.min(maxLayers, Math.floor(minLayers + zLayers * (maxLayers - minLayers + 1)));
+    const layers = Math.min(
+      maxLayers,
+      Math.floor(minLayers + zLayers * (maxLayers - minLayers + 1)),
+    );
 
     // 4. Weight decay
     const wd = zWeightDecay * 0.2;
@@ -68,7 +80,9 @@ export function EncodeDecodePlayground() {
               Universal Encode/Decode Latent Box Mapping
             </h3>
             <p className="text-xs text-slate-400 flex items-center gap-1">
-              <span>Mapping mixed continuous, log-scale, and discrete integer knobs into an isotropic</span>
+              <span>
+                Mapping mixed continuous, log-scale, and discrete integer knobs into an isotropic
+              </span>
               <LatexRenderer math="[0, 1]^n" block={false} />
               <span>unit cube</span>
             </p>
@@ -165,7 +179,8 @@ export function EncodeDecodePlayground() {
           <div className="space-y-1.5 pt-2 border-t border-white/5">
             <div className="flex justify-between items-center text-xs font-medium">
               <span className="text-slate-300 flex items-center gap-1">
-                <LatexRenderer math="z_4" block={false} /> <span>(Linear Bounded Weight Decay)</span>
+                <LatexRenderer math="z_4" block={false} />{" "}
+                <span>(Linear Bounded Weight Decay)</span>
               </span>
               <span className="text-amber-300 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 {zWeightDecay.toFixed(3)}
@@ -194,29 +209,43 @@ export function EncodeDecodePlayground() {
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20 space-y-1">
               <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
-                <span>Learning Rate (</span><LatexRenderer math="\eta" block={false} /><span>)</span>
+                <span>Learning Rate (</span>
+                <LatexRenderer math="\eta" block={false} />
+                <span>)</span>
               </div>
-              <div className="text-base font-bold text-sky-200 font-mono">{decoded.lr.toExponential(3)}</div>
+              <div className="text-base font-bold text-sky-200 font-mono">
+                {decoded.lr.toExponential(3)}
+              </div>
               <div className="text-[0.62rem] text-slate-500 font-mono">Log range [1e-5, 1e-1]</div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-purple-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Activation Function</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">
+                Activation Function
+              </div>
               <div className="text-base font-bold text-purple-200">{decoded.act}</div>
-              <div className="text-[0.62rem] text-slate-500 font-mono">Bin {decoded.actIdx + 1} of 4</div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">
+                Bin {decoded.actIdx + 1} of 4
+              </div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20 space-y-1">
               <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
-                <span>Transformer Layers (</span><LatexRenderer math="L" block={false} /><span>)</span>
+                <span>Transformer Layers (</span>
+                <LatexRenderer math="L" block={false} />
+                <span>)</span>
               </div>
-              <div className="text-base font-bold text-emerald-200 font-mono">{decoded.layers} Layers</div>
+              <div className="text-base font-bold text-emerald-200 font-mono">
+                {decoded.layers} Layers
+              </div>
               <div className="text-[0.62rem] text-slate-500 font-mono">Integer [6, 48]</div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-amber-500/20 space-y-1">
               <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Weight Decay</div>
-              <div className="text-base font-bold text-amber-200 font-mono">{decoded.wd.toFixed(4)}</div>
+              <div className="text-base font-bold text-amber-200 font-mono">
+                {decoded.wd.toFixed(4)}
+              </div>
               <div className="text-[0.62rem] text-slate-500 font-mono">Linear [0.0, 0.2]</div>
             </div>
           </div>
@@ -227,7 +256,15 @@ export function EncodeDecodePlayground() {
               <span>Late Quantization Principle</span>
             </div>
             <p>
-              By searching in the continuous unit box and only quantizing at the very moment of simulation evaluation, the probability distribution <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} /> moves smoothly across discrete boundaries; the optimizer itself never sees the staircase. Two caveats apply. Once <LatexRenderer math="\sigma" block={false} /> shrinks below a bin width, all offspring in that coordinate decode identically and selection goes blind, so integer coordinates need a step-size floor (or CMA-ES with margin). And slicing one axis into bins imposes an ordering on the categories that may not exist, which is why unordered choices are often one-hot encoded instead.
+              By searching in the continuous unit box and only quantizing at the very moment of
+              simulation evaluation, the probability distribution{" "}
+              <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} /> moves smoothly
+              across discrete boundaries; the optimizer itself never sees the staircase. Two caveats
+              apply. Once <LatexRenderer math="\sigma" block={false} /> shrinks below a bin width,
+              all offspring in that coordinate decode identically and selection goes blind, so
+              integer coordinates need a step-size floor (or CMA-ES with margin). And slicing one
+              axis into bins imposes an ordering on the categories that may not exist, which is why
+              unordered choices are often one-hot encoded instead.
             </p>
           </div>
         </div>

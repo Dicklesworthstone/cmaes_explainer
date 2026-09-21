@@ -29,10 +29,7 @@ function receiptAtPose(x: number, theta: number): KmrNavigationReceipt {
 
 describe("live KMR → household contact/LCP coupling", () => {
   test("a commanded base contact pushes the finite-mass chair", () => {
-    const coupling = createKmrHouseholdPhysicsCoupling(
-      { x: 0, y: 0, theta: 0 },
-      [0.75, 0],
-    );
+    const coupling = createKmrHouseholdPhysicsCoupling({ x: 0, y: 0, theta: 0 }, [0.75, 0]);
     let receipt = stepKmrHouseholdPhysics(coupling, receiptAt(0));
     for (let step = 1; step <= 120; step++) {
       receipt = stepKmrHouseholdPhysics(coupling, receiptAt(step * 0.01));
@@ -49,10 +46,7 @@ describe("live KMR → household contact/LCP coupling", () => {
   });
 
   test("a stationary distant base does not move the chair laterally", () => {
-    const coupling = createKmrHouseholdPhysicsCoupling(
-      { x: 0, y: 0, theta: 0 },
-      [3, 0],
-    );
+    const coupling = createKmrHouseholdPhysicsCoupling({ x: 0, y: 0, theta: 0 }, [3, 0]);
     let receipt = stepKmrHouseholdPhysics(coupling, receiptAt(0));
     for (let step = 0; step < 120; step++) {
       receipt = stepKmrHouseholdPhysics(coupling, receiptAt(0));
@@ -66,10 +60,7 @@ describe("live KMR → household contact/LCP coupling", () => {
       { x: 0, y: 0, theta: Math.PI - 0.01 },
       [3, 0],
     );
-    const receipt = stepKmrHouseholdPhysics(
-      coupling,
-      receiptAtPose(0, -Math.PI + 0.01),
-    );
+    const receipt = stepKmrHouseholdPhysics(coupling, receiptAtPose(0, -Math.PI + 0.01));
 
     expect(receipt.baseAngularVelocityRadPerSecond).toBeCloseTo(1.2, 9);
     expect(Math.abs(receipt.baseAngularVelocityRadPerSecond)).toBeLessThan(2);

@@ -3,9 +3,9 @@
 // full-body multi-sphere continuous collision projection against house obstacles, and impulse dynamics.
 
 import {
- distanceToOBB,
- projectPointOutOfOBB,
- type OrientedBoundingBox,
+  distanceToOBB,
+  type OrientedBoundingBox,
+  projectPointOutOfOBB,
 } from "./houseMultiObstacleKernel";
 
 export type InteractiveLimbPinId =
@@ -37,10 +37,34 @@ export const G1_INTERACTIVE_PINS: InteractiveLimbPin[] = [
   // In front of the face: the root grab handle already floats above the crown.
   { id: "head", label: "Head", standoff: [0.22, -0.12, 0], color: "#38bdf8", radius: 0.05 },
   { id: "pelvis", label: "Pelvis / Root", standoff: [-0.3, 0, 0], color: "#f59e0b", radius: 0.06 },
-  { id: "leftHand", label: "Left Hand", standoff: [0.05, 0, 0.17], color: "#22d3ee", radius: 0.045 },
-  { id: "rightHand", label: "Right Hand", standoff: [0.05, 0, -0.17], color: "#a855f7", radius: 0.045 },
-  { id: "leftFoot", label: "Left Foot", standoff: [0.2, 0.02, 0.05], color: "#10b981", radius: 0.05 },
-  { id: "rightFoot", label: "Right Foot", standoff: [0.2, 0.02, -0.05], color: "#ec4899", radius: 0.05 },
+  {
+    id: "leftHand",
+    label: "Left Hand",
+    standoff: [0.05, 0, 0.17],
+    color: "#22d3ee",
+    radius: 0.045,
+  },
+  {
+    id: "rightHand",
+    label: "Right Hand",
+    standoff: [0.05, 0, -0.17],
+    color: "#a855f7",
+    radius: 0.045,
+  },
+  {
+    id: "leftFoot",
+    label: "Left Foot",
+    standoff: [0.2, 0.02, 0.05],
+    color: "#10b981",
+    radius: 0.05,
+  },
+  {
+    id: "rightFoot",
+    label: "Right Foot",
+    standoff: [0.2, 0.02, -0.05],
+    color: "#ec4899",
+    radius: 0.05,
+  },
 ];
 
 /**
@@ -142,13 +166,13 @@ export interface G1FullBodyIKResult {
 // Unitree G1 Standard Physical Kinematic Lengths (meters)
 export const G1_KINEMATICS = {
   thighLength: 0.32,
-  shinLength: 0.30,
+  shinLength: 0.3,
   footHeight: 0.05,
   hipWidth: 0.18,
   torsoHeight: 0.35,
   shoulderWidth: 0.36,
   upperArmLength: 0.22,
-  forearmLength: 0.20,
+  forearmLength: 0.2,
   neckHeight: 0.18,
   headRadius: 0.11,
   bodyRadius: 0.16,
@@ -165,7 +189,7 @@ export function solveTwoBoneIK(
   target: [number, number, number],
   upperLength: number,
   lowerLength: number,
-  poleVector: [number, number, number] // preferred bend direction (e.g. forward for knees, backward for elbows)
+  poleVector: [number, number, number], // preferred bend direction (e.g. forward for knees, backward for elbows)
 ): { midPosition: [number, number, number]; reachedTarget: [number, number, number] } {
   const rX = root[0];
   const rY = root[1];
@@ -264,74 +288,70 @@ export function clampSphereAgainstHouse(
     maxX: 3.7,
     minZ: -4.4,
     maxZ: 5.2,
-  }
+  },
 ): {
   clamped: [number, number, number];
   contact: G1CollisionContact | null;
 } {
   let cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, pos[0]));
- let cy = Math.max(floorY + radius, pos[1]);
- let cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, pos[2]));
+  let cy = Math.max(floorY + radius, pos[1]);
+  let cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, pos[2]));
 
- let contact: G1CollisionContact | null = null;
+  let contact: G1CollisionContact | null = null;
 
- // Floor contact check
- if (cy - radius < floorY) {
- contact = {
- point: [cx, floorY, cz],
- normal: [0, 1, 0],
- penetration: floorY - (cy - radius),
- obstacleName: "Hardwood Floor",
- };
- }
+  // Floor contact check
+  if (cy - radius < floorY) {
+    contact = {
+      point: [cx, floorY, cz],
+      normal: [0, 1, 0],
+      penetration: floorY - (cy - radius),
+      obstacleName: "Hardwood Floor",
+    };
+  }
 
- // SOTA OBB projection: use the kernel's projectPointOutOfOBB so the
- // push direction is the true SDF gradient (handles interior points,
- // yawed OBBs, and non-cubic aspect ratios). The previous radial-from-
- // center projection left the sphere inside yawed furniture. Run
- // multiple Gauss-Seidel passes to relax the case where one OBB's push-
- // out drives the sphere into a second OBB.
- for (let pass = 0; pass < 3; pass++) {
- let passMoved = false;
- for (const obb of obstacles) {
- if (obb.exemptFromPenalty) continue;
- const dist = distanceToOBB([cx, cy, cz], obb);
- if (dist < radius) {
- const projected = projectPointOutOfOBB(
- [cx, cy, cz],
- obb,
- radius,
- );
- if (projected.wasInside) {
- const pushOut = radius - dist;
- // Normal of the OBB surface at the contact point: from the contact
- // point toward the sphere center. For an EXTERIOR query the kernel
- // pushes AWAY from the OBB, so (sphere - projected) points outward.
- // For an INTERIOR query the kernel pushes TOWARD the nearest face, so
- // (sphere - projected) also points outward (toward the face).
- const nx = (cx - projected.point[0]) / Math.max(1e-9, pushOut);
- const ny = (cy - projected.point[1]) / Math.max(1e-9, pushOut);
- const nz = (cz - projected.point[2]) / Math.max(1e-9, pushOut);
- cx = projected.point[0];
- cy = projected.point[1];
- cz = projected.point[2];
- contact = {
- point: [cx - nx * radius, cy - ny * radius, cz - nz * radius],
- normal: [nx, ny, nz],
- penetration: pushOut,
- obstacleName: obb.name,
- };
- passMoved = true;
- }
- }
- }
- if (!passMoved) break;
- }
+  // SOTA OBB projection: use the kernel's projectPointOutOfOBB so the
+  // push direction is the true SDF gradient (handles interior points,
+  // yawed OBBs, and non-cubic aspect ratios). The previous radial-from-
+  // center projection left the sphere inside yawed furniture. Run
+  // multiple Gauss-Seidel passes to relax the case where one OBB's push-
+  // out drives the sphere into a second OBB.
+  for (let pass = 0; pass < 3; pass++) {
+    let passMoved = false;
+    for (const obb of obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      const dist = distanceToOBB([cx, cy, cz], obb);
+      if (dist < radius) {
+        const projected = projectPointOutOfOBB([cx, cy, cz], obb, radius);
+        if (projected.wasInside) {
+          const pushOut = radius - dist;
+          // Normal of the OBB surface at the contact point: from the contact
+          // point toward the sphere center. For an EXTERIOR query the kernel
+          // pushes AWAY from the OBB, so (sphere - projected) points outward.
+          // For an INTERIOR query the kernel pushes TOWARD the nearest face, so
+          // (sphere - projected) also points outward (toward the face).
+          const nx = (cx - projected.point[0]) / Math.max(1e-9, pushOut);
+          const ny = (cy - projected.point[1]) / Math.max(1e-9, pushOut);
+          const nz = (cz - projected.point[2]) / Math.max(1e-9, pushOut);
+          cx = projected.point[0];
+          cy = projected.point[1];
+          cz = projected.point[2];
+          contact = {
+            point: [cx - nx * radius, cy - ny * radius, cz - nz * radius],
+            normal: [nx, ny, nz],
+            penetration: pushOut,
+            obstacleName: obb.name,
+          };
+          passMoved = true;
+        }
+      }
+    }
+    if (!passMoved) break;
+  }
 
- cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, cx));
- cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, cz));
+  cx = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, cx));
+  cz = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, cz));
 
- return { clamped: [cx, cy, cz], contact };
+  return { clamped: [cx, cy, cz], contact };
 }
 
 /**
@@ -340,7 +360,7 @@ export function clampSphereAgainstHouse(
 export function solveFullBodyG1IK(
   targets: G1LimbIKTarget,
   nominalPelvis: [number, number, number],
-  obstacles: OrientedBoundingBox[]
+  obstacles: OrientedBoundingBox[],
 ): G1FullBodyIKResult {
   const contacts: G1CollisionContact[] = [];
   let minClearance = 999.0;
@@ -351,7 +371,7 @@ export function solveFullBodyG1IK(
     rawPelvis,
     G1_KINEMATICS.bodyRadius,
     obstacles,
-    0.35
+    0.35,
   );
   if (pelvisContact) contacts.push(pelvisContact);
 
@@ -370,7 +390,7 @@ export function solveFullBodyG1IK(
     rawHead,
     G1_KINEMATICS.headRadius,
     obstacles,
-    0.8
+    0.8,
   );
   if (headContact) contacts.push(headContact);
 
@@ -389,13 +409,13 @@ export function solveFullBodyG1IK(
     rawLeftFoot,
     G1_KINEMATICS.footRadius,
     obstacles,
-    0.0
+    0.0,
   );
   const { clamped: rightFootClamped, contact: rFootContact } = clampSphereAgainstHouse(
     rawRightFoot,
     G1_KINEMATICS.footRadius,
     obstacles,
-    0.0
+    0.0,
   );
   if (lFootContact) contacts.push(lFootContact);
   if (rFootContact) contacts.push(rFootContact);
@@ -406,20 +426,28 @@ export function solveFullBodyG1IK(
     leftFootClamped,
     G1_KINEMATICS.thighLength,
     G1_KINEMATICS.shinLength,
-    [1, 0, 0] // bend forward
+    [1, 0, 0], // bend forward
   );
   const rightLegIK = solveTwoBoneIK(
     rightHip,
     rightFootClamped,
     G1_KINEMATICS.thighLength,
     G1_KINEMATICS.shinLength,
-    [1, 0, 0] // bend forward
+    [1, 0, 0], // bend forward
   );
 
   // 6. Shoulders and Hands IK
   const shoulderY = pY + G1_KINEMATICS.torsoHeight;
-  const leftShoulder: [number, number, number] = [pX, shoulderY, pZ - G1_KINEMATICS.shoulderWidth * 0.5];
-  const rightShoulder: [number, number, number] = [pX, shoulderY, pZ + G1_KINEMATICS.shoulderWidth * 0.5];
+  const leftShoulder: [number, number, number] = [
+    pX,
+    shoulderY,
+    pZ - G1_KINEMATICS.shoulderWidth * 0.5,
+  ];
+  const rightShoulder: [number, number, number] = [
+    pX,
+    shoulderY,
+    pZ + G1_KINEMATICS.shoulderWidth * 0.5,
+  ];
 
   const nominalLeftHand: [number, number, number] = [pX + 0.15, pY + 0.15, pZ - 0.22];
   const nominalRightHand: [number, number, number] = [pX + 0.15, pY + 0.15, pZ + 0.22];
@@ -431,13 +459,13 @@ export function solveFullBodyG1IK(
     rawLeftHand,
     G1_KINEMATICS.limbRadius,
     obstacles,
-    0.05
+    0.05,
   );
   const { clamped: rightHandClamped, contact: rHandContact } = clampSphereAgainstHouse(
     rawRightHand,
     G1_KINEMATICS.limbRadius,
     obstacles,
-    0.05
+    0.05,
   );
   if (lHandContact) contacts.push(lHandContact);
   if (rHandContact) contacts.push(rHandContact);
@@ -448,14 +476,14 @@ export function solveFullBodyG1IK(
     leftHandClamped,
     G1_KINEMATICS.upperArmLength,
     G1_KINEMATICS.forearmLength,
-    [-0.5, 0, -1] // outward/backward
+    [-0.5, 0, -1], // outward/backward
   );
   const rightArmIK = solveTwoBoneIK(
     rightShoulder,
     rightHandClamped,
     G1_KINEMATICS.upperArmLength,
     G1_KINEMATICS.forearmLength,
-    [-0.5, 0, 1] // outward/backward
+    [-0.5, 0, 1], // outward/backward
   );
 
   // Compute minimum clearance across all key body joints
@@ -502,7 +530,7 @@ export function solveFullBodyG1IK(
 export function computeImpulseResponse(
   impulseNs: number, // 5 to 50 N*s
   impulseAngleRad: number, // 0 to 2*PI in horizontal plane
-  robotMassKg: number = 35.0
+  robotMassKg: number = 35.0,
 ): { deltaV: [number, number, number]; recoveryStepOffset: [number, number, number] } {
   const speedDelta = impulseNs / robotMassKg;
   const dvX = Math.cos(impulseAngleRad) * speedDelta;

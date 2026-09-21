@@ -82,7 +82,7 @@ describe("Contact Restitution & Damping Engine", () => {
       material: "rubber",
     };
 
-    let prevEnergy = Infinity;
+    const prevEnergy = Infinity;
 
     for (let frame = 0; frame < 150; frame++) {
       const res = stepContactRestitution(ball, "concrete", 0.0, 1 / 60);

@@ -4,14 +4,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { G1TimelineScrubber } from "../components/G1TimelineScrubber";
 import {
   buildG1Config,
+  DEFAULT_G1_WALKING_CONFIG,
   decodeG1Admission,
   decodeG1Trace,
-  DEFAULT_G1_WALKING_CONFIG,
 } from "./frankensimCmaes";
 import {
   G1_OWNER_PUSH_ANGLE_DEGREES,
-  resolveG1PushVisualization,
   type G1PushVisualizationInput,
+  resolveG1PushVisualization,
 } from "./g1PushVisualization";
 
 const OWNER_PULSE: G1PushVisualizationInput = {
@@ -27,14 +27,10 @@ const OWNER_PULSE: G1PushVisualizationInput = {
 
 describe("resolveG1PushVisualization", () => {
   test("timeline labels the actual owner push and termination on real flat and pushed traces", async () => {
-    const owner =
-      await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    const owner = await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
-        new URL(
-          "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+        new URL("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
       ).arrayBuffer(),
     });
     for (const challenge of ["flat", "terrain-and-push"] as const) {
@@ -43,17 +39,14 @@ describe("resolveG1PushVisualization", () => {
       );
       try {
         const admission = decodeG1Admission(evaluator.receipt());
-        const decoded = decodeG1Trace(
-          evaluator.trace(evaluator.walking_curriculum_mean()),
-        );
+        const decoded = decodeG1Trace(evaluator.trace(evaluator.walking_curriculum_mean()));
         if (!("ok" in admission)) throw new Error(admission.refusal.name);
         if (!("ok" in decoded)) throw new Error(decoded.refusal.name);
         const trace = decoded.ok;
         const markup = renderToStaticMarkup(
           createElement(G1TimelineScrubber, {
             trace,
-            pushStartSeconds:
-              challenge === "flat" ? null : admission.ok.pushStartSeconds,
+            pushStartSeconds: challenge === "flat" ? null : admission.ok.pushStartSeconds,
             currentSampleIndex: 0,
             isPlaying: false,
             playbackSpeed: 1,
@@ -70,12 +63,8 @@ describe("resolveG1PushVisualization", () => {
           expect(markup).not.toContain("Owner push");
         } else {
           expect(trace.pushImpulseNewtonSeconds).toBeGreaterThan(0);
-          expect(markup).toContain(
-            `Owner push (${trace.pushImpulseNewtonSeconds.toFixed(1)} N·s)`,
-          );
-          expect(markup).toContain(
-            `${admission.ok.pushStartSeconds.toFixed(3)} s:`,
-          );
+          expect(markup).toContain(`Owner push (${trace.pushImpulseNewtonSeconds.toFixed(1)} N·s)`);
+          expect(markup).toContain(`${admission.ok.pushStartSeconds.toFixed(3)} s:`);
         }
         expect(markup).toContain(
           trace.terminationReason === "horizon"
@@ -120,14 +109,12 @@ describe("resolveG1PushVisualization", () => {
         ownerChallengeActive: false,
       }).source,
     ).toBe("none");
-    expect(
-      resolveG1PushVisualization({ ...OWNER_PULSE, sampleTimeSeconds: 0.55 })
-        .source,
-    ).toBe("none");
-    expect(
-      resolveG1PushVisualization({ ...OWNER_PULSE, sampleTimeSeconds: 0.7 })
-        .source,
-    ).toBe("none");
+    expect(resolveG1PushVisualization({ ...OWNER_PULSE, sampleTimeSeconds: 0.55 }).source).toBe(
+      "none",
+    );
+    expect(resolveG1PushVisualization({ ...OWNER_PULSE, sampleTimeSeconds: 0.7 }).source).toBe(
+      "none",
+    );
   });
 
   test("fails closed for non-finite manual and owner display values", () => {

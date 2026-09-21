@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
  */
 export function useScrollSpy(
   sectionIds: string[],
-  options: IntersectionObserverInit = { rootMargin: "-45% 0px -45% 0px" }
+  options: IntersectionObserverInit = { rootMargin: "-45% 0px -45% 0px" },
 ) {
   const [activeId, setActiveId] = useState("");
   const { rootMargin = "-45% 0px -45% 0px", threshold } = options;
@@ -18,13 +18,16 @@ export function useScrollSpy(
 
   useEffect(() => {
     if (typeof window === "undefined" || !("IntersectionObserver" in window)) return;
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && entry.target.id) {
-          setActiveId(entry.target.id);
-        }
-      });
-    }, { rootMargin, threshold });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.target.id) {
+            setActiveId(entry.target.id);
+          }
+        });
+      },
+      { rootMargin, threshold },
+    );
 
     sectionKey.split("|").forEach((id) => {
       const el = document.getElementById(id);
@@ -43,7 +46,7 @@ export function useScrollSpy(
  */
 export function useInView(
   ref: React.RefObject<HTMLElement | null>,
-  options: { rootMargin?: string; threshold?: number | number[]; once?: boolean } = {}
+  options: { rootMargin?: string; threshold?: number | number[]; once?: boolean } = {},
 ): boolean {
   // Initial false on BOTH server and client: callers that conditionally
   // mount/unmount subtrees on this flag must match the prerendered HTML —
@@ -67,7 +70,7 @@ export function useInView(
           observer.disconnect();
         }
       },
-      { rootMargin, threshold }
+      { rootMargin, threshold },
     );
 
     observer.observe(el);

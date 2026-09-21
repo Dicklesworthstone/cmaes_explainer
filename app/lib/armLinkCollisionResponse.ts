@@ -84,45 +84,45 @@ export function closestPointOnOBB(
   const cx = Math.max(-obb.halfExtents[0], Math.min(obb.halfExtents[0], lx));
   const cy = Math.max(-obb.halfExtents[1], Math.min(obb.halfExtents[1], ly));
   const cz = Math.max(-obb.halfExtents[2], Math.min(obb.halfExtents[2], lz));
- // If the query point is inside the OBB, the closest surface point lies
- // on the face with the smallest inward clearance. The local-frame
- // clearance to each face is hi - |li|, which is positive when the
- // query is inside the OBB. We snap the query to the face with the
- // smallest such clearance (Ericson §5.5.6 returns the query itself
- // for interior points, which is useless for projection; this is the
- // SOTA projection variant).
- let clampedX = cx;
- let clampedY = cy;
- let clampedZ = cz;
- const ex = obb.halfExtents[0] - Math.abs(lx);
- const ey = obb.halfExtents[1] - Math.abs(ly);
- const ez = obb.halfExtents[2] - Math.abs(lz);
- const inside = ex > 0 && ey > 0 && ez > 0;
- if (inside) {
- const nearestAxis = ex <= ey && ex <= ez ? "x" : ey <= ez ? "y" : "z";
- const signX = lx >= 0 ? 1 : -1;
- const signY = ly >= 0 ? 1 : -1;
- const signZ = lz >= 0 ? 1 : -1;
- if (nearestAxis === "x") {
- clampedX = signX * obb.halfExtents[0];
- } else if (nearestAxis === "y") {
- clampedY = signY * obb.halfExtents[1];
- } else {
- clampedZ = signZ * obb.halfExtents[2];
- }
- }
- // Rotate back to world frame. The local-frame transform in
- // distanceToOBB is [localX, localZ] = R(-yaw) * [dx, dz], so the
- // inverse is [dx, dz] = R(+yaw) * [localX, localZ]. With
- // cosY = cos(-yaw), sinY = sin(-yaw) (so cosY = cos(yaw) and
- // sinY = -sin(yaw)) the rotation expands to:
- //   dx =  cosY * clampedX + sinY * clampedZ
- //   dz = -sinY * clampedX + cosY * clampedZ
- const fx = cosY * clampedX + sinY * clampedZ;
- const fy = clampedY;
- const fz = -sinY * clampedX + cosY * clampedZ;
- return [obb.center[0] + fx, obb.center[1] + fy, obb.center[2] + fz];
- }
+  // If the query point is inside the OBB, the closest surface point lies
+  // on the face with the smallest inward clearance. The local-frame
+  // clearance to each face is hi - |li|, which is positive when the
+  // query is inside the OBB. We snap the query to the face with the
+  // smallest such clearance (Ericson §5.5.6 returns the query itself
+  // for interior points, which is useless for projection; this is the
+  // SOTA projection variant).
+  let clampedX = cx;
+  let clampedY = cy;
+  let clampedZ = cz;
+  const ex = obb.halfExtents[0] - Math.abs(lx);
+  const ey = obb.halfExtents[1] - Math.abs(ly);
+  const ez = obb.halfExtents[2] - Math.abs(lz);
+  const inside = ex > 0 && ey > 0 && ez > 0;
+  if (inside) {
+    const nearestAxis = ex <= ey && ex <= ez ? "x" : ey <= ez ? "y" : "z";
+    const signX = lx >= 0 ? 1 : -1;
+    const signY = ly >= 0 ? 1 : -1;
+    const signZ = lz >= 0 ? 1 : -1;
+    if (nearestAxis === "x") {
+      clampedX = signX * obb.halfExtents[0];
+    } else if (nearestAxis === "y") {
+      clampedY = signY * obb.halfExtents[1];
+    } else {
+      clampedZ = signZ * obb.halfExtents[2];
+    }
+  }
+  // Rotate back to world frame. The local-frame transform in
+  // distanceToOBB is [localX, localZ] = R(-yaw) * [dx, dz], so the
+  // inverse is [dx, dz] = R(+yaw) * [localX, localZ]. With
+  // cosY = cos(-yaw), sinY = sin(-yaw) (so cosY = cos(yaw) and
+  // sinY = -sin(yaw)) the rotation expands to:
+  //   dx =  cosY * clampedX + sinY * clampedZ
+  //   dz = -sinY * clampedX + cosY * clampedZ
+  const fx = cosY * clampedX + sinY * clampedZ;
+  const fy = clampedY;
+  const fz = -sinY * clampedX + cosY * clampedZ;
+  return [obb.center[0] + fx, obb.center[1] + fy, obb.center[2] + fz];
+}
 /**
  * One Gauss-Seidel projection step: returns the new link origin that is
  * guaranteed to clear the OBB by the link's effective radius. When the
@@ -137,43 +137,47 @@ export function projectLinkOutOfOBB(
   // Penetration occurs when sdfDist < linkRadius (link sphere overlaps OBB).
   const penetrationDepth = linkRadius - sdfDist;
   if (penetrationDepth <= 0) {
-    return { newPos: [linkPos[0], linkPos[1], linkPos[2]], penetrating: false, penetrationDepth: 0 };
+    return {
+      newPos: [linkPos[0], linkPos[1], linkPos[2]],
+      penetrating: false,
+      penetrationDepth: 0,
+    };
   }
- const closest = closestPointOnOBB([linkPos[0], linkPos[1], linkPos[2]], obb);
- // For an EXTERIOR query, the closest surface point is the boundary
- // point nearest to the query, and the push direction (link - closest)
- // points from the surface away from the OBB, which is what we want.
- // For an INTERIOR query, the closest surface point is on the nearest
- // face, and (link - closest) points back into the OBB — the wrong way.
- // The correct push direction for an interior point is toward the
- // nearest face, which is (closest - link). We detect the interior
- // case by checking whether sdfDist < 0.
- const sdfIsNegative = sdfDist < 0;
- const sign = sdfIsNegative ? -1 : 1;
- const dx = sign * (linkPos[0] - closest[0]);
- const dy = sign * (linkPos[1] - closest[1]);
- const dz = sign * (linkPos[2] - closest[2]);
- const len = Math.hypot(dx, dy, dz);
- if (len < 1e-6) {
- // Degenerate: link is exactly at the OBB's deepest interior point.
- // Use the OBB's longest-axis outward direction as a safe escape.
- const axisLen = obb.halfExtents[0];
- return {
- newPos: [linkPos[0] + axisLen, linkPos[1], linkPos[2]],
- penetrating: true,
- penetrationDepth,
- };
- }
- const inv = 1 / len;
- return {
- newPos: [
- linkPos[0] + dx * inv * penetrationDepth,
- linkPos[1] + dy * inv * penetrationDepth,
- linkPos[2] + dz * inv * penetrationDepth,
- ],
- penetrating: true,
- penetrationDepth,
- };
+  const closest = closestPointOnOBB([linkPos[0], linkPos[1], linkPos[2]], obb);
+  // For an EXTERIOR query, the closest surface point is the boundary
+  // point nearest to the query, and the push direction (link - closest)
+  // points from the surface away from the OBB, which is what we want.
+  // For an INTERIOR query, the closest surface point is on the nearest
+  // face, and (link - closest) points back into the OBB — the wrong way.
+  // The correct push direction for an interior point is toward the
+  // nearest face, which is (closest - link). We detect the interior
+  // case by checking whether sdfDist < 0.
+  const sdfIsNegative = sdfDist < 0;
+  const sign = sdfIsNegative ? -1 : 1;
+  const dx = sign * (linkPos[0] - closest[0]);
+  const dy = sign * (linkPos[1] - closest[1]);
+  const dz = sign * (linkPos[2] - closest[2]);
+  const len = Math.hypot(dx, dy, dz);
+  if (len < 1e-6) {
+    // Degenerate: link is exactly at the OBB's deepest interior point.
+    // Use the OBB's longest-axis outward direction as a safe escape.
+    const axisLen = obb.halfExtents[0];
+    return {
+      newPos: [linkPos[0] + axisLen, linkPos[1], linkPos[2]],
+      penetrating: true,
+      penetrationDepth,
+    };
+  }
+  const inv = 1 / len;
+  return {
+    newPos: [
+      linkPos[0] + dx * inv * penetrationDepth,
+      linkPos[1] + dy * inv * penetrationDepth,
+      linkPos[2] + dz * inv * penetrationDepth,
+    ],
+    penetrating: true,
+    penetrationDepth,
+  };
 }
 
 export interface ArmLinkSpec {

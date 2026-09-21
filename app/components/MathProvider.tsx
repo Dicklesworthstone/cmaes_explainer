@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import type { ReactNode } from "react";
 import { MathJaxContext } from "better-react-mathjax";
+import type { ReactNode } from "react";
+import { useEffect } from "react";
 
 // MathJaxContext is a client component that only touches window/document inside
 // guarded loaders, so it SSRs fine: the server emits the raw TeX (great for
@@ -21,20 +21,20 @@ const config = {
   tex: {
     inlineMath: [
       ["$", "$"],
-      ["\\(", "\\)"]
+      ["\\(", "\\)"],
     ],
     displayMath: [
       ["$$", "$$"],
-      ["\\[", "\\]"]
+      ["\\[", "\\]"],
     ],
-    packages: { "[+]": ["base", "ams"] }
+    packages: { "[+]": ["base", "ams"] },
   },
   svg: {
-    fontCache: "global"
+    fontCache: "global",
   },
   startup: {
-    typeset: false
-  }
+    typeset: false,
+  },
 };
 
 export function MathProvider(props: { children: ReactNode }) {

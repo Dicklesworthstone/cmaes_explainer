@@ -6,12 +6,12 @@
  * Runtime measurements belong to their owner/version/configuration scope.
  */
 
-import type { Metadata } from "next";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { Metadata } from "next";
+import { FurnitureCatalogInspector } from "../components/FurnitureCatalogInspector";
 import { HonestyChipStack } from "../components/HonestyChipStack";
 import { MaterialDatabaseInspector } from "../components/MaterialDatabaseInspector";
-import { FurnitureCatalogInspector } from "../components/FurnitureCatalogInspector";
 
 export const metadata: Metadata = {
   title: "Physics receipts — phr-env-2026",
@@ -50,7 +50,10 @@ function parseScores(markdown: string): ScoreRow[] {
       inScores = false;
       continue;
     }
-    const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
+    const cells = line
+      .split("|")
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
     if (cells.length < 6) continue;
     const parseScore = (raw: string): number => {
       const match = raw.match(/^(\d+)/);
@@ -83,7 +86,10 @@ function parseBudgets(markdown: string): BudgetRow[] {
       inBudgets = false;
       continue;
     }
-    const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
+    const cells = line
+      .split("|")
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
     if (cells.length < 4) continue;
     const parseSide = (raw: string): number | null => {
       const trimmed = raw.trim();
@@ -141,15 +147,13 @@ export default function ReceiptsPage() {
           </p>
           <h1 className="text-3xl font-bold text-white">Physics receipts</h1>
           <p className="max-w-3xl text-sm leading-6 text-slate-400">
-            Explore implementation references, performance targets and archived benchmark data.
-            The rubric scores are manually maintained assessments. They do not certify a
-            current owner run, and synthetic test inputs do not count as measured robot behavior.
-            For a live measurement, run the humanoid or arm experiment and inspect its receipt.
+            Explore implementation references, performance targets and archived benchmark data. The
+            rubric scores are manually maintained assessments. They do not certify a current owner
+            run, and synthetic test inputs do not count as measured robot behavior. For a live
+            measurement, run the humanoid or arm experiment and inspect its receipt.
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-2">
-            <span
-              className="rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.18em] text-amber-200"
-            >
+            <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.18em] text-amber-200">
               Planning assessments · not live verification
             </span>
             <span className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.18em] text-slate-300">
@@ -161,15 +165,24 @@ export default function ReceiptsPage() {
         <section className="space-y-4 min-w-0">
           <h2 className="text-xl font-semibold text-white">SOTA-rubric scores</h2>
           <p className="text-xs leading-5 text-slate-400">
-            Editorial scores from the committed rubric. On a narrow screen, focus the table
-            and scroll horizontally to read every field.
+            Editorial scores from the committed rubric. On a narrow screen, focus the table and
+            scroll horizontally to read every field.
           </p>
           {scores.length === 0 ? (
-            <p className="text-sm text-slate-400">No scores yet. The template lives at scripts/perf/sota-rubric.template.md.</p>
+            <p className="text-sm text-slate-400">
+              No scores yet. The template lives at scripts/perf/sota-rubric.template.md.
+            </p>
           ) : (
-            <div role="region" aria-label="Rubric scores, horizontally scrollable" tabIndex={0} className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300">
+            <div
+              role="region"
+              aria-label="Rubric scores, horizontally scrollable"
+              tabIndex={0}
+              className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
+            >
               <table className="w-full min-w-[850px] text-left text-sm">
-                <caption className="sr-only">Manually maintained rubric scores; not runtime certification</caption>
+                <caption className="sr-only">
+                  Manually maintained rubric scores; not runtime certification
+                </caption>
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Component</th>
@@ -185,26 +198,36 @@ export default function ReceiptsPage() {
                     <tr key={index} className="text-slate-200">
                       <td className="px-4 py-3 font-mono text-xs min-w-48">{row.component}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}>
+                        <span
+                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}
+                        >
                           {row.parity}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.oracle)} ${scoreColor(row.oracle)}`}>
+                        <span
+                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.oracle)} ${scoreColor(row.oracle)}`}
+                        >
                           {row.oracle}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.citedBenchmark)} ${scoreColor(row.citedBenchmark)}`}>
+                        <span
+                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.citedBenchmark)} ${scoreColor(row.citedBenchmark)}`}
+                        >
                           {row.citedBenchmark}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.behavioralReceipt)} ${scoreColor(row.behavioralReceipt)}`}>
+                        <span
+                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.behavioralReceipt)} ${scoreColor(row.behavioralReceipt)}`}
+                        >
                           {row.behavioralReceipt}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs leading-5 text-slate-400 min-w-64">{row.citations}</td>
+                      <td className="px-4 py-3 text-xs leading-5 text-slate-400 min-w-64">
+                        {row.citations}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -212,11 +235,12 @@ export default function ReceiptsPage() {
             </div>
           )}
           <p className="text-xs text-slate-500">
-            A score alone establishes neither parity nor successful behavior. Check the
-            referenced source and the original run conditions before comparing results.{" "}
+            A score alone establishes neither parity nor successful behavior. Check the referenced
+            source and the original run conditions before comparing results.{" "}
             {templateMd && (
               <span className="text-slate-600">
-                Template: scripts/perf/sota-rubric.template.md ({templateMd.length.toLocaleString()} bytes)
+                Template: scripts/perf/sota-rubric.template.md ({templateMd.length.toLocaleString()}{" "}
+                bytes)
               </span>
             )}
           </p>
@@ -226,15 +250,24 @@ export default function ReceiptsPage() {
         <section className="space-y-4 min-w-0">
           <h2 className="text-xl font-semibold text-white">Per-epic performance targets</h2>
           <p className="text-xs leading-5 text-slate-400">
-            These p95 values are budget targets, not measurements of this device. Scroll the
-            table horizontally on narrow screens.
+            These p95 values are budget targets, not measurements of this device. Scroll the table
+            horizontally on narrow screens.
           </p>
           {budgets.length === 0 ? (
-            <p className="text-sm text-slate-400">No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.</p>
+            <p className="text-sm text-slate-400">
+              No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.
+            </p>
           ) : (
-            <div role="region" aria-label="Performance targets, horizontally scrollable" tabIndex={0} className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300">
+            <div
+              role="region"
+              aria-label="Performance targets, horizontally scrollable"
+              tabIndex={0}
+              className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
+            >
               <table className="w-full min-w-[640px] text-left text-sm">
-                <caption className="sr-only">Performance budget targets; not measured timings</caption>
+                <caption className="sr-only">
+                  Performance budget targets; not measured timings
+                </caption>
                 <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Epic</th>
@@ -248,10 +281,14 @@ export default function ReceiptsPage() {
                     <tr key={index} className="text-slate-200">
                       <td className="px-4 py-3 font-mono text-xs min-w-48">{row.epic}</td>
                       <td className="px-4 py-3 text-center font-mono text-xs break-all">
-                        {row.ownerSideP95Ms === null ? "n/a" : `${row.ownerSideP95Ms.toFixed(1)} ms`}
+                        {row.ownerSideP95Ms === null
+                          ? "n/a"
+                          : `${row.ownerSideP95Ms.toFixed(1)} ms`}
                       </td>
                       <td className="px-4 py-3 text-center font-mono text-xs break-all">
-                        {row.explorerSideP95Ms === null ? "n/a" : `${row.explorerSideP95Ms.toFixed(1)} ms`}
+                        {row.explorerSideP95Ms === null
+                          ? "n/a"
+                          : `${row.explorerSideP95Ms.toFixed(1)} ms`}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-400">{row.reference}</td>
                     </tr>
@@ -261,8 +298,8 @@ export default function ReceiptsPage() {
             </div>
           )}
           <p className="text-xs text-slate-500">
-            A performance claim needs recorded workload, device, owner artifact and timing
-            samples. A target or an empty benchmark run cannot establish that claim.
+            A performance claim needs recorded workload, device, owner artifact and timing samples.
+            A target or an empty benchmark run cannot establish that claim.
           </p>
         </section>
 
@@ -270,15 +307,24 @@ export default function ReceiptsPage() {
         <section className="space-y-4">
           <h2 className="text-xl font-semibold text-white">Archived benchmark envelopes</h2>
           {envelopeMd ? (
-            <pre tabIndex={0} aria-label="Archived benchmark data" className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 p-4 text-xs text-slate-200">
+            <pre
+              tabIndex={0}
+              aria-label="Archived benchmark data"
+              className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 p-4 text-xs text-slate-200"
+            >
               {envelopeMd}
             </pre>
           ) : (
             <p className="text-sm text-slate-400">
               No envelope file yet. Run{" "}
-              <code className="rounded bg-slate-800/80 px-2 py-0.5 font-mono text-xs">bun ./tests/perf/physicsBench.ts g1-5040d-terrain-and-push 16</code>{" "}
+              <code className="rounded bg-slate-800/80 px-2 py-0.5 font-mono text-xs">
+                bun ./tests/perf/physicsBench.ts g1-5040d-terrain-and-push 16
+              </code>{" "}
               to capture the first baseline; the result is written to{" "}
-              <code className="rounded bg-slate-800/80 px-2 py-0.5 font-mono text-xs">tests/perf/physicsBench.lock.json</code>.
+              <code className="rounded bg-slate-800/80 px-2 py-0.5 font-mono text-xs">
+                tests/perf/physicsBench.lock.json
+              </code>
+              .
             </p>
           )}
         </section>
@@ -300,8 +346,8 @@ export default function ReceiptsPage() {
 
         <footer className="border-t border-white/10 pt-6 text-xs text-slate-500">
           <p>
-            This page indexes committed material. Source links and passing metadata tests do
-            not substitute for real owner execution, mathematical validation or a reproducible
+            This page indexes committed material. Source links and passing metadata tests do not
+            substitute for real owner execution, mathematical validation or a reproducible
             performance comparison.
           </p>
         </footer>

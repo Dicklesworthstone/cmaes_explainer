@@ -66,17 +66,9 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import {
-  captureReceipt,
-  type OwnerReceipt,
-} from "../receipts/receiptBattery";
+import { captureReceipt, type OwnerReceipt } from "../receipts/receiptBattery";
 
-type FlagshipId =
-  | "indoor-g1"
-  | "outdoor-g1"
-  | "kitchen-arm"
-  | "parlor-arm"
-  | "porch-arm";
+type FlagshipId = "indoor-g1" | "outdoor-g1" | "kitchen-arm" | "parlor-arm" | "porch-arm";
 
 interface FlagshipSpec {
   id: FlagshipId;

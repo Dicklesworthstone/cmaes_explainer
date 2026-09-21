@@ -14,8 +14,7 @@ export default function Image() {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        background:
-          "linear-gradient(145deg, #050b18 0%, #0a1626 55%, #050b18 100%)",
+        background: "linear-gradient(145deg, #050b18 0%, #0a1626 55%, #050b18 100%)",
         padding: "64px 72px",
         fontFamily: "system-ui, -apple-system, sans-serif",
         position: "relative",
@@ -72,8 +71,7 @@ export default function Image() {
             display: "flex",
             fontSize: 96,
             lineHeight: 1,
-            backgroundImage:
-              "linear-gradient(90deg, #38bdf8, #22d3ee, #818cf8)",
+            backgroundImage: "linear-gradient(90deg, #38bdf8, #22d3ee, #818cf8)",
             backgroundClip: "text",
             color: "transparent",
           }}

@@ -79,7 +79,7 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         hasTrusspath: false,
         hasFlyerAero: false,
         hasBemt: false,
-        hasDemoPhysics: false
+        hasDemoPhysics: false,
       };
     }
 
@@ -87,7 +87,10 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
       const [wasmMod, flyerMod, demoMod] = await Promise.all([
         loadWasmModule("/wasm/fs-wasm/fs_wasm.js", "/wasm/fs-wasm/fs_wasm_bg.wasm"),
         loadWasmModule("/wasm/fs-flyer/fs_flyer_wasm.js", "/wasm/fs-flyer/fs_flyer_wasm_bg.wasm"),
-        loadWasmModule("/wasm/fs-demo/fs_demo_physics_wasm.js", "/wasm/fs-demo/fs_demo_physics_wasm_bg.wasm")
+        loadWasmModule(
+          "/wasm/fs-demo/fs_demo_physics_wasm.js",
+          "/wasm/fs-demo/fs_demo_physics_wasm_bg.wasm",
+        ),
       ]);
 
       fsWasmModule = wasmMod;
@@ -119,7 +122,7 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         hasTrusspath,
         hasFlyerAero,
         hasBemt,
-        hasDemoPhysics
+        hasDemoPhysics,
       };
     } catch (err) {
       if (process.env.NODE_ENV === "development") {
@@ -132,7 +135,7 @@ export async function initFrankenSim(): Promise<FrankenSimStatus> {
         hasTrusspath: false,
         hasFlyerAero: false,
         hasBemt: false,
-        hasDemoPhysics: false
+        hasDemoPhysics: false,
       };
     }
   })();
@@ -162,7 +165,10 @@ export interface ParameterSpec {
  * Universal Unit-Cube $[0, 1]^N$ Parameter Decoder
  * Converts continuous CMA-ES coordinates $z \in [0, 1]^N$ into structured physical domain values.
  */
-export function decodeParameter(z: number, spec: ParameterSpec): {
+export function decodeParameter(
+  z: number,
+  spec: ParameterSpec,
+): {
   normalized: number;
   value: number | string;
   displayValue: string;
@@ -177,7 +183,9 @@ export function decodeParameter(z: number, spec: ParameterSpec): {
       return {
         normalized: clampZ,
         value: rounded,
-        displayValue: spec.format ? spec.format(rounded) : `${rounded.toFixed(2)}${spec.unit || ""}`
+        displayValue: spec.format
+          ? spec.format(rounded)
+          : `${rounded.toFixed(2)}${spec.unit || ""}`,
       };
     }
 
@@ -188,7 +196,7 @@ export function decodeParameter(z: number, spec: ParameterSpec): {
       return {
         normalized: clampZ,
         value: val,
-        displayValue: spec.format ? spec.format(val) : `${val.toFixed(3)}${spec.unit || ""}`
+        displayValue: spec.format ? spec.format(val) : `${val.toFixed(3)}${spec.unit || ""}`,
       };
     }
 
@@ -200,7 +208,7 @@ export function decodeParameter(z: number, spec: ParameterSpec): {
       return {
         normalized: clampZ,
         value: val,
-        displayValue: spec.format ? spec.format(val) : `${val}${spec.unit || ""}`
+        displayValue: spec.format ? spec.format(val) : `${val}${spec.unit || ""}`,
       };
     }
 
@@ -213,7 +221,7 @@ export function decodeParameter(z: number, spec: ParameterSpec): {
         normalized: clampZ,
         value: cat,
         displayValue: cat,
-        categoryIndex: index
+        categoryIndex: index,
       };
     }
   }
@@ -247,7 +255,11 @@ export function encodeParameter(value: any, spec: ParameterSpec): number {
 // ============================================================================
 
 export type TrussTopology = "Warren" | "Pratt" | "Howe" | "K-Truss" | "Bowstring Arch";
-export type MaterialGrade = "A36 Mild Steel" | "A992 High-Strength Steel" | "Ti-6Al-4V Titanium" | "CFRP Carbon Fiber";
+export type MaterialGrade =
+  | "A36 Mild Steel"
+  | "A992 High-Strength Steel"
+  | "Ti-6Al-4V Titanium"
+  | "CFRP Carbon Fiber";
 
 export interface BridgeParams {
   spanLength: number; // meters: 100 - 280 m
@@ -269,7 +281,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 280,
     step: 5,
     unit: " m",
-    format: (v) => `${Math.round(v)} m`
+    format: (v) => `${Math.round(v)} m`,
   },
   {
     name: "cableSag",
@@ -279,7 +291,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 36,
     step: 0.5,
     unit: " m",
-    format: (v) => `${Number(v).toFixed(1)} m`
+    format: (v) => `${Number(v).toFixed(1)} m`,
   },
   {
     name: "deckStiffness",
@@ -289,7 +301,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 1.0,
     step: 0.01,
     unit: "%",
-    format: (v) => `${Math.round(Number(v) * 100)}%`
+    format: (v) => `${Math.round(Number(v) * 100)}%`,
   },
   {
     name: "trussTopology",
@@ -297,7 +309,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     type: "categorical",
     min: 0,
     max: 1,
-    categories: ["Warren", "Pratt", "Howe", "K-Truss", "Bowstring Arch"]
+    categories: ["Warren", "Pratt", "Howe", "K-Truss", "Bowstring Arch"],
   },
   {
     name: "materialGrade",
@@ -305,7 +317,12 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     type: "categorical",
     min: 0,
     max: 1,
-    categories: ["A36 Mild Steel", "A992 High-Strength Steel", "Ti-6Al-4V Titanium", "CFRP Carbon Fiber"]
+    categories: [
+      "A36 Mild Steel",
+      "A992 High-Strength Steel",
+      "Ti-6Al-4V Titanium",
+      "CFRP Carbon Fiber",
+    ],
   },
   {
     name: "suspenderCount",
@@ -315,7 +332,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 48,
     step: 2,
     unit: " cables",
-    format: (v) => `${v} cables`
+    format: (v) => `${v} cables`,
   },
   {
     name: "towerAspect",
@@ -325,7 +342,7 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 0.6,
     step: 0.02,
     unit: "",
-    format: (v) => Number(v).toFixed(2)
+    format: (v) => Number(v).toFixed(2),
   },
   {
     name: "vibrationDamping",
@@ -335,8 +352,8 @@ export const BRIDGE_PARAM_SPECS: ParameterSpec[] = [
     max: 0.15,
     step: 0.005,
     unit: "%",
-    format: (v) => `${(Number(v) * 100).toFixed(1)}%`
-  }
+    format: (v) => `${(Number(v) * 100).toFixed(1)}%`,
+  },
 ];
 
 export interface BridgeAnalysisResult {
@@ -358,13 +375,13 @@ const TOPOLOGY_IDS: Record<TrussTopology, number> = {
   Pratt: 1,
   Howe: 2,
   "K-Truss": 3,
-  "Bowstring Arch": 4
+  "Bowstring Arch": 4,
 };
 const MATERIAL_IDS: Record<MaterialGrade, number> = {
   "A36 Mild Steel": 0,
   "A992 High-Strength Steel": 1,
   "Ti-6Al-4V Titanium": 2,
-  "CFRP Carbon Fiber": 3
+  "CFRP Carbon Fiber": 3,
 };
 
 const MIN_BRIDGE_FLUTTER_SPEED_KMH = 180;
@@ -374,7 +391,10 @@ function bridgeFlutterPenalty(flutterCriticalSpeedKmh: number): number {
   return shortfall * shortfall;
 }
 
-export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number = 0): BridgeAnalysisResult {
+export function evaluateBridgePhysics(
+  params: BridgeParams,
+  liveTruckPos: number = 0,
+): BridgeAnalysisResult {
   const {
     spanLength,
     cableSag,
@@ -383,7 +403,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
     materialGrade,
     suspenderCount,
     towerAspect,
-    vibrationDamping
+    vibrationDamping,
   } = params;
 
   // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
@@ -400,7 +420,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
         suspenderCount,
         towerAspect,
         vibrationDamping,
-        liveTruckPos
+        liveTruckPos,
       );
       const parsed = JSON.parse(raw);
       if (parsed.ok) {
@@ -416,7 +436,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
           yieldLimitMPa: o.yieldLimitMPa,
           isCompliant: o.isCompliant && o.flutterCriticalSpeedKmh >= MIN_BRIDGE_FLUTTER_SPEED_KMH,
           costScore: Math.round((o.costScore + flutterPenalty) * 1e6) / 1e6,
-          trussForces: []
+          trussForces: [],
         };
       }
       console.warn("[fs-demo] bridge_eval refusal:", parsed.refusal?.code, parsed.refusal?.message);
@@ -426,22 +446,28 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   }
 
   // Material property table: [Density kg/m3, Yield Stress MPa, Young's Modulus GPa, Cost Index]
-  const materialTable: Record<MaterialGrade, { density: number; yield: number; E: number; costFactor: number }> = {
+  const materialTable: Record<
+    MaterialGrade,
+    { density: number; yield: number; E: number; costFactor: number }
+  > = {
     "A36 Mild Steel": { density: 7850, yield: 250, E: 200, costFactor: 1.0 },
     "A992 High-Strength Steel": { density: 7850, yield: 345, E: 210, costFactor: 1.3 },
     "Ti-6Al-4V Titanium": { density: 4430, yield: 880, E: 114, costFactor: 6.5 },
-    "CFRP Carbon Fiber": { density: 1600, yield: 1200, E: 230, costFactor: 8.0 }
+    "CFRP Carbon Fiber": { density: 1600, yield: 1200, E: 230, costFactor: 8.0 },
   };
 
   const mat = materialTable[materialGrade] || materialTable["A36 Mild Steel"];
 
   // Truss topology efficiency multiplier (Warren vs Pratt vs Bowstring Arch)
-  const topologyEfficiency: Record<TrussTopology, { stiffnessFactor: number; massFactor: number; aeroDrag: number }> = {
+  const topologyEfficiency: Record<
+    TrussTopology,
+    { stiffnessFactor: number; massFactor: number; aeroDrag: number }
+  > = {
     Warren: { stiffnessFactor: 1.0, massFactor: 1.0, aeroDrag: 1.0 },
     Pratt: { stiffnessFactor: 1.08, massFactor: 1.05, aeroDrag: 1.05 },
     Howe: { stiffnessFactor: 1.02, massFactor: 1.04, aeroDrag: 1.08 },
     "K-Truss": { stiffnessFactor: 1.18, massFactor: 1.14, aeroDrag: 1.25 },
-    "Bowstring Arch": { stiffnessFactor: 1.28, massFactor: 1.20, aeroDrag: 0.85 }
+    "Bowstring Arch": { stiffnessFactor: 1.28, massFactor: 1.2, aeroDrag: 0.85 },
   };
 
   const topo = topologyEfficiency[trussTopology] || topologyEfficiency["Warren"];
@@ -467,14 +493,16 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   }
 
   // Cable tension for a parabolic cable under uniform load: H = (w * L^2) / (8 * s)
-  const deadLoadPerMeter = (mat.density * (0.08 + deckStiffness * 0.15) * 9.81 * topo.massFactor) / 1000; // kN/m
+  const deadLoadPerMeter =
+    (mat.density * (0.08 + deckStiffness * 0.15) * 9.81 * topo.massFactor) / 1000; // kN/m
   const liveTruckLoadKN = 400; // 40-ton moving vehicle
   const totalLinearLoad = deadLoadPerMeter + liveTruckLoadKN / spanLength;
 
   const spanSq = spanLength * spanLength;
   const sagSpanRatio = cableSag / spanLength;
   const horizontalCableTensionKN = (totalLinearLoad * spanSq) / (8 * Math.max(2, cableSag));
-  const maxCableTensionKN = horizontalCableTensionKN * Math.sqrt(1 + 16 * sagSpanRatio * sagSpanRatio);
+  const maxCableTensionKN =
+    horizontalCableTensionKN * Math.sqrt(1 + 16 * sagSpanRatio * sagSpanRatio);
 
   // Tower height: H_tower = spanLength * towerAspect
   const towerHeight = spanLength * towerAspect;
@@ -482,7 +510,8 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   // Deck bending stress & maximum deflection. Second moment of area spans
   // roughly 1.5-13 m^4 — the realistic range for stiffened bridge decks
   // (a fraction of a m^4 would be a plate girder, not a deck).
-  const effectiveEI = mat.E * 1e9 * (1.5 + deckStiffness * deckStiffness * deckStiffness * 12 * topo.stiffnessFactor);
+  const effectiveEI =
+    mat.E * 1e9 * (1.5 + deckStiffness * deckStiffness * deckStiffness * 12 * topo.stiffnessFactor);
   const maxDeflectionMm =
     ((5 * totalLinearLoad * 1000 * spanSq * spanSq) / (384 * effectiveEI)) *
     (1 / (1 + (8 * cableSag) / spanLength)) *
@@ -507,27 +536,38 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
   // V_f ~ 3.7 * omega_theta * b * sqrt(mu), with half deck width b, torsional
   // circular frequency omega_theta, and mass ratio mu = m / (rho * pi * b^2).
   const massPerLengthKg = mat.density * (0.08 + deckStiffness * 0.15) * topo.massFactor;
-  const torsionalFreq = (1 / (2 * Math.PI)) * Math.sqrt((effectiveEI * 0.8) / (massPerLengthKg * spanSq * spanSq));
+  const torsionalFreq =
+    (1 / (2 * Math.PI)) * Math.sqrt((effectiveEI * 0.8) / (massPerLengthKg * spanSq * spanSq));
   const halfDeckWidthM = 10;
   const omegaTorsional = 2 * Math.PI * torsionalFreq;
-  const massRatio = massPerLengthKg / (1.225 * Math.PI * halfDeckWidthM * halfDeckWidthM * topo.aeroDrag);
+  const massRatio =
+    massPerLengthKg / (1.225 * Math.PI * halfDeckWidthM * halfDeckWidthM * topo.aeroDrag);
   const flutterCriticalSpeedKmh =
-    3.7 * omegaTorsional * halfDeckWidthM * Math.sqrt(Math.max(0, massRatio)) * (1 + vibrationDamping * 4) * 3.6;
+    3.7 *
+    omegaTorsional *
+    halfDeckWidthM *
+    Math.sqrt(Math.max(0, massRatio)) *
+    (1 + vibrationDamping * 4) *
+    3.6;
 
   const directStress = deckBendingStressMPa + cableStressMPa * 0.35;
   const shearStress = 15 * topo.aeroDrag;
   const maxVonMisesStressMPa = Math.round(
-    Math.sqrt(directStress * directStress + 3 * shearStress * shearStress)
+    Math.sqrt(directStress * directStress + 3 * shearStress * shearStress),
   );
 
   // Total bridge mass in metric tons
-  const cableMassTons = (cableAreaM2 * spanLength * (1 + (8 / 3) * sagSpanRatio * sagSpanRatio) * mat.density * 2) / 1000;
+  const cableMassTons =
+    (cableAreaM2 * spanLength * (1 + (8 / 3) * sagSpanRatio * sagSpanRatio) * mat.density * 2) /
+    1000;
   // Same cross-sectional area as the dead-load term above, so the reported
   // deck mass and the load that stresses the deck describe one structure.
-  const deckMassTons = (spanLength * (0.08 + deckStiffness * 0.15) * mat.density * topo.massFactor) / 1000;
+  const deckMassTons =
+    (spanLength * (0.08 + deckStiffness * 0.15) * mat.density * topo.massFactor) / 1000;
   const suspenderMassTons = (suspenderCount * (cableSag * 0.6) * 0.002 * mat.density * 2) / 1000;
   const towerMassTons = (towerHeight * 0.8 * mat.density * 4) / 1000;
-  const totalMassTons = Math.round((cableMassTons + deckMassTons + suspenderMassTons + towerMassTons) * 10) / 10;
+  const totalMassTons =
+    Math.round((cableMassTons + deckMassTons + suspenderMassTons + towerMassTons) * 10) / 10;
 
   const isCompliant =
     maxVonMisesStressMPa <= mat.yield &&
@@ -546,7 +586,8 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
       (totalMassTons * mat.costFactor +
         stressViolation * stressViolation * 8.0 +
         deflectionViolation * deflectionViolation * 4.0 +
-        flutterPenalty) * 1e6
+        flutterPenalty) *
+        1e6,
     ) / 1e6;
 
   return {
@@ -559,7 +600,7 @@ export function evaluateBridgePhysics(params: BridgeParams, liveTruckPos: number
     yieldLimitMPa: mat.yield,
     isCompliant,
     costScore,
-    trussForces
+    trussForces,
   };
 }
 
@@ -594,7 +635,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 16.0,
     step: 0.2,
     unit: "",
-    format: (v) => Number(v).toFixed(1)
+    format: (v) => Number(v).toFixed(1),
   },
   {
     name: "sweepAngle",
@@ -604,7 +645,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 45.0,
     step: 0.5,
     unit: "°",
-    format: (v) => `${Number(v).toFixed(1)}°`
+    format: (v) => `${Number(v).toFixed(1)}°`,
   },
   {
     name: "thicknessRatio",
@@ -614,7 +655,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 0.24,
     step: 0.005,
     unit: "%",
-    format: (v) => `${(Number(v) * 100).toFixed(1)}%`
+    format: (v) => `${(Number(v) * 100).toFixed(1)}%`,
   },
   {
     name: "maxCamber",
@@ -624,7 +665,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 0.08,
     step: 0.002,
     unit: "%",
-    format: (v) => `${(Number(v) * 100).toFixed(1)}%`
+    format: (v) => `${(Number(v) * 100).toFixed(1)}%`,
   },
   {
     name: "camberPosition",
@@ -634,7 +675,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 0.6,
     step: 0.02,
     unit: "% chord",
-    format: (v) => `${(Number(v) * 100).toFixed(0)}%`
+    format: (v) => `${(Number(v) * 100).toFixed(0)}%`,
   },
   {
     name: "taperRatio",
@@ -644,7 +685,7 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 1.0,
     step: 0.02,
     unit: "",
-    format: (v) => Number(v).toFixed(2)
+    format: (v) => Number(v).toFixed(2),
   },
   {
     name: "airfoilFamily",
@@ -657,8 +698,8 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
       "NACA 5-Digit High-Lift",
       "Supercritical SC(2)",
       "Reflexed Flying Wing",
-      "Laminar Flow Low-Re"
-    ]
+      "Laminar Flow Low-Re",
+    ],
   },
   {
     name: "internalRibCount",
@@ -668,8 +709,8 @@ export const WING_PARAM_SPECS: ParameterSpec[] = [
     max: 36,
     step: 2,
     unit: " ribs",
-    format: (v) => `${v} ribs`
-  }
+    format: (v) => `${v} ribs`,
+  },
 ];
 
 export interface WingAnalysisResult {
@@ -692,10 +733,13 @@ const FAMILY_IDS: Record<AirfoilFamily, number> = {
   "NACA 5-Digit High-Lift": 1,
   "Supercritical SC(2)": 2,
   "Reflexed Flying Wing": 3,
-  "Laminar Flow Low-Re": 4
+  "Laminar Flow Low-Re": 4,
 };
 
-export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.78): WingAnalysisResult {
+export function evaluateWingPhysics(
+  params: WingParams,
+  cruiseMach: number = 0.78,
+): WingAnalysisResult {
   const {
     aspectRatio,
     sweepAngle,
@@ -704,7 +748,7 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
     camberPosition,
     taperRatio,
     airfoilFamily,
-    internalRibCount
+    internalRibCount,
   } = params;
 
   // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
@@ -721,7 +765,7 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
         taperRatio,
         FAMILY_IDS[airfoilFamily] ?? 0,
         internalRibCount,
-        cruiseMach
+        cruiseMach,
       );
       const parsed = JSON.parse(raw);
       if (parsed.ok) {
@@ -737,7 +781,7 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
           rootBendingMomentKNm: o.rootBendingMomentKNm,
           wingMassKg: o.wingMassKg,
           criticalMach: o.criticalMach,
-          costScore: o.costScore
+          costScore: o.costScore,
         };
       }
       console.warn("[fs-demo] wing_eval refusal:", parsed.refusal?.code, parsed.refusal?.message);
@@ -749,12 +793,40 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const sweepRad = (sweepAngle * Math.PI) / 180;
 
   // Airfoil aerodynamic factors
-  const familyCoeffs: Record<AirfoilFamily, { clBonus: number; cd0Bonus: number; mcritBonus: number; structuralFactor: number }> = {
-    "NACA 4-Digit Conventional": { clBonus: 1.0, cd0Bonus: 1.0, mcritBonus: 0.0, structuralFactor: 1.0 },
-    "NACA 5-Digit High-Lift": { clBonus: 1.22, cd0Bonus: 1.12, mcritBonus: -0.03, structuralFactor: 1.05 },
-    "Supercritical SC(2)": { clBonus: 1.15, cd0Bonus: 0.94, mcritBonus: 0.08, structuralFactor: 1.12 },
-    "Reflexed Flying Wing": { clBonus: 0.88, cd0Bonus: 0.92, mcritBonus: 0.02, structuralFactor: 0.95 },
-    "Laminar Flow Low-Re": { clBonus: 1.05, cd0Bonus: 0.78, mcritBonus: 0.04, structuralFactor: 1.08 }
+  const familyCoeffs: Record<
+    AirfoilFamily,
+    { clBonus: number; cd0Bonus: number; mcritBonus: number; structuralFactor: number }
+  > = {
+    "NACA 4-Digit Conventional": {
+      clBonus: 1.0,
+      cd0Bonus: 1.0,
+      mcritBonus: 0.0,
+      structuralFactor: 1.0,
+    },
+    "NACA 5-Digit High-Lift": {
+      clBonus: 1.22,
+      cd0Bonus: 1.12,
+      mcritBonus: -0.03,
+      structuralFactor: 1.05,
+    },
+    "Supercritical SC(2)": {
+      clBonus: 1.15,
+      cd0Bonus: 0.94,
+      mcritBonus: 0.08,
+      structuralFactor: 1.12,
+    },
+    "Reflexed Flying Wing": {
+      clBonus: 0.88,
+      cd0Bonus: 0.92,
+      mcritBonus: 0.02,
+      structuralFactor: 0.95,
+    },
+    "Laminar Flow Low-Re": {
+      clBonus: 1.05,
+      cd0Bonus: 0.78,
+      mcritBonus: 0.04,
+      structuralFactor: 1.08,
+    },
   };
 
   const family = familyCoeffs[airfoilFamily] || familyCoeffs["NACA 4-Digit Conventional"];
@@ -813,7 +885,7 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const criticalMach = dragDivergenceMach - Math.cbrt(0.1 / 80);
 
   const deltaMach = Math.max(0, cruiseMach - criticalMach);
-  const waveDragCDw = deltaMach > 0 ? 20 * Math.pow(deltaMach, 4) : 0;
+  const waveDragCDw = deltaMach > 0 ? 20 * deltaMach ** 4 : 0;
 
   const dragCoeffCD = profileDragCD0 + inducedDragCDi + waveDragCDw;
   const liftToDragRatio = liftCoeffCL / Math.max(1e-4, dragCoeffCD);
@@ -835,7 +907,7 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
   const rootThicknessM = rootChord * thicknessRatio;
   const sparCapAreaM2 = (rootBendingMomentKNm * 1000) / (0.45 * 350e6 * rootThicknessM); // 350 MPa allowable
   const sparMassKg = sparCapAreaM2 * halfSpan * 2 * 2700; // Aluminum/CFRP equivalent
-  const skinMassKg = wingAreaM2 * 0.003 * 2700 * (1 + 0.2 * sweepAngle / 30);
+  const skinMassKg = wingAreaM2 * 0.003 * 2700 * (1 + (0.2 * sweepAngle) / 30);
   const ribMassKg = internalRibCount * 2.8 * family.structuralFactor;
   const wingMassKg = Math.round(sparMassKg + skinMassKg + ribMassKg);
 
@@ -856,6 +928,6 @@ export function evaluateWingPhysics(params: WingParams, cruiseMach: number = 0.7
     rootBendingMomentKNm: Math.round(rootBendingMomentKNm),
     wingMassKg,
     criticalMach: Math.round(criticalMach * 100) / 100,
-    costScore
+    costScore,
   };
 }

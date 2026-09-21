@@ -19,7 +19,7 @@
 // SOTA References:
 //   - Hansen, "The CMA Evolution Strategy: A Tutorial" (Inria 2016)
 
-import { G1TrainEnv, type G1Observation } from "./g1StepwiseEnv";
+import { type G1Observation, G1TrainEnv } from "./g1StepwiseEnv";
 import { LiveCmaesOptimizer } from "./liveCmaesHousehold";
 
 export interface CmaesSearchOptions {
@@ -84,11 +84,7 @@ function extractFeatures(obs: G1Observation, out: number[]): void {
 }
 
 /** Greedy policy forward pass: action_j = tanh(<w_j, f>). Writes into actionOut. */
-function applyPolicy(
-  genotype: number[],
-  features: number[],
-  actionOut: number[],
-): void {
+function applyPolicy(genotype: number[], features: number[], actionOut: number[]): void {
   for (let j = 0; j < ACTUATOR_COUNT; j++) {
     let acc = 0.0;
     const base = j * FEATURE_COUNT;
@@ -157,9 +153,7 @@ function rollout(
  * both deterministic, and generation boundaries are budget-sliced so the
  * sample count never exceeds budgetEvaluations.
  */
-export function runCmaesPolicySearch(
-  options: CmaesSearchOptions = {},
-): CmaesPolicySearchResult {
+export function runCmaesPolicySearch(options: CmaesSearchOptions = {}): CmaesPolicySearchResult {
   const seed = options.seed ?? 42;
   const populationSize = Math.max(2, Math.floor(options.populationSize ?? 16));
   const budgetEvaluations = Math.max(1, Math.floor(options.budgetEvaluations ?? 2400));
@@ -183,8 +177,7 @@ export function runCmaesPolicySearch(
   const searchAction = new Array<number>(ACTUATOR_COUNT).fill(0.0);
 
   const episodeFitness = (genotype: number[]): number =>
-    -rollout(episodeSteps, genotype, searchFeatures, searchAction, null)
-      .objectiveScore;
+    -rollout(episodeSteps, genotype, searchFeatures, searchAction, null).objectiveScore;
 
   let evaluationsPerformed = 0;
   let bestFitness = Infinity;
@@ -215,13 +208,7 @@ export function runCmaesPolicySearch(
 
   // Flagship-horizon evaluation of the best policy found.
   const finalFeatureBank: number[][] = [];
-  const final = rollout(
-    finalSteps,
-    bestGenotype,
-    searchFeatures,
-    searchAction,
-    finalFeatureBank,
-  );
+  const final = rollout(finalSteps, bestGenotype, searchFeatures, searchAction, finalFeatureBank);
 
   const dt = new G1TrainEnv({ maxSteps: finalSteps }).config.dt;
   const seconds = finalSteps * dt;
@@ -237,9 +224,7 @@ export function runCmaesPolicySearch(
   // no env.step — cycling real feature vectors captured during the final
   // rollout. The sink accumulator keeps the loop from being optimized away.
   const bank =
-    finalFeatureBank.length > 0
-      ? finalFeatureBank
-      : [new Array<number>(FEATURE_COUNT).fill(0.0)];
+    finalFeatureBank.length > 0 ? finalFeatureBank : [new Array<number>(FEATURE_COUNT).fill(0.0)];
   const timingAction = new Array<number>(ACTUATOR_COUNT).fill(0.0);
   let sink = 0.0;
   const timingStartMs = performance.now();
@@ -248,8 +233,7 @@ export function runCmaesPolicySearch(
     sink += timingAction[0];
   }
   const timingElapsedMs = performance.now() - timingStartMs;
-  const inferenceLatencyMicros =
-    (timingElapsedMs * 1000.0) / INFERENCE_TIMING_ITERATIONS;
+  const inferenceLatencyMicros = (timingElapsedMs * 1000.0) / INFERENCE_TIMING_ITERATIONS;
   if (!Number.isFinite(sink)) {
     // Unreachable in practice; guards against a degenerate timing loop.
     sink = 0.0;

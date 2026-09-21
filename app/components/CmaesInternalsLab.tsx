@@ -1,35 +1,61 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Play, Pause, FastForward, RotateCcw, Cpu, Dices, Info } from "lucide-react";
-import { LatexRenderer } from "./LatexRenderer";
-import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
-import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { Cpu, Dices, FastForward, Info, Pause, Play, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createMulberry32 } from "../lib/cmaesEngine";
+import { type CMAESGenerationStateND, CMAESOptimizerND } from "../lib/cmaesEngineND";
 import {
   CMAES_VISUALIZATION_F_TARGET,
+  type CmaesKernelStatus,
+  type CmaesVizParams,
   evaluateCmaesVisualizationLandscape,
   initFrankenSimCmaes,
   runCmaesViz,
   wasmRunToNdStates,
-  type CmaesKernelStatus,
-  type CmaesVizParams,
 } from "../lib/frankensimCmaes";
+import { CMAESPhaseSpaceViewer } from "./CMAESPhaseSpaceViewer";
+import { LatexRenderer } from "./LatexRenderer";
 
 // ---------------------------------------------------------------------------
 // Landscapes — TS mirror of the kernel's registry (the honest fallback path).
 // ---------------------------------------------------------------------------
 
 const LANDSCAPES = [
-  { id: 0, name: "Sphere", formula: "f(x)=\\sum \\textcolor{#60a5fa}{x_i}^2", blurb: "Isotropic bowl, the easy case: C stays near the identity and sigma does the work." },
-  { id: 1, name: "Rosenbrock", formula: "\\sum\\!\\left[100(\\textcolor{#60a5fa}{x_{i+1}}-\\textcolor{#60a5fa}{x_i}^2)^2+(1-\\textcolor{#60a5fa}{x_i})^2\\right]", blurb: "Banana valley: CMA-ES must learn a curved, correlated ridge." },
+  {
+    id: 0,
+    name: "Sphere",
+    formula: "f(x)=\\sum \\textcolor{#60a5fa}{x_i}^2",
+    blurb: "Isotropic bowl, the easy case: C stays near the identity and sigma does the work.",
+  },
+  {
+    id: 1,
+    name: "Rosenbrock",
+    formula:
+      "\\sum\\!\\left[100(\\textcolor{#60a5fa}{x_{i+1}}-\\textcolor{#60a5fa}{x_i}^2)^2+(1-\\textcolor{#60a5fa}{x_i})^2\\right]",
+    blurb: "Banana valley: CMA-ES must learn a curved, correlated ridge.",
+  },
   // The kernel calls this landscape "cigar", but the implemented function
   // (one brutally steep axis, the rest flat) is the Discus/Tablet benchmark;
   // the true Cigar is x_0^2 + 10^6 * sum of the rest.
-  { id: 2, name: "Discus", formula: "f(x)=10^6 \\textcolor{#60a5fa}{x_0}^2+\\sum_{i>0} \\textcolor{#60a5fa}{x_i}^2", blurb: "One brutally sensitive axis: watch cond(C) explode, then adapt." },
-  { id: 3, name: "Rastrigin", formula: "10n+\\sum\\![\\textcolor{#60a5fa}{x_i}^2-10\\cos(2\\pi \\textcolor{#60a5fa}{x_i})]", blurb: "Heavily multimodal: population size is survival." },
-  { id: 4, name: "Ill-Cond.", formula: "\\sum 10^{6i/(n-1)} \\textcolor{#60a5fa}{x_i}^2", blurb: "Ellipsoid with a 10^6 condition number: covariance adaptation's home turf." },
+  {
+    id: 2,
+    name: "Discus",
+    formula: "f(x)=10^6 \\textcolor{#60a5fa}{x_0}^2+\\sum_{i>0} \\textcolor{#60a5fa}{x_i}^2",
+    blurb: "One brutally sensitive axis: watch cond(C) explode, then adapt.",
+  },
+  {
+    id: 3,
+    name: "Rastrigin",
+    formula: "10n+\\sum\\![\\textcolor{#60a5fa}{x_i}^2-10\\cos(2\\pi \\textcolor{#60a5fa}{x_i})]",
+    blurb: "Heavily multimodal: population size is survival.",
+  },
+  {
+    id: 4,
+    name: "Ill-Cond.",
+    formula: "\\sum 10^{6i/(n-1)} \\textcolor{#60a5fa}{x_i}^2",
+    blurb: "Ellipsoid with a 10^6 condition number: covariance adaptation's home turf.",
+  },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -37,7 +63,11 @@ const LANDSCAPES = [
 // ---------------------------------------------------------------------------
 
 export function CmaesInternalsLab() {
-  const [kernel, setKernel] = useState<CmaesKernelStatus>({ source: "unloaded", kernelVersion: null, error: null });
+  const [kernel, setKernel] = useState<CmaesKernelStatus>({
+    source: "unloaded",
+    kernelVersion: null,
+    error: null,
+  });
 
   // Rich parameter surface — every knob the kernel actually has.
   const [landscape, setLandscape] = useState<number>(1);
@@ -111,17 +141,20 @@ export function CmaesInternalsLab() {
       }
 
       // TS fallback: same algorithm, same couplings, labeled as fallback.
-      const opt = new CMAESOptimizerND((v: number[]) => evaluateCmaesVisualizationLandscape(landscape, v), {
-        dim,
-        initialMean: x0,
-        initialSigma: sigma0,
-        lambda,
-        activeCMA: active,
-        seed,
-        noiseLevel: noise,
-        bounds: boundsEnabled ? ([-2, 2] as [number, number]) : ([-1e9, 1e9] as [number, number]),
-        repairStrategy: boundsEnabled ? "reflect" : "none",
-      });
+      const opt = new CMAESOptimizerND(
+        (v: number[]) => evaluateCmaesVisualizationLandscape(landscape, v),
+        {
+          dim,
+          initialMean: x0,
+          initialSigma: sigma0,
+          lambda,
+          activeCMA: active,
+          seed,
+          noiseLevel: noise,
+          bounds: boundsEnabled ? ([-2, 2] as [number, number]) : ([-1e9, 1e9] as [number, number]),
+          repairStrategy: boundsEnabled ? "reflect" : "none",
+        },
+      );
       const hist: CMAESGenerationStateND[] = [];
       for (let i = 0; i < generations; i++) {
         const state = opt.step();
@@ -139,7 +172,19 @@ export function CmaesInternalsLab() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [kernel.source, landscape, dim, lambda, sigma0, active, seed, generations, noise, boundsEnabled, startPoint]);
+  }, [
+    kernel.source,
+    landscape,
+    dim,
+    lambda,
+    sigma0,
+    active,
+    seed,
+    generations,
+    noise,
+    boundsEnabled,
+    startPoint,
+  ]);
 
   // Playback.
   useEffect(() => {
@@ -175,7 +220,7 @@ export function CmaesInternalsLab() {
   // Loss sparkline data (log10 best_f per generation).
   const lossData = useMemo(
     () => states.map((s) => Math.log10(Math.max(1e-12, s.bestFitness))),
-    [states]
+    [states],
   );
 
   return (
@@ -187,10 +232,10 @@ export function CmaesInternalsLab() {
             Inside the optimizer: live covariance geometry
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Every generation of a real CMA-ES run, projected into 3D principal-component
-            space. The ellipsoid is the 1σ surface of the sampling distribution N(m, σ²C):
-            watch it form and orient as the population learns the landscape. The view
-            renormalizes overall size for visibility, so read σ&apos;s collapse from the telemetry.
+            Every generation of a real CMA-ES run, projected into 3D principal-component space. The
+            ellipsoid is the 1σ surface of the sampling distribution N(m, σ²C): watch it form and
+            orient as the population learns the landscape. The view renormalizes overall size for
+            visibility, so read σ&apos;s collapse from the telemetry.
           </p>
         </div>
         <div
@@ -199,11 +244,15 @@ export function CmaesInternalsLab() {
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
               : "border-amber-500/40 bg-amber-500/10 text-amber-300"
           }`}
-          title={kernel.error ?? (runSource === "wasm" ? kernel.kernelVersion ?? undefined : undefined)}
+          title={
+            kernel.error ?? (runSource === "wasm" ? (kernel.kernelVersion ?? undefined) : undefined)
+          }
         >
           <Cpu className="h-3.5 w-3.5 shrink-0" />
           {/* The full crate stamp is wider than a phone card; keep it for sm+ */}
-          <span className="sm:hidden truncate">{runSource === "wasm" ? "kernel: WASM step" : "kernel: TS fallback"}</span>
+          <span className="sm:hidden truncate">
+            {runSource === "wasm" ? "kernel: WASM step" : "kernel: TS fallback"}
+          </span>
           <span className="hidden sm:inline">
             {runSource === "wasm"
               ? `kernel: WASM step (${kernel.kernelVersion ?? "fs-cmaes-viz-wasm"})`
@@ -216,7 +265,10 @@ export function CmaesInternalsLab() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Landscape */}
         <div className="space-y-1.5">
-          <label htmlFor="internals-landscape-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+          <label
+            htmlFor="internals-landscape-select"
+            className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block"
+          >
             Landscape
           </label>
           <select
@@ -239,7 +291,10 @@ export function CmaesInternalsLab() {
 
         {/* Dimension */}
         <div className="space-y-1.5">
-          <label htmlFor="internals-dim-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+          <label
+            htmlFor="internals-dim-select"
+            className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block"
+          >
             Dimension n
           </label>
           <select
@@ -262,7 +317,10 @@ export function CmaesInternalsLab() {
 
         {/* Population */}
         <div className="space-y-1.5">
-          <label htmlFor="internals-lambda-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+          <label
+            htmlFor="internals-lambda-select"
+            className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block"
+          >
             Population λ
           </label>
           <select
@@ -288,7 +346,10 @@ export function CmaesInternalsLab() {
 
         {/* Initial sigma */}
         <div className="space-y-1.5">
-          <label htmlFor="internals-sigma0-select" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+          <label
+            htmlFor="internals-sigma0-select"
+            className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block"
+          >
             Initial σ₀
           </label>
           <select
@@ -319,7 +380,9 @@ export function CmaesInternalsLab() {
               type="button"
               onClick={() => setActive((a) => !a)}
               className={`flex-1 rounded-xl px-2 py-2 text-xs font-semibold border transition-colors ${
-                active ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300" : "border-white/10 bg-slate-950/70 text-slate-400"
+                active
+                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                  : "border-white/10 bg-slate-950/70 text-slate-400"
               }`}
               title="Active (negative) covariance updates on worst offspring"
             >
@@ -329,7 +392,9 @@ export function CmaesInternalsLab() {
               type="button"
               onClick={() => setBoundsEnabled((b) => !b)}
               className={`flex-1 rounded-xl px-2 py-2 text-xs font-semibold border transition-colors ${
-                boundsEnabled ? "border-sky-500/50 bg-sky-500/15 text-sky-300" : "border-white/10 bg-slate-950/70 text-slate-400"
+                boundsEnabled
+                  ? "border-sky-500/50 bg-sky-500/15 text-sky-300"
+                  : "border-white/10 bg-slate-950/70 text-slate-400"
               }`}
               title="Reflect-repair samples into [-2, 2]^n"
             >
@@ -339,7 +404,10 @@ export function CmaesInternalsLab() {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="internals-seed-input" className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block">
+          <label
+            htmlFor="internals-seed-input"
+            className="text-[0.68rem] uppercase tracking-wider text-slate-500 font-semibold block"
+          >
             Seed <span className="text-sky-300 font-mono">{seed}</span>
           </label>
           <div className="flex gap-2">
@@ -379,7 +447,9 @@ export function CmaesInternalsLab() {
               onClick={() => setLandscape(l.id)}
               style={{ width: "20%" }}
               className={`relative text-[0.6rem] font-mono transition-colors ${
-                landscape === l.id ? "bg-sky-500/40 text-white" : "bg-slate-900/80 text-slate-500 hover:bg-slate-800"
+                landscape === l.id
+                  ? "bg-sky-500/40 text-white"
+                  : "bg-slate-900/80 text-slate-500 hover:bg-slate-800"
               } ${i > 0 ? "border-l border-white/10" : ""}`}
             >
               {l.name} · [{(i * 0.2).toFixed(1)}, {((i + 1) * 0.2).toFixed(1)})
@@ -387,9 +457,9 @@ export function CmaesInternalsLab() {
           ))}
         </div>
         <p className="mt-1.5 text-[0.65rem] text-slate-500">
-          Discrete options are mapped to disjoint sub-ranges of a continuous [0, 1] variable —
-          so one optimizer coordinate encodes a categorical choice, and the same machinery
-          optimizes mixed continuous / integer / categorical design spaces.
+          Discrete options are mapped to disjoint sub-ranges of a continuous [0, 1] variable — so
+          one optimizer coordinate encodes a categorical choice, and the same machinery optimizes
+          mixed continuous / integer / categorical design spaces.
         </p>
       </div>
 
@@ -421,15 +491,24 @@ export function CmaesInternalsLab() {
                 }
               }}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white shadow-lg transition-[background-color,box-shadow] ${
-                isPlaying && cursor < states.length - 1 ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600"
+                isPlaying && cursor < states.length - 1
+                  ? "bg-amber-500 hover:bg-amber-600"
+                  : "bg-emerald-500 hover:bg-emerald-600"
               }`}
             >
-              {isPlaying && cursor < states.length - 1 ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              {isPlaying && cursor < states.length - 1 ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
               {isPlaying && cursor < states.length - 1 ? "Pause" : "Play evolution"}
             </button>
             <button
               type="button"
-              onClick={() => { setIsPlaying(false); setCursor((c) => Math.min(c + 1, states.length - 1)); }}
+              onClick={() => {
+                setIsPlaying(false);
+                setCursor((c) => Math.min(c + 1, states.length - 1));
+              }}
               className="rounded-xl border border-white/5 bg-slate-900 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
               title="Step one generation"
             >
@@ -437,14 +516,20 @@ export function CmaesInternalsLab() {
             </button>
             <button
               type="button"
-              onClick={() => { setIsPlaying(false); setCursor(0); }}
+              onClick={() => {
+                setIsPlaying(false);
+                setCursor(0);
+              }}
               className="rounded-xl border border-white/5 bg-slate-900 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
               title="Back to generation 0"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
             <input
-              type="range" min={0} max={Math.max(0, states.length - 1)} value={Math.min(cursor, states.length - 1)}
+              type="range"
+              min={0}
+              max={Math.max(0, states.length - 1)}
+              value={Math.min(cursor, states.length - 1)}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
                 if (!Number.isNaN(val)) {
@@ -479,45 +564,99 @@ export function CmaesInternalsLab() {
         {/* Telemetry column */}
         <div className="space-y-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 font-mono text-xs space-y-2">
-            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-sans font-semibold">Live internals</div>
-            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Best <LatexRenderer math="f_{\text{best}}" block={false} /></span><span className="text-emerald-400 font-bold">{latest ? latest.bestFitness.toExponential(3) : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Step size <LatexRenderer math="\sigma" block={false} /></span><span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400 flex items-center gap-1">Condition <LatexRenderer math="\kappa(C)" block={false} /></span><span className="text-purple-300">{latest ? (Number.isFinite(latest.conditionNumber) ? latest.conditionNumber.toFixed(1) : "∞") : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400">Evaluations</span><span className="text-slate-300">{latest ? latest.evalCount : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_c\|" block={false} /></span><span className="text-slate-300">{latest ? Math.hypot(...latest.pC).toFixed(3) : "—"}</span></div>
-            <div className="flex justify-between items-center"><span className="text-slate-400"><LatexRenderer math="\|p_\sigma\| / \mathbb{E}\|\mathcal{N}(0, I)\|" block={false} /></span><span className="text-slate-300">{latest ? (() => {
-              // chi_n expectation, not sqrt(n): at n=5 the two differ by ~5%,
-              // which matters for a diagnostic read against 1.0.
-              const nd = latest.mean.length;
-              const chiN = Math.sqrt(nd) * (1 - 1 / (4 * nd) + 1 / (21 * nd * nd));
-              return (Math.hypot(...latest.pSigma) / chiN).toFixed(3);
-            })() : "—"}</span></div>
+            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-sans font-semibold">
+              Live internals
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 flex items-center gap-1">
+                Best <LatexRenderer math="f_{\text{best}}" block={false} />
+              </span>
+              <span className="text-emerald-400 font-bold">
+                {latest ? latest.bestFitness.toExponential(3) : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 flex items-center gap-1">
+                Step size <LatexRenderer math="\sigma" block={false} />
+              </span>
+              <span className="text-sky-300">{latest ? latest.sigma.toFixed(4) : "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400 flex items-center gap-1">
+                Condition <LatexRenderer math="\kappa(C)" block={false} />
+              </span>
+              <span className="text-purple-300">
+                {latest
+                  ? Number.isFinite(latest.conditionNumber)
+                    ? latest.conditionNumber.toFixed(1)
+                    : "∞"
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Evaluations</span>
+              <span className="text-slate-300">{latest ? latest.evalCount : "—"}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">
+                <LatexRenderer math="\|p_c\|" block={false} />
+              </span>
+              <span className="text-slate-300">
+                {latest ? Math.hypot(...latest.pC).toFixed(3) : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">
+                <LatexRenderer
+                  math="\|p_\sigma\| / \mathbb{E}\|\mathcal{N}(0, I)\|"
+                  block={false}
+                />
+              </span>
+              <span className="text-slate-300">
+                {latest
+                  ? (() => {
+                      // chi_n expectation, not sqrt(n): at n=5 the two differ by ~5%,
+                      // which matters for a diagnostic read against 1.0.
+                      const nd = latest.mean.length;
+                      const chiN = Math.sqrt(nd) * (1 - 1 / (4 * nd) + 1 / (21 * nd * nd));
+                      return (Math.hypot(...latest.pSigma) / chiN).toFixed(3);
+                    })()
+                  : "—"}
+              </span>
+            </div>
           </div>
 
           {/* Loss curve */}
           <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">Convergence — log₁₀ best f(x)</div>
+            <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              Convergence — log₁₀ best f(x)
+            </div>
             <LossSparkline data={lossData} cursor={Math.min(cursor, states.length - 1)} />
           </div>
 
           {/* Variance explained */}
           {latest && (
             <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-              <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">PCA variance explained</div>
+              <div className="text-[0.68rem] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+                PCA variance explained
+              </div>
               <div className="space-y-1.5">
                 {latest.phaseSpace3D.varianceExplainedPercent.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs font-mono">
                     <span className="w-10 text-slate-400">PC{i + 1}</span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400" style={{ width: `${Math.min(100, v).toFixed(2)}%` }} />
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400"
+                        style={{ width: `${Math.min(100, v).toFixed(2)}%` }}
+                      />
                     </div>
                     <span className="w-12 text-right text-slate-400">{v.toFixed(1)}%</span>
                   </div>
                 ))}
               </div>
               <p className="mt-2 text-[0.65rem] text-slate-500">
-                Share of total variance captured by the 3D projection — the honest price of
-                looking at a {dim}-D distribution in 3D.
+                Share of total variance captured by the 3D projection — the honest price of looking
+                at a {dim}-D distribution in 3D.
               </p>
             </div>
           )}
@@ -528,11 +667,14 @@ export function CmaesInternalsLab() {
       <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4 text-sm text-slate-300">
         <div>
           <span className="text-slate-400">What you are watching: </span>
-          each generation samples <LatexRenderer math="\lambda" block={false} /> candidates from <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} />,
-          keeps the best half, and nudges the distribution toward them. The rank-1 term
-          {" "}<LatexRenderer math="c_1 \mathbf{p}_c \mathbf{p}_c^\top" block={false} />{" "}
-          remembers <em className="text-slate-200 not-italic">which direction the mean traveled</em>;
-          the rank-<LatexRenderer math="\mu" block={false} /> term <LatexRenderer math="c_\mu \sum w_i \mathbf{y}_i \mathbf{y}_i^\top" block={false} />{" "}
+          each generation samples <LatexRenderer math="\lambda" block={false} /> candidates from{" "}
+          <LatexRenderer math="\mathcal{N}(m, \sigma^2 C)" block={false} />, keeps the best half,
+          and nudges the distribution toward them. The rank-1 term{" "}
+          <LatexRenderer math="c_1 \mathbf{p}_c \mathbf{p}_c^\top" block={false} /> remembers{" "}
+          <em className="text-slate-200 not-italic">which direction the mean traveled</em>; the
+          rank-
+          <LatexRenderer math="\mu" block={false} /> term{" "}
+          <LatexRenderer math="c_\mu \sum w_i \mathbf{y}_i \mathbf{y}_i^\top" block={false} />{" "}
           reshapes the ellipse around the elite cloud itself. Current landscape:{" "}
           <span className="text-slate-200">{currentLandscape.blurb}</span>
         </div>
@@ -589,5 +731,12 @@ function LossSparkline({ data, cursor }: { data: number[]; cursor: number }) {
     }
   }, [data, cursor]);
 
-  return <canvas ref={ref} style={{ width: "100%", height: 96 }} className="block" aria-label="Best fitness per generation, log scale" />;
+  return (
+    <canvas
+      ref={ref}
+      style={{ width: "100%", height: 96 }}
+      className="block"
+      aria-label="Best fitness per generation, log scale"
+    />
+  );
 }

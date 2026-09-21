@@ -1,13 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import {
-  ContactGraph,
-  type RigidBody,
-} from "../app/lib/contactGraph";
+import { ContactGraph, type RigidBody } from "../app/lib/contactGraph";
 import {
   buildContactConstraints,
+  DEFAULT_LCP_CONFIG,
   solveLCP,
   stepPhysicsWorld,
-  DEFAULT_LCP_CONFIG,
 } from "../app/lib/lcpSolver";
 
 describe("Sequential Impulse / Projected Gauss-Seidel (PGS) LCP Solver", () => {
@@ -16,7 +13,7 @@ describe("Sequential Impulse / Projected Gauss-Seidel (PGS) LCP Solver", () => {
     pos: [number, number, number],
     vel: [number, number, number] = [0, 0, 0],
     r: number = 0.5,
-    mass: number = 1.0
+    mass: number = 1.0,
   ): RigidBody => ({
     id,
     isStatic: false,

@@ -56,8 +56,7 @@ const READABLE_FILE_FORMAT_VERSIONS = new Set([3, 4, 5]);
 const HEADER_BYTES = 32;
 const MAX_COEFFICIENTS = 65_535;
 const MAX_EXPERIMENT_BYTES = 16_384;
-const MAX_PAYLOAD_BYTES =
-  HEADER_BYTES + 4 * 255 + MAX_EXPERIMENT_BYTES + MAX_COEFFICIENTS * 8;
+const MAX_PAYLOAD_BYTES = HEADER_BYTES + 4 * 255 + MAX_EXPERIMENT_BYTES + MAX_COEFFICIENTS * 8;
 export const MAX_POLICY_FILE_BYTES = 2_000_000;
 
 export interface SharedG1Experiment {
@@ -130,9 +129,7 @@ function textBytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
 
-export function validatePolicyMetadata(
-  value: unknown,
-): asserts value is SharedPolicyMeta {
+export function validatePolicyMetadata(value: unknown): asserts value is SharedPolicyMeta {
   if (value === null || typeof value !== "object") {
     throw new Error("policy share: invalid metadata");
   }
@@ -155,19 +152,11 @@ export function validatePolicyMetadata(
     ["challenge", meta.challenge],
     ["optimizer family", meta.family],
   ] as const) {
-    if (
-      typeof value !== "string" ||
-      !value.trim() ||
-      textBytes(value).length > 255
-    ) {
+    if (typeof value !== "string" || !value.trim() || textBytes(value).length > 255) {
       throw new Error(`policy share: invalid ${field}`);
     }
   }
-  if (
-    !Number.isInteger(meta.generation) ||
-    meta.generation < 0 ||
-    meta.generation > 0xffff_ffff
-  ) {
+  if (!Number.isInteger(meta.generation) || meta.generation < 0 || meta.generation > 0xffff_ffff) {
     throw new Error("policy share: invalid generation");
   }
   if (!Number.isFinite(meta.sigma) || meta.sigma <= 0) {
@@ -208,10 +197,7 @@ function validatePolicy(policy: Float64Array): void {
 }
 
 /** Store original float64 bits, without a baseline or a rounding operation. */
-export function encodeSharedPolicy(
-  policy: Float64Array,
-  meta: SharedPolicyMeta,
-): Uint8Array {
+export function encodeSharedPolicy(policy: Float64Array, meta: SharedPolicyMeta): Uint8Array {
   validatePolicy(policy);
   validatePolicyMetadata(meta);
 
@@ -227,10 +213,7 @@ export function encodeSharedPolicy(
   }
   // Lengths live in the header, so the strings themselves carry no prefix.
   const stringBytes =
-    kernelBytes.length +
-    taskBytes.length +
-    challengeBytes.length +
-    familyBytes.length;
+    kernelBytes.length + taskBytes.length + challengeBytes.length + familyBytes.length;
 
   const bytes = new Uint8Array(
     HEADER_BYTES + stringBytes + experimentBytes.length + policy.length * 8,
@@ -262,10 +245,7 @@ export function encodeSharedPolicy(
 }
 
 /** Read a policy without depending on the recipient's curriculum baseline. */
-export function decodeSharedPolicy(
-  bytes: Uint8Array,
-  expectedLength: number,
-): SharedPolicy {
+export function decodeSharedPolicy(bytes: Uint8Array, expectedLength: number): SharedPolicy {
   if (bytes.length > MAX_PAYLOAD_BYTES) {
     throw new Error("policy share: payload is too large");
   }
@@ -291,23 +271,12 @@ export function decodeSharedPolicy(
   const generation = view.getUint32(8, true);
   const sigma = view.getFloat64(12, true);
   const experimentLength = view.getUint32(20, true);
-  if (
-    experimentLength > MAX_EXPERIMENT_BYTES ||
-    view.getUint32(28, true) !== 0
-  ) {
+  if (experimentLength > MAX_EXPERIMENT_BYTES || view.getUint32(28, true) !== 0) {
     throw new Error("policy share: unsupported header flags");
   }
-  const lengths = [
-    view.getUint8(24),
-    view.getUint8(25),
-    view.getUint8(26),
-    view.getUint8(27),
-  ];
+  const lengths = [view.getUint8(24), view.getUint8(25), view.getUint8(26), view.getUint8(27)];
   const stringTotal = lengths.reduce((sum, value) => sum + value, 0);
-  if (
-    bytes.length !==
-    HEADER_BYTES + stringTotal + experimentLength + count * 8
-  ) {
+  if (bytes.length !== HEADER_BYTES + stringTotal + experimentLength + count * 8) {
     throw new Error("policy share: payload length does not match its header");
   }
 
@@ -319,9 +288,7 @@ export function decodeSharedPolicy(
     return value;
   });
   const experiment: unknown = experimentLength
-    ? JSON.parse(
-        decoder.decode(bytes.subarray(cursor, cursor + experimentLength)),
-      )
+    ? JSON.parse(decoder.decode(bytes.subarray(cursor, cursor + experimentLength)))
     : undefined;
   cursor += experimentLength;
 
@@ -350,10 +317,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
   for (let index = 0; index < bytes.length; index += CHUNK) {
     binary += String.fromCharCode(...bytes.subarray(index, index + CHUNK));
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function base64UrlDecode(text: string): Uint8Array {
@@ -383,9 +347,7 @@ async function pipeBytes(
 ): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart])
     .stream()
-    .pipeThrough(
-      new (Transform as typeof CompressionStream)(mode as CompressionFormat),
-    );
+    .pipeThrough(new (Transform as typeof CompressionStream)(mode as CompressionFormat));
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
@@ -421,9 +383,7 @@ export async function encodePolicyFragment(
 ): Promise<string> {
   const raw = encodeSharedPolicy(policy, meta);
   if (typeof CompressionStream === "undefined") return base64UrlEncode(raw);
-  return base64UrlEncode(
-    await pipeBytes(raw, CompressionStream, "deflate-raw"),
-  );
+  return base64UrlEncode(await pipeBytes(raw, CompressionStream, "deflate-raw"));
 }
 
 /**
@@ -444,10 +404,7 @@ export async function decodePolicyFragment(
       "This share link is not readable. Some chat apps shorten long links — ask the sender for the full one.",
     );
   }
-  if (
-    bytes.length >= 4 &&
-    new DataView(bytes.buffer).getUint32(0, true) === POLICY_MAGIC
-  ) {
+  if (bytes.length >= 4 && new DataView(bytes.buffer).getUint32(0, true) === POLICY_MAGIC) {
     return decodeSharedPolicy(bytes, expectedLength);
   }
   if (typeof DecompressionStream === "undefined") {
@@ -474,11 +431,7 @@ export async function decodePolicyFragment(
 }
 
 /** Build the shareable URL for a policy fragment. */
-export function policyShareUrl(
-  origin: string,
-  pathname: string,
-  fragment: string,
-): string {
+export function policyShareUrl(origin: string, pathname: string, fragment: string): string {
   return `${origin}${pathname}#zpolicy=${fragment}`;
 }
 
@@ -503,17 +456,12 @@ export function policyFileContents(
     exportedAt: new Date().toISOString(),
     ...meta,
     measured,
-    policy: Array.from(policy, (value) =>
-      Object.is(value, -0) ? "-0" : value,
-    ),
+    policy: Array.from(policy, (value) => (Object.is(value, -0) ? "-0" : value)),
   };
 }
 
 /** Read a policy file back, refusing anything that is not one. */
-export function policyFromFileContents(
-  text: string,
-  expectedLength: number,
-): SharedPolicy {
+export function policyFromFileContents(text: string, expectedLength: number): SharedPolicy {
   if (text.length > MAX_POLICY_FILE_BYTES) {
     throw new Error("That policy file is too large.");
   }
@@ -540,13 +488,10 @@ export function policyFromFileContents(
   }
   if (
     !file.policy.every(
-      (value) =>
-        value === "-0" || (typeof value === "number" && Number.isFinite(value)),
+      (value) => value === "-0" || (typeof value === "number" && Number.isFinite(value)),
     )
   ) {
-    throw new Error(
-      "That policy file contains a coefficient that is not a finite number.",
-    );
+    throw new Error("That policy file contains a coefficient that is not a finite number.");
   }
   if (!READABLE_FILE_FORMAT_VERSIONS.has(file.formatVersion as number)) {
     throw new Error(
@@ -555,9 +500,7 @@ export function policyFromFileContents(
   }
   const coefficients = file.policy;
   validatePolicyMetadata(file);
-  const policy = Float64Array.from(coefficients, (value) =>
-    value === "-0" ? -0 : value,
-  );
+  const policy = Float64Array.from(coefficients, (value) => (value === "-0" ? -0 : value));
   validatePolicy(policy);
   return { ...(file as SharedPolicyMeta), policy };
 }
@@ -590,9 +533,7 @@ export interface SharedResidual {
 
 function encodeSharedResidual(residual: SharedResidual): Uint8Array {
   validateResidual(residual);
-  const bytes = new Uint8Array(
-    RESIDUAL_HEADER_BYTES + residual.head.length * 4,
-  );
+  const bytes = new Uint8Array(RESIDUAL_HEADER_BYTES + residual.head.length * 4);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, RESIDUAL_MAGIC, true);
   view.setUint32(4, RESIDUAL_VERSION, true);
@@ -615,9 +556,7 @@ function validateResidual(residual: SharedResidual): void {
     residual.head.length !== RESIDUAL_HEAD_LENGTH ||
     !residual.head.every((value) => Number.isFinite(Math.fround(value)))
   ) {
-    throw new Error(
-      "This shared policy must contain 960 finite model parameters.",
-    );
+    throw new Error("This shared policy must contain 960 finite model parameters.");
   }
   if (
     !Number.isFinite(residual.objective) ||
@@ -645,9 +584,7 @@ function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
   if (!condition) throw new Error("This shared policy names no condition.");
   const length = view.getUint32(12, true);
   if (length !== RESIDUAL_HEAD_LENGTH) {
-    throw new Error(
-      "This shared policy must contain 960 finite model parameters.",
-    );
+    throw new Error("This shared policy must contain 960 finite model parameters.");
   }
   if (bytes.length !== RESIDUAL_HEADER_BYTES + length * 4) {
     // The usual cause is a chat client truncating a long URL, not corruption.
@@ -671,25 +608,18 @@ function decodeSharedResidual(bytes: Uint8Array): SharedResidual {
 }
 
 /** The `zresidual` fragment value: deflate-raw inside base64url. */
-export async function encodeResidualFragment(
-  residual: SharedResidual,
-): Promise<string> {
+export async function encodeResidualFragment(residual: SharedResidual): Promise<string> {
   const raw = encodeSharedResidual(residual);
   if (typeof CompressionStream === "undefined") return base64UrlEncode(raw);
-  return base64UrlEncode(
-    await pipeBytes(raw, CompressionStream, "deflate-raw"),
-  );
+  return base64UrlEncode(await pipeBytes(raw, CompressionStream, "deflate-raw"));
 }
 
 /** Read a `zresidual` fragment value. */
-export async function decodeResidualFragment(
-  fragment: string,
-): Promise<SharedResidual> {
+export async function decodeResidualFragment(fragment: string): Promise<SharedResidual> {
   const bytes = base64UrlDecode(fragment);
   const looksRaw =
     bytes.length >= 4 &&
-    new DataView(bytes.buffer, bytes.byteOffset).getUint32(0, true) ===
-      RESIDUAL_MAGIC;
+    new DataView(bytes.buffer, bytes.byteOffset).getUint32(0, true) === RESIDUAL_MAGIC;
   if (looksRaw || typeof DecompressionStream === "undefined") {
     return decodeSharedResidual(bytes);
   }
@@ -704,11 +634,7 @@ export async function decodeResidualFragment(
   return decodeSharedResidual(inflated);
 }
 
-export function residualShareUrl(
-  origin: string,
-  pathname: string,
-  fragment: string,
-): string {
+export function residualShareUrl(origin: string, pathname: string, fragment: string): string {
   return `${origin}${pathname}#zresidual=${fragment}`;
 }
 

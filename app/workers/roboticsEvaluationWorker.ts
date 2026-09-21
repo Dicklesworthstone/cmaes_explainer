@@ -36,7 +36,7 @@ let armEvaluator: FrankenSimHouseholdManipulationEvaluator | null = null;
 
 function requireOk<T>(
   result: { ok: T } | { refusal: { name: string; detail: number | null } },
-  label: string
+  label: string,
 ): T {
   if ("ok" in result) return result.ok;
   const suffix = result.refusal.detail === null ? "" : ` (detail ${result.refusal.detail})`;
@@ -55,13 +55,13 @@ async function evaluate(request: EvaluationRequest): Promise<Float64Array> {
   if (request.model === "g1") {
     g1Evaluator ??= requireOk(
       await createFrankenSimG1WalkingEvaluator(request.config),
-      "parallel G1 admission"
+      "parallel G1 admission",
     );
     return requireOk(g1Evaluator.evaluatePopulation(request.policies), "parallel G1 evaluation");
   }
   armEvaluator ??= requireOk(
     await createFrankenSimHouseholdManipulationEvaluator(request.config),
-    "parallel arm admission"
+    "parallel arm admission",
   );
   return requireOk(armEvaluator.evaluatePopulation(request.policies), "parallel arm evaluation");
 }
@@ -70,7 +70,11 @@ worker.onmessage = (event: MessageEvent<EvaluationRequest>) => {
   const request = event.data;
   void evaluate(request).then(
     (objectives) => {
-      const response: EvaluationResponse = { type: "result", requestId: request.requestId, objectives };
+      const response: EvaluationResponse = {
+        type: "result",
+        requestId: request.requestId,
+        objectives,
+      };
       worker.postMessage(response, [objectives.buffer]);
     },
     (error: unknown) => {
@@ -80,8 +84,6 @@ worker.onmessage = (event: MessageEvent<EvaluationRequest>) => {
         message: error instanceof Error ? error.message : String(error),
       };
       worker.postMessage(response);
-    }
+    },
   );
 };
-
-export {};

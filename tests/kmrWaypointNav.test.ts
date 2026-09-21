@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 import {
   createKmrPlanarSdf,
   pathIsCollisionFree,
   planWaypointPath,
 } from "../app/lib/kmrWaypointNav";
-import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 
 const CLEARANCE_RADIUS = 0.18;
 
@@ -27,20 +27,12 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
   });
 
   test("empty scene: the path is collision-free", () => {
-    const plan = planWaypointPath(
-      { x: 0, y: 0, theta: 0 },
-      { x: 2, y: 2 },
-      [],
-    );
+    const plan = planWaypointPath({ x: 0, y: 0, theta: 0 }, { x: 2, y: 2 }, []);
     expect(pathIsCollisionFree(plan.path, [], CLEARANCE_RADIUS)).toBe(true);
   });
 
   test("a single wall in the path: value-policy extraction routes around it", () => {
-    const plan = planWaypointPath(
-      { x: 0, y: 0, theta: 0 },
-      { x: 2, y: 0 },
-      [wall3D],
-    );
+    const plan = planWaypointPath({ x: 0, y: 0, theta: 0 }, { x: 2, y: 0 }, [wall3D]);
     expect(pathIsCollisionFree(plan.path, [wall3D], CLEARANCE_RADIUS)).toBe(true);
     expect(plan.path.points.some(([, y]) => Math.abs(y) > 2.0)).toBe(true);
     expect(plan.path.totalDistanceMeters).toBeGreaterThan(2.0);
@@ -71,34 +63,20 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
       halfExtents: [4, 1, 0.1],
       rotationYawRad: 0,
     };
-    const plan = planWaypointPath(
-      { x: 0, y: 0, theta: 0 },
-      { x: 1, y: 0 },
-      [],
-    );
-    expect(pathIsCollisionFree(plan.path, [offWall], CLEARANCE_RADIUS)).toBe(
-      true,
-    );
+    const plan = planWaypointPath({ x: 0, y: 0, theta: 0 }, { x: 1, y: 0 }, []);
+    expect(pathIsCollisionFree(plan.path, [offWall], CLEARANCE_RADIUS)).toBe(true);
   });
 
   test("rejects goals that overlap an obstacle instead of animating through it", () => {
-    expect(() =>
-      planWaypointPath(
-        { x: 0, y: 0, theta: 0 },
-        { x: 1, y: 0 },
-        [wall3D],
-      ),
-    ).toThrow(/goal does not clear/);
+    expect(() => planWaypointPath({ x: 0, y: 0, theta: 0 }, { x: 1, y: 0 }, [wall3D])).toThrow(
+      /goal does not clear/,
+    );
   });
 
   test("rejects an out-of-bounds start instead of clamping it to a different grid cell", () => {
-    expect(() =>
-      planWaypointPath(
-        { x: -5, y: 0, theta: 0 },
-        { x: 1, y: 0 },
-        [],
-      ),
-    ).toThrow(/start lies outside/);
+    expect(() => planWaypointPath({ x: -5, y: 0, theta: 0 }, { x: 1, y: 0 }, [])).toThrow(
+      /start lies outside/,
+    );
   });
 
   test("rejects empty or non-finite externally supplied paths", () => {

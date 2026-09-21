@@ -152,7 +152,12 @@ export function filterCorridorVelocityQP(
     const proj = projectPointOntoSegment(state.position, c.start, c.end);
     // Active only when robot is physically inside the corridor length span [0, 1]
     const thresholdSq = (c.halfWidth * 2.5) ** 2;
-    if (proj.t > 0.01 && proj.t < 0.99 && proj.distSq < thresholdSq && proj.distSq < minDistanceSq) {
+    if (
+      proj.t > 0.01 &&
+      proj.t < 0.99 &&
+      proj.distSq < thresholdSq &&
+      proj.distSq < minDistanceSq
+    ) {
       minDistanceSq = proj.distSq;
       activeCorridor = c;
     }
@@ -169,13 +174,11 @@ export function filterCorridorVelocityQP(
     };
   }
 
-  const { hLateral, gradLateral, hOrientation } = evaluateSscbfBarrier(
-    state,
-    activeCorridor,
-  );
+  const { hLateral, gradLateral, hOrientation } = evaluateSscbfBarrier(state, activeCorridor);
 
   // CBF safety condition: dot(gradLateral, u) + gamma * hLateral >= 0
-  const cbfConstraint = gradLateral[0] * nominalVelocity[0] + gradLateral[1] * nominalVelocity[1] + gamma * hLateral;
+  const cbfConstraint =
+    gradLateral[0] * nominalVelocity[0] + gradLateral[1] * nominalVelocity[1] + gamma * hLateral;
 
   let safeVx = nominalVelocity[0];
   let safeVz = nominalVelocity[1];

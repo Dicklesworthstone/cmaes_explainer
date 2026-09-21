@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   BrainCircuit,
   ChartNoAxesCombined,
@@ -9,17 +8,13 @@ import {
   Network,
   Play,
 } from "lucide-react";
+import { useState } from "react";
 import { G1ResidualTrainer } from "./G1ResidualTrainer";
 import { HpoTrainer } from "./HpoTrainer";
 import { PolicyAblationComparison } from "./PolicyAblationComparison";
 import { RealPhysicsResidual } from "./RealPhysicsResidual";
 
-type ResearchPanel =
-  | "policies"
-  | "residual-receipt"
-  | "residual-trainer"
-  | "trainer"
-  | "frontier";
+type ResearchPanel = "policies" | "residual-receipt" | "residual-trainer" | "trainer" | "frontier";
 
 const PANELS: Array<{
   id: ResearchPanel;
@@ -118,10 +113,9 @@ export function FrankenRobotsResearchAnnex() {
       {active === "residual-receipt" ? (
         <div className="mt-6">
           <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-300">
-            This is the original humanoid page&apos;s source-bound comparison:
-            the transformer residual and tuned controller are both re-scored by
-            the same articulated G1 physics owner, with the committed receipt
-            kept beside the weights.
+            This is the original humanoid page&apos;s source-bound comparison: the transformer
+            residual and tuned controller are both re-scored by the same articulated G1 physics
+            owner, with the committed receipt kept beside the weights.
           </p>
           <RealPhysicsResidual />
         </div>
@@ -129,11 +123,10 @@ export function FrankenRobotsResearchAnnex() {
       {active === "residual-trainer" ? (
         <div className="mt-6">
           <p className="mb-4 max-w-4xl text-sm leading-6 text-slate-300">
-            Run the original page&apos;s live 960-parameter residual search on
-            this device. Runs persist separately by condition; you can resume a
-            checkpoint, start from the shipped policy, import or download
-            weights, and share a policy in a URL fragment that never reaches a
-            server.
+            Run the original page&apos;s live 960-parameter residual search on this device. Runs
+            persist separately by condition; you can resume a checkpoint, start from the shipped
+            policy, import or download weights, and share a policy in a URL fragment that never
+            reaches a server.
           </p>
           <G1ResidualTrainer />
         </div>
@@ -146,24 +139,30 @@ export function FrankenRobotsResearchAnnex() {
       {active === "frontier" ? (
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           <article className="rounded-2xl border border-emerald-300/20 bg-emerald-400/[0.07] p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Current upstream source</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+              Current upstream source
+            </p>
             <h3 className="mt-2 font-bold text-white">Many-objective search has moved forward</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">
               FrankenSim now contains deterministic NSGA-II/III and MOEA/D, versioned mating and
               normalization policies, reference-direction survival, bounded Pareto archives,
               hypervolume accounting, and production WFG1–WFG9 evaluators with replay-visible
-              identities. That opens a future robot lab where stability, speed, work, clearance,
-              and impact are explored as an auditable frontier instead of collapsed prematurely.
+              identities. That opens a future robot lab where stability, speed, work, clearance, and
+              impact are explored as an auditable frontier instead of collapsed prematurely.
             </p>
           </article>
           <article className="rounded-2xl border border-amber-300/20 bg-amber-400/[0.07] p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">Honest runtime boundary</p>
-            <h3 className="mt-2 font-bold text-white">Not mislabeled as today&apos;s robot owner</h3>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
+              Honest runtime boundary
+            </p>
+            <h3 className="mt-2 font-bold text-white">
+              Not mislabeled as today&apos;s robot owner
+            </h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              This app&apos;s physical rollouts still execute the pinned robotics owner package.
-              The newer many-objective APIs remain upstream Rust source until a versioned browser
-              ABI, parity battery, and robot-specific receipt contract are shipped. The app shows
-              that frontier without pretending it already powered the animation.
+              This app&apos;s physical rollouts still execute the pinned robotics owner package. The
+              newer many-objective APIs remain upstream Rust source until a versioned browser ABI,
+              parity battery, and robot-specific receipt contract are shipped. The app shows that
+              frontier without pretending it already powered the animation.
             </p>
           </article>
         </div>

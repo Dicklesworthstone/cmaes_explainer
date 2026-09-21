@@ -1,132 +1,122 @@
 "use client";
 
+import { FlyControls, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
-  OrbitControls,
-  PerspectiveCamera,
-  FlyControls,
-} from "@react-three/drei";
+  Activity,
+  BookOpen,
+  Bot,
+  Boxes,
+  Camera,
+  CheckCircle2,
+  Compass,
+  Cpu,
+  Download,
+  Eye,
+  Gauge,
+  Home,
+  Pause,
+  Play,
+  RotateCcw,
+  Shield,
+  ShieldCheck,
+  SkipBack,
+  Sliders,
+  Sparkles,
+  Square,
+  TreePine,
+  Volume2,
+  VolumeX,
+  Wrench,
+} from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import {
   advanceTracePlayback,
   clampTracePlaybackIndex,
   useTracePlaybackPreference,
 } from "../hooks/usePrefersReducedMotion";
-import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
-import { buildFurniture } from "../lib/houseFurniture";
-import { ArmLearningLedger } from "./ArmLearningLedger";
-import { PolicyExchange } from "./PolicyExchange";
-import {
-  appendArmLedgerPoint,
-  armLedgerPoint,
-  type ArmLedgerPoint,
-} from "../lib/armLearningLedger";
-import {
-  decodePolicyFragment,
-  policyFragmentFromHash,
-  type SharedPolicy,
-  type SharedPolicyMeta,
-  type SharedArmExperiment,
-} from "../lib/g1PolicyShare";
-import { armRestoreSharedExperiment } from "../lib/g1OptimizationProtocol";
-import {
-  describeAge,
-  isResumable,
-  loadTrainingSession,
-  saveTrainingSession,
-} from "../lib/g1TrainingSession";
-import {
-  ARM_TABLE_CENTER_X,
-  ARM_TABLE_DEPTH,
-  ARM_TABLE_THICKNESS,
-  ARM_TABLE_WIDTH,
-  armCounterSlabObstacle,
-  armStageObstacles,
-  armStageFurniture,
-  armWorkbenchObstacles,
-  createHouseNavigationScene,
-  conservativeSegmentClearanceToOBB,
-  distanceToOBB,
-  resolveCameraBoom,
-  type MultiObstacleSceneConfig,
-  type OrientedBoundingBox,
-} from "../lib/houseMultiObstacleKernel";
-import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
-import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
-import {
-  BookOpen,
-  Bot,
-  Boxes,
-  CheckCircle2,
-  Cpu,
-  Gauge,
-  Home,
-  Play,
-  RotateCcw,
-  ShieldCheck,
-  Sparkles,
-  Square,
-  TreePine,
-  Eye,
-  Camera,
-  Compass,
-  Activity,
-  Sliders,
-  Shield,
-  Pause,
-  SkipBack,
-  Volume2,
-  VolumeX,
-  Wrench,
-  Download,
-} from "lucide-react";
-import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
 import {
-  ArmGraspMicroscopeOverlay,
-  ArmGraspMicroscopeHUD,
-  ArmJointKinematicsStrip,
-} from "./ArmGraspMicroscope";
+  ARM_LINK_RADII,
+  type ArmSelfContact,
+  detectArmSelfCollisions,
+  resolveRenderedGripperContactGeometry,
+} from "../lib/armContactPhysics";
 import {
+  clampArmTargetPosition,
+  computeFerrariCannyGWS,
+  computeKukaFK,
+  iiwaJointAnglesFromOwnerPoses,
+  isTargetKukaReachable,
+  MANIPULABLE_OBJECT_PRESETS,
+  solveKukaIK,
+} from "../lib/armInverseKinematics";
+import {
+  type ArmLedgerPoint,
+  appendArmLedgerPoint,
+  armLedgerPoint,
+} from "../lib/armLearningLedger";
+import {
+  type FrankenRobotsPlaybackSpeed,
   installFrankenRobotsNativeCommandHandler,
   reportFrankenRobotsEngineState,
   reportFrankenRobotsTraceState,
-  type FrankenRobotsPlaybackSpeed,
 } from "../lib/frankenrobotsBridge";
-import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
-  MANIPULABLE_OBJECT_PRESETS,
-  computeFerrariCannyGWS,
-  solveKukaIK,
-  iiwaJointAnglesFromOwnerPoses,
-  computeKukaFK,
-  clampArmTargetPosition,
-  isTargetKukaReachable,
-} from "../lib/armInverseKinematics";
-import {
-  ARM_LINK_RADII,
-  detectArmSelfCollisions,
-  resolveRenderedGripperContactGeometry,
-  type ArmSelfContact,
-} from "../lib/armContactPhysics";
-import {
+  type CmaFamily,
   FRANKENSIM_OWNER_KERNEL_VERSION,
   HOUSEHOLD_PLACEMENT_CLEARANCE_METERS,
-  type CmaFamily,
   type HouseholdManipulationAdmission,
   type HouseholdManipulationTask,
   type HouseholdManipulationTraceReceipt,
   type HouseholdManipulationTraceSample,
   type HouseholdRobotPose,
 } from "../lib/frankensimCmaes";
+import { armRestoreSharedExperiment } from "../lib/g1OptimizationProtocol";
+import {
+  decodePolicyFragment,
+  policyFragmentFromHash,
+  type SharedArmExperiment,
+  type SharedPolicy,
+  type SharedPolicyMeta,
+} from "../lib/g1PolicyShare";
+import {
+  describeAge,
+  isResumable,
+  loadTrainingSession,
+  saveTrainingSession,
+} from "../lib/g1TrainingSession";
+import { buildFurniture } from "../lib/houseFurniture";
+import {
+  ARM_TABLE_CENTER_X,
+  ARM_TABLE_DEPTH,
+  ARM_TABLE_THICKNESS,
+  ARM_TABLE_WIDTH,
+  armCounterSlabObstacle,
+  armStageFurniture,
+  armStageObstacles,
+  armWorkbenchObstacles,
+  conservativeSegmentClearanceToOBB,
+  createHouseNavigationScene,
+  distanceToOBB,
+  type MultiObstacleSceneConfig,
+  type OrientedBoundingBox,
+  resolveCameraBoom,
+} from "../lib/houseMultiObstacleKernel";
+import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
+import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
+import { robotAudio } from "../lib/robotAudioSynthesizer";
+import {
+  ArmGraspMicroscopeHUD,
+  ArmGraspMicroscopeOverlay,
+  ArmJointKinematicsStrip,
+} from "./ArmGraspMicroscope";
+import { ArmLearningLedger } from "./ArmLearningLedger";
+import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
+import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
+import { PolicyExchange } from "./PolicyExchange";
+
 type ArmTraceOrigin = CmaFamily | "curriculum";
 
 type ArmPriorReplay = {
@@ -269,10 +259,7 @@ function number(value: number, digits = 3): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-function applyOwnerPose(
-  object: THREE.Object3D,
-  pose: HouseholdRobotPose,
-): void {
+function applyOwnerPose(object: THREE.Object3D, pose: HouseholdRobotPose): void {
   object.position.set(pose.position[0], pose.position[2], -pose.position[1]);
   object.quaternion.set(
     pose.quaternionWxyz[1],
@@ -282,9 +269,7 @@ function applyOwnerPose(
   );
 }
 
-function ownerPositionToThree(
-  position: readonly number[],
-): [number, number, number] {
+function ownerPositionToThree(position: readonly number[]): [number, number, number] {
   return [position[0], position[2], -position[1]];
 }
 
@@ -311,9 +296,7 @@ function HouseholdObject({
     return (
       <group>
         <mesh castShadow={!ghost} receiveShadow>
-          <cylinderGeometry
-            args={[radius * 0.9, radius, dimensions[2], 28, 1, false]}
-          />
+          <cylinderGeometry args={[radius * 0.9, radius, dimensions[2], 28, 1, false]} />
           <meshPhysicalMaterial
             color={material}
             roughness={0.2}
@@ -325,11 +308,7 @@ function HouseholdObject({
         </mesh>
         <mesh position={[radius * 1.05, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[radius * 0.55, radius * 0.16, 10, 24]} />
-          <meshStandardMaterial
-            color={material}
-            transparent={ghost}
-            opacity={opacity}
-          />
+          <meshStandardMaterial color={material} transparent={ghost} opacity={opacity} />
         </mesh>
       </group>
     );
@@ -350,18 +329,9 @@ function HouseholdObject({
         </mesh>
         {!ghost
           ? [-0.045, -0.015, 0.015, 0.045].map((z, index) => (
-              <mesh
-                key={z}
-                position={[
-                  index % 2 === 0 ? -0.014 : 0.014,
-                  dimensions[2] * 0.52,
-                  z,
-                ]}
-              >
+              <mesh key={z} position={[index % 2 === 0 ? -0.014 : 0.014, dimensions[2] * 0.52, z]}>
                 <cylinderGeometry args={[0.006, 0.006, 0.004, 12]} />
-                <meshStandardMaterial
-                  color={index === 0 ? "#ef4444" : "#94a3b8"}
-                />
+                <meshStandardMaterial color={index === 0 ? "#ef4444" : "#94a3b8"} />
               </mesh>
             ))
           : null}
@@ -376,12 +346,7 @@ function HouseholdObject({
         castShadow={!ghost}
       >
         <cylinderGeometry
-          args={[
-            dimensions[0] * 0.18,
-            dimensions[0] * 0.22,
-            dimensions[1] * 0.58,
-            18,
-          ]}
+          args={[dimensions[0] * 0.18, dimensions[0] * 0.22, dimensions[1] * 0.58, 18]}
         />
         <meshStandardMaterial
           color={ghost ? material : "#78350f"}
@@ -408,11 +373,7 @@ function HouseholdObject({
   );
 }
 
-function ArmEnvironment({
-  admission,
-}: {
-  admission: HouseholdManipulationAdmission;
-}) {
+function ArmEnvironment({ admission }: { admission: HouseholdManipulationAdmission }) {
   const { task } = admission.config;
   const { scene } = admission;
   const supportY = scene.supportHeightMeters;
@@ -432,17 +393,17 @@ function ArmEnvironment({
           reaching over a low table. Drawn centred on the origin (as it was),
           the slab swallowed the base drum and the first two links, so the arm
           appeared to grow out of the tabletop. */}
-      <mesh position={[ARM_TABLE_CENTER_X, supportY - ARM_TABLE_THICKNESS / 2, 0]} receiveShadow castShadow>
+      <mesh
+        position={[ARM_TABLE_CENTER_X, supportY - ARM_TABLE_THICKNESS / 2, 0]}
+        receiveShadow
+        castShadow
+      >
         {/* Drawn from the same constants the owner is told about, so the
             surface on screen and the surface in the physics cannot drift. */}
         <boxGeometry args={[ARM_TABLE_WIDTH, ARM_TABLE_THICKNESS, ARM_TABLE_DEPTH]} />
         <meshStandardMaterial
           color={
-            task === "backyard-trowel"
-              ? "#60452f"
-              : task === "kitchen-mug"
-                ? "#263241"
-                : "#3f3344"
+            task === "backyard-trowel" ? "#60452f" : task === "kitchen-mug" ? "#263241" : "#3f3344"
           }
           roughness={0.72}
           metalness={0.08}
@@ -451,7 +412,10 @@ function ArmEnvironment({
 
       {task === "kitchen-mug" ? (
         <>
-          <mesh position={[ARM_TABLE_CENTER_X, supportY + 0.5, -ARM_TABLE_DEPTH / 2 + 0.035]} receiveShadow>
+          <mesh
+            position={[ARM_TABLE_CENTER_X, supportY + 0.5, -ARM_TABLE_DEPTH / 2 + 0.035]}
+            receiveShadow
+          >
             <boxGeometry args={[ARM_TABLE_WIDTH, 1.05, 0.07]} />
             <meshStandardMaterial color="#1d2a40" roughness={0.82} />
           </mesh>
@@ -483,42 +447,23 @@ function ArmEnvironment({
       )}
 
       <group position={goal}>
-        <HouseholdObject
-          task={task}
-          dimensions={scene.objectDimensionsMeters}
-          ghost
-        />
+        <HouseholdObject task={task} dimensions={scene.objectDimensionsMeters} ghost />
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, -0.5 * scene.objectDimensionsMeters[2], 0]}
         >
           <ringGeometry args={[0.075, 0.095, 32]} />
-          <meshBasicMaterial
-            color="#34d399"
-            transparent
-            opacity={0.75}
-            side={THREE.DoubleSide}
-          />
+          <meshBasicMaterial color="#34d399" transparent opacity={0.75} side={THREE.DoubleSide} />
         </mesh>
       </group>
 
       <mesh position={obstacle}>
         <boxGeometry args={obstacleSize} />
-        <meshBasicMaterial
-          color="#fb7185"
-          transparent
-          opacity={0.075}
-          depthWrite={false}
-        />
+        <meshBasicMaterial color="#fb7185" transparent opacity={0.075} depthWrite={false} />
       </mesh>
       <mesh position={obstacle}>
         <boxGeometry args={obstacleSize} />
-        <meshBasicMaterial
-          color="#fb7185"
-          transparent
-          opacity={0.42}
-          wireframe
-        />
+        <meshBasicMaterial color="#fb7185" transparent opacity={0.42} wireframe />
       </mesh>
     </group>
   );
@@ -569,30 +514,22 @@ function ArmRig({
   const sampleIndex = useRef(initialIndex);
   const appliedSeek = useRef({ trace, playbackSeek });
   const publishedSampleIndex = useRef(-1);
-  const [currentSample, setCurrentSample] =
-    useState<HouseholdManipulationTraceSample | null>(
-      () => trace.samples[initialIndex] ?? null,
-    );
+  const [currentSample, setCurrentSample] = useState<HouseholdManipulationTraceSample | null>(
+    () => trace.samples[initialIndex] ?? null,
+  );
   // Publish the actual owner link origins used by both the rig and its diagnostics.
-  const [renderedForOverlay, setRenderedForOverlay] = useState<
-    Array<[number, number, number]>
-  >([]);
+  const [renderedForOverlay, setRenderedForOverlay] = useState<Array<[number, number, number]>>([]);
   const selfContactKeyRef = useRef("");
   const selfHotLinksRef = useRef<Set<number>>(new Set());
   const publishedRenderIndex = useRef(-1);
-  const sampleTimes = useMemo(
-    () => trace.samples.map((sample) => sample.timeSeconds),
-    [trace],
-  );
+  const sampleTimes = useMemo(() => trace.samples.map((sample) => sample.timeSeconds), [trace]);
   useLayoutEffect(() => {
-    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek) return;
+    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek)
+      return;
     appliedSeek.current = { trace, playbackSeek };
-    const nextIndex = clampTracePlaybackIndex(
-      trace.samples.length,
-      playbackSeek.sampleIndex,
-    );
+    const nextIndex = clampTracePlaybackIndex(trace.samples.length, playbackSeek.sampleIndex);
     sampleIndex.current = nextIndex;
-    playbackSeconds.current = nextIndex === 0 ? 0 : trace.samples[nextIndex]?.timeSeconds ?? 0;
+    playbackSeconds.current = nextIndex === 0 ? 0 : (trace.samples[nextIndex]?.timeSeconds ?? 0);
     publishedSampleIndex.current = -1;
   }, [playbackSeek, trace]);
   useLayoutEffect(() => {
@@ -621,9 +558,7 @@ function ArmRig({
       {
         name: "obstacle",
         box: new THREE.Box3().setFromCenterAndSize(
-          new THREE.Vector3(
-            ...ownerPositionToThree(scene.obstacleCenterMeters),
-          ),
+          new THREE.Vector3(...ownerPositionToThree(scene.obstacleCenterMeters)),
           new THREE.Vector3(
             2 * scene.obstacleHalfExtentsMeters[0],
             2 * scene.obstacleHalfExtentsMeters[2],
@@ -646,10 +581,7 @@ function ArmRig({
   // their owner poses. The owner kernel is handed this same list.
   const multiObstacleScene = useMemo(
     () => ({
-      obstacles: armStageObstacles(
-        admission.scene.supportHeightMeters,
-        admission.config.task,
-      ),
+      obstacles: armStageObstacles(admission.scene.supportHeightMeters, admission.config.task),
     }),
     [admission],
   );
@@ -682,8 +614,7 @@ function ArmRig({
     );
     sampleIndex.current = next.sampleIndex;
     playbackSeconds.current = next.elapsedSeconds;
-    const sample: HouseholdManipulationTraceSample =
-      samples[sampleIndex.current];
+    const sample: HouseholdManipulationTraceSample = samples[sampleIndex.current];
     if (publishedSampleIndex.current !== sampleIndex.current) {
       publishedSampleIndex.current = sampleIndex.current;
       setCurrentSample(sample);
@@ -691,9 +622,7 @@ function ArmRig({
     }
     // Render the measured chain verbatim. Contact diagnostics can tint it,
     // but may not bend the links or relocate the object behind the receipt.
-    const renderedPositions = sample.linkPoses.map((pose) =>
-      ownerPositionToThree(pose.position),
-    );
+    const renderedPositions = sample.linkPoses.map((pose) => ownerPositionToThree(pose.position));
     for (let link = 0; link < sample.linkPoses.length; link++) {
       const pose = sample.linkPoses[link];
       const group = linkRefs.current[link];
@@ -708,8 +637,7 @@ function ArmRig({
       scratch.start.set(parent[0], parent[1], parent[2]);
       scratch.end.set(child[0], child[1], child[2]);
       const segmentRadius = 0.072 - (link - 1) * 0.004;
-      const requiredClearance =
-        segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS;
+      const requiredClearance = segmentRadius + ARM_LINK_CLEARANCE_MARGIN_METERS;
       const segmentLength = scratch.start.distanceTo(scratch.end);
       // A housing whose swept segment cannot be certified clear of an OBB
       // is flagged, not hidden: the previous behaviour deleted the cylinder
@@ -719,12 +647,10 @@ function ArmRig({
       const segmentCertified = multiObstacleScene.obstacles.every((obb) => {
         if (obb.exemptFromPenalty) return true;
         const endpointLowerBound =
-          Math.min(distanceToOBB(parent, obb), distanceToOBB(child, obb)) -
-          segmentLength * 0.5;
+          Math.min(distanceToOBB(parent, obb), distanceToOBB(child, obb)) - segmentLength * 0.5;
         return (
           endpointLowerBound >= requiredClearance ||
-          conservativeSegmentClearanceToOBB(parent, child, obb) >=
-            requiredClearance
+          conservativeSegmentClearanceToOBB(parent, child, obb) >= requiredClearance
         );
       });
       segment.visible = true;
@@ -735,9 +661,7 @@ function ArmRig({
       }
       scratch.direction.subVectors(scratch.end, scratch.start);
       const length = Math.max(0.025, scratch.direction.length());
-      scratch.midpoint
-        .addVectors(scratch.start, scratch.end)
-        .multiplyScalar(0.5);
+      scratch.midpoint.addVectors(scratch.start, scratch.end).multiplyScalar(0.5);
       scratch.quaternion.setFromUnitVectors(
         scratch.yAxis,
         scratch.direction.multiplyScalar(1 / length),
@@ -781,16 +705,12 @@ function ArmRig({
       objectHalfHeightM: admission.scene.objectDimensionsMeters[2] * 0.5,
     });
     if (wristHousingRef.current)
-      wristHousingRef.current.position.y =
-        gripperGeometry.wristHousingCenterOffsetM;
-    if (palmRef.current)
-      palmRef.current.position.y = gripperGeometry.palmCenterOffsetM;
+      wristHousingRef.current.position.y = gripperGeometry.wristHousingCenterOffsetM;
+    if (palmRef.current) palmRef.current.position.y = gripperGeometry.palmCenterOffsetM;
     if (leftFingerRef.current)
-      leftFingerRef.current.position.x =
-        -gripperGeometry.fingerCenterHalfWidthM;
+      leftFingerRef.current.position.x = -gripperGeometry.fingerCenterHalfWidthM;
     if (rightFingerRef.current)
-      rightFingerRef.current.position.x =
-        gripperGeometry.fingerCenterHalfWidthM;
+      rightFingerRef.current.position.x = gripperGeometry.fingerCenterHalfWidthM;
     if (contactRingRef.current) {
       const forceScale = 1 + Math.min(1.2, sample.gripNormalForceNewtons / 14);
       contactRingRef.current.scale.setScalar(forceScale);
@@ -798,9 +718,7 @@ function ArmRig({
     }
     if (contactMaterialRef.current) {
       contactMaterialRef.current.opacity = sample.grasped ? 0.95 : 0.45;
-      contactMaterialRef.current.color.setHex(
-        sample.grasped ? 0x34d399 : 0xfbbf24,
-      );
+      contactMaterialRef.current.color.setHex(sample.grasped ? 0x34d399 : 0xfbbf24);
     }
 
     let violatingLink = -1;
@@ -812,18 +730,11 @@ function ArmRig({
     // furniture pieces.
     let mobViolatingLink = -1;
     let mobVolume = "";
-    for (
-      let link = 0;
-      link < sample.linkPoses.length && mobViolatingLink < 0;
-      link++
-    ) {
+    for (let link = 0; link < sample.linkPoses.length && mobViolatingLink < 0; link++) {
       const p = sample.linkPoses[link].position;
       scratch.probe.set(p[0], p[2], -p[1]);
       for (const obb of multiObstacleScene.obstacles) {
-        const dist = distanceToOBB(
-          [scratch.probe.x, scratch.probe.y, scratch.probe.z],
-          obb,
-        );
+        const dist = distanceToOBB([scratch.probe.x, scratch.probe.y, scratch.probe.z], obb);
         if (dist <= 0.05) {
           mobViolatingLink = link;
           mobVolume = obb.name;
@@ -840,11 +751,7 @@ function ArmRig({
     // origin against the declared counter/wall/obstacle volumes. A hit tints
     // that link's meshes red until the set of violations changes.
     frameTick.current += 1;
-    for (
-      let link = 0;
-      link < sample.linkPoses.length && violatingLink < 0;
-      link++
-    ) {
+    for (let link = 0; link < sample.linkPoses.length && violatingLink < 0; link++) {
       const p = sample.linkPoses[link].position;
       scratch.probe.set(p[0], p[2], -p[1]);
       for (const { name, box } of boundaryBoxes) {
@@ -859,10 +766,7 @@ function ArmRig({
     // penetrates a declared boundary volume or takes part in a self-contact
     // pair; every other link is explicitly reset, so nothing stays red.
     const violationKey = `${violatingLink < 0 ? "" : `${violatingLink}:${violatingVolume}`}|${selfContactKeyRef.current}`;
-    if (
-      violationKey !== boundaryStateRef.current.key &&
-      frameTick.current % 6 === 0
-    ) {
+    if (violationKey !== boundaryStateRef.current.key && frameTick.current % 6 === 0) {
       boundaryStateRef.current.key = violationKey;
       for (let link = 0; link < sample.linkPoses.length; link++) {
         const group = linkRefs.current[link];
@@ -871,8 +775,7 @@ function ArmRig({
         group.traverse((child) => {
           const mesh = child as THREE.Mesh;
           const mat = mesh.material as THREE.MeshStandardMaterial | undefined;
-          if (mat && "emissive" in mat)
-            mat.emissive.setHex(hot ? 0xdc2626 : 0x000000);
+          if (mat && "emissive" in mat) mat.emissive.setHex(hot ? 0xdc2626 : 0x000000);
         });
       }
     }
@@ -893,9 +796,7 @@ function ArmRig({
           castShadow
           receiveShadow
         >
-          <cylinderGeometry
-            args={[0.07 - index * 0.004, 0.072 - index * 0.004, 1, 28]}
-          />
+          <cylinderGeometry args={[0.07 - index * 0.004, 0.072 - index * 0.004, 1, 28]} />
           <meshPhysicalMaterial
             color="#c9ced4"
             roughness={0.28}
@@ -916,11 +817,7 @@ function ArmRig({
             <>
               <mesh position={[0, -0.055, 0]} castShadow receiveShadow>
                 <cylinderGeometry args={[0.14, 0.16, 0.11, 32]} />
-                <meshStandardMaterial
-                  color="#1e293b"
-                  roughness={0.32}
-                  metalness={0.78}
-                />
+                <meshStandardMaterial color="#1e293b" roughness={0.32} metalness={0.78} />
               </mesh>
               <mesh position={[0, 0.018, 0]} castShadow>
                 <cylinderGeometry args={[0.105, 0.125, 0.05, 32]} />
@@ -938,28 +835,13 @@ function ArmRig({
                   silver end-ring, replacing the generic sphere. */}
               <mesh castShadow>
                 <cylinderGeometry
-                  args={[
-                    index === 7 ? 0.058 : 0.068,
-                    index === 7 ? 0.058 : 0.068,
-                    0.085,
-                    28,
-                  ]}
+                  args={[index === 7 ? 0.058 : 0.068, index === 7 ? 0.058 : 0.068, 0.085, 28]}
                 />
-                <meshStandardMaterial
-                  color="#1c2430"
-                  roughness={0.3}
-                  metalness={0.8}
-                />
+                <meshStandardMaterial color="#1c2430" roughness={0.3} metalness={0.8} />
               </mesh>
               <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry
-                  args={[index === 7 ? 0.052 : 0.061, 0.008, 12, 36]}
-                />
-                <meshStandardMaterial
-                  color="#cbd5e1"
-                  metalness={0.9}
-                  roughness={0.18}
-                />
+                <torusGeometry args={[index === 7 ? 0.052 : 0.061, 0.008, 12, 36]} />
+                <meshStandardMaterial color="#cbd5e1" metalness={0.9} roughness={0.18} />
               </mesh>
             </group>
           )}
@@ -967,27 +849,15 @@ function ArmRig({
             <group>
               <mesh ref={palmRef} position={[0, 0.08, 0]} castShadow>
                 <boxGeometry args={[0.125, 0.035, 0.075]} />
-                <meshStandardMaterial
-                  color="#111827"
-                  metalness={0.78}
-                  roughness={0.28}
-                />
+                <meshStandardMaterial color="#111827" metalness={0.78} roughness={0.28} />
               </mesh>
               <mesh ref={leftFingerRef} position={[-0.055, 0, 0]} castShadow>
                 <boxGeometry args={[0.014, 0.11, 0.028]} />
-                <meshStandardMaterial
-                  color="#64748b"
-                  metalness={0.55}
-                  roughness={0.4}
-                />
+                <meshStandardMaterial color="#64748b" metalness={0.55} roughness={0.4} />
               </mesh>
               <mesh ref={rightFingerRef} position={[0.055, 0, 0]} castShadow>
                 <boxGeometry args={[0.014, 0.11, 0.028]} />
-                <meshStandardMaterial
-                  color="#64748b"
-                  metalness={0.55}
-                  roughness={0.4}
-                />
+                <meshStandardMaterial color="#64748b" metalness={0.55} roughness={0.4} />
               </mesh>
               <mesh ref={contactRingRef} rotation={[Math.PI / 2, 0, 0]}>
                 <torusGeometry args={[0.085, 0.006, 8, 36]} />
@@ -1011,10 +881,7 @@ function ArmRig({
         />
       </group>
 
-      <ArmGraspMicroscopeOverlay
-        sample={currentSample}
-        enabled={microscopeMode}
-      />
+      <ArmGraspMicroscopeOverlay sample={currentSample} enabled={microscopeMode} />
 
       <ArmPhysicsDebugOverlay
         enabled={physicsDebug ?? false}
@@ -1029,8 +896,7 @@ function ArmRig({
   );
 }
 
-export type ArmCameraMode =
-  "studio" | "microscope" | "overhead" | "side" | "front" | "fly";
+export type ArmCameraMode = "studio" | "microscope" | "overhead" | "side" | "front" | "fly";
 
 const armCameraScratchVec = new THREE.Vector3();
 
@@ -1117,7 +983,10 @@ function ArmCameraRig({
     } else if (cameraMode === "overhead") {
       armCameraScratchVec.set(objectPos[0] * 0.5, 3.2, objectPos[2] * 0.5 + 0.01);
       camera.position.lerp(armCameraScratchVec, ease(4));
-      lookAtRef.current.lerp(new THREE.Vector3(objectPos[0] * 0.5, 0.4, objectPos[2] * 0.5), ease(4));
+      lookAtRef.current.lerp(
+        new THREE.Vector3(objectPos[0] * 0.5, 0.4, objectPos[2] * 0.5),
+        ease(4),
+      );
       camera.lookAt(lookAtRef.current);
     } else if (cameraMode === "side") {
       armCameraScratchVec.set(0, 0.85, 1.75);
@@ -1133,9 +1002,18 @@ function ArmCameraRig({
       // FlyControls already moved the camera: keep it inside the workbench
       // envelope and above the floor so the operator cannot fly under the
       // hardwood or lose the arm behind the fog.
-      camera.position.x = Math.min(ARM_FLY_BOUNDS.maxX, Math.max(ARM_FLY_BOUNDS.minX, camera.position.x));
-      camera.position.y = Math.min(ARM_FLY_BOUNDS.maxY, Math.max(ARM_FLY_BOUNDS.minY, camera.position.y));
-      camera.position.z = Math.min(ARM_FLY_BOUNDS.maxZ, Math.max(ARM_FLY_BOUNDS.minZ, camera.position.z));
+      camera.position.x = Math.min(
+        ARM_FLY_BOUNDS.maxX,
+        Math.max(ARM_FLY_BOUNDS.minX, camera.position.x),
+      );
+      camera.position.y = Math.min(
+        ARM_FLY_BOUNDS.maxY,
+        Math.max(ARM_FLY_BOUNDS.minY, camera.position.y),
+      );
+      camera.position.z = Math.min(
+        ARM_FLY_BOUNDS.maxZ,
+        Math.max(ARM_FLY_BOUNDS.minZ, camera.position.z),
+      );
     }
   });
 
@@ -1155,15 +1033,9 @@ function ArmCameraRig({
   ) : cameraMode === "fly" ? (
     // Free-fly 6-DOF: WASD + Q/E + RMB drag. Bounded to the workbench
     // envelope so the operator can't lose the arm off-camera.
-    <FlyControls
-      movementSpeed={1.2}
-      rollSpeed={0.5}
-      dragToLook
-      autoForward={false}
-    />
+    <FlyControls movementSpeed={1.2} rollSpeed={0.5} dragToLook autoForward={false} />
   ) : null;
 }
-
 
 function ArmTargetDragger({
   targetPos,
@@ -1422,10 +1294,7 @@ function ArmStage({
   onSelfCollisionChange?: (contacts: ArmSelfContact[]) => void;
   dragTarget?: [number, number, number] | null;
   onDragTargetChange?: (pos: [number, number, number] | null) => void;
-  onCollisionChange?: (col: {
-    isColliding: boolean;
-    clearance: number;
-  }) => void;
+  onCollisionChange?: (col: { isColliding: boolean; clearance: number }) => void;
   onUnreachableChange?: (unreachable: boolean) => void;
   physicsDebug: boolean;
   allowVerticalPageScroll: boolean;
@@ -1445,29 +1314,20 @@ function ArmStage({
   // The arm's own base link, straight from the owner trace, so the reach
   // ghost and the reachability probe share the real robot's origin.
   const armBasePos = useMemo<[number, number, number]>(
-    () =>
-      currentSample
-        ? ownerPositionToThree(currentSample.linkPoses[0].position)
-        : [0, 0, 0],
+    () => (currentSample ? ownerPositionToThree(currentSample.linkPoses[0].position) : [0, 0, 0]),
     [currentSample],
   );
   const stageObstacles = useMemo(
     () =>
       admission
-        ? armStageObstacles(
-            admission.scene.supportHeightMeters,
-            admission.config.task,
-          )
+        ? armStageObstacles(admission.scene.supportHeightMeters, admission.config.task)
         : [],
     [admission],
   );
   const cameraObstacles = useMemo(
     () =>
       admission
-        ? armCameraObstacles(
-            admission.scene.supportHeightMeters,
-            admission.config.task,
-          )
+        ? armCameraObstacles(admission.scene.supportHeightMeters, admission.config.task)
         : [],
     [admission],
   );
@@ -1494,13 +1354,7 @@ function ArmStage({
     >
       <color attach="background" args={["#16120e"]} />
       <fog attach="fog" args={["#16120e", 5.0, 14.0]} />
-      <PerspectiveCamera
-        makeDefault
-        position={[1.55, 1.25, 1.8]}
-        fov={38}
-        near={0.03}
-        far={30}
-      />
+      <PerspectiveCamera makeDefault position={[1.55, 1.25, 1.8]} fov={38} near={0.03} far={30} />
       <ambientLight intensity={0.65} color="#fff1dc" />
       <hemisphereLight args={["#fed7aa", "#78350f", 1.3]} />
       <directionalLight
@@ -1529,27 +1383,16 @@ function ArmStage({
       {/* 1928 Sears Craftsman Bungalow Oak Hardwood Floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[12, 10]} />
-        <meshStandardMaterial
-          color="#6b3a16"
-          roughness={0.35}
-          metalness={0.08}
-        />
+        <meshStandardMaterial color="#6b3a16" roughness={0.35} metalness={0.08} />
       </mesh>
 
       {(() => {
-        const placement = admission
-          ? armTaskFurniture(admission.config.task)
-          : null;
+        const placement = admission ? armTaskFurniture(admission.config.task) : null;
         const obstacleName = placement?.obstacle.name;
         const pieces = armStageFurniture(admission?.config.task ?? "kitchen-mug");
         return pieces.map((f) => {
           const isObstacle = f.name === obstacleName;
-          const { group: furnGroup } = buildFurniture(
-            f.name,
-            f.size[0],
-            f.size[1],
-            f.height,
-          );
+          const { group: furnGroup } = buildFurniture(f.name, f.size[0], f.size[1], f.height);
           return (
             <group
               key={f.name}
@@ -1560,11 +1403,7 @@ function ArmStage({
               {isObstacle ? (
                 <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
                   <torusGeometry args={[0.09, 0.007, 8, 36]} />
-                  <meshBasicMaterial
-                    color="#fb7185"
-                    transparent
-                    opacity={0.55}
-                  />
+                  <meshBasicMaterial color="#fb7185" transparent opacity={0.55} />
                 </mesh>
               ) : null}
             </group>
@@ -1602,22 +1441,14 @@ function ArmStage({
         onUnreachableChange={onUnreachableChange}
       />
 
-      {dragTarget ? (
-        <ArmReachPreview target={dragTarget} basePos={armBasePos} />
-      ) : null}
+      {dragTarget ? <ArmReachPreview target={dragTarget} basePos={armBasePos} /> : null}
 
-      <ArmCameraRig
-        cameraMode={cameraMode}
-        objectPos={objectPos}
-        obstacles={cameraObstacles}
-      />
+      <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} obstacles={cameraObstacles} />
     </Canvas>
   );
 }
 
-export function HouseholdArmFlagship({
-  embedded = false,
-}: { embedded?: boolean } = {}) {
+export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean } = {}) {
   const { reduceMotion, isPlaying, setIsPlaying, resetPlayback, playbackActiveRef } =
     useTracePlaybackPreference();
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -1635,13 +1466,10 @@ export function HouseholdArmFlagship({
   // clicks in the same render tick both postMessage, racing the worker's
   // CMA session.
   const inFlightRef = useRef<boolean>(false);
-  const [trace, setTrace] = useState<HouseholdManipulationTraceReceipt | null>(
-    null,
-  );
+  const [trace, setTrace] = useState<HouseholdManipulationTraceReceipt | null>(null);
   const [curriculumReplay, setCurriculumReplay] = useState<ArmPriorReplay | null>(null);
   const curriculumTrace = curriculumReplay?.trace ?? null;
-  const [admission, setAdmission] =
-    useState<HouseholdManipulationAdmission | null>(null);
+  const [admission, setAdmission] = useState<HouseholdManipulationAdmission | null>(null);
   const [task, setTask] = useState<HouseholdManipulationTask>("kitchen-mug");
   const [family, setFamily] = useState<CmaFamily>("lm-cma");
   const [seedIndex, setSeedIndex] = useState(0);
@@ -1679,7 +1507,9 @@ export function HouseholdArmFlagship({
   // Late-bound: both handlers are declared below this effect, and it must not
   // re-run every time they are recreated.
   const selectTaskRef = useRef<((task: HouseholdManipulationTask) => void) | null>(null);
-  const handlePolicyImportRef = useRef<((imported: SharedPolicy, recovered?: ArmRecoveredRun) => Promise<void>) | null>(null);
+  const handlePolicyImportRef = useRef<
+    ((imported: SharedPolicy, recovered?: ArmRecoveredRun) => Promise<void>) | null
+  >(null);
   const [restoredNotice, setRestoredNotice] = useState<string | null>(null);
   useEffect(() => {
     familyRef.current = family;
@@ -1688,14 +1518,10 @@ export function HouseholdArmFlagship({
   const [bestObjective, setBestObjective] = useState<number | null>(null);
   const [activeTrace, setActiveTrace] = useState<ArmTraceOrigin>("curriculum");
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
-  const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>(
-    "preview",
-  );
+  const [busy, setBusy] = useState<"preview" | "optimize" | "compare" | null>("preview");
   const [stopRequested, setStopRequested] = useState(false);
   const [workerAvailable, setWorkerAvailable] = useState(true);
-  const [status, setStatus] = useState(
-    "Loading the pinned KUKA model and physical curriculum…",
-  );
+  const [status, setStatus] = useState("Loading the pinned KUKA model and physical curriculum…");
   const [error, setError] = useState<string | null>(null);
   // Mobile: show the 4 most consequential receipt cards by default; user can
   // expand to all 12 so the page doesn't drown the viewport in telemetry.
@@ -1706,24 +1532,28 @@ export function HouseholdArmFlagship({
   const [playbackSpeed, setPlaybackSpeed] = useState<FrankenRobotsPlaybackSpeed>(1);
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
-  const [playbackSeek, setPlaybackSeek] = useState<ArmPlaybackSeek>({ revision: 0, sampleIndex: 0 });
+  const [playbackSeek, setPlaybackSeek] = useState<ArmPlaybackSeek>({
+    revision: 0,
+    sampleIndex: 0,
+  });
   const playbackRevisionRef = useRef(0);
   const seekPlayback = useCallback((index: number) => {
     const revision = ++playbackRevisionRef.current;
     setPlaybackSeek({ revision, sampleIndex: index });
     setSampleIndex(index);
   }, []);
-  const handleSampleIndexChange = useCallback((index: number, revision: number) => {
-    // The Canvas is a separate React root. A frame queued before Restart or
-    // a scrub must not overwrite the newer command with its old position.
-    // Published positions update the HUD; only explicit seeks drive the rig.
-    setSampleIndex((current) =>
-      revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
-    );
-  }, [playbackActiveRef]);
-  const [armDragTarget, setArmDragTarget] = useState<
-    [number, number, number] | null
-  >(null);
+  const handleSampleIndexChange = useCallback(
+    (index: number, revision: number) => {
+      // The Canvas is a separate React root. A frame queued before Restart or
+      // a scrub must not overwrite the newer command with its old position.
+      // Published positions update the HUD; only explicit seeks drive the rig.
+      setSampleIndex((current) =>
+        revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
+      );
+    },
+    [playbackActiveRef],
+  );
+  const [armDragTarget, setArmDragTarget] = useState<[number, number, number] | null>(null);
   // armDragTarget stays null until the operator actually drags the pin.
   // While null the pin rides on the live owner object pose (which is
   // already on or above the counter), so nothing is seeded on mount and
@@ -1795,10 +1625,7 @@ export function HouseholdArmFlagship({
         },
       );
     } catch (workerError) {
-      const message =
-        workerError instanceof Error
-          ? workerError.message
-          : String(workerError);
+      const message = workerError instanceof Error ? workerError.message : String(workerError);
       queueMicrotask(() => {
         if (!active) return;
         setWorkerAvailable(false);
@@ -1829,9 +1656,10 @@ export function HouseholdArmFlagship({
         setTrainingSeconds(
           trainingSecondsRef.current + (Date.now() - trainingStartedAtRef.current) / 1000,
         );
-        setStatus(message.continuous
-          ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
-          : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
+        setStatus(
+          message.continuous
+            ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
+            : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
         );
       } else if (message.type === "trace") {
         const pendingImport = pendingImportRef.current;
@@ -1857,7 +1685,9 @@ export function HouseholdArmFlagship({
           const origin = pendingImport.recovered
             ? `Recovered your policy from ${describeAge(pendingImport.recovered.savedAt)} — generation ${message.generation.toLocaleString()}.`
             : "Imported policy replayed on its saved task.";
-          setRestoredNotice(`${origin} ${pendingImport.imported.experiment ? "Saved scene and seed verified." : "This coefficient archive uses the current default scene and Seed 1."} Further learning starts from these coefficients with Seed ${restored.seedIndex + 1}; optimizer state is not saved.`);
+          setRestoredNotice(
+            `${origin} ${pendingImport.imported.experiment ? "Saved scene and seed verified." : "This coefficient archive uses the current default scene and Seed 1."} Further learning starts from these coefficients with Seed ${restored.seedIndex + 1}; optimizer state is not saved.`,
+          );
           pendingImportRef.current = null;
           resetPlayback();
           pendingImport.resolve();
@@ -1911,7 +1741,9 @@ export function HouseholdArmFlagship({
           return next;
         });
         if (message.continuing) {
-          setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
+          setStatus(
+            `Learning continuously · generation ${message.generation} best policy now on stage.`,
+          );
           return;
         }
         // Bank the elapsed search time: the run has ended until the next
@@ -1928,8 +1760,8 @@ export function HouseholdArmFlagship({
           message.stopped
             ? `Stopped at generation ${message.generation}; replaying the best policy found.`
             : message.family === "curriculum"
-            ? `${TASK_COPY[message.admission.config.task].title} curriculum replayed from Frankensim WASM.`
-            : `Best ${FAMILY_COPY[message.family].title} policy replayed through the identical physical experiment.`,
+              ? `${TASK_COPY[message.admission.config.task].title} curriculum replayed from Frankensim WASM.`
+              : `Best ${FAMILY_COPY[message.family].title} policy replayed through the identical physical experiment.`,
         );
       } else if (message.type === "comparison") {
         setComparison(message.rows);
@@ -1945,19 +1777,16 @@ export function HouseholdArmFlagship({
         setBusy(null);
         setStopRequested(false);
         inFlightRef.current = false;
-        setStatus(
-          "The owner kernel refused or could not complete this request.",
-        );
+        setStatus("The owner kernel refused or could not complete this request.");
       }
     };
     optimizerWorker.onerror = (event) => {
       if (!active) return;
-      pendingImportRef.current?.reject(new Error(event.message || "The household-arm worker failed."));
-      pendingImportRef.current = null;
-      setError(
-        event.message ||
-          "The household-arm worker failed before returning a typed result.",
+      pendingImportRef.current?.reject(
+        new Error(event.message || "The household-arm worker failed."),
       );
+      pendingImportRef.current = null;
+      setError(event.message || "The household-arm worker failed before returning a typed result.");
       setBusy(null);
       inFlightRef.current = false;
       setWorkerAvailable(false);
@@ -1967,7 +1796,9 @@ export function HouseholdArmFlagship({
     optimizerWorker.postMessage({ type: "preview", task: "kitchen-mug" });
     return () => {
       active = false;
-      pendingImportRef.current?.reject(new Error("The household-arm worker was closed before replay completed."));
+      pendingImportRef.current?.reject(
+        new Error("The household-arm worker was closed before replay completed."),
+      );
       pendingImportRef.current = null;
       optimizerWorker.terminate();
       workerRef.current = null;
@@ -2007,20 +1838,17 @@ export function HouseholdArmFlagship({
     seedIndex,
   ]);
 
-  const post = useCallback(
-    (message: object, mode: "preview" | "optimize" | "compare") => {
-      if (!workerRef.current) return;
-      // Synchronous gate — must precede setBusy (which is async). The
-      // earlier busy-only check let two rapid clicks in the same render
-      // tick both postMessage. Mirrors the G1WalkingFlagship fix.
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      setError(null);
-      setBusy(mode);
-      workerRef.current.postMessage(message);
-    },
-    [],
-  );
+  const post = useCallback((message: object, mode: "preview" | "optimize" | "compare") => {
+    if (!workerRef.current) return;
+    // Synchronous gate — must precede setBusy (which is async). The
+    // earlier busy-only check let two rapid clicks in the same render
+    // tick both postMessage. Mirrors the G1WalkingFlagship fix.
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    setError(null);
+    setBusy(mode);
+    workerRef.current.postMessage(message);
+  }, []);
 
   const startContinuousOptimization = useCallback(() => {
     setStopRequested(false);
@@ -2061,8 +1889,9 @@ export function HouseholdArmFlagship({
     void decodePolicyFragment(fragment, stagePolicy.length)
       .then((imported) => {
         if (!active) return;
-        const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[])
-          .find((task) => task === imported.task);
+        const importedTask = (Object.keys(TASK_COPY) as HouseholdManipulationTask[]).find(
+          (task) => task === imported.task,
+        );
         if (!importedTask || imported.challenge !== "household") {
           throw new Error("This shared policy is not for a supported household task.");
         }
@@ -2115,7 +1944,9 @@ export function HouseholdArmFlagship({
         setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
       });
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [stagePolicy]);
 
   /** Replay a policy the operator brought in, from a file or a share link. */
@@ -2141,7 +1972,9 @@ export function HouseholdArmFlagship({
           pendingImportRef.current = null;
           inFlightRef.current = false;
           setBusy(null);
-          reject(error instanceof Error ? error : new Error("Could not send this policy to the owner."));
+          reject(
+            error instanceof Error ? error : new Error("Could not send this policy to the owner."),
+          );
         }
       });
     },
@@ -2219,10 +2052,17 @@ export function HouseholdArmFlagship({
         }
         const playing = command.command === "play";
         setIsPlaying(playing);
-        return { accepted: true, detail: playing ? "Arm replay is playing." : "Arm replay is paused." };
+        return {
+          accepted: true,
+          detail: playing ? "Arm replay is playing." : "Arm replay is paused.",
+        };
       }
       if (command.command === "seek") {
-        if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
+        if (
+          !trace ||
+          command.sampleIndex === undefined ||
+          command.sampleIndex >= trace.samples.length
+        ) {
           return { accepted: false, detail: "That Arm replay frame is unavailable." };
         }
         seekPlayback(command.sampleIndex);
@@ -2244,7 +2084,10 @@ export function HouseholdArmFlagship({
       }
       if (command.command === "set-seed") {
         if (busy !== null || inFlightRef.current || command.seedIndex === undefined) {
-          return { accepted: false, detail: "Finish the current owner request before changing seed." };
+          return {
+            accepted: false,
+            detail: "Finish the current owner request before changing seed.",
+          };
         }
         setSeedIndex(command.seedIndex);
         return {
@@ -2365,7 +2208,17 @@ export function HouseholdArmFlagship({
       return () => window.clearTimeout(timer);
     }
     report();
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraMode, microscopeMode, physicsDebug, playbackSeek.revision]);
+  }, [
+    embedded,
+    trace,
+    sampleIndex,
+    isPlaying,
+    playbackSpeed,
+    cameraMode,
+    microscopeMode,
+    physicsDebug,
+    playbackSeek.revision,
+  ]);
 
   const selectTask = useCallback(
     (nextTask: HouseholdManipulationTask) => {
@@ -2405,15 +2258,12 @@ export function HouseholdArmFlagship({
   );
 
   const objectiveDelta =
-    trace && curriculumTrace
-      ? curriculumTrace.objective - trace.objective
-      : null;
+    trace && curriculumTrace ? curriculumTrace.objective - trace.objective : null;
   const collisionRefused =
     trace !== null &&
     !trace.placed &&
     (trace.collisionRiskIntegral > 0 ||
-      trace.minimumCertifiedClearanceMeters <
-        HOUSEHOLD_PLACEMENT_CLEARANCE_METERS ||
+      trace.minimumCertifiedClearanceMeters < HOUSEHOLD_PLACEMENT_CLEARANCE_METERS ||
       trace.possibleCollisionTimeSeconds > 0);
   const taskInfo = TASK_COPY[task];
   const traceLastIndex = Math.max(0, (trace?.samples.length ?? 1) - 1);
@@ -2454,58 +2304,48 @@ export function HouseholdArmFlagship({
           role="tablist"
           aria-label="Household manipulation task"
         >
-          {(Object.keys(TASK_COPY) as HouseholdManipulationTask[]).map(
-            (taskName) => {
-              const info = TASK_COPY[taskName];
-              const Icon = info.icon;
-              const selected = taskName === task;
-              return (
-                <button
-                  key={taskName}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  disabled={busy !== null || !workerAvailable}
-                  onClick={() => selectTask(taskName)}
-                  className={`border text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    embedded
-                      ? "min-h-10 rounded-xl px-2 py-1.5"
-                      : "min-h-16 rounded-2xl px-4 py-3"
-                  } ${
-                    selected
-                      ? "border-orange-300/35 bg-orange-400/12"
-                      : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${info.accent}`} />
-                    <span
-                      className={`min-w-0 font-bold text-white line-clamp-2 ${
-                        embedded ? "text-xs" : "text-sm"
-                      }`}
-                    >
-                      {embedded ? EMBEDDED_TASK_TITLES[taskName] : info.title}
-                    </span>
-                  </span>
+          {(Object.keys(TASK_COPY) as HouseholdManipulationTask[]).map((taskName) => {
+            const info = TASK_COPY[taskName];
+            const Icon = info.icon;
+            const selected = taskName === task;
+            return (
+              <button
+                key={taskName}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                disabled={busy !== null || !workerAvailable}
+                onClick={() => selectTask(taskName)}
+                className={`border text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  embedded ? "min-h-10 rounded-xl px-2 py-1.5" : "min-h-16 rounded-2xl px-4 py-3"
+                } ${
+                  selected
+                    ? "border-orange-300/35 bg-orange-400/12"
+                    : "border-white/8 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${info.accent}`} />
                   <span
-                    className={
-                      embedded ? "sr-only" : "mt-1 block text-xs text-slate-500"
-                    }
+                    className={`min-w-0 font-bold text-white line-clamp-2 ${
+                      embedded ? "text-xs" : "text-sm"
+                    }`}
                   >
-                    {info.short}
+                    {embedded ? EMBEDDED_TASK_TITLES[taskName] : info.title}
                   </span>
-                </button>
-              );
-            },
-          )}
+                </span>
+                <span className={embedded ? "sr-only" : "mt-1 block text-xs text-slate-500"}>
+                  {info.short}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div
         className={
-          embedded
-            ? "block"
-            : "grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]"
+          embedded ? "block" : "grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]"
         }
       >
         <div className={embedded ? "space-y-0" : "space-y-4"}>
@@ -2556,9 +2396,7 @@ export function HouseholdArmFlagship({
                   type="button"
                   onClick={() => setMicroscopeMode(!microscopeMode)}
                   className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                    embedded
-                      ? "gap-1 px-2 py-1 text-[0.58rem]"
-                      : "gap-1.5 px-3 py-1 text-[0.68rem]"
+                    embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
                   } ${
                     microscopeMode
                       ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
@@ -2586,9 +2424,7 @@ export function HouseholdArmFlagship({
                   type="button"
                   onClick={() => setSoundEnabled(robotAudio.toggleMute())}
                   className={`flex items-center rounded-full border font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                    embedded
-                      ? "gap-1 px-2 py-1 text-[0.58rem]"
-                      : "gap-1.5 px-3 py-1 text-[0.68rem]"
+                    embedded ? "gap-1 px-2 py-1 text-[0.58rem]" : "gap-1.5 px-3 py-1 text-[0.68rem]"
                   } ${
                     soundEnabled
                       ? "border-emerald-400 bg-emerald-500/25 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
@@ -2700,9 +2536,7 @@ export function HouseholdArmFlagship({
               {/* Camera View Selector */}
               <div
                 className={`pointer-events-auto flex items-center rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md ${
-                  embedded
-                    ? "w-full justify-between gap-0.5"
-                    : "self-start gap-1"
+                  embedded ? "w-full justify-between gap-0.5" : "self-start gap-1"
                 }`}
               >
                 {(
@@ -2754,9 +2588,7 @@ export function HouseholdArmFlagship({
                       aria-label={`${cam.label} camera`}
                       onClick={() => setCameraMode(cam.id)}
                       className={`flex min-w-0 items-center whitespace-nowrap rounded-lg py-1 font-bold transition-all ${
-                        embedded
-                          ? "gap-0.5 px-1.5 text-[0.58rem]"
-                          : "gap-1 px-2 text-[0.65rem]"
+                        embedded ? "gap-0.5 px-1.5 text-[0.58rem]" : "gap-1 px-2 text-[0.65rem]"
                       } ${
                         isSelected
                           ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
@@ -2810,9 +2642,7 @@ export function HouseholdArmFlagship({
                 </button>
                 <button
                   type="button"
-                  aria-label={
-                    playbackRunning ? "Pause arm trace" : "Play arm trace"
-                  }
+                  aria-label={playbackRunning ? "Pause arm trace" : "Play arm trace"}
                   disabled={!trace}
                   onClick={() => setIsPlaying(!isPlaying)}
                   className="flex min-h-11 min-w-11 items-center justify-center rounded-lg p-1.5 text-orange-200 transition hover:bg-orange-400/15 hover:text-orange-100 disabled:opacity-35"
@@ -2853,10 +2683,7 @@ export function HouseholdArmFlagship({
                     min={0}
                     max={traceLastIndex}
                     step={1}
-                    value={clampTracePlaybackIndex(
-                      trace?.samples.length ?? 0,
-                      sampleIndex,
-                    )}
+                    value={clampTracePlaybackIndex(trace?.samples.length ?? 0, sampleIndex)}
                     disabled={!trace}
                     aria-valuetext={`Time ${currentPlaybackTime.toFixed(2)} seconds, sample ${sampleIndex + 1} of ${trace?.samples.length ?? 0}`}
                     onChange={(event) => {
@@ -2877,8 +2704,7 @@ export function HouseholdArmFlagship({
                   />
                 </div>
                 <span className="shrink-0 font-mono text-[0.62rem] tabular-nums text-slate-300">
-                  {currentPlaybackTime.toFixed(2)} / {traceDuration.toFixed(2)}{" "}
-                  s
+                  {currentPlaybackTime.toFixed(2)} / {traceDuration.toFixed(2)} s
                 </span>
                 <label className="sr-only" htmlFor="arm-playback-speed">
                   Arm trace playback speed
@@ -2921,9 +2747,7 @@ export function HouseholdArmFlagship({
             </div>
             <div
               ref={stageRef}
-              className={
-                embedded ? "h-[calc(100svh-64px)] w-full" : "h-[570px] w-full"
-              }
+              className={embedded ? "h-[calc(100svh-64px)] w-full" : "h-[570px] w-full"}
             >
               {shouldMountStage ? (
                 <ArmStage
@@ -2957,10 +2781,7 @@ export function HouseholdArmFlagship({
             ref={diagnosticsRef}
             className={`mt-3 flex scroll-mt-2 flex-col gap-3 ${embedded ? "px-1 pb-1" : ""}`}
           >
-            <ArmGraspMicroscopeHUD
-              sample={currentSampleForHUD}
-              enabled={microscopeMode}
-            />
+            <ArmGraspMicroscopeHUD sample={currentSampleForHUD} enabled={microscopeMode} />
             <ArmJointKinematicsStrip
               jointAngles={activeJointAngles}
               probeJointAngles={probeJointAngles}
@@ -2984,17 +2805,15 @@ export function HouseholdArmFlagship({
           </div>
 
           <p className="mt-5 text-sm leading-6 text-slate-400">
-            Seven joint target curves plus one gripper-width curve, each sampled
-            at sixteen knots:
+            Seven joint target curves plus one gripper-width curve, each sampled at sixteen knots:
             <span className="mt-2 block font-mono text-orange-200">
               (7 joints + 1 gripper) × 16 = 128 variables
             </span>
           </p>
           <p className="mt-3 text-xs leading-5 text-slate-500">
-            CMA-ES receives only a scalar receipt after a full rollout.
-            Compliant contact, stick/slip friction, free object dynamics,
-            release, hard limits, and owner-routed obstacle/self/object
-            separation make the objective piecewise and black-box—there is no
+            CMA-ES receives only a scalar receipt after a full rollout. Compliant contact,
+            stick/slip friction, free object dynamics, release, hard limits, and owner-routed
+            obstacle/self/object separation make the objective piecewise and black-box—there is no
             browser gradient hiding behind the animation.
           </p>
 
@@ -3017,9 +2836,8 @@ export function HouseholdArmFlagship({
             <option value="lm-ma">LM-MA — bounded transform</option>
           </select>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            At 128 dimensions, all four representations fit the honest browser
-            envelope. Full CMA is pedagogically useful here; it is rightly
-            refused for the 5,040-D walking problem.
+            At 128 dimensions, all four representations fit the honest browser envelope. Full CMA is
+            pedagogically useful here; it is rightly refused for the 5,040-D walking problem.
           </p>
 
           <label
@@ -3057,18 +2875,30 @@ export function HouseholdArmFlagship({
             <button
               type="button"
               disabled={!workerAvailable || (busy !== null && busy !== "optimize") || stopRequested}
-              onClick={busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization}
+              onClick={
+                busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization
+              }
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-rose-600 px-3 text-sm font-bold text-white shadow-lg shadow-orange-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {busy === "optimize" ? <Square className="h-4 w-4 fill-current" /> : <Sparkles className="h-4 w-4" />}
+              {busy === "optimize" ? (
+                <Square className="h-4 w-4 fill-current" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               {busy === "optimize"
-                ? (stopRequested ? "Stopping…" : `Stop · gen ${generation}`)
-                : (generation > 0 ? `Keep learning · gen ${generation}` : "Start learning")}
+                ? stopRequested
+                  ? "Stopping…"
+                  : `Stop · gen ${generation}`
+                : generation > 0
+                  ? `Keep learning · gen ${generation}`
+                  : "Start learning"}
             </button>
             <button
               type="button"
               disabled={busy !== null || !workerAvailable || !curriculumTrace}
-              onClick={() => { selectCurriculumReplay(); }}
+              onClick={() => {
+                selectCurriculumReplay();
+              }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
@@ -3089,19 +2919,14 @@ export function HouseholdArmFlagship({
             {generation > 0 ? (
               <div className="mt-3 flex justify-between gap-3 font-mono text-[0.7rem] text-slate-400">
                 <span>generation {generation}</span>
-                <span>
-                  best {bestObjective === null ? "—" : number(bestObjective, 4)}
-                </span>
+                <span>best {bestObjective === null ? "—" : number(bestObjective, 4)}</span>
               </div>
             ) : null}
-            {error ? (
-              <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p>
-            ) : null}
+            {error ? <p className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
             {restoredNotice ? (
               <p className="mt-2 rounded-xl border border-cyan-300/20 bg-cyan-950/30 px-3 py-2 text-[0.66rem] leading-4 text-cyan-100">
-                {restoredNotice} Learning continues from that policy — its
-                covariance was not saved, so this is a warm restart rather than
-                a resumed search.
+                {restoredNotice} Learning continues from that policy — its covariance was not saved,
+                so this is a warm restart rather than a resumed search.
               </p>
             ) : null}
             {ledger.length > 0 ? (
@@ -3115,14 +2940,16 @@ export function HouseholdArmFlagship({
                 subject="iiwa"
                 title="Keep this policy"
                 disabled={busy !== null || !workerAvailable || !trace || !admission}
-                meta={stagePolicyMeta ?? {
-                  kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-                  task,
-                  challenge: "household",
-                  family,
-                  generation,
-                  sigma: searchSigma,
-                }}
+                meta={
+                  stagePolicyMeta ?? {
+                    kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+                    task,
+                    challenge: "household",
+                    family,
+                    generation,
+                    sigma: searchSigma,
+                  }
+                }
                 measured={
                   trace
                     ? {
@@ -3163,29 +2990,16 @@ export function HouseholdArmFlagship({
               ["first grasp", `${number(trace.firstGraspTimeSeconds, 2)} s`],
               ["grip force", `${number(trace.peakGripForceNewtons, 1)} N`],
               ["work", `${number(trace.actuatorWorkJoules, 1)} J`],
-              [
-                "collision risk ∫",
-                `${number(trace.collisionRiskIntegral, 4)} m·s`,
-              ],
+              ["collision risk ∫", `${number(trace.collisionRiskIntegral, 4)} m·s`],
               [
                 "certified clearance",
                 `${number(trace.minimumCertifiedClearanceMeters * 100, 2)} cm`,
               ],
-              [
-                "possible collision",
-                `${number(trace.possibleCollisionTimeSeconds, 3)} s`,
-              ],
-              [
-                "convex iterations",
-                trace.collisionQueryIterations.toLocaleString(),
-              ],
+              ["possible collision", `${number(trace.possibleCollisionTimeSeconds, 3)} s`],
+              ["convex iterations", trace.collisionQueryIterations.toLocaleString()],
               [
                 "placement verdict",
-                trace.placed
-                  ? "placed ✓"
-                  : collisionRefused
-                    ? "collision-refused"
-                    : "not placed",
+                trace.placed ? "placed ✓" : collisionRefused ? "collision-refused" : "not placed",
               ],
             ];
             return (
@@ -3210,35 +3024,30 @@ export function HouseholdArmFlagship({
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:hidden">
-                  {(showAllReceipts ? cards : cards.slice(0, 4)).map(
-                    ([label, value]) => (
-                      <div
-                        key={label}
-                        title={`${label}: ${value}`}
-                        className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+                  {(showAllReceipts ? cards : cards.slice(0, 4)).map(([label, value]) => (
+                    <div
+                      key={label}
+                      title={`${label}: ${value}`}
+                      className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
+                    >
+                      <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                        {label}
+                      </p>
+                      <p
+                        title={String(value)}
+                        className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
                       >
-                        <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
-                          {label}
-                        </p>
-                        <p
-                          title={String(value)}
-                          className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
-                        >
-                          {value}
-                        </p>
-                      </div>
-                    ),
-                  )}
+                        {value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row md:hidden">
                   <button
                     type="button"
                     onClick={() => {
                       const obj = Object.fromEntries(
-                        cards.map(([k, v]) => [
-                          k,
-                          typeof v === "number" ? v : String(v),
-                        ]),
+                        cards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
                       );
                       const json = JSON.stringify(obj, null, 2);
                       if (navigator.clipboard) {
@@ -3266,10 +3075,7 @@ export function HouseholdArmFlagship({
                     type="button"
                     onClick={() => {
                       const obj = Object.fromEntries(
-                        cards.map(([k, v]) => [
-                          k,
-                          typeof v === "number" ? v : String(v),
-                        ]),
+                        cards.map(([k, v]) => [k, typeof v === "number" ? v : String(v)]),
                       );
                       const json = JSON.stringify(obj, null, 2);
                       if (navigator.clipboard) {
@@ -3298,17 +3104,15 @@ export function HouseholdArmFlagship({
                 Which covariance model helps at 128-D?
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Run every owner implementation from the identical curriculum,
-                seed, population, and rollout budget. This is a local
-                measurement on one nonsmooth task—not a universal ranking.
+                Run every owner implementation from the identical curriculum, seed, population, and
+                rollout budget. This is a local measurement on one nonsmooth task—not a universal
+                ranking.
               </p>
             </div>
             <button
               type="button"
               disabled={busy !== null || !workerAvailable}
-              onClick={() =>
-                post({ type: "compare", task, generations: 4 }, "compare")
-              }
+              onClick={() => post({ type: "compare", task, generations: 4 }, "compare")}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />
@@ -3322,39 +3126,27 @@ export function HouseholdArmFlagship({
                 <thead className="border-b border-white/10 text-slate-500">
                   <tr>
                     <th className="pb-3 font-semibold">owner family</th>
-                    <th className="pb-3 font-semibold">
-                      curriculum → final best
-                    </th>
+                    <th className="pb-3 font-semibold">curriculum → final best</th>
                     <th className="pb-3 font-semibold">evals</th>
-                    <th className="pb-3 font-semibold">
-                      persistent / workspace scalars
-                    </th>
+                    <th className="pb-3 font-semibold">persistent / workspace scalars</th>
                     <th className="pb-3 font-semibold">this browser</th>
                   </tr>
                 </thead>
                 <tbody>
                   {comparison.map((row) => (
-                    <tr
-                      key={row.family}
-                      className="border-b border-white/5 text-slate-300"
-                    >
-                      <td
-                        className={`py-3 font-semibold ${FAMILY_COPY[row.family].color}`}
-                      >
+                    <tr key={row.family} className="border-b border-white/5 text-slate-300">
+                      <td className={`py-3 font-semibold ${FAMILY_COPY[row.family].color}`}>
                         {FAMILY_COPY[row.family].title}
                       </td>
                       <td className="py-3 font-mono">
-                        {number(row.initialObjective, 2)} →{" "}
-                        {number(row.finalObjective, 2)}
+                        {number(row.initialObjective, 2)} → {number(row.finalObjective, 2)}
                       </td>
                       <td className="py-3 font-mono">{row.evaluations}</td>
                       <td className="py-3 font-mono">
                         {row.persistentScalars.toLocaleString()} /{" "}
                         {row.workspaceScalars.toLocaleString()}
                       </td>
-                      <td className="py-3 font-mono">
-                        {number(row.elapsedMilliseconds, 1)} ms
-                      </td>
+                      <td className="py-3 font-mono">{number(row.elapsedMilliseconds, 1)} ms</td>
                     </tr>
                   ))}
                 </tbody>
@@ -3363,10 +3155,7 @@ export function HouseholdArmFlagship({
           ) : (
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {(Object.keys(FAMILY_COPY) as CmaFamily[]).map((name) => (
-                <div
-                  key={name}
-                  className="rounded-2xl border border-white/10 bg-black/15 p-4"
-                >
+                <div key={name} className="rounded-2xl border border-white/10 bg-black/15 p-4">
                   <div className="flex items-center gap-2">
                     <Cpu className={`h-4 w-4 ${FAMILY_COPY[name].color}`} />
                     <p className="text-sm font-semibold text-slate-100">
@@ -3392,38 +3181,33 @@ export function HouseholdArmFlagship({
           </div>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
             <li>
-              <strong className="text-slate-200">Source arm:</strong> pinned
-              iiwa topology, masses, inertias, joint frames, axes, hard limits,
-              and 300 N·m reference defaults.
+              <strong className="text-slate-200">Source arm:</strong> pinned iiwa topology, masses,
+              inertias, joint frames, axes, hard limits, and 300 N·m reference defaults.
             </li>
             <li>
-              <strong className="text-slate-200">Owner math:</strong> SE(3)
-              kinematics, inverse-dynamics computed torque, Featherstone forward
-              dynamics, compliant pad force, Coulomb friction, and certified
-              convex separation.
+              <strong className="text-slate-200">Owner math:</strong> SE(3) kinematics,
+              inverse-dynamics computed torque, Featherstone forward dynamics, compliant pad force,
+              Coulomb friction, and certified convex separation.
             </li>
             <li>
-              <strong className="text-slate-200">Measured poses and joints:</strong>{" "}
-              the browser draws the object and eight link poses exactly as
-              measured by the kernel. All seven joint dials use those rotations
-              and the source joint frames. The cyan reach ghost and its separate
-              probe values use an auxiliary 4-joint browser chain.
+              <strong className="text-slate-200">Measured poses and joints:</strong> the browser
+              draws the object and eight link poses exactly as measured by the kernel. All seven
+              joint dials use those rotations and the source joint frames. The cyan reach ghost and
+              its separate probe values use an auxiliary 4-joint browser chain.
             </li>
             <li>
-              <strong className="text-slate-200">Grasp test:</strong> both
-              finite pads must remain engaged while the requested translation
-              and rotation wrench stays inside owner friction capacity.
+              <strong className="text-slate-200">Grasp test:</strong> both finite pads must remain
+              engaged while the requested translation and rotation wrench stays inside owner
+              friction capacity.
             </li>
             <li>
-              <strong className="text-slate-200">Reduced contact:</strong>{" "}
-              collision uses conservative oriented-box link/object envelopes,
-              not triangle meshes; there is no general impulse solver, grasp
-              planner, deformable object, or cable model.
+              <strong className="text-slate-200">Reduced contact:</strong> collision uses
+              conservative oriented-box link/object envelopes, not triangle meshes; there is no
+              general impulse solver, grasp planner, deformable object, or cable model.
             </li>
             <li>
-              <strong className="text-slate-200">No hardware claim:</strong>{" "}
-              this is a deterministic explainer benchmark, not a KUKA-certified
-              model or sim-to-real controller.
+              <strong className="text-slate-200">No hardware claim:</strong> this is a deterministic
+              explainer benchmark, not a KUKA-certified model or sim-to-real controller.
             </li>
           </ul>
         </aside>
@@ -3463,9 +3247,7 @@ export function HouseholdArmFlagship({
               Simplified
             </p>
             <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
-              <li>
-                · Collision uses oriented-box envelopes, not triangle meshes
-              </li>
+              <li>· Collision uses oriented-box envelopes, not triangle meshes</li>
               <li>· No impulse solver, deformable object, or cable model</li>
               <li>· Grasp pads are finite, rigid, parallel-jaw style</li>
               <li>· Object dynamics are rigid-body only</li>
@@ -3483,16 +3265,14 @@ export function HouseholdArmFlagship({
               <li>· No environment lighting, occlusion, or camera noise</li>
               <li>· No learned policy beyond the periodic basis</li>
               <li>· No sim-to-real transfer or hardware validation</li>
-              <li>
-                · No reachability planner, grasp planner, or motion planner
-              </li>
+              <li>· No reachability planner, grasp planner, or motion planner</li>
             </ul>
           </div>
         </div>
         <p className="border-t border-white/5 bg-black/20 px-4 py-3 text-[0.72rem] leading-5 text-slate-400 sm:px-5">
-          A placement the kernel approves can still fail on a real KUKA. The
-          page deliberately stops at a deterministic explainer benchmark;
-          treating it as a controller validation would be a category error.
+          A placement the kernel approves can still fail on a real KUKA. The page deliberately stops
+          at a deterministic explainer benchmark; treating it as a controller validation would be a
+          category error.
         </p>
       </details>
 
@@ -3500,15 +3280,12 @@ export function HouseholdArmFlagship({
         <div className="glass-card p-6">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-orange-300" />
-            <h3 className="font-bold text-white">
-              A parametric model with a paper trail
-            </h3>
+            <h3 className="font-bold text-white">A parametric model with a paper trail</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-400">
-            The procedural shell is intentionally mesh-free. Segment endpoints
-            come from owner poses; the table records the pinned source
-            joint-offset magnitude and mass used by dynamics. Orange housings
-            are display geometry; the collision owner independently builds
+            The procedural shell is intentionally mesh-free. Segment endpoints come from owner
+            poses; the table records the pinned source joint-offset magnitude and mass used by
+            dynamics. Orange housings are display geometry; the collision owner independently builds
             conservative oriented boxes from those source frames.
           </p>
           <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10">
@@ -3516,21 +3293,14 @@ export function HouseholdArmFlagship({
               <thead className="bg-white/[0.035] text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-semibold">source link</th>
-                  <th className="px-4 py-3 font-semibold">
-                    joint offset magnitude (m)
-                  </th>
+                  <th className="px-4 py-3 font-semibold">joint offset magnitude (m)</th>
                   <th className="px-4 py-3 font-semibold">mass (kg)</th>
                 </tr>
               </thead>
               <tbody>
                 {LINK_SOURCE_ROWS.map(([link, offset, mass]) => (
-                  <tr
-                    key={link}
-                    className="border-t border-white/[0.06] text-slate-300"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-orange-200">
-                      {link}
-                    </td>
+                  <tr key={link} className="border-t border-white/[0.06] text-slate-300">
+                    <td className="px-4 py-2.5 font-mono text-orange-200">{link}</td>
                     <td className="px-4 py-2.5 font-mono">{offset}</td>
                     <td className="px-4 py-2.5 font-mono">{mass}</td>
                   </tr>
@@ -3555,9 +3325,7 @@ export function HouseholdArmFlagship({
         <div className="glass-card p-6">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-emerald-300" />
-            <h3 className="font-bold text-white">
-              Why this is a useful black-box flagship
-            </h3>
+            <h3 className="font-bold text-white">Why this is a useful black-box flagship</h3>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-3">
             {[
@@ -3574,10 +3342,7 @@ export function HouseholdArmFlagship({
                 "The object must clear 9 cm, reach the goal tolerance, finish released on support, and avoid owner-reported obstacle, self, and proximal-object collision risk.",
               ],
             ].map(([title, body]) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-white/10 bg-black/15 p-4"
-              >
+              <div key={title} className="rounded-2xl border border-white/10 bg-black/15 p-4">
                 <div className="flex items-center gap-2 text-emerald-300">
                   <CheckCircle2 className="h-4 w-4" />
                   <p className="text-sm font-semibold text-white">{title}</p>
@@ -3587,10 +3352,10 @@ export function HouseholdArmFlagship({
             ))}
           </div>
           <p className="mt-5 text-sm leading-6 text-slate-400">
-            The source-feasible curriculum makes the demo inspectable from first
-            paint, while live CMA-ES still searches every coordinate. If a
-            sampled policy drops the object or misses the station, the receipt
-            says so; the renderer cannot substitute a canned success animation.
+            The source-feasible curriculum makes the demo inspectable from first paint, while live
+            CMA-ES still searches every coordinate. If a sampled policy drops the object or misses
+            the station, the receipt says so; the renderer cannot substitute a canned success
+            animation.
           </p>
         </div>
       </div>

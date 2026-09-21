@@ -16,14 +16,12 @@
 
 import { describe, expect, test } from "bun:test";
 import {
-  CRAFTSMAN_BUNGALOW_1928,
-} from "../app/lib/houseScenes";
-import {
   createHouseNavigationScene,
   distanceToOBB,
-  sweptSphereOBBEntryPoint,
   type OrientedBoundingBox,
+  sweptSphereOBBEntryPoint,
 } from "../app/lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 function obb(
   center: [number, number, number],
@@ -38,12 +36,7 @@ function obb(
 describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
   test("no hit when the segment is entirely outside the OBB", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
-    const result = sweptSphereOBBEntryPoint(
-      [2, 0, 0],
-      [3, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([2, 0, 0], [3, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(false);
   });
 
@@ -66,34 +59,19 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
 
   test("a sphere already at clearance can move away without being pinned", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
-    const result = sweptSphereOBBEntryPoint(
-      [0.55, 0, 0],
-      [0.7, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([0.55, 0, 0], [0.7, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(false);
   });
 
   test("a sphere already at clearance can slide along the face", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
-    const result = sweptSphereOBBEntryPoint(
-      [0.55, -0.2, 0],
-      [0.55, 0.2, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([0.55, -0.2, 0], [0.55, 0.2, 0], 0.05, box);
     expect(result.wasHit).toBe(false);
   });
 
   test("motion inward from the clearance boundary remains a hit", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
-    const result = sweptSphereOBBEntryPoint(
-      [0.55, 0, 0],
-      [0.4, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([0.55, 0, 0], [0.4, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(true);
     expect(result.entryT).toBe(0);
   });
@@ -103,12 +81,7 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
     // Segment starts outside (x=1.0) and ends inside (x=0.0). The swept
     // sphere of radius 0.05 should detect the crossing and return an
     // entry point just outside the +X face.
-    const result = sweptSphereOBBEntryPoint(
-      [1.0, 0, 0],
-      [0.0, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([1.0, 0, 0], [0.0, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(true);
     expect(result.entryPoint).toBeDefined();
     const ep = result.entryPoint as [number, number, number];
@@ -126,12 +99,7 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
     // Link moves from x=0.6 (just outside) to x=-0.4 (deep interior)
     // in one frame. Without CCD the snap would put the link at the
     // deepest-face projection, but the CCD finds the entry on +X.
-    const result = sweptSphereOBBEntryPoint(
-      [0.6, 0, 0],
-      [-0.4, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([0.6, 0, 0], [-0.4, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(true);
     const ep = result.entryPoint as [number, number, number];
     // The entry must be on the +X face side, not the deep -X interior.
@@ -143,12 +111,7 @@ describe("sweptSphereOBBEntryPoint (SOTA swept-volume CCD)", () => {
     // 45-degree yaw rotates the box. The swept-sphere entry should
     // still land on the rotated face, not the axis-aligned one.
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], Math.PI / 4);
-    const result = sweptSphereOBBEntryPoint(
-      [1.0, 0, 0],
-      [0.0, 0, 0],
-      0.05,
-      box,
-    );
+    const result = sweptSphereOBBEntryPoint([1.0, 0, 0], [0.0, 0, 0], 0.05, box);
     expect(result.wasHit).toBe(true);
     expect(result.entryPoint).toBeDefined();
     // The entry point should have positive x (entry side of the

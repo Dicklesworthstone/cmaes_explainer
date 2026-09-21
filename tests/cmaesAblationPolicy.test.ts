@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  runCmaesPolicySearch,
-  type CmaesPolicySearchResult,
-} from "../app/lib/cmaesAblationPolicy";
+import { type CmaesPolicySearchResult, runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
 
 function assertReceiptShape(result: CmaesPolicySearchResult): void {
   expect(result.receipt.parameterCount).toBe(105);
@@ -29,27 +26,21 @@ function assertReceiptShape(result: CmaesPolicySearchResult): void {
 }
 
 describe("CMA-ES Ablation Policy Search", () => {
-  test(
-    "default run stays within budget and is deterministic for a fixed seed",
-    () => {
-      const first = runCmaesPolicySearch();
-      assertReceiptShape(first);
-      expect(first.receipt.trainingSamplesRequired).toBeLessThanOrEqual(2400);
-      // Population-sliced budget: exactly the full budget spent in
-      // populationSize chunks.
-      expect(first.receipt.trainingSamplesRequired).toBe(2400);
+  test("default run stays within budget and is deterministic for a fixed seed", () => {
+    const first = runCmaesPolicySearch();
+    assertReceiptShape(first);
+    expect(first.receipt.trainingSamplesRequired).toBeLessThanOrEqual(2400);
+    // Population-sliced budget: exactly the full budget spent in
+    // populationSize chunks.
+    expect(first.receipt.trainingSamplesRequired).toBe(2400);
 
-      const second = runCmaesPolicySearch();
-      expect(second.bestGenotype).toEqual(first.bestGenotype);
-      expect(second.finalMetrics.objectiveScore).toBe(
-        first.finalMetrics.objectiveScore,
-      );
-      expect(second.finalMetrics.distanceTraveledMeters).toBe(
-        first.finalMetrics.distanceTraveledMeters,
-      );
-    },
-    60000,
-  );
+    const second = runCmaesPolicySearch();
+    expect(second.bestGenotype).toEqual(first.bestGenotype);
+    expect(second.finalMetrics.objectiveScore).toBe(first.finalMetrics.objectiveScore);
+    expect(second.finalMetrics.distanceTraveledMeters).toBe(
+      first.finalMetrics.distanceTraveledMeters,
+    );
+  }, 60000);
 
   test("parameter count matches the disclosed family (7 features x 15 actuators)", () => {
     const result = runCmaesPolicySearch({

@@ -1,25 +1,31 @@
 import { describe, expect, test } from "bun:test";
 import { Euler, Vector3 } from "three";
 import {
+  buildG1Config,
+  buildHouseholdManipulationConfig,
+  DEFAULT_G1_WALKING_CONFIG,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+} from "../app/lib/frankensimCmaes";
+import {
   armWorkbenchObstacles,
-  findClearSpawnPosition,
-  findClearTrajectorySpawnOffset,
-  HOUSE_STRUCTURAL_SURFACES,
-  g1KernelObstacleRoster,
-  householdKernelObstacleRoster,
-  resolveCameraBoom,
-  stageObbToKernelObstacle,
-  stageBoxRenderTransform,
-  type HouseholdKernelObstacle,
+  conservativeSegmentClearanceToOBB,
   createHouseNavigationScene,
   createHouseWallObstacles,
   createSceneFromHouseFurniture,
-  conservativeSegmentClearanceToOBB,
   distanceToOBB,
   evaluateHouseholdObjectiveWithFurniture,
+  findClearSpawnPosition,
+  findClearTrajectorySpawnOffset,
+  g1KernelObstacleRoster,
+  HOUSE_STRUCTURAL_SURFACES,
+  type HouseholdKernelObstacle,
+  householdKernelObstacleRoster,
   type OrientedBoundingBox,
   queryMultiObstacleScene,
+  resolveCameraBoom,
   simulateG1HouseNavigationChallenge,
+  stageBoxRenderTransform,
+  stageObbToKernelObstacle,
 } from "../app/lib/houseMultiObstacleKernel";
 import {
   CRAFTSMAN_FLOOR_SUPPORT,
@@ -27,12 +33,6 @@ import {
   CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR,
   CRAFTSMAN_FOUNDATION_SLAB,
 } from "../app/lib/houseScenes";
-import {
-  DEFAULT_G1_WALKING_CONFIG,
-  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-  buildG1Config,
-  buildHouseholdManipulationConfig,
-} from "../app/lib/frankensimCmaes";
 
 describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
   test("Three renderer box corners agree with the stage SDF and owner frame at arbitrary yaw", () => {
@@ -48,20 +48,39 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
       const transform = stageBoxRenderTransform(obb);
       const euler = new Euler(...transform.rotation);
       const owner = stageObbToKernelObstacle(obb);
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
-        const world = new Vector3(sx * obb.halfExtents[0], sy * obb.halfExtents[1], sz * obb.halfExtents[2])
-          .applyEuler(euler).add(new Vector3(...transform.position));
-        expect(distanceToOBB(world.toArray(), obb)).toBeCloseTo(0, 10);
-        const dx = world.x - owner.centerMeters[0];
-        const dy = -world.z - owner.centerMeters[1];
-        const c = Math.cos(owner.yawRad), s = Math.sin(owner.yawRad);
-        expect(Math.abs(c * dx + s * dy)).toBeCloseTo(owner.halfExtentsMeters[0], 10);
-        expect(Math.abs(-s * dx + c * dy)).toBeCloseTo(owner.halfExtentsMeters[1], 10);
-        expect(Math.abs(world.y - owner.centerMeters[2])).toBeCloseTo(owner.halfExtentsMeters[2], 10);
-      }
+      for (const sx of [-1, 1])
+        for (const sy of [-1, 1])
+          for (const sz of [-1, 1]) {
+            const world = new Vector3(
+              sx * obb.halfExtents[0],
+              sy * obb.halfExtents[1],
+              sz * obb.halfExtents[2],
+            )
+              .applyEuler(euler)
+              .add(new Vector3(...transform.position));
+            expect(distanceToOBB(world.toArray(), obb)).toBeCloseTo(0, 10);
+            const dx = world.x - owner.centerMeters[0];
+            const dy = -world.z - owner.centerMeters[1];
+            const c = Math.cos(owner.yawRad),
+              s = Math.sin(owner.yawRad);
+            expect(Math.abs(c * dx + s * dy)).toBeCloseTo(owner.halfExtentsMeters[0], 10);
+            expect(Math.abs(-s * dx + c * dy)).toBeCloseTo(owner.halfExtentsMeters[1], 10);
+            expect(Math.abs(world.y - owner.centerMeters[2])).toBeCloseTo(
+              owner.halfExtentsMeters[2],
+              10,
+            );
+          }
     }
-    const asymmetric: OrientedBoundingBox = { id: "negative", name: "negative", center: [0, 0, 0], halfExtents: [2, 0.5, 0.2], rotationYawRad: 0.6 };
-    const wrongCorner = new Vector3(2, 0.5, 0.2).applyEuler(new Euler(0, asymmetric.rotationYawRad, 0));
+    const asymmetric: OrientedBoundingBox = {
+      id: "negative",
+      name: "negative",
+      center: [0, 0, 0],
+      halfExtents: [2, 0.5, 0.2],
+      rotationYawRad: 0.6,
+    };
+    const wrongCorner = new Vector3(2, 0.5, 0.2).applyEuler(
+      new Euler(0, asymmetric.rotationYawRad, 0),
+    );
     expect(distanceToOBB(wrongCorner.toArray(), asymmetric)).toBeGreaterThan(1);
   });
 
@@ -131,8 +150,12 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
       halfExtents: [0.5, 0.5, 0.5],
       rotationYawRad: 0,
     };
-    expect(() => conservativeSegmentClearanceToOBB([0, 0, 0], [1, 0, 0], obb, 0)).toThrow("positive spacing");
-    expect(() => conservativeSegmentClearanceToOBB([Number.NaN, 0, 0], [1, 0, 0], obb)).toThrow("must be finite");
+    expect(() => conservativeSegmentClearanceToOBB([0, 0, 0], [1, 0, 0], obb, 0)).toThrow(
+      "positive spacing",
+    );
+    expect(() => conservativeSegmentClearanceToOBB([Number.NaN, 0, 0], [1, 0, 0], obb)).toThrow(
+      "must be finite",
+    );
   });
 
   test("createSceneFromHouseFurniture converts 70+ pieces into complete OBB scene roster", () => {
@@ -161,12 +184,8 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
       createSceneFromHouseFurniture().obstacles.length,
     );
 
-    const doorwayClearance = Math.min(
-      ...walls.map((wall) => distanceToOBB([0, 1, 5.5], wall)),
-    );
-    const solidWallDistance = Math.min(
-      ...walls.map((wall) => distanceToOBB([3, 1, 5.5], wall)),
-    );
+    const doorwayClearance = Math.min(...walls.map((wall) => distanceToOBB([0, 1, 5.5], wall)));
+    const solidWallDistance = Math.min(...walls.map((wall) => distanceToOBB([3, 1, 5.5], wall)));
     expect(doorwayClearance).toBeGreaterThan(1.0);
     expect(solidWallDistance).toBeLessThanOrEqual(0.0);
   });
@@ -374,7 +393,11 @@ describe("findClearTrajectorySpawnOffset / resolveCameraBoom (spawn-inside-sofa 
     expect(seat.offset[1]).toBe(0);
     expect(seat.minClearance).toBeGreaterThanOrEqual(0.18);
     for (const point of footprint) {
-      const world: [number, number, number] = [point[0] + seat.offset[0], point[1], point[2] + seat.offset[2]];
+      const world: [number, number, number] = [
+        point[0] + seat.offset[0],
+        point[1],
+        point[2] + seat.offset[2],
+      ];
       for (const obb of scene.obstacles) {
         if (obb.exemptFromPenalty) continue;
         expect(distanceToOBB(world, obb), obb.name).toBeGreaterThanOrEqual(0.18);
@@ -485,7 +508,9 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     // backsplash and support slab must be represented. A smaller capacity refuses.
     expect(mug.length).toBe(27);
     expect(mug.some((o) => o.name === "china-cabinet")).toBe(true);
-    expect(() => householdKernelObstacleRoster(0.2369, "kitchen-mug", 24)).toThrow("cannot represent");
+    expect(() => householdKernelObstacleRoster(0.2369, "kitchen-mug", 24)).toThrow(
+      "cannot represent",
+    );
     expect(mug[0].name).toBe("counter slab");
     expect(mug[0].role).toBe("support");
     expect(mug.slice(1).every((o) => o.role === "keep-out")).toBe(true);
@@ -549,7 +574,9 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
   test("schema-4 config packet refuses the envelope the owner refuses", () => {
     const base = DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG;
     expect(() => buildHouseholdManipulationConfig({ ...base, objectMassKilograms: -1 })).toThrow();
-    expect(() => buildHouseholdManipulationConfig({ ...base, staticFrictionMu: 0.5, kineticFrictionMu: 0.6 })).toThrow();
+    expect(() =>
+      buildHouseholdManipulationConfig({ ...base, staticFrictionMu: 0.5, kineticFrictionMu: 0.6 }),
+    ).toThrow();
     expect(() =>
       buildHouseholdManipulationConfig({
         ...base,
@@ -565,7 +592,15 @@ describe("household kernel obstacle roster and schema-3 config packet", () => {
     expect(() =>
       buildHouseholdManipulationConfig({
         ...base,
-        obstacles: [{ name: "bad", centerMeters: [0, 0, 0], halfExtentsMeters: [0, 0.1, 0.1], yawRad: 0, role: "keep-out" as const }],
+        obstacles: [
+          {
+            name: "bad",
+            centerMeters: [0, 0, 0],
+            halfExtentsMeters: [0, 0.1, 0.1],
+            yawRad: 0,
+            role: "keep-out" as const,
+          },
+        ],
       }),
     ).toThrow();
     // Zero overrides and no roster: the 12-word packet with preset semantics.
@@ -596,9 +631,7 @@ describe("declared structural surfaces (the robot-inside-the-floor regression)",
     expect(supportTop - renderedTop).toBeGreaterThan(0.002);
     expect(supportTop - renderedTop).toBeLessThan(0.05);
     // Same footprint, so the masonry still reads as the house's base.
-    expect(CRAFTSMAN_FOUNDATION_SLAB.halfExtents).toEqual([
-      ...CRAFTSMAN_FLOOR_SUPPORT.halfExtents,
-    ]);
+    expect(CRAFTSMAN_FOUNDATION_SLAB.halfExtents).toEqual([...CRAFTSMAN_FLOOR_SUPPORT.halfExtents]);
   });
 
   test("the G1 roster declares the house floor as a support surface, not a keep-out", () => {

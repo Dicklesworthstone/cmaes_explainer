@@ -12,7 +12,8 @@ class RobotAudioSynthesizer {
     if (this.ctx) return;
     if (typeof window === "undefined") return;
     const AudioContextClass =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) {
       this.ctx = new AudioContextClass();
     }

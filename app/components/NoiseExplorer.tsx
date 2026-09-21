@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Activity, Shuffle, Waves, Play, Pause, RotateCcw, Sparkles, Sliders, TrendingDown } from "lucide-react";
-import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState, createMulberry32 } from "../lib/cmaesEngine";
+import {
+  Activity,
+  Pause,
+  Play,
+  RotateCcw,
+  Shuffle,
+  Sliders,
+  Sparkles,
+  TrendingDown,
+  Waves,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type CMAESGenerationState, CMAESOptimizer, createMulberry32 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
+import { LatexRenderer } from "./LatexRenderer";
 
 const WIDTH = 920;
 const HEIGHT = 520;
@@ -54,7 +64,7 @@ export function NoiseExplorer() {
 
   const noisyObjective = useCallback(
     (x: number, y: number) => trueFn(x, y) + sampleNoiseRef.current(),
-    []
+    [],
   );
 
   const optimizerRef = useRef<CMAESOptimizer | null>(null);
@@ -66,7 +76,7 @@ export function NoiseExplorer() {
         initialMean: [1.8, 1.6],
         initialSigma: 0.6,
         lambda,
-        bounds: [-2.5, 2.5]
+        bounds: [-2.5, 2.5],
       });
     }
     return optimizerRef.current;
@@ -88,7 +98,7 @@ export function NoiseExplorer() {
       initialMean: [1.8, 1.6],
       initialSigma: 0.6,
       lambda,
-      bounds: [-2.5, 2.5]
+      bounds: [-2.5, 2.5],
     });
     optimizerRef.current = opt;
     const st0 = opt.step();
@@ -150,7 +160,7 @@ export function NoiseExplorer() {
       ymax: 2.5,
       norm: { mode: "linear", k: 8 },
       ramp: { r0: 10, rk: 15, g0: 20, gk: 75, b0: 40, bk: 120 },
-      fallbackField: trueFn
+      fallbackField: trueFn,
     }).then((canvas) => {
       if (live && canvas) setBgCanvas(canvas);
     });
@@ -259,7 +269,8 @@ export function NoiseExplorer() {
     const allVals = [...trueLossHistory, ...noisyLossHistory];
     const maxVal = Math.max(4.0, ...allVals);
     const minVal = Math.min(-0.5, ...allVals);
-    const toPxY = (v: number) => H - PADDING - ((v - minVal) / (maxVal - minVal + 1e-6)) * (H - 2 * PADDING);
+    const toPxY = (v: number) =>
+      H - PADDING - ((v - minVal) / (maxVal - minVal + 1e-6)) * (H - 2 * PADDING);
 
     // Draw grid
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
@@ -358,14 +369,21 @@ export function NoiseExplorer() {
                     feedback is canvas pixels and the demo reads as dead. */}
                 <span className="text-emerald-300 normal-case">
                   Gen {generation}/40 · true loss{" "}
-                  {trueLossHistory.length > 0 ? trueLossHistory[trueLossHistory.length - 1].toFixed(3) : "—"}
+                  {trueLossHistory.length > 0
+                    ? trueLossHistory[trueLossHistory.length - 1].toFixed(3)
+                    : "—"}
                 </span>
                 <span className="text-sky-400">● True Loss at Mean</span>
                 <span className="text-purple-400">● Median Observed</span>
               </div>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
-              <canvas ref={chartCanvasRef} width={WIDTH} height={280} className="w-full h-auto block" />
+              <canvas
+                ref={chartCanvasRef}
+                width={WIDTH}
+                height={280}
+                className="w-full h-auto block"
+              />
             </div>
           </div>
         </div>
@@ -421,7 +439,14 @@ export function NoiseExplorer() {
                 className="w-full accent-sky-400"
               />
               <p className="text-[0.68rem] text-slate-500">
-                <span>Raising </span><LatexRenderer math="\lambda" block={false} /><span> makes the noisy rank ordering more reliable, and the weighted recombination averages independent noise so the error in the mean update shrinks roughly like </span><LatexRenderer math="1/\sqrt{\mu_{\text{eff}}}" block={false} />.
+                <span>Raising </span>
+                <LatexRenderer math="\lambda" block={false} />
+                <span>
+                  {" "}
+                  makes the noisy rank ordering more reliable, and the weighted recombination
+                  averages independent noise so the error in the mean update shrinks roughly like{" "}
+                </span>
+                <LatexRenderer math="1/\sqrt{\mu_{\text{eff}}}" block={false} />.
               </p>
             </div>
           </div>
@@ -464,7 +489,12 @@ export function NoiseExplorer() {
               <span>The Rank Invariance Secret</span>
             </div>
             <p>
-              Gradient-based algorithms rely on numerical difference ratios, which divide by near-zero step intervals and blow up in the presence of noise. CMA-ES only needs the <strong>relative rank ordering</strong> of samples, so the scale of the objective is irrelevant. Noise still corrupts the ordering itself, which is exactly why larger populations, elite reevaluation, and explicit uncertainty handling exist; try the Cauchy setting to watch heavy-tailed spikes scramble the ranks.
+              Gradient-based algorithms rely on numerical difference ratios, which divide by
+              near-zero step intervals and blow up in the presence of noise. CMA-ES only needs the{" "}
+              <strong>relative rank ordering</strong> of samples, so the scale of the objective is
+              irrelevant. Noise still corrupts the ordering itself, which is exactly why larger
+              populations, elite reevaluation, and explicit uncertainty handling exist; try the
+              Cauchy setting to watch heavy-tailed spikes scramble the ranks.
             </p>
           </div>
         </div>

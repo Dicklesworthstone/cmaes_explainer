@@ -214,7 +214,8 @@ export class BrowserPhysicsAdapter {
           success: false,
           error: {
             code: "ERR_UNSUPPORTED_CAPABILITY",
-            message: "Continuous collision detection (sdf-ccd) not supported by this v068 kernel build",
+            message:
+              "Continuous collision detection (sdf-ccd) not supported by this v068 kernel build",
           },
         };
       }
@@ -233,7 +234,6 @@ export class BrowserPhysicsAdapter {
       }
 
       return { success: true, value: true };
-
     }
 
     return { success: true, value: true };

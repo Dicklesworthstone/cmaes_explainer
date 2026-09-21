@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Heart, Shield, Sparkles, Zap, Cpu, Compass } from "lucide-react";
+import { CheckCircle2, Compass, Cpu, Heart, Shield, Sparkles, Zap } from "lucide-react";
 import { LatexRenderer } from "./LatexRenderer";
 
 export function WhyILove() {
@@ -11,9 +11,12 @@ export function WhyILove() {
       title: "Principled Distribution-Space Updates",
       desc: (
         <span>
-          Maintains an explicit multivariate normal search distribution. Its mean shift and rank-μ covariance update together form a Monte Carlo natural-gradient step on the Riemannian manifold of Gaussians with the Fisher information metric; the evolution paths layer cross-generation history on top.
+          Maintains an explicit multivariate normal search distribution. Its mean shift and rank-μ
+          covariance update together form a Monte Carlo natural-gradient step on the Riemannian
+          manifold of Gaussians with the Fisher information metric; the evolution paths layer
+          cross-generation history on top.
         </span>
-      )
+      ),
     },
     {
       icon: Shield,
@@ -21,9 +24,11 @@ export function WhyILove() {
       title: "Invariance to Monotone Objective Warping",
       desc: (
         <span>
-          Rank-based selection evaluates only relative ordering, so scaling, shifting, or applying any strictly increasing transformation <LatexRenderer math="g(f(x))" block={false} /> (such as logarithmic or exponential rewards) leaves the optimization path identical.
+          Rank-based selection evaluates only relative ordering, so scaling, shifting, or applying
+          any strictly increasing transformation <LatexRenderer math="g(f(x))" block={false} />{" "}
+          (such as logarithmic or exponential rewards) leaves the optimization path identical.
         </span>
-      )
+      ),
     },
     {
       icon: Zap,
@@ -31,9 +36,12 @@ export function WhyILove() {
       title: "Converts Expensive Evals into Geometry Learning",
       desc: (
         <span>
-          When each simulation run is expensive, every sample must count. CMA-ES reuses every ranked batch to learn curvature, adapting its covariance toward <LatexRenderer math="C \propto H^{-1}" block={false} /> on quadratic bowls so it can navigate ill-conditioned ravines without finite-difference probing.
+          When each simulation run is expensive, every sample must count. CMA-ES reuses every ranked
+          batch to learn curvature, adapting its covariance toward{" "}
+          <LatexRenderer math="C \propto H^{-1}" block={false} /> on quadratic bowls so it can
+          navigate ill-conditioned ravines without finite-difference probing.
         </span>
-      )
+      ),
     },
     {
       icon: Cpu,
@@ -41,9 +49,13 @@ export function WhyILove() {
       title: "Mixed Discrete/Continuous Versatility",
       desc: (
         <span>
-          By normalizing parameters into a <LatexRenderer math="[0, 1]^n" block={false} /> unit cube and decoding at simulation boundaries, CMA-ES handles continuous dimensions, quantized integers, and categorical choices in a single search vector. Integer and categorical coordinates need a lower bound on their step size (or CMA-ES with margin) so quantization plateaus cannot stall adaptation.
+          By normalizing parameters into a <LatexRenderer math="[0, 1]^n" block={false} /> unit cube
+          and decoding at simulation boundaries, CMA-ES handles continuous dimensions, quantized
+          integers, and categorical choices in a single search vector. Integer and categorical
+          coordinates need a lower bound on their step size (or CMA-ES with margin) so quantization
+          plateaus cannot stall adaptation.
         </span>
-      )
+      ),
     },
     {
       icon: Sparkles,
@@ -51,10 +63,13 @@ export function WhyILove() {
       title: "Virtually Parameter-Free Out of the Box",
       desc: (
         <span>
-          Default heuristics (<LatexRenderer math="\lambda = 4 + \lfloor 3 \ln n \rfloor" block={false} />, CSA damping constants, recombination weights) function reliably across diverse problem domains without tedious manual hyperparameter sweeps.
+          Default heuristics (
+          <LatexRenderer math="\lambda = 4 + \lfloor 3 \ln n \rfloor" block={false} />, CSA damping
+          constants, recombination weights) function reliably across diverse problem domains without
+          tedious manual hyperparameter sweeps.
         </span>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -65,9 +80,7 @@ export function WhyILove() {
             <Heart className="h-5 w-5 fill-rose-500/30 text-rose-400" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white font-display">
-              Why I Love CMA-ES
-            </h3>
+            <h3 className="text-lg font-bold text-white font-display">Why I Love CMA-ES</h3>
             <p className="text-xs text-slate-400">
               The five architectural pillars that make it the ultimate black-box workhorse
             </p>

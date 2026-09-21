@@ -132,14 +132,22 @@ function compareAnswers(
     // can overflow both the subtraction and a relative error budget.
     const relativeDifference = scale === 0 ? 0 : Math.abs(actual / scale - expected / scale);
     if (difference > absoluteTolerance && relativeDifference > relativeTolerance) {
-      fail(`numeric mismatch: actual=${actual}, expected=${expected}, absolute=${absoluteTolerance}, relative=${relativeTolerance}`);
+      fail(
+        `numeric mismatch: actual=${actual}, expected=${expected}, absolute=${absoluteTolerance}, relative=${relativeTolerance}`,
+      );
     }
     onNumber(actual, expected);
     return;
   }
-  if (actual === null || expected === null || typeof actual !== "object" || typeof expected !== "object") {
+  if (
+    actual === null ||
+    expected === null ||
+    typeof actual !== "object" ||
+    typeof expected !== "object"
+  ) {
     if (actual === undefined || expected === undefined) fail("missing value");
-    if (!["string", "boolean"].includes(typeof actual) && actual !== null) fail("unsupported value");
+    if (!["string", "boolean"].includes(typeof actual) && actual !== null)
+      fail("unsupported value");
     if (!Object.is(actual, expected)) fail("type or metadata mismatch");
     return;
   }
@@ -148,14 +156,27 @@ function compareAnswers(
   ancestors.add(expected);
   try {
     if (ArrayBuffer.isView(actual) || ArrayBuffer.isView(expected)) {
-      if (!ArrayBuffer.isView(actual) || !ArrayBuffer.isView(expected) ||
-        actual instanceof DataView || expected instanceof DataView ||
-        actual.constructor !== expected.constructor) fail("typed-array type mismatch");
+      if (
+        !ArrayBuffer.isView(actual) ||
+        !ArrayBuffer.isView(expected) ||
+        actual instanceof DataView ||
+        expected instanceof DataView ||
+        actual.constructor !== expected.constructor
+      )
+        fail("typed-array type mismatch");
       const a = actual as unknown as ArrayLike<number>;
       const b = expected as unknown as ArrayLike<number>;
       if (a.length !== b.length) fail("typed-array length mismatch");
       for (let index = 0; index < a.length; index++) {
-        compareAnswers(a[index], b[index], absoluteTolerance, relativeTolerance, onNumber, `${path}[${index}]`, ancestors);
+        compareAnswers(
+          a[index],
+          b[index],
+          absoluteTolerance,
+          relativeTolerance,
+          onNumber,
+          `${path}[${index}]`,
+          ancestors,
+        );
       }
       return;
     }
@@ -163,24 +184,45 @@ function compareAnswers(
     if (Array.isArray(actual) && Array.isArray(expected)) {
       if (actual.length !== expected.length) fail("array length mismatch");
       for (let index = 0; index < actual.length; index++) {
-        compareAnswers(actual[index], expected[index], absoluteTolerance, relativeTolerance, onNumber, `${path}[${index}]`, ancestors);
+        compareAnswers(
+          actual[index],
+          expected[index],
+          absoluteTolerance,
+          relativeTolerance,
+          onNumber,
+          `${path}[${index}]`,
+          ancestors,
+        );
       }
       return;
     }
     for (const value of [actual, expected]) {
       const prototype = Object.getPrototypeOf(value);
       if (prototype !== Object.prototype && prototype !== null) fail("unsupported object type");
-      if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) fail("symbol field is unsupported");
+      if (Reflect.ownKeys(value).some((key) => typeof key === "symbol"))
+        fail("symbol field is unsupported");
     }
     const a = actual as Record<string, unknown>;
     const b = expected as Record<string, unknown>;
     const keys = Object.getOwnPropertyNames(a).sort();
     const otherKeys = Object.getOwnPropertyNames(b).sort();
-    if (keys.length !== otherKeys.length || keys.some((key, index) => key !== otherKeys[index])) fail("object keys differ");
+    if (keys.length !== otherKeys.length || keys.some((key, index) => key !== otherKeys[index]))
+      fail("object keys differ");
     for (const key of keys) {
-      if (!Object.hasOwn(Object.getOwnPropertyDescriptor(a, key)!, "value") ||
-        !Object.hasOwn(Object.getOwnPropertyDescriptor(b, key)!, "value")) fail("accessor output is unsupported");
-      compareAnswers(a[key], b[key], absoluteTolerance, relativeTolerance, onNumber, `${path}[${JSON.stringify(key)}]`, ancestors);
+      if (
+        !Object.hasOwn(Object.getOwnPropertyDescriptor(a, key)!, "value") ||
+        !Object.hasOwn(Object.getOwnPropertyDescriptor(b, key)!, "value")
+      )
+        fail("accessor output is unsupported");
+      compareAnswers(
+        a[key],
+        b[key],
+        absoluteTolerance,
+        relativeTolerance,
+        onNumber,
+        `${path}[${JSON.stringify(key)}]`,
+        ancestors,
+      );
     }
   } finally {
     ancestors.delete(actual);
@@ -189,7 +231,8 @@ function compareAnswers(
 }
 
 function validateTolerance(value: number): void {
-  if (!Number.isFinite(value) || value < 0) throw new Error("parityHarness: tolerance must be finite and nonnegative");
+  if (!Number.isFinite(value) || value < 0)
+    throw new Error("parityHarness: tolerance must be finite and nonnegative");
 }
 
 /**
@@ -236,7 +279,9 @@ export function parityHarness<TInput, TOutput>(
         compareAnswers(testCase.kernel, testCase.oracle, tolerance, relativeTolerance, () => {});
       }
     } catch (error) {
-      throw new Error(`parityHarness[${ownerName}] case '${testCase.id}': ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `parityHarness[${ownerName}] case '${testCase.id}': ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     result.cases.push({
       id: testCase.id,
@@ -263,18 +308,21 @@ export function assertDeterministic<TInput, TOutput>(
   input: TInput,
   trials = 4,
 ): void {
-  if (!Number.isInteger(trials) || trials < 2) throw new Error("assertDeterministic: at least two trials are required");
+  if (!Number.isInteger(trials) || trials < 2)
+    throw new Error("assertDeterministic: at least two trials are required");
   const answers: TOutput[] = [];
   for (let trial = 0; trial < trials; trial++) {
     answers.push(structuredClone(fn(structuredClone(input))));
   }
   for (let trial = 1; trial < trials; trial++) {
-    parityHarness(`determinism:${ownerName}:trial-${trial}`, [{
-      id: "same-input",
-      input,
-      ts: answers[0],
-      kernel: answers[trial],
-      tolerance: 0,
-    }]);
+    parityHarness(`determinism:${ownerName}:trial-${trial}`, [
+      {
+        id: "same-input",
+        input,
+        ts: answers[0],
+        kernel: answers[trial],
+        tolerance: 0,
+      },
+    ]);
   }
 }

@@ -13,7 +13,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
     id: "cmaes-sampling",
     title: "1. The Gaussian Search Distribution Sampling",
     category: "Sampling & Coordinate Transformation",
-    rawLatex: "x_i = m^{(g)} + \\sigma^{(g)} \\cdot B^{(g)} D^{(g)} z_i, \\quad z_i \\sim \\mathcal{N}(0, I_n)",
+    rawLatex:
+      "x_i = m^{(g)} + \\sigma^{(g)} \\cdot B^{(g)} D^{(g)} z_i, \\quad z_i \\sim \\mathcal{N}(0, I_n)",
     colorizedLatex: `${wrapInteractiveLatexTerm("xi", "x_i", "sapphire")} = ${wrapInteractiveLatexTerm("m", "m^{(g)}", "amethyst")} + ${wrapInteractiveLatexTerm("sigma", "\\sigma^{(g)}", "amber")} \\cdot ${wrapInteractiveLatexTerm("B", "B^{(g)}", "teal")} ${wrapInteractiveLatexTerm("D", "D^{(g)}", "emerald")} ${wrapInteractiveLatexTerm("z", "z_i", "cyan")}, \\quad ${wrapInteractiveLatexTerm("z", "z_i", "cyan")} \\sim \\mathcal{N}(0, I_n)`,
     plainEnglishSentence: [
       { text: "Each candidate design " },
@@ -38,7 +39,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "sapphire",
         role: "The concrete parameter vector sent to your simulator or black-box evaluator.",
         dimension: "n-dimensional vector",
-        intuition: "One scout deployed into parameter space. A batch of λ such vectors forms the current generation.",
+        intuition:
+          "One scout deployed into parameter space. A batch of λ such vectors forms the current generation.",
         keyBehavior: "After evaluation, designs are sorted strictly by relative performance rank.",
       },
       {
@@ -48,8 +50,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amethyst",
         role: "The expected center of the search distribution and best estimate of the optimum.",
         dimension: "n-dimensional vector",
-        intuition: "The 'base camp' of the search swarm. Shifts each generation toward the center of gravity of the top μ elite designs.",
-        keyBehavior: "Does not jump directly to the single best point; takes a robust weighted average to prevent noise chasing.",
+        intuition:
+          "The 'base camp' of the search swarm. Shifts each generation toward the center of gravity of the top μ elite designs.",
+        keyBehavior:
+          "Does not jump directly to the single best point; takes a robust weighted average to prevent noise chasing.",
       },
       {
         id: "sigma",
@@ -58,8 +62,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "Scalar factor determining the overall reach and exploration spread in all directions.",
         dimension: "Positive scalar",
-        intuition: "The throttle of the optimizer. Expands when successive steps align; contracts when steps oscillate.",
-        keyBehavior: "Adapted dynamically via Cumulative Step-Size Adaptation (CSA) without manual learning rate schedules.",
+        intuition:
+          "The throttle of the optimizer. Expands when successive steps align; contracts when steps oscillate.",
+        keyBehavior:
+          "Adapted dynamically via Cumulative Step-Size Adaptation (CSA) without manual learning rate schedules.",
       },
       {
         id: "B",
@@ -68,7 +74,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "Orthogonal matrix (B Bᵀ = I) defining the orientation of the search ellipsoid.",
         dimension: "n × n orthogonal matrix",
-        intuition: "Aligns the ellipsoid coordinate axes with the diagonal ridges and valleys of the objective landscape.",
+        intuition:
+          "Aligns the ellipsoid coordinate axes with the diagonal ridges and valleys of the objective landscape.",
         keyBehavior: "Computed from the eigendecomposition of covariance C = B D² Bᵀ.",
       },
       {
@@ -78,8 +85,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "emerald",
         role: "Diagonal matrix containing square roots of eigenvalues (standard deviations along principal axes).",
         dimension: "n × n diagonal matrix",
-        intuition: "Controls how much the search cloud is stretched along each principal eigenvector.",
-        keyBehavior: "When landscape conditioning is steep, D stretches the distribution to sample far along shallow ravines.",
+        intuition:
+          "Controls how much the search cloud is stretched along each principal eigenvector.",
+        keyBehavior:
+          "When landscape conditioning is steep, D stretches the distribution to sample far along shallow ravines.",
       },
       {
         id: "z",
@@ -88,19 +97,24 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "cyan",
         role: "Standard independent normal vector sampled from N(0, Iₙ).",
         dimension: "n-dimensional vector",
-        intuition: "The raw source of unbiased spherical entropy that gets reshaped by the covariance geometry.",
-        keyBehavior: "Drawn freshly for each offspring candidate using Box-Muller or Ziggurat transforms.",
+        intuition:
+          "The raw source of unbiased spherical entropy that gets reshaped by the covariance geometry.",
+        keyBehavior:
+          "Drawn freshly for each offspring candidate using Box-Muller or Ziggurat transforms.",
       },
     ],
-    pedagogicalNote: "Instead of searching blindly, CMA-ES uses linear algebra (B D) to transform simple spherical white noise into an elongated ellipsoid that mirrors the curvature of the optimization landscape.",
-    takeaway: "Sampling from N(m, σ² C) allows CMA-ES to explore candidate solutions with maximal entropy while adapting direction and scale.",
+    pedagogicalNote:
+      "Instead of searching blindly, CMA-ES uses linear algebra (B D) to transform simple spherical white noise into an elongated ellipsoid that mirrors the curvature of the optimization landscape.",
+    takeaway:
+      "Sampling from N(m, σ² C) allows CMA-ES to explore candidate solutions with maximal entropy while adapting direction and scale.",
   },
 
   "cmaes-recombination": {
     id: "cmaes-recombination",
     title: "2. Rank-Based Recombination & Weighted Mean Shift",
     category: "Selection & Mean Update",
-    rawLatex: "m^{(g+1)} = \\sum_{i=1}^{\\mu} w_i x_{i:\\lambda}, \\quad \\sum_{i=1}^{\\mu} w_i = 1, \\quad w_1 \\ge w_2 \\ge \\dots \\ge w_\\mu > 0",
+    rawLatex:
+      "m^{(g+1)} = \\sum_{i=1}^{\\mu} w_i x_{i:\\lambda}, \\quad \\sum_{i=1}^{\\mu} w_i = 1, \\quad w_1 \\ge w_2 \\ge \\dots \\ge w_\\mu > 0",
     colorizedLatex: `${wrapInteractiveLatexTerm("m_next", "m^{(g+1)}", "amethyst")} = \\sum_{i=1}^{\\mu} ${wrapInteractiveLatexTerm("w", "w_i", "coral")} ${wrapInteractiveLatexTerm("x_rank", "x_{i:\\lambda}", "sapphire")}, \\quad \\sum_{i=1}^{\\mu} ${wrapInteractiveLatexTerm("w", "w_i", "coral")} = 1`,
     plainEnglishSentence: [
       { text: "The next generation mean " },
@@ -119,8 +133,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amethyst",
         role: "The new center of probability mass for generation g + 1.",
         dimension: "n-dimensional vector",
-        intuition: "Shifts base camp smoothly into the basin carved by the best-performing candidates.",
-        keyBehavior: "Moves in the direction of the sampled natural gradient without calculating explicit derivatives.",
+        intuition:
+          "Shifts base camp smoothly into the basin carved by the best-performing candidates.",
+        keyBehavior:
+          "Moves in the direction of the sampled natural gradient without calculating explicit derivatives.",
       },
       {
         id: "w",
@@ -129,7 +145,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "coral",
         role: "Weight assigned to the i-th best candidate: w_i = ln(μ + 0.5) - ln(i), normalized to sum to 1.",
         dimension: "Scalar in (0, 1)",
-        intuition: "Rewards top performers with greater influence while smoothly tapering off for lower ranks.",
+        intuition:
+          "Rewards top performers with greater influence while smoothly tapering off for lower ranks.",
         keyBehavior: "Completely ignores raw numerical scores. Only the relative ranking matters.",
       },
       {
@@ -140,18 +157,22 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "The i-th best parameter vector in generation g such that f(x_{1:λ}) ≤ f(x_{2:λ}) ≤ ... ≤ f(x_{λ:λ}).",
         dimension: "n-dimensional vector",
         intuition: "The elite scouts that found the most promising territory in the current batch.",
-        keyBehavior: "Only the top μ ≈ λ/2 candidates contribute to the mean update; the rest are discarded.",
+        keyBehavior:
+          "Only the top μ ≈ λ/2 candidates contribute to the mean update; the rest are discarded.",
       },
     ],
-    pedagogicalNote: "Because weights depend solely on index rank rather than raw score differences, applying any strictly increasing transformation g(f(x)) produces the exact same update. Outliers and scaling distortions cannot derail the search.",
-    takeaway: "Rank-based selection provides strict order invariance and prevents extreme loss spikes from destabilizing the optimizer.",
+    pedagogicalNote:
+      "Because weights depend solely on index rank rather than raw score differences, applying any strictly increasing transformation g(f(x)) produces the exact same update. Outliers and scaling distortions cannot derail the search.",
+    takeaway:
+      "Rank-based selection provides strict order invariance and prevents extreme loss spikes from destabilizing the optimizer.",
   },
 
   "cmaes-csa-path": {
     id: "cmaes-csa-path",
     title: "3. Cumulative Step-Size Adaptation (CSA Evolution Path)",
     category: "Step-Size Adaptation",
-    rawLatex: "p_\\sigma^{(g+1)} = (1 - c_\\sigma) p_\\sigma^{(g)} + \\sqrt{c_\\sigma (2 - c_\\sigma) \\mu_{\\text{eff}}} \\, {C^{(g)}}^{-1/2} \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}",
+    rawLatex:
+      "p_\\sigma^{(g+1)} = (1 - c_\\sigma) p_\\sigma^{(g)} + \\sqrt{c_\\sigma (2 - c_\\sigma) \\mu_{\\text{eff}}} \\, {C^{(g)}}^{-1/2} \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}",
     colorizedLatex: `${wrapInteractiveLatexTerm("psigma", "p_\\sigma^{(g+1)}", "rose")} = (1 - ${wrapInteractiveLatexTerm("csigma", "c_\\sigma", "amber")}) ${wrapInteractiveLatexTerm("psigma_prev", "p_\\sigma^{(g)}", "rose")} + \\sqrt{${wrapInteractiveLatexTerm("csigma", "c_\\sigma", "amber")} (2 - ${wrapInteractiveLatexTerm("csigma", "c_\\sigma", "amber")}) ${wrapInteractiveLatexTerm("mueff", "\\mu_{\\text{eff}}", "coral")}} \\, ${wrapInteractiveLatexTerm("C_white", "{C^{(g)}}^{-1/2}", "emerald")} \\frac{${wrapInteractiveLatexTerm("dm", "m^{(g+1)} - m^{(g)}", "amethyst")}}{${wrapInteractiveLatexTerm("sigma", "\\sigma^{(g)}", "amber")}}`,
     plainEnglishSentence: [
       { text: "The step-size evolution path " },
@@ -174,8 +195,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "rose",
         role: "Exponentially weighted history vector tracking the directional alignment of consecutive generational steps.",
         dimension: "n-dimensional vector",
-        intuition: "The momentum vector in isotropic coordinates. Measures whether the optimizer is running straight down a runway or zigzagging.",
-        keyBehavior: "Under neutral random selection, p_σ is distributed as a standard Gaussian vector, so its expected length is E||N(0, I)|| ≈ √n.",
+        intuition:
+          "The momentum vector in isotropic coordinates. Measures whether the optimizer is running straight down a runway or zigzagging.",
+        keyBehavior:
+          "Under neutral random selection, p_σ is distributed as a standard Gaussian vector, so its expected length is E||N(0, I)|| ≈ √n.",
       },
       {
         id: "C_white",
@@ -184,8 +207,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "emerald",
         role: "Inverse square root of covariance: C^{-1/2} = B D^{-1} Bᵀ.",
         dimension: "n × n symmetric matrix",
-        intuition: "Strips away the directional distortion of the landscape so path length measures pure geometric coherence.",
-        keyBehavior: "Ensures step-size adaptation is isotropic and independent of coordinate scaling.",
+        intuition:
+          "Strips away the directional distortion of the landscape so path length measures pure geometric coherence.",
+        keyBehavior:
+          "Ensures step-size adaptation is isotropic and independent of coordinate scaling.",
       },
       {
         id: "csigma",
@@ -194,8 +219,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "Learning rate for the evolution path (c_σ ≈ (μ_eff + 2) / (n + μ_eff + 5)).",
         dimension: "Scalar in (0, 1)",
-        intuition: "Controls memory retention: 1/c_σ generations of backward history are preserved.",
-        keyBehavior: "Balances responsiveness to sudden landscape turns with stability against local sample noise.",
+        intuition:
+          "Controls memory retention: 1/c_σ generations of backward history are preserved.",
+        keyBehavior:
+          "Balances responsiveness to sudden landscape turns with stability against local sample noise.",
       },
       {
         id: "mueff",
@@ -204,7 +231,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "coral",
         role: "Effective number of elite points contributing to updates: μ_eff = (∑ w_i)² / ∑ w_i².",
         dimension: "Scalar, typically 1 ≤ μ_eff ≤ μ",
-        intuition: "Quantifies the statistical degrees of freedom in the weighted recombination pool.",
+        intuition:
+          "Quantifies the statistical degrees of freedom in the weighted recombination pool.",
         keyBehavior: "Normalizes the variance of the path update to maintain unit expectation.",
       },
       {
@@ -228,15 +256,18 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         keyBehavior: "Ensures evolution path tracking remains dimensionless and scale-invariant.",
       },
     ],
-    pedagogicalNote: "Why whiten by C^{-1/2}? Without whitening, an elongated covariance matrix would make steps along the major axis appear artificially long even when wandering. Whitening normalizes all directions into a perfect sphere.",
-    takeaway: "Cumulative path tracking acts as an intelligent cruise control: consistent alignment accelerates search; oscillation applies the brakes.",
+    pedagogicalNote:
+      "Why whiten by C^{-1/2}? Without whitening, an elongated covariance matrix would make steps along the major axis appear artificially long even when wandering. Whitening normalizes all directions into a perfect sphere.",
+    takeaway:
+      "Cumulative path tracking acts as an intelligent cruise control: consistent alignment accelerates search; oscillation applies the brakes.",
   },
 
   "cmaes-sigma-update": {
     id: "cmaes-sigma-update",
     title: "4. Exponential Step-Size Update (Inertial Cruise Control)",
     category: "Step-Size Adaptation",
-    rawLatex: "\\sigma^{(g+1)} = \\sigma^{(g)} \\exp\\left( \\frac{c_\\sigma}{d_\\sigma} \\left( \\frac{\\|p_\\sigma^{(g+1)}\\|}{\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\|} - 1 \\right) \\right)",
+    rawLatex:
+      "\\sigma^{(g+1)} = \\sigma^{(g)} \\exp\\left( \\frac{c_\\sigma}{d_\\sigma} \\left( \\frac{\\|p_\\sigma^{(g+1)}\\|}{\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\|} - 1 \\right) \\right)",
     colorizedLatex: `${wrapInteractiveLatexTerm("sigma_next", "\\sigma^{(g+1)}", "amber")} = ${wrapInteractiveLatexTerm("sigma_cur", "\\sigma^{(g)}", "amber")} \\exp\\left( \\frac{${wrapInteractiveLatexTerm("csigma", "c_\\sigma", "amber")}}{${wrapInteractiveLatexTerm("dsigma", "d_\\sigma", "teal")}} \\left( \\frac{\\|${wrapInteractiveLatexTerm("psigma", "p_\\sigma^{(g+1)}", "rose")}\\|}{${wrapInteractiveLatexTerm("chiN", "\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\|", "cyan")}} - 1 \\right) \\right)`,
     plainEnglishSentence: [
       { text: "The new step size " },
@@ -259,7 +290,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "The adapted global scale factor for generation g + 1.",
         dimension: "Positive scalar",
-        intuition: "Grows exponentially when progress is consistently collinear; shrinks when trapped or near an optimum.",
+        intuition:
+          "Grows exponentially when progress is consistently collinear; shrinks when trapped or near an optimum.",
         keyBehavior: "Changes smoothly without sudden discrete step-halving jumps.",
       },
       {
@@ -279,7 +311,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "rose",
         role: "Euclidean norm of the accumulated conjugate evolution path vector.",
         dimension: "Non-negative scalar",
-        intuition: "The odometer of coherent progress. Longer than expected means forward sprint; shorter means zigzagging.",
+        intuition:
+          "The odometer of coherent progress. Longer than expected means forward sprint; shorter means zigzagging.",
         keyBehavior: "Compared directly against the expected random walk length.",
       },
       {
@@ -290,7 +323,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Analytic expectation: E||N(0, Iₙ)|| = √2 Γ((n+1)/2) / Γ(n/2) ≈ √n (1 - 1/(4n) + 1/(21n²)).",
         dimension: "Scalar ≈ √n",
         intuition: "The natural baseline length of pure unbiased thermal noise in n dimensions.",
-        keyBehavior: "If empirical path equals this baseline, exp(0) = 1 and step size remains unchanged.",
+        keyBehavior:
+          "If empirical path equals this baseline, exp(0) = 1 and step size remains unchanged.",
       },
       {
         id: "dsigma",
@@ -299,8 +333,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "Damping constant (d_σ ≈ 1 + 2 max(0, √((μ_eff - 1)/(n + 1)) - 1) + c_σ).",
         dimension: "Positive scalar > 1",
-        intuition: "The shock absorber that limits maximum rate of step-size change per generation.",
-        keyBehavior: "Prevents runaway explosive step inflation when traversing temporary flat regions.",
+        intuition:
+          "The shock absorber that limits maximum rate of step-size change per generation.",
+        keyBehavior:
+          "Prevents runaway explosive step inflation when traversing temporary flat regions.",
       },
       {
         id: "csigma",
@@ -309,19 +345,23 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "Weighting factor balancing path responsiveness against noise.",
         dimension: "Scalar in (0, 1)",
-        intuition: "Controls how rapidly historical direction updates translate into step-size changes.",
+        intuition:
+          "Controls how rapidly historical direction updates translate into step-size changes.",
         keyBehavior: "Derived from problem dimension n and effective selection mass μ_eff.",
       },
     ],
-    pedagogicalNote: "If consecutive steps point in the same direction, ||p_σ|| > E||N(0, I)||, causing the exponent to be positive (exp(>0) > 1), which expands σ. If steps oscillate or cancel, ||p_σ|| < E||N(0, I)||, causing exp(<0) < 1, which contracts σ.",
-    takeaway: "CSA keeps the step size well calibrated across both flat plains and narrow canyons without manual schedule tuning.",
+    pedagogicalNote:
+      "If consecutive steps point in the same direction, ||p_σ|| > E||N(0, I)||, causing the exponent to be positive (exp(>0) > 1), which expands σ. If steps oscillate or cancel, ||p_σ|| < E||N(0, I)||, causing exp(<0) < 1, which contracts σ.",
+    takeaway:
+      "CSA keeps the step size well calibrated across both flat plains and narrow canyons without manual schedule tuning.",
   },
 
   "cmaes-covariance-update": {
     id: "cmaes-covariance-update",
     title: "5. Covariance Matrix Adaptation (Rank-1 + Rank-μ + Active CMA)",
     category: "Covariance Matrix Adaptation",
-    rawLatex: "C^{(g+1)} = (1 - c_1 - c_\\mu) C^{(g)} + c_1 p_c^{(g+1)} {p_c^{(g+1)}}^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i y_{i:\\lambda}^{(g+1)} {y_{i:\\lambda}^{(g+1)}}^\\top + \\Delta C_{\\text{active}}",
+    rawLatex:
+      "C^{(g+1)} = (1 - c_1 - c_\\mu) C^{(g)} + c_1 p_c^{(g+1)} {p_c^{(g+1)}}^\\top + c_\\mu \\sum_{i=1}^{\\mu} w_i y_{i:\\lambda}^{(g+1)} {y_{i:\\lambda}^{(g+1)}}^\\top + \\Delta C_{\\text{active}}",
     colorizedLatex: `${wrapInteractiveLatexTerm("C_next", "C^{(g+1)}", "emerald")} = (1 - ${wrapInteractiveLatexTerm("c1", "c_1", "amber")} - ${wrapInteractiveLatexTerm("cmu", "c_\\mu", "amber")}) ${wrapInteractiveLatexTerm("C_cur", "C^{(g)}", "emerald")} + ${wrapInteractiveLatexTerm("c1", "c_1", "amber")} ${wrapInteractiveLatexTerm("pc", "p_c^{(g+1)} {p_c^{(g+1)}}^\\top", "rose")} + ${wrapInteractiveLatexTerm("cmu", "c_\\mu", "amber")} \\sum_{i=1}^{\\mu} ${wrapInteractiveLatexTerm("w", "w_i", "coral")} ${wrapInteractiveLatexTerm("y", "y_{i:\\lambda} y_{i:\\lambda}^\\top", "sapphire")} + ${wrapInteractiveLatexTerm("C_active", "\\Delta C_{\\text{active}}", "crimson")}`,
     plainEnglishSentence: [
       { text: "The updated covariance matrix " },
@@ -344,8 +384,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "emerald",
         role: "Symmetric positive-definite matrix encoding learned landscape conditioning.",
         dimension: "n × n matrix",
-        intuition: "The geometric memory of the optimizer. On quadratic bowls it settles near C ∝ H⁻¹, up to stochastic fluctuations.",
-        keyBehavior: "Reshapes the spherical search cloud into an elongated ellipsoid aligned with low-cost ridges.",
+        intuition:
+          "The geometric memory of the optimizer. On quadratic bowls it settles near C ∝ H⁻¹, up to stochastic fluctuations.",
+        keyBehavior:
+          "Reshapes the spherical search cloud into an elongated ellipsoid aligned with low-cost ridges.",
       },
       {
         id: "C_cur",
@@ -354,7 +396,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "emerald",
         role: "Baseline covariance from the prior generation, discounted by (1 - c_1 - c_μ).",
         dimension: "n × n matrix",
-        intuition: "Provides inertia so covariance adapts smoothly over several generations rather than fluttering on noise.",
+        intuition:
+          "Provides inertia so covariance adapts smoothly over several generations rather than fluttering on noise.",
         keyBehavior: "Guarantees gradual learning and numerical stability.",
       },
       {
@@ -364,8 +407,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "rose",
         role: "Outer product of the anisotropic evolution path p_c in parameter coordinates.",
         dimension: "n × n rank-1 matrix",
-        intuition: "Online Principal Component Analysis (PCA) along the trajectory of the mean over time.",
-        keyBehavior: "Dominates when population sizes λ are small; quickly stretches C along steady downhill directions.",
+        intuition:
+          "Online Principal Component Analysis (PCA) along the trajectory of the mean over time.",
+        keyBehavior:
+          "Dominates when population sizes λ are small; quickly stretches C along steady downhill directions.",
       },
       {
         id: "y",
@@ -374,8 +419,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "sapphire",
         role: "Weighted sample covariance matrix of the top μ elite offspring: y_{i:λ} = (x_{i:λ} - m^{(g)}) / σ^{(g)}.",
         dimension: "n × n rank-min(μ, n) matrix",
-        intuition: "Captures the instantaneous spatial spread of good candidates in the current single batch.",
-        keyBehavior: "Dominates in large populations: c_μ grows with μ_eff, cutting the generations needed to learn C from order n² to order n.",
+        intuition:
+          "Captures the instantaneous spatial spread of good candidates in the current single batch.",
+        keyBehavior:
+          "Dominates in large populations: c_μ grows with μ_eff, cutting the generations needed to learn C from order n² to order n.",
       },
       {
         id: "C_active",
@@ -384,8 +431,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "crimson",
         role: "Contribution of the worst-ranked offspring, which enter the rank-μ sum with negative weights: ΔC_active = c_μ ∑_{i=μ+1}^λ w_i y_{i:λ} y_{i:λ}ᵀ with w_i < 0, magnitudes rescaled by n / ||C^{-1/2} y_{i:λ}||² to keep the negative update bounded in whitened coordinates.",
         dimension: "n × n matrix",
-        intuition: "Active braking: contracts variance along the directions the worst offspring proved unproductive.",
-        keyBehavior: "Speeds up covariance adaptation on ill-conditioned problems, by up to roughly 2× in the original Jastrebski & Arnold experiments.",
+        intuition:
+          "Active braking: contracts variance along the directions the worst offspring proved unproductive.",
+        keyBehavior:
+          "Speeds up covariance adaptation on ill-conditioned problems, by up to roughly 2× in the original Jastrebski & Arnold experiments.",
       },
       {
         id: "c1",
@@ -394,7 +443,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "Learning rate for the rank-1 trajectory update (c_1 ≈ 2 / ((n + 1.3)² + μ_eff)).",
         dimension: "Scalar in (0, 1)",
-        intuition: "Controls how quickly single-step trajectory correlations reshape the covariance.",
+        intuition:
+          "Controls how quickly single-step trajectory correlations reshape the covariance.",
         keyBehavior: "Scales roughly as O(1/n²), ensuring stable matrix conditioning.",
       },
       {
@@ -405,7 +455,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Learning rate for the intra-generation elite cloud update (c_μ ≈ min(1 - c_1, 2(μ_eff - 2 + 1/μ_eff)/((n + 2)² + μ_eff))).",
         dimension: "Scalar in (0, 1)",
         intuition: "Controls how much immediate intra-batch variance influences the matrix.",
-        keyBehavior: "Scales with effective population size μ_eff; enables massive scaling on parallel compute clusters.",
+        keyBehavior:
+          "Scales with effective population size μ_eff; enables massive scaling on parallel compute clusters.",
       },
       {
         id: "w",
@@ -418,15 +469,18 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         keyBehavior: "Enforces rank-order invariance across the covariance update.",
       },
     ],
-    pedagogicalNote: "CMA-ES combines two distinct timescales of learning: rank-1 updates exploit historical temporal correlations between generations, while rank-μ updates exploit spatial variance within the current generation.",
-    takeaway: "Adapting C implicitly learns a matrix proportional to the inverse Hessian H⁻¹ of the objective without calculating a single derivative.",
+    pedagogicalNote:
+      "CMA-ES combines two distinct timescales of learning: rank-1 updates exploit historical temporal correlations between generations, while rank-μ updates exploit spatial variance within the current generation.",
+    takeaway:
+      "Adapting C implicitly learns a matrix proportional to the inverse Hessian H⁻¹ of the objective without calculating a single derivative.",
   },
 
   "cmaes-natural-gradient": {
     id: "cmaes-natural-gradient",
     title: "6. Natural Gradient on the Gaussian Statistical Manifold",
     category: "Information Geometry & Foundations",
-    rawLatex: "\\tilde{\\nabla}_\\theta J(\\theta) = F(\\theta)^{-1} \\nabla_\\theta J(\\theta), \\quad F(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [\\nabla_\\theta \\ln P_\\theta(x) \\nabla_\\theta \\ln P_\\theta(x)^\\top]",
+    rawLatex:
+      "\\tilde{\\nabla}_\\theta J(\\theta) = F(\\theta)^{-1} \\nabla_\\theta J(\\theta), \\quad F(\\theta) = \\mathbb{E}_{x \\sim P_\\theta} [\\nabla_\\theta \\ln P_\\theta(x) \\nabla_\\theta \\ln P_\\theta(x)^\\top]",
     colorizedLatex: `${wrapInteractiveLatexTerm("nat_grad", "\\tilde{\\nabla}_\\theta J(\\theta)", "emerald")} = ${wrapInteractiveLatexTerm("fisher_inv", "F(\\theta)^{-1}", "teal")} ${wrapInteractiveLatexTerm("euclid_grad", "\\nabla_\\theta J(\\theta)", "amber")}, \\quad ${wrapInteractiveLatexTerm("fisher", "F(\\theta)", "teal")} = \\mathbb{E}_{x \\sim P_\\theta} [\\nabla_\\theta \\ln P_\\theta(x) \\nabla_\\theta \\ln P_\\theta(x)^\\top]`,
     plainEnglishSentence: [
       { text: "The canonical natural gradient " },
@@ -445,8 +499,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "emerald",
         role: "The steepest ascent direction of expected fitness J(θ) = E_{x~P_θ}[-f(x)] with respect to the Fisher information metric.",
         dimension: "Parameter space vector",
-        intuition: "The direction that maximizes expected fitness improvement for a fixed infinitesimal change in distribution Kullback-Leibler (KL) divergence.",
-        keyBehavior: "Akimoto et al. and the IGO framework of Ollivier et al. proved that the mean and rank-μ covariance updates are a sampled Monte Carlo natural gradient step; the evolution paths and CSA are refinements outside that derivation.",
+        intuition:
+          "The direction that maximizes expected fitness improvement for a fixed infinitesimal change in distribution Kullback-Leibler (KL) divergence.",
+        keyBehavior:
+          "Akimoto et al. and the IGO framework of Ollivier et al. proved that the mean and rank-μ covariance updates are a sampled Monte Carlo natural gradient step; the evolution paths and CSA are refinements outside that derivation.",
       },
       {
         id: "fisher_inv",
@@ -455,8 +511,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "Inverse of the Riemannian metric tensor on the manifold of Gaussian probability distributions.",
         dimension: "dim(θ) × dim(θ) matrix",
-        intuition: "Acts as a universal coordinate equalizer, ensuring updates do not depend on how Gaussian parameters are represented.",
-        keyBehavior: "Transforms Euclidean gradients into geometric invariants on the statistical manifold.",
+        intuition:
+          "Acts as a universal coordinate equalizer, ensuring updates do not depend on how Gaussian parameters are represented.",
+        keyBehavior:
+          "Transforms Euclidean gradients into geometric invariants on the statistical manifold.",
       },
       {
         id: "euclid_grad",
@@ -465,7 +523,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "amber",
         role: "Raw derivative of expected performance J(θ) with respect to distribution parameters θ = {m, σ, C}.",
         dimension: "Parameter space vector",
-        intuition: "Standard calculus slope of expected reward, which depends arbitrarily on parameterization.",
+        intuition:
+          "Standard calculus slope of expected reward, which depends arbitrarily on parameterization.",
         keyBehavior: "Estimated by sampling λ offspring and weighting by rank scores.",
       },
       {
@@ -475,19 +534,24 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "F(θ) = E_{x~P_θ}[∇_θ ln P_θ(x) ∇_θ ln P_θ(x)ᵀ], measuring statistical distance between neighboring distributions.",
         dimension: "dim(θ) × dim(θ) positive-definite matrix",
-        intuition: "The intrinsic distance metric measuring how distinguishably the probability distribution shifts when parameters change.",
-        keyBehavior: "Transforms covariantly under any invertible reparameterization of θ, so the natural-gradient direction and the KL geometry it encodes do not depend on how the Gaussian is parameterized.",
+        intuition:
+          "The intrinsic distance metric measuring how distinguishably the probability distribution shifts when parameters change.",
+        keyBehavior:
+          "Transforms covariantly under any invertible reparameterization of θ, so the natural-gradient direction and the KL geometry it encodes do not depend on how the Gaussian is parameterized.",
       },
     ],
-    pedagogicalNote: "CMA-ES is not an ad-hoc biological heuristic. Its core update (the mean shift and the rank-μ covariance term) is a natural gradient step on the Riemannian manifold of multivariate Gaussian distributions equipped with the Fisher Information metric; the evolution paths and step-size control add history that a single natural gradient step cannot capture.",
-    takeaway: "Information geometry grounds the core of CMA-ES as coordinate-free steepest descent on probability distributions.",
+    pedagogicalNote:
+      "CMA-ES is not an ad-hoc biological heuristic. Its core update (the mean shift and the rank-μ covariance term) is a natural gradient step on the Riemannian manifold of multivariate Gaussian distributions equipped with the Fisher Information metric; the evolution paths and step-size control add history that a single natural gradient step cannot capture.",
+    takeaway:
+      "Information geometry grounds the core of CMA-ES as coordinate-free steepest descent on probability distributions.",
   },
 
   "cmaes-pc-path": {
     id: "cmaes-pc-path",
     title: "7. Rank-1 Anisotropic Evolution Path (Mean Trajectory Memory)",
     category: "Covariance Matrix Adaptation",
-    rawLatex: "p_c^{(g+1)} = (1 - c_c) p_c^{(g)} + h_\\sigma \\sqrt{c_c (2 - c_c) \\mu_{\\text{eff}}} \\, \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}",
+    rawLatex:
+      "p_c^{(g+1)} = (1 - c_c) p_c^{(g)} + h_\\sigma \\sqrt{c_c (2 - c_c) \\mu_{\\text{eff}}} \\, \\frac{m^{(g+1)} - m^{(g)}}{\\sigma^{(g)}}",
     colorizedLatex: `${wrapInteractiveLatexTerm("pc", "p_c^{(g+1)}", "rose")} = (1 - ${wrapInteractiveLatexTerm("cc", "c_c", "amber")}) ${wrapInteractiveLatexTerm("pc_prev", "p_c^{(g)}", "rose")} + ${wrapInteractiveLatexTerm("hsigma", "h_\\sigma", "teal")} \\sqrt{${wrapInteractiveLatexTerm("cc", "c_c", "amber")} (2 - ${wrapInteractiveLatexTerm("cc", "c_c", "amber")}) ${wrapInteractiveLatexTerm("mueff", "\\mu_{\\text{eff}}", "coral")}} \\, \\frac{${wrapInteractiveLatexTerm("dm", "m^{(g+1)} - m^{(g)}", "amethyst")}}{${wrapInteractiveLatexTerm("sigma", "\\sigma^{(g)}", "amber")}}`,
     plainEnglishSentence: [
       { text: "The anisotropic path " },
@@ -510,8 +574,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "rose",
         role: "Accumulates directional correlations across generations in unwhitened parameter coordinates.",
         dimension: "n-dimensional vector",
-        intuition: "The directional inertia of the distribution center. Drives rank-1 updates to stretch the covariance along long corridors.",
-        keyBehavior: "Unlike p_σ, p_c does not use whitening, preserving real physical orientation.",
+        intuition:
+          "The directional inertia of the distribution center. Drives rank-1 updates to stretch the covariance along long corridors.",
+        keyBehavior:
+          "Unlike p_σ, p_c does not use whitening, preserving real physical orientation.",
       },
       {
         id: "cc",
@@ -530,8 +596,10 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "Binary gate that stalls p_c accumulation when step size σ is rapidly inflating to avoid over-stretching C.",
         dimension: "0 or 1",
-        intuition: "The safety clutch that prevents covariance over-elongation during emergency step-size expansions.",
-        keyBehavior: "h_σ = 1 under normal operation; temporarily 0 if ||p_σ|| grows excessively large.",
+        intuition:
+          "The safety clutch that prevents covariance over-elongation during emergency step-size expansions.",
+        keyBehavior:
+          "h_σ = 1 under normal operation; temporarily 0 if ||p_σ|| grows excessively large.",
       },
       {
         id: "mueff",
@@ -541,7 +609,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Variance-effective elite population size: μ_eff = (∑ w_i)² / ∑ w_i².",
         dimension: "Scalar ≥ 1",
         intuition: "Normalizes the momentum variance contribution from the elite batch.",
-        keyBehavior: "Matches the statistical degree of freedom in the weighted recombination pool.",
+        keyBehavior:
+          "Matches the statistical degree of freedom in the weighted recombination pool.",
       },
       {
         id: "dm",
@@ -564,15 +633,18 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         keyBehavior: "Adapts dynamically through CSA.",
       },
     ],
-    pedagogicalNote: "By tracking mean movement across consecutive generations, p_c detects consistent linear ridges that a single generation's offspring cloud could never resolve alone.",
-    takeaway: "The rank-1 path p_c acts as online Principal Component Analysis (PCA) along the trajectory of optimization.",
+    pedagogicalNote:
+      "By tracking mean movement across consecutive generations, p_c detects consistent linear ridges that a single generation's offspring cloud could never resolve alone.",
+    takeaway:
+      "The rank-1 path p_c acts as online Principal Component Analysis (PCA) along the trajectory of optimization.",
   },
 
   "cmaes-hessian-inverse": {
     id: "cmaes-hessian-inverse",
     title: "8. Approximate Inverse-Hessian Curvature Alignment",
     category: "Curvature & Second-Order Convergence",
-    rawLatex: "C^{(g)} \\approx \\alpha H^{-1} \\;\\; \\text{for large } g, \\quad f(x) = \\frac{1}{2} (x - x^*)^\\top H (x - x^*)",
+    rawLatex:
+      "C^{(g)} \\approx \\alpha H^{-1} \\;\\; \\text{for large } g, \\quad f(x) = \\frac{1}{2} (x - x^*)^\\top H (x - x^*)",
     colorizedLatex: `${wrapInteractiveLatexTerm("C", "C^{(g)}", "emerald")} \\approx \\alpha ${wrapInteractiveLatexTerm("H_inv", "H^{-1}", "emerald")} \\;\\; \\text{for large } g, \\quad f(x) = \\frac{1}{2} (${wrapInteractiveLatexTerm("x", "x - x^*", "sapphire")})^\\top ${wrapInteractiveLatexTerm("H", "H", "teal")} (${wrapInteractiveLatexTerm("x", "x - x^*", "sapphire")})`,
     plainEnglishSentence: [
       { text: "On any convex quadratic bowl with Hessian matrix " },
@@ -594,7 +666,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "The learned distribution shape maintained by CMA-ES.",
         dimension: "n × n matrix",
         intuition: "Stretches along flat valley floors and compresses across steep ridges.",
-        keyBehavior: "Transforms elliptical contours into spherical isotropic contours in transformed space.",
+        keyBehavior:
+          "Transforms elliptical contours into spherical isotropic contours in transformed space.",
       },
       {
         id: "H_inv",
@@ -604,7 +677,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "The ideal Newton preconditioning matrix: [∇² f(x)]⁻¹.",
         dimension: "n × n symmetric matrix",
         intuition: "The exact curvature metric needed for one-step Newton convergence.",
-        keyBehavior: "CMA-ES approximates a multiple of H⁻¹ purely through black-box ranking, without computing second derivatives.",
+        keyBehavior:
+          "CMA-ES approximates a multiple of H⁻¹ purely through black-box ranking, without computing second derivatives.",
       },
       {
         id: "H",
@@ -614,7 +688,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Matrix of second-order partial derivatives ∂²f / ∂x_i ∂x_j.",
         dimension: "n × n positive-definite matrix",
         intuition: "The physical topography of the valley.",
-        keyBehavior: "Eigenvalues of H govern the ill-conditioning and aspect ratio of the terrain.",
+        keyBehavior:
+          "Eigenvalues of H govern the ill-conditioning and aspect ratio of the terrain.",
       },
       {
         id: "x",
@@ -624,18 +699,22 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Vector distance from current point x to global minimum x*.",
         dimension: "n-dimensional vector",
         intuition: "The remaining distance to the true optimal design.",
-        keyBehavior: "Once C is adapted, shrinks by a roughly constant factor per generation (linear convergence: a straight line on a log plot).",
+        keyBehavior:
+          "Once C is adapted, shrinks by a roughly constant factor per generation (linear convergence: a straight line on a log plot).",
       },
     ],
-    pedagogicalNote: "Newton's method preconditions the gradient with H⁻¹ to jump directly to the minimum. CMA-ES gains the same geometric advantage for derivative-free optimization by adapting C toward a multiple of H⁻¹.",
-    takeaway: "Covariance adaptation acts as a derivative-free quasi-Newton method, whitening the search landscape.",
+    pedagogicalNote:
+      "Newton's method preconditions the gradient with H⁻¹ to jump directly to the minimum. CMA-ES gains the same geometric advantage for derivative-free optimization by adapting C toward a multiple of H⁻¹.",
+    takeaway:
+      "Covariance adaptation acts as a derivative-free quasi-Newton method, whitening the search landscape.",
   },
 
   "cmaes-rank-invariance": {
     id: "cmaes-rank-invariance",
     title: "9. Strict Invariance to Monotone Objective Warping",
     category: "Invariance & Robustness",
-    rawLatex: "\\forall g: \\mathbb{R} \\to \\mathbb{R}, \\quad g'(u) > 0 \\implies \\text{CMA-ES}(g \\circ f) \\equiv \\text{CMA-ES}(f)",
+    rawLatex:
+      "\\forall g: \\mathbb{R} \\to \\mathbb{R}, \\quad g'(u) > 0 \\implies \\text{CMA-ES}(g \\circ f) \\equiv \\text{CMA-ES}(f)",
     colorizedLatex: `\\forall ${wrapInteractiveLatexTerm("g_fn", "g", "amber")}: \\mathbb{R} \\to \\mathbb{R}, \\quad ${wrapInteractiveLatexTerm("g_deriv", "g'(u) > 0", "amber")} \\implies \\text{CMA-ES}(${wrapInteractiveLatexTerm("g_comp", "g \\circ f", "teal")}) \\equiv \\text{CMA-ES}(${wrapInteractiveLatexTerm("fx", "f", "sapphire")})`,
     plainEnglishSentence: [
       { text: "Applying any strictly increasing transformation " },
@@ -644,7 +723,9 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
       { text: "g'(u) > 0", variableId: "g_deriv" },
       { text: " to the objective " },
       { text: "f(x)", variableId: "fx" },
-      { text: " preserves every selection ranking, so with the same random seed CMA-ES produces the identical sequence of means, step sizes, and covariance matrices." },
+      {
+        text: " preserves every selection ranking, so with the same random seed CMA-ES produces the identical sequence of means, step sizes, and covariance matrices.",
+      },
     ],
     variables: [
       {
@@ -684,12 +765,16 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         color: "teal",
         role: "The composite objective presented to the optimizer.",
         dimension: "R^n → R",
-        intuition: "Even if the output is logarithmically or exponentially warped, CMA-ES generates the identical sequence of steps.",
-        keyBehavior: "Nonlinear warping rescales gradients and forces gradient-based methods to re-tune step sizes; CMA-ES is exactly invariant.",
+        intuition:
+          "Even if the output is logarithmically or exponentially warped, CMA-ES generates the identical sequence of steps.",
+        keyBehavior:
+          "Nonlinear warping rescales gradients and forces gradient-based methods to re-tune step sizes; CMA-ES is exactly invariant.",
       },
     ],
-    pedagogicalNote: "A nonlinear monotone rescaling such as exp(f) leaves the minimizer unchanged but can make gradients explode or vanish, so gradient methods must re-tune their step sizes. CMA-ES reads only the relative rank order, which the rescaling leaves untouched, so it takes the identical sequence of steps.",
-    takeaway: "Order invariance means tuned hyperparameters carry over across diverse fitness reward formulations.",
+    pedagogicalNote:
+      "A nonlinear monotone rescaling such as exp(f) leaves the minimizer unchanged but can make gradients explode or vanish, so gradient methods must re-tune their step sizes. CMA-ES reads only the relative rank order, which the rescaling leaves untouched, so it takes the identical sequence of steps.",
+    takeaway:
+      "Order invariance means tuned hyperparameters carry over across diverse fitness reward formulations.",
   },
 
   "cmaes-affine-invariance": {
@@ -707,7 +792,9 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
       { text: "A", variableId: "A" },
       { text: " and translation " },
       { text: "b", variableId: "b" },
-      { text: " yields identical optimization trajectories in transformed coordinates, provided the initial mean and covariance are transformed the same way." },
+      {
+        text: " yields identical optimization trajectories in transformed coordinates, provided the initial mean and covariance are transformed the same way.",
+      },
     ],
     variables: [
       {
@@ -728,7 +815,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "Any non-singular n × n matrix in the General Linear Group GL(n, R).",
         dimension: "n × n invertible matrix",
         intuition: "Rotates, scales, and shears all parameter axes simultaneously.",
-        keyBehavior: "Separable optimizers break under non-diagonal A; CMA-ES covariance rotation B handles full dense coupling.",
+        keyBehavior:
+          "Separable optimizers break under non-diagonal A; CMA-ES covariance rotation B handles full dense coupling.",
       },
       {
         id: "x",
@@ -751,22 +839,27 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         keyBehavior: "Ensures translation invariance across the entire search space.",
       },
     ],
-    pedagogicalNote: "Optimizers that treat each parameter independently (coordinate descent, separable evolutionary algorithms, per-parameter step-size rules) degrade badly if you rotate the coordinate system by 45 degrees, because parameters become cross-coupled. Because CMA-ES maintains the full covariance C with rotation matrix B, it treats all coordinate systems identically.",
-    takeaway: "Rotational invariance means the user never has to worry about parameter cross-talk or coordinate alignment.",
+    pedagogicalNote:
+      "Optimizers that treat each parameter independently (coordinate descent, separable evolutionary algorithms, per-parameter step-size rules) degrade badly if you rotate the coordinate system by 45 degrees, because parameters become cross-coupled. Because CMA-ES maintains the full covariance C with rotation matrix B, it treats all coordinate systems identically.",
+    takeaway:
+      "Rotational invariance means the user never has to worry about parameter cross-talk or coordinate alignment.",
   },
 
   "cmaes-expected-chi": {
     id: "cmaes-expected-chi",
     title: "11. Expected Length of an n-Dimensional Standard Normal Vector",
     category: "Step-Size Adaptation Foundations",
-    rawLatex: "\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\| = \\sqrt{2}\\, \\frac{\\Gamma((n+1)/2)}{\\Gamma(n/2)} \\approx \\sqrt{n} \\left(1 - \\frac{1}{4n} + \\frac{1}{21n^2}\\right)",
+    rawLatex:
+      "\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\| = \\sqrt{2}\\, \\frac{\\Gamma((n+1)/2)}{\\Gamma(n/2)} \\approx \\sqrt{n} \\left(1 - \\frac{1}{4n} + \\frac{1}{21n^2}\\right)",
     colorizedLatex: `${wrapInteractiveLatexTerm("chiN", "\\mathbb{E}\\|\\mathcal{N}(0, I_n)\\|", "cyan")} = \\sqrt{2}\\, \\frac{\\Gamma((${wrapInteractiveLatexTerm("n", "n", "amber")} + 1)/2)}{\\Gamma(${wrapInteractiveLatexTerm("n", "n", "amber")}/2)} \\approx \\sqrt{${wrapInteractiveLatexTerm("n", "n", "amber")}} \\left(1 - \\frac{1}{4 ${wrapInteractiveLatexTerm("n", "n", "amber")}} + \\frac{1}{21 ${wrapInteractiveLatexTerm("n", "n", "amber")}^2}\\right)`,
     plainEnglishSentence: [
       { text: "The expected Euclidean length " },
       { text: "\\mathbb{E}\\|\\mathcal{N}(0, I)\\|", variableId: "chiN" },
       { text: " of pure random Gaussian noise in " },
       { text: "n", variableId: "n" },
-      { text: " dimensions serves as the exact reference baseline for Cumulative Step-Size Adaptation." },
+      {
+        text: " dimensions serves as the exact reference baseline for Cumulative Step-Size Adaptation.",
+      },
     ],
     variables: [
       {
@@ -777,7 +870,8 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "The mean length of a sample from the standard normal distribution in n dimensions: E[||z||].",
         dimension: "Positive scalar ≈ √n",
         intuition: "The natural radius of thermal brownian motion in an n-dimensional room.",
-        keyBehavior: "The CSA yardstick: path length above this baseline means aligned steps (grow σ), near it means uncorrelated steps (hold σ), below it means oscillating steps (shrink σ).",
+        keyBehavior:
+          "The CSA yardstick: path length above this baseline means aligned steps (grow σ), near it means uncorrelated steps (hold σ), below it means oscillating steps (shrink σ).",
       },
       {
         id: "n",
@@ -787,10 +881,13 @@ export const CMAES_EQUATIONS: Record<string, ColorizedEquation> = {
         role: "The number of design parameters being optimized.",
         dimension: "Positive integer",
         intuition: "The degrees of freedom of the search space.",
-        keyBehavior: "As n increases, high-dimensional probability mass concentrates tightly in a thin shell around radius √n.",
+        keyBehavior:
+          "As n increases, high-dimensional probability mass concentrates tightly in a thin shell around radius √n.",
       },
     ],
-    pedagogicalNote: "In high dimensions, a standard Gaussian's mass is not spread through a solid ball; it concentrates in a thin shell of roughly constant thickness around radius √n. CSA exploits this concentration to calibrate step sizes with precision.",
-    takeaway: "The chi-distribution expectation provides an analytic threshold for directional momentum versus thermal noise.",
+    pedagogicalNote:
+      "In high dimensions, a standard Gaussian's mass is not spread through a solid ball; it concentrates in a thin shell of roughly constant thickness around radius √n. CSA exploits this concentration to calibrate step sizes with precision.",
+    takeaway:
+      "The chi-distribution expectation provides an analytic threshold for directional momentum versus thermal noise.",
   },
 };

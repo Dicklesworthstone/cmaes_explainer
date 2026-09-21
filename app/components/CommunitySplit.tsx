@@ -1,6 +1,6 @@
 "use client";
 
-import { Share2, Sparkles, Brain, Cpu, ArrowRightLeft, CheckCircle2 } from "lucide-react";
+import { ArrowRightLeft, Brain, CheckCircle2, Cpu, Share2, Sparkles } from "lucide-react";
 
 export function CommunitySplit() {
   return (
@@ -37,13 +37,22 @@ export function CommunitySplit() {
           </div>
 
           <p className="text-xs text-slate-300 leading-relaxed">
-            The world of Evolution Strategies, Estimation of Distribution Algorithms (EDAs), and Kriging / Gaussian Process surrogates.
+            The world of Evolution Strategies, Estimation of Distribution Algorithms (EDAs), and
+            Kriging / Gaussian Process surrogates.
           </p>
 
           <ul className="space-y-2 text-xs text-slate-300 list-disc pl-4 marker:text-sky-400">
-            <li><strong>Core Premise:</strong> Evaluations are precious, expensive, and opaque.</li>
-            <li><strong>Strength:</strong> Invariance to any monotone rescaling of the objective; tolerant of discontinuous, non-smooth landscapes.</li>
-            <li><strong>Benchmark Arena:</strong> Robotics controllers, CFD, structural FEA, aerodynamic design.</li>
+            <li>
+              <strong>Core Premise:</strong> Evaluations are precious, expensive, and opaque.
+            </li>
+            <li>
+              <strong>Strength:</strong> Invariance to any monotone rescaling of the objective;
+              tolerant of discontinuous, non-smooth landscapes.
+            </li>
+            <li>
+              <strong>Benchmark Arena:</strong> Robotics controllers, CFD, structural FEA,
+              aerodynamic design.
+            </li>
           </ul>
         </div>
 
@@ -58,13 +67,24 @@ export function CommunitySplit() {
           </div>
 
           <p className="text-xs text-slate-300 leading-relaxed">
-            The world of reverse-mode automatic differentiation, backpropagation, Adam/SGD, and end-to-end differentiable neural architectures.
+            The world of reverse-mode automatic differentiation, backpropagation, Adam/SGD, and
+            end-to-end differentiable neural architectures.
           </p>
 
           <ul className="space-y-2 text-xs text-slate-300 list-disc pl-4 marker:text-emerald-400">
-            <li><strong>Core Premise:</strong> Differentiate billions of parameters with massive GPU throughput.</li>
-            <li><strong>Blind Spot:</strong> Struggles whenever simulators contain discrete jumps or non-smooth loops.</li>
-            <li><strong>Re-invention:</strong> Natural Evolution Strategies (NES/xNES) derive the same natural-gradient update CMA-ES approximates; OpenAI&apos;s ES for RL strips it down to a fixed isotropic Gaussian with a mean-only update.</li>
+            <li>
+              <strong>Core Premise:</strong> Differentiate billions of parameters with massive GPU
+              throughput.
+            </li>
+            <li>
+              <strong>Blind Spot:</strong> Struggles whenever simulators contain discrete jumps or
+              non-smooth loops.
+            </li>
+            <li>
+              <strong>Re-invention:</strong> Natural Evolution Strategies (NES/xNES) derive the same
+              natural-gradient update CMA-ES approximates; OpenAI&apos;s ES for RL strips it down to
+              a fixed isotropic Gaussian with a mean-only update.
+            </li>
           </ul>
         </div>
       </div>
@@ -75,7 +95,10 @@ export function CommunitySplit() {
           <span>The Unified Insight</span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Both paradigms converge when they optimize parameter probability distributions with natural gradients under the Fisher Information metric. Bridging zero-order distribution updates with first-order automatic differentiation enables robust exploration across both physical engineering models and neural architectures.
+          Both paradigms converge when they optimize parameter probability distributions with
+          natural gradients under the Fisher Information metric. Bridging zero-order distribution
+          updates with first-order automatic differentiation enables robust exploration across both
+          physical engineering models and neural architectures.
         </p>
       </div>
     </div>

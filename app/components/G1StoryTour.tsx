@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
 import { BookOpen, Sparkles } from "lucide-react";
+import React from "react";
 import type { G1Admission, G1ObjectiveReceipt } from "../lib/frankensimCmaes";
 
 export interface StoryChapter {
@@ -71,7 +71,14 @@ interface G1StoryTourProps {
   disabled?: boolean;
 }
 
-export function G1StoryTour({ currentChapter, onSelectChapter, receipt, admission, kernelVersion, disabled }: G1StoryTourProps) {
+export function G1StoryTour({
+  currentChapter,
+  onSelectChapter,
+  receipt,
+  admission,
+  kernelVersion,
+  disabled,
+}: G1StoryTourProps) {
   return (
     <div className="rounded-2xl border border-cyan-400/20 bg-slate-950/80 p-5 backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
@@ -112,9 +119,7 @@ export function G1StoryTour({ currentChapter, onSelectChapter, receipt, admissio
                 <div className="flex items-center justify-between">
                   <span
                     className={`rounded-md px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider ${
-                      isActive
-                        ? "bg-cyan-400/20 text-cyan-200"
-                        : "bg-white/5 text-slate-400"
+                      isActive ? "bg-cyan-400/20 text-cyan-200" : "bg-white/5 text-slate-400"
                     }`}
                   >
                     {ch.badge}

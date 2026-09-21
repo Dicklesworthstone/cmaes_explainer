@@ -55,9 +55,9 @@
  *   value-iteration-on-SDF perf workload.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
 import { execSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /* ------------------------------------------------------------------ */
 /*  Workload descriptor.                                              */
@@ -307,9 +307,9 @@ function runTrial(
     for (let member = 0; member < population; member++) {
       const point: number[] = new Array(dim);
       // Deterministic: splitmix64-style seed mixing.
-      const mix = ((seed + generation * 1009 + member * 9176) * 0x9E3779B97F4A7C15) >>> 0;
+      const mix = ((seed + generation * 1009 + member * 9176) * 0x9e3779b97f4a7c15) >>> 0;
       for (let index = 0; index < dim; index++) {
-        const bits = ((mix ^ (mix >>> (index * 7))) >>> 0) / 0xFFFFFFFF;
+        const bits = ((mix ^ (mix >>> (index * 7))) >>> 0) / 0xffffffff;
         point[index] = bits * 2 - 1;
       }
       const value = objective(point);
@@ -329,17 +329,21 @@ if (require.main === module) {
     console.error(`Unknown workload: ${workloadId}. Known: ${Object.keys(WORKLOADS).join(", ")}`);
     process.exit(2);
   }
-  const result = runWorkload(workload, (point) => {
-    // Anisotropic ellipsoid objective (same shape as cmaesEngine.bench.ts).
-    let total = 0;
-    const denom = Math.max(1, point.length - 1);
-    for (let index = 0; index < point.length; index++) {
-      const scale = 10 ** (3 * index / denom);
-      const centered = point[index] - 0.37;
-      total += scale * centered * centered;
-    }
-    return total;
-  }, dim);
+  const result = runWorkload(
+    workload,
+    (point) => {
+      // Anisotropic ellipsoid objective (same shape as cmaesEngine.bench.ts).
+      let total = 0;
+      const denom = Math.max(1, point.length - 1);
+      for (let index = 0; index < point.length; index++) {
+        const scale = 10 ** ((3 * index) / denom);
+        const centered = point[index] - 0.37;
+        total += scale * centered * centered;
+      }
+      return total;
+    },
+    dim,
+  );
   console.log(JSON.stringify(result.envelope, null, 2));
   const locked = readEnvelopeFile();
   if (locked && locked.envelopes[workloadId]) {

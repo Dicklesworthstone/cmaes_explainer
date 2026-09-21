@@ -1,18 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { Euler, Quaternion, Vector3 } from "three";
-import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
-import {
-  buildG1Config,
-  buildHouseholdManipulationConfig,
-  decodeG1Trace,
-  decodeHouseholdManipulationTrace,
-  DEFAULT_G1_WALKING_CONFIG,
-  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-} from "../app/lib/frankensimCmaes";
 import {
   advanceTracePlayback,
   clampTracePlaybackIndex,
 } from "../app/hooks/usePrefersReducedMotion";
+import { iiwaJointAnglesFromOwnerPoses } from "../app/lib/armInverseKinematics";
+import {
+  buildG1Config,
+  buildHouseholdManipulationConfig,
+  DEFAULT_G1_WALKING_CONFIG,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  decodeG1Trace,
+  decodeHouseholdManipulationTrace,
+} from "../app/lib/frankensimCmaes";
 
 describe("shared robot trace playback", () => {
   const sampleTimes = [0, 0.25, 0.5, 0.75, 1] as const;
@@ -92,14 +92,10 @@ describe("shared robot trace playback", () => {
   });
 
   test("honors all four speeds and shows terminal poses on five real owner traces", async () => {
-    const owner =
-      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
-        new URL(
-          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
       ).arrayBuffer(),
     });
     const traces: number[][] = [];
@@ -111,20 +107,14 @@ describe("shared robot trace playback", () => {
         }),
       );
       try {
-        const result = decodeG1Trace(
-          evaluator.trace(evaluator.walking_curriculum_mean()),
-        );
+        const result = decodeG1Trace(evaluator.trace(evaluator.walking_curriculum_mean()));
         if (!("ok" in result)) throw new Error(result.refusal.name);
         traces.push(result.ok.samples.map((sample) => sample.timeSeconds));
       } finally {
         evaluator.free();
       }
     }
-    for (const task of [
-      "kitchen-mug",
-      "living-room-remote",
-      "backyard-trowel",
-    ] as const) {
+    for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
       const evaluator = new owner.HouseholdManipulationVizEvaluator(
         buildHouseholdManipulationConfig({
           ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -157,12 +147,8 @@ describe("shared robot trace playback", () => {
           );
         }
         expect(state.elapsedSeconds).toBeCloseTo((8 / 60) * speed, 12);
-        expect(times[state.sampleIndex]).toBeLessThanOrEqual(
-          state.elapsedSeconds,
-        );
-        expect(times[state.sampleIndex + 1]).toBeGreaterThan(
-          state.elapsedSeconds,
-        );
+        expect(times[state.sampleIndex]).toBeLessThanOrEqual(state.elapsedSeconds);
+        expect(times[state.sampleIndex + 1]).toBeGreaterThan(state.elapsedSeconds);
         let terminalSeen = false;
         // Uneven real render intervals need not land exactly on the horizon.
         // The final owner pose must still be exposed before the first wrap.
@@ -218,13 +204,9 @@ describe("source iiwa joint readout", () => {
       q = q
         .clone()
         .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), yaw))
-        .multiply(
-          new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), pitch),
-        )
+        .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), pitch))
         .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), roll))
-        .multiply(
-          new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), angles[i]),
-        );
+        .multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), angles[i]));
       poses.push(pose(q, i % 2 === 0 ? -1 : 1));
     }
     return poses;
@@ -235,49 +217,32 @@ describe("source iiwa joint readout", () => {
       const angles = [0, 1, 2, 3, 4, 5, 6].map(
         (i) => Math.sin(seed * 1.37 + i * 2.19) * (i % 2 ? 1.9 : 2.8),
       );
-      const base = new Quaternion().setFromEuler(
-        new Euler(seed * 0.31, seed * 0.53, seed * -0.71),
-      );
+      const base = new Quaternion().setFromEuler(new Euler(seed * 0.31, seed * 0.53, seed * -0.71));
       const actual = iiwaJointAnglesFromOwnerPoses(forward(angles, base));
-      actual.forEach((angle, index) =>
-        expect(angle).toBeCloseTo(angles[index], 11),
-      );
+      actual.forEach((angle, index) => expect(angle).toBeCloseTo(angles[index], 11));
     }
   });
 
   test("refuses the wrong topology, malformed rotations, and a non-joint-axis rotation", () => {
     expect(() => iiwaJointAnglesFromOwnerPoses([])).toThrow("eight");
-    const poses = forward(
-      [0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
-      new Quaternion(),
-    );
+    const poses = forward([0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7], new Quaternion());
     const bad = poses.map((p) => ({
       quaternionWxyz: [...p.quaternionWxyz] as [number, number, number, number],
     }));
     bad[3].quaternionWxyz[0] = NaN;
     expect(() => iiwaJointAnglesFromOwnerPoses(bad)).toThrow("unit");
     [poses[2], poses[4]] = [poses[4], poses[2]];
-    expect(() => iiwaJointAnglesFromOwnerPoses(poses)).toThrow(
-      "source joint frame",
-    );
+    expect(() => iiwaJointAnglesFromOwnerPoses(poses)).toThrow("source joint frame");
   });
 
   test("reconstructs the rotations in every sample of three actual owner task traces", async () => {
-    const owner =
-      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
-        new URL(
-          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
       ).arrayBuffer(),
     });
-    for (const task of [
-      "kitchen-mug",
-      "living-room-remote",
-      "backyard-trowel",
-    ] as const) {
+    for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
       const evaluator = new owner.HouseholdManipulationVizEvaluator(
         buildHouseholdManipulationConfig({
           ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
@@ -296,10 +261,7 @@ describe("source iiwa joint readout", () => {
           const reconstructed = forward(angles, new Quaternion(x, y, z, w));
           reconstructed.forEach((p, index) => {
             const actual = sample.linkPoses[index].quaternionWxyz;
-            const dot = p.quaternionWxyz.reduce(
-              (sum, value, j) => sum + value * actual[j],
-              0,
-            );
+            const dot = p.quaternionWxyz.reduce((sum, value, j) => sum + value * actual[j], 0);
             expect(Math.abs(dot)).toBeCloseTo(1, 11);
           });
         }

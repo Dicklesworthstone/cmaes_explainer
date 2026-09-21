@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  BrowserPhysicsAdapter,
-  type KernelManifest,
-} from "../app/lib/browserPhysicsAdapter";
+import { BrowserPhysicsAdapter, type KernelManifest } from "../app/lib/browserPhysicsAdapter";
 
 describe("Browser Fail-Closed Physics Kernel Adapter", () => {
   const validV068Manifest: KernelManifest = {

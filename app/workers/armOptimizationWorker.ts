@@ -1,28 +1,28 @@
 /// <reference lib="webworker" />
 
 import {
-  householdKernelObstacleRoster,
-  type HouseholdKernelObstacle,
-} from "../lib/houseMultiObstacleKernel";
-import {
-  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  type CmaFamily,
   createFrankenSimCmaFamilySession,
   createFrankenSimHouseholdManipulationEvaluator,
-  type CmaFamily,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
   type FrankenSimCmaFamilySession,
   type FrankenSimHouseholdManipulationEvaluator,
-  type HouseholdManipulationConfig,
   type HouseholdManipulationAdmission,
+  type HouseholdManipulationConfig,
   type HouseholdManipulationTask,
   type HouseholdManipulationTraceReceipt,
 } from "../lib/frankensimCmaes";
-import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 import {
   armRestoreSharedExperiment,
   armSharedExperiment,
   armVerifySharedExperiment,
 } from "../lib/g1OptimizationProtocol";
 import type { SharedArmExperiment, SharedPolicy } from "../lib/g1PolicyShare";
+import {
+  type HouseholdKernelObstacle,
+  householdKernelObstacleRoster,
+} from "../lib/houseMultiObstacleKernel";
+import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
 type WorkerRequest =
   | { type: "preview"; task: HouseholdManipulationTask; seedIndex?: number }
@@ -94,7 +94,6 @@ type WorkerResponse =
   | { type: "comparison"; rows: ComparisonRow[]; complete: boolean }
   | { type: "error"; message: string };
 
-
 type ArmEvaluator = FrankenSimHouseholdManipulationEvaluator;
 type ArmCmaSession = FrankenSimCmaFamilySession;
 
@@ -154,7 +153,7 @@ function post(message: WorkerResponse): void {
 
 function requireOk<T>(
   result: { ok: T } | { refusal: { name: string; detail: number | null } },
-  label: string
+  label: string,
 ): T {
   if ("ok" in result) return result.ok;
   const suffix = result.refusal.detail === null ? "" : ` (detail ${result.refusal.detail})`;
@@ -169,7 +168,10 @@ function requireOk<T>(
 // readable from an admission, so it is resolved once per task by admitting a
 // bare evaluator first and cached. The extra admission is a packet decode,
 // not a rollout.
-const kernelObstaclesByTask = new Map<HouseholdManipulationTask, readonly HouseholdKernelObstacle[]>();
+const kernelObstaclesByTask = new Map<
+  HouseholdManipulationTask,
+  readonly HouseholdKernelObstacle[]
+>();
 
 async function kernelObstaclesFor(
   task: HouseholdManipulationTask,
@@ -184,10 +186,7 @@ async function kernelObstaclesFor(
     "household-arm support-height probe",
   );
   try {
-    const roster = householdKernelObstacleRoster(
-      probe.admission.scene.supportHeightMeters,
-      task,
-    );
+    const roster = householdKernelObstacleRoster(probe.admission.scene.supportHeightMeters, task);
     kernelObstaclesByTask.set(task, roster);
     return roster;
   } finally {
@@ -195,9 +194,7 @@ async function kernelObstaclesFor(
   }
 }
 
-async function taskConfig(
-  task: HouseholdManipulationTask,
-): Promise<HouseholdManipulationConfig> {
+async function taskConfig(task: HouseholdManipulationTask): Promise<HouseholdManipulationConfig> {
   return {
     ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
     task,
@@ -211,7 +208,7 @@ function memoryFor(family: CmaFamily): number | undefined {
 
 function reportParallelEvaluation(
   receipt: { lanes: number; firstBatchVerified: boolean; fallbackReason: string | null },
-  announced: boolean
+  announced: boolean,
 ): boolean {
   if (announced) return true;
   if (receipt.fallbackReason) {
@@ -235,16 +232,14 @@ function reportParallelEvaluation(
  * the search uses — so an imported gait is measured by exactly the owner that
  * would have trained it.
  */
-async function replayArmPolicy(
-  imported: SharedPolicy,
-): Promise<void> {
+async function replayArmPolicy(imported: SharedPolicy): Promise<void> {
   const { task, family } = armRestoreSharedExperiment(imported);
   post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
   const config = await taskConfig(task);
   const experiment = armVerifySharedExperiment(imported, config);
   const evaluator = requireOk(
     await createFrankenSimHouseholdManipulationEvaluator(config),
-    "household-arm admission"
+    "household-arm admission",
   );
   try {
     const trace = requireOk(evaluator.trace(imported.policy), "imported policy trace");
@@ -272,14 +267,11 @@ async function preview(task: HouseholdManipulationTask, seedIndex = 0): Promise<
   const config = await taskConfig(task);
   const evaluator = requireOk(
     await createFrankenSimHouseholdManipulationEvaluator(config),
-    "household-arm admission"
+    "household-arm admission",
   );
   try {
     const curriculumMean = evaluator.curriculumPolicyMean();
-    const trace = requireOk(
-      evaluator.trace(curriculumMean),
-      "household-arm curriculum trace"
-    );
+    const trace = requireOk(evaluator.trace(curriculumMean), "household-arm curriculum trace");
     post({
       type: "trace",
       trace,
@@ -305,7 +297,10 @@ async function optimize(
   resumeFrom?: Float64Array,
   sigma = 0.001,
 ): Promise<void> {
-  const generations = Math.max(2, Math.min(ARM_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
+  const generations = Math.max(
+    2,
+    Math.min(ARM_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)),
+  );
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const runKey = `${task}:${family}:${seedIndex}`;
 
@@ -333,18 +328,18 @@ async function optimize(
     const config = await taskConfig(task);
     const evaluator = requireOk(
       await createFrankenSimHouseholdManipulationEvaluator(config),
-      "household-arm admission"
+      "household-arm admission",
     );
     const evaluationPool = new RoboticsEvaluationPool({ model: "arm", config, dimension: 128 });
     // A run recovered from storage starts from the policy it reached; a fresh
     // one starts from the curriculum mean.
-    let bestPolicy =
+    const bestPolicy =
       resumeFrom && resumeFrom.length === evaluator.curriculumPolicyMean().length
         ? Float64Array.from(resumeFrom)
         : evaluator.curriculumPolicyMean();
-    let bestObjective = requireOk(
+    const bestObjective = requireOk(
       evaluator.evaluate(bestPolicy),
-      "household-arm curriculum evaluation"
+      "household-arm curriculum evaluation",
     ).objective;
     // Budget spans the continuation lifetime; requests bound the loop.
     const session = requireOk(
@@ -357,7 +352,7 @@ async function optimize(
         maxEvaluations: POPULATION * ARM_MAX_TOTAL_GENERATIONS,
         seed: 0x4152_4d31n + BigInt(seedIndex),
       }),
-      "CMA admission"
+      "CMA admission",
     );
     const activeRun: ArmActiveRun = {
       session,
@@ -389,17 +384,16 @@ async function optimize(
         break;
       }
       const ask = requireOk(run.session.ask(), "CMA ask");
-      const evaluation = await run.pool.evaluate(
-        ask.candidates,
-        () => requireOk(
+      const evaluation = await run.pool.evaluate(ask.candidates, () =>
+        requireOk(
           run.evaluator.evaluatePopulation(ask.candidates),
-          "sequential household-arm population evaluation"
-        )
+          "sequential household-arm population evaluation",
+        ),
       );
       parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
       const snapshot = requireOk(
         run.session.tell(ask.generation, evaluation.objectives),
-        "CMA tell"
+        "CMA tell",
       );
       completedGeneration = snapshot.generation;
       run.completedGeneration = completedGeneration;
@@ -468,7 +462,7 @@ async function optimize(
 }
 async function compareFamilies(
   task: HouseholdManipulationTask,
-  requestedGenerations: number
+  requestedGenerations: number,
 ): Promise<void> {
   const generations = Math.max(2, Math.min(8, Math.trunc(requestedGenerations)));
   const families: CmaFamily[] = ["full", "separable", "lm-cma", "lm-ma"];
@@ -482,7 +476,7 @@ async function compareFamilies(
   const config = await taskConfig(task);
   const evaluator = requireOk(
     await createFrankenSimHouseholdManipulationEvaluator(config),
-    "household-arm admission"
+    "household-arm admission",
   );
   const evaluationPool = new RoboticsEvaluationPool({ model: "arm", config, dimension: 128 });
   let parallelAnnounced = false;
@@ -490,7 +484,7 @@ async function compareFamilies(
     const mean = evaluator.curriculumPolicyMean();
     const initialObjective = requireOk(
       evaluator.evaluate(mean),
-      "household-arm curriculum evaluation"
+      "household-arm curriculum evaluation",
     ).objective;
     for (const family of families) {
       post({
@@ -508,7 +502,7 @@ async function compareFamilies(
           maxEvaluations: POPULATION * generations,
           seed: 0x4152_c0den,
         }),
-        `${family} admission`
+        `${family} admission`,
       );
       // Wall-clock elapsed is a labeled UI/runtime measurement, not a
       // simulation input. Date.now's 1 ms resolution is well below the
@@ -519,17 +513,16 @@ async function compareFamilies(
       try {
         for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
           const ask = requireOk(session.ask(), `${family} ask`);
-          const evaluation = await evaluationPool.evaluate(
-            ask.candidates,
-            () => requireOk(
+          const evaluation = await evaluationPool.evaluate(ask.candidates, () =>
+            requireOk(
               evaluator.evaluatePopulation(ask.candidates),
-              `${family} sequential physical population`
-            )
+              `${family} sequential physical population`,
+            ),
           );
           parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
           const snapshot = requireOk(
             session.tell(ask.generation, evaluation.objectives),
-            `${family} tell`
+            `${family} tell`,
           );
           finalObjective = Math.min(finalObjective, snapshot.best?.objective ?? finalObjective);
           evaluations = snapshot.evaluations;
@@ -571,9 +564,8 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     }
     return;
   }
-  const optimizationRunKey = request.type === "optimize"
-    ? `${request.task}:${request.family}:${request.seedIndex}`
-    : null;
+  const optimizationRunKey =
+    request.type === "optimize" ? `${request.task}:${request.family}:${request.seedIndex}` : null;
   if (optimizationRunKey) armOptimizationRequests.add(optimizationRunKey);
   // See g1OptimizationWorker for the work-factory rationale: invoking
   // the work inside .then() is what actually serializes, because the
@@ -582,22 +574,27 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     request.type === "replay"
       ? replayArmPolicy(request.imported)
       : request.type === "preview"
-      ? preview(request.task, request.seedIndex)
-      : request.type === "compare"
-        ? compareFamilies(request.task, request.generations)
-        : optimize(
-            request.task,
-            request.family,
-            request.generations,
-            request.seedIndex,
-            request.mode,
-            request.continuous,
-            request.resumeFrom,
-            request.sigma,
-          );
-  const scheduled = armGate.then(() => work(), () => work()).catch((error: unknown) => {
-    post({ type: "error", message: error instanceof Error ? error.message : String(error) });
-  });
+        ? preview(request.task, request.seedIndex)
+        : request.type === "compare"
+          ? compareFamilies(request.task, request.generations)
+          : optimize(
+              request.task,
+              request.family,
+              request.generations,
+              request.seedIndex,
+              request.mode,
+              request.continuous,
+              request.resumeFrom,
+              request.sigma,
+            );
+  const scheduled = armGate
+    .then(
+      () => work(),
+      () => work(),
+    )
+    .catch((error: unknown) => {
+      post({ type: "error", message: error instanceof Error ? error.message : String(error) });
+    });
   armGate = scheduled;
   void scheduled.finally(() => {
     if (!optimizationRunKey) return;
@@ -605,5 +602,3 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     armStopRequests.delete(optimizationRunKey);
   });
 };
-
-export {};

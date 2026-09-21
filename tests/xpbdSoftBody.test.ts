@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createCushionLattice,
-  createRugLattice,
-  stepXPBDSoftBody,
-} from "../app/lib/xpbdSoftBody";
+import { createCushionLattice, createRugLattice, stepXPBDSoftBody } from "../app/lib/xpbdSoftBody";
 
 describe("XPBD Soft-Body & Compliant Lattice Engine", () => {
   test("createRugLattice constructs valid <=100 node planar lattice", () => {
@@ -46,7 +42,9 @@ describe("XPBD Soft-Body & Compliant Lattice Engine", () => {
 
     const getTopAvgY = () => {
       const topIndices = cushion.volumeConstraints[0].topNodes;
-      return topIndices.reduce((sum, idx) => sum + cushion.nodes[idx].position[1], 0) / topIndices.length;
+      return (
+        topIndices.reduce((sum, idx) => sum + cushion.nodes[idx].position[1], 0) / topIndices.length
+      );
     };
 
     const settledTopY = getTopAvgY();

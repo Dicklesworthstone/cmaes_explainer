@@ -1,35 +1,30 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import {
+  Activity,
+  ArrowRight,
+  Check,
+  Compass,
+  Layers,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+  Sliders,
+  Sparkles,
+  StepForward,
+  Target,
+  TrendingDown,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInView } from "../hooks/useScrollSpy";
+import { createMulberry32, eigen2x2, sampleGaussian, sampleGaussian2D } from "../lib/cmaesEngine";
+import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
+import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
+import { ColorizedEquation } from "./ColorizedEquation";
 import { LatexRenderer } from "./LatexRenderer";
 import { WhyILove } from "./WhyILove";
-import { ColorizedEquation } from "./ColorizedEquation";
-import { CMAES_EQUATIONS } from "../lib/cmaesEquations";
-import {
-  Sparkles,
-  Sliders,
-  RotateCw,
-  Compass,
-  ArrowRight,
-  TrendingDown,
-  Layers,
-  Activity,
-  Check,
-  Play,
-  Pause,
-  RotateCcw,
-  StepForward,
-  Zap,
-  Target
-} from "lucide-react";
-import {
-  createMulberry32,
-  eigen2x2,
-  sampleGaussian,
-  sampleGaussian2D,
-} from "../lib/cmaesEngine";
-import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
-import { useInView } from "../hooks/useScrollSpy";
 
 interface InteractiveSample {
   x: number;
@@ -66,19 +61,21 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     id: "rosenbrock",
     name: "Rosenbrock Banana Valley",
     subtitle: "Curved non-convex ravine with minimum at (1, 1)",
-    formula: "f(x, y) = 10(\\textcolor{#60a5fa}{y} - \\textcolor{#60a5fa}{x}^2)^2 + (1 - \\textcolor{#60a5fa}{x})^2",
-    fn: (x, y) => 10 * Math.pow(y - x * x, 2) + Math.pow(1 - x, 2),
+    formula:
+      "f(x, y) = 10(\\textcolor{#60a5fa}{y} - \\textcolor{#60a5fa}{x}^2)^2 + (1 - \\textcolor{#60a5fa}{x})^2",
+    fn: (x, y) => 10 * (y - x * x) ** 2 + (1 - x) ** 2,
     initialMean: [-1.4, 1.4],
     globalOpt: [1.0, 1.0],
     initialSigma: 0.55,
     initialEigenRatio: 3.0,
-    initialAngle: 35
+    initialAngle: 35,
   },
   cigar: {
     id: "cigar",
     name: "Sharp Cigar Ravine",
     subtitle: "Moderately ill-conditioned ridge rotated by 35° (benchmark cigars reach 10⁶)",
-    formula: "f(x, y) = \\textcolor{#60a5fa}{u}^2 + 80 \\textcolor{#60a5fa}{v}^2, \\quad \\kappa(H) = 80",
+    formula:
+      "f(x, y) = \\textcolor{#60a5fa}{u}^2 + 80 \\textcolor{#60a5fa}{v}^2, \\quad \\kappa(H) = 80",
     fn: (x, y) => {
       const rot = 0.61;
       const u = x * Math.cos(rot) + y * Math.sin(rot);
@@ -89,25 +86,27 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     globalOpt: [0.0, 0.0],
     initialSigma: 0.5,
     initialEigenRatio: 4.5,
-    initialAngle: 35
+    initialAngle: 35,
   },
   rastrigin: {
     id: "rastrigin",
     name: "Rastrigin Multimodal",
     subtitle: "Grid of deceptive local minima surrounding the origin",
-    formula: "f(x, y) = 20 + \\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2 - 10(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})",
+    formula:
+      "f(x, y) = 20 + \\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2 - 10(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})",
     fn: (x, y) => 20 + x * x + y * y - 10 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y)),
     initialMean: [-1.5, -1.5],
     globalOpt: [0.0, 0.0],
     initialSigma: 0.6,
     initialEigenRatio: 1.2,
-    initialAngle: 0
+    initialAngle: 0,
   },
   ackley: {
     id: "ackley",
     name: "Ackley Basin",
     subtitle: "Flat outer plateau with steep central exponential bowl",
-    formula: "f(x, y) = -20 e^{-0.2\\sqrt{\\frac{1}{2}(\\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2)}} - e^{0.5(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})} + 20 + e",
+    formula:
+      "f(x, y) = -20 e^{-0.2\\sqrt{\\frac{1}{2}(\\textcolor{#60a5fa}{x}^2 + \\textcolor{#60a5fa}{y}^2)}} - e^{0.5(\\cos 2\\pi \\textcolor{#60a5fa}{x} + \\cos 2\\pi \\textcolor{#60a5fa}{y})} + 20 + e",
     fn: (x, y) =>
       -20 * Math.exp(-0.2 * Math.sqrt(0.5 * (x * x + y * y))) -
       Math.exp(0.5 * (Math.cos(2 * Math.PI * x) + Math.cos(2 * Math.PI * y))) +
@@ -117,8 +116,8 @@ const LANDSCAPES: Record<LandscapeKey, LandscapeSpec> = {
     globalOpt: [0.0, 0.0],
     initialSigma: 0.65,
     initialEigenRatio: 1.5,
-    initialAngle: 45
-  }
+    initialAngle: 45,
+  },
 };
 
 /**
@@ -153,7 +152,12 @@ function GaussianDistributionSandbox() {
   const [pCNorm, setPCNorm] = useState(0);
   const [deltaMNorm, setDeltaMNorm] = useState(0);
   const [history, setHistory] = useState<TrajectoryNode[]>([
-    { x: landscape.initialMean[0], y: landscape.initialMean[1], fitness: landscape.fn(landscape.initialMean[0], landscape.initialMean[1]), gen: 0 }
+    {
+      x: landscape.initialMean[0],
+      y: landscape.initialMean[1],
+      fitness: landscape.fn(landscape.initialMean[0], landscape.initialMean[1]),
+      gen: 0,
+    },
   ]);
 
   const pSigmaRef = useRef<[number, number]>([0, 0]);
@@ -197,7 +201,14 @@ function GaussianDistributionSandbox() {
       emX: spec.initialMean[0],
       emY: spec.initialMean[1],
     };
-    setHistory([{ x: spec.initialMean[0], y: spec.initialMean[1], fitness: spec.fn(spec.initialMean[0], spec.initialMean[1]), gen: 0 }]);
+    setHistory([
+      {
+        x: spec.initialMean[0],
+        y: spec.initialMean[1],
+        fitness: spec.fn(spec.initialMean[0], spec.initialMean[1]),
+        gen: 0,
+      },
+    ]);
   };
 
   const handlePointerPos = (clientX: number, clientY: number, target: HTMLElement) => {
@@ -206,7 +217,10 @@ function GaussianDistributionSandbox() {
     const py = clientY - rect.top;
     const DOMAIN = 2.4;
     const x = Math.max(-DOMAIN, Math.min(DOMAIN, (px / rect.width) * (2 * DOMAIN) - DOMAIN));
-    const y = Math.max(-DOMAIN, Math.min(DOMAIN, ((rect.height - py) / rect.height) * (2 * DOMAIN) - DOMAIN));
+    const y = Math.max(
+      -DOMAIN,
+      Math.min(DOMAIN, ((rect.height - py) / rect.height) * (2 * DOMAIN) - DOMAIN),
+    );
     setMeanX(parseFloat(x.toFixed(2)));
     setMeanY(parseFloat(y.toFixed(2)));
   };
@@ -264,9 +278,19 @@ function GaussianDistributionSandbox() {
     return {
       samples: pts,
       eliteMean: newMean,
-      samplePoints: pts
+      samplePoints: pts,
     };
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, covarianceScale, sampleCount, eliteFraction, landscape]);
+  }, [
+    meanX,
+    meanY,
+    sigma,
+    eigenRatio,
+    angleDeg,
+    covarianceScale,
+    sampleCount,
+    eliteFraction,
+    landscape,
+  ]);
 
   // Execute one step of 2D CMA-ES
   const stepGeneration = useCallback(() => {
@@ -293,9 +317,9 @@ function GaussianDistributionSandbox() {
     const n = 2;
     const cSigma = (muEff + 2) / (n + muEff + 5);
     const dSigma = 1 + 2 * Math.max(0, Math.sqrt((muEff - 1) / (n + 1)) - 1) + cSigma;
-    const cc = (4 + muEff / n) / (n + 4 + 2 * muEff / n);
-    const c1 = 2 / (Math.pow(n + 1.3, 2) + muEff);
-    const cMu = Math.min(1 - c1, (2 * (muEff - 2 + 1 / muEff)) / (Math.pow(n + 2, 2) + muEff));
+    const cc = (4 + muEff / n) / (n + 4 + (2 * muEff) / n);
+    const c1 = 2 / ((n + 1.3) ** 2 + muEff);
+    const cMu = Math.min(1 - c1, (2 * (muEff - 2 + 1 / muEff)) / ((n + 2) ** 2 + muEff));
 
     // Update evolution paths
     const angleRad = (angleDeg * Math.PI) / 180;
@@ -320,22 +344,26 @@ function GaussianDistributionSandbox() {
     const constSig = Math.sqrt(cSigma * (2 - cSigma) * muEff);
     const newPSig: [number, number] = [
       (1 - cSigma) * pSigmaRef.current[0] + constSig * unrotWhitenedX,
-      (1 - cSigma) * pSigmaRef.current[1] + constSig * unrotWhitenedY
+      (1 - cSigma) * pSigmaRef.current[1] + constSig * unrotWhitenedY,
     ];
     pSigmaRef.current = newPSig;
 
     const pSigNorm = Math.sqrt(newPSig[0] * newPSig[0] + newPSig[1] * newPSig[1]);
     // E||N(0, I_n)|| ~ sqrt(n)(1 - 1/(4n) + 1/(21n^2)) ~ 1.254 for n = 2
     const chiN = Math.sqrt(n) * (1 - 1 / (4 * n) + 1 / (21 * n * n));
-    const newSigma = Math.max(0.02, Math.min(1.5, sigma * Math.exp((cSigma / dSigma) * (pSigNorm / chiN - 1))));
+    const newSigma = Math.max(
+      0.02,
+      Math.min(1.5, sigma * Math.exp((cSigma / dSigma) * (pSigNorm / chiN - 1))),
+    );
     const pathNormalizer = Math.sqrt(1 - (1 - cSigma) ** (2 * (generation + 1)));
-    const hSigma = pSigNorm / Math.max(Number.EPSILON, pathNormalizer) / chiN < 1.4 + 2 / (n + 1) ? 1 : 0;
+    const hSigma =
+      pSigNorm / Math.max(Number.EPSILON, pathNormalizer) / chiN < 1.4 + 2 / (n + 1) ? 1 : 0;
 
     // Update pc
     const constC = Math.sqrt(cc * (2 - cc) * muEff);
     const newPC: [number, number] = [
       (1 - cc) * pCRef.current[0] + hSigma * constC * (dm[0] / Math.max(1e-4, sigma)),
-      (1 - cc) * pCRef.current[1] + hSigma * constC * (dm[1] / Math.max(1e-4, sigma))
+      (1 - cc) * pCRef.current[1] + hSigma * constC * (dm[1] / Math.max(1e-4, sigma)),
     ];
     pCRef.current = newPC;
 
@@ -345,7 +373,7 @@ function GaussianDistributionSandbox() {
     // so the displayed sliders and the optimizer updated different matrices.
     const currentC: [[number, number], [number, number]] = [
       [l1 * cosA * cosA + l2 * sinA * sinA, (l1 - l2) * sinA * cosA],
-      [(l1 - l2) * sinA * cosA, l1 * sinA * sinA + l2 * cosA * cosA]
+      [(l1 - l2) * sinA * cosA, l1 * sinA * sinA + l2 * cosA * cosA],
     ];
     const rank1_00 = newPC[0] * newPC[0];
     const rank1_01 = newPC[0] * newPC[1];
@@ -392,8 +420,24 @@ function GaussianDistributionSandbox() {
     setGeneration((g) => g + 1);
 
     const fNew = landscape.fn(newM[0], newM[1]);
-    setHistory((prev) => [...prev.slice(-30), { x: newM[0], y: newM[1], fitness: fNew, gen: generation + 1 }]);
-  }, [meanX, meanY, sigma, eigenRatio, angleDeg, covarianceScale, sampleCount, eliteFraction, samplePoints, eliteMean, landscape, generation]);
+    setHistory((prev) => [
+      ...prev.slice(-30),
+      { x: newM[0], y: newM[1], fitness: fNew, gen: generation + 1 },
+    ]);
+  }, [
+    meanX,
+    meanY,
+    sigma,
+    eigenRatio,
+    angleDeg,
+    covarianceScale,
+    sampleCount,
+    eliteFraction,
+    samplePoints,
+    eliteMean,
+    landscape,
+    generation,
+  ]);
 
   // Autoplay ticker
   useEffect(() => {
@@ -431,7 +475,7 @@ function GaussianDistributionSandbox() {
       ymax: 2.4,
       norm: { mode: "tanh" as const, k: activeLandscapeKey === "cigar" ? 25 : 8 },
       ramp: { r0: 8, rk: 22, g0: 20, gk: 70, b0: 40, bk: 130 },
-      fallbackField: landscape.fn
+      fallbackField: landscape.fn,
     };
     // Drop the previous landscape's backdrop immediately: the render loop
     // reads this ref every frame, so without this a switch would keep
@@ -622,11 +666,11 @@ function GaussianDistributionSandbox() {
       ctx.moveTo(emX, emY);
       ctx.lineTo(
         emX - ahLen * Math.cos(arrowAng - Math.PI / 6),
-        emY - ahLen * Math.sin(arrowAng - Math.PI / 6)
+        emY - ahLen * Math.sin(arrowAng - Math.PI / 6),
       );
       ctx.lineTo(
         emX - ahLen * Math.cos(arrowAng + Math.PI / 6),
-        emY - ahLen * Math.sin(arrowAng + Math.PI / 6)
+        emY - ahLen * Math.sin(arrowAng + Math.PI / 6),
       );
       ctx.closePath();
       ctx.fill();
@@ -682,7 +726,20 @@ function GaussianDistributionSandbox() {
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [meanX, meanY, sigma, eigenRatio, covarianceScale, angleDeg, samples, eliteMean, landscape, history, activeLandscapeKey, isInView]);
+  }, [
+    meanX,
+    meanY,
+    sigma,
+    eigenRatio,
+    covarianceScale,
+    angleDeg,
+    samples,
+    eliteMean,
+    landscape,
+    history,
+    activeLandscapeKey,
+    isInView,
+  ]);
 
   const currentFitness = landscape.fn(meanX, meanY);
 
@@ -699,7 +756,8 @@ function GaussianDistributionSandbox() {
               Interactive 2D Gaussian Distribution Sandbox
             </h3>
             <p className="text-xs text-slate-400">
-              Drag the distribution parameters manually, or run live step-by-step CMA-ES evolution down the valley
+              Drag the distribution parameters manually, or run live step-by-step CMA-ES evolution
+              down the valley
             </p>
           </div>
         </div>
@@ -768,8 +826,14 @@ function GaussianDistributionSandbox() {
                 <span className="text-sky-300 font-bold">{generation}</span>
               </div>
               <div className="flex items-center justify-between gap-3 text-slate-400">
-                <span className="flex items-center"><LatexRenderer math="f(m)" block={false} />:</span>
-                <span className="text-emerald-300 font-bold">{currentFitness < 1e-3 ? currentFitness.toExponential(2) : currentFitness.toFixed(3)}</span>
+                <span className="flex items-center">
+                  <LatexRenderer math="f(m)" block={false} />:
+                </span>
+                <span className="text-emerald-300 font-bold">
+                  {currentFitness < 1e-3
+                    ? currentFitness.toExponential(2)
+                    : currentFitness.toFixed(3)}
+                </span>
               </div>
             </div>
           </div>
@@ -786,7 +850,11 @@ function GaussianDistributionSandbox() {
                     : "bg-sky-500 text-white hover:bg-sky-400 shadow-glow-sm"
                 }`}
               >
-                {isPlaying ? <Pause className="h-3.5 w-3.5 fill-current" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+                {isPlaying ? (
+                  <Pause className="h-3.5 w-3.5 fill-current" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                )}
                 <span>{isPlaying ? "Pause" : "Auto-Run"}</span>
               </button>
 
@@ -817,14 +885,16 @@ function GaussianDistributionSandbox() {
                 {[
                   { label: "Slow", ms: 700 },
                   { label: "Normal", ms: 450 },
-                  { label: "Fast", ms: 160 }
+                  { label: "Fast", ms: 160 },
                 ].map((s) => (
                   <button
                     key={s.ms}
                     type="button"
                     onClick={() => setSpeedMs(s.ms)}
                     className={`px-1.5 py-0.5 rounded text-[0.65rem] transition-colors ${
-                      speedMs === s.ms ? "bg-sky-500 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                      speedMs === s.ms
+                        ? "bg-sky-500 text-white font-bold"
+                        : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     {s.label}
@@ -904,7 +974,8 @@ function GaussianDistributionSandbox() {
                 className="w-full accent-purple-400"
               />
               <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
-                <span>Stretches covariance</span> <LatexRenderer math="C" block={false} /> <span>along the ill-conditioned valley.</span>
+                <span>Stretches covariance</span> <LatexRenderer math="C" block={false} />{" "}
+                <span>along the ill-conditioned valley.</span>
               </p>
             </div>
 
@@ -962,7 +1033,12 @@ function GaussianDistributionSandbox() {
               <span>What you are observing</span>
             </div>
             <p className="leading-relaxed">
-              As generations progress, the <strong className="text-sky-300">blue confidence ellipse</strong> elongates and rotates to match the curvature of the ravine (this sandbox caps the drawn eigenvalue ratio at 8:1 for readability), while the <strong className="text-emerald-300">green arrow</strong> pulls the mean along the valley floor without evaluating gradients.
+              As generations progress, the{" "}
+              <strong className="text-sky-300">blue confidence ellipse</strong> elongates and
+              rotates to match the curvature of the ravine (this sandbox caps the drawn eigenvalue
+              ratio at 8:1 for readability), while the{" "}
+              <strong className="text-emerald-300">green arrow</strong> pulls the mean along the
+              valley floor without evaluating gradients.
             </p>
           </div>
         </div>
@@ -978,9 +1054,13 @@ function GaussianDistributionSandbox() {
             <div>
               <h4 className="text-sm font-bold text-white font-display flex items-center gap-2">
                 <span>Live Simulation Internal Algebraic State</span>
-                <span className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
-                  isPlaying ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse" : "bg-slate-800 border-white/10 text-slate-400"
-                }`}>
+                <span
+                  className={`text-[0.65rem] font-mono px-2 py-0.5 rounded-full border ${
+                    isPlaying
+                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 animate-pulse"
+                      : "bg-slate-800 border-white/10 text-slate-400"
+                  }`}
+                >
                   {isPlaying ? "Live Evolution Step" : "Static State"}
                 </span>
               </h4>
@@ -1018,11 +1098,10 @@ function GaussianDistributionSandbox() {
               <span>Step-Size (CSA)</span>
               <LatexRenderer math="\sigma" block={false} />
             </div>
-            <div className="font-mono text-amber-300 text-sm font-semibold">
-              {sigma.toFixed(3)}
-            </div>
+            <div className="font-mono text-amber-300 text-sm font-semibold">{sigma.toFixed(3)}</div>
             <div className="text-[0.68rem] text-slate-400 font-mono">
-              <LatexRenderer math="\|p_\sigma\|" block={false} /> = {pSigmaNorm.toFixed(2)} (vs <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
+              <LatexRenderer math="\|p_\sigma\|" block={false} /> = {pSigmaNorm.toFixed(2)} (vs{" "}
+              <LatexRenderer math="\mathbb{E}\|\mathcal{N}\| \approx 1.25" block={false} />)
             </div>
           </div>
 
@@ -1036,7 +1115,9 @@ function GaussianDistributionSandbox() {
               {eigenRatio.toFixed(1)} : 1
             </div>
             <div className="text-[0.68rem] text-slate-400 font-mono">
-              axes <LatexRenderer math="\sqrt{\kappa}" block={false} /> = {Math.sqrt(eigenRatio).toFixed(2)}:1 · <LatexRenderer math="\theta" block={false} /> = {angleDeg}°
+              axes <LatexRenderer math="\sqrt{\kappa}" block={false} /> ={" "}
+              {Math.sqrt(eigenRatio).toFixed(2)}:1 · <LatexRenderer math="\theta" block={false} /> ={" "}
+              {angleDeg}°
             </div>
           </div>
 
@@ -1049,22 +1130,23 @@ function GaussianDistributionSandbox() {
             <div className="font-mono text-rose-300 text-sm font-semibold">
               <LatexRenderer math="\|p_c\|" block={false} /> = {pCNorm.toFixed(2)}
             </div>
-            <div className="text-[0.68rem] text-slate-400">
-              Rank-1 directional memory
-            </div>
+            <div className="text-[0.68rem] text-slate-400">Rank-1 directional memory</div>
           </div>
 
           {/* Card 5: Elite Selection */}
           <div className="bg-slate-950/60 rounded-xl p-3 border border-white/5 space-y-1 sm:col-span-2 lg:col-span-1">
             <div className="text-[0.65rem] font-bold uppercase tracking-wider text-sky-400 flex items-center justify-between">
               <span>Elite Selection</span>
-              <span><LatexRenderer math="\mu / \lambda" block={false} /></span>
+              <span>
+                <LatexRenderer math="\mu / \lambda" block={false} />
+              </span>
             </div>
             <div className="font-mono text-sky-300 text-sm font-semibold">
               {Math.max(1, Math.floor(sampleCount * eliteFraction))} / {sampleCount}
             </div>
             <div className="text-[0.68rem] text-slate-400 font-mono">
-              Best <LatexRenderer math="f" block={false} />: {currentFitness < 1e-3 ? currentFitness.toExponential(2) : currentFitness.toFixed(3)}
+              Best <LatexRenderer math="f" block={false} />:{" "}
+              {currentFitness < 1e-3 ? currentFitness.toExponential(2) : currentFitness.toFixed(3)}
             </div>
           </div>
         </div>
@@ -1078,15 +1160,26 @@ export function CmaesIntro() {
     <div className="space-y-10">
       <div className="prose-cmaes">
         <p className="text-xl text-slate-200 leading-relaxed font-normal">
-          In deep learning, optimization almost always means <em className="text-sky-300 font-semibold not-italic">gradients</em>: Adam, Adafactor, Lion, and SGD with cosine schedules evaluate backpropagation derivatives to step downhill.
+          In deep learning, optimization almost always means{" "}
+          <em className="text-sky-300 font-semibold not-italic">gradients</em>: Adam, Adafactor,
+          Lion, and SGD with cosine schedules evaluate backpropagation derivatives to step downhill.
         </p>
 
         <p>
-          In engineering design, physical robotics, and scientific simulations, <strong>gradients often do not exist, suffer from severe discretization noise, or cost hours of compute per point</strong>. In black-box optimization, where you can only evaluate a system and observe its scalar output, <strong className="text-sky-200 font-semibold">CMA-ES</strong> (Covariance Matrix Adaptation Evolution Strategy) is the standard workhorse.
+          In engineering design, physical robotics, and scientific simulations,{" "}
+          <strong>
+            gradients often do not exist, suffer from severe discretization noise, or cost hours of
+            compute per point
+          </strong>
+          . In black-box optimization, where you can only evaluate a system and observe its scalar
+          output, <strong className="text-sky-200 font-semibold">CMA-ES</strong> (Covariance Matrix
+          Adaptation Evolution Strategy) is the standard workhorse.
         </p>
 
         <p>
-          CMA-ES provides a coordinate-invariant, sample-efficient method to navigate opaque, non-differentiable objective landscapes into a good basin; on strongly multimodal problems, restart strategies (IPOP/BIPOP) supply the global sweep.
+          CMA-ES provides a coordinate-invariant, sample-efficient method to navigate opaque,
+          non-differentiable objective landscapes into a good basin; on strongly multimodal
+          problems, restart strategies (IPOP/BIPOP) supply the global sweep.
         </p>
       </div>
 
@@ -1096,16 +1189,20 @@ export function CmaesIntro() {
       <div className="prose-cmaes space-y-6">
         <h2>The Core Mathematical Philosophy</h2>
 
-        <p>
-          At its foundation, CMA-ES operates under a clean abstraction:
-        </p>
+        <p>At its foundation, CMA-ES operates under a clean abstraction:</p>
 
         <blockquote className="border-l-4 border-sky-400 bg-slate-900/40 p-5 rounded-r-2xl my-6 text-slate-200 text-base md:text-lg italic leading-relaxed">
-          &ldquo;You do not optimize a single point in parameter space. You optimize a <strong>probability distribution</strong> over parameter space, and iteratively reshape that distribution to concentrate probability mass where performance is highest.&rdquo;
+          &ldquo;You do not optimize a single point in parameter space. You optimize a{" "}
+          <strong>probability distribution</strong> over parameter space, and iteratively reshape
+          that distribution to concentrate probability mass where performance is highest.&rdquo;
         </blockquote>
 
         <p>
-          Suppose you want to minimize an unknown black-box objective function <LatexRenderer math="f: \mathbb{R}^n \to \mathbb{R}" block={false} />. You supply CMA-ES with the dimension <LatexRenderer math="n" block={false} />, an initial mean vector <LatexRenderer math="m^{(0)}" block={false} />, and an initial step size <LatexRenderer math="\sigma^{(0)}" block={false} />.
+          Suppose you want to minimize an unknown black-box objective function{" "}
+          <LatexRenderer math="f: \mathbb{R}^n \to \mathbb{R}" block={false} />. You supply CMA-ES
+          with the dimension <LatexRenderer math="n" block={false} />, an initial mean vector{" "}
+          <LatexRenderer math="m^{(0)}" block={false} />, and an initial step size{" "}
+          <LatexRenderer math="\sigma^{(0)}" block={false} />.
         </p>
       </div>
 
@@ -1116,7 +1213,8 @@ export function CmaesIntro() {
 
       <div className="prose-cmaes space-y-6">
         <p>
-          In each generation <LatexRenderer math="g" block={false} />, the algorithm executes a four-beat cycle:
+          In each generation <LatexRenderer math="g" block={false} />, the algorithm executes a
+          four-beat cycle:
         </p>
 
         <div className="grid gap-4 my-8 not-prose">
@@ -1125,26 +1223,26 @@ export function CmaesIntro() {
               step: "1",
               title: "Sampling Offspring",
               math: "\\textcolor{#60a5fa}{x_i} \\sim \\mathcal{N}(\\textcolor{#c084fc}{m^{(g)}}, (\\textcolor{#fbbf24}{\\sigma^{(g)}})^2 \\textcolor{#34d399}{C^{(g)}})",
-              desc: "Generate a batch of λ candidate designs from the current multivariate normal distribution. Initially, C is spherical; over successive iterations, it stretches along the valley floor."
+              desc: "Generate a batch of λ candidate designs from the current multivariate normal distribution. Initially, C is spherical; over successive iterations, it stretches along the valley floor.",
             },
             {
               step: "2",
               title: "Black-Box Evaluation",
               math: "\\textcolor{#60a5fa}{y_i} = f(\\textcolor{#60a5fa}{x_i}), \\quad i = 1, \\dots, \\lambda",
-              desc: "Evaluate the simulator, finite-element solver, or hyperparameter training run for each candidate vector to obtain scalar performance scores."
+              desc: "Evaluate the simulator, finite-element solver, or hyperparameter training run for each candidate vector to obtain scalar performance scores.",
             },
             {
               step: "3",
               title: "Rank-Based Selection",
               math: "f(\\textcolor{#60a5fa}{x_{1:\\lambda}}) \\le f(\\textcolor{#60a5fa}{x_{2:\\lambda}}) \\le \\dots \\le f(\\textcolor{#60a5fa}{x_{\\lambda:\\lambda}})",
-              desc: "Sort the population by relative rank. CMA-ES ignores raw magnitudes and tracks only order, providing invariance to any strictly increasing monotonic transformation g(f(x))."
+              desc: "Sort the population by relative rank. CMA-ES ignores raw magnitudes and tracks only order, providing invariance to any strictly increasing monotonic transformation g(f(x)).",
             },
             {
               step: "4",
               title: "Distribution Update",
               math: "\\textcolor{#c084fc}{m^{(g+1)}} = \\sum_{i=1}^{\\mu} \\textcolor{#fb923c}{w_i} \\textcolor{#60a5fa}{x_{i:\\lambda}}, \\quad \\textcolor{#34d399}{C^{(g+1)}} = \\text{Adapt}(\\textcolor{#34d399}{C^{(g)}}, \\textcolor{#fb7185}{p_c}), \\quad \\textcolor{#fbbf24}{\\sigma^{(g+1)}} = \\text{CSA}(\\textcolor{#fbbf24}{\\sigma^{(g)}}, \\textcolor{#fb7185}{p_\\sigma})",
-              desc: "Shift mean m toward weighted elite designs, adapt covariance matrix C via rank-1 trajectory memory and rank-μ batch spread, and adjust step size σ using path momentum."
-            }
+              desc: "Shift mean m toward weighted elite designs, adapt covariance matrix C via rank-1 trajectory memory and rank-μ batch spread, and adjust step size σ using path momentum.",
+            },
           ].map((item) => (
             <div
               key={item.step}
@@ -1176,11 +1274,19 @@ export function CmaesIntro() {
         <h2>Why CMA-ES Implicitly Learns Inverse-Hessian Geometry</h2>
 
         <p>
-          On an ill-conditioned quadratic bowl <LatexRenderer math="f(x) = \frac{1}{2} x^\top H x" block={false} />, isotropic search struggles because steep directions oscillate while shallow directions crawl. Newton&apos;s method resolves this by preconditioning gradients with <LatexRenderer math="H^{-1}" block={false} />, transforming elliptical contours into spherical circles where steepest descent points directly at the minimum.
+          On an ill-conditioned quadratic bowl{" "}
+          <LatexRenderer math="f(x) = \frac{1}{2} x^\top H x" block={false} />, isotropic search
+          struggles because steep directions oscillate while shallow directions crawl. Newton&apos;s
+          method resolves this by preconditioning gradients with{" "}
+          <LatexRenderer math="H^{-1}" block={false} />, transforming elliptical contours into
+          spherical circles where steepest descent points directly at the minimum.
         </p>
 
         <p>
-          CMA-ES discovers this geometry <strong>without forming a Hessian matrix or computing derivatives</strong>. The weighted covariance of selected steps (the rank-µ update), reinforced by the evolution path (rank-1), adapts <LatexRenderer math="C" block={false} /> until, approximately:
+          CMA-ES discovers this geometry{" "}
+          <strong>without forming a Hessian matrix or computing derivatives</strong>. The weighted
+          covariance of selected steps (the rank-µ update), reinforced by the evolution path
+          (rank-1), adapts <LatexRenderer math="C" block={false} /> until, approximately:
         </p>
 
         <div className="my-6 not-prose">
@@ -1188,7 +1294,10 @@ export function CmaesIntro() {
         </div>
 
         <p>
-          Sampling from <LatexRenderer math="\mathcal{N}(m, \sigma^2 H^{-1})" block={false} /> whitens the search landscape, so the linear convergence rate becomes essentially independent of the problem&apos;s conditioning, where standard genetic algorithms or random search stall.
+          Sampling from <LatexRenderer math="\mathcal{N}(m, \sigma^2 H^{-1})" block={false} />{" "}
+          whitens the search landscape, so the linear convergence rate becomes essentially
+          independent of the problem&apos;s conditioning, where standard genetic algorithms or
+          random search stall.
         </p>
       </div>
 

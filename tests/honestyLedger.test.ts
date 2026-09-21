@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { HONESTY_CHIP_REGISTRY } from "../app/lib/honestyLedger";
 import fs from "fs";
 import path from "path";
+import { HONESTY_CHIP_REGISTRY } from "../app/lib/honestyLedger";
 
 describe("Project Honesty Ledger & Traceability Registry", () => {
   test("source index retains the existing implementation categories", () => {
@@ -41,8 +41,11 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
   });
 
   test("every task reference resolves in the committed tracker", () => {
-    const issues = fs.readFileSync(path.join(process.cwd(), ".beads/issues.jsonl"), "utf8")
-      .trim().split("\n").map((line) => JSON.parse(line) as { id: string });
+    const issues = fs
+      .readFileSync(path.join(process.cwd(), ".beads/issues.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { id: string });
     const ids = new Set(issues.map((issue) => issue.id));
     for (const chip of HONESTY_CHIP_REGISTRY) expect(ids.has(chip.beadId)).toBe(true);
   });

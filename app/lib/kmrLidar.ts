@@ -51,10 +51,7 @@ function validateLidarConfig(config: LidarConfig): void {
   if (!Number.isFinite(config.minRangeMeters) || config.minRangeMeters < 0) {
     throw new Error("LiDAR minRangeMeters must be finite and non-negative");
   }
-  if (
-    !Number.isFinite(config.maxRangeMeters) ||
-    config.maxRangeMeters <= config.minRangeMeters
-  ) {
+  if (!Number.isFinite(config.maxRangeMeters) || config.maxRangeMeters <= config.minRangeMeters) {
     throw new Error("LiDAR maxRangeMeters must be finite and exceed minRangeMeters");
   }
   if (!Number.isFinite(config.fovDegrees) || config.fovDegrees <= 0 || config.fovDegrees > 360) {
@@ -110,9 +107,7 @@ export function scanLidar(
   const fovRadians = (config.fovDegrees * Math.PI) / 180.0;
   const startAngle = -fovRadians / 2.0;
   const rSelf = Math.max(config.minRangeMeters * 0.5, 0.05);
-  const gauss = makeSeededGaussian(
-    Math.floor(baseXMeters * 1e6) ^ Math.floor(baseYMeters * 1e6),
-  );
+  const gauss = makeSeededGaussian(Math.floor(baseXMeters * 1e6) ^ Math.floor(baseYMeters * 1e6));
   for (let i = 0; i < config.numRays; i += 1) {
     const t = i / Math.max(1, config.numRays - 1);
     const angle = startAngle + t * fovRadians;
@@ -258,11 +253,11 @@ export function lidarToCostmap2D(
       // had no case for "ray hit at the cell."
       const rangeMargin = bestRay.rangeMeters - dist;
       if (rangeMargin > cellSizeMeters * 0.5) {
-        occupancy[j][i] = 0;   // ray passed through: free
+        occupancy[j][i] = 0; // ray passed through: free
       } else if (rangeMargin < -cellSizeMeters * 0.5) {
         occupancy[j][i] = 0.5; // ray stopped before reaching: unknown
       } else {
-        occupancy[j][i] = 1;   // ray hit at this cell: occupied
+        occupancy[j][i] = 1; // ray hit at this cell: occupied
       }
     }
   }

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   ARM_LINK_RADII,
-  OBJECT_CONTACT_HULLS,
   detectArmSelfCollisions,
+  OBJECT_CONTACT_HULLS,
   resolveArmObjectContact,
   resolveRenderedGripperContactGeometry,
 } from "../../app/lib/armContactPhysics";
@@ -120,16 +120,20 @@ describe("experimental arm contact display approximation", () => {
   });
 
   test("rejects malformed rendered contact dimensions", () => {
-    expect(() => resolveRenderedGripperContactGeometry({
-      commandedGripperWidthM: Number.NaN,
-      graspHalfWidthM: 0.046,
-      objectHalfHeightM: 0.052,
-    })).toThrow("finite and non-negative");
-    expect(() => resolveRenderedGripperContactGeometry({
-      commandedGripperWidthM: 0.084,
-      graspHalfWidthM: -0.046,
-      objectHalfHeightM: 0.052,
-    })).toThrow("finite and non-negative");
+    expect(() =>
+      resolveRenderedGripperContactGeometry({
+        commandedGripperWidthM: Number.NaN,
+        graspHalfWidthM: 0.046,
+        objectHalfHeightM: 0.052,
+      }),
+    ).toThrow("finite and non-negative");
+    expect(() =>
+      resolveRenderedGripperContactGeometry({
+        commandedGripperWidthM: 0.084,
+        graspHalfWidthM: -0.046,
+        objectHalfHeightM: 0.052,
+      }),
+    ).toThrow("finite and non-negative");
   });
 
   test("fails closed on unknown objects and non-finite inputs", () => {
@@ -156,12 +160,20 @@ describe("experimental arm contact display approximation", () => {
 
 describe("arm self-collision diagnostic", () => {
   test("a straight chain with generous spacing reports no self contact", () => {
-    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [0, 0.78 + i * 0.25, 0]);
+    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [
+      0,
+      0.78 + i * 0.25,
+      0,
+    ]);
     expect(detectArmSelfCollisions(chain, ARM_LINK_RADII)).toEqual([]);
   });
 
   test("adjacent links are never reported even though they touch", () => {
-    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [0, 0.78 + i * 0.05, 0]);
+    const chain: [number, number, number][] = Array.from({ length: 8 }, (_, i) => [
+      0,
+      0.78 + i * 0.05,
+      0,
+    ]);
     const contacts = detectArmSelfCollisions(chain, ARM_LINK_RADII);
     expect(contacts.every((c) => c.linkB - c.linkA >= 2)).toBe(true);
   });

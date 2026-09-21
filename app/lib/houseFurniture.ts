@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { createMulberry32 } from "./cmaesEngine";
-import { type FurnitureKind, FURNITURE_KIND_DEFAULTS } from "./furnitureTaxonomy";
+import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "./furnitureTaxonomy";
 
 // Procedural furniture meshes: Craftsman-era silhouettes built from
 // BufferGeometry primitives. No GLTF/GLB (law 7) — all geometry is
@@ -95,7 +95,12 @@ export function roundedBox(w: number, h: number, d: number, radius: number): THR
   return geo;
 }
 
-export function taperedCylinder(rTop: number, rBot: number, h: number, seg = 12): THREE.CylinderGeometry {
+export function taperedCylinder(
+  rTop: number,
+  rBot: number,
+  h: number,
+  seg = 12,
+): THREE.CylinderGeometry {
   const geo = new THREE.CylinderGeometry(rTop, rBot, h, seg);
   geo.translate(0, h / 2, 0);
   return geo;
@@ -158,7 +163,12 @@ export function bsplineExtrude(
 }
 
 /** Capsule geometry helper (cylinder with two hemispherical ends). */
-export function capsuleGeometry(radius: number, length: number, radialSeg = 12, capSeg = 6): THREE.BufferGeometry {
+export function capsuleGeometry(
+  radius: number,
+  length: number,
+  radialSeg = 12,
+  capSeg = 6,
+): THREE.BufferGeometry {
   return new THREE.CapsuleGeometry(radius, Math.max(0.001, length), capSeg, radialSeg);
 }
 
@@ -227,7 +237,11 @@ export function generateSofaGeometry(w: number, d: number, h: number): Procedura
   };
 }
 
-export function generateDiningTableGeometry(w: number, d: number, h: number): ProceduralShapeResult {
+export function generateDiningTableGeometry(
+  w: number,
+  d: number,
+  h: number,
+): ProceduralShapeResult {
   const parts: ProceduralShapePart[] = [];
   const topThickness = 0.045;
   // Tabletop
@@ -276,7 +290,10 @@ export function generateDiningTableGeometry(w: number, d: number, h: number): Pr
 export function generateBookshelfGeometry(w: number, d: number, h: number): ProceduralShapeResult {
   const parts: ProceduralShapePart[] = [];
   const rng = createMulberry32(
-    (Math.floor(w * 1000) * 0x9e37 ^ Math.floor(d * 1000) * 0x53d7 ^ Math.floor(h * 1000) * 0x1a7b) >>> 0,
+    ((Math.floor(w * 1000) * 0x9e37) ^
+      (Math.floor(d * 1000) * 0x53d7) ^
+      (Math.floor(h * 1000) * 0x1a7b)) >>>
+      0,
   );
   const shelfCount = 5;
   for (let i = 0; i < shelfCount; i++) {
@@ -441,7 +458,12 @@ export function generateStoveGeometry(w: number, d: number, h: number): Procedur
   };
 }
 
-export function generateChairGeometry(w: number, d: number, h: number, isRocking = false): ProceduralShapeResult {
+export function generateChairGeometry(
+  w: number,
+  d: number,
+  h: number,
+  isRocking = false,
+): ProceduralShapeResult {
   const parts: ProceduralShapePart[] = [];
   const seatH = h * 0.45;
   // Seat
@@ -616,7 +638,11 @@ export function generateStorageCabinetGeometry(
       parts.push({
         name: `handle_${r}_${c}`,
         geometry: handleGeo,
-        localOffset: [px + (colCount > 1 ? (c === 0 ? panelW * 0.35 : -panelW * 0.35) : 0), py, d / 2 + 0.02],
+        localOffset: [
+          px + (colCount > 1 ? (c === 0 ? panelW * 0.35 : -panelW * 0.35) : 0),
+          py,
+          d / 2 + 0.02,
+        ],
         materialHint: "brassHardware",
       });
     }
@@ -642,7 +668,8 @@ export function generateApplianceGeometry(
 ): ProceduralShapeResult {
   const parts: ProceduralShapePart[] = [];
   const bodyGeo = roundedBox(w, h, d, 0.02);
-  const colorHint: CraftsmanColorKey = kind === "fridge" || kind === "microwave" ? "steelBrushed" : "porcelainWhite";
+  const colorHint: CraftsmanColorKey =
+    kind === "fridge" || kind === "microwave" ? "steelBrushed" : "porcelainWhite";
   parts.push({
     name: "housing",
     geometry: bodyGeo,
@@ -821,7 +848,18 @@ export function generateSmallObjectGeometry(
   w: number,
   d: number,
   h: number,
-  kind: "plate" | "glass" | "mug" | "bottle" | "pan" | "book" | "lamp" | "plant" | "rug" | "curtain" | "picture-frame",
+  kind:
+    | "plate"
+    | "glass"
+    | "mug"
+    | "bottle"
+    | "pan"
+    | "book"
+    | "lamp"
+    | "plant"
+    | "rug"
+    | "curtain"
+    | "picture-frame",
 ): ProceduralShapeResult {
   const parts: ProceduralShapePart[] = [];
   if (kind === "plate") {
@@ -1076,7 +1114,9 @@ export function generateFurnitureGeometry(
   h?: number,
 ): ProceduralShapeResult {
   // Resolve defaults if any dimension is missing
-  const defaults = (FURNITURE_KIND_DEFAULTS as Record<string, { defaultSize: [number, number, number] }>)[kind];
+  const defaults = (
+    FURNITURE_KIND_DEFAULTS as Record<string, { defaultSize: [number, number, number] }>
+  )[kind];
   const width = w ?? defaults?.defaultSize[0] ?? 1.0;
   const depth = d ?? defaults?.defaultSize[1] ?? 0.8;
   const height = h ?? defaults?.defaultSize[2] ?? 0.8;
@@ -1174,9 +1214,10 @@ export function generateFurnitureGeometry(
 // ---------------------------------------------------------------------------
 
 function createMaterial(part: ProceduralShapePart): THREE.Material {
-  const colorKey = part.materialHint && part.materialHint in CRAFTSMAN_PALETTE
-    ? (part.materialHint as CraftsmanColorKey)
-    : "walnutWood";
+  const colorKey =
+    part.materialHint && part.materialHint in CRAFTSMAN_PALETTE
+      ? (part.materialHint as CraftsmanColorKey)
+      : "walnutWood";
   const color = CRAFTSMAN_PALETTE[colorKey];
 
   return new THREE.MeshStandardMaterial({
@@ -1250,9 +1291,20 @@ export function buildFurniture(name: string, w: number, d: number, h: number): F
 export function roomFloorMaterial(roomName: string): THREE.MeshStandardMaterial {
   const palette = CRAFTSMAN_PALETTE;
   if (roomName.includes("kitchen") || roomName.includes("bath"))
-    return new THREE.MeshStandardMaterial({ color: palette.tileFloor, roughness: 0.35, metalness: 0.05 });
+    return new THREE.MeshStandardMaterial({
+      color: palette.tileFloor,
+      roughness: 0.35,
+      metalness: 0.05,
+    });
   if (roomName.includes("bedroom"))
-    return new THREE.MeshStandardMaterial({ color: palette.carpetFloor, roughness: 0.92, metalness: 0.0 });
-  return new THREE.MeshStandardMaterial({ color: palette.hardwoodFloor, roughness: 0.4, metalness: 0.05 });
+    return new THREE.MeshStandardMaterial({
+      color: palette.carpetFloor,
+      roughness: 0.92,
+      metalness: 0.0,
+    });
+  return new THREE.MeshStandardMaterial({
+    color: palette.hardwoodFloor,
+    roughness: 0.4,
+    metalness: 0.05,
+  });
 }
-

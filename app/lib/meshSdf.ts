@@ -145,17 +145,19 @@ export class MeshSdf {
       }
     }
 
-    const isInside = (hitCount % 2 === 1) || (dot < -1e-5);
+    const isInside = hitCount % 2 === 1 || dot < -1e-5;
     const distance = isInside ? -unsignedDist : unsignedDist;
 
-    let nx = toP[0];
-    let ny = toP[1];
-    let nz = toP[2];
+    const nx = toP[0];
+    const ny = toP[1];
+    const nz = toP[2];
     const nLen = Math.hypot(nx, ny, nz);
 
     let finalNormal: [number, number, number] = bestNormal;
     if (nLen > 1e-8) {
-      finalNormal = isInside ? [-nx / nLen, -ny / nLen, -nz / nLen] : [nx / nLen, ny / nLen, nz / nLen];
+      finalNormal = isInside
+        ? [-nx / nLen, -ny / nLen, -nz / nLen]
+        : [nx / nLen, ny / nLen, nz / nLen];
     }
 
     return {
@@ -304,12 +306,24 @@ export function sampleVoxelSdf(
   const baseDistance = c0 * (1 - tz) + c1 * tz;
 
   // Numerical gradient along axes
-  const gradX = ((c100 - c000) * (1 - ty) * (1 - tz) + (c110 - c010) * ty * (1 - tz) +
-    (c101 - c001) * (1 - ty) * tz + (c111 - c011) * ty * tz) / cellSize[0];
-  const gradY = ((c010 - c000) * (1 - tx) * (1 - tz) + (c110 - c100) * tx * (1 - tz) +
-    (c011 - c001) * (1 - tx) * tz + (c111 - c101) * tx * tz) / cellSize[1];
-  const gradZ = ((c001 - c000) * (1 - tx) * (1 - ty) + (c101 - c100) * tx * (1 - ty) +
-    (c011 - c001) * (1 - tx) * ty + (c111 - c110) * tx * ty) / cellSize[2];
+  const gradX =
+    ((c100 - c000) * (1 - ty) * (1 - tz) +
+      (c110 - c010) * ty * (1 - tz) +
+      (c101 - c001) * (1 - ty) * tz +
+      (c111 - c011) * ty * tz) /
+    cellSize[0];
+  const gradY =
+    ((c010 - c000) * (1 - tx) * (1 - tz) +
+      (c110 - c100) * tx * (1 - tz) +
+      (c011 - c001) * (1 - tx) * tz +
+      (c111 - c101) * tx * tz) /
+    cellSize[1];
+  const gradZ =
+    ((c001 - c000) * (1 - tx) * (1 - ty) +
+      (c101 - c100) * tx * (1 - ty) +
+      (c011 - c001) * (1 - tx) * ty +
+      (c111 - c110) * tx * ty) /
+    cellSize[2];
 
   const gLen = Math.hypot(gradX, gradY, gradZ) || 1;
   const normal: [number, number, number] = [gradX / gLen, gradY / gLen, gradZ / gLen];
@@ -370,8 +384,8 @@ export function closestPointOnTriangle(
   }
 
   const va = d3 * d6 - d5 * d4;
-  if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
-    const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / (d4 - d3 + (d5 - d6));
     const bc = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
     return [b[0] + w * bc[0], b[1] + w * bc[1], b[2] + w * bc[2]]; // Edge BC region
   }
@@ -380,9 +394,5 @@ export function closestPointOnTriangle(
   const denom = 1.0 / (va + vb + vc);
   const v = vb * denom;
   const w = vc * denom;
-  return [
-    a[0] + ab[0] * v + ac[0] * w,
-    a[1] + ab[1] * v + ac[1] * w,
-    a[2] + ab[2] * v + ac[2] * w,
-  ];
+  return [a[0] + ab[0] * v + ac[0] * w, a[1] + ab[1] * v + ac[1] * w, a[2] + ab[2] * v + ac[2] * w];
 }

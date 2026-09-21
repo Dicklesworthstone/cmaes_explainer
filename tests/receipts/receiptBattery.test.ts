@@ -29,11 +29,11 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   captureReceipt,
-  readSnapshot,
-  writeSnapshot,
   compareSnapshot,
   type OwnerId,
   type OwnerReceipt,
+  readSnapshot,
+  writeSnapshot,
 } from "./receiptBattery";
 
 const OWNERS: OwnerId[] = [

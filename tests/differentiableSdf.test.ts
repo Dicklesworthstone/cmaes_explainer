@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import {
-  sminPoly,
-  sminLse,
-  smaxPoly,
-  evalGradientAndHessian,
-  DifferentiableSdfNode,
-  raymarchDifferentiableSdf,
-  DifferentiableSceneSDF,
-} from "../app/lib/differentiableSdf";
 import { sdfBox, sdfSphere } from "../app/lib/analyticSdf";
+import {
+  DifferentiableSceneSDF,
+  DifferentiableSdfNode,
+  evalGradientAndHessian,
+  raymarchDifferentiableSdf,
+  smaxPoly,
+  sminLse,
+  sminPoly,
+} from "../app/lib/differentiableSdf";
 
 describe("Differentiable Signed Distance Fields & Exact Gradients", () => {
   describe("C¹ Smooth Minimum & Maximum Operators", () => {
@@ -88,7 +88,10 @@ describe("Differentiable Signed Distance Fields & Exact Gradients", () => {
     });
 
     it("applies narrow-band Wendland near-surface refinement without affecting far field", () => {
-      const baseNode = new DifferentiableSdfNode((p) => sdfSphere(p, [0, 0, 0], 1.0).distance, "base");
+      const baseNode = new DifferentiableSdfNode(
+        (p) => sdfSphere(p, [0, 0, 0], 1.0).distance,
+        "base",
+      );
 
       // Micro-displacement function (e.g. sinusoidal surface ripple)
       const rippleFn = (p: [number, number, number]) => 0.02 * Math.sin(p[0] * 20);

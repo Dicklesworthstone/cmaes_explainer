@@ -1,8 +1,8 @@
 "use client";
 
-import * as THREE from "three";
-import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import * as THREE from "three";
 
 interface TimerConstructor {
   new (): any;

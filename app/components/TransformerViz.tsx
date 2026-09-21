@@ -1,33 +1,33 @@
 "use client";
 
+import { Float, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Float, OrbitControls } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import * as THREE from "three";
-import { useInView } from "../hooks/useScrollSpy";
 import {
-  Sparkles,
-  BrainCircuit,
   BarChart2,
+  BrainCircuit,
   Compass,
-  RotateCcw,
-  Sliders,
+  Info,
   Maximize2,
   Minimize2,
-  Info,
-  TrendingDown
+  RotateCcw,
+  Sliders,
+  Sparkles,
+  TrendingDown,
 } from "lucide-react";
-import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { useInView } from "../hooks/useScrollSpy";
+import { type CMAESGenerationStateND, CMAESOptimizerND } from "../lib/cmaesEngineND";
 import {
-  ArchPoint,
-  AttentionType,
-  ActivationType,
+  type ActivationType,
+  type ArchPoint,
+  type AttentionType,
   decodeVectorToArch,
-  evaluateArchFitness
+  evaluateArchFitness,
 } from "../lib/nasObjective";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
 import { LatexRenderer } from "./LatexRenderer";
+import { safePointerEvents } from "./safeR3FEvents";
 
 // ============================================================================
 // 1. Types & Architectural Models — the surrogate objective itself lives in
@@ -44,7 +44,7 @@ import { LatexRenderer } from "./LatexRenderer";
 function ResidualStreamParticles({
   layerCount,
   layerSpacing,
-  stackRadius
+  stackRadius,
 }: {
   layerCount: number;
   layerSpacing: number;
@@ -111,7 +111,7 @@ function AttentionHeadCluster({
   attnType,
   radius,
   yPos,
-  scale = 1.0
+  scale = 1.0,
 }: {
   headCount: number;
   attnType: AttentionType;
@@ -183,7 +183,7 @@ function TransformerBlock3D({
   heads,
   attnType,
   actType,
-  layerSpacing
+  layerSpacing,
 }: {
   layerIndex: number;
   totalLayers: number;
@@ -225,14 +225,7 @@ function TransformerBlock3D({
 
       {/* 4. SwiGLU / MLP Feed-Forward Core (Hexagonal Prism) */}
       <mesh position={[0, 0.16 * blockScale, 0]}>
-        <cylinderGeometry
-          args={[
-            widthFactor * 0.55,
-            widthFactor * 0.62,
-            0.11 * blockScale,
-            6
-          ]}
-        />
+        <cylinderGeometry args={[widthFactor * 0.55, widthFactor * 0.62, 0.11 * blockScale, 6]} />
         <meshPhysicalMaterial
           color="#c084fc"
           emissive="#7e22ce"
@@ -247,7 +240,7 @@ function TransformerBlock3D({
 
       {/* Outer Neon Layer Bounding Ring */}
       <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[widthFactor * 0.88, widthFactor * 0.90, 32]} />
+        <ringGeometry args={[widthFactor * 0.88, widthFactor * 0.9, 32]} />
         <meshBasicMaterial color="#38bdf8" transparent opacity={0.25} side={THREE.DoubleSide} />
       </mesh>
     </group>
@@ -262,7 +255,7 @@ function HolographicTransformerStack({
   dim,
   heads,
   attnType,
-  actType
+  actType,
 }: {
   layers: number;
   dim: number;
@@ -343,7 +336,7 @@ function HolographicTransformerStack({
 function ParetoFrontierCanvas({
   currentPoint,
   evaluatedArchs,
-  onSelectArch
+  onSelectArch,
 }: {
   currentPoint: ArchPoint;
   evaluatedArchs: ArchPoint[];
@@ -353,9 +346,7 @@ function ParetoFrontierCanvas({
   const [hoveredPoint, setHoveredPoint] = useState<ArchPoint | null>(null);
 
   const paretoPoints = useMemo(() => {
-    return evaluatedArchs
-      .filter((p) => p.isPareto)
-      .sort((a, b) => a.flopsGiga - b.flopsGiga);
+    return evaluatedArchs.filter((p) => p.isPareto).sort((a, b) => a.flopsGiga - b.flopsGiga);
   }, [evaluatedArchs]);
 
   useEffect(() => {
@@ -383,8 +374,10 @@ function ParetoFrontierCanvas({
     const minLoss = 1.0;
     const maxLoss = 3.6;
 
-    const toPxX = (f: number) => PAD_LEFT + ((f - minFlops) / (maxFlops - minFlops)) * (W - PAD_LEFT - PAD_RIGHT);
-    const toPxY = (l: number) => H - PAD_BOTTOM - ((l - minLoss) / (maxLoss - minLoss)) * (H - PAD_TOP - PAD_BOTTOM);
+    const toPxX = (f: number) =>
+      PAD_LEFT + ((f - minFlops) / (maxFlops - minFlops)) * (W - PAD_LEFT - PAD_RIGHT);
+    const toPxY = (l: number) =>
+      H - PAD_BOTTOM - ((l - minLoss) / (maxLoss - minLoss)) * (H - PAD_TOP - PAD_BOTTOM);
 
     // Subtle Grid Lines
     ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
@@ -552,8 +545,12 @@ function ParetoFrontierCanvas({
             let closest: ArchPoint | null = null;
             let minDist = Infinity;
             evaluatedArchs.forEach((pt) => {
-              const px = PAD_LEFT + ((pt.flopsGiga - 1.0) / 49.0) * (canvas.width - PAD_LEFT - PAD_RIGHT);
-              const py = canvas.height - PAD_BOTTOM - ((pt.valLoss - 1.0) / 2.6) * (canvas.height - PAD_TOP - PAD_BOTTOM);
+              const px =
+                PAD_LEFT + ((pt.flopsGiga - 1.0) / 49.0) * (canvas.width - PAD_LEFT - PAD_RIGHT);
+              const py =
+                canvas.height -
+                PAD_BOTTOM -
+                ((pt.valLoss - 1.0) / 2.6) * (canvas.height - PAD_TOP - PAD_BOTTOM);
               const dist = Math.hypot(clickX - px, clickY - py);
               if (dist < minDist && dist < 32) {
                 minDist = dist;
@@ -573,12 +570,21 @@ function ParetoFrontierCanvas({
         {hoveredPoint && (
           <div className="absolute top-3 right-3 p-2.5 rounded-xl bg-slate-950/90 border border-purple-500/40 backdrop-blur-md text-[0.7rem] font-mono text-slate-200 shadow-xl pointer-events-none space-y-1">
             <div className="font-bold text-purple-300">
-              {hoveredPoint.layers}L • {hoveredPoint.dim}d • {hoveredPoint.heads}H ({hoveredPoint.attnType})
+              {hoveredPoint.layers}L • {hoveredPoint.dim}d • {hoveredPoint.heads}H (
+              {hoveredPoint.attnType})
             </div>
             <div className="flex items-center gap-2 text-slate-400">
-              <span>Params: <strong className="text-emerald-300">{hoveredPoint.paramsM.toFixed(1)}M</strong></span>
-              <span>Loss: <strong className="text-sky-300">{hoveredPoint.valLoss.toFixed(3)}</strong></span>
-              <span>Compute: <strong className="text-amber-300">{hoveredPoint.flopsGiga.toFixed(1)}G</strong></span>
+              <span>
+                Params:{" "}
+                <strong className="text-emerald-300">{hoveredPoint.paramsM.toFixed(1)}M</strong>
+              </span>
+              <span>
+                Loss: <strong className="text-sky-300">{hoveredPoint.valLoss.toFixed(3)}</strong>
+              </span>
+              <span>
+                Compute:{" "}
+                <strong className="text-amber-300">{hoveredPoint.flopsGiga.toFixed(1)}G</strong>
+              </span>
             </div>
           </div>
         )}
@@ -631,7 +637,10 @@ export function TransformerViz() {
 
     list.forEach((p1) => {
       p1.isPareto = !list.some(
-        (p2) => p2.flopsGiga <= p1.flopsGiga && p2.valLoss <= p1.valLoss && (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
+        (p2) =>
+          p2.flopsGiga <= p1.flopsGiga &&
+          p2.valLoss <= p1.valLoss &&
+          (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss),
       );
     });
     return list;
@@ -658,16 +667,13 @@ export function TransformerViz() {
     setLatestStateND(null);
     setHistoryND([]);
 
-    const optimizer = new CMAESOptimizerND(
-      (zVec) => evaluateArchFitness(zVec),
-      {
-        dim: 5,
-        initialMean: [...paramVector],
-        initialSigma: 0.22,
-        lambda: 14,
-        bounds: [0.0, 1.0]
-      }
-    );
+    const optimizer = new CMAESOptimizerND((zVec) => evaluateArchFitness(zVec), {
+      dim: 5,
+      initialMean: [...paramVector],
+      initialSigma: 0.22,
+      lambda: 14,
+      bounds: [0.0, 1.0],
+    });
 
     let g = 0;
     const maxG = 25;
@@ -692,7 +698,10 @@ export function TransformerViz() {
         const next = [...prev, ...candidateArchitectures];
         next.forEach((p1) => {
           p1.isPareto = !next.some(
-            (p2) => p2.flopsGiga <= p1.flopsGiga && p2.valLoss <= p1.valLoss && (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss)
+            (p2) =>
+              p2.flopsGiga <= p1.flopsGiga &&
+              p2.valLoss <= p1.valLoss &&
+              (p2.flopsGiga < p1.flopsGiga || p2.valLoss < p1.valLoss),
           );
         });
         return next;
@@ -737,7 +746,9 @@ export function TransformerViz() {
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              CMA-ES minimizes a weighted loss, compute, and latency objective in a continuous latent space; the chart tracks the empirical Pareto set of every architecture evaluated. Loss and latency come from hand-written surrogates, not training runs.
+              CMA-ES minimizes a weighted loss, compute, and latency objective in a continuous
+              latent space; the chart tracks the empirical Pareto set of every architecture
+              evaluated. Loss and latency come from hand-written surrogates, not training runs.
             </p>
           </div>
         </div>
@@ -780,40 +791,40 @@ export function TransformerViz() {
                 className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-2xl"
               >
                 {shouldMountGL && (
-                <Canvas
-                  dpr={[1, 2]}
-                  events={safePointerEvents}
-                  frameloop={isInView ? "always" : "demand"}
-                >
-                  <PerspectiveCamera makeDefault position={[4.2, 2.5, 4.4]} fov={38} />
-                  <color attach="background" args={["#030712"]} />
-                  <fog attach="fog" args={["#030712", 8, 22]} />
+                  <Canvas
+                    dpr={[1, 2]}
+                    events={safePointerEvents}
+                    frameloop={isInView ? "always" : "demand"}
+                  >
+                    <PerspectiveCamera makeDefault position={[4.2, 2.5, 4.4]} fov={38} />
+                    <color attach="background" args={["#030712"]} />
+                    <fog attach="fog" args={["#030712", 8, 22]} />
 
-                  <ambientLight intensity={0.6} />
-                  <directionalLight position={[5, 10, 6]} intensity={1.2} />
-                  <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
-                  <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
+                    <ambientLight intensity={0.6} />
+                    <directionalLight position={[5, 10, 6]} intensity={1.2} />
+                    <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
+                    <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
 
-                  <OrbitControls
-                    makeDefault
-                    enableDamping
-                    dampingFactor={0.06}
-                    minDistance={3.0}
-                    maxDistance={12}
-                    maxPolarAngle={Math.PI / 2 + 0.05}
-                    target={[0, 0, 0]}
-                  />
-
-                  <Float speed={1.2} rotationIntensity={0.1} floatIntensity={0.1}>
-                    <HolographicTransformerStack
-                      layers={currentArch.layers}
-                      dim={currentArch.dim}
-                      heads={currentArch.heads}
-                      attnType={currentArch.attnType}
-                      actType={currentArch.actType}
+                    <OrbitControls
+                      makeDefault
+                      enableDamping
+                      dampingFactor={0.06}
+                      minDistance={3.0}
+                      maxDistance={12}
+                      maxPolarAngle={Math.PI / 2 + 0.05}
+                      target={[0, 0, 0]}
                     />
-                  </Float>
-                </Canvas>
+
+                    <Float speed={1.2} rotationIntensity={0.1} floatIntensity={0.1}>
+                      <HolographicTransformerStack
+                        layers={currentArch.layers}
+                        dim={currentArch.dim}
+                        heads={currentArch.heads}
+                        attnType={currentArch.attnType}
+                        actType={currentArch.actType}
+                      />
+                    </Float>
+                  </Canvas>
                 )}
 
                 <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-purple-300 backdrop-blur-md">
@@ -836,40 +847,40 @@ export function TransformerViz() {
               className="relative aspect-square sm:aspect-[16/11] lg:h-[460px] w-full rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-[0_20px_60px_rgba(0,0,0,0.8)] group"
             >
               {shouldMountGL && (
-              <Canvas
-                dpr={[1, 2]}
-                events={safePointerEvents}
-                frameloop={isInView ? "always" : "demand"}
-              >
-                <PerspectiveCamera makeDefault position={[4.4, 2.6, 4.6]} fov={38} />
-                <color attach="background" args={["#030712"]} />
-                <fog attach="fog" args={["#030712", 8, 22]} />
+                <Canvas
+                  dpr={[1, 2]}
+                  events={safePointerEvents}
+                  frameloop={isInView ? "always" : "demand"}
+                >
+                  <PerspectiveCamera makeDefault position={[4.4, 2.6, 4.6]} fov={38} />
+                  <color attach="background" args={["#030712"]} />
+                  <fog attach="fog" args={["#030712", 8, 22]} />
 
-                <ambientLight intensity={0.6} />
-                <directionalLight position={[5, 10, 6]} intensity={1.2} />
-                <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
-                <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
+                  <ambientLight intensity={0.6} />
+                  <directionalLight position={[5, 10, 6]} intensity={1.2} />
+                  <pointLight position={[-5, 4, -4]} intensity={0.8} color="#38bdf8" />
+                  <pointLight position={[4, -4, -4]} intensity={0.8} color="#c084fc" />
 
-                <OrbitControls
-                  makeDefault
-                  enableDamping
-                  dampingFactor={0.06}
-                  minDistance={3.0}
-                  maxDistance={14}
-                  maxPolarAngle={Math.PI / 2 + 0.05}
-                  target={[0, 0, 0]}
-                />
-
-                <Float speed={1.2} rotationIntensity={0.12} floatIntensity={0.12}>
-                  <HolographicTransformerStack
-                    layers={currentArch.layers}
-                    dim={currentArch.dim}
-                    heads={currentArch.heads}
-                    attnType={currentArch.attnType}
-                    actType={currentArch.actType}
+                  <OrbitControls
+                    makeDefault
+                    enableDamping
+                    dampingFactor={0.06}
+                    minDistance={3.0}
+                    maxDistance={14}
+                    maxPolarAngle={Math.PI / 2 + 0.05}
+                    target={[0, 0, 0]}
                   />
-                </Float>
-              </Canvas>
+
+                  <Float speed={1.2} rotationIntensity={0.12} floatIntensity={0.12}>
+                    <HolographicTransformerStack
+                      layers={currentArch.layers}
+                      dim={currentArch.dim}
+                      heads={currentArch.heads}
+                      attnType={currentArch.attnType}
+                      actType={currentArch.actType}
+                    />
+                  </Float>
+                </Canvas>
               )}
 
               {/* Top-Right Orbit Badge */}
@@ -885,12 +896,23 @@ export function TransformerViz() {
               <div className="hidden sm:flex absolute bottom-3 left-3 z-20 flex-col gap-1 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-xs font-mono text-slate-200 shadow-2xl pointer-events-none">
                 <div className="flex items-center gap-2 text-purple-300 font-bold text-sm font-display">
                   <BrainCircuit className="h-4 w-4 text-purple-400" />
-                  <span>{currentArch.layers} Layers • {currentArch.dim} <LatexRenderer math="d_{\text{model}}" block={false} /> • {currentArch.heads} Heads</span>
+                  <span>
+                    {currentArch.layers} Layers • {currentArch.dim}{" "}
+                    <LatexRenderer math="d_{\text{model}}" block={false} /> • {currentArch.heads}{" "}
+                    Heads
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-[0.7rem] text-slate-400 pt-1 border-t border-white/10">
-                  <span>Attn: <strong className="text-sky-300">{currentArch.attnType}</strong></span>
-                  <span>MLP: <strong className="text-purple-300">{currentArch.actType}</strong></span>
-                  <span>Params: <strong className="text-emerald-300">{currentArch.paramsM.toFixed(1)}M</strong></span>
+                  <span>
+                    Attn: <strong className="text-sky-300">{currentArch.attnType}</strong>
+                  </span>
+                  <span>
+                    MLP: <strong className="text-purple-300">{currentArch.actType}</strong>
+                  </span>
+                  <span>
+                    Params:{" "}
+                    <strong className="text-emerald-300">{currentArch.paramsM.toFixed(1)}M</strong>
+                  </span>
                 </div>
               </div>
             </div>
@@ -898,11 +920,16 @@ export function TransformerViz() {
 
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2 text-[0.72rem] text-slate-400 font-mono">
             <span className="sm:hidden text-slate-200">
-              {currentArch.layers}L · {currentArch.dim}d · {currentArch.heads}H · {currentArch.attnType}/{currentArch.actType} ·{" "}
-              <span className="text-emerald-300 font-bold">{currentArch.paramsM.toFixed(1)}M params</span>
+              {currentArch.layers}L · {currentArch.dim}d · {currentArch.heads}H ·{" "}
+              {currentArch.attnType}/{currentArch.actType} ·{" "}
+              <span className="text-emerald-300 font-bold">
+                {currentArch.paramsM.toFixed(1)}M params
+              </span>
             </span>
             <span className="hidden sm:inline">Rotary Embeddings • RMSNorm • Residual Streams</span>
-            <span className="text-purple-300 font-bold">~{currentArch.latencyMs.toFixed(1)}ms / token (surrogate)</span>
+            <span className="text-purple-300 font-bold">
+              ~{currentArch.latencyMs.toFixed(1)}ms / token (surrogate)
+            </span>
           </div>
         </div>
 
@@ -922,7 +949,9 @@ export function TransformerViz() {
             <div className="space-y-1.5">
               <div className="flex justify-between items-center text-xs font-medium">
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>Layer Depth (</span><LatexRenderer math="L" block={false} /><span>)</span>
+                  <span>Layer Depth (</span>
+                  <LatexRenderer math="L" block={false} />
+                  <span>)</span>
                 </span>
                 <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                   {currentArch.layers} Layers
@@ -949,7 +978,9 @@ export function TransformerViz() {
               <div className="flex justify-between items-center text-xs font-medium">
                 <span className="text-slate-300 flex flex-wrap items-center gap-1">
                   <span>Hidden Dimension</span>
-                  <span className="whitespace-nowrap inline-flex items-center">(<LatexRenderer math="d_{\text{model}}" block={false} />)</span>
+                  <span className="whitespace-nowrap inline-flex items-center">
+                    (<LatexRenderer math="d_{\text{model}}" block={false} />)
+                  </span>
                 </span>
                 <span className="text-indigo-300 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
                   {currentArch.dim} Channels
@@ -975,7 +1006,9 @@ export function TransformerViz() {
             <div className="space-y-1.5 pt-2 border-t border-white/5">
               <div className="flex justify-between items-center text-xs font-medium">
                 <span className="text-slate-300 flex items-center gap-1">
-                  <span>Attention Heads (</span><LatexRenderer math="n_{\text{heads}}" block={false} /><span>)</span>
+                  <span>Attention Heads (</span>
+                  <LatexRenderer math="n_{\text{heads}}" block={false} />
+                  <span>)</span>
                 </span>
                 <span className="text-purple-300 font-mono bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                   {currentArch.heads} Heads
@@ -1000,7 +1033,9 @@ export function TransformerViz() {
             {/* Discrete KV-Cache Paradigm & Activation Selector */}
             <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
               <div>
-                <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">Attention Style</span>
+                <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">
+                  Attention Style
+                </span>
                 <div className="grid grid-cols-3 gap-1">
                   {(["MHA", "GQA", "MQA"] as const).map((t, idx) => {
                     const active = currentArch.attnType === t;
@@ -1025,7 +1060,9 @@ export function TransformerViz() {
               </div>
 
               <div>
-                <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">Activation</span>
+                <span className="text-[0.68rem] text-slate-400 uppercase font-mono block mb-1.5">
+                  Activation
+                </span>
                 <div className="grid grid-cols-3 gap-1">
                   {(["SwiGLU", "GELU", "Mish"] as const).map((a, idx) => {
                     const active = currentArch.actType === a;
@@ -1076,7 +1113,11 @@ export function TransformerViz() {
               }`}
             >
               <Sparkles className="h-4 w-4" />
-              <span>{isSearching ? "Halt NAS Evolution" : "Run 5D CMA-ES Architecture Search (weighted-sum objective)"}</span>
+              <span>
+                {isSearching
+                  ? "Halt NAS Evolution"
+                  : "Run 5D CMA-ES Architecture Search (weighted-sum objective)"}
+              </span>
             </button>
 
             <button

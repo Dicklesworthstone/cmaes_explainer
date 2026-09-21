@@ -47,14 +47,14 @@ describe("Per-Material-Pair Friction & Restitution Engine", () => {
   test("evaluates calibrated empirical values for key household pairs", () => {
     const rubberWood = getMaterialPairFriction("rubber", "hardwood");
     expect(rubberWood.staticFriction).toBe(0.85);
-    expect(rubberWood.kineticFriction).toBe(0.70);
+    expect(rubberWood.kineticFriction).toBe(0.7);
 
     const fabricFabric = getMaterialPairFriction("fabric", "fabric");
     expect(fabricFabric.rollingFriction).toBe(0.08);
     expect(fabricFabric.restitution).toBe(0.05);
 
     const steelSteel = getMaterialPairFriction("steel", "steel");
-    expect(steelSteel.restitution).toBe(0.60);
+    expect(steelSteel.restitution).toBe(0.6);
   });
 
   test("combines custom materials using geometric mean mixing laws", () => {
@@ -63,8 +63,8 @@ describe("Per-Material-Pair Friction & Restitution Engine", () => {
       staticFriction: 0.64,
       kineticFriction: 0.49,
       rollingFriction: 0.01,
-      restitution: 0.50,
-      damping: 0.20,
+      restitution: 0.5,
+      damping: 0.2,
     };
 
     const customMatB = {
@@ -72,8 +72,8 @@ describe("Per-Material-Pair Friction & Restitution Engine", () => {
       staticFriction: 0.36,
       kineticFriction: 0.25,
       rollingFriction: 0.004,
-      restitution: 0.20,
-      damping: 0.10,
+      restitution: 0.2,
+      damping: 0.1,
     };
 
     const combined = combineCustomMaterials(customMatA, customMatB);
@@ -81,7 +81,7 @@ describe("Per-Material-Pair Friction & Restitution Engine", () => {
     expect(combined.staticFriction).toBeCloseTo(0.48, 4);
     // sqrt(0.49 * 0.25) = sqrt(0.1225) = 0.35
     expect(combined.kineticFriction).toBeCloseTo(0.35, 4);
-    expect(combined.restitution).toBe(0.20);
+    expect(combined.restitution).toBe(0.2);
     expect(combined.rollingFriction).toBe(0.01);
   });
 });

@@ -8,10 +8,7 @@ import {
 
 describe("HPO outer loop convergence (cmaes-89eg)", () => {
   test("best fitness improves over 8 generations", () => {
-    const optimizer = new CmaesHyperparameterOptimizer(
-      G1_TRAINING_HYPERPARAMETERS,
-      0x47315040,
-    );
+    const optimizer = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 0x47315040);
     const fitnesses: number[] = [];
     for (let g = 0; g < 8; g += 1) {
       fitnesses.push(optimizer.stepGeneration().bestFitness);
@@ -38,16 +35,12 @@ describe("HPO outer loop convergence (cmaes-89eg)", () => {
   });
 
   test("antithetic mirroring keeps search mean in spec range", () => {
-    const mirrored = new CmaesHyperparameterOptimizer(
-      G1_TRAINING_HYPERPARAMETERS,
-      0x47315040,
-      { mirroredSampling: true },
-    );
-    const plain = new CmaesHyperparameterOptimizer(
-      G1_TRAINING_HYPERPARAMETERS,
-      0x47315040,
-      { mirroredSampling: false },
-    );
+    const mirrored = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 0x47315040, {
+      mirroredSampling: true,
+    });
+    const plain = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 0x47315040, {
+      mirroredSampling: false,
+    });
     for (let g = 0; g < 6; g += 1) {
       mirrored.stepGeneration();
       plain.stepGeneration();

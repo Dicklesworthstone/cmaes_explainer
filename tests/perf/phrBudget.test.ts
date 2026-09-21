@@ -51,7 +51,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface BudgetRow {
@@ -79,7 +79,10 @@ function parseBudgets(markdown: string): BudgetRow[] {
       inBudgets = false;
       continue;
     }
-    const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
+    const cells = line
+      .split("|")
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
     if (cells.length < 4) continue;
     const parseSide = (raw: string): number | null => {
       const trimmed = raw.trim();
@@ -197,7 +200,9 @@ function writeReport(checks: BudgetCheck[]): void {
     "|---|---|---|---|---|---|",
   ];
   for (const c of checks) {
-    lines.push(`| ${c.epic} | ${c.side} | ${c.budgetMs.toFixed(3)} | ${c.actualMs.toFixed(3)} | ${c.within ? "OK" : "OVER"} | ${c.exceedancePct.toFixed(1)} |`);
+    lines.push(
+      `| ${c.epic} | ${c.side} | ${c.budgetMs.toFixed(3)} | ${c.actualMs.toFixed(3)} | ${c.within ? "OK" : "OVER"} | ${c.exceedancePct.toFixed(1)} |`,
+    );
   }
   writeFileSync(REPORT_PATH, lines.join("\n") + "\n", "utf-8");
 }

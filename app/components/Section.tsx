@@ -1,13 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { motion } from "framer-motion";
+import type { ReactNode } from "react";
 
-export function Section(props: {
-  id: string;
-  title: string;
-  children: ReactNode;
-}) {
+export function Section(props: { id: string; title: string; children: ReactNode }) {
   return (
     <section
       id={props.id}
@@ -23,10 +19,8 @@ export function Section(props: {
           {props.title}
         </h2>
         <div className="mt-8 mb-12 h-px w-full max-w-xs bg-gradient-to-r from-sky-500/50 to-transparent" />
-        
-        <div className="relative">
-            {props.children}
-        </div>
+
+        <div className="relative">{props.children}</div>
       </motion.div>
     </section>
   );

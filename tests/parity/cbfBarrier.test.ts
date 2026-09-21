@@ -30,8 +30,8 @@ import {
   assertDeterministic,
   flattenNumeric,
   maxAbsDiff,
-  parityHarness,
   type ParityCase,
+  parityHarness,
 } from "./parityHarness";
 
 /* ------------------------------------------------------------------ */
@@ -90,8 +90,10 @@ function reference4DofArmSphereCbf(
     const qMinus = [...jointAngles] as [number, number, number, number];
     qPlus[i] = jointAngles[i] + h;
     qMinus[i] = jointAngles[i] - h;
-    const fx = (armEndEffectorX(qPlus, linkLengths) - armEndEffectorX(qMinus, linkLengths)) / (2 * h);
-    const fy = (armEndEffectorY(qPlus, linkLengths) - armEndEffectorY(qMinus, linkLengths)) / (2 * h);
+    const fx =
+      (armEndEffectorX(qPlus, linkLengths) - armEndEffectorX(qMinus, linkLengths)) / (2 * h);
+    const fy =
+      (armEndEffectorY(qPlus, linkLengths) - armEndEffectorY(qMinus, linkLengths)) / (2 * h);
     grads[i] = slack * 2 * (dx * fx + dy * fy);
   }
   return [value, grads[0], grads[1], grads[2], grads[3]];
@@ -163,13 +165,7 @@ const cbfCases: Array<ParityCase<unknown, unknown>> = [
       sphereRadius: 0.1,
       safetyMargin: 0.05,
     },
-    ts: reference4DofArmSphereCbf(
-      [0, 0, 0, 0],
-      [0.3, 0.3, 0.2, 0.1],
-      [0.5, 0],
-      0.1,
-      0.05,
-    ),
+    ts: reference4DofArmSphereCbf([0, 0, 0, 0], [0.3, 0.3, 0.2, 0.1], [0.5, 0], 0.1, 0.05),
     kernel: undefined,
     tolerance: 1e-6,
   },
@@ -201,7 +197,9 @@ describe("parity: CBF safety-barrier gradient (kernel vs analytical oracle)", ()
 
   test("missing CBF kernel answers cannot certify conformance", () => {
     for (const testCase of cbfCases) {
-      expect(() => parityHarness("cbf-barrier", [testCase])).toThrow("missing required kernel answer");
+      expect(() => parityHarness("cbf-barrier", [testCase])).toThrow(
+        "missing required kernel answer",
+      );
     }
   });
 
@@ -222,13 +220,7 @@ describe("parity: CBF safety-barrier gradient (kernel vs analytical oracle)", ()
   test("analytical oracle: 4-DOF arm vs sphere (joints at zero)", () => {
     // All joints at 0: end-effector at (0.9, 0). Sphere at (0.5, 0), r=0.1, m=0.05.
     // d_safe = 0.15. d2 = 0.16. slack = 0.1375 > 0. Barrier = 0.
-    const ts = reference4DofArmSphereCbf(
-      [0, 0, 0, 0],
-      [0.3, 0.3, 0.2, 0.1],
-      [0.5, 0],
-      0.1,
-      0.05,
-    );
+    const ts = reference4DofArmSphereCbf([0, 0, 0, 0], [0.3, 0.3, 0.2, 0.1], [0.5, 0], 0.1, 0.05);
     expect(ts[0]).toBe(0);
     for (let i = 1; i < 5; i++) expect(ts[i]).toBe(0);
   });

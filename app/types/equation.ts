@@ -6,15 +6,15 @@
  */
 
 export type ColorVariant =
-  | "crimson"   // Rich red: active negative weights, penalty shifts, losses
-  | "sapphire"  // Deep royal blue: candidate offspring x_i, raw parameter samples
-  | "emerald"   // Vibrant green: covariance matrix C, eigenvalue stretching D, output
-  | "amber"     // Golden amber: global step size sigma, learning rates, multipliers
-  | "amethyst"  // Royal purple: distribution mean m, state centers, coordinate shift
-  | "cyan"      // Electric cyan: isotropic standard Gaussian white noise z ~ N(0, I)
-  | "coral"     // Radiant orange: rank-based selection weights w_i, elite clouds
-  | "rose"      // Vivid rose: evolution paths p_sigma, p_c, historical momentum
-  | "teal";     // Deep teal: orthogonal eigenvector rotation matrix B, principal axes
+  | "crimson" // Rich red: active negative weights, penalty shifts, losses
+  | "sapphire" // Deep royal blue: candidate offspring x_i, raw parameter samples
+  | "emerald" // Vibrant green: covariance matrix C, eigenvalue stretching D, output
+  | "amber" // Golden amber: global step size sigma, learning rates, multipliers
+  | "amethyst" // Royal purple: distribution mean m, state centers, coordinate shift
+  | "cyan" // Electric cyan: isotropic standard Gaussian white noise z ~ N(0, I)
+  | "coral" // Radiant orange: rank-based selection weights w_i, elite clouds
+  | "rose" // Vivid rose: evolution paths p_sigma, p_c, historical momentum
+  | "teal"; // Deep teal: orthogonal eigenvector rotation matrix B, principal axes
 
 export interface EquationVariable {
   id: string;

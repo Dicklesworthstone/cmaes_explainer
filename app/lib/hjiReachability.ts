@@ -57,7 +57,7 @@
  * Non-goals (see bead): dynamic obstacles, GPU solver, kernel changes.
  */
 
-import { type AABB2D, type SDF2D, type Vec2 } from "./dpValueIteration";
+import type { AABB2D, SDF2D, Vec2 } from "./dpValueIteration";
 
 /** Solver configuration. Grid: nx * ny * nTheta cells. */
 export interface BRTParams {

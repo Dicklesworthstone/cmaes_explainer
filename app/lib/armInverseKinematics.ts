@@ -1,9 +1,12 @@
-import { distanceToOBB, projectPointOutOfOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 import { Euler, Quaternion } from "three";
 import type { HouseholdRobotPose } from "./frankensimCmaes";
+import {
+  distanceToOBB,
+  type OrientedBoundingBox,
+  projectPointOutOfOBB,
+} from "./houseMultiObstacleKernel";
 // helpers for the household-arm UI. This reduced procedural chain is not the
 // source-bound FrankenSim iiwa 7 R800 owner and must not certify placement.
-
 
 export interface KukaJointLimits {
   min: number;
@@ -31,7 +34,8 @@ export const IIWA_OWNER_JOINT_LIMIT_DEGREES = [170, 120, 170, 120, 170, 120, 175
 export function iiwaJointAnglesFromOwnerPoses(
   poses: readonly Pick<HouseholdRobotPose, "quaternionWxyz">[],
 ): number[] {
-  if (poses.length !== 8) throw new Error("iiwa joint readout requires eight source-ordered link poses");
+  if (poses.length !== 8)
+    throw new Error("iiwa joint readout requires eight source-ordered link poses");
   const rotations = poses.map(({ quaternionWxyz: q }) => {
     if (q.length !== 4 || !q.every(Number.isFinite) || Math.abs(Math.hypot(...q) - 1) > 1e-6) {
       throw new Error("iiwa joint readout requires unit owner quaternions");
@@ -40,7 +44,10 @@ export function iiwaJointAnglesFromOwnerPoses(
   });
   return IIWA_OWNER_JOINT_ORIGIN_RPY.map(([roll, pitch, yaw], index) => {
     const origin = new Quaternion().setFromEuler(new Euler(roll, pitch, yaw, "ZYX"));
-    const relative = rotations[index].clone().invert().multiply(rotations[index + 1]);
+    const relative = rotations[index]
+      .clone()
+      .invert()
+      .multiply(rotations[index + 1]);
     const joint = origin.invert().multiply(relative).normalize();
     if (Math.hypot(joint.x, joint.y) > 1e-6) {
       throw new Error(`iiwa link ${index + 1} does not match its source joint frame`);
@@ -68,7 +75,7 @@ export const KUKA_IIWA14_LIMITS = KUKA_AUXILIARY_JOINT_LIMITS;
 export const KUKA_LINK_LENGTHS = {
   baseHeight: 0.36,
   upperArm: 0.42,
-  forearm: 0.40,
+  forearm: 0.4,
   flange: 0.126,
   gripperLength: 0.15,
 };
@@ -98,7 +105,7 @@ export const MANIPULABLE_OBJECT_PRESETS: Record<string, ManipulableObjectSpec> =
   "glass-pitcher": {
     id: "glass-pitcher",
     name: "Hand-Blown Glass Pitcher",
-    massKg: 1.10,
+    massKg: 1.1,
     frictionCoeff: 0.45,
     color: "#38bdf8",
     dimensionsM: [0.065, 0.18, 0.065],
@@ -109,7 +116,7 @@ export const MANIPULABLE_OBJECT_PRESETS: Record<string, ManipulableObjectSpec> =
     id: "orchard-apple",
     name: "Orchard Honeycrisp Apple",
     massKg: 0.18,
-    frictionCoeff: 0.70,
+    frictionCoeff: 0.7,
     color: "#f43f5e",
     dimensionsM: [0.038, 0.075, 0.038],
     nominalStart: [0.42, 0.81, 0.25],
@@ -119,7 +126,7 @@ export const MANIPULABLE_OBJECT_PRESETS: Record<string, ManipulableObjectSpec> =
     id: "cereal-bowl",
     name: "Fired Stoneware Cereal Bowl",
     massKg: 0.55,
-    frictionCoeff: 0.60,
+    frictionCoeff: 0.6,
     color: "#eab308",
     dimensionsM: [0.075, 0.06, 0.075],
     nominalStart: [0.38, 0.81, 0.18],
@@ -147,7 +154,7 @@ export function computeKukaFK(
   // support height (they are 0.237, 0.277 and 0.265 m) and the arm stands on
   // the floor, not on the counter. With this base the surrogate converges on
   // the real object position to within 0.5 mm.
-  basePos: [number, number, number] = [0, 0, 0]
+  basePos: [number, number, number] = [0, 0, 0],
 ): { linkPositions: [number, number, number][]; endEffector: [number, number, number] } {
   const q = angles.length >= 7 ? angles : [0, 0.4, 0, -1.2, 0, 0.8, 0];
   const links: [number, number, number][] = [];
@@ -216,13 +223,14 @@ export function solveKukaIK(
   initialAngles: number[] = [0, 0.4, 0, -1.2, 0, 0.8, 0],
   /** Owner link-0 origin; see computeKukaFK. */
   basePos: [number, number, number] = [0, 0, 0],
-  maxIterations: number = 60
+  maxIterations: number = 60,
 ): number[] {
   const bX = basePos[0];
   const bZ = basePos[2];
   const q0Nominal = Math.atan2(targetPos[0] - bX, targetPos[2] - bZ);
 
-  let angles = initialAngles.length >= 7 ? [...initialAngles] : [q0Nominal, 0.5, 0, 1.0, 0, 0.5, 0];
+  const angles =
+    initialAngles.length >= 7 ? [...initialAngles] : [q0Nominal, 0.5, 0, 1.0, 0, 0.5, 0];
   angles[0] = q0Nominal;
   if (angles[3] <= 0) angles[3] = 0.8;
   if (angles[1] <= 0) angles[1] = 0.5;
@@ -271,9 +279,15 @@ export function solveKukaIK(
     }
 
     // Invert 3x3 matrix JJT
-    const a = JJT[0][0], b = JJT[0][1], c = JJT[0][2];
-    const d = JJT[1][0], e = JJT[1][1], f = JJT[1][2];
-    const g = JJT[2][0], h = JJT[2][1], k = JJT[2][2];
+    const a = JJT[0][0],
+      b = JJT[0][1],
+      c = JJT[0][2];
+    const d = JJT[1][0],
+      e = JJT[1][1],
+      f = JJT[1][2];
+    const g = JJT[2][0],
+      h = JJT[2][1],
+      k = JJT[2][2];
 
     const det = a * (e * k - f * h) - b * (d * k - f * g) + c * (d * h - e * g);
     if (Math.abs(det) < 1e-8) break;
@@ -297,7 +311,7 @@ export function solveKukaIK(
       angles[j] += Math.max(-0.4, Math.min(0.4, dq));
       angles[j] = Math.max(
         KUKA_AUXILIARY_JOINT_LIMITS[j].min,
-        Math.min(KUKA_AUXILIARY_JOINT_LIMITS[j].max, angles[j])
+        Math.min(KUKA_AUXILIARY_JOINT_LIMITS[j].max, angles[j]),
       );
     }
   }
@@ -336,66 +350,62 @@ export function isTargetKukaReachable(
 }
 
 export function clampArmTargetPosition(
- target: [number, number, number],
- obstacles: OrientedBoundingBox[],
- /**
-  * Support surface the target may not sink below. Pass the owner's
-  * `supportHeightMeters` (0.237-0.277 m depending on task); the default is
-  * only a fallback for callers without an admission.
-  */
- tableHeight: number = 0.24,
- margin: number = 0.04
+  target: [number, number, number],
+  obstacles: OrientedBoundingBox[],
+  /**
+   * Support surface the target may not sink below. Pass the owner's
+   * `supportHeightMeters` (0.237-0.277 m depending on task); the default is
+   * only a fallback for callers without an admission.
+   */
+  tableHeight: number = 0.24,
+  margin: number = 0.04,
 ): {
- clampedTarget: [number, number, number];
- isColliding: boolean;
- minClearance: number;
+  clampedTarget: [number, number, number];
+  isColliding: boolean;
+  minClearance: number;
 } {
- // Workspace bounds (matches the actual table footprint)
- let safeX = Math.max(-1.5, Math.min(1.5, target[0]));
- let safeZ = Math.max(-1.5, Math.min(1.5, target[2]));
- // an OBB taller than the table (e.g. a chair) is allowed to push the
- // target upward. We take the maximum of the table floor and the
- let safeY = Math.max(tableHeight + margin, target[1]);
- let minClearance = 999.0;
- let isColliding = false;
- for (let pass = 0; pass < 3; pass++) {
- let passMoved = false;
- for (const obb of obstacles) {
- if (obb.exemptFromPenalty) continue;
- const dist = distanceToOBB([safeX, safeY, safeZ], obb);
- if (dist < minClearance) minClearance = dist;
- if (dist < margin) {
- isColliding = true;
- const projected = projectPointOutOfOBB(
- [safeX, safeY, safeZ],
- obb,
- margin,
- );
- if (projected.wasInside) {
- safeX = projected.point[0];
- safeY = Math.max(tableHeight + margin, projected.point[1]);
- safeZ = projected.point[2];
- passMoved = true;
- }
- }
- }
- if (!passMoved) break;
- }
- // After all passes, recompute isColliding based on the FINAL state so
- // the caller learns whether the projection succeeded.
- let finalColliding = false;
- for (const obb of obstacles) {
- if (obb.exemptFromPenalty) continue;
- if (distanceToOBB([safeX, safeY, safeZ], obb) < margin) {
- finalColliding = true;
- break;
- }
- }
- return {
- clampedTarget: [safeX, safeY, safeZ],
- isColliding: finalColliding,
- minClearance: Math.max(0, minClearance),
- };
+  // Workspace bounds (matches the actual table footprint)
+  let safeX = Math.max(-1.5, Math.min(1.5, target[0]));
+  let safeZ = Math.max(-1.5, Math.min(1.5, target[2]));
+  // an OBB taller than the table (e.g. a chair) is allowed to push the
+  // target upward. We take the maximum of the table floor and the
+  let safeY = Math.max(tableHeight + margin, target[1]);
+  let minClearance = 999.0;
+  let isColliding = false;
+  for (let pass = 0; pass < 3; pass++) {
+    let passMoved = false;
+    for (const obb of obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      const dist = distanceToOBB([safeX, safeY, safeZ], obb);
+      if (dist < minClearance) minClearance = dist;
+      if (dist < margin) {
+        isColliding = true;
+        const projected = projectPointOutOfOBB([safeX, safeY, safeZ], obb, margin);
+        if (projected.wasInside) {
+          safeX = projected.point[0];
+          safeY = Math.max(tableHeight + margin, projected.point[1]);
+          safeZ = projected.point[2];
+          passMoved = true;
+        }
+      }
+    }
+    if (!passMoved) break;
+  }
+  // After all passes, recompute isColliding based on the FINAL state so
+  // the caller learns whether the projection succeeded.
+  let finalColliding = false;
+  for (const obb of obstacles) {
+    if (obb.exemptFromPenalty) continue;
+    if (distanceToOBB([safeX, safeY, safeZ], obb) < margin) {
+      finalColliding = true;
+      break;
+    }
+  }
+  return {
+    clampedTarget: [safeX, safeY, safeZ],
+    isColliding: finalColliding,
+    minClearance: Math.max(0, minClearance),
+  };
 }
 
 /**
@@ -405,7 +415,7 @@ export function computeFerrariCannyGWS(
   padForceN: number, // 0 to 40 N
   apertureM: number, // 0 to 0.08 m
   objectRadiusM: number = 0.04,
-  frictionCoeff: number = 0.65
+  frictionCoeff: number = 0.65,
 ): {
   gwsRadius: number; // radius of largest origin-centered ball in wrench space
   normalForceN: number;

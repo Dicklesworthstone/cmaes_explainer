@@ -1,10 +1,10 @@
 import {
-  DEFAULT_G1_WALKING_CONFIG,
-  FRANKENSIM_OWNER_ARTIFACT,
-  FRANKENSIM_OWNER_KERNEL_VERSION,
   buildG1Config,
   buildHouseholdManipulationConfig,
   type CmaFamily,
+  DEFAULT_G1_WALKING_CONFIG,
+  FRANKENSIM_OWNER_ARTIFACT,
+  FRANKENSIM_OWNER_KERNEL_VERSION,
   type G1Challenge,
   type G1Task,
   type G1WalkingConfig,
@@ -12,18 +12,18 @@ import {
   type HouseholdManipulationTask,
 } from "./frankensimCmaes";
 import {
+  type SharedArmExperiment,
+  type SharedG1Experiment,
+  type SharedPolicyMeta,
+  validatePolicyMetadata,
+} from "./g1PolicyShare";
+import {
+  createHouseNavigationScene,
   g1KernelObstacleRoster,
   g1SeatForHouse,
-  createHouseNavigationScene,
   HOUSE_STRUCTURAL_SURFACES,
   type HouseholdKernelObstacle,
 } from "./houseMultiObstacleKernel";
-import {
-  validatePolicyMetadata,
-  type SharedG1Experiment,
-  type SharedArmExperiment,
-  type SharedPolicyMeta,
-} from "./g1PolicyShare";
 
 export type G1OptimizationRequest = {
   /** Stage translation of the owner origin; shared by every operation. */
@@ -142,9 +142,7 @@ export function g1ResolveSeat(
   seat: readonly [number, number, number] = G1_HOUSE_SEAT.offset,
 ): [number, number, number] {
   if (seat.length !== 3 || !seat.every(Number.isFinite) || seat[1] !== 0) {
-    throw new Error(
-      "G1 placement requires finite stage coordinates on the floor (y = 0).",
-    );
+    throw new Error("G1 placement requires finite stage coordinates on the floor (y = 0).");
   }
   return [seat[0], seat[1], seat[2]];
 }
@@ -158,10 +156,7 @@ export type G1SceneReceipt = {
   digest: string;
 };
 
-function g1InputBytes(
-  seat: readonly number[],
-  configWords: readonly number[],
-): Uint8Array {
+function g1InputBytes(seat: readonly number[], configWords: readonly number[]): Uint8Array {
   const values = [...seat, ...configWords];
   const bytes = new Uint8Array(values.length * 8);
   const view = new DataView(bytes.buffer);
@@ -170,16 +165,11 @@ function g1InputBytes(
 }
 
 function hex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** Preserve the exact experiment that produced the displayed receipt. */
-export function g1SharedExperiment(
-  scene: G1SceneReceipt,
-  seedIndex: number,
-): SharedG1Experiment {
+export function g1SharedExperiment(scene: G1SceneReceipt, seedIndex: number): SharedG1Experiment {
   return {
     version: 1,
     kind: "g1",
@@ -203,13 +193,10 @@ export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
   }
   if (
     meta.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
-    experiment.ownerSourceRevision !==
-      FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
+    experiment.ownerSourceRevision !== FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
     experiment.ownerWasmSha256 !== FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256
   ) {
-    throw new Error(
-      "This exact experiment requires a different owner artifact.",
-    );
+    throw new Error("This exact experiment requires a different owner artifact.");
   }
   if (
     !["balance", "stepping", "walking"].includes(meta.task) ||
@@ -218,9 +205,7 @@ export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
   ) {
     throw new Error("This exact G1 experiment has unsupported settings.");
   }
-  const bytes = Uint8Array.from(experiment.inputBytes.match(/../g)!, (pair) =>
-    parseInt(pair, 16),
-  );
+  const bytes = Uint8Array.from(experiment.inputBytes.match(/../g)!, (pair) => parseInt(pair, 16));
   const view = new DataView(bytes.buffer);
   const seat = g1ResolveSeat([
     view.getFloat64(0, true),
@@ -234,9 +219,7 @@ export function g1RestoreSharedExperiment(meta: SharedPolicyMeta): {
   );
   const expected = g1InputBytes(seat, Array.from(buildG1Config(config)));
   if (hex(expected) !== experiment.inputBytes) {
-    throw new Error(
-      "This exact experiment has a different scene or owner configuration.",
-    );
+    throw new Error("This exact experiment has a different scene or owner configuration.");
   }
   return { seat, seedIndex: experiment.seedIndex };
 }
@@ -251,9 +234,7 @@ export function armSharedExperiment(
     kind: "arm",
     ownerSourceRevision: FRANKENSIM_OWNER_ARTIFACT.sourceRevision,
     ownerWasmSha256: FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256,
-    inputBytes: hex(
-      g1InputBytes([], Array.from(buildHouseholdManipulationConfig(config))),
-    ),
+    inputBytes: hex(g1InputBytes([], Array.from(buildHouseholdManipulationConfig(config)))),
     seedIndex,
   };
 }
@@ -265,16 +246,14 @@ export function armRestoreSharedExperiment(meta: SharedPolicyMeta): {
   seedIndex: number;
 } {
   validatePolicyMetadata(meta);
-  const task = (
-    ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const
-  ).find((candidate) => candidate === meta.task);
+  const task = (["kitchen-mug", "living-room-remote", "backyard-trowel"] as const).find(
+    (candidate) => candidate === meta.task,
+  );
   const family = (["full", "separable", "lm-cma", "lm-ma"] as const).find(
     (candidate) => candidate === meta.family,
   );
   if (!task || meta.challenge !== "household" || !family) {
-    throw new Error(
-      "This policy is not for a supported household task and optimizer.",
-    );
+    throw new Error("This policy is not for a supported household task and optimizer.");
   }
   const experiment = meta.experiment;
   if (experiment) {
@@ -283,13 +262,10 @@ export function armRestoreSharedExperiment(meta: SharedPolicyMeta): {
     }
     if (
       meta.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION ||
-      experiment.ownerSourceRevision !==
-        FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
+      experiment.ownerSourceRevision !== FRANKENSIM_OWNER_ARTIFACT.sourceRevision ||
       experiment.ownerWasmSha256 !== FRANKENSIM_OWNER_ARTIFACT.assets.wasmSha256
     ) {
-      throw new Error(
-        "This exact experiment requires a different owner artifact.",
-      );
+      throw new Error("This exact experiment requires a different owner artifact.");
     }
   }
   return { task, family, seedIndex: experiment?.seedIndex ?? 0 };
@@ -306,9 +282,7 @@ export function armVerifySharedExperiment(
     config.task !== restored.task ||
     (meta.experiment && meta.experiment.inputBytes !== actual.inputBytes)
   ) {
-    throw new Error(
-      "This exact experiment has a different scene or owner configuration.",
-    );
+    throw new Error("This exact experiment has a different scene or owner configuration.");
   }
   return actual;
 }
@@ -331,17 +305,12 @@ export async function g1ExperimentForSeat(
   const bytes = new Uint8Array(owner.length + values.length * 8);
   bytes.set(owner);
   const view = new DataView(bytes.buffer);
-  values.forEach((value, index) =>
-    view.setFloat64(owner.length + index * 8, value, true),
-  );
+  values.forEach((value, index) => view.setFloat64(owner.length + index * 8, value, true));
   const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  const digest = Array.from(hash, (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  const digest = Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
   const catalogBodyCount =
-    createHouseNavigationScene().obstacles.filter(
-      (body) => !body.exemptFromPenalty,
-    ).length + HOUSE_STRUCTURAL_SURFACES.length;
+    createHouseNavigationScene().obstacles.filter((body) => !body.exemptFromPenalty).length +
+    HOUSE_STRUCTURAL_SURFACES.length;
   return {
     config,
     scene: {

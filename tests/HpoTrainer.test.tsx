@@ -62,10 +62,7 @@ describe("HpoTrainer surface area (cmaes-89eg)", () => {
   });
 
   test("Optimizer reports a monotonic-or-flat best observed fitness", () => {
-    const optimizer = new CmaesHyperparameterOptimizer(
-      G1_TRAINING_HYPERPARAMETERS,
-      0x47315040,
-    );
+    const optimizer = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 0x47315040);
     let prev = optimizer.stepGeneration().bestFitness;
     for (let g = 0; g < 4; g += 1) {
       const next = optimizer.stepGeneration().bestFitness;

@@ -279,7 +279,7 @@ export function createCushionLattice(
     distanceConstraints,
     bendingConstraints: [],
     volumeConstraints,
-    frictionCoeff: 0.60,
+    frictionCoeff: 0.6,
     damping: 0.92,
   };
 }

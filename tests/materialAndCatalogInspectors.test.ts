@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { CRAFTSMAN_MATERIAL_DATABASE } from "../app/components/MaterialDatabaseInspector";
-import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../app/lib/furnitureTaxonomy";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 describe("Material Database & Furniture Catalog Inspector Modules", () => {
   test("CRAFTSMAN_MATERIAL_DATABASE contains valid PBR materials for all major categories", () => {

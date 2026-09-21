@@ -89,12 +89,7 @@ export function extractBloomLuminance(
 /**
  * Evaluates radial vignette darkening factor for screen UV [u, v] in [0, 1].
  */
-export function evaluateVignette(
-  uv: [number, number],
-  r0 = 0.6,
-  r1 = 1.4,
-  strength = 0.3,
-): number {
+export function evaluateVignette(uv: [number, number], r0 = 0.6, r1 = 1.4, strength = 0.3): number {
   const nx = uv[0] * 2.0 - 1.0;
   const ny = uv[1] * 2.0 - 1.0;
   const dist = Math.hypot(nx, ny);

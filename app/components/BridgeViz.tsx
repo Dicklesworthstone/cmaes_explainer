@@ -1,39 +1,39 @@
 "use client";
 
+import { Line, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Line, OrbitControls } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import {
+  Activity,
+  Building2,
+  Compass,
+  Eye,
+  Info,
+  Layers,
+  Pause,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+  Sliders,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useInView } from "../hooks/useScrollSpy";
+import { type CMAESGenerationStateND, CMAESOptimizerND } from "../lib/cmaesEngineND";
 import {
-  Play,
-  Pause,
-  RotateCcw,
-  Sparkles,
-  Building2,
-  ShieldCheck,
-  Activity,
-  Zap,
-  Compass,
-  Layers,
-  Sliders,
-  Eye,
-  Info
-} from "lucide-react";
-import {
-  BridgeParams,
-  TrussTopology,
-  MaterialGrade,
   BRIDGE_PARAM_SPECS,
-  evaluateBridgePhysics,
+  type BridgeParams,
   decodeParameter,
   encodeParameter,
-  initFrankenSim
+  evaluateBridgePhysics,
+  initFrankenSim,
+  type MaterialGrade,
+  type TrussTopology,
 } from "../lib/frankensimPhysics";
-import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
-import { FrankenSimBadge } from "./FrankenSimBadge";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
+import { FrankenSimBadge } from "./FrankenSimBadge";
+import { safePointerEvents } from "./safeR3FEvents";
 
 // Turbo colormap approximation for the deck stress overlay. The color
 // coordinate is stress normalized by the selected material's yield, so the
@@ -44,7 +44,7 @@ const TURBO_COLORS = [
   new THREE.Color("#1bf1e8"), // 0.4 of yield
   new THREE.Color("#f1f927"), // 0.6 of yield
   new THREE.Color("#fa6e09"), // 0.8 of yield
-  new THREE.Color("#7a0403")  // 1.0: at or above yield
+  new THREE.Color("#7a0403"), // 1.0: at or above yield
 ];
 
 const _tempColor = new THREE.Color();
@@ -84,7 +84,15 @@ function Water() {
   );
 }
 
-function Towers({ height, span, material }: { height: number; span: number; material: MaterialGrade }) {
+function Towers({
+  height,
+  span,
+  material,
+}: {
+  height: number;
+  span: number;
+  material: MaterialGrade;
+}) {
   const h = 2.5 + height * 2.0;
   const x = span;
 
@@ -146,7 +154,15 @@ function Towers({ height, span, material }: { height: number; span: number; mate
   );
 }
 
-function MainCables({ span, sag, towerHeight }: { span: number; sag: number; towerHeight: number }) {
+function MainCables({
+  span,
+  sag,
+  towerHeight,
+}: {
+  span: number;
+  sag: number;
+  towerHeight: number;
+}) {
   const points = useMemo(() => {
     const p: THREE.Vector3[] = [];
     const h = 2.5 + towerHeight * 2.0;
@@ -173,7 +189,7 @@ function Suspenders({
   span,
   sag,
   towerHeight,
-  count
+  count,
 }: {
   span: number;
   sag: number;
@@ -193,13 +209,13 @@ function Suspenders({
         <mesh key={`f-${i}`} position={[x, (topY + botY) / 2, 0.65]}>
           <cylinderGeometry args={[0.015, 0.015, topY - botY]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.8} />
-        </mesh>
+        </mesh>,
       );
       els.push(
         <mesh key={`b-${i}`} position={[x, (topY + botY) / 2, -0.65]}>
           <cylinderGeometry args={[0.015, 0.015, topY - botY]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.8} />
-        </mesh>
+        </mesh>,
       );
     }
     return els;
@@ -211,7 +227,7 @@ function Suspenders({
 function TrussWebbing({
   span,
   topology,
-  stiffness
+  stiffness,
 }: {
   span: number;
   topology: TrussTopology;
@@ -267,7 +283,7 @@ function DeckAnimator({
   loadPos,
   maxStress,
   yieldLimit,
-  maxDeflectionMm
+  maxDeflectionMm,
 }: {
   span: number;
   stiffness: number;
@@ -319,7 +335,12 @@ function DeckAnimator({
 
   return (
     <group>
-      <instancedMesh ref={meshRef} args={[undefined as any, undefined as any, segments]} castShadow receiveShadow>
+      <instancedMesh
+        ref={meshRef}
+        args={[undefined as any, undefined as any, segments]}
+        castShadow
+        receiveShadow
+      >
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.3} metalness={0.6} />
       </instancedMesh>
@@ -344,7 +365,7 @@ function decodeBridgeVector(v: number[]): BridgeParams {
     materialGrade: String(decodeParameter(v[4], BRIDGE_PARAM_SPECS[4]).value) as MaterialGrade,
     suspenderCount: Number(decodeParameter(v[5], BRIDGE_PARAM_SPECS[5]).value),
     towerAspect: Number(decodeParameter(v[6], BRIDGE_PARAM_SPECS[6]).value),
-    vibrationDamping: Number(decodeParameter(v[7], BRIDGE_PARAM_SPECS[7]).value)
+    vibrationDamping: Number(decodeParameter(v[7], BRIDGE_PARAM_SPECS[7]).value),
   };
 }
 
@@ -365,7 +386,7 @@ export function BridgeViz() {
     materialGrade: "A36 Mild Steel",
     suspenderCount: 24,
     towerAspect: 0.35,
-    vibrationDamping: 0.05
+    vibrationDamping: 0.05,
   });
 
   const [isExpanded3D, setIsExpanded3D] = useState(false);
@@ -400,7 +421,7 @@ export function BridgeViz() {
       encodeParameter(params.materialGrade, BRIDGE_PARAM_SPECS[4]),
       encodeParameter(params.suspenderCount, BRIDGE_PARAM_SPECS[5]),
       encodeParameter(params.towerAspect, BRIDGE_PARAM_SPECS[6]),
-      encodeParameter(params.vibrationDamping, BRIDGE_PARAM_SPECS[7])
+      encodeParameter(params.vibrationDamping, BRIDGE_PARAM_SPECS[7]),
     ];
   }, [params]);
 
@@ -474,8 +495,8 @@ export function BridgeViz() {
         initialMean: [...paramVector],
         initialSigma: 0.25,
         lambda: 16,
-        bounds: [0.0, 1.0]
-      }
+        bounds: [0.0, 1.0],
+      },
     );
 
     let g = 0;
@@ -529,8 +550,88 @@ export function BridgeViz() {
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* 3D Physical Bridge Canvas */}
-              <div ref={canvasContainerRef} className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
+              <div
+                ref={canvasContainerRef}
+                className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]"
+              >
                 {shouldMountGL && (
+                  <Canvas
+                    shadows
+                    dpr={[1, 2]}
+                    events={safePointerEvents}
+                    frameloop={isInView ? "always" : "demand"}
+                  >
+                    <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
+                    <color attach="background" args={["#0b1120"]} />
+                    <fog attach="fog" args={["#0b1120", 6, 28]} />
+
+                    <ambientLight intensity={0.5} />
+                    <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
+                    <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
+                    <directionalLight position={[0, 10, 0]} intensity={0.6} color="#bae6fd" />
+
+                    <OrbitControls
+                      makeDefault
+                      enableDamping
+                      dampingFactor={0.06}
+                      minDistance={3.5}
+                      maxDistance={14}
+                      maxPolarAngle={Math.PI / 2 + 0.05}
+                      target={[0, 0.3, 0]}
+                    />
+
+                    <group position={[0, -0.4, 0]}>
+                      <Water />
+                      <Towers
+                        height={params.towerAspect}
+                        span={span3D}
+                        material={params.materialGrade}
+                      />
+                      <MainCables span={span3D} sag={sag3D} towerHeight={params.towerAspect} />
+                      <Suspenders
+                        span={span3D}
+                        sag={sag3D}
+                        towerHeight={params.towerAspect}
+                        count={params.suspenderCount}
+                      />
+                      <TrussWebbing
+                        span={span3D}
+                        topology={params.trussTopology}
+                        stiffness={params.deckStiffness}
+                      />
+                      <DeckAnimator
+                        span={span3D}
+                        stiffness={params.deckStiffness}
+                        loadPos={loadPos}
+                        maxStress={analysis.maxVonMisesStressMPa}
+                        yieldLimit={analysis.yieldLimitMPa}
+                        maxDeflectionMm={analysis.maxDeflectionMm}
+                      />
+                    </group>
+                  </Canvas>
+                )}
+
+                {/* Top Badge */}
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-amber-300 backdrop-blur-md">
+                  Analytic Beam + Cable Model
+                </div>
+              </div>
+
+              {/* 3D PCA Covariance Phase Space Canvas */}
+              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
+                <CMAESPhaseSpaceViewer
+                  latestState={latestStateND}
+                  history={historyND}
+                  title="3D PCA Covariance Ellipsoid"
+                />
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={canvasContainerRef}
+              className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]"
+            >
+              {shouldMountGL && (
                 <Canvas
                   shadows
                   dpr={[1, 2]}
@@ -558,7 +659,11 @@ export function BridgeViz() {
 
                   <group position={[0, -0.4, 0]}>
                     <Water />
-                    <Towers height={params.towerAspect} span={span3D} material={params.materialGrade} />
+                    <Towers
+                      height={params.towerAspect}
+                      span={span3D}
+                      material={params.materialGrade}
+                    />
                     <MainCables span={span3D} sag={sag3D} towerHeight={params.towerAspect} />
                     <Suspenders
                       span={span3D}
@@ -581,76 +686,6 @@ export function BridgeViz() {
                     />
                   </group>
                 </Canvas>
-                )}
-
-                {/* Top Badge */}
-                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-amber-300 backdrop-blur-md">
-                  Analytic Beam + Cable Model
-                </div>
-              </div>
-
-              {/* 3D PCA Covariance Phase Space Canvas */}
-              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
-                <CMAESPhaseSpaceViewer
-                  latestState={latestStateND}
-                  history={historyND}
-                  title="3D PCA Covariance Ellipsoid"
-                />
-              </div>
-            </div>
-          ) : (
-            <div ref={canvasContainerRef} className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0b1120]">
-              {shouldMountGL && (
-              <Canvas
-                shadows
-                dpr={[1, 2]}
-                events={safePointerEvents}
-                frameloop={isInView ? "always" : "demand"}
-              >
-                <PerspectiveCamera makeDefault position={[0.8, 2.2, 7.2]} fov={38} />
-                <color attach="background" args={["#0b1120"]} />
-                <fog attach="fog" args={["#0b1120", 6, 28]} />
-
-                <ambientLight intensity={0.5} />
-                <directionalLight position={[6, 12, 6]} intensity={1.4} castShadow />
-                <pointLight position={[-6, 4, -4]} intensity={0.6} color="#38bdf8" />
-                <directionalLight position={[0, 10, 0]} intensity={0.6} color="#bae6fd" />
-
-                <OrbitControls
-                  makeDefault
-                  enableDamping
-                  dampingFactor={0.06}
-                  minDistance={3.5}
-                  maxDistance={14}
-                  maxPolarAngle={Math.PI / 2 + 0.05}
-                  target={[0, 0.3, 0]}
-                />
-
-                <group position={[0, -0.4, 0]}>
-                  <Water />
-                  <Towers height={params.towerAspect} span={span3D} material={params.materialGrade} />
-                  <MainCables span={span3D} sag={sag3D} towerHeight={params.towerAspect} />
-                  <Suspenders
-                    span={span3D}
-                    sag={sag3D}
-                    towerHeight={params.towerAspect}
-                    count={params.suspenderCount}
-                  />
-                  <TrussWebbing
-                    span={span3D}
-                    topology={params.trussTopology}
-                    stiffness={params.deckStiffness}
-                  />
-                  <DeckAnimator
-                    span={span3D}
-                    stiffness={params.deckStiffness}
-                    loadPos={loadPos}
-                    maxStress={analysis.maxVonMisesStressMPa}
-                    yieldLimit={analysis.yieldLimitMPa}
-                    maxDeflectionMm={analysis.maxDeflectionMm}
-                  />
-                </group>
-              </Canvas>
               )}
 
               {/* Orbit hint */}
@@ -678,16 +713,24 @@ export function BridgeViz() {
                 <div className="h-1.5 sm:h-2 w-full rounded-full bg-gradient-to-r from-[#30123b] via-[#1bf1e8] to-[#7a0403]" />
                 <div className="flex justify-between text-[0.58rem] sm:text-[0.62rem] text-slate-400 font-mono">
                   <span>0</span>
-                  <span>0.5&middot;&sigma;<sub>y</sub></span>
-                  <span>&sigma;<sub>y</sub> = {analysis.yieldLimitMPa} MPa</span>
+                  <span>
+                    0.5&middot;&sigma;<sub>y</sub>
+                  </span>
+                  <span>
+                    &sigma;<sub>y</sub> = {analysis.yieldLimitMPa} MPa
+                  </span>
                 </div>
               </div>
 
               {/* Status Pill (desktop only; see mobile strip) */}
               <div className="hidden sm:flex absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex-col gap-1.5 pointer-events-none">
                 <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
-                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">Total Mass:</span>
-                  <span className="font-mono font-bold text-xs sm:text-sm text-amber-200">{analysis.totalMassTons} Tons</span>
+                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">
+                    Total Mass:
+                  </span>
+                  <span className="font-mono font-bold text-xs sm:text-sm text-amber-200">
+                    {analysis.totalMassTons} Tons
+                  </span>
                 </div>
               </div>
             </div>
@@ -700,12 +743,16 @@ export function BridgeViz() {
                 <span className="text-slate-500 uppercase text-[0.6rem]">Deck Stress</span>{" "}
                 <span
                   className={`font-bold ${
-                    analysis.maxVonMisesStressMPa > analysis.yieldLimitMPa ? "text-rose-400" : "text-emerald-400"
+                    analysis.maxVonMisesStressMPa > analysis.yieldLimitMPa
+                      ? "text-rose-400"
+                      : "text-emerald-400"
                   }`}
                 >
                   {analysis.maxVonMisesStressMPa} MPa
                 </span>{" "}
-                <span className="text-slate-500">/ σ<sub>y</sub> {analysis.yieldLimitMPa}</span>
+                <span className="text-slate-500">
+                  / σ<sub>y</sub> {analysis.yieldLimitMPa}
+                </span>
               </span>
               <span>
                 <span className="text-slate-500 uppercase text-[0.6rem]">Mass</span>{" "}
@@ -725,7 +772,13 @@ export function BridgeViz() {
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
               <div className="text-slate-500 uppercase">Flutter limit</div>
-              <div className={analysis.flutterCriticalSpeedKmh >= 180 ? "text-emerald-300 font-bold" : "text-rose-300 font-bold"}>
+              <div
+                className={
+                  analysis.flutterCriticalSpeedKmh >= 180
+                    ? "text-emerald-300 font-bold"
+                    : "text-rose-300 font-bold"
+                }
+              >
                 {analysis.flutterCriticalSpeedKmh} / 180 km/h
               </div>
             </div>
@@ -735,7 +788,11 @@ export function BridgeViz() {
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/70 p-2.5">
               <div className="text-slate-500 uppercase">Constraints</div>
-              <div className={analysis.isCompliant ? "text-emerald-300 font-bold" : "text-rose-300 font-bold"}>
+              <div
+                className={
+                  analysis.isCompliant ? "text-emerald-300 font-bold" : "text-rose-300 font-bold"
+                }
+              >
                 {analysis.isCompliant ? "PASS" : "VIOLATION"}
               </div>
             </div>
@@ -762,7 +819,8 @@ export function BridgeViz() {
               <span className="font-mono text-[0.68rem] text-slate-400">8D Parameter Space</span>
             </div>
             <p className="text-xs text-slate-300">
-              Discrete topologies & materials are smoothly partitioned across continuous <code className="text-amber-300 font-mono">[0, 1]</code> interval bins.
+              Discrete topologies & materials are smoothly partitioned across continuous{" "}
+              <code className="text-amber-300 font-mono">[0, 1]</code> interval bins.
             </p>
 
             {/* Quick Presets */}
@@ -778,7 +836,7 @@ export function BridgeViz() {
                     materialGrade: "A992 High-Strength Steel",
                     suspenderCount: 32,
                     towerAspect: 0.42,
-                    vibrationDamping: 0.06
+                    vibrationDamping: 0.06,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
@@ -796,7 +854,7 @@ export function BridgeViz() {
                     materialGrade: "A36 Mild Steel",
                     suspenderCount: 20,
                     towerAspect: 0.3,
-                    vibrationDamping: 0.08
+                    vibrationDamping: 0.08,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-300 border border-orange-500/20 hover:bg-orange-500/20 transition-colors"
@@ -814,7 +872,7 @@ export function BridgeViz() {
                     materialGrade: "Ti-6Al-4V Titanium",
                     suspenderCount: 28,
                     towerAspect: 0.38,
-                    vibrationDamping: 0.04
+                    vibrationDamping: 0.04,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
@@ -838,7 +896,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[0].max}
                 step={BRIDGE_PARAM_SPECS[0].step}
                 value={params.spanLength}
-                onChange={(e) => applyManualParams({ ...params, spanLength: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, spanLength: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-amber-400"
               />
@@ -848,7 +908,9 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{BRIDGE_PARAM_SPECS[1].label}</span>
-                <span className="text-sky-300 font-mono text-xs">{params.cableSag.toFixed(1)} m</span>
+                <span className="text-sky-300 font-mono text-xs">
+                  {params.cableSag.toFixed(1)} m
+                </span>
               </div>
               <input
                 type="range"
@@ -857,7 +919,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[1].max}
                 step={BRIDGE_PARAM_SPECS[1].step}
                 value={params.cableSag}
-                onChange={(e) => applyManualParams({ ...params, cableSag: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, cableSag: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-sky-400"
               />
@@ -867,7 +931,9 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{BRIDGE_PARAM_SPECS[2].label}</span>
-                <span className="text-emerald-300 font-mono text-xs">{Math.round(params.deckStiffness * 100)}%</span>
+                <span className="text-emerald-300 font-mono text-xs">
+                  {Math.round(params.deckStiffness * 100)}%
+                </span>
               </div>
               <input
                 type="range"
@@ -876,7 +942,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[2].max}
                 step={BRIDGE_PARAM_SPECS[2].step}
                 value={params.deckStiffness}
-                onChange={(e) => applyManualParams({ ...params, deckStiffness: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, deckStiffness: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-emerald-400"
               />
@@ -886,12 +954,16 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">Truss Web Topology</span>
-                <span className="text-purple-300 font-mono text-[0.68rem]">{params.trussTopology}</span>
+                <span className="text-purple-300 font-mono text-[0.68rem]">
+                  {params.trussTopology}
+                </span>
               </div>
               <select
                 aria-label="Truss Web Topology"
                 value={params.trussTopology}
-                onChange={(e) => applyManualParams({ ...params, trussTopology: e.target.value as TrussTopology })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, trussTopology: e.target.value as TrussTopology })
+                }
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-400"
               >
                 {BRIDGE_PARAM_SPECS[3].categories?.map((cat) => (
@@ -906,12 +978,16 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">Material Grade</span>
-                <span className="text-indigo-300 font-mono text-[0.68rem]">{params.materialGrade}</span>
+                <span className="text-indigo-300 font-mono text-[0.68rem]">
+                  {params.materialGrade}
+                </span>
               </div>
               <select
                 aria-label="Material Grade"
                 value={params.materialGrade}
-                onChange={(e) => applyManualParams({ ...params, materialGrade: e.target.value as MaterialGrade })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, materialGrade: e.target.value as MaterialGrade })
+                }
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-400"
               >
                 {BRIDGE_PARAM_SPECS[4].categories?.map((cat) => (
@@ -935,7 +1011,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[5].max}
                 step={BRIDGE_PARAM_SPECS[5].step}
                 value={params.suspenderCount}
-                onChange={(e) => applyManualParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, suspenderCount: parseInt(e.target.value, 10) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-cyan-400"
               />
@@ -945,7 +1023,9 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{BRIDGE_PARAM_SPECS[6].label}</span>
-                <span className="text-rose-300 font-mono text-xs">{params.towerAspect.toFixed(2)}</span>
+                <span className="text-rose-300 font-mono text-xs">
+                  {params.towerAspect.toFixed(2)}
+                </span>
               </div>
               <input
                 type="range"
@@ -954,7 +1034,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[6].max}
                 step={BRIDGE_PARAM_SPECS[6].step}
                 value={params.towerAspect}
-                onChange={(e) => applyManualParams({ ...params, towerAspect: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, towerAspect: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-rose-400"
               />
@@ -964,7 +1046,9 @@ export function BridgeViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{BRIDGE_PARAM_SPECS[7].label}</span>
-                <span className="text-teal-300 font-mono text-xs">{(params.vibrationDamping * 100).toFixed(1)}%</span>
+                <span className="text-teal-300 font-mono text-xs">
+                  {(params.vibrationDamping * 100).toFixed(1)}%
+                </span>
               </div>
               <input
                 type="range"
@@ -973,7 +1057,9 @@ export function BridgeViz() {
                 max={BRIDGE_PARAM_SPECS[7].max}
                 step={BRIDGE_PARAM_SPECS[7].step}
                 value={params.vibrationDamping}
-                onChange={(e) => applyManualParams({ ...params, vibrationDamping: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, vibrationDamping: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-teal-400"
               />

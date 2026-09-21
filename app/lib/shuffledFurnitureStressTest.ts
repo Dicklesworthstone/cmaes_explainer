@@ -18,11 +18,8 @@
 //   - Peng et al., "Sim-to-Real Transfer of Robotic Control with Dynamics Randomization" (ICRA 2018)
 //   - Rudin et al., "Learning Robust Locomotion Policies via Dynamic Obstacle Randomization" (RSS 2022)
 
+import { createSceneFromHouseFurniture, queryMultiObstacleScene } from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
-import {
-  createSceneFromHouseFurniture,
-  queryMultiObstacleScene,
-} from "./houseMultiObstacleKernel";
 
 // Stress-trial controller parameters. The robot disc radius 0.25 m matches
 // the existing rolling-piece interaction (distToRolling - 0.25 - radius) and
@@ -34,6 +31,7 @@ const STRESS_TRIAL_ROBOT_RADIUS = 0.25;
 const REPULSION_RANGE_M = 0.8;
 const FURNITURE_REPULSION_GAIN = 0.6;
 const PENETRATION_THRESHOLD_M = -0.05;
+
 import {
   createRollingPieceState,
   ROLLING_PIECE_DEFAULTS,
@@ -100,7 +98,7 @@ function seededRandom(seed: number): () => number {
  */
 export function generateShuffledScene(config: ShuffledSceneConfig): ShuffledScene {
   const rand = seededRandom(config.seed);
-  const maxJitter = config.maxJitterMeters ?? 0.30;
+  const maxJitter = config.maxJitterMeters ?? 0.3;
   const maxYaw = config.maxYawJitterRad ?? 0.35;
 
   const jitteredFurniture: HouseFurniture[] = [];
@@ -227,7 +225,11 @@ export function runShuffledStressTrial(
     // velocity away. The clearance also feeds minClearance so the existing
     // < PENETRATION_THRESHOLD_M break guards against hard penetrations.
     const furnRes = queryMultiObstacleScene(
-      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius: STRESS_TRIAL_ROBOT_RADIUS, safetyMargin: 0.05 },
+      {
+        position: [currentPos[0], 0.5, currentPos[1]],
+        robotRadius: STRESS_TRIAL_ROBOT_RADIUS,
+        safetyMargin: 0.05,
+      },
       furnitureScene,
     );
     if (furnRes.minimumClearanceMeters < furnitureMinClearance) {
@@ -279,7 +281,6 @@ export function runShuffledStressTrial(
     rollingPieceDisplacement: rollingDisplacement,
   };
 }
-
 
 /**
  * Runs a multi-trial stress test across K randomized room configurations.

@@ -17,13 +17,13 @@ import { describe, expect, test } from "bun:test";
 
 import {
   ACES_FILMIC,
-  DEFAULT_POSTFX_PROFILE,
-  POSTFX_PROFILES,
   acesFilmic,
   acesFilmicWithExposure,
   applyPostFXSoftware,
+  DEFAULT_POSTFX_PROFILE,
   flickerFireplace,
   linearToSRGB,
+  POSTFX_PROFILES,
 } from "../app/lib/postFx";
 
 describe("postFx", () => {
@@ -138,9 +138,6 @@ describe("postFx", () => {
     expect(linearToSRGB(0.001)).toBeCloseTo(0.01292, 5);
     // Near 1: power curve (1.055 * x^(1/2.4) - 0.055)
     expect(linearToSRGB(1)).toBeCloseTo(1.0, 5);
-    expect(linearToSRGB(0.5)).toBeCloseTo(
-      1.055 * Math.pow(0.5, 1 / 2.4) - 0.055,
-      3
-    );
+    expect(linearToSRGB(0.5)).toBeCloseTo(1.055 * 0.5 ** (1 / 2.4) - 0.055, 3);
   });
 });

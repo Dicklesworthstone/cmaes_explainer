@@ -139,26 +139,19 @@ export function HpoTrainer() {
   };
 
   return (
-    <Section
-      id="hpo-trainer"
-      title="Exploring hyperparameter search with CMA-ES"
-    >
+    <Section id="hpo-trainer" title="Exploring hyperparameter search with CMA-ES">
       <div className="space-y-4">
         <p className="max-w-3xl text-sm leading-7 text-slate-400">
-          This eight-dimensional CMA-ES search evaluates a kinematic stand-in
-          for G1 motion. Learning rate, momentum and entropy currently control
-          action amplitude, smoothing and noise; the three reward weights, GAE
-          lambda and value-loss coefficient do not yet affect evaluation. No PPO
-          or Muon training runs here. Each generation evaluates eight
-          candidates, or sixteen with mirrored sampling, for up to 120 steps per
-          rollout.
+          This eight-dimensional CMA-ES search evaluates a kinematic stand-in for G1 motion.
+          Learning rate, momentum and entropy currently control action amplitude, smoothing and
+          noise; the three reward weights, GAE lambda and value-loss coefficient do not yet affect
+          evaluation. No PPO or Muon training runs here. Each generation evaluates eight candidates,
+          or sixteen with mirrored sampling, for up to 120 steps per rollout.
         </p>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500">
-                Generation
-              </div>
+              <div className="text-xs uppercase tracking-wider text-slate-500">Generation</div>
               <div className="font-mono text-2xl text-slate-100">
                 {result === null ? 0 : result.generation}
               </div>
@@ -172,9 +165,7 @@ export function HpoTrainer() {
               </div>
             </div>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500">
-                Last delta
-              </div>
+              <div className="text-xs uppercase tracking-wider text-slate-500">Last delta</div>
               <div
                 className={`font-mono text-2xl ${
                   lastDelta === null
@@ -190,9 +181,7 @@ export function HpoTrainer() {
               </div>
             </div>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wider text-slate-500">
-                Inner rollouts
-              </div>
+              <div className="text-xs uppercase tracking-wider text-slate-500">Inner rollouts</div>
               <div className="font-mono text-2xl text-slate-100">
                 {result === null ? 0 : result.evaluationsCount}
               </div>
@@ -205,18 +194,14 @@ export function HpoTrainer() {
               disabled={running}
               className="inline-flex min-h-11 items-center justify-center rounded-lg border border-emerald-500/60 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {running
-                ? "Running..."
-                : `Run ${batch} generation${batch === 1 ? "" : "s"}`}
+              {running ? "Running..." : `Run ${batch} generation${batch === 1 ? "" : "s"}`}
             </button>
             <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-3 text-xs text-slate-400">
               <span>Batch</span>
               <select
                 value={batch}
                 onChange={(e) => {
-                  const next = Number(
-                    e.target.value,
-                  ) as (typeof RUN_BATCH_SIZES)[number];
+                  const next = Number(e.target.value) as (typeof RUN_BATCH_SIZES)[number];
                   setBatch(next);
                 }}
                 disabled={running}
@@ -250,9 +235,7 @@ export function HpoTrainer() {
               />
               <span>
                 WS warm start{" "}
-                <span className="text-slate-500">
-                  (start the mean at the hand-tuned defaults)
-                </span>
+                <span className="text-slate-500">(start the mean at the hand-tuned defaults)</span>
               </span>
             </label>
             <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/40 px-3 text-xs text-slate-400">
@@ -274,9 +257,7 @@ export function HpoTrainer() {
               </span>
             </label>
             <span className="ml-auto text-xs text-slate-500">
-              {warmStart
-                ? "Warm start: ON (defaults prior)."
-                : "Warm start: off (cold origin)."}{" "}
+              {warmStart ? "Warm start: ON (defaults prior)." : "Warm start: off (cold origin)."}{" "}
               Seed: 0x47315040.
             </span>
           </div>
@@ -288,9 +269,9 @@ export function HpoTrainer() {
             </div>
             <HpoBestParameters best={result?.bestHyperparameters} />
             <p className="mt-3 text-xs text-slate-500">
-              These are the best evaluated candidate&apos;s parameters, not the
-              current search mean. The cold start uses the centre of each range
-              (in log space where specified); warm start uses the defaults.
+              These are the best evaluated candidate&apos;s parameters, not the current search mean.
+              The cold start uses the centre of each range (in log space where specified); warm
+              start uses the defaults.
             </p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -317,10 +298,9 @@ export function HpoTrainer() {
             </p>
             <FitnessSparkline values={history} />
             <p className="mt-3 text-xs text-slate-500">
-              The outer loop adapts the full CMA-ES covariance, with antithetic
-              sampling available. The fitness is the negation of mean
-              inner-rollout reward, so a lower number means the policy under
-              those hyperparameters gathered more total reward.
+              The outer loop adapts the full CMA-ES covariance, with antithetic sampling available.
+              The fitness is the negation of mean inner-rollout reward, so a lower number means the
+              policy under those hyperparameters gathered more total reward.
             </p>
           </div>
         </div>
@@ -344,8 +324,7 @@ function FitnessSparkline({ values }: { values: number[] }) {
   const minVal = Math.min(...values);
   const maxVal = Math.max(...values);
   const range = Math.max(maxVal - minVal, 1e-6);
-  const xStep =
-    values.length === 1 ? 0 : (width - 2 * padX) / (values.length - 1);
+  const xStep = values.length === 1 ? 0 : (width - 2 * padX) / (values.length - 1);
   const points = values
     .map((v, i) => {
       const x = padX + i * xStep;

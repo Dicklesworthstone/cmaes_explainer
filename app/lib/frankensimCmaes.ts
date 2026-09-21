@@ -1,5 +1,5 @@
-import type { HouseholdKernelObstacle } from "./houseMultiObstacleKernel";
 import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0623/manifest.json";
+import type { HouseholdKernelObstacle } from "./houseMultiObstacleKernel";
 
 /**
  * FrankenSim CMA-ES kernel (fs-cmaes-viz-wasm) — WASM loader + adapter.
@@ -49,18 +49,14 @@ export interface CmaesVizParams {
 export const CMAES_VISUALIZATION_F_TARGET = 1e-8;
 
 /** Exact TypeScript mirror of the visualization kernel's landscape registry. */
-export function evaluateCmaesVisualizationLandscape(
-  landscape: number,
-  x: number[],
-): number {
+export function evaluateCmaesVisualizationLandscape(landscape: number, x: number[]): number {
   switch (landscape) {
     case 0:
       return x.reduce((sum, value) => sum + value * value, 0);
     case 1: {
       let sum = 0;
       for (let index = 0; index < x.length - 1; index++) {
-        sum +=
-          100 * (x[index + 1] - x[index] * x[index]) ** 2 + (1 - x[index]) ** 2;
+        sum += 100 * (x[index + 1] - x[index] * x[index]) ** 2 + (1 - x[index]) ** 2;
       }
       return sum;
     }
@@ -72,11 +68,7 @@ export function evaluateCmaesVisualizationLandscape(
     case 3:
       return (
         10 * x.length +
-        x.reduce(
-          (sum, value) =>
-            sum + value * value - 10 * Math.cos(2 * Math.PI * value),
-          0,
-        )
+        x.reduce((sum, value) => sum + value * value - 10 * Math.cos(2 * Math.PI * value), 0)
       );
     case 4:
       return x.reduce(
@@ -181,9 +173,7 @@ export async function verifyOwnerArtifacts(
     !manifest.build.recipe.trim() ||
     !manifest.assets
   ) {
-    throw new Error(
-      "owner artifact manifest has an incompatible identity or schema",
-    );
+    throw new Error("owner artifact manifest has an incompatible identity or schema");
   }
   const g1 = manifest.g1;
   if (
@@ -196,8 +186,7 @@ export async function verifyOwnerArtifacts(
     !/^[0-9a-f]{40}$/.test(g1.sourceUrdfRevision) ||
     !Array.isArray(g1.armSwingGateSeconds) ||
     !g1.armSwingGateSeconds.every((seconds) => typeof seconds === "string") ||
-    JSON.stringify(g1.armSwingGateSeconds.map(Number)) !==
-      JSON.stringify([1 / 3.1, 3 / 3.1]) ||
+    JSON.stringify(g1.armSwingGateSeconds.map(Number)) !== JSON.stringify([1 / 3.1, 3 / 3.1]) ||
     !Array.isArray(g1.learnedJointIndices) ||
     g1.learnedJointIndices.length !== 15 ||
     !g1.learnedJointIndices.every((joint, index) => joint === index) ||
@@ -219,8 +208,7 @@ export async function verifyOwnerArtifacts(
       !indices.every(
         (index, coordinate) =>
           index ===
-          Math.floor(coordinate / offsets.length) * 336 +
-            offsets[coordinate % offsets.length],
+          Math.floor(coordinate / offsets.length) * 336 + offsets[coordinate % offsets.length],
       )
     ) {
       throw new Error(`owner manifest has incompatible G1 ${name} indices`);
@@ -234,13 +222,9 @@ export async function verifyOwnerArtifacts(
       throw new Error(`owner ${label} manifest digest is invalid`);
     }
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-    const actual = Array.from(digest, (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    ).join("");
+    const actual = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
     if (actual !== expected) {
-      throw new Error(
-        `owner ${label} SHA-256 mismatch: expected ${expected}, received ${actual}`,
-      );
+      throw new Error(`owner ${label} SHA-256 mismatch: expected ${expected}, received ${actual}`);
     }
   }
 }
@@ -250,13 +234,8 @@ export function verifyOwnerRuntimeIdentity(
   kernelVersion: string | undefined,
   sourceRevision: string | undefined,
 ): void {
-  if (
-    kernelVersion !== manifest.kernelVersion ||
-    sourceRevision !== manifest.sourceRevision
-  ) {
-    throw new Error(
-      "owner runtime identity does not match the artifact manifest",
-    );
+  if (kernelVersion !== manifest.kernelVersion || sourceRevision !== manifest.sourceRevision) {
+    throw new Error("owner runtime identity does not match the artifact manifest");
   }
 }
 
@@ -276,13 +255,9 @@ let loadPromise: Promise<CmaesKernelStatus> | null = null;
  * landscape/option matrix through CMAES_VISUALIZATION_F_TARGET.
  */
 const AUDITED_CMAES_KERNEL_VERSION = "fs-cmaes-viz-wasm 0.4.1";
-const AUDITED_CMAES_KERNEL_VERSIONS = new Set<string>([
-  AUDITED_CMAES_KERNEL_VERSION,
-]);
+const AUDITED_CMAES_KERNEL_VERSIONS = new Set<string>([AUDITED_CMAES_KERNEL_VERSION]);
 
-export function isCompatibleCmaesKernelVersion(
-  version: string | null,
-): boolean {
+export function isCompatibleCmaesKernelVersion(version: string | null): boolean {
   return version !== null && AUDITED_CMAES_KERNEL_VERSIONS.has(version);
 }
 
@@ -315,14 +290,9 @@ async function loadWasmModule(
   // Keeping import.meta.url out of this client module is intentional:
   // Turbopack treats any new URL(..., import.meta.url) expression as an asset
   // import, including this test-only file-realm branch.
-  const runtimeBase = isLocalFileRealm
-    ? runtimeLocation.href
-    : `${runtimeLocation.origin}/`;
+  const runtimeBase = isLocalFileRealm ? runtimeLocation.href : `${runtimeLocation.origin}/`;
   const resolveAssetUrl = (assetPath: string) =>
-    new URL(
-      isLocalFileRealm ? assetPath.replace(/^\/+/, "") : assetPath,
-      runtimeBase,
-    ).href;
+    new URL(isLocalFileRealm ? assetPath.replace(/^\/+/, "") : assetPath, runtimeBase).href;
   const jsUrl = resolveAssetUrl(jsPath);
   const wasmUrl = resolveAssetUrl(wasmPath);
   const jsBytes = await fetch(jsUrl, {
@@ -340,29 +310,22 @@ async function loadWasmModule(
       }),
     ]);
     if (!response.ok) throw new Error(`fetch ${wasmUrl}: ${response.status}`);
-    if (!manifestResponse.ok)
-      throw new Error(`owner manifest fetch: ${manifestResponse.status}`);
+    if (!manifestResponse.ok) throw new Error(`owner manifest fetch: ${manifestResponse.status}`);
     const publishedManifest: unknown = await manifestResponse.json();
     if (JSON.stringify(publishedManifest) !== JSON.stringify(ownerManifest)) {
-      throw new Error(
-        "published owner manifest does not match the reviewed build",
-      );
+      throw new Error("published owner manifest does not match the reviewed build");
     }
     wasmInput = await response.arrayBuffer();
     await verifyOwnerArtifacts(ownerManifest, jsBytes, wasmInput);
   }
-  const blobUrl = URL.createObjectURL(
-    new Blob([jsBytes], { type: "text/javascript" }),
-  );
+  const blobUrl = URL.createObjectURL(new Blob([jsBytes], { type: "text/javascript" }));
   try {
     // Dynamic import is REQUIRED here: the specifier is a runtime-created
     // Blob URL wrapping fetched wasm-bindgen glue. A static import cannot
     // express a runtime URL, and webpackIgnore stops Turbopack from mangling
     // the glue (the sanctioned frankensim loader pattern).
     const mod = (await import(/* webpackIgnore: true */ blobUrl)) as {
-      default?: (opts: {
-        module_or_path: string | ArrayBuffer;
-      }) => Promise<unknown>;
+      default?: (opts: { module_or_path: string | ArrayBuffer }) => Promise<unknown>;
     } & WasmModule;
     if (typeof mod.default === "function") {
       await mod.default({ module_or_path: wasmInput });
@@ -401,9 +364,7 @@ export function initFrankenSimCmaes(): Promise<CmaesKernelStatus> {
         };
       }
       const version =
-        typeof mod.cmaes_viz_kernel_version === "function"
-          ? mod.cmaes_viz_kernel_version()
-          : null;
+        typeof mod.cmaes_viz_kernel_version === "function" ? mod.cmaes_viz_kernel_version() : null;
       if (!isCompatibleCmaesKernelVersion(version)) {
         return {
           source: "ts-fallback",
@@ -434,8 +395,7 @@ export interface CmaesVizRefusal {
   ranked_repairs: string[];
 }
 
-export type DecodedCmaesPacket =
-  { ok: CmaesVizRun } | { refusal: CmaesVizRefusal };
+export type DecodedCmaesPacket = { ok: CmaesVizRun } | { refusal: CmaesVizRefusal };
 
 const PACKET_MAGIC = 0x434d4131;
 const PACKET_SCHEMA_VERSION = 1;
@@ -490,9 +450,7 @@ const PACKET_REFUSALS = new Map<number, CmaesVizRefusal>([
     {
       code: "landscape-unknown",
       message: "landscape id has no registered function",
-      ranked_repairs: [
-        "use ids 0..=4 (sphere, rosenbrock, cigar, rastrigin, elli)",
-      ],
+      ranked_repairs: ["use ids 0..=4 (sphere, rosenbrock, cigar, rastrigin, elli)"],
     },
   ],
   [
@@ -560,34 +518,18 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
   if (!(packet instanceof Float64Array) || packet.length < 4) {
     throw new Error("malformed CMA-ES packet: expected Float64Array header");
   }
-  if (packet[0] !== PACKET_MAGIC)
-    throw new Error("malformed CMA-ES packet: magic");
-  if (packet[1] !== PACKET_SCHEMA_VERSION)
-    throw new Error("malformed CMA-ES packet: schema");
-  const status = packetInteger(
-    packet,
-    2,
-    "status",
-    PACKET_STATUS_OK,
-    PACKET_STATUS_REFUSAL,
-  );
-  const declaredWords = packetInteger(
-    packet,
-    3,
-    "total_words",
-    4,
-    Number.MAX_SAFE_INTEGER,
-  );
-  if (declaredWords !== packet.length)
-    throw new Error("malformed CMA-ES packet: total_words");
+  if (packet[0] !== PACKET_MAGIC) throw new Error("malformed CMA-ES packet: magic");
+  if (packet[1] !== PACKET_SCHEMA_VERSION) throw new Error("malformed CMA-ES packet: schema");
+  const status = packetInteger(packet, 2, "status", PACKET_STATUS_OK, PACKET_STATUS_REFUSAL);
+  const declaredWords = packetInteger(packet, 3, "total_words", 4, Number.MAX_SAFE_INTEGER);
+  if (declaredWords !== packet.length) throw new Error("malformed CMA-ES packet: total_words");
 
   if (status === PACKET_STATUS_REFUSAL) {
     if (packet.length !== REFUSAL_PACKET_WORDS)
       throw new Error("malformed CMA-ES packet: refusal length");
     const refusalId = packetInteger(packet, 4, "refusal code", 1, 11);
     const refusal = PACKET_REFUSALS.get(refusalId);
-    if (!refusal)
-      throw new Error("malformed CMA-ES packet: unknown refusal code");
+    if (!refusal) throw new Error("malformed CMA-ES packet: unknown refusal code");
     return {
       refusal: { ...refusal, ranked_repairs: refusal.ranked_repairs.slice() },
     };
@@ -599,15 +541,8 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
   const landscape = packetInteger(packet, 5, "landscape", 0, 4);
   const stopReasonId = packetInteger(packet, 6, "stop_reason", 0, 1);
   const bestFitness = packet[7];
-  if (!Number.isFinite(bestFitness))
-    throw new Error("malformed CMA-ES packet: best_f");
-  const totalEvaluations = packetInteger(
-    packet,
-    8,
-    "total_evals",
-    0,
-    Number.MAX_SAFE_INTEGER,
-  );
+  if (!Number.isFinite(bestFitness)) throw new Error("malformed CMA-ES packet: best_f");
+  const totalEvaluations = packetInteger(packet, 8, "total_evals", 0, Number.MAX_SAFE_INTEGER);
   const generationCount = packetInteger(packet, 9, "generation_count", 1, 200);
   const lambda = packetInteger(packet, 10, "lambda", 4, 48);
   const generationStride = packetInteger(
@@ -620,18 +555,15 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
   const expectedStride = generationPacketWords(dim, lambda);
   if (generationStride !== expectedStride)
     throw new Error("malformed CMA-ES packet: generation_stride");
-  const expectedWords =
-    PACKET_HEADER_WORDS + 6 * dim + generationCount * generationStride;
-  if (packet.length !== expectedWords)
-    throw new Error("malformed CMA-ES packet: payload shape");
+  const expectedWords = PACKET_HEADER_WORDS + 6 * dim + generationCount * generationStride;
+  if (packet.length !== expectedWords) throw new Error("malformed CMA-ES packet: payload shape");
   if (totalEvaluations !== generationCount * lambda)
     throw new Error("malformed CMA-ES packet: total_evals mismatch");
 
   let cursor = PACKET_HEADER_WORDS;
   const take = (count: number, label: string): Float64Array => {
     const end = cursor + count;
-    if (end > packet.length)
-      throw new Error(`malformed CMA-ES packet: truncated ${label}`);
+    if (end > packet.length) throw new Error(`malformed CMA-ES packet: truncated ${label}`);
     const view = packet.subarray(cursor, end);
     for (let index = 0; index < view.length; index++) {
       const value = view[index];
@@ -642,11 +574,7 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
     cursor = end;
     return view;
   };
-  const nextInteger = (
-    label: string,
-    minimum: number,
-    maximum: number,
-  ): number => {
+  const nextInteger = (label: string, minimum: number, maximum: number): number => {
     const value = packetInteger(packet, cursor, label, minimum, maximum);
     cursor += 1;
     return value;
@@ -654,8 +582,7 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
   const nextFinite = (label: string): number => {
     const value = packet[cursor];
     cursor += 1;
-    if (!Number.isFinite(value))
-      throw new Error(`malformed CMA-ES packet: ${label}`);
+    if (!Number.isFinite(value)) throw new Error(`malformed CMA-ES packet: ${label}`);
     return value;
   };
 
@@ -665,31 +592,21 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
   const pcaPoolEigenvalues = take(dim, "pca_pool_eigvals");
   const generationRows: CmaesVizGeneration[] = [];
 
-  for (
-    let generationIndex = 0;
-    generationIndex < generationCount;
-    generationIndex++
-  ) {
+  for (let generationIndex = 0; generationIndex < generationCount; generationIndex++) {
     const recordStart = cursor;
     const g = nextInteger("generation", 1, generationCount);
-    if (g !== generationIndex + 1)
-      throw new Error("malformed CMA-ES packet: generation sequence");
+    if (g !== generationIndex + 1) throw new Error("malformed CMA-ES packet: generation sequence");
     const sigma = nextFinite("sigma");
-    if (sigma <= 0)
-      throw new Error("malformed CMA-ES packet: non-positive sigma");
+    if (sigma <= 0) throw new Error("malformed CMA-ES packet: non-positive sigma");
     const cond = nextFinite("condition number");
     if (cond < 1) throw new Error("malformed CMA-ES packet: condition number");
     const generationBest = nextFinite("generation best_f");
     const evals = nextInteger("generation evals", lambda, totalEvaluations);
-    if (evals !== g * lambda)
-      throw new Error("malformed CMA-ES packet: generation eval mismatch");
+    if (evals !== g * lambda) throw new Error("malformed CMA-ES packet: generation eval mismatch");
     const mean = take(dim, "mean");
     const eigvals = take(dim, "eigvals");
     for (let index = 0; index < eigvals.length; index++) {
-      if (
-        eigvals[index] <= 0 ||
-        (index > 0 && eigvals[index] < eigvals[index - 1])
-      ) {
+      if (eigvals[index] <= 0 || (index > 0 && eigvals[index] < eigvals[index - 1])) {
         throw new Error("malformed CMA-ES packet: eigvals");
       }
     }
@@ -701,19 +618,16 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
     const sz = take(lambda * dim, "sz");
     const sf = take(lambda, "sf");
     for (let index = 1; index < sf.length; index++) {
-      if (sf[index] < sf[index - 1])
-        throw new Error("malformed CMA-ES packet: unranked sf");
+      if (sf[index] < sf[index - 1]) throw new Error("malformed CMA-ES packet: unranked sf");
     }
     const se = take(lambda, "se");
     let sawNonElite = false;
     let eliteCount = 0;
     for (const elite of se) {
-      if (elite !== 0 && elite !== 1)
-        throw new Error("malformed CMA-ES packet: se");
+      if (elite !== 0 && elite !== 1) throw new Error("malformed CMA-ES packet: se");
       if (elite === 0) sawNonElite = true;
       else {
-        if (sawNonElite)
-          throw new Error("malformed CMA-ES packet: non-prefix elites");
+        if (sawNonElite) throw new Error("malformed CMA-ES packet: non-prefix elites");
         eliteCount += 1;
       }
     }
@@ -744,16 +658,14 @@ export function decodeCmaesPacket(packet: Float64Array): DecodedCmaesPacket {
       p_c: pC,
     });
   }
-  if (cursor !== packet.length)
-    throw new Error("malformed CMA-ES packet: trailing words");
+  if (cursor !== packet.length) throw new Error("malformed CMA-ES packet: trailing words");
 
   return {
     ok: {
       kernel: AUDITED_CMAES_KERNEL_VERSION,
       dim,
       landscape,
-      stop_reason:
-        stopReasonId === 0 ? "generations-exhausted" : "target-reached",
+      stop_reason: stopReasonId === 0 ? "generations-exhausted" : "target-reached",
       best_f: bestFitness,
       best_x: bestX,
       total_evals: totalEvaluations,
@@ -807,11 +719,7 @@ export function runCmaesViz(params: CmaesVizParams): CmaesVizRun | null {
     );
     const decoded = decodeCmaesPacket(packet);
     if ("ok" in decoded) return decoded.ok;
-    console.warn(
-      "[fs-cmaes] kernel refusal:",
-      decoded.refusal.code,
-      decoded.refusal.message,
-    );
+    console.warn("[fs-cmaes] kernel refusal:", decoded.refusal.code, decoded.refusal.message);
     return null;
   } catch (err) {
     console.warn("[fs-cmaes] kernel call failed:", err);
@@ -838,11 +746,7 @@ type CandidateSampleND = {
 type PhaseSpace3DProjection = {
   projectedMean: [number, number, number];
   ellipsoidRadii: [number, number, number];
-  principalAxes3D: [
-    [number, number, number],
-    [number, number, number],
-    [number, number, number],
-  ];
+  principalAxes3D: [[number, number, number], [number, number, number], [number, number, number]];
   eigenvalues: number[];
   conditionNumber: number;
   varianceExplainedPercent: [number, number, number];
@@ -880,8 +784,7 @@ function projectPoint(
   const out: [number, number, number] = [0, 0, 0];
   for (let r = 0; r < 3; r++) {
     let acc = 0;
-    for (let i = 0; i < n; i++)
-      acc += basis[r * n + i] * (point[i] - center[i]);
+    for (let i = 0; i < n; i++) acc += basis[r * n + i] * (point[i] - center[i]);
     out[r] = acc;
   }
   return out;
@@ -909,19 +812,13 @@ function projectDirection(
 
 function copyNumericVector(values: NumericVector): number[] {
   const copy = new Array<number>(values.length);
-  for (let index = 0; index < values.length; index++)
-    copy[index] = values[index];
+  for (let index = 0; index < values.length; index++) copy[index] = values[index];
   return copy;
 }
 
-function copyNumericSlice(
-  values: NumericVector,
-  start: number,
-  end: number,
-): number[] {
+function copyNumericSlice(values: NumericVector, start: number, end: number): number[] {
   const copy = new Array<number>(end - start);
-  for (let index = start; index < end; index++)
-    copy[index - start] = values[index];
+  for (let index = start; index < end; index++) copy[index - start] = values[index];
   return copy;
 }
 
@@ -937,15 +834,10 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
   const pool = run.pca_pool_eigvals;
   const populationAlreadyRanked = run[PACKED_RUN_MARKER] === true;
   let poolSum = 0;
-  for (let index = 0; index < pool.length; index++)
-    poolSum += Math.max(pool[index], 0);
+  for (let index = 0; index < pool.length; index++) poolSum += Math.max(pool[index], 0);
   poolSum ||= 1;
   // Top-3 pooled eigenvalues (largest last in the ascending spectrum).
-  const top3 = [
-    pool[pool.length - 1] ?? 0,
-    pool[pool.length - 2] ?? 0,
-    pool[pool.length - 3] ?? 0,
-  ];
+  const top3 = [pool[pool.length - 1] ?? 0, pool[pool.length - 2] ?? 0, pool[pool.length - 3] ?? 0];
   const varianceExplained: [number, number, number] = [
     (100 * Math.max(top3[0], 0)) / poolSum,
     (100 * Math.max(top3[1], 0)) / poolSum,
@@ -976,9 +868,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     for (let index = 0; index < gen.se.length; index++)
       selectedCount += Number(gen.se[index] === 1);
     const eliteCount =
-      selectedCount > 0 && selectedCount < lambda
-        ? selectedCount
-        : Math.floor(lambda / 2);
+      selectedCount > 0 && selectedCount < lambda ? selectedCount : Math.floor(lambda / 2);
 
     const generationBestIndex = sortedIndices[0];
     const generationBestFitness = gen.sf[generationBestIndex];
@@ -1015,11 +905,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
         rawX: x,
         x,
         z,
-        projected3D: [
-          p[0] - projMean[0],
-          p[1] - projMean[1],
-          p[2] - projMean[2],
-        ],
+        projected3D: [p[0] - projMean[0], p[1] - projMean[1], p[2] - projMean[2]],
         fitness: gen.sf[s],
         trueFitness: gen.sf[s],
         rank: ranks[s],
@@ -1031,9 +917,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
     // proj_eigvals are eigenvalues of C's projected marginal (sigma excluded,
     // like gen.eigvals), so the 1-sigma radii are sigma * sqrt(eigenvalue) —
     // the same contract cmaesEngineND documents.
-    const projectedEigenvalues = Array.from(gen.proj_eigvals, (value) =>
-      Math.max(value, 0),
-    );
+    const projectedEigenvalues = Array.from(gen.proj_eigvals, (value) => Math.max(value, 0));
     const radii: [number, number, number] = [
       gen.sigma * Math.sqrt(projectedEigenvalues[2]),
       gen.sigma * Math.sqrt(projectedEigenvalues[1]),
@@ -1050,9 +934,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       [number, number, number],
     ] = [col(2), col(1), col(0)];
     const projCond =
-      projectedEigenvalues[0] > 0
-        ? projectedEigenvalues[2] / projectedEigenvalues[0]
-        : Infinity;
+      projectedEigenvalues[0] > 0 ? projectedEigenvalues[2] / projectedEigenvalues[0] : Infinity;
     const evolutionPath3D = projectDirection(gen.p_c, basis, n);
     const evolutionPathSigma3D = projectDirection(gen.p_sigma, basis, n);
 
@@ -1061,8 +943,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       Array.from({ length: n }, (_, k) => {
         let acc = 0;
         for (let j = 0; j < n; j++)
-          acc +=
-            eigenvalues[j] * gen.eigvecs[i * n + j] * gen.eigvecs[k * n + j];
+          acc += eigenvalues[j] * gen.eigvecs[i * n + j] * gen.eigvecs[k * n + j];
         return acc;
       }),
     );
@@ -1092,11 +973,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
         projectedMean: [gen.proj_mean[0], gen.proj_mean[1], gen.proj_mean[2]],
         ellipsoidRadii: radii,
         principalAxes3D,
-        eigenvalues: [
-          projectedEigenvalues[2],
-          projectedEigenvalues[1],
-          projectedEigenvalues[0],
-        ],
+        eigenvalues: [projectedEigenvalues[2], projectedEigenvalues[1], projectedEigenvalues[0]],
         conditionNumber: projCond,
         varianceExplainedPercent: varianceExplained,
         evolutionPath3D,
@@ -1104,9 +981,7 @@ export function wasmRunToNdStates(run: CmaesVizRun): CMAESGenerationStateND[] {
       },
       // Per-coordinate sampling variance of N(m, sigma^2 C) is sigma^2 * C_ii
       // (eigenvalues would be variance per principal axis, a different thing).
-      variancePerDim: covariance.map(
-        (row, i) => gen.sigma * gen.sigma * Math.max(row[i], 0),
-      ),
+      variancePerDim: covariance.map((row, i) => gen.sigma * gen.sigma * Math.max(row[i], 0)),
     };
   });
 }
@@ -1303,10 +1178,8 @@ export interface CmaFamilySnapshot {
   streamSemantics: number;
   streamKernel: number;
   normalStreamBlocks: bigint;
-  samplingOrder:
-    "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
-  updateOrder:
-    "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
+  samplingOrder: "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
+  updateOrder: "linear" | "memory-linear" | "memory-quadratic" | "quadratic" | "cubic";
   persistentScalars: number;
   pendingGenerationScalars: number;
   updateWorkspaceScalars: number;
@@ -1362,9 +1235,7 @@ type RawManipulationEvaluator = {
 type OwnerWasmModule = WasmModule & {
   CmaesVizSession?: new (config: Float64Array) => RawCmaSession;
   G1WalkingVizEvaluator?: new (config: Float64Array) => RawG1Evaluator;
-  HouseholdManipulationVizEvaluator?: new (
-    config: Float64Array,
-  ) => RawManipulationEvaluator;
+  HouseholdManipulationVizEvaluator?: new (config: Float64Array) => RawManipulationEvaluator;
   G1TransformerTrainerSession?: new (
     challenge: number,
     durationSeconds: number,
@@ -1447,8 +1318,7 @@ function exactPacketInteger(
   minimum = 0,
   maximum = Number.MAX_SAFE_INTEGER,
 ): number {
-  if (index >= packet.length)
-    throw new Error(`malformed packed packet: missing ${label}`);
+  if (index >= packet.length) throw new Error(`malformed packed packet: missing ${label}`);
   const value = packet[index];
   if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
     throw new Error(`malformed packed packet: ${label}`);
@@ -1456,11 +1326,7 @@ function exactPacketInteger(
   return value;
 }
 
-function finitePacketNumber(
-  packet: Float64Array,
-  index: number,
-  label: string,
-): number {
+function finitePacketNumber(packet: Float64Array, index: number, label: string): number {
   if (index >= packet.length || !Number.isFinite(packet[index])) {
     throw new Error(`malformed packed packet: ${label}`);
   }
@@ -1479,8 +1345,7 @@ function finitePacketView(
   }
   const values = packet.subarray(start, end);
   for (let index = 0; index < values.length; index++) {
-    if (!Number.isFinite(values[index]))
-      throw new Error(`malformed packed packet: ${label}`);
+    if (!Number.isFinite(values[index])) throw new Error(`malformed packed packet: ${label}`);
   }
   return values;
 }
@@ -1499,25 +1364,14 @@ function decodeCommonOutput(
   if (packet[1] !== schema) throw new Error("malformed packed packet: schema");
   const status = exactPacketInteger(packet, 2, "status", 0, 1);
   const kind = exactPacketInteger(packet, 3, "kind", 0, 4);
-  if (kind !== expectedKind)
-    throw new Error("malformed packed packet: unexpected kind");
+  if (kind !== expectedKind) throw new Error("malformed packed packet: unexpected kind");
   const totalWords = exactPacketInteger(packet, 4, "total words", 5);
-  if (totalWords !== packet.length)
-    throw new Error("malformed packed packet: total words");
+  if (totalWords !== packet.length) throw new Error("malformed packed packet: total words");
   if (status === 0) return { payloadStart: 5 };
-  if (packet.length !== 7)
-    throw new Error("malformed packed packet: refusal length");
-  const code = exactPacketInteger(
-    packet,
-    5,
-    "refusal code",
-    1,
-    refusalNames.length - 1,
-  );
+  if (packet.length !== 7) throw new Error("malformed packed packet: refusal length");
+  const code = exactPacketInteger(packet, 5, "refusal code", 1, refusalNames.length - 1);
   const rawDetail = packet[6];
-  const detail = Number.isNaN(rawDetail)
-    ? null
-    : exactPacketInteger(packet, 6, "refusal detail");
+  const detail = Number.isNaN(rawDetail) ? null : exactPacketInteger(packet, 6, "refusal detail");
   return { refusal: { code, name: refusalNames[code] ?? "unknown", detail } };
 }
 
@@ -1545,8 +1399,7 @@ const COMPLEXITY_NAMES = [
 /** Strictly decode an admission or post-tell snapshot without inventing diagnostics. */
 export function decodeCmaFamilySnapshot(
   packet: Float64Array,
-  expectedKind:
-    typeof OWNER_CMA_KIND_ADMISSION | typeof OWNER_CMA_KIND_SNAPSHOT,
+  expectedKind: typeof OWNER_CMA_KIND_ADMISSION | typeof OWNER_CMA_KIND_SNAPSHOT,
 ): PackedResult<CmaFamilySnapshot> {
   const header = decodeCmaOutputHeader(packet, expectedKind);
   if ("refusal" in header) return header;
@@ -1559,17 +1412,11 @@ export function decodeCmaFamilySnapshot(
   const generation = exactPacketInteger(packet, 7, "generation");
   const evaluations = exactPacketInteger(packet, 8, "evaluations");
   const sigma = finitePacketNumber(packet, 9, "sigma");
-  if (sigma <= 0)
-    throw new Error("malformed packed packet: non-positive sigma");
+  if (sigma <= 0) throw new Error("malformed packed packet: non-positive sigma");
   const population = exactPacketInteger(packet, 10, "population", 4);
   const parents = exactPacketInteger(packet, 11, "parents", 1, population - 1);
   const maxGenerations = exactPacketInteger(packet, 12, "max generations", 1);
-  const admittedEvaluations = exactPacketInteger(
-    packet,
-    13,
-    "admitted evaluations",
-    population,
-  );
+  const admittedEvaluations = exactPacketInteger(packet, 13, "admitted evaluations", population);
   if (
     admittedEvaluations !== maxGenerations * population ||
     evaluations !== generation * population ||
@@ -1577,128 +1424,52 @@ export function decodeCmaFamilySnapshot(
   ) {
     throw new Error("malformed packed packet: budget receipt");
   }
-  const streamSemantics = exactPacketInteger(
-    packet,
-    14,
-    "stream semantics",
-    1,
-    0xffff_ffff,
-  );
-  const streamKernel = exactPacketInteger(
-    packet,
-    15,
-    "stream kernel",
-    1,
-    0xffff_ffff,
-  );
-  const normalLow = exactPacketInteger(
-    packet,
-    16,
-    "normal blocks low",
-    0,
-    0xffff_ffff,
-  );
-  const normalHigh = exactPacketInteger(
-    packet,
-    17,
-    "normal blocks high",
-    0,
-    0xffff_ffff,
-  );
-  const samplingOrderId = exactPacketInteger(
-    packet,
-    18,
-    "sampling order",
-    0,
-    4,
-  );
+  const streamSemantics = exactPacketInteger(packet, 14, "stream semantics", 1, 0xffff_ffff);
+  const streamKernel = exactPacketInteger(packet, 15, "stream kernel", 1, 0xffff_ffff);
+  const normalLow = exactPacketInteger(packet, 16, "normal blocks low", 0, 0xffff_ffff);
+  const normalHigh = exactPacketInteger(packet, 17, "normal blocks high", 0, 0xffff_ffff);
+  const samplingOrderId = exactPacketInteger(packet, 18, "sampling order", 0, 4);
   const updateOrderId = exactPacketInteger(packet, 19, "update order", 0, 4);
-  const persistentScalars = exactPacketInteger(
-    packet,
-    20,
-    "persistent scalars",
-  );
-  const pendingGenerationScalars = exactPacketInteger(
-    packet,
-    21,
-    "pending scalars",
-  );
-  const updateWorkspaceScalars = exactPacketInteger(
-    packet,
-    22,
-    "workspace scalars",
-  );
+  const persistentScalars = exactPacketInteger(packet, 20, "persistent scalars");
+  const pendingGenerationScalars = exactPacketInteger(packet, 21, "pending scalars");
+  const updateWorkspaceScalars = exactPacketInteger(packet, 22, "workspace scalars");
   const denseMatrixEntries = exactPacketInteger(packet, 23, "dense entries");
   const memoryCapacity = exactPacketInteger(packet, 24, "memory capacity");
   const hasBest = exactPacketInteger(packet, 25, "has best", 0, 1) === 1;
   const shapeKind = exactPacketInteger(packet, 29, "shape kind", 0, 2);
   const shapeWords = exactPacketInteger(packet, 30, "shape words");
   const expectedWords = OWNER_CMA_SNAPSHOT_WORDS + 2 * dimension + shapeWords;
-  if (packet.length !== expectedWords)
-    throw new Error("malformed packed packet: snapshot shape");
-  const expectedSamplingOrder =
-    family === "full" ? 2 : family === "separable" ? 0 : 1;
+  if (packet.length !== expectedWords) throw new Error("malformed packed packet: snapshot shape");
+  const expectedSamplingOrder = family === "full" ? 2 : family === "separable" ? 0 : 1;
   const expectedUpdateOrder =
-    family === "full"
-      ? 3
-      : family === "separable"
-        ? 0
-        : family === "lm-cma"
-          ? 4
-          : 1;
-  if (
-    samplingOrderId !== expectedSamplingOrder ||
-    updateOrderId !== expectedUpdateOrder
-  ) {
+    family === "full" ? 3 : family === "separable" ? 0 : family === "lm-cma" ? 4 : 1;
+  if (samplingOrderId !== expectedSamplingOrder || updateOrderId !== expectedUpdateOrder) {
     throw new Error("malformed packed packet: family complexity");
   }
   if (
     // The full owner retains both C and its cached eigensystem/root, hence two
     // dense n-by-n stores. Other families truthfully report no dense matrix.
     (family === "full" &&
-      (denseMatrixEntries !== 2 * dimension * dimension ||
-        memoryCapacity !== 0)) ||
-    (family === "separable" &&
-      (denseMatrixEntries !== 0 || memoryCapacity !== 0)) ||
+      (denseMatrixEntries !== 2 * dimension * dimension || memoryCapacity !== 0)) ||
+    (family === "separable" && (denseMatrixEntries !== 0 || memoryCapacity !== 0)) ||
     ((family === "lm-cma" || family === "lm-ma") &&
       (denseMatrixEntries !== 0 || memoryCapacity === 0))
   ) {
     throw new Error("malformed packed packet: family storage");
   }
 
-  const mean = finitePacketView(
-    packet,
-    OWNER_CMA_SNAPSHOT_WORDS,
-    dimension,
-    "mean",
-  );
+  const mean = finitePacketView(packet, OWNER_CMA_SNAPSHOT_WORDS, dimension, "mean");
   const bestPointStart = OWNER_CMA_SNAPSHOT_WORDS + dimension;
   let best: CmaFamilySnapshot["best"] = null;
   if (hasBest) {
     best = {
       objective: finitePacketNumber(packet, 26, "best objective"),
-      generation: exactPacketInteger(
-        packet,
-        27,
-        "best generation",
-        0,
-        generation,
-      ),
-      candidate: exactPacketInteger(
-        packet,
-        28,
-        "best candidate",
-        0,
-        population - 1,
-      ),
+      generation: exactPacketInteger(packet, 27, "best generation", 0, generation),
+      candidate: exactPacketInteger(packet, 28, "best candidate", 0, population - 1),
       point: finitePacketView(packet, bestPointStart, dimension, "best point"),
     };
   } else {
-    if (
-      !Number.isNaN(packet[26]) ||
-      !Number.isNaN(packet[27]) ||
-      !Number.isNaN(packet[28])
-    ) {
+    if (!Number.isNaN(packet[26]) || !Number.isNaN(packet[27]) || !Number.isNaN(packet[28])) {
       throw new Error("malformed packed packet: absent best metadata");
     }
     for (let index = 0; index < dimension; index++) {
@@ -1714,21 +1485,9 @@ export function decodeCmaFamilySnapshot(
     if (family !== "full" || shapeWords !== dimension + 3) {
       throw new Error("malformed packed packet: full shape");
     }
-    const negativeWeightCount = exactPacketInteger(
-      packet,
-      shapeStart,
-      "negative weights",
-    );
-    const minimumEigenvalue = finitePacketNumber(
-      packet,
-      shapeStart + 1,
-      "minimum eigenvalue",
-    );
-    const maximumEigenvalue = finitePacketNumber(
-      packet,
-      shapeStart + 2,
-      "maximum eigenvalue",
-    );
+    const negativeWeightCount = exactPacketInteger(packet, shapeStart, "negative weights");
+    const minimumEigenvalue = finitePacketNumber(packet, shapeStart + 1, "minimum eigenvalue");
+    const maximumEigenvalue = finitePacketNumber(packet, shapeStart + 2, "maximum eigenvalue");
     if (minimumEigenvalue <= 0 || maximumEigenvalue < minimumEigenvalue) {
       throw new Error("malformed packed packet: full spectrum");
     }
@@ -1752,22 +1511,13 @@ export function decodeCmaFamilySnapshot(
     if (family !== "separable" || shapeWords !== dimension + 1) {
       throw new Error("malformed packed packet: diagonal shape");
     }
-    const variances = finitePacketView(
-      packet,
-      shapeStart + 1,
-      dimension,
-      "variances",
-    );
+    const variances = finitePacketView(packet, shapeStart + 1, dimension, "variances");
     if (variances.some((value) => value <= 0)) {
       throw new Error("malformed packed packet: diagonal variances");
     }
     shape = {
       kind: "diagonal",
-      negativeWeightCount: exactPacketInteger(
-        packet,
-        shapeStart,
-        "negative weights",
-      ),
+      negativeWeightCount: exactPacketInteger(packet, shapeStart, "negative weights"),
       variances,
     };
   } else {
@@ -1781,12 +1531,7 @@ export function decodeCmaFamilySnapshot(
       0,
       memoryCapacity,
     );
-    const capacity = exactPacketInteger(
-      packet,
-      shapeStart + 1,
-      "shape capacity",
-      1,
-    );
+    const capacity = exactPacketInteger(packet, shapeStart + 1, "shape capacity", 1);
     if (capacity !== memoryCapacity || shapeWords !== storedVectors + 2) {
       throw new Error("malformed packed packet: limited-memory payload");
     }
@@ -1836,9 +1581,7 @@ export function decodeCmaFamilySnapshot(
 }
 
 /** Strictly decode one complete row-major owner population. */
-export function decodeCmaFamilyAsk(
-  packet: Float64Array,
-): PackedResult<CmaFamilyAsk> {
+export function decodeCmaFamilyAsk(packet: Float64Array): PackedResult<CmaFamilyAsk> {
   const header = decodeCmaOutputHeader(packet, OWNER_CMA_KIND_ASK);
   if ("refusal" in header) return header;
   if (packet.length < 9) throw new Error("malformed packed packet: ask header");
@@ -1847,10 +1590,7 @@ export function decodeCmaFamilyAsk(
   const dimension = exactPacketInteger(packet, 7, "dimension", 1, 100_000);
   const population = exactPacketInteger(packet, 8, "population", 4, 64_000);
   const candidateWords = dimension * population;
-  if (
-    !Number.isSafeInteger(candidateWords) ||
-    packet.length !== 9 + candidateWords
-  ) {
+  if (!Number.isSafeInteger(candidateWords) || packet.length !== 9 + candidateWords) {
     throw new Error("malformed packed packet: ask shape");
   }
   const candidates = finitePacketView(packet, 9, candidateWords, "candidates");
@@ -1877,15 +1617,11 @@ export function buildCmaFamilyConfig(config: CmaFamilyConfig): Float64Array {
     Number(seed >> 32n),
     config.sigma,
   ]);
-  for (let index = 0; index < dimension; index++)
-    packet[12 + index] = config.mean[index];
+  for (let index = 0; index < dimension; index++) packet[12 + index] = config.mean[index];
   return packet;
 }
 
-function buildTellPacket(
-  generation: number,
-  objectives: ArrayLike<number>,
-): Float64Array {
+function buildTellPacket(generation: number, objectives: ArrayLike<number>): Float64Array {
   const packet = new Float64Array(6 + objectives.length);
   packet.set([
     OWNER_CMA_MAGIC,
@@ -1895,8 +1631,7 @@ function buildTellPacket(
     generation,
     objectives.length,
   ]);
-  for (let index = 0; index < objectives.length; index++)
-    packet[6 + index] = objectives[index];
+  for (let index = 0; index < objectives.length; index++) packet[6 + index] = objectives[index];
   return packet;
 }
 
@@ -1913,10 +1648,7 @@ export class FrankenSimCmaFamilySession {
     return decodeCmaFamilyAsk(this.raw.ask());
   }
 
-  tell(
-    generation: number,
-    objectives: ArrayLike<number>,
-  ): PackedResult<CmaFamilySnapshot> {
+  tell(generation: number, objectives: ArrayLike<number>): PackedResult<CmaFamilySnapshot> {
     return decodeCmaFamilySnapshot(
       this.raw.tell(buildTellPacket(generation, objectives)),
       OWNER_CMA_KIND_SNAPSHOT,
@@ -1934,9 +1666,7 @@ export async function createFrankenSimCmaFamilySession(
   const status = await initFrankenSimOwnerKernel();
   const Session = ownerModule?.CmaesVizSession;
   if (status.source !== "wasm" || !Session) {
-    throw new Error(
-      status.error ?? "Frankensim owner CMA kernel is unavailable",
-    );
+    throw new Error(status.error ?? "Frankensim owner CMA kernel is unavailable");
   }
   const raw = new Session(buildCmaFamilyConfig(config));
   let decoded: PackedResult<CmaFamilySnapshot>;
@@ -2101,9 +1831,7 @@ export function buildG1Config(config: G1WalkingConfig): Float64Array {
       `G1 config: ${obstacles.length} obstacles exceeds the owner cap of ${G1_MAX_OBSTACLES}`,
     );
   }
-  const words = new Float64Array(
-    G1_CONFIG_FIXED_WORDS + G1_OBSTACLE_WORDS * obstacles.length,
-  );
+  const words = new Float64Array(G1_CONFIG_FIXED_WORDS + G1_OBSTACLE_WORDS * obstacles.length);
   words.set([
     G1_MAGIC,
     G1_SCHEMA,
@@ -2143,22 +1871,13 @@ function decodeG1Header(
   packet: Float64Array,
   expectedKind: number,
 ): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
-  return decodeCommonOutput(
-    packet,
-    G1_MAGIC,
-    G1_SCHEMA,
-    expectedKind,
-    G1_REFUSAL_NAMES,
-  );
+  return decodeCommonOutput(packet, G1_MAGIC, G1_SCHEMA, expectedKind, G1_REFUSAL_NAMES);
 }
 
-export function decodeG1Admission(
-  packet: Float64Array,
-): PackedResult<G1Admission> {
+export function decodeG1Admission(packet: Float64Array): PackedResult<G1Admission> {
   const header = decodeG1Header(packet, G1_KIND_ADMISSION);
   if ("refusal" in header) return header;
-  if (packet.length !== 136)
-    throw new Error("malformed G1 packet: admission length");
+  if (packet.length !== 136) throw new Error("malformed G1 packet: admission length");
   const policyDimension = exactPacketInteger(packet, 5, "policy dimension");
   const linkCount = exactPacketInteger(packet, 6, "link count");
   const poseWords = exactPacketInteger(packet, 7, "pose words");
@@ -2173,37 +1892,20 @@ export function decodeG1Admission(
   }
   const topology = [29, 15, 14, 336, 8, 15, 30, 60];
   for (let index = 0; index < topology.length; index++) {
-    if (
-      exactPacketInteger(packet, 21 + index, "controller layout") !==
-      topology[index]
-    ) {
+    if (exactPacketInteger(packet, 21 + index, "controller layout") !== topology[index]) {
       throw new Error("malformed G1 packet: controller layout mismatch");
     }
   }
-  const armSwingGateStartSeconds = finitePacketNumber(
-    packet,
-    29,
-    "arm gate start",
-  );
+  const armSwingGateStartSeconds = finitePacketNumber(packet, 29, "arm gate start");
   const armSwingGateEndSeconds = finitePacketNumber(packet, 30, "arm gate end");
-  if (
-    armSwingGateStartSeconds !== 1 / 3.1 ||
-    armSwingGateEndSeconds !== 3 / 3.1
-  ) {
+  if (armSwingGateStartSeconds !== 1 / 3.1 || armSwingGateEndSeconds !== 3 / 3.1) {
     throw new Error("malformed G1 packet: arm gate mismatch");
   }
-  const decodeCurriculumBlock = (
-    start: number,
-    offsets: number[],
-  ): number[] => {
+  const decodeCurriculumBlock = (start: number, offsets: number[]): number[] => {
     const indices: number[] = [];
     for (let row = 0; row < 15; row++) {
       for (const offset of offsets) {
-        const index = exactPacketInteger(
-          packet,
-          start + indices.length,
-          "curriculum index",
-        );
+        const index = exactPacketInteger(packet, start + indices.length, "curriculum index");
         if (index !== row * 336 + offset) {
           throw new Error("malformed G1 packet: curriculum index mismatch");
         }
@@ -2222,41 +1924,17 @@ export function decodeG1Admission(
   const targetSpeed = finitePacketNumber(packet, 11, "target speed");
   const gaitFrequency = finitePacketNumber(packet, 12, "gait frequency");
   const traceStride = exactPacketInteger(packet, 13, "trace stride", 1, 1_000);
-  const taskId = exactPacketInteger(
-    packet,
-    14,
-    "task",
-    0,
-    G1_TASK_NAMES.length - 1,
-  );
+  const taskId = exactPacketInteger(packet, 14, "task", 0, G1_TASK_NAMES.length - 1);
   const task = G1_TASK_NAMES[taskId];
   if (!task) throw new Error("malformed G1 packet: task");
-  const challengeId = exactPacketInteger(
-    packet,
-    15,
-    "challenge",
-    0,
-    G1_CHALLENGE_NAMES.length - 1,
-  );
+  const challengeId = exactPacketInteger(packet, 15, "challenge", 0, G1_CHALLENGE_NAMES.length - 1);
   const challenge = G1_CHALLENGE_NAMES[challengeId];
   if (!challenge) throw new Error("malformed G1 packet: challenge");
-  const terrainAmplitudeMeters = finitePacketNumber(
-    packet,
-    16,
-    "terrain amplitude",
-  );
-  const terrainWavenumberRadiansPerMeter = finitePacketNumber(
-    packet,
-    17,
-    "terrain wavenumber",
-  );
+  const terrainAmplitudeMeters = finitePacketNumber(packet, 16, "terrain amplitude");
+  const terrainWavenumberRadiansPerMeter = finitePacketNumber(packet, 17, "terrain wavenumber");
   const pushStartSeconds = finitePacketNumber(packet, 18, "push start");
   const pushEndSeconds = finitePacketNumber(packet, 19, "push end");
-  const pushPeakForceNewtons = finitePacketNumber(
-    packet,
-    20,
-    "push peak force",
-  );
+  const pushPeakForceNewtons = finitePacketNumber(packet, 20, "push peak force");
   if (
     stepSeconds < 1 / 480 ||
     stepSeconds > 1 / 30 ||
@@ -2308,8 +1986,7 @@ export function decodeG1Admission(
 }
 
 function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
-  if (packet.length < 28)
-    throw new Error("malformed G1 packet: objective receipt");
+  if (packet.length < 28) throw new Error("malformed G1 packet: objective receipt");
   const terminationId = exactPacketInteger(
     packet,
     27,
@@ -2318,8 +1995,7 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     G1_TERMINATION_REASONS.length - 1,
   );
   const terminationReason = G1_TERMINATION_REASONS[terminationId];
-  if (!terminationReason)
-    throw new Error("malformed G1 packet: termination reason");
+  if (!terminationReason) throw new Error("malformed G1 packet: termination reason");
   const receipt = {
     objective: finitePacketNumber(packet, 5, "objective"),
     distanceMeters: finitePacketNumber(packet, 6, "distance"),
@@ -2332,47 +2008,21 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
     backwardDistanceMeters: finitePacketNumber(packet, 13, "backward distance"),
     lateralErrorIntegral: finitePacketNumber(packet, 14, "lateral error"),
     headingErrorIntegral: finitePacketNumber(packet, 15, "heading error"),
-    contactScheduleMismatchIntegral: finitePacketNumber(
-      packet,
-      16,
-      "contact schedule mismatch",
-    ),
-    swingClearanceErrorIntegral: finitePacketNumber(
-      packet,
-      17,
-      "swing clearance error",
-    ),
+    contactScheduleMismatchIntegral: finitePacketNumber(packet, 16, "contact schedule mismatch"),
+    swingClearanceErrorIntegral: finitePacketNumber(packet, 17, "swing clearance error"),
     singleSupportSeconds: finitePacketNumber(packet, 18, "single support"),
     doubleSupportSeconds: finitePacketNumber(packet, 19, "double support"),
     flightSeconds: finitePacketNumber(packet, 20, "flight"),
     pushImpulseNewtonSeconds: finitePacketNumber(packet, 21, "push impulse"),
     recoveryTimeSeconds: finitePacketNumber(packet, 22, "recovery time"),
-    minimumBaseHeightMeters: finitePacketNumber(
-      packet,
-      23,
-      "minimum base height",
-    ),
+    minimumBaseHeightMeters: finitePacketNumber(packet, 23, "minimum base height"),
     maximumTiltSine: finitePacketNumber(packet, 24, "maximum tilt sine"),
-    maximumAbsoluteTerrainHeightMeters: finitePacketNumber(
-      packet,
-      25,
-      "maximum terrain height",
-    ),
-    completedSteps: exactPacketInteger(
-      packet,
-      26,
-      "completed steps",
-      0,
-      10_000,
-    ),
+    maximumAbsoluteTerrainHeightMeters: finitePacketNumber(packet, 25, "maximum terrain height"),
+    completedSteps: exactPacketInteger(packet, 26, "completed steps", 0, 10_000),
     terminationReason,
     // Schema 8: the deepest body-sphere penetration the owner's obstacle
     // guard measured over the rollout. Zero when no boxes were declared.
-    maximumBodyPenetrationMeters: finitePacketNumber(
-      packet,
-      28,
-      "maximum body penetration",
-    ),
+    maximumBodyPenetrationMeters: finitePacketNumber(packet, 28, "maximum body penetration"),
   };
   if (
     receipt.speedErrorIntegral < 0 ||
@@ -2402,36 +2052,27 @@ function decodeG1ReceiptPayload(packet: Float64Array): G1ObjectiveReceipt {
   return receipt;
 }
 
-export function decodeG1Evaluation(
-  packet: Float64Array,
-): PackedResult<G1ObjectiveReceipt> {
+export function decodeG1Evaluation(packet: Float64Array): PackedResult<G1ObjectiveReceipt> {
   const header = decodeG1Header(packet, G1_KIND_EVALUATION);
   if ("refusal" in header) return header;
   // Schema 8: 5 header words + 24 receipt words (the last is the obstacle
   // guard's deepest measured body penetration).
-  if (packet.length !== 29)
-    throw new Error("malformed G1 packet: evaluation length");
+  if (packet.length !== 29) throw new Error("malformed G1 packet: evaluation length");
   return { ok: decodeG1ReceiptPayload(packet) };
 }
 
-export function decodeG1Population(
-  packet: Float64Array,
-): PackedResult<Float64Array> {
+export function decodeG1Population(packet: Float64Array): PackedResult<Float64Array> {
   const header = decodeG1Header(packet, G1_KIND_POPULATION);
   if ("refusal" in header) return header;
-  if (packet.length < 7)
-    throw new Error("malformed G1 packet: population length");
+  if (packet.length < 7) throw new Error("malformed G1 packet: population length");
   const population = exactPacketInteger(packet, 5, "population", 1, 64);
-  if (packet.length !== 6 + population)
-    throw new Error("malformed G1 packet: population shape");
+  if (packet.length !== 6 + population) throw new Error("malformed G1 packet: population shape");
   return {
     ok: finitePacketView(packet, 6, population, "population objectives"),
   };
 }
 
-export function decodeG1Trace(
-  packet: Float64Array,
-): PackedResult<G1TraceReceipt> {
+export function decodeG1Trace(packet: Float64Array): PackedResult<G1TraceReceipt> {
   const header = decodeG1Header(packet, G1_KIND_TRACE);
   if ("refusal" in header) return header;
   const receipt = decodeG1ReceiptPayload(packet);
@@ -2444,13 +2085,10 @@ export function decodeG1Trace(
   let previousTime = -Infinity;
   for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
     const timeSeconds = finitePacketNumber(packet, cursor, "trace time");
-    if (timeSeconds < previousTime)
-      throw new Error("malformed G1 packet: trace time order");
+    if (timeSeconds < previousTime) throw new Error("malformed G1 packet: trace time order");
     previousTime = timeSeconds;
-    const leftContact =
-      exactPacketInteger(packet, cursor + 1, "left contact", 0, 1) === 1;
-    const rightContact =
-      exactPacketInteger(packet, cursor + 2, "right contact", 0, 1) === 1;
+    const leftContact = exactPacketInteger(packet, cursor + 1, "left contact", 0, 1) === 1;
+    const rightContact = exactPacketInteger(packet, cursor + 2, "right contact", 0, 1) === 1;
     cursor += 3;
     const linkPoses: G1LinkPose[] = [];
     for (let link = 0; link < G1_LINK_COUNT; link++) {
@@ -2524,9 +2162,7 @@ export async function createFrankenSimG1WalkingEvaluator(
   const status = await initFrankenSimOwnerKernel();
   const Evaluator = ownerModule?.G1WalkingVizEvaluator;
   if (status.source !== "wasm" || !Evaluator) {
-    throw new Error(
-      status.error ?? "Frankensim G1 owner kernel is unavailable",
-    );
+    throw new Error(status.error ?? "Frankensim G1 owner kernel is unavailable");
   }
   const raw = new Evaluator(buildG1Config(config));
   let decoded: PackedResult<G1Admission>;
@@ -2578,8 +2214,7 @@ function decodeTrainerPacket(packet: Float64Array): G1TransformerProgress {
       `trainer packet must carry ${TRAINER_PACKET_WORDS} words, received ${packet.length}`,
     );
   }
-  const status =
-    packet[0] === 1 ? "generation" : packet[0] === 2 ? "stopped" : "running";
+  const status = packet[0] === 1 ? "generation" : packet[0] === 2 ? "stopped" : "running";
   return {
     status,
     generation: packet[1],
@@ -2726,9 +2361,7 @@ export function residualHeadFromArtifact(buffer: ArrayBuffer): Float64Array {
     }
     if (index === headIndex) {
       if (length !== nOutputs * dModel) {
-        throw new Error(
-          `policy head is ${length} values, expected ${nOutputs * dModel}`,
-        );
+        throw new Error(`policy head is ${length} values, expected ${nOutputs * dModel}`);
       }
       const head = new Float64Array(length);
       for (let i = 0; i < length; i++) {
@@ -2744,19 +2377,18 @@ export function residualHeadFromArtifact(buffer: ArrayBuffer): Float64Array {
   throw new Error("residual artifact carries no policy head");
 }
 
-export async function createFrankenSimG1TransformerTrainer(options: {
-  challenge?: G1TransformerChallenge;
-  durationSeconds?: number;
-  sigma?: number;
-  seed?: number;
-} = {}): Promise<FrankenSimG1TransformerTrainer> {
+export async function createFrankenSimG1TransformerTrainer(
+  options: {
+    challenge?: G1TransformerChallenge;
+    durationSeconds?: number;
+    sigma?: number;
+    seed?: number;
+  } = {},
+): Promise<FrankenSimG1TransformerTrainer> {
   const status = await initFrankenSimOwnerKernel();
   const Trainer = ownerModule?.G1TransformerTrainerSession;
   if (status.source !== "wasm" || !Trainer) {
-    throw new Error(
-      status.error ??
-        "Frankensim owner kernel does not expose the residual trainer",
-    );
+    throw new Error(status.error ?? "Frankensim owner kernel does not expose the residual trainer");
   }
   return new FrankenSimG1TransformerTrainer(
     new Trainer(
@@ -2768,8 +2400,7 @@ export async function createFrankenSimG1TransformerTrainer(options: {
   );
 }
 
-export type HouseholdManipulationTask =
-  "kitchen-mug" | "living-room-remote" | "backyard-trowel";
+export type HouseholdManipulationTask = "kitchen-mug" | "living-room-remote" | "backyard-trowel";
 
 export interface HouseholdManipulationConfig {
   task: HouseholdManipulationTask;
@@ -2802,13 +2433,12 @@ const ARM_TASK_NAMES = [
  */
 export const HOUSEHOLD_PLACEMENT_CLEARANCE_METERS = 0.045;
 
-export const DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG: HouseholdManipulationConfig =
-  {
-    task: "kitchen-mug",
-    stepSeconds: 1 / 90,
-    durationSeconds: 6,
-    traceStride: 3,
-  };
+export const DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG: HouseholdManipulationConfig = {
+  task: "kitchen-mug",
+  stepSeconds: 1 / 90,
+  durationSeconds: 6,
+  traceStride: 3,
+};
 
 export interface HouseholdManipulationScene {
   objectMassKilograms: number;
@@ -2948,7 +2578,9 @@ export function buildHouseholdManipulationConfig(
       c.some((value) => Math.abs(value) > 10) ||
       h.some((value) => value <= 0.001 || value > 5)
     ) {
-      throw new Error(`household-arm config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`);
+      throw new Error(
+        `household-arm config: obstacle ${index} (${obstacle.name}) is outside the owner envelope`,
+      );
     }
     // Schema 4 appends the body role: a keep-out volume the arm must avoid, or
     // a work surface it may touch but not sink through.
@@ -2964,13 +2596,7 @@ function decodeArmHeader(
   packet: Float64Array,
   expectedKind: number,
 ): { payloadStart: 5 } | { refusal: PackedOwnerRefusal } {
-  return decodeCommonOutput(
-    packet,
-    ARM_MAGIC,
-    ARM_SCHEMA,
-    expectedKind,
-    ARM_REFUSAL_NAMES,
-  );
+  return decodeCommonOutput(packet, ARM_MAGIC, ARM_SCHEMA, expectedKind, ARM_REFUSAL_NAMES);
 }
 
 function packetVector3(
@@ -3025,55 +2651,21 @@ export function decodeHouseholdManipulationAdmission(
   const stepSeconds = finitePacketNumber(packet, 11, "step seconds");
   const durationSeconds = finitePacketNumber(packet, 12, "duration seconds");
   const traceStride = exactPacketInteger(packet, 13, "trace stride", 1, 1_000);
-  const taskId = exactPacketInteger(
-    packet,
-    14,
-    "task",
-    0,
-    ARM_TASK_NAMES.length - 1,
-  );
+  const taskId = exactPacketInteger(packet, 14, "task", 0, ARM_TASK_NAMES.length - 1);
   const task = ARM_TASK_NAMES[taskId];
   if (!task) throw new Error("malformed household-arm packet: task");
-  const minimumGripperWidthMeters = finitePacketNumber(
-    packet,
-    15,
-    "minimum gripper width",
-  );
-  const openGripperWidthMeters = finitePacketNumber(
-    packet,
-    16,
-    "open gripper width",
-  );
-  const placementToleranceMeters = finitePacketNumber(
-    packet,
-    17,
-    "placement tolerance",
-  );
+  const minimumGripperWidthMeters = finitePacketNumber(packet, 15, "minimum gripper width");
+  const openGripperWidthMeters = finitePacketNumber(packet, 16, "open gripper width");
+  const placementToleranceMeters = finitePacketNumber(packet, 17, "placement tolerance");
   const liftTargetMeters = finitePacketNumber(packet, 18, "lift target");
   const objectMassKilograms = finitePacketNumber(packet, 19, "object mass");
   const objectDimensionsMeters = packetVector3(packet, 20, "object dimensions");
-  const graspHalfWidthMeters = finitePacketNumber(
-    packet,
-    23,
-    "grasp half width",
-  );
-  const initialObjectPositionMeters = packetVector3(
-    packet,
-    24,
-    "initial object position",
-  );
-  const goalObjectPositionMeters = packetVector3(
-    packet,
-    27,
-    "goal object position",
-  );
+  const graspHalfWidthMeters = finitePacketNumber(packet, 23, "grasp half width");
+  const initialObjectPositionMeters = packetVector3(packet, 24, "initial object position");
+  const goalObjectPositionMeters = packetVector3(packet, 27, "goal object position");
   const supportHeightMeters = finitePacketNumber(packet, 30, "support height");
   const obstacleCenterMeters = packetVector3(packet, 31, "obstacle center");
-  const obstacleHalfExtentsMeters = packetVector3(
-    packet,
-    34,
-    "obstacle half extents",
-  );
+  const obstacleHalfExtentsMeters = packetVector3(packet, 34, "obstacle half extents");
   const staticFrictionMu = finitePacketNumber(packet, 37, "static friction");
   const kineticFrictionMu = finitePacketNumber(packet, 38, "kinetic friction");
   const extraObstacleCount = exactPacketInteger(
@@ -3102,9 +2694,7 @@ export function decodeHouseholdManipulationAdmission(
     supportHeightMeters <= 0 ||
     obstacleHalfExtentsMeters.some((value) => value <= 0)
   ) {
-    throw new Error(
-      "malformed household-arm packet: admitted controls or scene",
-    );
+    throw new Error("malformed household-arm packet: admitted controls or scene");
   }
   return {
     ok: {
@@ -3142,49 +2732,23 @@ function decodeHouseholdReceiptPayload(
   if (packet.length < ARM_RECEIPT_WORDS) {
     throw new Error("malformed household-arm packet: objective receipt");
   }
-  const ownerReportedPlaced =
-    exactPacketInteger(packet, 20, "placed", 0, 1) === 1;
+  const ownerReportedPlaced = exactPacketInteger(packet, 20, "placed", 0, 1) === 1;
   const receipt: HouseholdManipulationObjectiveReceipt = {
     objective: finitePacketNumber(packet, 5, "objective"),
     finalObjectErrorMeters: finitePacketNumber(packet, 6, "final object error"),
-    minimumReachErrorMeters: finitePacketNumber(
-      packet,
-      7,
-      "minimum reach error",
-    ),
+    minimumReachErrorMeters: finitePacketNumber(packet, 7, "minimum reach error"),
     maximumLiftMeters: finitePacketNumber(packet, 8, "maximum lift"),
     actuatorWorkJoules: finitePacketNumber(packet, 9, "actuator work"),
-    collisionRiskIntegral: finitePacketNumber(
-      packet,
-      10,
-      "collision risk integral",
-    ),
-    minimumCertifiedClearanceMeters: finitePacketNumber(
-      packet,
-      11,
-      "minimum certified clearance",
-    ),
-    possibleCollisionTimeSeconds: finitePacketNumber(
-      packet,
-      12,
-      "possible collision time",
-    ),
-    collisionQueryIterations: exactPacketInteger(
-      packet,
-      13,
-      "collision query iterations",
-    ),
-    controlLimitIntegral: finitePacketNumber(
-      packet,
-      14,
-      "control limit integral",
-    ),
+    collisionRiskIntegral: finitePacketNumber(packet, 10, "collision risk integral"),
+    minimumCertifiedClearanceMeters: finitePacketNumber(packet, 11, "minimum certified clearance"),
+    possibleCollisionTimeSeconds: finitePacketNumber(packet, 12, "possible collision time"),
+    collisionQueryIterations: exactPacketInteger(packet, 13, "collision query iterations"),
+    controlLimitIntegral: finitePacketNumber(packet, 14, "control limit integral"),
     firstGraspTimeSeconds: finitePacketNumber(packet, 15, "first grasp time"),
     graspDurationSeconds: finitePacketNumber(packet, 16, "grasp duration"),
     peakGripForceNewtons: finitePacketNumber(packet, 17, "peak grip force"),
     everGrasped: exactPacketInteger(packet, 18, "ever grasped", 0, 1) === 1,
-    releasedAfterTransport:
-      exactPacketInteger(packet, 19, "released", 0, 1) === 1,
+    releasedAfterTransport: exactPacketInteger(packet, 19, "released", 0, 1) === 1,
     ownerReportedPlaced,
     placed: false,
     completedSteps: exactPacketInteger(packet, 21, "completed steps", 1, 1_440),
@@ -3192,8 +2756,7 @@ function decodeHouseholdReceiptPayload(
   receipt.placed =
     ownerReportedPlaced &&
     receipt.collisionRiskIntegral === 0 &&
-    receipt.minimumCertifiedClearanceMeters >=
-      HOUSEHOLD_PLACEMENT_CLEARANCE_METERS &&
+    receipt.minimumCertifiedClearanceMeters >= HOUSEHOLD_PLACEMENT_CLEARANCE_METERS &&
     receipt.possibleCollisionTimeSeconds === 0;
   if (
     receipt.finalObjectErrorMeters < 0 ||
@@ -3207,8 +2770,7 @@ function decodeHouseholdReceiptPayload(
     receipt.firstGraspTimeSeconds < 0 ||
     receipt.graspDurationSeconds < 0 ||
     receipt.peakGripForceNewtons < 0 ||
-    (ownerReportedPlaced &&
-      (!receipt.everGrasped || !receipt.releasedAfterTransport))
+    (ownerReportedPlaced && (!receipt.everGrasped || !receipt.releasedAfterTransport))
   ) {
     throw new Error("malformed household-arm packet: objective invariants");
   }
@@ -3231,8 +2793,7 @@ export function decodeHouseholdManipulationPopulation(
 ): PackedResult<Float64Array> {
   const header = decodeArmHeader(packet, ARM_KIND_POPULATION);
   if ("refusal" in header) return header;
-  if (packet.length < 7)
-    throw new Error("malformed household-arm packet: population length");
+  if (packet.length < 7) throw new Error("malformed household-arm packet: population length");
   const population = exactPacketInteger(packet, 5, "population", 1, 64);
   if (packet.length !== 6 + population) {
     throw new Error("malformed household-arm packet: population shape");
@@ -3248,16 +2809,8 @@ export function decodeHouseholdManipulationTrace(
   const header = decodeArmHeader(packet, ARM_KIND_TRACE);
   if ("refusal" in header) return header;
   const receipt = decodeHouseholdReceiptPayload(packet);
-  const sampleCount = exactPacketInteger(
-    packet,
-    ARM_RECEIPT_WORDS,
-    "trace sample count",
-    1,
-  );
-  if (
-    packet.length !==
-    ARM_RECEIPT_WORDS + 1 + sampleCount * ARM_TRACE_SAMPLE_WORDS
-  ) {
+  const sampleCount = exactPacketInteger(packet, ARM_RECEIPT_WORDS, "trace sample count", 1);
+  if (packet.length !== ARM_RECEIPT_WORDS + 1 + sampleCount * ARM_TRACE_SAMPLE_WORDS) {
     throw new Error("malformed household-arm packet: trace shape");
   }
   const samples: HouseholdManipulationTraceSample[] = [];
@@ -3269,18 +2822,9 @@ export function decodeHouseholdManipulationTrace(
       throw new Error("malformed household-arm packet: trace time order");
     }
     previousTime = timeSeconds;
-    const gripperWidthMeters = finitePacketNumber(
-      packet,
-      cursor + 1,
-      "gripper width",
-    );
-    const gripNormalForceNewtons = finitePacketNumber(
-      packet,
-      cursor + 2,
-      "grip force",
-    );
-    const grasped =
-      exactPacketInteger(packet, cursor + 3, "grasped", 0, 1) === 1;
+    const gripperWidthMeters = finitePacketNumber(packet, cursor + 1, "gripper width");
+    const gripNormalForceNewtons = finitePacketNumber(packet, cursor + 2, "grip force");
+    const grasped = exactPacketInteger(packet, cursor + 3, "grasped", 0, 1) === 1;
     if (gripperWidthMeters <= 0 || gripNormalForceNewtons < 0) {
       throw new Error("malformed household-arm packet: gripper state");
     }
@@ -3308,10 +2852,7 @@ export class FrankenSimHouseholdManipulationEvaluator {
   private readonly raw: RawManipulationEvaluator;
   readonly admission: HouseholdManipulationAdmission;
 
-  constructor(
-    raw: RawManipulationEvaluator,
-    admission: HouseholdManipulationAdmission,
-  ) {
+  constructor(raw: RawManipulationEvaluator, admission: HouseholdManipulationAdmission) {
     this.raw = raw;
     this.admission = admission;
   }
@@ -3327,16 +2868,12 @@ export class FrankenSimHouseholdManipulationEvaluator {
     return mean;
   }
 
-  evaluate(
-    policy: Float64Array,
-  ): PackedResult<HouseholdManipulationObjectiveReceipt> {
+  evaluate(policy: Float64Array): PackedResult<HouseholdManipulationObjectiveReceipt> {
     return decodeHouseholdManipulationEvaluation(this.raw.evaluate(policy));
   }
 
   evaluatePopulation(policies: Float64Array): PackedResult<Float64Array> {
-    return decodeHouseholdManipulationPopulation(
-      this.raw.evaluate_population(policies),
-    );
+    return decodeHouseholdManipulationPopulation(this.raw.evaluate_population(policies));
   }
 
   trace(policy: Float64Array): PackedResult<HouseholdManipulationTraceReceipt> {
@@ -3354,9 +2891,7 @@ export async function createFrankenSimHouseholdManipulationEvaluator(
   const status = await initFrankenSimOwnerKernel();
   const Evaluator = ownerModule?.HouseholdManipulationVizEvaluator;
   if (status.source !== "wasm" || !Evaluator) {
-    throw new Error(
-      status.error ?? "Frankensim household-arm owner kernel is unavailable",
-    );
+    throw new Error(status.error ?? "Frankensim household-arm owner kernel is unavailable");
   }
   const raw = new Evaluator(buildHouseholdManipulationConfig(config));
   let decoded: PackedResult<HouseholdManipulationAdmission>;

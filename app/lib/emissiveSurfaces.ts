@@ -81,7 +81,7 @@ export function kelvinToRgb(kelvin: number): [number, number, number] {
     red = 255;
   } else {
     red = temp - 60;
-    red = 329.698727446 * Math.pow(red, -0.1332047592);
+    red = 329.698727446 * red ** -0.1332047592;
     red = Math.max(0, Math.min(255, red));
   }
 
@@ -92,7 +92,7 @@ export function kelvinToRgb(kelvin: number): [number, number, number] {
     green = Math.max(0, Math.min(255, green));
   } else {
     green = temp - 60;
-    green = 288.1221695283 * Math.pow(green, -0.0755148492);
+    green = 288.1221695283 * green ** -0.0755148492;
     green = Math.max(0, Math.min(255, green));
   }
 
@@ -110,7 +110,7 @@ export function kelvinToRgb(kelvin: number): [number, number, number] {
   // Convert sRGB to linear RGB
   const toLinear = (c: number): number => {
     const s = c / 255.0;
-    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   };
 
   return [toLinear(red), toLinear(green), toLinear(blue)];
@@ -219,7 +219,11 @@ function flickerFireplace(frame: number, phase: number, base: number): number {
 
 export function liveEmissiveIntensity(surface: EmissiveSurface, frame: number): number {
   if (!surface.on) return 0;
-  if (surface.kind === "fireplace-flame" || surface.kind === "fireplace-hearth" || surface.kind === "candle") {
+  if (
+    surface.kind === "fireplace-flame" ||
+    surface.kind === "fireplace-hearth" ||
+    surface.kind === "candle"
+  ) {
     return flickerFireplace(frame, surface.phase, surface.baseIntensity);
   }
   if (surface.kind === "bedside-lamp") {
@@ -229,7 +233,10 @@ export function liveEmissiveIntensity(surface: EmissiveSurface, frame: number): 
   return surface.baseIntensity;
 }
 
-export function liveEmissiveColor(surface: EmissiveSurface, frame: number): [number, number, number] {
+export function liveEmissiveColor(
+  surface: EmissiveSurface,
+  frame: number,
+): [number, number, number] {
   if (!surface.on) return [0, 0, 0];
   if (surface.kind === "fireplace-flame" || surface.kind === "fireplace-hearth") {
     const shift = 0.05 * Math.sin(frame * 0.03 + surface.phase);
@@ -302,7 +309,7 @@ export function evaluateEmissiveIlluminance(
   surfaces: EmissiveSurface[],
   timeSeconds = 0.0,
 ): [number, number, number] {
-  let totalE: [number, number, number] = [0, 0, 0];
+  const totalE: [number, number, number] = [0, 0, 0];
 
   for (let i = 0; i < surfaces.length; i++) {
     const surf = surfaces[i];

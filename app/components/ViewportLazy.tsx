@@ -11,7 +11,7 @@
  * for visibility. `rootMargin` is in CSS pixels; default "200px" means we mount
  * slightly before the section enters the viewport.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useInView } from "../hooks/useScrollSpy";
 
 export function ViewportLazy({
@@ -71,13 +71,9 @@ export function ViewportLazy({
           observer.disconnect();
           clearTimeout(timeout);
           cancelAnimationFrame(frame);
-          inputs.forEach((type) =>
-            window.removeEventListener(type, stopTracking),
-          );
+          inputs.forEach((type) => window.removeEventListener(type, stopTracking));
         };
-        inputs.forEach((type) =>
-          window.addEventListener(type, stopTracking, { passive: true }),
-        );
+        inputs.forEach((type) => window.addEventListener(type, stopTracking, { passive: true }));
         observer.observe(document.body);
         align();
       } else {
@@ -99,8 +95,7 @@ export function ViewportLazy({
   const style =
     minHeight !== undefined
       ? {
-          minHeight:
-            typeof minHeight === "number" ? `${minHeight}px` : minHeight,
+          minHeight: typeof minHeight === "number" ? `${minHeight}px` : minHeight,
         }
       : undefined;
 

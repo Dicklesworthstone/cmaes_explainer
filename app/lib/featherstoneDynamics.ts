@@ -21,7 +21,7 @@ export type Matrix6x6 = [
   SpatialVector,
   SpatialVector,
   SpatialVector,
-  SpatialVector
+  SpatialVector,
 ];
 
 export type JointType = "revolute" | "prismatic" | "fixed";
@@ -58,25 +58,11 @@ export function createZeroSpatial(): SpatialVector {
 }
 
 export function spatialAdd(a: SpatialVector, b: SpatialVector): SpatialVector {
-  return [
-    a[0] + b[0],
-    a[1] + b[1],
-    a[2] + b[2],
-    a[3] + b[3],
-    a[4] + b[4],
-    a[5] + b[5],
-  ];
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3], a[4] + b[4], a[5] + b[5]];
 }
 
 export function spatialSub(a: SpatialVector, b: SpatialVector): SpatialVector {
-  return [
-    a[0] - b[0],
-    a[1] - b[1],
-    a[2] - b[2],
-    a[3] - b[3],
-    a[4] - b[4],
-    a[5] - b[5],
-  ];
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3], a[4] - b[4], a[5] - b[5]];
 }
 
 export function spatialScale(a: SpatialVector, s: number): SpatialVector {
@@ -84,14 +70,7 @@ export function spatialScale(a: SpatialVector, s: number): SpatialVector {
 }
 
 export function spatialDot(a: SpatialVector, b: SpatialVector): number {
-  return (
-    a[0] * b[0] +
-    a[1] * b[1] +
-    a[2] * b[2] +
-    a[3] * b[3] +
-    a[4] * b[4] +
-    a[5] * b[5]
-  );
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] + a[4] * b[4] + a[5] * b[5];
 }
 
 /**
@@ -109,9 +88,9 @@ export function spatialCrossMotion(v: SpatialVector, m: SpatialVector): SpatialV
   const rz = wx * my - wy * mx;
 
   // w x m_v + v x m_w
-  const rvx = (wy * mvz - wz * mvy) + (vy * mz - vz * my);
-  const rvy = (wz * mvx - wx * mvz) + (vz * mx - vx * mz);
-  const rvz = (wx * mvy - wy * mvx) + (vx * my - vy * mx);
+  const rvx = wy * mvz - wz * mvy + (vy * mz - vz * my);
+  const rvy = wz * mvx - wx * mvz + (vz * mx - vx * mz);
+  const rvz = wx * mvy - wy * mvx + (vx * my - vy * mx);
 
   return [rx, ry, rz, rvx, rvy, rvz];
 }
@@ -125,9 +104,9 @@ export function spatialCrossForce(v: SpatialVector, f: SpatialVector): SpatialVe
   const [nx, ny, nz, fx, fy, fz] = f;
 
   // w x f_n + v x f_f
-  const rnx = (wy * nz - wz * ny) + (vy * fz - vz * fy);
-  const rny = (wz * nx - wx * nz) + (vz * fx - vx * fz);
-  const rnz = (wx * ny - wy * nx) + (vx * fy - vy * fx);
+  const rnx = wy * nz - wz * ny + (vy * fz - vz * fy);
+  const rny = wz * nx - wx * nz + (vz * fx - vx * fz);
+  const rnz = wx * ny - wy * nx + (vx * fy - vy * fx);
 
   // w x f_f
   const rfx = wy * fz - wz * fy;
@@ -140,15 +119,16 @@ export function spatialCrossForce(v: SpatialVector, f: SpatialVector): SpatialVe
 /**
  * Construct 3D Rotation Matrix from Euler angles [roll, pitch, yaw]
  */
-export function eulerToRotationMatrix(rpy: [number, number, number]): [
-  [number, number, number],
-  [number, number, number],
-  [number, number, number]
-] {
+export function eulerToRotationMatrix(
+  rpy: [number, number, number],
+): [[number, number, number], [number, number, number], [number, number, number]] {
   const [r, p, y] = rpy;
-  const cr = Math.cos(r), sr = Math.sin(r);
-  const cp = Math.cos(p), sp = Math.sin(p);
-  const cy = Math.cos(y), sy = Math.sin(y);
+  const cr = Math.cos(r),
+    sr = Math.sin(r);
+  const cp = Math.cos(p),
+    sp = Math.sin(p);
+  const cy = Math.cos(y),
+    sy = Math.sin(y);
 
   return [
     [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
@@ -163,7 +143,7 @@ export function eulerToRotationMatrix(rpy: [number, number, number]): [
 export function transformSpatialMotion(
   R: [[number, number, number], [number, number, number], [number, number, number]],
   r: [number, number, number], // translation from parent to child in parent frame
-  v: SpatialVector
+  v: SpatialVector,
 ): SpatialVector {
   const [wx, wy, wz, vx, vy, vz] = v;
 
@@ -195,7 +175,7 @@ export function transformSpatialMotion(
 export function transformSpatialForce(
   R: [[number, number, number], [number, number, number], [number, number, number]],
   r: [number, number, number],
-  f: SpatialVector
+  f: SpatialVector,
 ): SpatialVector {
   const [nx, ny, nz, fx, fy, fz] = f;
 
@@ -223,7 +203,7 @@ export function transformSpatialForce(
 export function transformSpatialInertia(
   R: [[number, number, number], [number, number, number], [number, number, number]],
   r: [number, number, number],
-  I: Matrix6x6
+  I: Matrix6x6,
 ): Matrix6x6 {
   const out: Matrix6x6 = [
     [0, 0, 0, 0, 0, 0],
@@ -234,15 +214,28 @@ export function transformSpatialInertia(
     [0, 0, 0, 0, 0, 0],
   ];
 
-  const rx = r[0], ry = r[1], rz = r[2];
-  const r00 = R[0][0], r01 = R[0][1], r02 = R[0][2];
-  const r10 = R[1][0], r11 = R[1][1], r12 = R[1][2];
-  const r20 = R[2][0], r21 = R[2][1], r22 = R[2][2];
+  const rx = r[0],
+    ry = r[1],
+    rz = r[2];
+  const r00 = R[0][0],
+    r01 = R[0][1],
+    r02 = R[0][2];
+  const r10 = R[1][0],
+    r11 = R[1][1],
+    r12 = R[1][2];
+  const r20 = R[2][0],
+    r21 = R[2][1],
+    r22 = R[2][2];
 
   // Evaluate X^T * I * X column by column using unit basis vectors e_c
   for (let c = 0; c < 6; c++) {
     // 1. v_child = X * ec
-    let wx = 0, wy = 0, wz = 0, vx = 0, vy = 0, vz = 0;
+    let wx = 0,
+      wy = 0,
+      wz = 0,
+      vx = 0,
+      vy = 0,
+      vz = 0;
     if (c === 0) wx = 1;
     else if (c === 1) wy = 1;
     else if (c === 2) wz = 1;
@@ -267,11 +260,21 @@ export function transformSpatialInertia(
     const vcv_z = r20 * lin_px + r21 * lin_py + r22 * lin_pz;
 
     // 2. f_child = I * v_child
-    let f0 = 0, f1 = 0, f2 = 0, f3 = 0, f4 = 0, f5 = 0;
+    let f0 = 0,
+      f1 = 0,
+      f2 = 0,
+      f3 = 0,
+      f4 = 0,
+      f5 = 0;
     for (let row = 0; row < 6; row++) {
       const I_row = I[row];
-      const sum = I_row[0] * vcw_x + I_row[1] * vcw_y + I_row[2] * vcw_z +
-                  I_row[3] * vcv_x + I_row[4] * vcv_y + I_row[5] * vcv_z;
+      const sum =
+        I_row[0] * vcw_x +
+        I_row[1] * vcw_y +
+        I_row[2] * vcw_z +
+        I_row[3] * vcv_x +
+        I_row[4] * vcv_y +
+        I_row[5] * vcv_z;
       if (row === 0) f0 = sum;
       else if (row === 1) f1 = sum;
       else if (row === 2) f2 = sum;
@@ -306,7 +309,7 @@ export function transformSpatialInertia(
 export function buildSpatialInertia(
   mass: number,
   com: [number, number, number],
-  Iprincipal: [number, number, number]
+  Iprincipal: [number, number, number],
 ): Matrix6x6 {
   const [cx, cy, cz] = com;
   const [Ixx, Iyy, Izz] = Iprincipal;
@@ -328,7 +331,9 @@ export function buildSpatialInertia(
   const I22 = Izz + m * (cSq - cz * cz);
 
   // Cross term m * [c]x
-  const mcx = m * cx, mcy = m * cy, mcz = m * cz;
+  const mcx = m * cx,
+    mcy = m * cy,
+    mcz = m * cz;
 
   return [
     [I00, I01, I02, 0, -mcz, mcy],
@@ -369,7 +374,7 @@ export function forwardDynamicsABA(
   tree: MultibodyTree,
   q: number[],
   qDot: number[],
-  tau: number[]
+  tau: number[],
 ): ForwardDynamicsResult {
   const N = tree.links.length;
   const v = new Array<SpatialVector>(N);
@@ -385,7 +390,9 @@ export function forwardDynamicsABA(
   const qDDot = new Float64Array(N);
 
   // Link relative transform caches
-  const R_rel = new Array<[[number, number, number], [number, number, number], [number, number, number]]>(N);
+  const R_rel = new Array<
+    [[number, number, number], [number, number, number], [number, number, number]]
+  >(N);
   const r_rel = new Array<[number, number, number]>(N);
 
   // -------------------------------------------------------------------------
@@ -407,7 +414,7 @@ export function forwardDynamicsABA(
     }
 
     // Relative rotation including joint angle q[i]
-    let rpy: [number, number, number] = [...link.parentTransform.rotation];
+    const rpy: [number, number, number] = [...link.parentTransform.rotation];
     if (link.jointType === "revolute") {
       // Rotate around axis
       if (link.jointAxis[2] === 1) rpy[2] += q[i] || 0;
@@ -463,8 +470,12 @@ export function forwardDynamicsABA(
       // Ia_i = IA_i - U_i * (1/D_i) * U_i^T
       const invD = 1.0 / D[i];
       const Ia_i: Matrix6x6 = [
-        [0,0,0,0,0,0], [0,0,0,0,0,0], [0,0,0,0,0,0],
-        [0,0,0,0,0,0], [0,0,0,0,0,0], [0,0,0,0,0,0]
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
       ];
       for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
@@ -476,7 +487,7 @@ export function forwardDynamicsABA(
       const uRatio = u[i] * invD;
       const pa_term = spatialAdd(
         pA[i],
-        spatialAdd(multiplyInertiaVector(Ia_i, c[i]), spatialScale(U[i], uRatio))
+        spatialAdd(multiplyInertiaVector(Ia_i, c[i]), spatialScale(U[i], uRatio)),
       );
 
       // Propagate articulated inertia and bias force to parent
@@ -502,9 +513,10 @@ export function forwardDynamicsABA(
     const link = tree.links[i];
     const parent = link.parentIndex;
 
-    const a_parent_transformed = parent === -1
-      ? transformSpatialMotion(R_rel[i], r_rel[i], a0)
-      : transformSpatialMotion(R_rel[i], r_rel[i], a[parent]);
+    const a_parent_transformed =
+      parent === -1
+        ? transformSpatialMotion(R_rel[i], r_rel[i], a0)
+        : transformSpatialMotion(R_rel[i], r_rel[i], a[parent]);
 
     const a_prime = spatialAdd(a_parent_transformed, c[i]);
 
@@ -530,7 +542,7 @@ export function inverseDynamicsRNEA(
   tree: MultibodyTree,
   q: number[],
   qDot: number[],
-  qDDot: number[]
+  qDDot: number[],
 ): number[] {
   const N = tree.links.length;
   const v = new Array<SpatialVector>(N);
@@ -542,7 +554,9 @@ export function inverseDynamicsRNEA(
   const [gx, gy, gz] = tree.gravity || [0, 0, -9.81];
   const a0: SpatialVector = [0, 0, 0, -gx, -gy, -gz];
 
-  const R_rel = new Array<[[number, number, number], [number, number, number], [number, number, number]]>(N);
+  const R_rel = new Array<
+    [[number, number, number], [number, number, number], [number, number, number]]
+  >(N);
   const r_rel = new Array<[number, number, number]>(N);
 
   // Forward Kinematics Pass
@@ -560,7 +574,7 @@ export function inverseDynamicsRNEA(
       S[i] = createZeroSpatial();
     }
 
-    let rpy: [number, number, number] = [...link.parentTransform.rotation];
+    const rpy: [number, number, number] = [...link.parentTransform.rotation];
     if (link.jointType === "revolute") {
       if (link.jointAxis[2] === 1) rpy[2] += q[i] || 0;
       else if (link.jointAxis[1] === 1) rpy[1] += q[i] || 0;
@@ -576,13 +590,13 @@ export function inverseDynamicsRNEA(
       v[i] = vJ;
       a[i] = spatialAdd(
         transformSpatialMotion(R_rel[i], r_rel[i], a0),
-        spatialAdd(spatialCrossMotion(v[i], vJ), spatialScale(S[i], qDDot[i] || 0))
+        spatialAdd(spatialCrossMotion(v[i], vJ), spatialScale(S[i], qDDot[i] || 0)),
       );
     } else {
       v[i] = spatialAdd(transformSpatialMotion(R_rel[i], r_rel[i], v[parent]), vJ);
       a[i] = spatialAdd(
         transformSpatialMotion(R_rel[i], r_rel[i], a[parent]),
-        spatialAdd(spatialCrossMotion(v[i], vJ), spatialScale(S[i], qDDot[i] || 0))
+        spatialAdd(spatialCrossMotion(v[i], vJ), spatialScale(S[i], qDDot[i] || 0)),
       );
     }
 
@@ -590,7 +604,7 @@ export function inverseDynamicsRNEA(
     const I = buildSpatialInertia(link.mass, link.centerOfMass, link.inertiaPrincipal);
     f[i] = spatialAdd(
       multiplyInertiaVector(I, a[i]),
-      spatialCrossForce(v[i], multiplyInertiaVector(I, v[i]))
+      spatialCrossForce(v[i], multiplyInertiaVector(I, v[i])),
     );
   }
 
@@ -617,7 +631,7 @@ export function inverseDynamicsRNEA(
 export function computeMechanicalEnergy(
   tree: MultibodyTree,
   q: number[],
-  qDot: number[]
+  qDot: number[],
 ): { kineticEnergy: number; potentialEnergy: number; totalEnergy: number } {
   const N = tree.links.length;
   let kinetic = 0;
@@ -657,7 +671,7 @@ export function stepMultibodyDynamics(
   q: number[],
   qDot: number[],
   tau: number[],
-  dt: number = 0.002
+  dt: number = 0.002,
 ): { qNext: number[]; qDotNext: number[]; qDDot: number[] } {
   const { qDDot } = forwardDynamicsABA(tree, q, qDot, tau);
   const N = q.length;

@@ -90,15 +90,8 @@ let runRevision = 0;
 /** Config the live trainer was built for, so an unchanged restart can resume. */
 let activeKey: string | null = null;
 
-function configKey(
-  request: Extract<TrainingWorkerRequest, { type: "start" }>,
-): string {
-  return [
-    request.challenge,
-    request.durationSeconds,
-    request.sigma,
-    request.seed,
-  ].join(":");
+function configKey(request: Extract<TrainingWorkerRequest, { type: "start" }>): string {
+  return [request.challenge, request.durationSeconds, request.sigma, request.seed].join(":");
 }
 
 /** Post at most this often; a rollout is fast enough to outpace a repaint. */
@@ -137,10 +130,7 @@ function reportStopped(): void {
  * Shared by the fresh-trainer and resume paths: seeding is not something one
  * of them may quietly skip.
  */
-function reportSeeded(
-  target: FrankenSimG1TransformerTrainer,
-  head: Float64Array,
-): void {
+function reportSeeded(target: FrankenSimG1TransformerTrainer, head: Float64Array): void {
   const objective = target.seedHead(head);
   const progress = target.progress();
   latest = progress;
@@ -172,10 +162,7 @@ async function loop(
     const now = Date.now();
     // Always report a closed generation: that is when the distribution moved,
     // and it is the event a learning curve is actually made of.
-    if (
-      progress.status === "generation" ||
-      now - lastPost >= PROGRESS_INTERVAL_MS
-    ) {
+    if (progress.status === "generation" || now - lastPost >= PROGRESS_INTERVAL_MS) {
       lastPost = now;
       // Checkpoint only on a closed generation, and only occasionally: the
       // head is meaningful between generations, not mid-population.
@@ -230,7 +217,8 @@ scope.onmessage = (event: MessageEvent<TrainingWorkerRequest>) => {
       const trained = trainer.trace(true);
       const baseline = trainer.trace(false);
       if ("refusal" in trained) throw new Error(`trained rollout refused: ${trained.refusal.name}`);
-      if ("refusal" in baseline) throw new Error(`baseline rollout refused: ${baseline.refusal.name}`);
+      if ("refusal" in baseline)
+        throw new Error(`baseline rollout refused: ${baseline.refusal.name}`);
       scope.postMessage({
         type: "trace",
         trained: trained.ok,

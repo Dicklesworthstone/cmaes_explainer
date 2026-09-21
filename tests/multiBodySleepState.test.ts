@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  MultiBodySleepManager,
-  type SleepableBody,
-} from "../app/lib/multiBodySleepState";
+import { MultiBodySleepManager, type SleepableBody } from "../app/lib/multiBodySleepState";
 
 describe("Multi-Body Sleep State & Impulse-Gated Activation Engine", () => {
   test("settled body transitions to SLEEPING after quiet dwell time", () => {

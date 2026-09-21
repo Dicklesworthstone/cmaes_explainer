@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
 
@@ -113,9 +113,7 @@ export function G1BiomechanicsOverlay({
       const zi = points[i][1];
       const xj = points[j][0];
       const zj = points[j][1];
-      const intersect =
-        zi > pz !== zj > pz &&
-        px < ((xj - xi) * (pz - zi)) / (zj - zi + 1e-9) + xi;
+      const intersect = zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi + 1e-9) + xi;
       if (intersect) inside = !inside;
     }
 
@@ -151,11 +149,7 @@ export function G1BiomechanicsOverlay({
   return (
     <group>
       {/* 1. Dynamic Ground Support Polygon Floor Mesh */}
-      <mesh
-        geometry={supportGeometry}
-        position={[0, groundY, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
+      <mesh geometry={supportGeometry} position={[0, groundY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <meshBasicMaterial
           color={isStable ? "#10b981" : "#f43f5e"}
           transparent
@@ -187,12 +181,7 @@ export function G1BiomechanicsOverlay({
       <group position={capturePoint}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.045, 0.065, 24]} />
-          <meshBasicMaterial
-            color="#f59e0b"
-            transparent
-            opacity={0.85}
-            side={THREE.DoubleSide}
-          />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.85} side={THREE.DoubleSide} />
         </mesh>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <circleGeometry args={[0.02, 16]} />
@@ -219,7 +208,7 @@ export function G1BiomechanicsOverlay({
             Math.hypot(
               capturePoint[0] - comPosition[0],
               capturePoint[1] - comPosition[1],
-              capturePoint[2] - comPosition[2]
+              capturePoint[2] - comPosition[2],
             ),
             6,
           ]}
@@ -231,12 +220,7 @@ export function G1BiomechanicsOverlay({
       <group position={zmpPosition}>
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.025, 0.04, 20]} />
-          <meshBasicMaterial
-            color="#a855f7"
-            transparent
-            opacity={0.8}
-            side={THREE.DoubleSide}
-          />
+          <meshBasicMaterial color="#a855f7" transparent opacity={0.8} side={THREE.DoubleSide} />
         </mesh>
       </group>
 

@@ -11,13 +11,13 @@
 // receipt).
 
 import { describe, expect, test } from "bun:test";
+import { RECEIPT_ANALYSIS_PRESETS } from "../components/G1ObjectiveEqualizer";
+import type { G1TraceReceipt } from "./frankensimCmaes";
 import {
   computeMultiFactorObjective,
   DEFAULT_MULTI_FACTOR_WEIGHTS,
   type MultiFactorConfig,
 } from "./g1MultiFactor";
-import { RECEIPT_ANALYSIS_PRESETS } from "../components/G1ObjectiveEqualizer";
-import type { G1TraceReceipt } from "./frankensimCmaes";
 
 const DEFAULT_CONFIG: MultiFactorConfig = {
   stepSeconds: 1 / 480,
@@ -134,9 +134,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
       expect(byLabel["work per meter (efficiency)"]).toBe(preset.weights.workPerMeter);
       expect(byLabel["slip integral"]).toBe(preset.weights.slipIntegral);
       expect(byLabel["impact integral"]).toBe(preset.weights.impactIntegral);
-      expect(byLabel["survival (steps/horizon)"]).toBe(
-        DEFAULT_MULTI_FACTOR_WEIGHTS.survival,
-      );
+      expect(byLabel["survival (steps/horizon)"]).toBe(DEFAULT_MULTI_FACTOR_WEIGHTS.survival);
       return result.weighted.toFixed(8);
     });
 
@@ -144,9 +142,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
   });
 
   test("the default preset agrees with the documented default receipt lens", () => {
-    const baseline = RECEIPT_ANALYSIS_PRESETS.find(
-      (preset) => preset.id === "owner-receipt",
-    );
+    const baseline = RECEIPT_ANALYSIS_PRESETS.find((preset) => preset.id === "owner-receipt");
     expect(baseline).toBeDefined();
     expect(baseline?.weights).toEqual({
       meanForwardSpeed: DEFAULT_MULTI_FACTOR_WEIGHTS.meanForwardSpeed,
@@ -168,16 +164,12 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
       DEFAULT_CONFIG,
       { meanForwardSpeed: Number.NaN, postureIntegral: Number.POSITIVE_INFINITY },
     );
-    const byLabel = Object.fromEntries(
-      result.channels.map((channel) => [channel.label, channel]),
-    );
+    const byLabel = Object.fromEntries(result.channels.map((channel) => [channel.label, channel]));
     expect(byLabel["mean fwd speed ≥ target"].weight).toBe(
       DEFAULT_MULTI_FACTOR_WEIGHTS.meanForwardSpeed,
     );
     expect(byLabel["mean fwd speed ≥ target"].contribution).toBeLessThan(0);
-    expect(byLabel["posture integral"].weight).toBe(
-      DEFAULT_MULTI_FACTOR_WEIGHTS.postureIntegral,
-    );
+    expect(byLabel["posture integral"].weight).toBe(DEFAULT_MULTI_FACTOR_WEIGHTS.postureIntegral);
   });
 
   test("survival normalizes by horizon (720 steps)", () => {
@@ -279,7 +271,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
     );
     const expected = r.channels.reduce((acc, c) => acc + c.contribution, 0);
     expect(r.weighted).toBeCloseTo(expected, 10);
-    expect(r.weighted).toBeCloseTo(1.95 + (-1.0), 10);
+    expect(r.weighted).toBeCloseTo(1.95 + -1.0, 10);
   });
 
   test("non-finite per-channel values fall back to 0 (defensive)", () => {

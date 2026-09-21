@@ -1,24 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import {
-  solveTwoBoneIK,
-  clampSphereAgainstHouse,
-  solveFullBodyG1IK,
-  computeImpulseResponse,
-  G1_KINEMATICS,
-  G1_INTERACTIVE_PINS,
-  G1_BODY_LINK_RADIUS_METERS,
-  clampSphereAgainstLinks,
-  limbPinRestPosition,
-} from "../../app/lib/humanoidRagdollIk";
 import { createSceneFromHouseFurniture } from "../../app/lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../../app/lib/houseScenes";
+import {
+  clampSphereAgainstHouse,
+  clampSphereAgainstLinks,
+  computeImpulseResponse,
+  G1_BODY_LINK_RADIUS_METERS,
+  G1_INTERACTIVE_PINS,
+  G1_KINEMATICS,
+  limbPinRestPosition,
+  solveFullBodyG1IK,
+  solveTwoBoneIK,
+} from "../../app/lib/humanoidRagdollIk";
 
 describe("Multi-Limb Inverse Kinematics & Collision Ragdoll Suite", () => {
   test("two-bone IK reaches exact target when within range", () => {
     const root: [number, number, number] = [0, 0.75, 0];
     const target: [number, number, number] = [0, 0.2, 0];
     const upper = 0.32;
-    const lower = 0.30;
+    const lower = 0.3;
     const pole: [number, number, number] = [1, 0, 0];
 
     const result = solveTwoBoneIK(root, target, upper, lower, pole);
@@ -34,7 +34,7 @@ describe("Multi-Limb Inverse Kinematics & Collision Ragdoll Suite", () => {
     const root: [number, number, number] = [0, 0, 0];
     const target: [number, number, number] = [0, 2.0, 0]; // 2.0m exceeds upper+lower (0.62m)
     const upper = 0.32;
-    const lower = 0.30;
+    const lower = 0.3;
 
     const result = solveTwoBoneIK(root, target, upper, lower, [1, 0, 0]);
     const maxReach = upper + lower - 0.001;
@@ -51,7 +51,7 @@ describe("Multi-Limb Inverse Kinematics & Collision Ragdoll Suite", () => {
         leftHand: [-3.8, 1.0, 0], // Outside west wall bounds!
       },
       nominalPelvis,
-      scene.obstacles
+      scene.obstacles,
     );
 
     expect(result.leftHandPosition[0]).toBeGreaterThan(-3.7);
@@ -94,19 +94,12 @@ describe("clampSphereAgainstHouse — yawed OBB regression (cmaes-pvz followup)"
     };
     const sphere: [number, number, number] = [1.01, 0.85, 1.6];
     const radius = 0.06;
-    const { clamped, contact } = clampSphereAgainstHouse(
-      sphere,
-      radius,
-      [yawedChair],
-      0.0,
-    );
+    const { clamped, contact } = clampSphereAgainstHouse(sphere, radius, [yawedChair], 0.0);
     expect(contact).not.toBeNull();
     expect(contact?.obstacleName).toBe("yawed-chair");
     // After projection, the sphere must clear the chair by the radius.
     const { distanceToOBB } = require("../../app/lib/houseMultiObstacleKernel");
-    expect(distanceToOBB(clamped, yawedChair)).toBeGreaterThanOrEqual(
-      radius - 1e-6,
-    );
+    expect(distanceToOBB(clamped, yawedChair)).toBeGreaterThanOrEqual(radius - 1e-6);
     // The Y coordinate must have been updated (the chair is tall enough
     // to push the sphere above the original Y).
     expect(clamped[1]).toBeGreaterThan(sphere[1]);
@@ -128,7 +121,12 @@ describe("interactive pins never overlap the humanoid (sphere-inside-robot regre
     for (const pin of G1_INTERACTIVE_PINS) {
       const anchor = links[0];
       const rest = limbPinRestPosition(anchor, heading, pin.standoff);
-      const { clamped, overlapped } = clampSphereAgainstLinks(rest, pin.radius, links, G1_BODY_LINK_RADIUS_METERS);
+      const { clamped, overlapped } = clampSphereAgainstLinks(
+        rest,
+        pin.radius,
+        links,
+        G1_BODY_LINK_RADIUS_METERS,
+      );
       for (const link of links) {
         const d = Math.hypot(clamped[0] - link[0], clamped[1] - link[1], clamped[2] - link[2]);
         expect(d, `${pin.id} vs link ${JSON.stringify(link)}`).toBeGreaterThanOrEqual(
@@ -143,7 +141,12 @@ describe("interactive pins never overlap the humanoid (sphere-inside-robot regre
 
   test("a pin dragged into the torso is pushed back out along the shortest exit", () => {
     const inside: [number, number, number] = [0.02, 0.8, 0.01];
-    const { clamped, overlapped } = clampSphereAgainstLinks(inside, 0.05, links, G1_BODY_LINK_RADIUS_METERS);
+    const { clamped, overlapped } = clampSphereAgainstLinks(
+      inside,
+      0.05,
+      links,
+      G1_BODY_LINK_RADIUS_METERS,
+    );
     expect(overlapped).toBe(true);
     for (const link of links) {
       const d = Math.hypot(clamped[0] - link[0], clamped[1] - link[1], clamped[2] - link[2]);

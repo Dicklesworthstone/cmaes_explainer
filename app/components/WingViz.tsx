@@ -1,37 +1,37 @@
 "use client";
 
+import { Float, Line, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, Float, OrbitControls, Line } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import * as THREE from "three";
-import { useInView } from "../hooks/useScrollSpy";
 import {
-  Play,
-  Pause,
-  Sparkles,
-  Wind,
-  PlaneTakeoff,
-  Gauge,
   Activity,
   Compass,
-  Layers,
-  Sliders,
   Eye,
-  Info
+  Gauge,
+  Info,
+  Layers,
+  Pause,
+  PlaneTakeoff,
+  Play,
+  Sliders,
+  Sparkles,
+  Wind,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { useInView } from "../hooks/useScrollSpy";
+import { type CMAESGenerationStateND, CMAESOptimizerND } from "../lib/cmaesEngineND";
 import {
-  WingParams,
-  AirfoilFamily,
-  WING_PARAM_SPECS,
-  evaluateWingPhysics,
+  type AirfoilFamily,
   decodeParameter,
   encodeParameter,
-  initFrankenSim
+  evaluateWingPhysics,
+  initFrankenSim,
+  WING_PARAM_SPECS,
+  type WingParams,
 } from "../lib/frankensimPhysics";
-import { CMAESOptimizerND, CMAESGenerationStateND } from "../lib/cmaesEngineND";
-import { FrankenSimBadge } from "./FrankenSimBadge";
 import { CMAESPhaseSpaceViewer, CMAESTelemetryHUD } from "./CMAESPhaseSpaceViewer";
+import { FrankenSimBadge } from "./FrankenSimBadge";
+import { safePointerEvents } from "./safeR3FEvents";
 
 // --- NACA & Parametric Airfoil 3D Geometry Generator ---
 
@@ -41,7 +41,7 @@ function getNacaShape(
   t: number,
   family: AirfoilFamily,
   chord: number = 1.4,
-  points = 80
+  points = 80,
 ): THREE.Shape {
   const shape = new THREE.Shape();
   const upper: [number, number][] = [];
@@ -65,8 +65,8 @@ function getNacaShape(
         yc = chord * (m / (p * p)) * (2 * p * (x / chord) - (x / chord) ** 2);
         dyc_dx = ((2 * m) / (p * p)) * (p - x / chord);
       } else {
-        yc = chord * (m / ((1 - p) ** 2)) * (1 - 2 * p + 2 * p * (x / chord) - (x / chord) ** 2);
-        dyc_dx = ((2 * m) / ((1 - p) ** 2)) * (p - x / chord);
+        yc = chord * (m / (1 - p) ** 2) * (1 - 2 * p + 2 * p * (x / chord) - (x / chord) ** 2);
+        dyc_dx = ((2 * m) / (1 - p) ** 2) * (p - x / chord);
       }
     }
 
@@ -120,7 +120,7 @@ export function buildWingGeometryForRender(
     | "camberPosition"
     | "taperRatio"
     | "airfoilFamily"
-  >
+  >,
 ): THREE.ExtrudeGeometry {
   const span = 1.4 + (params.aspectRatio / 16) * 3.2;
   const shape = getNacaShape(
@@ -128,7 +128,7 @@ export function buildWingGeometryForRender(
     params.camberPosition,
     params.thicknessRatio,
     params.airfoilFamily,
-    1.4
+    1.4,
   );
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
     depth: span,
@@ -136,7 +136,7 @@ export function buildWingGeometryForRender(
     bevelThickness: 0.03,
     bevelSize: 0.03,
     bevelSegments: 4,
-    steps: 8
+    steps: 8,
   };
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
   geom.center();
@@ -171,7 +171,7 @@ export interface WingRibRenderStation {
 
 /** Build the visible structural-rib stations used by the live renderer. */
 export function buildWingRibsForRender(
-  params: Pick<WingParams, "aspectRatio" | "sweepAngle" | "taperRatio" | "internalRibCount">
+  params: Pick<WingParams, "aspectRatio" | "sweepAngle" | "taperRatio" | "internalRibCount">,
 ): WingRibRenderStation[] {
   const span = 1.4 + (params.aspectRatio / 16) * 3.2;
   const sweepSkew = (params.sweepAngle / 45) * 1.35;
@@ -182,7 +182,7 @@ export function buildWingRibsForRender(
     return {
       x: spanNorm * sweepSkew,
       z: spanFraction * span,
-      chord: 1.4 * scaleFactor
+      chord: 1.4 * scaleFactor,
     };
   });
 }
@@ -195,7 +195,7 @@ function ParametricWingMesh({
   camberPosition,
   taperRatio,
   airfoilFamily,
-  internalRibCount
+  internalRibCount,
 }: WingParams) {
   const meshRef = useRef<THREE.Group>(null);
 
@@ -208,17 +208,9 @@ function ParametricWingMesh({
         maxCamber,
         camberPosition,
         taperRatio,
-        airfoilFamily
+        airfoilFamily,
       }),
-    [
-      airfoilFamily,
-      aspectRatio,
-      camberPosition,
-      maxCamber,
-      sweepAngle,
-      taperRatio,
-      thicknessRatio
-    ]
+    [airfoilFamily, aspectRatio, camberPosition, maxCamber, sweepAngle, taperRatio, thicknessRatio],
   );
 
   const ribs = useMemo(
@@ -227,9 +219,9 @@ function ParametricWingMesh({
         aspectRatio,
         sweepAngle,
         taperRatio,
-        internalRibCount
+        internalRibCount,
       }),
-    [aspectRatio, internalRibCount, sweepAngle, taperRatio]
+    [aspectRatio, internalRibCount, sweepAngle, taperRatio],
   );
 
   useFrame((state) => {
@@ -275,7 +267,13 @@ function ParametricWingMesh({
 
 // --- 3D Wind Tunnel CFD Streamlines ---
 
-function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; liftStrength?: number }) {
+function CFDStreamlines({
+  speed = 1.2,
+  liftStrength = 1.0,
+}: {
+  speed?: number;
+  liftStrength?: number;
+}) {
   const count = 280;
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -293,7 +291,7 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
         x: (r1 - 0.5) * 12,
         y: (r2 - 0.5) * 4.5,
         z: (r3 - 0.5) * 6.5,
-        speed: 0.8 + r1 * 0.6
+        speed: 0.8 + r1 * 0.6,
       };
     });
   }, [count]);
@@ -340,7 +338,12 @@ function CFDStreamlines({ speed = 1.2, liftStrength = 1.0 }: { speed?: number; l
   return (
     <instancedMesh ref={meshRef} args={[undefined as any, undefined as any, count]}>
       <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial transparent opacity={0.65} blending={THREE.AdditiveBlending} depthWrite={false} />
+      <meshBasicMaterial
+        transparent
+        opacity={0.65}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
     </instancedMesh>
   );
 }
@@ -356,7 +359,7 @@ function decodeWingVector(v: number[]): WingParams {
     camberPosition: Number(decodeParameter(v[4], WING_PARAM_SPECS[4]).value),
     taperRatio: Number(decodeParameter(v[5], WING_PARAM_SPECS[5]).value),
     airfoilFamily: String(decodeParameter(v[6], WING_PARAM_SPECS[6]).value) as AirfoilFamily,
-    internalRibCount: Number(decodeParameter(v[7], WING_PARAM_SPECS[7]).value)
+    internalRibCount: Number(decodeParameter(v[7], WING_PARAM_SPECS[7]).value),
   };
 }
 
@@ -379,7 +382,7 @@ export function WingViz() {
     camberPosition: 0.4,
     taperRatio: 0.56,
     airfoilFamily: "Supercritical SC(2)",
-    internalRibCount: 22
+    internalRibCount: 22,
   });
 
   const [isExpanded3D, setIsExpanded3D] = useState(false);
@@ -410,7 +413,7 @@ export function WingViz() {
       encodeParameter(params.camberPosition, WING_PARAM_SPECS[4]),
       encodeParameter(params.taperRatio, WING_PARAM_SPECS[5]),
       encodeParameter(params.airfoilFamily, WING_PARAM_SPECS[6]),
-      encodeParameter(params.internalRibCount, WING_PARAM_SPECS[7])
+      encodeParameter(params.internalRibCount, WING_PARAM_SPECS[7]),
     ];
   }, [params]);
 
@@ -470,8 +473,8 @@ export function WingViz() {
         initialMean: [...paramVector],
         initialSigma: 0.25,
         lambda: 16,
-        bounds: [0.0, 1.0]
-      }
+        bounds: [0.0, 1.0],
+      },
     );
 
     let g = 0;
@@ -523,8 +526,82 @@ export function WingViz() {
           {isExpanded3D ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* 3D Physical Wing CFD Canvas */}
-              <div ref={canvasContainerRef} className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]">
+              <div
+                ref={canvasContainerRef}
+                className="relative group aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]"
+              >
                 {shouldMountGL && (
+                  <Canvas
+                    events={safePointerEvents}
+                    shadows
+                    dpr={[1, 2]}
+                    frameloop={isInView ? "always" : "demand"}
+                    className="w-full h-full"
+                  >
+                    <PerspectiveCamera makeDefault position={[3.2, 1.9, 4.2]} fov={38} />
+                    <color attach="background" args={["#020617"]} />
+                    <fog attach="fog" args={["#020617", 5, 20]} />
+
+                    <ambientLight intensity={0.5} />
+                    <spotLight
+                      position={[10, 10, 10]}
+                      angle={0.2}
+                      penumbra={1}
+                      intensity={1.5}
+                      castShadow
+                    />
+                    <pointLight position={[-8, -4, -6]} intensity={0.7} color="#38bdf8" />
+                    <directionalLight position={[0, 10, 0]} intensity={0.7} color="#bae6fd" />
+
+                    <OrbitControls
+                      makeDefault
+                      enableDamping
+                      dampingFactor={0.06}
+                      minDistance={2.8}
+                      maxDistance={12}
+                      maxPolarAngle={Math.PI / 2 + 0.05}
+                      target={[0, 0, 0]}
+                    />
+
+                    <group position={[0, -0.2, 0]}>
+                      <ParametricWingMesh {...params} />
+                      <CFDStreamlines speed={1.4} liftStrength={aero.liftCoeffCL} />
+                      <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
+                    </group>
+                  </Canvas>
+                )}
+
+                {/* Top Badge */}
+                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-cyan-300 backdrop-blur-md">
+                  3D Physical Airfoil
+                </div>
+
+                {/* Aerodynamic Telemetry Overlay */}
+                <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1 pointer-events-none">
+                  <div className="px-2 py-0.5 rounded-lg bg-slate-950/85 text-[0.62rem] text-cyan-300 border border-cyan-500/30 backdrop-blur-md flex items-center gap-1.5">
+                    <span className="text-slate-400 font-bold uppercase text-[0.55rem]">L/D:</span>
+                    <span className="font-mono font-bold text-cyan-200">
+                      {aero.liftToDragRatio.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3D PCA Covariance Phase Space Canvas */}
+              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
+                <CMAESPhaseSpaceViewer
+                  latestState={latestStateND}
+                  history={historyND}
+                  title="3D PCA Covariance Ellipsoid"
+                />
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={canvasContainerRef}
+              className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]"
+            >
+              {shouldMountGL && (
                 <Canvas
                   events={safePointerEvents}
                   shadows
@@ -537,7 +614,13 @@ export function WingViz() {
                   <fog attach="fog" args={["#020617", 5, 20]} />
 
                   <ambientLight intensity={0.5} />
-                  <spotLight position={[10, 10, 10]} angle={0.2} penumbra={1} intensity={1.5} castShadow />
+                  <spotLight
+                    position={[10, 10, 10]}
+                    angle={0.2}
+                    penumbra={1}
+                    intensity={1.5}
+                    castShadow
+                  />
                   <pointLight position={[-8, -4, -6]} intensity={0.7} color="#38bdf8" />
                   <directionalLight position={[0, 10, 0]} intensity={0.7} color="#bae6fd" />
 
@@ -557,66 +640,6 @@ export function WingViz() {
                     <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
                   </group>
                 </Canvas>
-                )}
-
-                {/* Top Badge */}
-                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-slate-950/80 border border-white/10 text-[0.62rem] font-bold text-cyan-300 backdrop-blur-md">
-                  3D Physical Airfoil
-                </div>
-
-                {/* Aerodynamic Telemetry Overlay */}
-                <div className="absolute bottom-2.5 left-2.5 flex flex-col gap-1 pointer-events-none">
-                  <div className="px-2 py-0.5 rounded-lg bg-slate-950/85 text-[0.62rem] text-cyan-300 border border-cyan-500/30 backdrop-blur-md flex items-center gap-1.5">
-                    <span className="text-slate-400 font-bold uppercase text-[0.55rem]">L/D:</span>
-                    <span className="font-mono font-bold text-cyan-200">{aero.liftToDragRatio.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 3D PCA Covariance Phase Space Canvas */}
-              <div className="relative aspect-[16/11] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#030712]">
-                <CMAESPhaseSpaceViewer
-                  latestState={latestStateND}
-                  history={historyND}
-                  title="3D PCA Covariance Ellipsoid"
-                />
-              </div>
-            </div>
-          ) : (
-            <div ref={canvasContainerRef} className="relative group aspect-[16/10] sm:aspect-auto lg:h-[460px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#020617]">
-              {shouldMountGL && (
-              <Canvas
-                events={safePointerEvents}
-                shadows
-                dpr={[1, 2]}
-                frameloop={isInView ? "always" : "demand"}
-                className="w-full h-full"
-              >
-                <PerspectiveCamera makeDefault position={[3.2, 1.9, 4.2]} fov={38} />
-                <color attach="background" args={["#020617"]} />
-                <fog attach="fog" args={["#020617", 5, 20]} />
-
-                <ambientLight intensity={0.5} />
-                <spotLight position={[10, 10, 10]} angle={0.2} penumbra={1} intensity={1.5} castShadow />
-                <pointLight position={[-8, -4, -6]} intensity={0.7} color="#38bdf8" />
-                <directionalLight position={[0, 10, 0]} intensity={0.7} color="#bae6fd" />
-
-                <OrbitControls
-                  makeDefault
-                  enableDamping
-                  dampingFactor={0.06}
-                  minDistance={2.8}
-                  maxDistance={12}
-                  maxPolarAngle={Math.PI / 2 + 0.05}
-                  target={[0, 0, 0]}
-                />
-
-                <group position={[0, -0.2, 0]}>
-                  <ParametricWingMesh {...params} />
-                  <CFDStreamlines speed={1.4} liftStrength={aero.liftCoeffCL} />
-                  <gridHelper args={[24, 24, "#1e293b", "#0f172a"]} position={[0, -1.8, 0]} />
-                </group>
-              </Canvas>
               )}
 
               {/* Orbit hint */}
@@ -630,19 +653,31 @@ export function WingViz() {
                   numbers in the strip under the viewport) */}
               <div className="hidden sm:flex absolute bottom-3 left-3 sm:bottom-4 sm:left-4 flex-col gap-1 sm:gap-1.5 pointer-events-none">
                 <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-cyan-300 border border-cyan-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
-                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">L/D Ratio:</span>
-                  <span className="font-mono font-bold text-xs sm:text-sm text-cyan-200">{aero.liftToDragRatio.toFixed(2)}</span>
+                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">
+                    L/D Ratio:
+                  </span>
+                  <span className="font-mono font-bold text-xs sm:text-sm text-cyan-200">
+                    {aero.liftToDragRatio.toFixed(2)}
+                  </span>
                 </div>
                 <div className="px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 text-xs text-rose-300 border border-rose-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
-                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">Drag (CD):</span>
-                  <span className="font-mono font-bold text-[0.68rem] sm:text-xs">{aero.dragCoeffCD.toFixed(4)}</span>
+                  <span className="font-bold uppercase tracking-wider text-[0.6rem] sm:text-[0.65rem] text-slate-400">
+                    Drag (CD):
+                  </span>
+                  <span className="font-mono font-bold text-[0.68rem] sm:text-xs">
+                    {aero.dragCoeffCD.toFixed(4)}
+                  </span>
                 </div>
               </div>
 
               {/* Critical Mach Indicator (desktop only; see mobile strip) */}
               <div className="hidden sm:block absolute bottom-3 right-3 sm:bottom-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-slate-950/85 border border-white/10 text-xs font-mono text-slate-300 backdrop-blur-md shadow-xl pointer-events-none">
-                <div className="text-[0.58rem] sm:text-[0.65rem] uppercase text-slate-400">Critical Mach</div>
-                <div className="font-bold text-sky-400 text-xs sm:text-sm">{aero.criticalMach.toFixed(2)} M</div>
+                <div className="text-[0.58rem] sm:text-[0.65rem] uppercase text-slate-400">
+                  Critical Mach
+                </div>
+                <div className="font-bold text-sky-400 text-xs sm:text-sm">
+                  {aero.criticalMach.toFixed(2)} M
+                </div>
               </div>
             </div>
           )}
@@ -700,7 +735,7 @@ export function WingViz() {
                     camberPosition: 0.42,
                     taperRatio: 0.52,
                     airfoilFamily: "Supercritical SC(2)",
-                    internalRibCount: 24
+                    internalRibCount: 24,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors"
@@ -718,7 +753,7 @@ export function WingViz() {
                     camberPosition: 0.35,
                     taperRatio: 0.42,
                     airfoilFamily: "Laminar Flow Low-Re",
-                    internalRibCount: 18
+                    internalRibCount: 18,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
@@ -736,7 +771,7 @@ export function WingViz() {
                     camberPosition: 0.45,
                     taperRatio: 0.7,
                     airfoilFamily: "NACA 4-Digit Conventional",
-                    internalRibCount: 32
+                    internalRibCount: 32,
                   })
                 }
                 className="text-[0.68rem] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
@@ -751,7 +786,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[0].label}</span>
-                <span className="text-cyan-300 font-mono text-xs">{params.aspectRatio.toFixed(1)}</span>
+                <span className="text-cyan-300 font-mono text-xs">
+                  {params.aspectRatio.toFixed(1)}
+                </span>
               </div>
               <input
                 type="range"
@@ -760,7 +797,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[0].max}
                 step={WING_PARAM_SPECS[0].step}
                 value={params.aspectRatio}
-                onChange={(e) => applyManualParams({ ...params, aspectRatio: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, aspectRatio: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-cyan-400"
               />
@@ -770,7 +809,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[1].label}</span>
-                <span className="text-blue-300 font-mono text-xs">{params.sweepAngle.toFixed(1)}°</span>
+                <span className="text-blue-300 font-mono text-xs">
+                  {params.sweepAngle.toFixed(1)}°
+                </span>
               </div>
               <input
                 type="range"
@@ -779,7 +820,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[1].max}
                 step={WING_PARAM_SPECS[1].step}
                 value={params.sweepAngle}
-                onChange={(e) => applyManualParams({ ...params, sweepAngle: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, sweepAngle: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-blue-400"
               />
@@ -789,7 +832,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[2].label}</span>
-                <span className="text-indigo-300 font-mono text-xs">{(params.thicknessRatio * 100).toFixed(1)}%</span>
+                <span className="text-indigo-300 font-mono text-xs">
+                  {(params.thicknessRatio * 100).toFixed(1)}%
+                </span>
               </div>
               <input
                 type="range"
@@ -798,7 +843,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[2].max}
                 step={WING_PARAM_SPECS[2].step}
                 value={params.thicknessRatio}
-                onChange={(e) => applyManualParams({ ...params, thicknessRatio: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, thicknessRatio: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-indigo-400"
               />
@@ -808,7 +855,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[3].label}</span>
-                <span className="text-purple-300 font-mono text-xs">{(params.maxCamber * 100).toFixed(1)}%</span>
+                <span className="text-purple-300 font-mono text-xs">
+                  {(params.maxCamber * 100).toFixed(1)}%
+                </span>
               </div>
               <input
                 type="range"
@@ -817,7 +866,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[3].max}
                 step={WING_PARAM_SPECS[3].step}
                 value={params.maxCamber}
-                onChange={(e) => applyManualParams({ ...params, maxCamber: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, maxCamber: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-purple-400"
               />
@@ -827,7 +878,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[4].label}</span>
-                <span className="text-teal-300 font-mono text-xs">{(params.camberPosition * 100).toFixed(0)}%</span>
+                <span className="text-teal-300 font-mono text-xs">
+                  {(params.camberPosition * 100).toFixed(0)}%
+                </span>
               </div>
               <input
                 type="range"
@@ -836,7 +889,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[4].max}
                 step={WING_PARAM_SPECS[4].step}
                 value={params.camberPosition}
-                onChange={(e) => applyManualParams({ ...params, camberPosition: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, camberPosition: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-teal-400"
               />
@@ -846,7 +901,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[5].label}</span>
-                <span className="text-rose-300 font-mono text-xs">{params.taperRatio.toFixed(2)}</span>
+                <span className="text-rose-300 font-mono text-xs">
+                  {params.taperRatio.toFixed(2)}
+                </span>
               </div>
               <input
                 type="range"
@@ -855,7 +912,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[5].max}
                 step={WING_PARAM_SPECS[5].step}
                 value={params.taperRatio}
-                onChange={(e) => applyManualParams({ ...params, taperRatio: parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, taperRatio: parseFloat(e.target.value) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-rose-400"
               />
@@ -865,12 +924,16 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">Airfoil Family</span>
-                <span className="text-sky-300 font-mono text-[0.68rem]">{params.airfoilFamily}</span>
+                <span className="text-sky-300 font-mono text-[0.68rem]">
+                  {params.airfoilFamily}
+                </span>
               </div>
               <select
                 aria-label="Airfoil Family"
                 value={params.airfoilFamily}
-                onChange={(e) => applyManualParams({ ...params, airfoilFamily: e.target.value as AirfoilFamily })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, airfoilFamily: e.target.value as AirfoilFamily })
+                }
                 className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-400"
               >
                 {WING_PARAM_SPECS[6].categories?.map((cat) => (
@@ -885,7 +948,9 @@ export function WingViz() {
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-medium">
                 <span className="text-slate-300">{WING_PARAM_SPECS[7].label}</span>
-                <span className="text-amber-300 font-mono text-xs">{params.internalRibCount} ribs</span>
+                <span className="text-amber-300 font-mono text-xs">
+                  {params.internalRibCount} ribs
+                </span>
               </div>
               <input
                 type="range"
@@ -894,7 +959,9 @@ export function WingViz() {
                 max={WING_PARAM_SPECS[7].max}
                 step={WING_PARAM_SPECS[7].step}
                 value={params.internalRibCount}
-                onChange={(e) => applyManualParams({ ...params, internalRibCount: parseInt(e.target.value, 10) })}
+                onChange={(e) =>
+                  applyManualParams({ ...params, internalRibCount: parseInt(e.target.value, 10) })
+                }
                 style={{ touchAction: "pan-y pinch-zoom" }}
                 className="w-full accent-amber-400"
               />
@@ -911,7 +978,9 @@ export function WingViz() {
             }`}
           >
             <Sparkles className="h-4 w-4" />
-            <span>{isOptimizing ? "Stop Aerodynamic Optimization" : "Run 8D CMA-ES Wing Optimization"}</span>
+            <span>
+              {isOptimizing ? "Stop Aerodynamic Optimization" : "Run 8D CMA-ES Wing Optimization"}
+            </span>
           </button>
         </div>
       </div>

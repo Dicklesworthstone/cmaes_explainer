@@ -56,14 +56,16 @@ export function decodeVectorToArch(z: number[]): ArchPoint {
   // the demo, not measurements from training runs.
   const valLoss = Math.max(
     1.08,
-    1.12 + 3.2 / Math.sqrt(layers * 0.7 + (dim / 128) * 2.2) +
+    1.12 +
+      3.2 / Math.sqrt(layers * 0.7 + (dim / 128) * 2.2) +
       (attnType === "MQA" ? 0.06 : attnType === "GQA" ? 0.02 : 0) +
-      (actType === "GELU" ? 0.06 : actType === "Mish" ? 0.03 : 0)
+      (actType === "GELU" ? 0.06 : actType === "Mish" ? 0.03 : 0),
   );
   // The mild per-head latency term stands in for scheduling and kernel-launch
   // overhead in this surrogate; mainly it keeps z[2] from being a null
   // direction the optimizer merely diffuses along.
-  const latencyMs = layers * 0.75 + (dim / 256) * 1.1 + heads * 0.12 + (attnType === "MHA" ? 0.4 : 0);
+  const latencyMs =
+    layers * 0.75 + (dim / 256) * 1.1 + heads * 0.12 + (attnType === "MHA" ? 0.4 : 0);
 
   return {
     id: 0,
@@ -76,7 +78,7 @@ export function decodeVectorToArch(z: number[]): ArchPoint {
     flopsGiga,
     valLoss,
     latencyMs,
-    isPareto: false
+    isPareto: false,
   };
 }
 

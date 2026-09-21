@@ -24,22 +24,14 @@ import {
 } from "../app/lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
-function unwrap<T>(
-  result: { ok: T } | { refusal: PackedOwnerRefusal },
-  context: string,
-): T {
+function unwrap<T>(result: { ok: T } | { refusal: PackedOwnerRefusal }, context: string): T {
   if ("ok" in result) return result.ok;
   throw new Error(`${context} refusal: ${result.refusal.name}`);
 }
 
-const ownerModule = await import(
-  "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js"
-);
+const ownerModule = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
 const ownerBytes = await Bun.file(
-  new URL(
-    "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-    import.meta.url,
-  ),
+  new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
 ).arrayBuffer();
 await ownerModule.default({ module_or_path: ownerBytes });
 
@@ -49,28 +41,12 @@ const evaluator = new Evaluator(
   // Schema-9 walking config: eleven fixed words plus a keep-out box count.
   // This suite pins the owner's own coordinate and safety envelope, so it
   // declares no boxes; the browser's roster is covered separately.
-  new Float64Array([
-    0x47315737,
-    9,
-    0,
-    12,
-    1 / 480,
-    1.5,
-    0.65,
-    1.55,
-    12,
-    2,
-    0,
-    0,
-  ]),
+  new Float64Array([0x47315737, 9, 0, 12, 1 / 480, 1.5, 0.65, 1.55, 12, 2, 0, 0]),
 );
 const admission = unwrap(decodeG1Admission(evaluator.receipt()), "G1 admission");
 expect(admission.policyDimension).toBe(5_040);
 const curriculumPolicy = evaluator.walking_curriculum_mean();
-const curriculumTrace = unwrap(
-  decodeG1Trace(evaluator.trace(curriculumPolicy)),
-  "G1 trace",
-);
+const curriculumTrace = unwrap(decodeG1Trace(evaluator.trace(curriculumPolicy)), "G1 trace");
 const curriculumEvaluation = unwrap(
   decodeG1Evaluation(evaluator.evaluate(curriculumPolicy)),
   "G1 evaluation",

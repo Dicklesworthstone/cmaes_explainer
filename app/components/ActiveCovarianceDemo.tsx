@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Scissors, Sparkles, Activity, Play, Pause, RotateCcw, ShieldAlert, ArrowDownRight, Layers } from "lucide-react";
-import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState, eigen2x2 } from "../lib/cmaesEngine";
+import {
+  Activity,
+  ArrowDownRight,
+  Layers,
+  Pause,
+  Play,
+  RotateCcw,
+  Scissors,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type CMAESGenerationState, CMAESOptimizer, eigen2x2 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
+import { LatexRenderer } from "./LatexRenderer";
 
 const WIDTH = 960;
 const HEIGHT = 640;
@@ -31,7 +41,7 @@ export function ActiveCovarianceDemo() {
         initialSigma: 0.5,
         lambda: 16,
         activeCMA: useActive,
-        bounds: [-DOMAIN, DOMAIN]
+        bounds: [-DOMAIN, DOMAIN],
       });
       // Replay the generation already shown in the seeded history (same seed,
       // deterministic engine), so the first user step advances instead of
@@ -49,7 +59,7 @@ export function ActiveCovarianceDemo() {
       initialSigma: 0.5,
       lambda: 16,
       activeCMA: true,
-      bounds: [-DOMAIN, DOMAIN]
+      bounds: [-DOMAIN, DOMAIN],
     });
     return [opt.step()];
   });
@@ -61,7 +71,7 @@ export function ActiveCovarianceDemo() {
       initialSigma: 0.5,
       lambda: 16,
       activeCMA: useActive,
-      bounds: [-DOMAIN, DOMAIN]
+      bounds: [-DOMAIN, DOMAIN],
     });
     optimizerRef.current = opt;
     setHistory([opt.step()]);
@@ -112,7 +122,7 @@ export function ActiveCovarianceDemo() {
       ymax: DOMAIN,
       norm: { mode: "log10p1", k: 2.2 },
       ramp: { r0: 10, rk: 20, g0: 20, gk: 75, b0: 40, bk: 115 },
-      fallbackField: objectiveFn
+      fallbackField: objectiveFn,
     }).then((canvas) => {
       if (live && canvas) setBgCanvas(canvas);
     });
@@ -306,15 +316,21 @@ export function ActiveCovarianceDemo() {
             {latestState && (
               <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
                 <div className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>Best <LatexRenderer math="f_{\text{best}}" block={false} />:</span>
+                  <span>
+                    Best <LatexRenderer math="f_{\text{best}}" block={false} />:
+                  </span>
                   <span>{latestState.bestFitness.toFixed(4)}</span>
                 </div>
                 <div className="text-sky-300 flex items-center gap-1">
-                  <span>Step <LatexRenderer math="\sigma" block={false} />:</span>
+                  <span>
+                    Step <LatexRenderer math="\sigma" block={false} />:
+                  </span>
                   <span>{latestState.sigma.toFixed(4)}</span>
                 </div>
                 <div className="text-purple-300 flex items-center gap-1">
-                  <span>Cond <LatexRenderer math="\kappa(C)" block={false} />:</span>
+                  <span>
+                    Cond <LatexRenderer math="\kappa(C)" block={false} />:
+                  </span>
                   <span>{latestState.conditionNumber.toFixed(1)}</span>
                 </div>
                 <div className="text-slate-400">Gen: {latestState.generation}/46</div>
@@ -382,16 +398,28 @@ export function ActiveCovarianceDemo() {
               <span>Why Active Covariance Accelerates Convergence</span>
             </div>
             <p className="text-slate-300 leading-relaxed">
-              Standard CMA-ES expands covariance along directions that produce elite samples, but relies solely on passive exponential discounting <span className="inline-block"><LatexRenderer math="(1 - c_1 - c_\mu) C" block={false} /></span> to shrink variance in bad directions.
+              Standard CMA-ES expands covariance along directions that produce elite samples, but
+              relies solely on passive exponential discounting{" "}
+              <span className="inline-block">
+                <LatexRenderer math="(1 - c_1 - c_\mu) C" block={false} />
+              </span>{" "}
+              to shrink variance in bad directions.
             </p>
             <p className="text-slate-300 leading-relaxed">
-              <strong>Active CMA-ES</strong> assigns negative weights to the worst-ranked offspring, with each contribution rescaled by its Mahalanobis length so <LatexRenderer math="C" block={false} /> stays positive definite:
+              <strong>Active CMA-ES</strong> assigns negative weights to the worst-ranked offspring,
+              with each contribution rescaled by its Mahalanobis length so{" "}
+              <LatexRenderer math="C" block={false} /> stays positive definite:
             </p>
             <div className="text-[0.8rem] bg-slate-900/80 p-2.5 rounded-xl border border-white/5 text-center text-rose-300">
-              <LatexRenderer math="\Delta C_{\text{active}} = - c_\mu \sum_j |w_j| \tfrac{n}{\|C^{-1/2} y_j\|^2} \, y_j y_j^\top" block={false} />
+              <LatexRenderer
+                math="\Delta C_{\text{active}} = - c_\mu \sum_j |w_j| \tfrac{n}{\|C^{-1/2} y_j\|^2} \, y_j y_j^\top"
+                block={false}
+              />
             </div>
             <p className="text-slate-400 leading-relaxed">
-              This flattens the search ellipsoid against canyon walls, preventing wasteful mutations into known high-loss regions. Jastrebski &amp; Arnold (2006) measured speedups up to about 2&times; on ill-conditioned functions.
+              This flattens the search ellipsoid against canyon walls, preventing wasteful mutations
+              into known high-loss regions. Jastrebski &amp; Arnold (2006) measured speedups up to
+              about 2&times; on ill-conditioned functions.
             </p>
           </div>
         </div>

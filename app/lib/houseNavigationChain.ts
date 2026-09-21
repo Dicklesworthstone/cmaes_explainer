@@ -37,7 +37,7 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
     name: "Front Porch Entry",
     position: [1.5, -2.5],
     acceptanceRadius: 0.45,
-    targetSpeed: 0.60,
+    targetSpeed: 0.6,
     room: "porch",
   },
   {
@@ -61,14 +61,14 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
     name: "Kitchen Island",
     position: [4.5, 3.5],
     acceptanceRadius: 0.45,
-    targetSpeed: 0.60,
+    targetSpeed: 0.6,
     room: "kitchen",
   },
   {
     id: "wp-hallway",
     name: "Central Hallway",
     position: [2.5, 4.0],
-    acceptanceRadius: 0.40,
+    acceptanceRadius: 0.4,
     targetSpeed: 0.55,
     room: "hallway",
   },
@@ -77,15 +77,15 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
     name: "Master Bedroom",
     position: [1.0, 5.5],
     acceptanceRadius: 0.45,
-    targetSpeed: 0.60,
+    targetSpeed: 0.6,
     room: "bedroom",
   },
   {
     id: "wp-bathroom",
     name: "Ensuite Bathroom",
     position: [3.0, 6.5],
-    acceptanceRadius: 0.40,
-    targetSpeed: 0.50,
+    acceptanceRadius: 0.4,
+    targetSpeed: 0.5,
     room: "bath",
   },
 ];
@@ -102,8 +102,8 @@ export const CRAFTSMAN_DOORWAYS: CorridorSegment[] = [
     id: "door-parlor-dining",
     start: [2.5, 0.6],
     end: [3.0, 0.9],
-    halfWidth: 0.50,
-    maxYawErrorRad: 0.40,
+    halfWidth: 0.5,
+    maxYawErrorRad: 0.4,
   },
   {
     id: "door-dining-kitchen",
@@ -117,21 +117,21 @@ export const CRAFTSMAN_DOORWAYS: CorridorSegment[] = [
     start: [3.5, 3.8],
     end: [3.0, 4.0],
     halfWidth: 0.42,
-    maxYawErrorRad: 0.30,
+    maxYawErrorRad: 0.3,
   },
   {
     id: "door-hallway-bedroom",
     start: [1.8, 4.5],
     end: [1.4, 5.0],
     halfWidth: 0.42,
-    maxYawErrorRad: 0.30,
+    maxYawErrorRad: 0.3,
   },
   {
     id: "door-bedroom-bath",
     start: [2.0, 6.0],
     end: [2.5, 6.3],
-    halfWidth: 0.40,
-    maxYawErrorRad: 0.30,
+    halfWidth: 0.4,
+    maxYawErrorRad: 0.3,
   },
 ];
 
@@ -194,7 +194,7 @@ export function simulateHouseNavigation(
           activeRoom: currentWp.room,
           clearanceMeters: Math.max(0.1, lastStepClearance),
         });
-         break;
+        break;
       }
     }
 
@@ -237,7 +237,9 @@ export function simulateHouseNavigation(
     currentVel = [safeVx, safeVz];
 
     // Physical obstacle clearance in meters (margin + robotRadius)
-    const stepClearance = filterRes.isCorridorActive ? Math.max(0.01, filterRes.lateralMargin + robotRadius) : 0.35;
+    const stepClearance = filterRes.isCorridorActive
+      ? Math.max(0.01, filterRes.lateralMargin + robotRadius)
+      : 0.35;
     if (stepClearance < minClearance) {
       minClearance = stepClearance;
     }

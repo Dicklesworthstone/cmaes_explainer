@@ -294,20 +294,32 @@ function validateSchema8Buffer(buffer: Float64Array): void {
     throw new Error("malformed Schema-8 packet: buffer too short for header");
   }
   if (buffer[0] !== SCHEMA_8_MAGIC) {
-    throw new Error(`malformed Schema-8 packet: magic mismatch (expected 0x${SCHEMA_8_MAGIC.toString(16)}, got ${buffer[0]})`);
+    throw new Error(
+      `malformed Schema-8 packet: magic mismatch (expected 0x${SCHEMA_8_MAGIC.toString(16)}, got ${buffer[0]})`,
+    );
   }
   if (buffer[1] !== SCHEMA_8_VERSION) {
-    throw new Error(`malformed Schema-8 packet: version mismatch (expected ${SCHEMA_8_VERSION}, got ${buffer[1]})`);
+    throw new Error(
+      `malformed Schema-8 packet: version mismatch (expected ${SCHEMA_8_VERSION}, got ${buffer[1]})`,
+    );
   }
   const totalWords = buffer[4];
   if (totalWords !== buffer.length) {
-    throw new Error(`malformed Schema-8 packet: length mismatch (header claims ${totalWords}, buffer has ${buffer.length})`);
+    throw new Error(
+      `malformed Schema-8 packet: length mismatch (header claims ${totalWords}, buffer has ${buffer.length})`,
+    );
   }
   const numBodies = buffer[5];
   const numJoints = buffer[6];
   const numContacts = buffer[7];
-  const expectedTotal = HEADER_WORDS + numBodies * BODY_STRIDE + numJoints * JOINT_STRIDE + numContacts * CONTACT_STRIDE;
+  const expectedTotal =
+    HEADER_WORDS +
+    numBodies * BODY_STRIDE +
+    numJoints * JOINT_STRIDE +
+    numContacts * CONTACT_STRIDE;
   if (expectedTotal !== totalWords) {
-    throw new Error(`malformed Schema-8 packet: layout size mismatch (expected ${expectedTotal}, got ${totalWords})`);
+    throw new Error(
+      `malformed Schema-8 packet: layout size mismatch (expected ${expectedTotal}, got ${totalWords})`,
+    );
   }
 }

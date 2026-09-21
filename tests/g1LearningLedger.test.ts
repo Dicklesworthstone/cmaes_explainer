@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   appendLedgerPoint,
+  type LearningLedgerPoint,
   learningLedgerPoint,
   ledgerImprovementFactor,
-  type LearningLedgerPoint,
 } from "../app/lib/g1LearningLedger";
 
 const STEP_SECONDS = 1 / 480;
@@ -96,7 +96,10 @@ describe("G1 learning ledger", () => {
 
   test("points stay ordered by generation and bounded, keeping the seed baseline", () => {
     let history: LearningLedgerPoint[] = [];
-    history = appendLedgerPoint(history, learningLedgerPoint(receipt(0.2, 300, 720), 0, STEP_SECONDS));
+    history = appendLedgerPoint(
+      history,
+      learningLedgerPoint(receipt(0.2, 300, 720), 0, STEP_SECONDS),
+    );
     for (let generation = 400; generation > 0; generation -= 4) {
       history = appendLedgerPoint(
         history,

@@ -1,57 +1,46 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildG1Config,
+  buildHouseholdManipulationConfig,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  decodeG1Trace,
+  decodeHouseholdManipulationAdmission,
+  decodeHouseholdManipulationTrace,
+  FRANKENSIM_OWNER_KERNEL_VERSION,
+} from "../app/lib/frankensimCmaes";
+import {
+  armRestoreSharedExperiment,
+  armSharedExperiment,
+  armVerifySharedExperiment,
   G1_DEFAULT_SEARCH_SIGMA,
   G1_HOUSE_SEAT,
   g1ExperimentForSeat,
   g1OptimizationConfig,
   g1OptimizationRunKey,
   g1ResolveSeat,
-  g1SharedExperiment,
   g1RestoreSharedExperiment,
-  armRestoreSharedExperiment,
-  armSharedExperiment,
-  armVerifySharedExperiment,
+  g1SharedExperiment,
 } from "../app/lib/g1OptimizationProtocol";
 import {
-  buildG1Config,
-  decodeG1Trace,
-  FRANKENSIM_OWNER_KERNEL_VERSION,
-  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-  buildHouseholdManipulationConfig,
-  decodeHouseholdManipulationAdmission,
-  decodeHouseholdManipulationTrace,
-} from "../app/lib/frankensimCmaes";
-import {
-  policyFileContents,
-  policyFromFileContents,
-  encodeSharedPolicy,
+  decodePolicyFragment,
   decodeSharedPolicy,
   encodePolicyFragment,
-  decodePolicyFragment,
+  encodeSharedPolicy,
+  policyFileContents,
+  policyFromFileContents,
 } from "../app/lib/g1PolicyShare";
+import { decodeTrainingSession, encodeTrainingSession } from "../app/lib/g1TrainingSession";
 import { householdKernelObstacleRoster } from "../app/lib/houseMultiObstacleKernel";
-import {
-  encodeTrainingSession,
-  decodeTrainingSession,
-} from "../app/lib/g1TrainingSession";
 
 describe("Arm exact experiment archives", () => {
   test("replays all three real task rosters from exact file/link/storage inputs and refuses altered experiments", async () => {
-    const owner =
-      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
-        new URL(
-          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
       ).arrayBuffer(),
     });
-    for (const task of [
-      "kitchen-mug",
-      "living-room-remote",
-      "backyard-trowel",
-    ] as const) {
+    for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
       const bare = { ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task };
       const probe = new owner.HouseholdManipulationVizEvaluator(
         buildHouseholdManipulationConfig(bare),
@@ -100,15 +89,9 @@ describe("Arm exact experiment archives", () => {
         );
         expect(stored).not.toBeNull();
         const copies = [
-          policyFromFileContents(
-            JSON.stringify(policyFileContents(policy, meta)),
-            128,
-          ),
+          policyFromFileContents(JSON.stringify(policyFileContents(policy, meta)), 128),
           decodeSharedPolicy(encodeSharedPolicy(policy, meta), 128),
-          await decodePolicyFragment(
-            await encodePolicyFragment(policy, meta),
-            128,
-          ),
+          await decodePolicyFragment(await encodePolicyFragment(policy, meta), 128),
           stored!,
         ];
         for (const copy of copies) {
@@ -117,18 +100,12 @@ describe("Arm exact experiment archives", () => {
             family: "lm-cma",
             seedIndex: 2,
           });
-          expect(armVerifySharedExperiment(copy, config)).toEqual(
-            meta.experiment,
-          );
-          expect(new Uint8Array(copy.policy.buffer)).toEqual(
-            new Uint8Array(policy.buffer),
-          );
+          expect(armVerifySharedExperiment(copy, config)).toEqual(meta.experiment);
+          expect(new Uint8Array(copy.policy.buffer)).toEqual(new Uint8Array(policy.buffer));
           expect(new Uint8Array(evaluator.trace(copy.policy).buffer)).toEqual(
             new Uint8Array(original.buffer),
           );
-          expect(() => g1RestoreSharedExperiment(copy)).toThrow(
-            "not for the G1",
-          );
+          expect(() => g1RestoreSharedExperiment(copy)).toThrow("not for the G1");
         }
         for (const changed of [
           { ...config, stepSeconds: 1 / 120 },
@@ -187,11 +164,7 @@ describe("Arm exact experiment archives", () => {
 
 describe("G1 optimization task protocol", () => {
   test("restores the moved terrain experiment and refuses altered owner or physical inputs", async () => {
-    const original = await g1ExperimentForSeat(
-      "walking",
-      "terrain-and-push",
-      [-2.125, -0, 1.375],
-    );
+    const original = await g1ExperimentForSeat("walking", "terrain-and-push", [-2.125, -0, 1.375]);
     const meta = {
       kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
       task: "walking",
@@ -208,11 +181,7 @@ describe("G1 optimization task protocol", () => {
     const restored = g1RestoreSharedExperiment(imported);
     expect(restored.seedIndex).toBe(2);
     expect(Object.is(restored.seat[1], -0)).toBe(true);
-    const replay = await g1ExperimentForSeat(
-      "walking",
-      "terrain-and-push",
-      restored.seat,
-    );
+    const replay = await g1ExperimentForSeat("walking", "terrain-and-push", restored.seat);
     expect(replay.scene).toEqual(original.scene);
     for (const changed of [
       { ...meta, kernelVersion: "foreign" },
@@ -265,40 +234,25 @@ describe("G1 optimization task protocol", () => {
   });
 
   test("isolates continuation sessions across task, challenge, family, and seed", () => {
-    const baseline = g1OptimizationRunKey(
-      "walking",
-      "terrain-and-push",
-      "lm-cma",
-      0,
-    );
+    const baseline = g1OptimizationRunKey("walking", "terrain-and-push", "lm-cma", 0);
     const negativeControls = [
       g1OptimizationRunKey("balance", "terrain-and-push", "lm-cma", 0),
       g1OptimizationRunKey("stepping", "terrain-and-push", "lm-cma", 0),
       g1OptimizationRunKey("walking", "flat", "lm-cma", 0),
       g1OptimizationRunKey("walking", "terrain-and-push", "separable", 0),
       g1OptimizationRunKey("walking", "terrain-and-push", "lm-cma", 1),
-      g1OptimizationRunKey(
-        "walking",
-        "terrain-and-push",
-        "lm-cma",
-        0,
-        [0, 0, 0],
-      ),
+      g1OptimizationRunKey("walking", "terrain-and-push", "lm-cma", 0, [0, 0, 0]),
     ];
 
     expect(new Set([baseline, ...negativeControls]).size).toBe(7);
     expect(baseline).toBe(
-      g1OptimizationRunKey("walking", "terrain-and-push", "lm-cma", 0, [
-        ...G1_HOUSE_SEAT.offset,
-      ]),
+      g1OptimizationRunKey("walking", "terrain-and-push", "lm-cma", 0, [...G1_HOUSE_SEAT.offset]),
     );
   });
 
   test("binds the exact packet and placement to repeatable experiment identity", async () => {
     const original = await g1ExperimentForSeat("walking", "flat");
-    const replay = await g1ExperimentForSeat("walking", "flat", [
-      ...original.scene.seat,
-    ]);
+    const replay = await g1ExperimentForSeat("walking", "flat", [...original.scene.seat]);
     const movedSeat: [number, number, number] = [
       original.scene.seat[0] + 0.05,
       0,
@@ -306,36 +260,20 @@ describe("G1 optimization task protocol", () => {
     ];
     const moved = await g1ExperimentForSeat("walking", "flat", movedSeat);
     const changedTask = await g1ExperimentForSeat("balance", "flat");
-    const changedChallenge = await g1ExperimentForSeat(
-      "walking",
-      "terrain-and-push",
-    );
+    const changedChallenge = await g1ExperimentForSeat("walking", "terrain-and-push");
     expect(original.scene).toEqual(replay.scene);
     expect(original.scene.digest).toMatch(/^[0-9a-f]{64}$/);
     expect(
-      new Set(
-        [original, moved, changedTask, changedChallenge].map(
-          (e) => e.scene.digest,
-        ),
-      ).size,
+      new Set([original, moved, changedTask, changedChallenge].map((e) => e.scene.digest)).size,
     ).toBe(4);
     expect(moved.scene.seat).toEqual(movedSeat);
-    expect(moved.scene.configWords).toEqual(
-      Array.from(buildG1Config(moved.config)),
-    );
+    expect(moved.scene.configWords).toEqual(Array.from(buildG1Config(moved.config)));
     expect(moved.scene.configWords).not.toEqual(original.scene.configWords);
-    expect(moved.scene.configWords.slice(0, 12)).toEqual(
-      original.scene.configWords.slice(0, 12),
-    );
+    expect(moved.scene.configWords.slice(0, 12)).toEqual(original.scene.configWords.slice(0, 12));
     const floorBefore = original.config.obstacles![0];
     const floorAfter = moved.config.obstacles![0];
-    expect(floorAfter.centerMeters[0]).toBeCloseTo(
-      floorBefore.centerMeters[0] - 0.05,
-      12,
-    );
-    expect(floorAfter.centerMeters.slice(1)).toEqual(
-      floorBefore.centerMeters.slice(1),
-    );
+    expect(floorAfter.centerMeters[0]).toBeCloseTo(floorBefore.centerMeters[0] - 0.05, 12);
+    expect(floorAfter.centerMeters.slice(1)).toEqual(floorBefore.centerMeters.slice(1));
     // Returning a copied seat prevents a caller from mutating the default.
     movedSeat[0] += 10;
     expect(moved.scene.seat[0]).toBe(original.scene.seat[0] + 0.05);
@@ -348,21 +286,15 @@ describe("G1 optimization task protocol", () => {
       [0, 0.1, 0],
     ] as const) {
       expect(() => g1ResolveSeat(seat)).toThrow("on the floor");
-      expect(() =>
-        g1OptimizationRunKey("walking", "flat", "lm-ma", 0, seat),
-      ).toThrow();
+      expect(() => g1OptimizationRunKey("walking", "flat", "lm-ma", 0, seat)).toThrow();
     }
   });
 
   test("replays the disclosed scene packets through the actual shipped owner", async () => {
-    const owner =
-      await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
     await owner.default({
       module_or_path: await Bun.file(
-        new URL(
-          "../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
       ).arrayBuffer(),
     });
     const original = await g1ExperimentForSeat("walking", "flat");

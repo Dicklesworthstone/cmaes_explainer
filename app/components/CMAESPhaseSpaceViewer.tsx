@@ -1,13 +1,23 @@
 "use client";
 
+import { Line, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { safePointerEvents } from "./safeR3FEvents";
-import { PerspectiveCamera, OrbitControls, Line } from "@react-three/drei";
+import {
+  Activity,
+  Compass,
+  Gauge,
+  Layers,
+  Maximize2,
+  Minimize2,
+  Navigation,
+  Sparkles,
+  TrendingDown,
+} from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { CMAESGenerationStateND } from "../lib/cmaesEngineND";
 import { useInView } from "../hooks/useScrollSpy";
-import { Activity, Compass, Layers, Sparkles, Navigation, Gauge, TrendingDown, Maximize2, Minimize2 } from "lucide-react";
+import type { CMAESGenerationStateND } from "../lib/cmaesEngineND";
+import { safePointerEvents } from "./safeR3FEvents";
 
 /**
  * Renders the 3D Covariance Ellipsoid Mesh for the projected distribution N(0, sigma^2 C_3D)
@@ -16,7 +26,7 @@ import { Activity, Compass, Layers, Sparkles, Navigation, Gauge, TrendingDown, M
 function EllipsoidMesh({
   radii,
   sigma,
-  scaleRef
+  scaleRef,
 }: {
   radii: [number, number, number];
   sigma: number;
@@ -36,12 +46,12 @@ function EllipsoidMesh({
     targetScale1Sigma.set(
       Math.max(0.06, radii[0] * s),
       Math.max(0.06, radii[1] * s),
-      Math.max(0.06, radii[2] * s)
+      Math.max(0.06, radii[2] * s),
     );
     targetScale2Sigma.set(
       Math.max(0.12, radii[0] * s * 2.0),
       Math.max(0.12, radii[1] * s * 2.0),
-      Math.max(0.12, radii[2] * s * 2.0)
+      Math.max(0.12, radii[2] * s * 2.0),
     );
 
     const lerpRate = Math.min(1, delta * 9.0);
@@ -99,7 +109,7 @@ function EllipsoidMesh({
  */
 function PrincipalAxes({
   radii,
-  scale = 3.5
+  scale = 3.5,
 }: {
   radii: [number, number, number];
   scale?: number;
@@ -131,7 +141,7 @@ function PrincipalAxes({
  */
 function PopulationCloud({
   state,
-  scaleRef
+  scaleRef,
 }: {
   state: CMAESGenerationStateND;
   scaleRef: React.RefObject<number>;
@@ -181,7 +191,7 @@ function PopulationCloud({
 function EvolutionPaths({
   pC,
   pSigma,
-  scale = 3.5
+  scale = 3.5,
 }: {
   pC: [number, number, number];
   pSigma?: [number, number, number];
@@ -190,7 +200,7 @@ function EvolutionPaths({
   const linePC = useMemo(() => {
     return [
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(pC[0] * scale * 0.8, pC[1] * scale * 0.8, pC[2] * scale * 0.8)
+      new THREE.Vector3(pC[0] * scale * 0.8, pC[1] * scale * 0.8, pC[2] * scale * 0.8),
     ];
   }, [pC, scale]);
 
@@ -198,7 +208,7 @@ function EvolutionPaths({
     if (!pSigma) return [];
     return [
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(pSigma[0] * scale * 0.8, pSigma[1] * scale * 0.8, pSigma[2] * scale * 0.8)
+      new THREE.Vector3(pSigma[0] * scale * 0.8, pSigma[1] * scale * 0.8, pSigma[2] * scale * 0.8),
     ];
   }, [pSigma, scale]);
 
@@ -222,7 +232,7 @@ function EvolutionPaths({
 function ScaleSync({
   idealScale,
   scaleRef,
-  children
+  children,
 }: {
   idealScale: number;
   scaleRef: React.RefObject<number>;
@@ -242,7 +252,7 @@ function DynamicSceneRig({
   sigma,
   state,
   pC,
-  pSigma
+  pSigma,
 }: {
   radii: [number, number, number];
   sigma: number;
@@ -305,32 +315,18 @@ function DynamicSceneRig({
 
       {/* 3D Covariance Ellipsoid + its principal axes, in the eigenbasis */}
       <group quaternion={orientation}>
-        <EllipsoidMesh
-          radii={radii}
-          sigma={sigma}
-          scaleRef={currentScaleRef}
-        />
+        <EllipsoidMesh radii={radii} sigma={sigma} scaleRef={currentScaleRef} />
         <ScaleSync idealScale={idealScale} scaleRef={currentScaleRef}>
-          <PrincipalAxes
-            radii={radii}
-            scale={idealScale}
-          />
+          <PrincipalAxes radii={radii} scale={idealScale} />
         </ScaleSync>
       </group>
 
       {/* Candidate Offspring Population Cloud & Elites */}
-      <PopulationCloud
-        state={state}
-        scaleRef={currentScaleRef}
-      />
+      <PopulationCloud state={state} scaleRef={currentScaleRef} />
 
       {/* Evolution Paths (p_c & p_sigma) */}
       <ScaleSync idealScale={idealScale} scaleRef={currentScaleRef}>
-        <EvolutionPaths
-          pC={pC}
-          pSigma={pSigma}
-          scale={idealScale}
-        />
+        <EvolutionPaths pC={pC} pSigma={pSigma} scale={idealScale} />
       </ScaleSync>
     </group>
   );
@@ -340,7 +336,7 @@ export function CMAESPhaseSpaceViewer({
   latestState,
   history,
   className = "",
-  title = "Internal CMA-ES 3D PCA Phase-Space Evolution"
+  title = "Internal CMA-ES 3D PCA Phase-Space Evolution",
 }: {
   latestState: CMAESGenerationStateND | null;
   history: CMAESGenerationStateND[];
@@ -355,13 +351,16 @@ export function CMAESPhaseSpaceViewer({
 
   if (!latestState) {
     return (
-      <div className={`rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-center text-xs text-slate-400 ${className}`}>
+      <div
+        className={`rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-center text-xs text-slate-400 ${className}`}
+      >
         Launch optimization to project internal covariance adaptation into 3D phase space.
       </div>
     );
   }
 
-  const { phaseSpace3D, conditionNumber, sigma, generation, pC, pSigma, variancePerDim } = latestState;
+  const { phaseSpace3D, conditionNumber, sigma, generation, pC, pSigma, variancePerDim } =
+    latestState;
 
   return (
     <div
@@ -387,36 +386,36 @@ export function CMAESPhaseSpaceViewer({
       {/* 3D Canvas */}
       <div className="relative aspect-[16/11] w-full">
         {isMountGL && (
-        <Canvas
-          events={safePointerEvents}
-          shadows
-          dpr={[1, 2]}
-          frameloop={isInView ? "always" : "demand"}
-        >
-          <PerspectiveCamera makeDefault position={[2.2, 1.6, 2.8]} fov={40} />
-          <color attach="background" args={["#030712"]} />
+          <Canvas
+            events={safePointerEvents}
+            shadows
+            dpr={[1, 2]}
+            frameloop={isInView ? "always" : "demand"}
+          >
+            <PerspectiveCamera makeDefault position={[2.2, 1.6, 2.8]} fov={40} />
+            <color attach="background" args={["#030712"]} />
 
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[5, 8, 5]} intensity={1.2} />
-          <pointLight position={[-4, -4, -4]} intensity={0.6} color="#38bdf8" />
+            <ambientLight intensity={0.5} />
+            <directionalLight position={[5, 8, 5]} intensity={1.2} />
+            <pointLight position={[-4, -4, -4]} intensity={0.6} color="#38bdf8" />
 
-          <OrbitControls
-            makeDefault
-            enableDamping
-            dampingFactor={0.08}
-            minDistance={1.2}
-            maxDistance={8.0}
-            target={[0, 0, 0]}
-          />
+            <OrbitControls
+              makeDefault
+              enableDamping
+              dampingFactor={0.08}
+              minDistance={1.2}
+              maxDistance={8.0}
+              target={[0, 0, 0]}
+            />
 
-          <DynamicSceneRig
-            radii={phaseSpace3D.ellipsoidRadii}
-            sigma={sigma}
-            state={latestState}
-            pC={phaseSpace3D.evolutionPath3D}
-            pSigma={phaseSpace3D.evolutionPathSigma3D}
-          />
-        </Canvas>
+            <DynamicSceneRig
+              radii={phaseSpace3D.ellipsoidRadii}
+              sigma={sigma}
+              state={latestState}
+              pC={phaseSpace3D.evolutionPath3D}
+              pSigma={phaseSpace3D.evolutionPathSigma3D}
+            />
+          </Canvas>
         )}
 
         {/* Orbit hint badge */}
@@ -430,7 +429,9 @@ export function CMAESPhaseSpaceViewer({
         <div className="sm:hidden absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-white/10 text-[0.6rem] font-mono text-slate-300 pointer-events-none flex items-center gap-2">
           <span>
             <span className="text-rose-400">PC1</span>{" "}
-            <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[0].toFixed(0)}%</span>
+            <span className="font-bold">
+              {phaseSpace3D.varianceExplainedPercent[0].toFixed(0)}%
+            </span>
           </span>
           <span>
             <span className="text-amber-300">σ</span>{" "}
@@ -449,25 +450,35 @@ export function CMAESPhaseSpaceViewer({
           <div className="space-y-1 pt-0.5">
             <div className="flex justify-between items-center">
               <span className="text-rose-400">PC 1 (Major Axis):</span>
-              <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[0].toFixed(1)}%</span>
+              <span className="font-bold">
+                {phaseSpace3D.varianceExplainedPercent[0].toFixed(1)}%
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-emerald-400">PC 2 (Minor Axis):</span>
-              <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[1].toFixed(1)}%</span>
+              <span className="font-bold">
+                {phaseSpace3D.varianceExplainedPercent[1].toFixed(1)}%
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sky-400">PC 3 (Depth Axis):</span>
-              <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[2].toFixed(1)}%</span>
+              <span className="font-bold">
+                {phaseSpace3D.varianceExplainedPercent[2].toFixed(1)}%
+              </span>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-[0.62rem] text-slate-400 pt-1.5 border-t border-white/10">
-            <span>Evolution Path <code className="text-purple-300 font-bold font-mono">p_c</code>:</span>
+            <span>
+              Evolution Path <code className="text-purple-300 font-bold font-mono">p_c</code>:
+            </span>
             <span className="text-purple-300 font-bold">Active Momentum</span>
           </div>
 
           <div className="flex justify-between text-[0.62rem] text-slate-400">
-            <span>Step Size <code className="text-amber-300 font-bold font-mono">σ</code>:</span>
+            <span>
+              Step Size <code className="text-amber-300 font-bold font-mono">σ</code>:
+            </span>
             <span className="text-amber-300 font-bold">{sigma.toFixed(4)}</span>
           </div>
         </div>
@@ -483,7 +494,7 @@ export function CMAESPhaseSpaceViewer({
 export function CMAESMiniRadar({
   state,
   size = 100,
-  className = ""
+  className = "",
 }: {
   state: CMAESGenerationStateND | null;
   size?: number;
@@ -618,7 +629,9 @@ export function CMAESMiniRadar({
   }, [state, size]);
 
   return (
-    <div className={`relative rounded-xl overflow-hidden border border-sky-500/20 shadow-inner bg-slate-950/90 ${className}`}>
+    <div
+      className={`relative rounded-xl overflow-hidden border border-sky-500/20 shadow-inner bg-slate-950/90 ${className}`}
+    >
       <canvas ref={canvasRef} width={size * 2} height={size * 2} className="w-full h-full block" />
       <div className="absolute top-1 left-1.5 text-[0.55rem] font-mono uppercase tracking-wider text-sky-400/80 pointer-events-none">
         C_3D PCA
@@ -641,7 +654,7 @@ export function CMAESTelemetryHUD({
   isExpanded3D = false,
   accentColor = "cyan",
   title = "CMA-ES Internal State",
-  objectiveName = "Cost Score"
+  objectiveName = "Cost Score",
 }: {
   latestState: CMAESGenerationStateND | null;
   history: CMAESGenerationStateND[];
@@ -673,7 +686,7 @@ export function CMAESTelemetryHUD({
       path: `M ${points.join(" L ")}`,
       minVal,
       maxVal,
-      currentVal: scores[scores.length - 1]
+      currentVal: scores[scores.length - 1],
     };
   }, [history]);
 
@@ -797,7 +810,9 @@ export function CMAESTelemetryHUD({
           </div>
 
           <div className="flex items-center justify-between text-[0.62rem] text-slate-400 pt-0.5">
-            <span>Anisotropy Path <code className="text-purple-300 font-bold">p_c</code></span>
+            <span>
+              Anisotropy Path <code className="text-purple-300 font-bold">p_c</code>
+            </span>
             <span className="text-purple-300 font-bold">Vector Memory</span>
           </div>
         </div>
@@ -811,7 +826,9 @@ export function CMAESTelemetryHUD({
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[0.62rem]">
               <span className="text-rose-400">PC 1 (Major)</span>
-              <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[0].toFixed(1)}%</span>
+              <span className="font-bold">
+                {phaseSpace3D.varianceExplainedPercent[0].toFixed(1)}%
+              </span>
             </div>
             <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
               <div
@@ -822,7 +839,9 @@ export function CMAESTelemetryHUD({
 
             <div className="flex items-center justify-between text-[0.62rem]">
               <span className="text-emerald-400">PC 2 (Minor)</span>
-              <span className="font-bold">{phaseSpace3D.varianceExplainedPercent[1].toFixed(1)}%</span>
+              <span className="font-bold">
+                {phaseSpace3D.varianceExplainedPercent[1].toFixed(1)}%
+              </span>
             </div>
             <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
               <div

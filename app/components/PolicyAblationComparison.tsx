@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-  type AblationPairResult,
-} from "../lib/policyAblationComparison";
+import type React from "react";
+import { useEffect, useState } from "react";
+import type { AblationPairResult } from "../lib/policyAblationComparison";
 
 type AblationWorkerResponse =
   | { type: "result"; seed: number; result: AblationPairResult }
@@ -12,9 +11,7 @@ type AblationWorkerResponse =
 function spawnAblationWorker(onMessage: (msg: AblationWorkerResponse) => void): Worker {
   // Bundled worker: all measurement compute (720-step transformer rollout +
   // CMA-ES search) runs off the main thread — the page stays responsive.
-  const worker = new Worker(
-    new URL("../workers/policyAblationWorker.ts", import.meta.url),
-  );
+  const worker = new Worker(new URL("../workers/policyAblationWorker.ts", import.meta.url));
   worker.onmessage = (e: MessageEvent<AblationWorkerResponse>) => onMessage(e.data);
   worker.onerror = (e) =>
     onMessage({ type: "error", seed: -1, error: e.message || "worker error" });
@@ -85,9 +82,9 @@ export function PolicyAblationComparison() {
         role="alert"
       >
         <p className="text-red-400 text-xs">
-          Ablation failed to load its measured artifacts ({error}). The weight
-          file and training receipt must exist under
-          public/robots/g1/transformer/ — nothing is faked in their absence.
+          Ablation failed to load its measured artifacts ({error}). The weight file and training
+          receipt must exist under public/robots/g1/transformer/ — nothing is faked in their
+          absence.
         </p>
       </div>
     );
@@ -102,8 +99,8 @@ export function PolicyAblationComparison() {
         aria-live="polite"
       >
         <p className="text-neutral-400 text-xs animate-pulse">
-          Measuring both policies in a background worker (live CMA-ES search +
-          720-step transformer rollout) — the page stays interactive.
+          Measuring both policies in a background worker (live CMA-ES search + 720-step transformer
+          rollout) — the page stays interactive.
         </p>
       </div>
     );
@@ -125,12 +122,11 @@ export function PolicyAblationComparison() {
             </h2>
           </div>
           <p className="text-xs text-neutral-400">
-            Both sides execute for the same 720-step horizon on the current
-            action-causal stand-in, where forward motion requires real actuator
-            work. CMA-ES searches that contract live. The transformer runs the
-            committed 2.9M-parameter trunk with a policy head trained offline on
-            this same reward, reaching 7.09 m against the prior&apos;s 7.05 m at
-            this budget — see below.
+            Both sides execute for the same 720-step horizon on the current action-causal stand-in,
+            where forward motion requires real actuator work. CMA-ES searches that contract live.
+            The transformer runs the committed 2.9M-parameter trunk with a policy head trained
+            offline on this same reward, reaching 7.09 m against the prior&apos;s 7.05 m at this
+            budget — see below.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -145,10 +141,10 @@ export function PolicyAblationComparison() {
               onChange={(e) => setSeed(Number(e.target.value))}
               aria-label="CMA-ES search seed"
             >
-            <option value={42}>#42 (default)</option>
-            <option value={101}>#101</option>
-            <option value={202}>#202</option>
-            <option value={505}>#505</option>
+              <option value={42}>#42 (default)</option>
+              <option value={101}>#101</option>
+              <option value={202}>#202</option>
+              <option value={505}>#505</option>
             </select>
           </div>
         </div>
@@ -157,12 +153,10 @@ export function PolicyAblationComparison() {
       {!tf.trainedOnEvaluationContract ? (
         <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-xs text-amber-100">
           Contract mismatch, shown deliberately: transformer training used
-          <code className="mx-1">{tf.trainingEnvironmentContract}</code>, while
-          this evaluation uses
-          <code className="mx-1">{tf.evaluationEnvironmentContract}</code>.
-          Its all-zero policy head now earns zero locomotion distance. A new
-          owner-coupled checkpoint is required before this can be called a
-          learned walking policy.
+          <code className="mx-1">{tf.trainingEnvironmentContract}</code>, while this evaluation uses
+          <code className="mx-1">{tf.evaluationEnvironmentContract}</code>. Its all-zero policy head
+          now earns zero locomotion distance. A new owner-coupled checkpoint is required before this
+          can be called a learned walking policy.
         </div>
       ) : null}
 
@@ -177,17 +171,15 @@ export function PolicyAblationComparison() {
           </div>
           <div className="text-[10px] text-neutral-500">
             CMA-ES {cma.trainingSamplesRequired.toLocaleString()} vs transformer{" "}
-            {tf.trainingSamplesRequired.toLocaleString()} env steps — whichever
-            direction it falls; this is not a quality comparison across
-            incompatible training contracts
+            {tf.trainingSamplesRequired.toLocaleString()} env steps — whichever direction it falls;
+            this is not a quality comparison across incompatible training contracts
           </div>
         </div>
 
         <div className="bg-neutral-950/80 border border-neutral-800 p-3 rounded-lg text-center">
           <div className="text-xs text-neutral-400">Inference Latency</div>
           <div className="text-lg font-bold text-cyan-400 mt-0.5">
-            {cma.inferenceLatencyMicros.toFixed(2)}µs vs{" "}
-            {tf.inferenceLatencyMicros.toFixed(1)}µs
+            {cma.inferenceLatencyMicros.toFixed(2)}µs vs {tf.inferenceLatencyMicros.toFixed(1)}µs
           </div>
           <div className="text-[10px] text-neutral-500">
             Linear 105-param matvec vs {tf.parameterCount.toLocaleString()}-param causal decoder
@@ -231,8 +223,8 @@ export function PolicyAblationComparison() {
           <strong className="text-neutral-200">
             {result.theoreticalMaxDistanceMeters.toFixed(2)} m
           </strong>{" "}
-          is the furthest ANY policy can travel in 720 steps — sustaining the
-          commanded speed for the entire horizon. CMA-ES reaches{" "}
+          is the furthest ANY policy can travel in 720 steps — sustaining the commanded speed for
+          the entire horizon. CMA-ES reaches{" "}
           <strong className="text-neutral-200">
             {((cma.distanceTraveledMeters / result.theoreticalMaxDistanceMeters) * 100).toFixed(0)}%
           </strong>{" "}
@@ -240,53 +232,46 @@ export function PolicyAblationComparison() {
           <strong className="text-neutral-200">
             {((tf.distanceTraveledMeters / result.theoreticalMaxDistanceMeters) * 100).toFixed(0)}%
           </strong>
-          . Both sit near a wall neither can pass, which is the useful thing to
-          know: the gap between them is small because the room above them is
-          small, not because one architecture is dramatically better.
+          . Both sit near a wall neither can pass, which is the useful thing to know: the gap
+          between them is small because the room above them is small, not because one architecture
+          is dramatically better.
         </p>
         <div className="text-neutral-300 font-bold text-[10px] uppercase pt-1">Provenance</div>
         <p className="leading-relaxed">
           Transformer: the trunk comes from{" "}
-          <code className="text-neutral-200">fs-g1-train/examples/train_ablation.rs</code> —
-          PPO (clipped) + GAE with Muon/Adam over{" "}
-          {tf.trainingSamplesRequired.toLocaleString()} env steps. That run did not
-          learn: its mean reward was flat across all 60 iterations, the shipped
-          checkpoint is iteration 0, and its policy head was exported entirely
-          zero — so tanh(0·h) = 0 for every actuator and the robot could not
-          move. The 7.8 m in its own receipt came from a superseded stand-in
-          that granted target speed regardless of action.
+          <code className="text-neutral-200">fs-g1-train/examples/train_ablation.rs</code> — PPO
+          (clipped) + GAE with Muon/Adam over {tf.trainingSamplesRequired.toLocaleString()} env
+          steps. That run did not learn: its mean reward was flat across all 60 iterations, the
+          shipped checkpoint is iteration 0, and its policy head was exported entirely zero — so
+          tanh(0·h) = 0 for every actuator and the robot could not move. The 7.8 m in its own
+          receipt came from a superseded stand-in that granted target speed regardless of action.
         </p>
         <p className="leading-relaxed">
-          What ships now keeps that trunk byte-for-byte and frozen, fixes its
-          observation normalisation — the artifact shipped with mean 0 and
-          variance 1, i.e. normalisation switched off, while joint velocities
-          have twelve times the spread of joint positions and one channel is a
-          constant −9.81 — and trains only the 29×256 output layer. That layer
-          is initialised by ridge regression onto the CMA-ES gait
-          (<code className="text-neutral-200">scripts/fit-transformer-head.ts</code>,
-          6.76 m) and then searched against this environment&apos;s own reward by
-          an evolution strategy with momentum and step-size adaptation
-          (<code className="text-neutral-200">scripts/train-transformer-head.ts</code>),
-          reaching <strong className="text-neutral-200">7.09 m</strong> on three
-          held-out seeds it never trained on. Both cards run on the action-causal
-          kinematic stand-in, which has no push/joint-limit/slip telemetry; it is
-          not the full G1 owner.
+          What ships now keeps that trunk byte-for-byte and frozen, fixes its observation
+          normalisation — the artifact shipped with mean 0 and variance 1, i.e. normalisation
+          switched off, while joint velocities have twelve times the spread of joint positions and
+          one channel is a constant −9.81 — and trains only the 29×256 output layer. That layer is
+          initialised by ridge regression onto the CMA-ES gait (
+          <code className="text-neutral-200">scripts/fit-transformer-head.ts</code>, 6.76 m) and
+          then searched against this environment&apos;s own reward by an evolution strategy with
+          momentum and step-size adaptation (
+          <code className="text-neutral-200">scripts/train-transformer-head.ts</code>), reaching{" "}
+          <strong className="text-neutral-200">7.09 m</strong> on three held-out seeds it never
+          trained on. Both cards run on the action-causal kinematic stand-in, which has no
+          push/joint-limit/slip telemetry; it is not the full G1 owner.
         </p>
         <p className="leading-relaxed">
-          Which architecture wins depends entirely on the search budget, and
-          saying so is the actual finding. At the 4,000-evaluation budget this
-          panel runs live, the phase prior reaches 7.05 m and the transformer
-          7.09 m. Give the phase prior 12,000 evaluations and it reaches 7.29 m,
-          ahead again — 105 well-chosen parameters converge further than 3,840
-          generic ones, because the phase basis already encodes the answer&apos;s
-          shape. The transformer gets more from less search; the prior gets more
-          from more search.
+          Which architecture wins depends entirely on the search budget, and saying so is the actual
+          finding. At the 4,000-evaluation budget this panel runs live, the phase prior reaches 7.05
+          m and the transformer 7.09 m. Give the phase prior 12,000 evaluations and it reaches 7.29
+          m, ahead again — 105 well-chosen parameters converge further than 3,840 generic ones,
+          because the phase basis already encodes the answer&apos;s shape. The transformer gets more
+          from less search; the prior gets more from more search.
         </p>
         <p className="leading-relaxed">
-          The original v1 export remains available with its zero policy head.
-          Golden-vector checks cover the fitted v2 artifact now loaded by this
-          panel; the live rollout measures its action-dependent motion on the
-          stated evaluation contract.
+          The original v1 export remains available with its zero policy head. Golden-vector checks
+          cover the fitted v2 artifact now loaded by this panel; the live rollout measures its
+          action-dependent motion on the stated evaluation contract.
         </p>
       </div>
     </div>
@@ -362,13 +347,7 @@ function PolicyCard({
           <span className="text-neutral-500">— (not modeled here)</span>
         </MetricRow>
         <MetricRow label="Train / Eval Contract">
-          <span
-            className={
-              r.trainedOnEvaluationContract
-                ? "text-emerald-400"
-                : "text-amber-400"
-            }
-          >
+          <span className={r.trainedOnEvaluationContract ? "text-emerald-400" : "text-amber-400"}>
             {r.trainedOnEvaluationContract ? "matched" : "mismatch"}
           </span>
         </MetricRow>

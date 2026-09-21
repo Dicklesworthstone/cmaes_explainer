@@ -4,10 +4,7 @@ import path from "path";
 
 describe("G1 Transformer Policy Metadata & Browser Inference Manifest", () => {
   test("metadata.json exists and conforms to the G1 walking flagship contract", () => {
-    const metaPath = path.join(
-      process.cwd(),
-      "public/robots/g1/transformer/metadata.json",
-    );
+    const metaPath = path.join(process.cwd(), "public/robots/g1/transformer/metadata.json");
     expect(fs.existsSync(metaPath)).toBe(true);
 
     const raw = fs.readFileSync(metaPath, "utf-8");
@@ -51,7 +48,7 @@ describe("G1 Transformer Policy Metadata & Browser Inference Manifest", () => {
     expect(meta.training_metadata.inference_badge).toBeDefined();
     expect(meta.training_metadata.inference_badge.label).toMatch(/transformer/i);
     expect(meta.training_metadata.inference_badge.fallback_label).toBe(
-      "transformer (weights unavailable — nothing is faked)"
+      "transformer (weights unavailable — nothing is faked)",
     );
   });
 });

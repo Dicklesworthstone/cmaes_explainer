@@ -73,7 +73,7 @@ export const CRAFTSMAN_TOUR_KEYFRAMES: CameraKeyframe[] = [
     position: [2.2, 1.8, 4.8],
     target: [1.0, 0.8, 5.8],
     fovDegrees: 50,
-    exposure: 0.90,
+    exposure: 0.9,
     bloomThreshold: 1.1,
   },
   {
@@ -81,7 +81,7 @@ export const CRAFTSMAN_TOUR_KEYFRAMES: CameraKeyframe[] = [
     position: [1.8, 1.7, 5.8],
     target: [3.0, 1.0, 6.6],
     fovDegrees: 52,
-    exposure: 1.10,
+    exposure: 1.1,
     bloomThreshold: 1.3,
   },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 // ---------------------------------------------------------------------------
@@ -40,12 +40,12 @@ function createOakHardwoodTexture(): THREE.CanvasTexture {
       ctx.beginPath();
       ctx.moveTo(gx, 0);
       ctx.bezierCurveTo(
-        gx + (Math.sin(gIdx) * 6),
+        gx + Math.sin(gIdx) * 6,
         340,
-        gx - (Math.cos(gIdx) * 6),
+        gx - Math.cos(gIdx) * 6,
         680,
-        gx + (Math.sin(gIdx * 2) * 4),
-        1024
+        gx + Math.sin(gIdx * 2) * 4,
+        1024,
       );
       ctx.stroke();
     }
@@ -127,7 +127,7 @@ function createClinkerBrickTexture(): THREE.CanvasTexture {
       // Texture flecks inside brick
       ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
       for (let s = 0; s < 6; s++) {
-        ctx.fillRect(x + 5 + (s * 9) % (colW - 10), y + 4 + (s * 5) % (rowH - 8), 3, 2);
+        ctx.fillRect(x + 5 + ((s * 9) % (colW - 10)), y + 4 + ((s * 5) % (rowH - 8)), 3, 2);
       }
     }
   }
@@ -167,7 +167,11 @@ function createCraftsmanRugTexture(): THREE.CanvasTexture {
   // Geometric medallion motifs
   ctx.fillStyle = "#d4af37";
   const centers = [
-    [150, 150], [362, 150], [150, 362], [362, 362], [256, 256]
+    [150, 150],
+    [362, 150],
+    [150, 362],
+    [362, 362],
+    [256, 256],
   ];
   for (const [cx, cy] of centers) {
     ctx.beginPath();
@@ -743,7 +747,7 @@ export function CraftsmanLivingRoom({
                   <boxGeometry args={[0.07, 0.42, 0.07]} />
                   <primitive object={materials.fumedDarkOak} attach="material" />
                 </mesh>
-              ))
+              )),
             )}
             {/* Ceramic Arts & Crafts Bowl on Table */}
             <mesh position={[0, 0.47, 0]} castShadow>
@@ -820,11 +824,7 @@ export function CraftsmanLivingRoom({
       />
 
       {/* Interior Bounce Fill Light */}
-      <directionalLight
-        position={[2.8, 2.5, 3.2]}
-        intensity={0.65}
-        color="#fed7aa"
-      />
+      <directionalLight position={[2.8, 2.5, 3.2]} intensity={0.65} color="#fed7aa" />
     </group>
   );
 }

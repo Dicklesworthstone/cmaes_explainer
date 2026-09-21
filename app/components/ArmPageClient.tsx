@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Bot, Navigation } from "lucide-react";
+import { useState } from "react";
 import { HouseholdArmFlagship } from "./HouseholdArmFlagship";
 import { KmrScene } from "./KmrScene";
 
@@ -10,9 +10,7 @@ export interface ArmPageClientProps {
 }
 
 export function ArmPageClient({ embedded = false }: ArmPageClientProps = {}) {
-  const [activeTab, setActiveTab] = useState<"tabletop" | "kmr-mobile">(
-    "tabletop",
-  );
+  const [activeTab, setActiveTab] = useState<"tabletop" | "kmr-mobile">("tabletop");
 
   return (
     <div>
@@ -60,9 +58,7 @@ export function ArmPageClient({ embedded = false }: ArmPageClientProps = {}) {
           >
             <Navigation className="h-4 w-4 shrink-0" />
             <span className="truncate">
-              {embedded
-                ? "KMR Mobile Base"
-                : "KMR Mobile Base (4-Mecanum + LiDAR)"}
+              {embedded ? "KMR Mobile Base" : "KMR Mobile Base (4-Mecanum + LiDAR)"}
             </span>
           </button>
         </div>
@@ -92,8 +88,8 @@ export function ArmPageClient({ embedded = false }: ArmPageClientProps = {}) {
             </span>
           </div>
           <p className="mb-3 text-[0.68rem] leading-5 text-slate-400">
-            TypeScript navigation owner and household contact/LCP coupling; this
-            mobile-base path is not FrankenSim robot-owner WASM.
+            TypeScript navigation owner and household contact/LCP coupling; this mobile-base path is
+            not FrankenSim robot-owner WASM.
           </p>
           <KmrScene />
         </div>

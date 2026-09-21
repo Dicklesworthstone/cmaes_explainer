@@ -1,6 +1,6 @@
 "use client";
 
-import { Github, Heart, ExternalLink, Globe2, Terminal, Sparkles, UserCheck } from "lucide-react";
+import { ExternalLink, Github, Globe2, Heart, Sparkles, Terminal, UserCheck } from "lucide-react";
 
 export function Footer() {
   return (
@@ -29,7 +29,8 @@ export function Footer() {
               >
                 Jeffrey Emanuel
               </a>
-              . Explorable interactive animations, SIMD WebAssembly optimization kernels, and real-time 3D phase-space visualization.
+              . Explorable interactive animations, SIMD WebAssembly optimization kernels, and
+              real-time 3D phase-space visualization.
             </p>
           </div>
 
@@ -63,10 +64,13 @@ export function Footer() {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
-            <h4 className="text-sm font-bold text-white font-display">CMA-ES Interactive Explainer</h4>
+            <h4 className="text-sm font-bold text-white font-display">
+              CMA-ES Interactive Explainer
+            </h4>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            An explorable explanation of the Covariance Matrix Adaptation Evolution Strategy, based on the essay by{" "}
+            An explorable explanation of the Covariance Matrix Adaptation Evolution Strategy, based
+            on the essay by{" "}
             <a
               href="https://jeffreyemanuel.com/"
               target="_blank"
@@ -85,7 +89,9 @@ export function Footer() {
         </div>
 
         <div className="space-y-3">
-          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">References & Papers</h4>
+          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+            References & Papers
+          </h4>
           <ul className="space-y-2.5 text-xs text-slate-400">
             <li>
               <a
@@ -124,7 +130,9 @@ export function Footer() {
         </div>
 
         <div className="space-y-3 sm:col-span-2 lg:col-span-1">
-          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Open Source Engines</h4>
+          <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+            Open Source Engines
+          </h4>
           <ul className="space-y-2.5 text-xs text-slate-400">
             <li>
               <a

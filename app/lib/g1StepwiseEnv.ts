@@ -82,7 +82,7 @@ export class G1TrainEnv {
       maxSteps: config.maxSteps ?? 720,
       dt: config.dt ?? 1 / 60,
       targetSpeedMps: config.targetSpeedMps ?? 0.65,
-      fallHeightThreshold: config.fallHeightThreshold ?? 0.40,
+      fallHeightThreshold: config.fallHeightThreshold ?? 0.4,
       fallTiltThresholdRad: config.fallTiltThresholdRad ?? 0.85,
     };
     if (!Number.isSafeInteger(this.config.maxSteps) || this.config.maxSteps < 1) {
@@ -140,9 +140,7 @@ export class G1TrainEnv {
     let actionEffort = 0.0;
     for (let j = 0; j < 15; j++) {
       const candidate = action[j] ?? 0.0;
-      const act = Number.isFinite(candidate)
-        ? Math.max(-1.0, Math.min(1.0, candidate))
-        : 0.0;
+      const act = Number.isFinite(candidate) ? Math.max(-1.0, Math.min(1.0, candidate)) : 0.0;
       const targetPos = act * 0.5;
       const torque = 120.0 * (targetPos - this.jointPos[j]) - 8.0 * this.jointVel[j];
       this.jointVel[j] += (torque / 1.5) * dt;
@@ -165,8 +163,8 @@ export class G1TrainEnv {
     // Height drops faster as tilt grows; calibrated to match the kernel's
     // measured fall time on a 1.5s push pulse: a constant 0.3 rad tilt
     // falls in ~5s.
-    const tiltSineSquared = this.currentRoll * this.currentRoll
-      + this.currentPitch * this.currentPitch;
+    const tiltSineSquared =
+      this.currentRoll * this.currentRoll + this.currentPitch * this.currentPitch;
     this.currentHeight -= 0.5 * tiltSineSquared * dt;
     // Forward displacement is ACTION-CAUSAL. The previous stand-in advanced
     // at targetSpeed even when every action was exactly zero, making an inert
@@ -181,16 +179,12 @@ export class G1TrainEnv {
       legVelocitySquared += this.jointVel[j] * this.jointVel[j];
     }
     const legVelocityRms = Math.sqrt(legVelocitySquared / 12.0);
-    const hipOpposition = Math.min(
-      1.0,
-      Math.abs(this.jointVel[0] - this.jointVel[6]) / 2.0,
-    );
+    const hipOpposition = Math.min(1.0, Math.abs(this.jointVel[0] - this.jointVel[6]) / 2.0);
     const motionDrive = Math.min(1.0, legVelocityRms / 2.0);
     const gaitDrive = motionDrive * (0.25 + 0.75 * hipOpposition);
     const requestedForwardSpeed = this.config.targetSpeedMps * gaitDrive;
     const speedResponse = Math.min(1.0, 6.0 * dt);
-    this.currentForwardSpeed +=
-      (requestedForwardSpeed - this.currentForwardSpeed) * speedResponse;
+    this.currentForwardSpeed += (requestedForwardSpeed - this.currentForwardSpeed) * speedResponse;
     const deltaX = Math.max(0.0, this.currentForwardSpeed) * dt * uprightFactor;
     this.currentPosX += deltaX;
     this.cumulativeDist += deltaX;
@@ -198,8 +192,9 @@ export class G1TrainEnv {
     // Check termination. fallHeightThreshold default 0.40m (initial 0.75m)
     // gives ~3.5s of grace under worst-case tilt before falling; the
     // tilt threshold 0.85 rad (~48 deg) catches a sudden kick.
-    const fall = this.currentHeight < this.config.fallHeightThreshold
-      || tilt > this.config.fallTiltThresholdRad;
+    const fall =
+      this.currentHeight < this.config.fallHeightThreshold ||
+      tilt > this.config.fallTiltThresholdRad;
     const timeout = this.stepCount >= this.config.maxSteps;
     const done = fall || timeout;
     this.terminated = done;

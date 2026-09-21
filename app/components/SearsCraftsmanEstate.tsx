@@ -1,14 +1,11 @@
 "use client";
 
-import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
-
-import React, { useMemo, useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+
+import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import {
-  CRAFTSMAN_WALKING_ROUTES,
-  type CraftsmanWalkingRoute,
-} from "../lib/craftsmanCatalogData";
+import { CRAFTSMAN_WALKING_ROUTES, type CraftsmanWalkingRoute } from "../lib/craftsmanCatalogData";
+import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 
 // ---------------------------------------------------------------------------
 // High-Resolution Procedural Texture Generators (Three.js Skill Doctrine)
@@ -51,7 +48,7 @@ function createOakHardwoodTexture(): THREE.CanvasTexture {
         gx - Math.cos(gIdx) * 6,
         680,
         gx + Math.sin(gIdx * 2) * 4,
-        1024
+        1024,
       );
       ctx.stroke();
     }
@@ -254,10 +251,7 @@ function createAmberMicaTexture(): THREE.CanvasTexture {
     const y = (Math.cos(i * 27.7) * 0.5 + 0.5) * 256;
     const size = 6 + (i % 12);
     const alpha = 0.15 + (i % 5) * 0.08;
-    ctx.fillStyle =
-      i % 2 === 0
-        ? `rgba(255, 235, 170, ${alpha})`
-        : `rgba(160, 75, 15, ${alpha})`;
+    ctx.fillStyle = i % 2 === 0 ? `rgba(255, 235, 170, ${alpha})` : `rgba(160, 75, 15, ${alpha})`;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + size, y + size * 0.4);
@@ -713,11 +707,7 @@ export function SearsCraftsmanEstate({
           <mesh key={vIdx} position={[vx, 1.5, -1.84]} castShadow>
             <cylinderGeometry args={[0.04, 0.06, 0.18, 16]} />
             <primitive
-              object={
-                vIdx % 2 === 0
-                  ? materials.potteryRookwood
-                  : materials.potteryVanBriggle
-              }
+              object={vIdx % 2 === 0 ? materials.potteryRookwood : materials.potteryVanBriggle}
               attach="material"
             />
           </mesh>
@@ -813,13 +803,7 @@ export function SearsCraftsmanEstate({
               <mesh key={bIdx} position={[0.02, 0.45, bx]} castShadow>
                 <boxGeometry args={[0.3, 0.28, 0.32]} />
                 <meshStandardMaterial
-                  color={
-                    bIdx === 0
-                      ? "#7f1d1d"
-                      : idx === 0
-                      ? "#1e3a8a"
-                      : "#14532d"
-                  }
+                  color={bIdx === 0 ? "#7f1d1d" : idx === 0 ? "#1e3a8a" : "#14532d"}
                   roughness={0.7}
                 />
               </mesh>
@@ -861,11 +845,7 @@ export function SearsCraftsmanEstate({
               ))}
               <mesh position={[0, 1.35, 0.02]}>
                 <planeGeometry args={[0.78, 0.65]} />
-                <meshStandardMaterial
-                  color="#c0c8d0"
-                  roughness={0.08}
-                  metalness={0.9}
-                />
+                <meshStandardMaterial color="#c0c8d0" roughness={0.08} metalness={0.9} />
               </mesh>
             </group>
 
@@ -876,12 +856,7 @@ export function SearsCraftsmanEstate({
                 <primitive object={materials.oakWood} attach="material" />
               </mesh>
               {[-0.65, 0.65].map((tx, idx) => (
-                <mesh
-                  key={idx}
-                  position={[tx, 0.36, 0]}
-                  castShadow
-                  receiveShadow
-                >
+                <mesh key={idx} position={[tx, 0.36, 0]} castShadow receiveShadow>
                   <boxGeometry args={[0.08, 0.72, 0.72]} />
                   <primitive object={materials.fumedDarkOak} attach="material" />
                 </mesh>
@@ -932,11 +907,7 @@ export function SearsCraftsmanEstate({
               [-0.2, -0.15],
               [0.2, -0.15],
             ].map(([bx, bz], idx) => (
-              <mesh
-                key={idx}
-                position={[bx, 0.97, bz]}
-                rotation={[Math.PI / 2, 0, 0]}
-              >
+              <mesh key={idx} position={[bx, 0.97, bz]} rotation={[Math.PI / 2, 0, 0]}>
                 <torusGeometry args={[0.08, 0.012, 8, 24]} />
                 <primitive object={materials.castIron} attach="material" />
               </mesh>
@@ -977,12 +948,7 @@ export function SearsCraftsmanEstate({
               <primitive object={materials.oliveWool} attach="material" />
             </mesh>
             {[-0.42, 0.42].map((px, idx) => (
-              <mesh
-                key={idx}
-                position={[px, 0.58, -0.72]}
-                rotation={[0.2, 0, 0]}
-                castShadow
-              >
+              <mesh key={idx} position={[px, 0.58, -0.72]} rotation={[0.2, 0, 0]} castShadow>
                 <boxGeometry args={[0.48, 0.14, 0.32]} />
                 <meshStandardMaterial color="#f0ede6" roughness={0.8} />
               </mesh>
@@ -1041,12 +1007,7 @@ export function SearsCraftsmanEstate({
           </mesh>
           <mesh castShadow>
             <boxGeometry args={[0.52, 0.34, 0.52]} />
-            <meshStandardMaterial
-              color="#2d261e"
-              wireframe
-              roughness={0.3}
-              metalness={0.8}
-            />
+            <meshStandardMaterial color="#2d261e" wireframe roughness={0.3} metalness={0.8} />
           </mesh>
           <pointLight
             color="#f59e0b"
@@ -1062,21 +1023,11 @@ export function SearsCraftsmanEstate({
       {/* ----------------------------------------------------------------- */}
       {(showRoof || activeRoom === "cutaway") && (
         <group position={[0, 3.2, -0.8]}>
-          <mesh
-            position={[-2.3, 0.55, 0]}
-            rotation={[0, 0, 0.28]}
-            castShadow
-            receiveShadow
-          >
+          <mesh position={[-2.3, 0.55, 0]} rotation={[0, 0, 0.28]} castShadow receiveShadow>
             <planeGeometry args={[5.2, 10.8]} />
             <primitive object={materials.roofShingle} attach="material" />
           </mesh>
-          <mesh
-            position={[2.3, 0.55, 0]}
-            rotation={[0, 0, -0.28]}
-            castShadow
-            receiveShadow
-          >
+          <mesh position={[2.3, 0.55, 0]} rotation={[0, 0, -0.28]} castShadow receiveShadow>
             <planeGeometry args={[5.2, 10.8]} />
             <primitive object={materials.roofShingle} attach="material" />
           </mesh>
@@ -1136,11 +1087,7 @@ export function SearsCraftsmanEstate({
       />
 
       {/* Warm Wood Surface Bounce Fill Light */}
-      <directionalLight
-        position={[3.5, 3.2, 2.0]}
-        intensity={0.7}
-        color="#fed7aa"
-      />
+      <directionalLight position={[3.5, 3.2, 2.0]} intensity={0.7} color="#fed7aa" />
 
       {/* ----------------------------------------------------------------- */}
       {/* 10. Whole-House Obstacle Traversal Waypoints & Gate Rings         */}
@@ -1169,11 +1116,7 @@ export function SearsCraftsmanEstate({
               </mesh>
               <mesh position={[0, 0.6, 0]}>
                 <cylinderGeometry args={[0.008, 0.008, 1.2, 8]} />
-                <meshBasicMaterial
-                  color="#38bdf8"
-                  transparent
-                  opacity={0.65}
-                />
+                <meshBasicMaterial color="#38bdf8" transparent opacity={0.65} />
               </mesh>
             </group>
           ))}

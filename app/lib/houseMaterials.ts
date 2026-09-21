@@ -73,8 +73,14 @@ export class SeededRNG {
 // Permutation table for gradient noise
 const PERM = new Uint8Array(512);
 const GRAD2 = [
-  [1, 1], [-1, 1], [1, -1], [-1, -1],
-  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1],
+  [-1, 1],
+  [1, -1],
+  [-1, -1],
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
 ];
 
 function initPermutationTable(seed: number): void {
@@ -212,7 +218,7 @@ export function generateFabricTexture(
       // 2D orthogonal warp & weft cross-hatch
       const warp = Math.sin(nx * weaveFrequency * Math.PI * 2);
       const weft = Math.cos(ny * weaveFrequency * Math.PI * 2);
-      const weave = (warp * weft) * 0.25 + 0.5;
+      const weave = warp * weft * 0.25 + 0.5;
 
       const shade = 0.85 + weave * 0.3;
       albedo[idx + 0] = Math.floor(Math.min(255, baseColor[0] * shade));
@@ -256,8 +262,8 @@ export function generateTileTexture(
       const fx = nx - Math.floor(nx);
       const idx = (y * width + x) * 4;
 
-      const isGrout = fx < groutWidth || fx > (1 - groutWidth) ||
-                      fy < groutWidth || fy > (1 - groutWidth);
+      const isGrout =
+        fx < groutWidth || fx > 1 - groutWidth || fy < groutWidth || fy > 1 - groutWidth;
 
       if (isGrout) {
         albedo[idx + 0] = groutColor[0];
@@ -319,7 +325,7 @@ export function generateMarbleTexture(
       const qx = fbm(nx * 4, ny * 4, 3);
       const qy = fbm(nx * 4 + 5.2, ny * 4 + 1.3, 3);
       const vein = Math.abs(Math.sin((nx + qx * 0.8 + ny + qy * 0.8) * Math.PI * 3));
-      const t = Math.pow(1.0 - vein, 4.0);
+      const t = (1.0 - vein) ** 4.0;
 
       albedo[idx + 0] = Math.floor(baseColor[0] * (1 - t) + veinColor[0] * t);
       albedo[idx + 1] = Math.floor(baseColor[1] * (1 - t) + veinColor[1] * t);

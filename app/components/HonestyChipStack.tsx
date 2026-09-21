@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { HONESTY_CHIP_REGISTRY } from "../lib/honestyLedger";
 
 export function HonestyChipStack() {
@@ -62,7 +62,8 @@ export function HonestyChipStack() {
             <h2 className="text-base font-bold text-neutral-100">Interactive Honesty Chip Stack</h2>
           </div>
           <p className="text-xs text-neutral-400">
-            Source and test index. Helper implementations and background equations do not certify a live robot run.
+            Source and test index. Helper implementations and background equations do not certify a
+            live robot run.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -94,7 +95,9 @@ export function HonestyChipStack() {
               try {
                 if (!navigator.clipboard) throw new Error("Clipboard unavailable");
                 await navigator.clipboard.writeText(json);
-                setCopyToast(`Copied ${filteredChips.length} claim${filteredChips.length === 1 ? "" : "s"} as JSON to clipboard`);
+                setCopyToast(
+                  `Copied ${filteredChips.length} claim${filteredChips.length === 1 ? "" : "s"} as JSON to clipboard`,
+                );
               } catch {
                 setCopyToast("Could not copy. Allow clipboard access and try again.");
               }
@@ -197,11 +200,15 @@ export function HonestyChipStack() {
           {/* Grounding Claim & Academic Citation */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
             <div className="bg-neutral-900/60 border border-neutral-800/80 p-2.5 rounded-lg space-y-1">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase">Honesty Statement</span>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">
+                Honesty Statement
+              </span>
               <p className="text-neutral-200 text-xs leading-relaxed">{activeChip.claim}</p>
             </div>
             <div className="bg-neutral-900/60 border border-neutral-800/80 p-2.5 rounded-lg space-y-1">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase">Background Reference</span>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase">
+                Background Reference
+              </span>
               <p className="text-amber-300/90 text-xs italic">{activeChip.citation}</p>
             </div>
           </div>
@@ -210,10 +217,22 @@ export function HonestyChipStack() {
           <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-neutral-800 text-neutral-400 gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-4 break-words">
               <span>
-                Source: <a className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]" href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.sourceFile}`}>{activeChip.sourceFile}</a>
+                Source:{" "}
+                <a
+                  className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]"
+                  href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.sourceFile}`}
+                >
+                  {activeChip.sourceFile}
+                </a>
               </span>
               <span>
-                Test suite: <a className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]" href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.testFile}`}>{activeChip.testFile}</a>
+                Test suite:{" "}
+                <a
+                  className="text-cyan-400 font-semibold underline [overflow-wrap:anywhere]"
+                  href={`https://github.com/Dicklesworthstone/cmaes_explainer/blob/main/${activeChip.testFile}`}
+                >
+                  {activeChip.testFile}
+                </a>
               </span>
             </div>
             <div className="text-[11px] text-neutral-500">

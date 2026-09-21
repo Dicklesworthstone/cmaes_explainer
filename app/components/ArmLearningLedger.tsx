@@ -2,10 +2,10 @@
 
 import { useMemo } from "react";
 import {
+  type ArmLedgerPoint,
   armAccuracyImprovement,
   armEnergyImprovement,
   armRefusalReason,
-  type ArmLedgerPoint,
 } from "../lib/armLearningLedger";
 
 /**
@@ -98,8 +98,7 @@ export function ArmLearningLedger({
     const margin = { top: 12, right: 12, bottom: 16, left: 48 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
-    const x = (generation: number) =>
-      margin.left + ((generation - genMin) / genRange) * chartWidth;
+    const x = (generation: number) => margin.left + ((generation - genMin) / genRange) * chartWidth;
     // Error falls as the arm improves, so a DOWNWARD line is progress; the axis
     // is not inverted, because a chart that reads backwards teaches the wrong
     // thing about what the search is doing.
@@ -240,12 +239,11 @@ export function ArmLearningLedger({
         </p>
       ) : null}
       <p className="mt-1 text-[0.6rem] leading-4 text-slate-500">
-        Placement error is the distance from the object&apos;s final centre to
-        the goal, read from the same owner receipt as the objective. Amber points
-        are rollouts the owner refused — a falling error line means nothing if
-        the placement was not accepted. A task can improve its accuracy for
-        thousands of generations and stay refused: a solid body is something the
-        search is blocked BY, not a penalty it can trade against.
+        Placement error is the distance from the object&apos;s final centre to the goal, read from
+        the same owner receipt as the objective. Amber points are rollouts the owner refused — a
+        falling error line means nothing if the placement was not accepted. A task can improve its
+        accuracy for thousands of generations and stay refused: a solid body is something the search
+        is blocked BY, not a penalty it can trade against.
       </p>
     </div>
   );

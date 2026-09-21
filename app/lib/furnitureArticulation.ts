@@ -17,7 +17,7 @@
 //   - Gaschler, "Manipulation Planning" (TUM 2015) — affordance-grounded articulation specs
 //   - Catto, "Modeling and Solving Constraints" (GDC 2014)
 
-import { type FurnitureKind, type JointType } from "./furnitureTaxonomy";
+import type { FurnitureKind, JointType } from "./furnitureTaxonomy";
 
 export interface JointLimits {
   min: number; // rad for revolute, meters for prismatic
@@ -76,7 +76,10 @@ export class ArticulationGraph {
   public addJoint(joint: ArticulationJointDef): void {
     this.joints.set(joint.name, joint);
     const initialPos = joint.initialPosition ?? 0;
-    this.jointPositions.set(joint.name, Math.max(joint.limits.min, Math.min(joint.limits.max, initialPos)));
+    this.jointPositions.set(
+      joint.name,
+      Math.max(joint.limits.min, Math.min(joint.limits.max, initialPos)),
+    );
     this.jointVelocities.set(joint.name, 0);
   }
 
@@ -127,9 +130,10 @@ export class ArticulationGraph {
 
       const totalForce = ext + springForce + dampingForce + frictionForce;
       const childLink = this.links.get(joint.childLink);
-      const effInertia = joint.type === "revolute" || joint.type === "continuous"
-        ? Math.max(0.005, childLink?.inertia.iyy ?? 0.05)
-        : Math.max(0.1, childLink?.mass ?? 1.0);
+      const effInertia =
+        joint.type === "revolute" || joint.type === "continuous"
+          ? Math.max(0.005, childLink?.inertia.iyy ?? 0.05)
+          : Math.max(0.1, childLink?.mass ?? 1.0);
 
       const accel = totalForce / effInertia;
       let newVel = vel + accel * safeDt;
@@ -206,12 +210,7 @@ export class ArticulationGraph {
 // ---------------------------------------------------------------------------
 
 function createIdentityMatrix(): number[] {
-  return [
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  ];
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 }
 
 function multiplyMatrices(a: number[], b: number[]): number[] {
@@ -273,16 +272,28 @@ function computeJointTransformMatrix(joint: ArticulationJointDef, q: number): nu
   return mat;
 }
 
-function decomposeTransformMatrix(mat: number[]): { position: [number, number, number]; rotation: [number, number, number, number] } {
+function decomposeTransformMatrix(mat: number[]): {
+  position: [number, number, number];
+  rotation: [number, number, number, number];
+} {
   const position: [number, number, number] = [mat[12], mat[13], mat[14]];
 
   // Extract rotation matrix
-  const m00 = mat[0], m01 = mat[4], m02 = mat[8];
-  const m10 = mat[1], m11 = mat[5], m12 = mat[9];
-  const m20 = mat[2], m21 = mat[6], m22 = mat[10];
+  const m00 = mat[0],
+    m01 = mat[4],
+    m02 = mat[8];
+  const m10 = mat[1],
+    m11 = mat[5],
+    m12 = mat[9];
+  const m20 = mat[2],
+    m21 = mat[6],
+    m22 = mat[10];
 
   const trace = m00 + m11 + m22;
-  let qx = 0, qy = 0, qz = 0, qw = 1;
+  let qx = 0,
+    qy = 0,
+    qz = 0,
+    qw = 1;
 
   if (trace > 0) {
     const s = 0.5 / Math.sqrt(trace + 1.0);
@@ -400,7 +411,12 @@ export function createOvenArticulation(w = 0.76, d = 0.7, h = 0.9): Articulation
   return graph;
 }
 
-export function createDresserArticulation(w = 0.9, d = 0.5, h = 1.0, drawerCount = 4): ArticulationGraph {
+export function createDresserArticulation(
+  w = 0.9,
+  d = 0.5,
+  h = 1.0,
+  drawerCount = 4,
+): ArticulationGraph {
   const graph = new ArticulationGraph("dresser_frame", {
     name: "dresser_frame",
     mass: 42.0,

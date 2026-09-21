@@ -1,23 +1,27 @@
-import * as THREE from "three";
 import { describe, expect, test } from "bun:test";
+import type * as THREE from "three";
+import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0623/manifest.json";
+import { buildWingGeometryForRender, buildWingRibsForRender } from "../components/WingViz";
+import { resolveRenderedGripperContactGeometry } from "./armContactPhysics";
 import {
   BENCHMARKS,
   CMAESOptimizer,
-  DEFAULT_RANDOM_SEARCH_SEED,
   createMulberry32,
+  DEFAULT_RANDOM_SEARCH_SEED,
   runRandomSearch,
 } from "./cmaesEngine";
 import { CMAESOptimizerND } from "./cmaesEngineND";
-import ownerArtifactManifest from "../../public/wasm/fs-cmaes/v0623/manifest.json";
 import {
-  CMAES_VISUALIZATION_F_TARGET,
-  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-  DEFAULT_G1_WALKING_CONFIG,
-  buildG1Config,
   buildCmaFamilyConfig,
+  buildG1Config,
+  CMAES_VISUALIZATION_F_TARGET,
+  type CmaesVizGeneration,
+  type CmaesVizRun,
+  DEFAULT_G1_WALKING_CONFIG,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+  decodeCmaesPacket,
   decodeCmaFamilyAsk,
   decodeCmaFamilySnapshot,
-  decodeCmaesPacket,
   decodeG1Admission,
   decodeG1Evaluation,
   decodeG1Population,
@@ -27,27 +31,20 @@ import {
   decodeHouseholdManipulationTrace,
   evaluateCmaesVisualizationLandscape,
   isCompatibleCmaesKernelVersion,
-  wasmRunToNdStates,
+  type OwnerArtifactManifest,
   verifyOwnerArtifacts,
   verifyOwnerRuntimeIdentity,
-  type CmaesVizGeneration,
-  type CmaesVizRun,
-  type OwnerArtifactManifest,
+  wasmRunToNdStates,
 } from "./frankensimCmaes";
-import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
-import { resolveRenderedGripperContactGeometry } from "./armContactPhysics";
 import {
+  type BridgeParams,
   evaluateBridgePhysics,
   evaluateWingPhysics,
-  type BridgeParams,
   type WingParams,
 } from "./frankensimPhysics";
-import { evaluateArchFitness } from "./nasObjective";
-import {
-  buildWingGeometryForRender,
-  buildWingRibsForRender,
-} from "../components/WingViz";
 import { buildBookshelf } from "./houseFurniture";
+import { evaluateArchFitness } from "./nasObjective";
+import { RoboticsEvaluationPool } from "./roboticsEvaluationPool";
 
 const benchmarkCases = [
   {
@@ -80,18 +77,14 @@ describe("shared CMA-ES engines", () => {
   test("uses Hansen's canonical default population size", () => {
     expect(new CMAESOptimizer((x, y) => x * x + y * y).lambda).toBe(6);
     expect(
-      new CMAESOptimizerND(
-        (x) => x.reduce((sum, value) => sum + value * value, 0),
-        { dim: 2 },
-      ).lambda,
+      new CMAESOptimizerND((x) => x.reduce((sum, value) => sum + value * value, 0), { dim: 2 })
+        .lambda,
     ).toBe(6);
   });
 
   for (const preset of benchmarkCases) {
     test(`converges on the curated ${preset.id} preset`, () => {
-      const benchmark = BENCHMARKS.find(
-        (candidate) => candidate.id === preset.id,
-      )!;
+      const benchmark = BENCHMARKS.find((candidate) => candidate.id === preset.id)!;
       const optimizer = new CMAESOptimizer(benchmark.eval, {
         initialMean: preset.start,
         initialSigma: preset.sigma,
@@ -101,21 +94,15 @@ describe("shared CMA-ES engines", () => {
       });
 
       let state = optimizer.step();
-      for (let generation = 1; generation < 60; generation++)
-        state = optimizer.step();
+      for (let generation = 1; generation < 60; generation++) state = optimizer.step();
 
       expect(state.bestFitness).toBeLessThan(1e-6);
       expect(
         state.samples.every((sample) =>
-          sample.x.every(
-            (value) =>
-              value >= benchmark.domain[0] && value <= benchmark.domain[1],
-          ),
+          sample.x.every((value) => value >= benchmark.domain[0] && value <= benchmark.domain[1]),
         ),
       ).toBe(true);
-      expect(
-        state.eigenvalues.every((value) => Number.isFinite(value) && value > 0),
-      ).toBe(true);
+      expect(state.eigenvalues.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
     });
   }
 
@@ -128,10 +115,7 @@ describe("shared CMA-ES engines", () => {
       seed: 919,
     };
     const raw = new CMAESOptimizer(objective, options);
-    const transformed = new CMAESOptimizer(
-      (x, y) => 7 + Math.log1p(objective(x, y)),
-      options,
-    );
+    const transformed = new CMAESOptimizer((x, y) => 7 + Math.log1p(objective(x, y)), options);
 
     for (let generation = 0; generation < 25; generation++) {
       const rawState = raw.step();
@@ -157,18 +141,13 @@ describe("shared CMA-ES engines", () => {
     );
 
     let state = optimizer.step();
-    for (let generation = 1; generation < 100; generation++)
-      state = optimizer.step();
+    for (let generation = 1; generation < 100; generation++) state = optimizer.step();
 
     expect(state.bestFitness).toBeLessThan(1e-6);
-    expect(
-      state.eigenvalues.every((value) => Number.isFinite(value) && value > 0),
-    ).toBe(true);
+    expect(state.eigenvalues.every((value) => Number.isFinite(value) && value > 0)).toBe(true);
     expect(
       state.covariance.every((row, i) =>
-        row.every(
-          (value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12,
-        ),
+        row.every((value, j) => Math.abs(value - state.covariance[j][i]) < 1e-12),
       ),
     ).toBe(true);
   });
@@ -188,11 +167,7 @@ describe("shared CMA-ES engines", () => {
     const expectedGenotypeMean = [0, 1].map((dimension) =>
       state.samples
         .slice(0, optimizer.mu)
-        .reduce(
-          (sum, sample, rank) =>
-            sum + optimizer.weights[rank] * sample.rawX[dimension],
-          0,
-        ),
+        .reduce((sum, sample, rank) => sum + optimizer.weights[rank] * sample.rawX[dimension], 0),
     );
 
     expect(
@@ -212,8 +187,7 @@ describe("shared CMA-ES engines", () => {
 
   test("literal clipping keeps adaptation inside the box and reaches an interior optimum", () => {
     const target = 0.2;
-    const objective2D = (x: number, y: number) =>
-      (x - target) ** 2 + (y - target) ** 2;
+    const objective2D = (x: number, y: number) => (x - target) ** 2 + (y - target) ** 2;
     const optimizer2D = new CMAESOptimizer(objective2D, {
       initialMean: [0.5, 0.5],
       initialSigma: 0.8,
@@ -241,17 +215,12 @@ describe("shared CMA-ES engines", () => {
 
     expect(state2D.bestFitness).toBeLessThan(1e-12);
     expect(stateND.bestFitness).toBeLessThan(1e-12);
-    expect(optimizer2D.mean.every((value) => value >= 0 && value <= 1)).toBe(
-      true,
-    );
-    expect(optimizerND.mean.every((value) => value >= 0 && value <= 1)).toBe(
-      true,
-    );
+    expect(optimizer2D.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
+    expect(optimizerND.mean.every((value) => value >= 0 && value <= 1)).toBe(true);
   });
 
   test("the public covariance snapshot cannot desynchronize the cached eigensystem", () => {
-    const objective = (x: number[]) =>
-      x.reduce((sum, value) => sum + value * value, 0);
+    const objective = (x: number[]) => x.reduce((sum, value) => sum + value * value, 0);
     const options = {
       dim: 4,
       initialMean: [0.8, 0.6, 0.4, 0.2],
@@ -306,9 +275,7 @@ describe("deterministic baselines and seeded streams", () => {
 
   test("runRandomSearch still bounds-checks the seed parameter", () => {
     const sphere = (x: number, y: number) => x * x + y * y;
-    expect(() => runRandomSearch(sphere, [-1, 1], 8, Number.NaN)).toThrow(
-      /seed/,
-    );
+    expect(() => runRandomSearch(sphere, [-1, 1], 8, Number.NaN)).toThrow(/seed/);
   });
 
   test("createMulberry32 streams are bit-identical across two constructions", () => {
@@ -329,9 +296,7 @@ describe("deterministic baselines and seeded streams", () => {
       const rng = createMulberry32(nextSeed);
       return {
         nextSeed,
-        point: Array.from({ length: 6 }, () =>
-          Math.round((rng() * 3 - 1.5) * 100) / 100,
-        ),
+        point: Array.from({ length: 6 }, () => Math.round((rng() * 3 - 1.5) * 100) / 100),
       };
     };
     const first = rollOnce(1337);
@@ -436,9 +401,7 @@ describe("advertised optimization dimensions", () => {
     ];
 
     for (const variant of variants) {
-      expect(evaluateWingPhysics(variant, 0.78).costScore).not.toBe(
-        baselineCost,
-      );
+      expect(evaluateWingPhysics(variant, 0.78).costScore).not.toBe(baselineCost);
     }
   });
 
@@ -464,32 +427,20 @@ describe("advertised optimization dimensions", () => {
     ];
 
     const baselineGeometry = buildWingGeometryForRender(baseline);
-    const baselinePositions = Array.from(
-      baselineGeometry.attributes.position.array,
-    );
+    const baselinePositions = Array.from(baselineGeometry.attributes.position.array);
     baselineGeometry.dispose();
 
     for (const variant of variants) {
       const geometry = buildWingGeometryForRender(variant);
-      expect(Array.from(geometry.attributes.position.array)).not.toEqual(
-        baselinePositions,
-      );
+      expect(Array.from(geometry.attributes.position.array)).not.toEqual(baselinePositions);
       geometry.dispose();
     }
 
     const baselineRibs = buildWingRibsForRender(baseline);
-    expect(
-      buildWingRibsForRender({ ...baseline, internalRibCount: 34 }),
-    ).toHaveLength(34);
-    expect(
-      buildWingRibsForRender({ ...baseline, aspectRatio: 14 }),
-    ).not.toEqual(baselineRibs);
-    expect(buildWingRibsForRender({ ...baseline, sweepAngle: 38 })).not.toEqual(
-      baselineRibs,
-    );
-    expect(
-      buildWingRibsForRender({ ...baseline, taperRatio: 0.82 }),
-    ).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, internalRibCount: 34 })).toHaveLength(34);
+    expect(buildWingRibsForRender({ ...baseline, aspectRatio: 14 })).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, sweepAngle: 38 })).not.toEqual(baselineRibs);
+    expect(buildWingRibsForRender({ ...baseline, taperRatio: 0.82 })).not.toEqual(baselineRibs);
   });
 
   test("bridge damping changes flutter compliance and objective", () => {
@@ -504,14 +455,9 @@ describe("advertised optimization dimensions", () => {
       vibrationDamping: 0.01,
     };
     const lowDamping = evaluateBridgePhysics(baseline, 0);
-    const highDamping = evaluateBridgePhysics(
-      { ...baseline, vibrationDamping: 0.15 },
-      0,
-    );
+    const highDamping = evaluateBridgePhysics({ ...baseline, vibrationDamping: 0.15 }, 0);
 
-    expect(highDamping.flutterCriticalSpeedKmh).toBeGreaterThan(
-      lowDamping.flutterCriticalSpeedKmh,
-    );
+    expect(highDamping.flutterCriticalSpeedKmh).toBeGreaterThan(lowDamping.flutterCriticalSpeedKmh);
     expect(highDamping.costScore).toBeLessThan(lowDamping.costScore);
     expect(lowDamping.isCompliant).toBe(false);
     expect(highDamping.isCompliant).toBe(true);
@@ -571,12 +517,7 @@ test("WASM snapshots rank ask-order samples without leaking final coordinates in
 
   const states = wasmRunToNdStates(run);
   expect(states[0].samples.map((sample) => sample.rank)).toEqual([3, 0, 2, 1]);
-  expect(states[0].samples.map((sample) => sample.isElite)).toEqual([
-    false,
-    true,
-    false,
-    true,
-  ]);
+  expect(states[0].samples.map((sample) => sample.isElite)).toEqual([false, true, false, true]);
   expect(states[0].bestX).toEqual([1, 0, 0]);
   expect(states[1].bestX).toEqual(Array.from(run.best_x));
   expect(states[1].bestFitness).toBe(0.5);
@@ -803,10 +744,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
   const wasmBytes = await Bun.file(
     generatedPackage
       ? `${generatedPackage}/fs_cmaes_viz_wasm_bg.wasm`
-      : new URL(
-          "../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm",
-          import.meta.url,
-        ),
+      : new URL("../../public/wasm/fs-cmaes/v041/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
   ).arrayBuffer();
   await wasm.default({ module_or_path: wasmBytes });
 
@@ -832,20 +770,13 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
       },
     );
     const tsStates = [];
-    for (
-      let generationIndex = 0;
-      generationIndex < scenario.generations;
-      generationIndex++
-    ) {
+    for (let generationIndex = 0; generationIndex < scenario.generations; generationIndex++) {
       const state = optimizer.step();
       tsStates.push(state);
       if (state.bestFitness <= CMAES_VISUALIZATION_F_TARGET) break;
     }
 
-    const initial = Array.from(
-      { length: 6 },
-      (_, index) => scenario.initialMean[index] ?? 0,
-    );
+    const initial = Array.from({ length: 6 }, (_, index) => scenario.initialMean[index] ?? 0);
     const packet = wasm.cmaes_viz_run(
       scenario.dim,
       initial[0],
@@ -874,8 +805,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
     const run = decoded.ok;
     const wasmStates = wasmRunToNdStates(run);
     const finalTsState = tsStates.at(-1);
-    if (!finalTsState)
-      throw new Error(`${scenario.name}: TypeScript produced no generation`);
+    if (!finalTsState) throw new Error(`${scenario.name}: TypeScript produced no generation`);
     const expectedStopReason =
       finalTsState.bestFitness <= CMAES_VISUALIZATION_F_TARGET
         ? "target-reached"
@@ -887,11 +817,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
     stopReasons.add(run.stop_reason);
     comparedGenerations += run.generations.length;
 
-    for (
-      let generationIndex = 0;
-      generationIndex < tsStates.length;
-      generationIndex++
-    ) {
+    for (let generationIndex = 0; generationIndex < tsStates.length; generationIndex++) {
       const label = `${scenario.name}, generation ${generationIndex + 1}`;
       const wasmGeneration = run.generations[generationIndex];
       const wasmState = wasmStates[generationIndex];
@@ -915,12 +841,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
         tsState.samples.map((sample) => sample.fitness),
         2e-8,
       );
-      requireDifferenceWithin(
-        `${label} mean`,
-        wasmGeneration.mean,
-        tsState.mean,
-        2e-8,
-      );
+      requireDifferenceWithin(`${label} mean`, wasmGeneration.mean, tsState.mean, 2e-8);
       requireDifferenceWithin(
         `${label} eigenvalues`,
         wasmGeneration.eigvals,
@@ -933,24 +854,9 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
         tsState.covariance.flat(),
         2e-8,
       );
-      requireDifferenceWithin(
-        `${label} p_sigma`,
-        wasmGeneration.p_sigma,
-        tsState.pSigma,
-        2e-8,
-      );
-      requireDifferenceWithin(
-        `${label} p_c`,
-        wasmGeneration.p_c,
-        tsState.pC,
-        2e-8,
-      );
-      requireDifferenceWithin(
-        `${label} sigma`,
-        [wasmGeneration.sigma],
-        [tsState.sigma],
-        2e-8,
-      );
+      requireDifferenceWithin(`${label} p_sigma`, wasmGeneration.p_sigma, tsState.pSigma, 2e-8);
+      requireDifferenceWithin(`${label} p_c`, wasmGeneration.p_c, tsState.pC, 2e-8);
+      requireDifferenceWithin(`${label} sigma`, [wasmGeneration.sigma], [tsState.sigma], 2e-8);
       requireDifferenceWithin(
         `${label} best fitness`,
         [wasmGeneration.best_f],
@@ -958,21 +864,13 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
         2e-8,
       );
     }
-    requireDifferenceWithin(
-      `${scenario.name} final best x`,
-      run.best_x,
-      finalTsState.bestX,
-      2e-8,
-    );
+    requireDifferenceWithin(`${scenario.name} final best x`, run.best_x, finalTsState.bestX, 2e-8);
   }
 
   expect(comparedGenerations).toBeGreaterThanOrEqual(500);
-  expect(stopReasons).toEqual(
-    new Set(["generations-exhausted", "target-reached"]),
-  );
+  expect(stopReasons).toEqual(new Set(["generations-exhausted", "target-reached"]));
 
-  if (!representativePacket)
-    throw new Error("trajectory matrix produced no packet");
+  if (!representativePacket) throw new Error("trajectory matrix produced no packet");
 
   const refusalPacket = wasm.cmaes_viz_run(
     1,
@@ -996,9 +894,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
   );
   const refusal = decodeCmaesPacket(refusalPacket);
   expect("refusal" in refusal && refusal.refusal.code).toBe("dim-out-of-range");
-  expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual([
-    "set dim within 2..=6",
-  ]);
+  expect("refusal" in refusal && refusal.refusal.ranked_repairs).toEqual(["set dim within 2..=6"]);
 
   const wrongMagic = representativePacket.slice();
   wrongMagic[0] = 0;
@@ -1007,9 +903,7 @@ test("packed WASM matches complete TypeScript trajectories across the visualizat
   wrongStride[11] += 1;
   expect(() => decodeCmaesPacket(wrongStride)).toThrow("generation_stride");
   expect(() =>
-    decodeCmaesPacket(
-      representativePacket.slice(0, representativePacket.length - 1),
-    ),
+    decodeCmaesPacket(representativePacket.slice(0, representativePacket.length - 1)),
   ).toThrow("total_words");
 });
 
@@ -1018,11 +912,7 @@ const OWNER_CMA_MAGIC = 0x434d4132;
 function ownerSnapshotPacket(family: number): Float64Array {
   const dimension = 3;
   const shapePayload =
-    family === 0
-      ? [1, 0.5, 2, 1, 1.25, 1.5]
-      : family === 1
-        ? [1, 1, 1.25, 1.5]
-        : [0, 5];
+    family === 0 ? [1, 0.5, 2, 1, 1.25, 1.5] : family === 1 ? [1, 1, 1.25, 1.5] : [0, 5];
   const packet = new Float64Array(31 + 2 * dimension + shapePayload.length);
   packet.set([
     OWNER_CMA_MAGIC,
@@ -1068,8 +958,7 @@ describe("schema-2 owner CMA packet adapter", () => {
     const expected = ["full", "separable", "lm-cma", "lm-ma"] as const;
     for (let family = 0; family < expected.length; family++) {
       const decoded = decodeCmaFamilySnapshot(ownerSnapshotPacket(family), 1);
-      if (!("ok" in decoded))
-        throw new Error(`unexpected family ${family} refusal`);
+      if (!("ok" in decoded)) throw new Error(`unexpected family ${family} refusal`);
       expect(decoded.ok.family).toBe(expected[family]);
       expect(decoded.ok.dimension).toBe(3);
       expect(decoded.ok.admittedEvaluations).toBe(14);
@@ -1132,29 +1021,21 @@ describe("schema-2 owner CMA packet adapter", () => {
     const decoded = decodeCmaFamilyAsk(ask);
     if (!("ok" in decoded)) throw new Error("unexpected ask refusal");
     expect(decoded.ok.generation).toBe(1);
-    expect(Array.from(decoded.ok.candidates)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-    ]);
+    expect(Array.from(decoded.ok.candidates)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
   test("fails closed on malformed shape claims and preserves typed refusals", () => {
     const malformed = ownerSnapshotPacket(0);
     malformed[30] -= 1;
-    expect(() => decodeCmaFamilySnapshot(malformed, 1)).toThrow(
-      "snapshot shape",
-    );
+    expect(() => decodeCmaFamilySnapshot(malformed, 1)).toThrow("snapshot shape");
 
     const wrongComplexity = ownerSnapshotPacket(3);
     wrongComplexity[18] = 0;
-    expect(() => decodeCmaFamilySnapshot(wrongComplexity, 1)).toThrow(
-      "family complexity",
-    );
+    expect(() => decodeCmaFamilySnapshot(wrongComplexity, 1)).toThrow("family complexity");
 
     const nonPositiveVariance = ownerSnapshotPacket(1);
     nonPositiveVariance[38] = 0;
-    expect(() => decodeCmaFamilySnapshot(nonPositiveVariance, 1)).toThrow(
-      "diagonal variances",
-    );
+    expect(() => decodeCmaFamilySnapshot(nonPositiveVariance, 1)).toThrow("diagonal variances");
 
     const refusal = new Float64Array([OWNER_CMA_MAGIC, 2, 1, 2, 7, 17, 3]);
     expect(decodeCmaFamilyAsk(refusal)).toEqual({
@@ -1197,17 +1078,14 @@ describe("G1 walking packet adapter", () => {
     1 / 3.1,
     3 / 3.1,
     ...Array.from({ length: 15 }, (_, row) => row * 336),
-    ...Array.from({ length: 15 }, (_, row) => [
-      row * 336 + 1,
-      row * 336 + 2,
-    ]).flat(),
+    ...Array.from({ length: 15 }, (_, row) => [row * 336 + 1, row * 336 + 2]).flat(),
     ...Array.from({ length: 15 }, (_, row) =>
       [248, 256, 272, 280].map((offset) => row * 336 + offset),
     ).flat(),
   ]);
   const objectiveWords = [
-    12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6,
-    0.88, 0.02, 8.4, 0.31, 0.54, 0.18, 0.024, 720, 0,
+    12, 0.4, 0.2, 3, 0.01, 0.3, 0.02, 0.1, 0.01, 0.2, 0.3, 0.4, 0.005, 0.6, 0.88, 0.02, 8.4, 0.31,
+    0.54, 0.18, 0.024, 720, 0,
     // schema 8: maximum body penetration measured by the obstacle guard
     0,
   ];
@@ -1245,9 +1123,7 @@ describe("G1 walking packet adapter", () => {
 
     const reversedPush = admission.slice();
     reversedPush[19] = 0.5;
-    expect(() => decodeG1Admission(reversedPush)).toThrow(
-      "admitted controls",
-    );
+    expect(() => decodeG1Admission(reversedPush)).toThrow("admitted controls");
     const shortHorizon = admission.slice();
     shortHorizon[10] = 0.1;
     const shortAdmission = decodeG1Admission(shortHorizon);
@@ -1259,36 +1135,22 @@ describe("G1 walking packet adapter", () => {
   });
 
   test("decodes decomposed objectives, population rows, and owner poses", () => {
-    const evaluation = new Float64Array([
-      0x47315737,
-      9,
-      0,
-      2,
-      29,
-      ...objectiveWords,
-    ]);
+    const evaluation = new Float64Array([0x47315737, 9, 0, 2, 29, ...objectiveWords]);
     const decodedEvaluation = decodeG1Evaluation(evaluation);
-    if (!("ok" in decodedEvaluation))
-      throw new Error("unexpected evaluation refusal");
+    if (!("ok" in decodedEvaluation)) throw new Error("unexpected evaluation refusal");
     expect(decodedEvaluation.ok.distanceMeters).toBe(0.4);
     expect(decodedEvaluation.ok.pushImpulseNewtonSeconds).toBe(8.4);
     expect(decodedEvaluation.ok.terminationReason).toBe("horizon");
 
     const negativeIntegral = evaluation.slice();
     negativeIntegral[11] = -1;
-    expect(() => decodeG1Evaluation(negativeIntegral)).toThrow(
-      "negative integral",
-    );
+    expect(() => decodeG1Evaluation(negativeIntegral)).toThrow("negative integral");
 
     const negativeBodyPenetration = evaluation.slice();
     negativeBodyPenetration[28] = -0.001;
-    expect(() => decodeG1Evaluation(negativeBodyPenetration)).toThrow(
-      "negative integral",
-    );
+    expect(() => decodeG1Evaluation(negativeBodyPenetration)).toThrow("negative integral");
 
-    const population = decodeG1Population(
-      new Float64Array([0x47315737, 9, 0, 4, 9, 3, 4, 3, 2]),
-    );
+    const population = decodeG1Population(new Float64Array([0x47315737, 9, 0, 4, 9, 3, 4, 3, 2]));
     if (!("ok" in population)) throw new Error("unexpected population refusal");
     expect(Array.from(population.ok)).toEqual([4, 3, 2]);
 
@@ -1303,16 +1165,7 @@ describe("G1 walking packet adapter", () => {
       sample[poseStart + 3] = 1;
     }
     const trace = decodeG1Trace(
-      new Float64Array([
-        0x47315737,
-        9,
-        0,
-        3,
-        243,
-        ...objectiveWords,
-        1,
-        ...sample,
-      ]),
+      new Float64Array([0x47315737, 9, 0, 3, 243, ...objectiveWords, 1, ...sample]),
     );
     if (!("ok" in trace)) throw new Error("unexpected trace refusal");
     expect(trace.ok.samples).toHaveLength(1);
@@ -1353,16 +1206,12 @@ describe("G1 walking packet adapter", () => {
     const unknownReason = baseTilt.slice();
     // 7 is now the valid "body obstacle" reason; 8 is still unknown.
     unknownReason[27] = 8;
-    expect(() => decodeG1Evaluation(unknownReason)).toThrow(
-      "termination reason",
-    );
+    expect(() => decodeG1Evaluation(unknownReason)).toThrow("termination reason");
   });
 
   test("rejects a pose packet whose declared sample count is inconsistent", () => {
     expect(() =>
-      decodeG1Trace(
-        new Float64Array([0x47315737, 9, 0, 3, 30, ...objectiveWords, 1]),
-      ),
+      decodeG1Trace(new Float64Array([0x47315737, 9, 0, 3, 30, ...objectiveWords, 1])),
     ).toThrow("trace shape");
   });
 });
@@ -1383,9 +1232,11 @@ async function withEvaluationWorkerDouble(
       }
       mutate(objectives);
       queueMicrotask(() => {
-        this.dispatchEvent(new MessageEvent("message", {
-          data: { type: "result", requestId: message.requestId, objectives },
-        }));
+        this.dispatchEvent(
+          new MessageEvent("message", {
+            data: { type: "result", requestId: message.requestId, objectives },
+          }),
+        );
       });
     }
 
@@ -1404,11 +1255,9 @@ async function withEvaluationWorkerDouble(
   try {
     await run(() => terminatedWorkers);
   } finally {
-    if (workerDescriptor)
-      Object.defineProperty(globalThis, "Worker", workerDescriptor);
+    if (workerDescriptor) Object.defineProperty(globalThis, "Worker", workerDescriptor);
     else Reflect.deleteProperty(globalThis, "Worker");
-    if (navigatorDescriptor)
-      Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+    if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
     else Reflect.deleteProperty(globalThis, "navigator");
   }
 }
@@ -1417,11 +1266,14 @@ test("the robotics pool admits exact parallel results and reuses the verified la
   await withEvaluationWorkerDouble(
     () => {},
     async (terminated) => {
-      const pool = new RoboticsEvaluationPool({
-        model: "arm",
-        config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-        dimension: 128,
-      }, 2);
+      const pool = new RoboticsEvaluationPool(
+        {
+          model: "arm",
+          config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+          dimension: 128,
+        },
+        2,
+      );
       const policies = new Float64Array(4 * 128);
       policies[0] = 11;
       policies[128] = 12;
@@ -1457,11 +1309,14 @@ test("the robotics pool permanently falls back after an exact-parity mismatch", 
       objectives[0] += 1;
     },
     async (terminated) => {
-      const pool = new RoboticsEvaluationPool({
-        model: "arm",
-        config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
-        dimension: 128,
-      }, 2);
+      const pool = new RoboticsEvaluationPool(
+        {
+          model: "arm",
+          config: DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
+          dimension: 128,
+        },
+        2,
+      );
       const policies = new Float64Array(2 * 128);
       policies[0] = 21;
       policies[128] = 22;
@@ -1486,10 +1341,7 @@ test("the robotics pool permanently falls back after an exact-parity mismatch", 
 });
 
 test("the robotics pool degrades to the sequential owner when workers are unavailable", async () => {
-  const workerDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "Worker",
-  );
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Worker");
   Object.defineProperty(globalThis, "Worker", {
     configurable: true,
     value: class UnavailableWorker {
@@ -1505,36 +1357,25 @@ test("the robotics pool degrades to the sequential owner when workers are unavai
       dimension: 128,
     });
     const sequentialObjectives = Float64Array.of(17);
-    const receipt = await pool.evaluate(
-      new Float64Array(128),
-      () => sequentialObjectives,
-    );
+    const receipt = await pool.evaluate(new Float64Array(128), () => sequentialObjectives);
     expect(receipt.objectives).toBe(sequentialObjectives);
     expect(receipt.lanes).toBe(1);
     expect(receipt.firstBatchVerified).toBe(false);
     expect(receipt.fallbackReason).toContain("worker construction failed");
     pool.free();
   } finally {
-    if (workerDescriptor)
-      Object.defineProperty(globalThis, "Worker", workerDescriptor);
+    if (workerDescriptor) Object.defineProperty(globalThis, "Worker", workerDescriptor);
     else Reflect.deleteProperty(globalThis, "Worker");
   }
 });
 
 test("the shipped owner package executes every CMA family plus both robot flagships", async () => {
-  const wasm =
-    await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+  const wasm = await import("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
   const wasmBytes = await Bun.file(
-    new URL(
-      "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm",
-      import.meta.url,
-    ),
+    new URL("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
   ).arrayBuffer();
   const javascriptBytes = await Bun.file(
-    new URL(
-      "../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js",
-      import.meta.url,
-    ),
+    new URL("../../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js", import.meta.url),
   ).arrayBuffer();
   await verifyOwnerArtifacts(ownerArtifactManifest, javascriptBytes, wasmBytes);
   await wasm.default({ module_or_path: wasmBytes });
@@ -1562,9 +1403,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     ...ownerArtifactManifest,
     schemas: { ...ownerArtifactManifest.schemas, g1: 8 },
   };
-  await expect(
-    verifyOwnerArtifacts(foreignSchema, javascriptBytes, wasmBytes),
-  ).rejects.toThrow("identity or schema");
+  await expect(verifyOwnerArtifacts(foreignSchema, javascriptBytes, wasmBytes)).rejects.toThrow(
+    "identity or schema",
+  );
   const corruptLayouts: ((manifest: OwnerArtifactManifest) => void)[] = [
     (manifest) => {
       manifest.g1.physicalActuatorCount = 30;
@@ -1588,9 +1429,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   for (const corrupt of corruptLayouts) {
     const manifest = structuredClone(ownerArtifactManifest);
     corrupt(manifest);
-    await expect(
-      verifyOwnerArtifacts(manifest, javascriptBytes, wasmBytes),
-    ).rejects.toThrow("owner manifest");
+    await expect(verifyOwnerArtifacts(manifest, javascriptBytes, wasmBytes)).rejects.toThrow(
+      "owner manifest",
+    );
   }
   const damagedJavascript = javascriptBytes.slice(0);
   new Uint8Array(damagedJavascript)[0] ^= 1;
@@ -1612,9 +1453,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     expect(shortAdmission.ok.config.durationSeconds).toBe(0.1);
     // The disclosed push/gate times may lie after a valid short horizon.
     expect(shortAdmission.ok.pushStartSeconds).toBeGreaterThan(0.1);
-    const shortReceipt = decodeG1Evaluation(
-      shortOwner.evaluate(new Float64Array(5_040)),
-    );
+    const shortReceipt = decodeG1Evaluation(shortOwner.evaluate(new Float64Array(5_040)));
     if (!("ok" in shortReceipt)) throw new Error("short owner evaluation refused");
     expect(shortReceipt.ok.completedSteps).toBe(48);
     expect(shortReceipt.ok.pushImpulseNewtonSeconds).toBe(0);
@@ -1640,8 +1479,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
       throw new Error(`${family}: admission refusal ${admission.refusal.name}`);
 
     const ask = decodeCmaFamilyAsk(session.ask());
-    if (!("ok" in ask))
-      throw new Error(`${family}: ask refusal ${ask.refusal.name}`);
+    if (!("ok" in ask)) throw new Error(`${family}: ask refusal ${ask.refusal.name}`);
     const objectives = new Float64Array(ask.ok.population);
     for (let row = 0; row < ask.ok.population; row++) {
       let objective = 0;
@@ -1660,16 +1498,11 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
       ...objectives,
     ]);
     const snapshot = decodeCmaFamilySnapshot(session.tell(tell), 4);
-    if (!("ok" in snapshot))
-      throw new Error(`${family}: tell refusal ${snapshot.refusal.name}`);
+    if (!("ok" in snapshot)) throw new Error(`${family}: tell refusal ${snapshot.refusal.name}`);
     expect(snapshot.ok.generation).toBe(1);
     expect(snapshot.ok.evaluations).toBe(6);
     expect(snapshot.ok.shape.kind).toBe(
-      family === "full"
-        ? "full"
-        : family === "separable"
-          ? "diagonal"
-          : "limited-memory",
+      family === "full" ? "full" : family === "separable" ? "diagonal" : "limited-memory",
     );
     session.free();
   }
@@ -1714,64 +1547,35 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   }
 
   const evaluator = new wasm.G1WalkingVizEvaluator(
-    new Float64Array([
-      0x47315737,
-      9,
-      0,
-      12,
-      1 / 480,
-      1.5,
-      0.65,
-      1.55,
-      12,
-      2,
-      1,
-      0,
-    ]),
+    new Float64Array([0x47315737, 9, 0, 12, 1 / 480, 1.5, 0.65, 1.55, 12, 2, 1, 0]),
   );
   const admission = decodeG1Admission(evaluator.receipt());
-  if (!("ok" in admission))
-    throw new Error(`G1 admission refusal ${admission.refusal.name}`);
+  if (!("ok" in admission)) throw new Error(`G1 admission refusal ${admission.refusal.name}`);
   expect(admission.ok.policyDimension).toBe(5_040);
 
   const stabilizingPolicy = evaluator.stabilizing_policy_mean();
   const curriculumPolicy = evaluator.walking_curriculum_mean();
-  expect(stabilizingPolicy.filter((value: number) => value !== 0)).toHaveLength(
-    15,
-  );
-  expect(curriculumPolicy.filter((value: number) => value !== 0)).toHaveLength(
-    105,
-  );
+  expect(stabilizingPolicy.filter((value: number) => value !== 0)).toHaveLength(15);
+  expect(curriculumPolicy.filter((value: number) => value !== 0)).toHaveLength(105);
   const evaluation = decodeG1Evaluation(evaluator.evaluate(stabilizingPolicy));
   const curriculum = decodeG1Evaluation(evaluator.evaluate(curriculumPolicy));
   const aggressiveEvaluation = decodeG1Evaluation(
-    evaluator.evaluate(
-      new Float64Array(admission.ok.policyDimension).fill(0.03),
-    ),
+    evaluator.evaluate(new Float64Array(admission.ok.policyDimension).fill(0.03)),
   );
   const trace = decodeG1Trace(evaluator.trace(curriculumPolicy));
-  if (!("ok" in evaluation))
-    throw new Error(`G1 evaluation refusal ${evaluation.refusal.name}`);
-  if (!("ok" in curriculum))
-    throw new Error(`G1 curriculum refusal ${curriculum.refusal.name}`);
+  if (!("ok" in evaluation)) throw new Error(`G1 evaluation refusal ${evaluation.refusal.name}`);
+  if (!("ok" in curriculum)) throw new Error(`G1 curriculum refusal ${curriculum.refusal.name}`);
   if (!("ok" in aggressiveEvaluation)) {
-    throw new Error(
-      `aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`,
-    );
+    throw new Error(`aggressive G1 evaluation refusal ${aggressiveEvaluation.refusal.name}`);
   }
-  if (!("ok" in trace))
-    throw new Error(`G1 trace refusal ${trace.refusal.name}`);
+  if (!("ok" in trace)) throw new Error(`G1 trace refusal ${trace.refusal.name}`);
   // The standing prior is deliberately task-scoped and need not complete a
   // walking challenge. The v0.6.13 curriculum is pinned to the native v073
   // owner receipt so browser packaging cannot silently regress into the old
   // jump-like, low-displacement, or cross-target-divergent gait.
   expect(evaluation.ok.completedSteps).toBeGreaterThan(120);
-  expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(
-    evaluation.ok.completedSteps,
-  );
-  expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(
-    evaluation.ok.objective,
-  );
+  expect(aggressiveEvaluation.ok.completedSteps).toBeLessThan(evaluation.ok.completedSteps);
+  expect(aggressiveEvaluation.ok.objective).toBeGreaterThan(evaluation.ok.objective);
   expect(curriculum.ok.completedSteps).toBe(720);
   expect(curriculum.ok.terminationReason).toBe("horizon");
   // The walking shaping score was rebalanced to pay for forward progress,
@@ -1786,18 +1590,9 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   expect(curriculum.ok.actuatorWorkJoules).toBeCloseTo(11796.419770004608, 7);
   expect(curriculum.ok.flightSeconds).toBeCloseTo(0.08333333333333338, 12);
   expect(curriculum.ok.flightSeconds).toBeLessThan(0.1);
-  expect(curriculum.ok.lateralErrorIntegral).toBeCloseTo(
-    0.38117352800697313,
-    12,
-  );
-  expect(curriculum.ok.headingErrorIntegral).toBeCloseTo(
-    0.9341669126226677,
-    12,
-  );
-  expect(curriculum.ok.pushImpulseNewtonSeconds).toBeCloseTo(
-    2.291467558724226,
-    5,
-  );
+  expect(curriculum.ok.lateralErrorIntegral).toBeCloseTo(0.38117352800697313, 12);
+  expect(curriculum.ok.headingErrorIntegral).toBeCloseTo(0.9341669126226677, 12);
+  expect(curriculum.ok.pushImpulseNewtonSeconds).toBeCloseTo(2.291467558724226, 5);
   expect(curriculum.ok.recoveryTimeSeconds).toBe(0.8);
   expect(curriculum.ok.singleSupportSeconds).toBeGreaterThan(0);
   expect(trace.ok.samples.length).toBeGreaterThanOrEqual(5);
@@ -1805,25 +1600,11 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   expect(traceReceipt).toEqual(curriculum.ok);
 
   const flatEvaluator = new wasm.G1WalkingVizEvaluator(
-    new Float64Array([
-      0x47315737,
-      9,
-      0,
-      12,
-      1 / 480,
-      1.5,
-      0.65,
-      1.55,
-      12,
-      2,
-      0,
-      0,
-    ]),
+    new Float64Array([0x47315737, 9, 0, 12, 1 / 480, 1.5, 0.65, 1.55, 12, 2, 0, 0]),
   );
   const flatPolicy = flatEvaluator.walking_curriculum_mean();
   const flat = decodeG1Evaluation(flatEvaluator.evaluate(flatPolicy));
-  if (!("ok" in flat))
-    throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
+  if (!("ok" in flat)) throw new Error(`flat G1 curriculum refusal ${flat.refusal.name}`);
   expect(flat.ok.completedSteps).toBe(720);
   expect(flat.ok.terminationReason).toBe("horizon");
   // Also moved by the walking rebalance (was 7.915509184194548). The
@@ -1857,15 +1638,10 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
   try {
     for (let generation = 0; generation < generations; generation++) {
       const ask = decodeCmaFamilyAsk(convergenceSession.ask());
-      if (!("ok" in ask))
-        throw new Error(`G1 convergence ask refusal ${ask.refusal.name}`);
-      const objectives = decodeG1Population(
-        evaluator.evaluate_population(ask.ok.candidates),
-      );
+      if (!("ok" in ask)) throw new Error(`G1 convergence ask refusal ${ask.refusal.name}`);
+      const objectives = decodeG1Population(evaluator.evaluate_population(ask.ok.candidates));
       if (!("ok" in objectives)) {
-        throw new Error(
-          `G1 convergence population refusal ${objectives.refusal.name}`,
-        );
+        throw new Error(`G1 convergence population refusal ${objectives.refusal.name}`);
       }
       const tell = Float64Array.from([
         OWNER_CMA_MAGIC,
@@ -1886,8 +1662,7 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     convergenceSession.free();
   }
   const optimized = decodeG1Evaluation(evaluator.evaluate(bestPoint));
-  if (!("ok" in optimized))
-    throw new Error(`optimized G1 refusal ${optimized.refusal.name}`);
+  if (!("ok" in optimized)) throw new Error(`optimized G1 refusal ${optimized.refusal.name}`);
   // Deliberately NOT asserting that this beats the seed. Sixteen generations at
   // sigma 5e-4 is far too short a run to expect any candidate to: the search
   // that does improve the gait needs tens of generations, which is measured in
@@ -1911,27 +1686,19 @@ test("the shipped owner package executes every CMA family plus both robot flagsh
     );
     const armAdmission = decodeHouseholdManipulationAdmission(arm.receipt());
     if (!("ok" in armAdmission)) {
-      throw new Error(
-        `arm task ${task} admission refusal ${armAdmission.refusal.name}`,
-      );
+      throw new Error(`arm task ${task} admission refusal ${armAdmission.refusal.name}`);
     }
     expect(armAdmission.ok.policyDimension).toBe(128);
     expect(armAdmission.ok.linkCount).toBe(8);
     const armMean = arm.curriculum_policy_mean();
     expect(armMean).toHaveLength(128);
-    const armEvaluation = decodeHouseholdManipulationEvaluation(
-      arm.evaluate(armMean),
-    );
+    const armEvaluation = decodeHouseholdManipulationEvaluation(arm.evaluate(armMean));
     const armTrace = decodeHouseholdManipulationTrace(arm.trace(armMean));
     if (!("ok" in armEvaluation)) {
-      throw new Error(
-        `arm task ${task} evaluation refusal ${armEvaluation.refusal.name}`,
-      );
+      throw new Error(`arm task ${task} evaluation refusal ${armEvaluation.refusal.name}`);
     }
     if (!("ok" in armTrace)) {
-      throw new Error(
-        `arm task ${task} trace refusal ${armTrace.refusal.name}`,
-      );
+      throw new Error(`arm task ${task} trace refusal ${armTrace.refusal.name}`);
     }
     expect(armEvaluation.ok.everGrasped).toBe(true);
     expect(armEvaluation.ok.releasedAfterTransport).toBe(true);

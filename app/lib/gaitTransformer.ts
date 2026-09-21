@@ -151,7 +151,8 @@ export function loadGaitTransformerWeights(buffer: ArrayBuffer): LoadedTransform
       );
     }
   }
-  const [dModel, nHeads, headDim, nKvHeads, kvDim, nLayers, mlpHidden, context, nInputs, nOutputs] = dims;
+  const [dModel, nHeads, headDim, nKvHeads, kvDim, nLayers, mlpHidden, context, nInputs, nOutputs] =
+    dims;
   const layerArrays: LoadedTransformerWeights["layers"] = [];
   const expectedShape = (rows: number, cols: number) => rows * cols;
   const arrayCount = reader.u32();
@@ -178,10 +179,13 @@ export function loadGaitTransformerWeights(buffer: ArrayBuffer): LoadedTransform
     if (layer.wk.length !== expectedShape(kvDim, dModel)) throw new Error(`layer ${l} wk`);
     if (layer.wv.length !== expectedShape(kvDim, dModel)) throw new Error(`layer ${l} wv`);
     if (layer.wo.length !== expectedShape(dModel, dModel)) throw new Error(`layer ${l} wo`);
-    if (layer.wGate.length !== expectedShape(mlpHidden, dModel)) throw new Error(`layer ${l} wGate`);
+    if (layer.wGate.length !== expectedShape(mlpHidden, dModel))
+      throw new Error(`layer ${l} wGate`);
     if (layer.wUp.length !== expectedShape(mlpHidden, dModel)) throw new Error(`layer ${l} wUp`);
-    if (layer.wDown.length !== expectedShape(dModel, mlpHidden)) throw new Error(`layer ${l} wDown`);
-    if (layer.norm1.length !== dModel || layer.norm2.length !== dModel) throw new Error(`layer ${l} norms`);
+    if (layer.wDown.length !== expectedShape(dModel, mlpHidden))
+      throw new Error(`layer ${l} wDown`);
+    if (layer.norm1.length !== dModel || layer.norm2.length !== dModel)
+      throw new Error(`layer ${l} norms`);
     layerArrays.push(layer);
   }
   const finalNorm = reader.f32Array();
@@ -198,7 +202,18 @@ export function loadGaitTransformerWeights(buffer: ArrayBuffer): LoadedTransform
   if (!reader.atEnd()) throw new Error("trailing bytes in weights file");
 
   return {
-    config: { dModel, nHeads, headDim, nKvHeads, kvDim, nLayers, mlpHidden, context, nInputs, nOutputs },
+    config: {
+      dModel,
+      nHeads,
+      headDim,
+      nKvHeads,
+      kvDim,
+      nLayers,
+      mlpHidden,
+      context,
+      nInputs,
+      nOutputs,
+    },
     embed,
     layers: layerArrays,
     finalNorm,
@@ -209,7 +224,13 @@ export function loadGaitTransformerWeights(buffer: ArrayBuffer): LoadedTransform
   };
 }
 
-function matvec(out: Float64Array, w: Float32Array, rows: number, cols: number, x: Float64Array): void {
+function matvec(
+  out: Float64Array,
+  w: Float32Array,
+  rows: number,
+  cols: number,
+  x: Float64Array,
+): void {
   for (let r = 0; r < rows; r++) {
     let sum = 0.0;
     const base = r * cols;
@@ -231,7 +252,7 @@ function ropeInPlace(x: Float64Array, headDim: number, position: number): void {
   const half = headDim / 2;
   for (let base = 0; base < x.length; base += headDim) {
     for (let i = 0; i < half; i++) {
-      const freq = Math.pow(10000.0, (-2.0 * i) / half);
+      const freq = 10000.0 ** ((-2.0 * i) / half);
       const angle = position * freq;
       const c = Math.cos(angle);
       const s = Math.sin(angle);
@@ -327,7 +348,8 @@ export class GaitTransformerPolicy {
       throw new Error(`obs dim ${obs.length} != ${cfg.nInputs}`);
     }
     for (let i = 0; i < cfg.nInputs; i++) {
-      this.normedObs[i] = (obs[i] - this.w.obsNorm.mean[i]) / (Math.sqrt(this.w.obsNorm.variance[i]) + 1e-8);
+      this.normedObs[i] =
+        (obs[i] - this.w.obsNorm.mean[i]) / (Math.sqrt(this.w.obsNorm.variance[i]) + 1e-8);
     }
     matvec(this.h, this.w.embed, d, cfg.nInputs, this.normedObs);
 

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Footer } from "../components/Footer";
+import { G1ResidualTrainer } from "../components/G1ResidualTrainer";
 import { G1WalkingFlagship } from "../components/G1WalkingFlagship";
+import { Navbar } from "../components/Navbar";
 import { PolicyAblationComparison } from "../components/PolicyAblationComparison";
 import { RealPhysicsResidual } from "../components/RealPhysicsResidual";
-import { G1ResidualTrainer } from "../components/G1ResidualTrainer";
-import { Navbar } from "../components/Navbar";
-import { Footer } from "../components/Footer";
 
 export const metadata: Metadata = {
   title: "Unitree G1 Humanoid Walking — 5,040-D CMA-ES Simulation",
@@ -47,9 +47,9 @@ export default function HumanoidPage() {
             Teach a whole-body G1 model to walk
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-400">
-            Twenty-nine source actuators, 480&nbsp;Hz articulated dynamics, and
-            5,040 learned locomotion weights — optimized live in your browser by
-            CMA-ES with no gradient ever computed.
+            Twenty-nine source actuators, 480&nbsp;Hz articulated dynamics, and 5,040 learned
+            locomotion weights — optimized live in your browser by CMA-ES with no gradient ever
+            computed.
           </p>
         </section>
 
@@ -66,9 +66,7 @@ export default function HumanoidPage() {
                 {layer.label}
               </p>
               <p className="mt-2 font-mono text-lg text-white">{layer.value}</p>
-              <p className="mt-3 text-xs leading-5 text-slate-400">
-                {layer.detail}
-              </p>
+              <p className="mt-3 text-xs leading-5 text-slate-400">{layer.detail}</p>
             </article>
           ))}
         </section>
@@ -85,24 +83,19 @@ export default function HumanoidPage() {
             Two architectures on the same contract — phase prior vs transformer
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            The flagship above uses a 5,040-D linear residual policy on a
-            hand-designed phase basis — a <em>strong, sample-efficient prior</em>.
-            Beside it runs a 2.9M-parameter causal transformer on the same
-            action-causal contract, where moving forward costs real actuator
-            work. Its committed PPO+Muon run never learned — reward flat across
-            all 60 iterations, checkpoint from iteration 0, and a policy head
-            exported entirely zero, so it emitted no action at all. Rather than
-            display that as a result, the shipped artifact keeps that trunk
-            frozen, repairs its observation normalisation, and trains only the
-            29×256 output layer — cloned from the CMA-ES gait, then searched
-            against this environment&apos;s own reward — until it walks{" "}
-            <strong>7.09 m</strong>, past the phase prior&apos;s 7.05 m at the
-            same budget. The contract caps speed at 0.65 m/s, so 7.80 m is the
-            most anything can travel here; give the 105-parameter prior three
-            times the search and it reaches 7.29 m and leads again. Which
-            architecture wins is a question about budget, not about
-            architecture, and that is the point worth taking away. Artifacts
-            remain under{" "}
+            The flagship above uses a 5,040-D linear residual policy on a hand-designed phase basis
+            — a <em>strong, sample-efficient prior</em>. Beside it runs a 2.9M-parameter causal
+            transformer on the same action-causal contract, where moving forward costs real actuator
+            work. Its committed PPO+Muon run never learned — reward flat across all 60 iterations,
+            checkpoint from iteration 0, and a policy head exported entirely zero, so it emitted no
+            action at all. Rather than display that as a result, the shipped artifact keeps that
+            trunk frozen, repairs its observation normalisation, and trains only the 29×256 output
+            layer — cloned from the CMA-ES gait, then searched against this environment&apos;s own
+            reward — until it walks <strong>7.09 m</strong>, past the phase prior&apos;s 7.05 m at
+            the same budget. The contract caps speed at 0.65 m/s, so 7.80 m is the most anything can
+            travel here; give the 105-parameter prior three times the search and it reaches 7.29 m
+            and leads again. Which architecture wins is a question about budget, not about
+            architecture, and that is the point worth taking away. Artifacts remain under{" "}
             <code className="break-all">public/robots/g1/transformer/</code>.
           </p>
           <div className="mt-6">
@@ -119,30 +112,25 @@ export default function HumanoidPage() {
             The same transformer, measured on the real robot
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            Everything above is measured in the stand-in, and a stand-in whose
-            forward speed is a formula can only ever settle an argument about
-            the formula. So the same architecture was searched against the owner
-            the flagship actually runs — articulated-body dynamics, real
-            contact, and the identical objective CMA-ES minimises in the demo at
-            the top of this page. The transformer contributes a residual on top
-            of the tuned controller and its output layer starts at zero, so the
-            search <em>begins</em> at that controller&apos;s exact behaviour and
-            has to earn every step from there.
+            Everything above is measured in the stand-in, and a stand-in whose forward speed is a
+            formula can only ever settle an argument about the formula. So the same architecture was
+            searched against the owner the flagship actually runs — articulated-body dynamics, real
+            contact, and the identical objective CMA-ES minimises in the demo at the top of this
+            page. The transformer contributes a residual on top of the tuned controller and its
+            output layer starts at zero, so the search <em>begins</em> at that controller&apos;s
+            exact behaviour and has to earn every step from there.
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            The search itself is the thing this site is about: LM-CMA from{" "}
-            <code>fs-dfo</code>, the same optimizer family the flagship offers,
-            with IPOP restarts because a converged run spends its remaining
-            budget standing still. A whole generation is one parallel batch
-            across every core. That combination replaced a hand-rolled evolution
-            strategy which, on the arithmetic of the day, reached a 45.8%
-            improvement over the tuned controller on flat ground in eighty
-            times the wall-clock time. The search reaches{" "}
-            <strong>165.4%</strong> there now. The two figures are not strictly
-            comparable — the transcendentals underneath them changed in
-            between, for the reason given below — but the wall-clock difference
-            and the change in kind are real, and the current number is the one
-            the panel below will reproduce on your own machine.
+            The search itself is the thing this site is about: LM-CMA from <code>fs-dfo</code>, the
+            same optimizer family the flagship offers, with IPOP restarts because a converged run
+            spends its remaining budget standing still. A whole generation is one parallel batch
+            across every core. That combination replaced a hand-rolled evolution strategy which, on
+            the arithmetic of the day, reached a 45.8% improvement over the tuned controller on flat
+            ground in eighty times the wall-clock time. The search reaches <strong>165.4%</strong>{" "}
+            there now. The two figures are not strictly comparable — the transcendentals underneath
+            them changed in between, for the reason given below — but the wall-clock difference and
+            the change in kind are real, and the current number is the one the panel below will
+            reproduce on your own machine.
           </p>
           <div className="mt-6">
             <RealPhysicsResidual />
@@ -158,44 +146,35 @@ export default function HumanoidPage() {
             Now run that search yourself
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            Everything above reports a search that already finished. This runs
-            it here: the same LM-CMA over the same 960 parameters, against the
-            same articulated-body physics and the same objective, in a worker on
-            your machine. The kernel ships with SIMD enabled and the model is 64
-            units wide and two layers deep, which is the whole reason a laptop
-            suffices. It starts on flat ground, where the first improvement
-            typically lands within about ten seconds and roughly forty rollouts;
-            the harder cross-challenge run the figures above are measured on is
-            one dropdown away. There is no fixed budget, so it keeps going until
-            you stop it — on one laptop it passed{" "}
-            <strong>120% better than the tuned controller</strong> inside two
-            minutes — and the policy it finds downloads as an FSGT weights
-            file. It is a 64-wide, two-layer model, so it is deliberately not
-            interchangeable with the 256-wide artifact the comparison above
-            loads; that loader pins its audited architecture and refuses
-            anything else, which is the point of the audit. A run also survives
-            a reload, and the policy fits in a link: only the 960 trained
-            parameters travel, because the rest of the network is fixed by the
-            kernel&apos;s own seed. They ride in the URL fragment, so the policy
-            never reaches a server, and whoever opens it has the owner re-run it
-            on their own machine before believing the number.
+            Everything above reports a search that already finished. This runs it here: the same
+            LM-CMA over the same 960 parameters, against the same articulated-body physics and the
+            same objective, in a worker on your machine. The kernel ships with SIMD enabled and the
+            model is 64 units wide and two layers deep, which is the whole reason a laptop suffices.
+            It starts on flat ground, where the first improvement typically lands within about ten
+            seconds and roughly forty rollouts; the harder cross-challenge run the figures above are
+            measured on is one dropdown away. There is no fixed budget, so it keeps going until you
+            stop it — on one laptop it passed <strong>120% better than the tuned controller</strong>{" "}
+            inside two minutes — and the policy it finds downloads as an FSGT weights file. It is a
+            64-wide, two-layer model, so it is deliberately not interchangeable with the 256-wide
+            artifact the comparison above loads; that loader pins its audited architecture and
+            refuses anything else, which is the point of the audit. A run also survives a reload,
+            and the policy fits in a link: only the 960 trained parameters travel, because the rest
+            of the network is fixed by the kernel&apos;s own seed. They ride in the URL fragment, so
+            the policy never reaches a server, and whoever opens it has the owner re-run it on their
+            own machine before believing the number.
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-            A policy trained on the workstation scores the same here, to the
-            digit. That took fixing. The physics owner was already identical on
-            both targets, but the transformer called the host&apos;s{" "}
-            <code>exp</code>, <code>tanh</code>, <code>sin</code>,{" "}
-            <code>cos</code> and <code>powf</code>; macOS and the WebAssembly
-            build ship different implementations of those, and 720 steps of
-            contact-rich dynamics turns a last-bit disagreement into a different
-            trajectory — a policy that walked on one machine fell over on the
-            other. Routing those five through the same Rust implementation
-            everywhere closed it: the shipped policy reproduces here at{" "}
-            <strong>−157.68085560636536</strong> and{" "}
-            <strong>1.0565011518224396 m</strong>, the digits the workstation
-            recorded. The owner still re-measures every policy it is handed, so
-            every figure in the panel is what <em>your</em> machine measured —
-            it now simply agrees.
+            A policy trained on the workstation scores the same here, to the digit. That took
+            fixing. The physics owner was already identical on both targets, but the transformer
+            called the host&apos;s <code>exp</code>, <code>tanh</code>, <code>sin</code>,{" "}
+            <code>cos</code> and <code>powf</code>; macOS and the WebAssembly build ship different
+            implementations of those, and 720 steps of contact-rich dynamics turns a last-bit
+            disagreement into a different trajectory — a policy that walked on one machine fell over
+            on the other. Routing those five through the same Rust implementation everywhere closed
+            it: the shipped policy reproduces here at <strong>−157.68085560636536</strong> and{" "}
+            <strong>1.0565011518224396 m</strong>, the digits the workstation recorded. The owner
+            still re-measures every policy it is handed, so every figure in the panel is what{" "}
+            <em>your</em> machine measured — it now simply agrees.
           </p>
           <div className="mt-6">
             <G1ResidualTrainer />
@@ -207,32 +186,27 @@ export default function HumanoidPage() {
             What this simulation actually does
           </h2>
           <p>
-            Every candidate policy is a vector of{" "}
-            <strong>5,040 learned weights</strong>: 15 lower-body and waist
-            actuators each read 42 physical signals through 8 gait-phase basis
-            terms (15 × 42 × 8 = 5,040). The policy outputs bounded residual
-            efforts; an articulated multibody kernel with SE(3) integration,
-            contact, and friction integrates all 29 source joints at a fixed
-            timestep — the same 1.5-second, 720-step experiment for every
+            Every candidate policy is a vector of <strong>5,040 learned weights</strong>: 15
+            lower-body and waist actuators each read 42 physical signals through 8 gait-phase basis
+            terms (15 × 42 × 8 = 5,040). The policy outputs bounded residual efforts; an articulated
+            multibody kernel with SE(3) integration, contact, and friction integrates all 29 source
+            joints at a fixed timestep — the same 1.5-second, 720-step experiment for every
             candidate and for the winner you watch.
           </p>
           <p>
-            CMA-ES never sees derivatives. It samples a population from a
-            Gaussian search distribution, scores each walk (upright distance,
-            foot contact schedule adherence, energy, and hard guards for falls
-            and joint limits), then reshapes its covariance toward the
-            successful candidates. Full CMA-ES is refused above 256 dimensions
-            because a dense 5,040² covariance would need 25,401,600 entries; the
-            live flagship therefore uses the separable and limited-memory
-            variants you can compare directly.
+            CMA-ES never sees derivatives. It samples a population from a Gaussian search
+            distribution, scores each walk (upright distance, foot contact schedule adherence,
+            energy, and hard guards for falls and joint limits), then reshapes its covariance toward
+            the successful candidates. Full CMA-ES is refused above 256 dimensions because a dense
+            5,040² covariance would need 25,401,600 entries; the live flagship therefore uses the
+            separable and limited-memory variants you can compare directly.
           </p>
           <p>
-            The source boundary is precise. Frankensim transcribes
-            Unitree&apos;s current 29-DoF mode-11 description; the Three.js
-            scene projects the 30 emitted world-from-link poses and never
-            recomputes robot kinematics. The fixed head and hand shells are
-            visual geometry. This remains a deterministic explainer, not a
-            validated hardware controller or sim-to-real result. See the{" "}
+            The source boundary is precise. Frankensim transcribes Unitree&apos;s current 29-DoF
+            mode-11 description; the Three.js scene projects the 30 emitted world-from-link poses
+            and never recomputes robot kinematics. The fixed head and hand shells are visual
+            geometry. This remains a deterministic explainer, not a validated hardware controller or
+            sim-to-real result. See the{" "}
             <a
               className="text-cyan-300 underline decoration-cyan-500/40 underline-offset-4"
               href="https://github.com/unitreerobotics/unitree_ros/blob/master/robots/g1_description/README.md"

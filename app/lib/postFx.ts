@@ -43,9 +43,18 @@ export const ACES_FILMIC = {
 export function acesFilmic(rgb: [number, number, number]): [number, number, number] {
   const [r, g, b] = rgb;
   return [
-    clamp01((r * (ACES_FILMIC.a * r + ACES_FILMIC.b)) / (r * (ACES_FILMIC.c * r + ACES_FILMIC.d) + ACES_FILMIC.e)),
-    clamp01((g * (ACES_FILMIC.a * g + ACES_FILMIC.b)) / (g * (ACES_FILMIC.c * g + ACES_FILMIC.d) + ACES_FILMIC.e)),
-    clamp01((b * (ACES_FILMIC.a * b + ACES_FILMIC.b)) / (b * (ACES_FILMIC.c * b + ACES_FILMIC.d) + ACES_FILMIC.e)),
+    clamp01(
+      (r * (ACES_FILMIC.a * r + ACES_FILMIC.b)) /
+        (r * (ACES_FILMIC.c * r + ACES_FILMIC.d) + ACES_FILMIC.e),
+    ),
+    clamp01(
+      (g * (ACES_FILMIC.a * g + ACES_FILMIC.b)) /
+        (g * (ACES_FILMIC.c * g + ACES_FILMIC.d) + ACES_FILMIC.e),
+    ),
+    clamp01(
+      (b * (ACES_FILMIC.a * b + ACES_FILMIC.b)) /
+        (b * (ACES_FILMIC.c * b + ACES_FILMIC.d) + ACES_FILMIC.e),
+    ),
   ];
 }
 
@@ -54,7 +63,7 @@ export function acesFilmic(rgb: [number, number, number]): [number, number, numb
  *  to `acesFilmic([r*e, g*e, b*e])`. */
 export function acesFilmicWithExposure(
   rgb: [number, number, number],
-  exposure: number
+  exposure: number,
 ): [number, number, number] {
   return acesFilmic([rgb[0] * exposure, rgb[1] * exposure, rgb[2] * exposure]);
 }
@@ -91,28 +100,28 @@ export const POSTFX_PROFILES: Record<string, PostFXProfile> = {
     ...DEFAULT_POSTFX_PROFILE,
     exposure: 0.95,
     bloomStrength: 0.55,
-    bloomThreshold: 0.80, // lower so oven light / fixtures bloom
-    vignetteIntensity: 0.20,
+    bloomThreshold: 0.8, // lower so oven light / fixtures bloom
+    vignetteIntensity: 0.2,
   },
   "parlor-calm": {
     ...DEFAULT_POSTFX_PROFILE,
     exposure: 1.0,
-    bloomStrength: 0.40,
-    bloomThreshold: 0.90, // higher so only the lamp / fireplace bloom
+    bloomStrength: 0.4,
+    bloomThreshold: 0.9, // higher so only the lamp / fireplace bloom
     vignetteIntensity: 0.22,
   },
   "porch-bright": {
     ...DEFAULT_POSTFX_PROFILE,
     exposure: 1.15,
-    bloomStrength: 0.30,
-    bloomThreshold: 1.00, // only the sun blooms
+    bloomStrength: 0.3,
+    bloomThreshold: 1.0, // only the sun blooms
     vignetteIntensity: 0.12,
   },
   "bedroom-moody": {
     ...DEFAULT_POSTFX_PROFILE,
-    exposure: 0.80,
+    exposure: 0.8,
     bloomStrength: 0.55,
-    bloomThreshold: 0.70, // bedside lamps bloom freely
+    bloomThreshold: 0.7, // bedside lamps bloom freely
     vignetteIntensity: 0.28,
   },
 };
@@ -121,23 +130,18 @@ export const POSTFX_PROFILES: Record<string, PostFXProfile> = {
  *  the post-FX-adjusted linear RGB. Useful for headless tests. */
 export function applyPostFXSoftware(
   rgb: [number, number, number],
-  profile: PostFXProfile
+  profile: PostFXProfile,
 ): [number, number, number] {
   if (!profile.enabled) return rgb;
   // 1. Exposure + ACES
   const tonemapped = acesFilmicWithExposure(rgb, profile.exposure);
   // 2. Bloom (approximated as a soft additive highlight; in the real
   //    pipeline this is a separate pass on luminance > threshold).
-  const luminance =
-    0.2126 * tonemapped[0] + 0.7152 * tonemapped[1] + 0.0722 * tonemapped[2];
+  const luminance = 0.2126 * tonemapped[0] + 0.7152 * tonemapped[1] + 0.0722 * tonemapped[2];
   const bloom = Math.max(0, luminance - profile.bloomThreshold) * profile.bloomStrength;
   // 3. Vignette (no-op in software; the GPU pass does the edge falloff)
   // 4. CA (no-op in software; the GPU pass does the channel split)
-  return [
-    tonemapped[0] + bloom,
-    tonemapped[1] + bloom,
-    tonemapped[2] + bloom,
-  ];
+  return [tonemapped[0] + bloom, tonemapped[1] + bloom, tonemapped[2] + bloom];
 }
 
 /** Deterministic Perlin-flavored flicker for a fireplace. Uses
@@ -170,7 +174,7 @@ export function hash01(n: number): number {
  *  helper is for software tests and offline baking. */
 export function linearToSRGB(linear: number): number {
   if (linear <= 0.0031308) return linear * 12.92;
-  return 1.055 * Math.pow(linear, 1.0 / 2.4) - 0.055;
+  return 1.055 * linear ** (1.0 / 2.4) - 0.055;
 }
 
 function clamp01(x: number): number {

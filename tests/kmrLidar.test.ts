@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 import {
   KUKA_KMR_IIWA_LIDAR_DEFAULT,
+  type LidarConfig,
   lidarToCostmap2D,
   scanLidar,
-  type LidarConfig,
 } from "../app/lib/kmrLidar";
-import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 
 const cfg: LidarConfig = KUKA_KMR_IIWA_LIDAR_DEFAULT;
 
@@ -42,7 +42,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     // a 4.29° step and no sample at the exact midpoint (index 32 sits at
     // ±2.14°, not 0°). A 6° tolerance covers the closest forward sample.
     const frontRays = scan.rays.filter(
-      (r) => r.hit && Math.abs(r.angleRadians) < 6 * Math.PI / 180,
+      (r) => r.hit && Math.abs(r.angleRadians) < (6 * Math.PI) / 180,
     );
     expect(frontRays.length).toBeGreaterThan(0);
     // The wall is at x=3 with half-extent 0.1, so the front face is at
@@ -60,7 +60,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     };
     const scan = scanLidar(0, 0, [cabinet], cfg);
     const forward = scan.rays.filter(
-      (ray) => ray.hit && Math.abs(ray.angleRadians) < 6 * Math.PI / 180,
+      (ray) => ray.hit && Math.abs(ray.angleRadians) < (6 * Math.PI) / 180,
     );
     expect(forward.length).toBeGreaterThan(0);
     expect(forward[0].rangeMeters).toBeCloseTo(2.9, 0);
@@ -76,7 +76,7 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     };
     const scan = scanLidar(0, 0, [northWall], cfg, Math.PI / 2);
     const forward = scan.rays.filter(
-      (ray) => ray.hit && Math.abs(ray.angleRadians) < 6 * Math.PI / 180,
+      (ray) => ray.hit && Math.abs(ray.angleRadians) < (6 * Math.PI) / 180,
     );
     expect(forward.length).toBeGreaterThan(0);
     expect(forward[0].rangeMeters).toBeCloseTo(2.9, 0);
@@ -93,13 +93,11 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
 
   test("rejects malformed sensor contracts", () => {
     expect(() => scanLidar(0, 0, [], { ...cfg, numRays: 0 })).toThrow(/numRays/);
-    expect(() => scanLidar(0, 0, [], { ...cfg, maxRangeMeters: 0.05 })).toThrow(
-      /maxRangeMeters/,
-    );
+    expect(() => scanLidar(0, 0, [], { ...cfg, maxRangeMeters: 0.05 })).toThrow(/maxRangeMeters/);
     expect(() => scanLidar(Number.NaN, 0, [], cfg)).toThrow(/base pose/);
-    expect(() =>
-      lidarToCostmap2D({ rays: [], baseXMeters: 0, baseYMeters: 0 }, cfg),
-    ).toThrow(/at least one ray/);
+    expect(() => lidarToCostmap2D({ rays: [], baseXMeters: 0, baseYMeters: 0 }, cfg)).toThrow(
+      /at least one ray/,
+    );
   });
 
   test("lidarToCostmap2D produces a centered grid with the right dimensions", () => {

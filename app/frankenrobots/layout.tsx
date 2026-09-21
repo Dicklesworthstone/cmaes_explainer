@@ -14,8 +14,6 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default function FrankenRobotsLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function FrankenRobotsLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return children;
 }

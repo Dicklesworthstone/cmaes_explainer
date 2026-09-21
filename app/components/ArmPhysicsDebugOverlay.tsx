@@ -26,17 +26,17 @@
 
 import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { ARM_LINK_RADII, resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
 import {
   computeKukaFK,
   KUKA_AUXILIARY_JOINT_LIMITS,
   KUKA_LINK_LENGTHS,
 } from "../lib/armInverseKinematics";
-import { stageBoxRenderTransform, type OrientedBoundingBox } from "../lib/houseMultiObstacleKernel";
 import type {
   HouseholdManipulationAdmission,
   HouseholdManipulationTraceSample,
 } from "../lib/frankensimCmaes";
-import { ARM_LINK_RADII, resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
+import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
 
 // Module-level cache of the reachable workspace point cloud. Computing
 // it on every render would be wasteful; the joint limits are constants
@@ -90,8 +90,8 @@ const REACHABLE_WORKSPACE_POINTS: Float32Array = (() => {
 // 8-link radius table. Must match the visual link dimensions used
 // when rendering the KUKA arm in HouseholdArmFlagship.
 const LINK_RADIUS: readonly number[] = [
-  0.10, // iiwa_link_0 (base)
-  0.10, // iiwa_link_1 (shoulder turret)
+  0.1, // iiwa_link_0 (base)
+  0.1, // iiwa_link_1 (shoulder turret)
   0.07, // iiwa_link_2 (upper arm)
   0.07, // iiwa_link_3 (elbow)
   0.06, // iiwa_link_4 (forearm)
@@ -149,10 +149,7 @@ export function ArmPhysicsDebugOverlay({
   const workspaceGeometry = useMemo(() => {
     if (!enabled) return null;
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(REACHABLE_WORKSPACE_POINTS, 3),
-    );
+    geometry.setAttribute("position", new THREE.BufferAttribute(REACHABLE_WORKSPACE_POINTS, 3));
     return geometry;
   }, [enabled]);
 
@@ -177,12 +174,12 @@ export function ArmPhysicsDebugOverlay({
   ];
   const objectPosition = sample ? ownerToThree(sample.objectPose.position) : null;
   const objectQuaternion = sample
-    ? [
+    ? ([
         sample.objectPose.quaternionWxyz[1],
         sample.objectPose.quaternionWxyz[3],
         -sample.objectPose.quaternionWxyz[2],
         sample.objectPose.quaternionWxyz[0],
-      ] as [number, number, number, number]
+      ] as [number, number, number, number])
     : null;
   const gripperGeometry = sample
     ? resolveRenderedGripperContactGeometry({
@@ -194,12 +191,12 @@ export function ArmPhysicsDebugOverlay({
   const gripperPose = sample?.linkPoses[7];
   const gripperPosition = gripperPose ? ownerToThree(gripperPose.position) : null;
   const gripperQuaternion = gripperPose
-    ? [
+    ? ([
         gripperPose.quaternionWxyz[1],
         gripperPose.quaternionWxyz[3],
         -gripperPose.quaternionWxyz[2],
         gripperPose.quaternionWxyz[0],
-      ] as [number, number, number, number]
+      ] as [number, number, number, number])
     : null;
 
   return (
@@ -215,12 +212,7 @@ export function ArmPhysicsDebugOverlay({
             return (
               <mesh key={`col-${idx}`} position={pos}>
                 <sphereGeometry args={[r, 8, 6]} />
-                <meshBasicMaterial
-                  color="#22d3ee"
-                  wireframe
-                  transparent
-                  opacity={0.45}
-                />
+                <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.45} />
               </mesh>
             );
           })
@@ -243,19 +235,10 @@ export function ArmPhysicsDebugOverlay({
         <lineSegments
           key={`obb-${idx}-${obb.name}`}
           geometry={edges}
-          position={[
-            obb.center[0],
-            obb.center[1],
-            obb.center[2],
-          ]}
+          position={[obb.center[0], obb.center[1], obb.center[2]]}
           rotation={stageBoxRenderTransform(obb).rotation}
         >
-          <lineBasicMaterial
-            color="#f43f5e"
-            transparent
-            opacity={0.55}
-            depthWrite={false}
-          />
+          <lineBasicMaterial color="#f43f5e" transparent opacity={0.55} depthWrite={false} />
         </lineSegments>
       ))}
 
@@ -297,7 +280,13 @@ export function ArmPhysicsDebugOverlay({
       {objectPosition && objectQuaternion ? (
         <mesh position={objectPosition} quaternion={objectQuaternion}>
           <boxGeometry args={objectThreeDimensions} />
-          <meshBasicMaterial color="#34d399" wireframe transparent opacity={0.9} depthWrite={false} />
+          <meshBasicMaterial
+            color="#34d399"
+            wireframe
+            transparent
+            opacity={0.9}
+            depthWrite={false}
+          />
         </mesh>
       ) : null}
 
@@ -305,19 +294,43 @@ export function ArmPhysicsDebugOverlay({
         <group position={gripperPosition} quaternion={gripperQuaternion}>
           <mesh position={[-gripperGeometry.fingerCenterHalfWidthM, 0, 0]}>
             <boxGeometry args={[0.014, 0.11, 0.028]} />
-            <meshBasicMaterial color="#fde047" wireframe transparent opacity={0.9} depthWrite={false} />
+            <meshBasicMaterial
+              color="#fde047"
+              wireframe
+              transparent
+              opacity={0.9}
+              depthWrite={false}
+            />
           </mesh>
           <mesh position={[gripperGeometry.fingerCenterHalfWidthM, 0, 0]}>
             <boxGeometry args={[0.014, 0.11, 0.028]} />
-            <meshBasicMaterial color="#fde047" wireframe transparent opacity={0.9} depthWrite={false} />
+            <meshBasicMaterial
+              color="#fde047"
+              wireframe
+              transparent
+              opacity={0.9}
+              depthWrite={false}
+            />
           </mesh>
           <mesh position={[0, gripperGeometry.palmCenterOffsetM, 0]}>
             <boxGeometry args={[0.125, 0.035, 0.075]} />
-            <meshBasicMaterial color="#fb923c" wireframe transparent opacity={0.9} depthWrite={false} />
+            <meshBasicMaterial
+              color="#fb923c"
+              wireframe
+              transparent
+              opacity={0.9}
+              depthWrite={false}
+            />
           </mesh>
           <mesh position={[0, gripperGeometry.wristHousingCenterOffsetM, 0]}>
             <boxGeometry args={[0.116, 0.085, 0.116]} />
-            <meshBasicMaterial color="#f43f5e" wireframe transparent opacity={0.75} depthWrite={false} />
+            <meshBasicMaterial
+              color="#f43f5e"
+              wireframe
+              transparent
+              opacity={0.75}
+              depthWrite={false}
+            />
           </mesh>
         </group>
       ) : null}

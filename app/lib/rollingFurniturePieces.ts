@@ -100,8 +100,8 @@ export const ROLLING_PIECE_DEFAULTS: Record<RollingFurnitureKind, RollingPieceCo
       wheelCount: 4,
       wheelRadius: 0.04,
       trailOffset: 0.02,
-      rollingFrictionCoeff: 0.010,
-      slidingFrictionCoeff: 0.50,
+      rollingFrictionCoeff: 0.01,
+      slidingFrictionCoeff: 0.5,
       swivelDamping: 0.12,
       corneringStiffness: 150.0,
     },
@@ -111,14 +111,14 @@ export const ROLLING_PIECE_DEFAULTS: Record<RollingFurnitureKind, RollingPieceCo
     kind: "mop-bucket",
     massKg: 6.0,
     momentOfInertiaZz: 0.12,
-    boundingRadius: 0.20,
+    boundingRadius: 0.2,
     height: 0.45,
     caster: {
       wheelCount: 4,
       wheelRadius: 0.035,
       trailOffset: 0.015,
       rollingFrictionCoeff: 0.018,
-      slidingFrictionCoeff: 0.60,
+      slidingFrictionCoeff: 0.6,
       swivelDamping: 0.09,
       corneringStiffness: 90.0,
     },
@@ -127,14 +127,14 @@ export const ROLLING_PIECE_DEFAULTS: Record<RollingFurnitureKind, RollingPieceCo
     id: "hamper-default",
     kind: "rolling-hamper",
     massKg: 5.0,
-    momentOfInertiaZz: 0.10,
+    momentOfInertiaZz: 0.1,
     boundingRadius: 0.25,
-    height: 0.70,
+    height: 0.7,
     caster: {
       wheelCount: 4,
       wheelRadius: 0.025,
       trailOffset: 0.018,
-      rollingFrictionCoeff: 0.020,
+      rollingFrictionCoeff: 0.02,
       slidingFrictionCoeff: 0.55,
       swivelDamping: 0.07,
       corneringStiffness: 80.0,
@@ -210,7 +210,10 @@ export function stepRollingPieceDynamics(
   const slipAngle = Math.atan2(vLat, Math.max(0.05, Math.abs(vLong)));
   const maxLateralFriction = config.caster.slidingFrictionCoeff * normalForce;
   const linearLateralFriction = -config.caster.corneringStiffness * slipAngle;
-  const fLatScrub = Math.max(-maxLateralFriction, Math.min(maxLateralFriction, linearLateralFriction));
+  const fLatScrub = Math.max(
+    -maxLateralFriction,
+    Math.min(maxLateralFriction, linearLateralFriction),
+  );
 
   // Caster Trail Restoring & Aligning Swivel Torque
   const tauCasterAlign = -config.caster.trailOffset * fLatScrub;

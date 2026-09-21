@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
   ContactGraph,
-  computeBodyAABB,
-  testAABBOverlap,
-  collideSphereSphere,
-  collideSphereBox,
   collideBodyPlane,
+  collideSphereBox,
+  collideSphereSphere,
+  computeBodyAABB,
   type RigidBody,
+  testAABBOverlap,
 } from "../app/lib/contactGraph";
 
 describe("Multibody Contact Graph & Narrowphase Collision Engine", () => {
@@ -30,7 +30,7 @@ describe("Multibody Contact Graph & Narrowphase Collision Engine", () => {
     id: string,
     pos: [number, number, number],
     half: [number, number, number] = [0.5, 0.5, 0.5],
-    rot: [number, number, number] = [0, 0, 0]
+    rot: [number, number, number] = [0, 0, 0],
   ): RigidBody => ({
     id,
     isStatic: false,
@@ -144,7 +144,10 @@ describe("Multibody Contact Graph & Narrowphase Collision Engine", () => {
 
       // Simulate solver caching normal impulse on s1 vs floor
       const findManifold = (list: typeof manifoldsFrame1, idA: string, idB: string) =>
-        list.find((m) => (m.bodyAId === idA && m.bodyBId === idB) || (m.bodyAId === idB && m.bodyBId === idA));
+        list.find(
+          (m) =>
+            (m.bodyAId === idA && m.bodyBId === idB) || (m.bodyAId === idB && m.bodyBId === idA),
+        );
 
       const floorContact = findManifold(manifoldsFrame1, "s1", "ground")?.contacts[0];
       expect(floorContact).toBeDefined();

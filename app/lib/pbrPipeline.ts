@@ -36,7 +36,7 @@
 //     pipeline fails closed (throws) if a consumer tries to put a linear texture in
 //     a sRGB slot or vice versa.
 
-import { FurnitureKind } from "./furnitureTaxonomy";
+import type { FurnitureKind } from "./furnitureTaxonomy";
 
 /** glTF 2.0 color space for a texture slot. */
 export type ColorSpace = "srgb" | "linear";
@@ -131,17 +131,14 @@ const SLOT_COLOR_SPACE: Record<PBRTextureSlot, ColorSpace> = {
   sheenRoughness: "linear",
 };
 
-export function assertColorSpace(
-  slot: PBRTextureSlot,
-  declared: ColorSpace
-): void {
+export function assertColorSpace(slot: PBRTextureSlot, declared: ColorSpace): void {
   const required = SLOT_COLOR_SPACE[slot];
   if (required !== declared) {
     throw new Error(
       `PBR pipeline: texture slot '${slot}' requires color-space '${required}' ` +
         `but got '${declared}'. Per glTF 2.0 spec, color textures MUST be sRGB and ` +
         `data textures (normal, metallicRoughness, AO, displacement, sheenRoughness) ` +
-        `MUST be linear. Fail-closed.`
+        `MUST be linear. Fail-closed.`,
     );
   }
 }
@@ -764,5 +761,5 @@ export function totalTextureBudgetMB(): number {
 
 /** All PBR material classes. */
 export const ALL_PBR_MATERIAL_CLASSES: PBRMaterialClass[] = Object.keys(
-  PBR_MATERIAL_SLOTS
+  PBR_MATERIAL_SLOTS,
 ) as PBRMaterialClass[];

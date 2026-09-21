@@ -26,7 +26,7 @@ const options: BenchmarkOptions = {
   trials: integerArgument("trials", 20),
   warmupTrials: integerArgument("warmup", 3),
   seed: integerArgument("seed", 1729),
-  golden: process.argv.includes("--golden")
+  golden: process.argv.includes("--golden"),
 };
 
 if (options.dim < 1 || options.generations < 1 || options.trials < 1) {
@@ -37,7 +37,7 @@ function ellipsoidObjective(point: VectorND): number {
   let total = 0;
   const denominator = Math.max(1, point.length - 1);
   for (let index = 0; index < point.length; index++) {
-    const scale = 10 ** (3 * index / denominator);
+    const scale = 10 ** ((3 * index) / denominator);
     const centered = point[index] - 0.37;
     total += scale * centered * centered;
   }
@@ -47,10 +47,13 @@ function ellipsoidObjective(point: VectorND): number {
 function runTrial(seed: number) {
   const optimizer = new CMAESOptimizerND(ellipsoidObjective, {
     dim: options.dim,
-    initialMean: Array.from({ length: options.dim }, (_, index) => 0.15 + 0.7 * index / Math.max(1, options.dim - 1)),
+    initialMean: Array.from(
+      { length: options.dim },
+      (_, index) => 0.15 + (0.7 * index) / Math.max(1, options.dim - 1),
+    ),
     initialSigma: 0.23,
     repairStrategy: "none",
-    seed
+    seed,
   });
 
   let state = optimizer.step();
@@ -60,22 +63,28 @@ function runTrial(seed: number) {
 
 if (options.golden) {
   const state = runTrial(options.seed);
-  process.stdout.write(`${JSON.stringify({
-    engine: "CMAESOptimizerND",
-    scenario: "anisotropic-ellipsoid-unbounded",
-    dim: options.dim,
-    generations: options.generations,
-    seed: options.seed,
-    generation: state.generation,
-    evalCount: state.evalCount,
-    bestFitness: state.bestFitness,
-    bestX: state.bestX,
-    mean: state.mean,
-    sigma: state.sigma,
-    covariance: state.covariance,
-    eigenvalues: state.eigenvalues,
-    conditionNumber: state.conditionNumber
-  }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        engine: "CMAESOptimizerND",
+        scenario: "anisotropic-ellipsoid-unbounded",
+        dim: options.dim,
+        generations: options.generations,
+        seed: options.seed,
+        generation: state.generation,
+        evalCount: state.evalCount,
+        bestFitness: state.bestFitness,
+        bestX: state.bestX,
+        mean: state.mean,
+        sigma: state.sigma,
+        covariance: state.covariance,
+        eigenvalues: state.eigenvalues,
+        conditionNumber: state.conditionNumber,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 } else {
   for (let trial = 0; trial < options.warmupTrials; trial++) runTrial(options.seed + trial);
 
@@ -91,23 +100,30 @@ if (options.golden) {
   }
 
   const sorted = [...durationsMs].sort((left, right) => left - right);
-  const percentile = (fraction: number): number => sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
+  const percentile = (fraction: number): number =>
+    sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)];
   const totalDurationSeconds = durationsMs.reduce((sum, duration) => sum + duration, 0) / 1_000;
 
-  process.stdout.write(`${JSON.stringify({
-    engine: "CMAESOptimizerND",
-    scenario: "anisotropic-ellipsoid-unbounded",
-    dim: options.dim,
-    generationsPerTrial: options.generations,
-    trials: options.trials,
-    warmupTrials: options.warmupTrials,
-    populationSize: 4 + Math.floor(3 * Math.log(options.dim)),
-    durationsMs,
-    p50Ms: percentile(0.5),
-    p95Ms: percentile(0.95),
-    p99Ms: percentile(0.99),
-    totalEvaluations,
-    evaluationsPerSecond: totalEvaluations / totalDurationSeconds,
-    checksum
-  }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        engine: "CMAESOptimizerND",
+        scenario: "anisotropic-ellipsoid-unbounded",
+        dim: options.dim,
+        generationsPerTrial: options.generations,
+        trials: options.trials,
+        warmupTrials: options.warmupTrials,
+        populationSize: 4 + Math.floor(3 * Math.log(options.dim)),
+        durationsMs,
+        p50Ms: percentile(0.5),
+        p95Ms: percentile(0.95),
+        p99Ms: percentile(0.99),
+        totalEvaluations,
+        evaluationsPerSecond: totalEvaluations / totalDurationSeconds,
+        checksum,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }

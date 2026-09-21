@@ -67,9 +67,9 @@ export function stepRollingSphere(
   if (penetration < -1e-4) {
     // Ballistic integration
     body.velocity[1] -= GRAVITY * safeDt;
-    body.position[0] += (body.velocity[0] + externalForce[0] / m * safeDt) * safeDt;
-    body.position[1] += (body.velocity[1] + externalForce[1] / m * safeDt) * safeDt;
-    body.position[2] += (body.velocity[2] + externalForce[2] / m * safeDt) * safeDt;
+    body.position[0] += (body.velocity[0] + (externalForce[0] / m) * safeDt) * safeDt;
+    body.position[1] += (body.velocity[1] + (externalForce[1] / m) * safeDt) * safeDt;
+    body.position[2] += (body.velocity[2] + (externalForce[2] / m) * safeDt) * safeDt;
 
     return {
       hasContact: false,
@@ -114,8 +114,8 @@ export function stepRollingSphere(
   const meff = 1.0 / invMeff;
 
   // Stopping force required to eliminate slip in this time step
-  const FstopX = -vcx * meff / safeDt;
-  const FstopZ = -vcz * meff / safeDt;
+  const FstopX = (-vcx * meff) / safeDt;
+  const FstopZ = (-vcz * meff) / safeDt;
   const FstopMag = Math.hypot(FstopX, FstopZ);
 
   if (FstopMag <= maxSlidingFriction) {
@@ -174,7 +174,7 @@ export function stepRollingSphere(
 
   // Integrate angular velocity
   const alphaX = (tauFrictionX + rollTx) / I;
-  const alphaY = (spinTorque) / I;
+  const alphaY = spinTorque / I;
   const alphaZ = (tauFrictionZ + rollTz) / I;
 
   body.angularVelocity[0] += alphaX * safeDt;
@@ -182,7 +182,10 @@ export function stepRollingSphere(
   body.angularVelocity[2] += alphaZ * safeDt;
 
   // Limit stopping when nearly stationary
-  if (Math.hypot(body.velocity[0], body.velocity[2]) < 1e-4 && Math.hypot(...body.angularVelocity) < 1e-4) {
+  if (
+    Math.hypot(body.velocity[0], body.velocity[2]) < 1e-4 &&
+    Math.hypot(...body.angularVelocity) < 1e-4
+  ) {
     body.velocity[0] = 0;
     body.velocity[2] = 0;
     body.angularVelocity[0] = 0;
@@ -254,7 +257,7 @@ export function stepRollingCylinder(
   const invMeff = 1.0 / m + (R * R) / I;
   const meff = 1.0 / invMeff;
 
-  const FstopX = -vcx * meff / safeDt;
+  const FstopX = (-vcx * meff) / safeDt;
   let Fx = 0;
   let isPureRolling = false;
 

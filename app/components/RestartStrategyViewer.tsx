@@ -1,17 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { RefreshCw, Timer, Activity, Play, Pause, RotateCcw, Sparkles, Layers, TrendingDown } from "lucide-react";
-import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState, createMulberry32 } from "../lib/cmaesEngine";
+import {
+  Activity,
+  Layers,
+  Pause,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Sparkles,
+  Timer,
+  TrendingDown,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type CMAESGenerationState, CMAESOptimizer, createMulberry32 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
+import { LatexRenderer } from "./LatexRenderer";
 
 const WIDTH = 960;
 const HEIGHT = 520;
 
 // Highly multimodal Rastrigin-like 2D landscape with multiple deceptively deep local basins
 const multimodalFn = (x: number, y: number) => {
-  return 10 * 2 + (x * x - 10 * Math.cos(2 * Math.PI * x)) + (y * y - 10 * Math.cos(2 * Math.PI * y));
+  return (
+    10 * 2 + (x * x - 10 * Math.cos(2 * Math.PI * x)) + (y * y - 10 * Math.cos(2 * Math.PI * y))
+  );
 };
 
 export function RestartStrategyViewer() {
@@ -36,7 +48,7 @@ export function RestartStrategyViewer() {
       initialMean: [1.9, -2.3],
       initialSigma: 0.6,
       lambda: 8,
-      bounds: [-3.5, 3.5]
+      bounds: [-3.5, 3.5],
     });
     return { opt, s0: opt.step() };
   });
@@ -52,9 +64,9 @@ export function RestartStrategyViewer() {
   const [evalBudget, setEvalBudget] = useState<number>(8);
   const [globalBestFitness, setGlobalBestFitness] = useState<number>(initialRun.s0.bestFitness);
   const [history, setHistory] = useState<CMAESGenerationState[]>(() => [initialRun.s0]);
-  const [fitnessTimeline, setFitnessTimeline] = useState<{ evals: number; fit: number; lambda: number }[]>(() => [
-    { evals: 8, fit: initialRun.s0.bestFitness, lambda: 8 }
-  ]);
+  const [fitnessTimeline, setFitnessTimeline] = useState<
+    { evals: number; fit: number; lambda: number }[]
+  >(() => [{ evals: 8, fit: initialRun.s0.bestFitness, lambda: 8 }]);
 
   // Seeded presentation: the same starting basin and restart sequence on
   // every load, so the IPOP/BIPOP comparison is reproducible (law 3).
@@ -69,7 +81,7 @@ export function RestartStrategyViewer() {
         initialSigma: sigmaInit,
         lambda: popSize,
         bounds: [-3.5, 3.5],
-        seed: (setupRng.current() * 0xffffffff) >>> 0
+        seed: (setupRng.current() * 0xffffffff) >>> 0,
       });
     }
     return optimizerRef.current;
@@ -94,7 +106,7 @@ export function RestartStrategyViewer() {
       initialSigma: sigmaInit,
       lambda: popSize,
       bounds: [-3.5, 3.5],
-      seed: (setupRng.current() * 0xffffffff) >>> 0
+      seed: (setupRng.current() * 0xffffffff) >>> 0,
     });
     optimizerRef.current = opt;
     setCurrentLambda(popSize);
@@ -106,7 +118,7 @@ export function RestartStrategyViewer() {
     setGlobalBestFitness(globalBestRef.current);
     setFitnessTimeline((prev) => [
       ...prev,
-      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: popSize }
+      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: popSize },
     ]);
   }, []);
 
@@ -143,7 +155,7 @@ export function RestartStrategyViewer() {
     setGlobalBestFitness(globalBestRef.current);
     setFitnessTimeline((prev) => [
       ...prev,
-      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: currentLambda }
+      { evals: evalBudgetRef.current, fit: globalBestRef.current, lambda: currentLambda },
     ]);
 
     // Detect stagnation or convergence to trigger the restart policy. The
@@ -175,7 +187,7 @@ export function RestartStrategyViewer() {
           nextPop = 8;
           // Drawn from the seeded presentation stream so the BIPOP small
           // regime's log-uniform sigma schedule is reproducible (law 3).
-          nextSigma = 0.6 * Math.pow(10, -2 * setupRng.current());
+          nextSigma = 0.6 * 10 ** (-2 * setupRng.current());
         }
       }
 
@@ -212,7 +224,7 @@ export function RestartStrategyViewer() {
       ymax: 3.5,
       norm: { mode: "linear", k: 50 },
       ramp: { r0: 10, rk: 15, g0: 20, gk: 75, b0: 40, bk: 120 },
-      fallbackField: multimodalFn
+      fallbackField: multimodalFn,
     }).then((canvas) => {
       if (live && canvas) setBgCanvas(canvas);
     });
@@ -335,7 +347,8 @@ export function RestartStrategyViewer() {
 
     const maxFit = 40;
     const minFit = 0;
-    const toPxY = (f: number) => H - PADDING - ((f - minFit) / (maxFit - minFit)) * (H - 2 * PADDING);
+    const toPxY = (f: number) =>
+      H - PADDING - ((f - minFit) / (maxFit - minFit)) * (H - 2 * PADDING);
 
     // Grid
     ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
@@ -410,10 +423,13 @@ export function RestartStrategyViewer() {
 
             <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
               <div className="text-emerald-400 font-bold">
-                Global Best: {Number.isFinite(globalBestFitness) ? globalBestFitness.toFixed(3) : "—"}
+                Global Best:{" "}
+                {Number.isFinite(globalBestFitness) ? globalBestFitness.toFixed(3) : "—"}
               </div>
               <div className="text-sky-300 flex items-center gap-1">
-                <span>Pop <LatexRenderer math="\lambda" block={false} />:</span>
+                <span>
+                  Pop <LatexRenderer math="\lambda" block={false} />:
+                </span>
                 <span>{currentLambda}</span>
               </div>
               <div className="text-amber-300">Restarts: {restartCount}</div>
@@ -431,7 +447,12 @@ export function RestartStrategyViewer() {
               <span className="font-mono text-[0.68rem] text-slate-400">{evalBudget} Evals</span>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
-              <canvas ref={chartCanvasRef} width={WIDTH} height={240} className="w-full h-auto block" />
+              <canvas
+                ref={chartCanvasRef}
+                width={WIDTH}
+                height={240}
+                className="w-full h-auto block"
+              />
             </div>
           </div>
         </div>
@@ -447,11 +468,22 @@ export function RestartStrategyViewer() {
             <p className="text-xs text-slate-300 leading-relaxed">
               {strategy === "ipop" ? (
                 <>
-                  <strong>IPOP-CMA-ES</strong> doubles the population size (<span className="inline-block"><LatexRenderer math="\lambda \leftarrow 2\lambda" block={false} /></span>) after every restart. Larger populations increase global search power, smoothing over high-frequency local ripples.
+                  <strong>IPOP-CMA-ES</strong> doubles the population size (
+                  <span className="inline-block">
+                    <LatexRenderer math="\lambda \leftarrow 2\lambda" block={false} />
+                  </span>
+                  ) after every restart. Larger populations increase global search power, smoothing
+                  over high-frequency local ripples.
                 </>
               ) : (
                 <>
-                  <strong>BIPOP-CMA-ES</strong> balances exploration and exploitation by alternating between large exploratory populations and small local populations with varied initial step sizes <span className="inline-block"><LatexRenderer math="\sigma_0" block={false} /></span>.
+                  <strong>BIPOP-CMA-ES</strong> balances exploration and exploitation by alternating
+                  between large exploratory populations and small local populations with varied
+                  initial step sizes{" "}
+                  <span className="inline-block">
+                    <LatexRenderer math="\sigma_0" block={false} />
+                  </span>
+                  .
                 </>
               )}
             </p>

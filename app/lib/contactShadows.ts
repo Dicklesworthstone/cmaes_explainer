@@ -85,7 +85,7 @@ export function evaluateSdfSoftShadow(
   }
 
   const clampedShadow = Math.max(0.0, Math.min(1.0, shadow));
-  const penumbraWidth = minDistance > 0 ? (1.0 - clampedShadow) : 1.0;
+  const penumbraWidth = minDistance > 0 ? 1.0 - clampedShadow : 1.0;
 
   return {
     shadowFactor: clampedShadow,
@@ -97,11 +97,7 @@ export function evaluateSdfSoftShadow(
 /**
  * Computes PCSS (Percentage-Closer Soft Shadows) variable penumbra width.
  */
-export function computePcssPenumbra(
-  dReceiver: number,
-  dBlocker: number,
-  lightSize = 0.5,
-): number {
+export function computePcssPenumbra(dReceiver: number, dBlocker: number, lightSize = 0.5): number {
   if (dBlocker <= 1e-4 || dReceiver <= dBlocker) {
     return 0.0;
   }
@@ -138,7 +134,7 @@ export function evaluateFloorContactAO(
     }
 
     // Vertical height decay (quadratic falloff)
-    const heightFactor = Math.pow(1.0 - h / fadeHeight, 2.0);
+    const heightFactor = (1.0 - h / fadeHeight) ** 2.0;
 
     // Horizontal radial Gaussian kernel
     const dx = px - caster.position[0];

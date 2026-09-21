@@ -44,8 +44,8 @@ const nextConfig = {
     ];
   },
   turbopack: {
-    rules: {}
-  }
+    rules: {},
+  },
 };
 
 export default nextConfig;

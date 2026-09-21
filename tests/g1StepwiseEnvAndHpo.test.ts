@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
 import {
   CmaesHyperparameterOptimizer,
   defaultGenotypeFromSpecs,
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
+import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
 
 describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", () => {
   test("G1TrainEnv reset produces complete 42-D observation vector", () => {
@@ -73,12 +73,8 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
     expect(() => new G1TrainEnv({ dt: 0 })).toThrow(/dt/);
     expect(() => new G1TrainEnv({ dt: Number.NaN })).toThrow(/dt/);
     expect(() => new G1TrainEnv({ targetSpeedMps: -0.1 })).toThrow(/targetSpeedMps/);
-    expect(() => new G1TrainEnv({ fallHeightThreshold: -0.1 })).toThrow(
-      /fallHeightThreshold/,
-    );
-    expect(() => new G1TrainEnv({ fallTiltThresholdRad: 0 })).toThrow(
-      /fallTiltThresholdRad/,
-    );
+    expect(() => new G1TrainEnv({ fallHeightThreshold: -0.1 })).toThrow(/fallHeightThreshold/);
+    expect(() => new G1TrainEnv({ fallTiltThresholdRad: 0 })).toThrow(/fallTiltThresholdRad/);
   });
 
   test("requires reset after a terminal step", () => {
@@ -122,9 +118,9 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
     // Initial decoded default
     const decoded = hpo.decodeGenotype(new Array(8).fill(0.0));
     expect(decoded.muonLearningRate).toBeGreaterThan(0.0);
-    expect(decoded.muonMomentum).toBeGreaterThanOrEqual(0.80);
+    expect(decoded.muonMomentum).toBeGreaterThanOrEqual(0.8);
     expect(decoded.muonMomentum).toBeLessThanOrEqual(0.99);
-    expect(decoded.gaeLambda).toBeGreaterThan(0.90);
+    expect(decoded.gaeLambda).toBeGreaterThan(0.9);
 
     // Step 5 outer HPO generations
     let firstFit = Infinity;
@@ -185,7 +181,6 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
   });
 
   test("mirrored sampling doubles rollout cost and stays deterministic per seed", () => {
-
     const plain = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 123);
     const r1 = plain.stepGeneration();
     expect(r1.evaluationsCount).toBe(8);
@@ -205,7 +200,9 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
 
   test("mirrored HPO reports a real candidate score and counts every actual rollout", () => {
     const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 12, {
-      mirroredSampling: true, replicationsPerCandidate: 2, baseRolloutSeed: 71,
+      mirroredSampling: true,
+      replicationsPerCandidate: 2,
+      baseRolloutSeed: 71,
     });
     // Instrument the real evaluator without replacing its environment or score.
     const instrumented = hpo as unknown as {
@@ -219,7 +216,7 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
       return result;
     };
     const result = hpo.stepGeneration();
-    const best = evaluated.reduce((a, b) => a.fitness <= b.fitness ? a : b);
+    const best = evaluated.reduce((a, b) => (a.fitness <= b.fitness ? a : b));
     expect(evaluated.length).toBe(16);
     expect(result.evaluationsCount).toBe(evaluated.reduce((sum, entry) => sum + entry.rollouts, 0));
     expect(result.evaluationsCount).toBe(32);

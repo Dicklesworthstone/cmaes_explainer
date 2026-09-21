@@ -22,20 +22,21 @@
 
 import { describe, expect, test } from "bun:test";
 import {
-  CRAFTSMAN_BUNGALOW_1928,
-} from "../app/lib/houseScenes";
-import {
   createHouseNavigationScene,
   distanceToOBB,
-  projectPointOutOfOBB,
   type OrientedBoundingBox,
+  projectPointOutOfOBB,
 } from "../app/lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 // The exact threshold the G1 component uses. If anyone changes the
 // production constant they have to update this guard.
 const G1_LINK_CLEARANCE_METERS = 0.05;
 
-function obbOf(name: string, scene: ReturnType<typeof createHouseNavigationScene>): OrientedBoundingBox | undefined {
+function obbOf(
+  name: string,
+  scene: ReturnType<typeof createHouseNavigationScene>,
+): OrientedBoundingBox | undefined {
   return scene.obstacles.find((o) => o.name === name);
 }
 
@@ -85,11 +86,7 @@ describe("G1 link-OBB penetration projection (SOTA visualization layer)", () => 
     // Pick the first OBB the catalog gives us; the projection is
     // shape-agnostic so any OBB is a valid witness.
     const obb = scene.obstacles[0];
-    const inside = [
-      obb.center[0],
-      obb.center[1],
-      obb.center[2],
-    ] as [number, number, number];
+    const inside = [obb.center[0], obb.center[1], obb.center[2]] as [number, number, number];
     expect(distanceToOBB(inside, obb)).toBeLessThan(0); // confirmed inside
     const projected = projectPointOutOfOBB(inside, obb, G1_LINK_CLEARANCE_METERS);
     expect(projected.wasInside).toBe(true);

@@ -14,12 +14,19 @@
  * - Ericson, "Real-Time Collision Detection", 2005.
  */
 
-import { SDFEvaluation, sdfBox, sdfCapsule, sdfCylinder, sdfOBB, sdfSphere } from "./analyticSdf";
+import {
+  type SDFEvaluation,
+  sdfBox,
+  sdfCapsule,
+  sdfCylinder,
+  sdfOBB,
+  sdfSphere,
+} from "./analyticSdf";
 
 export type Matrix3x3 = [
   [number, number, number],
   [number, number, number],
-  [number, number, number]
+  [number, number, number],
 ];
 
 export interface DifferentiableSdfResult {
@@ -33,7 +40,11 @@ export interface DifferentiableSdfResult {
  * Polynomial C¹-smooth minimum.
  * Returns smoothed distance and partial derivatives with respect to inputs (a, b).
  */
-export function sminPoly(a: number, b: number, k: number = 0.1): { val: number; dda: number; ddb: number } {
+export function sminPoly(
+  a: number,
+  b: number,
+  k: number = 0.1,
+): { val: number; dda: number; ddb: number } {
   if (k <= 1e-9) {
     const val = Math.min(a, b);
     return { val, dda: a < b ? 1 : 0, ddb: a < b ? 0 : 1 };
@@ -69,7 +80,11 @@ export function sminPoly(a: number, b: number, k: number = 0.1): { val: number; 
 /**
  * Log-Sum-Exp C¹-smooth minimum: smin(a, b) = -k * ln(exp(-a/k) + exp(-b/k))
  */
-export function sminLse(a: number, b: number, k: number = 0.1): { val: number; dda: number; ddb: number } {
+export function sminLse(
+  a: number,
+  b: number,
+  k: number = 0.1,
+): { val: number; dda: number; ddb: number } {
   if (k <= 1e-9) {
     const val = Math.min(a, b);
     return { val, dda: a < b ? 1 : 0, ddb: a < b ? 0 : 1 };
@@ -90,7 +105,11 @@ export function sminLse(a: number, b: number, k: number = 0.1): { val: number; d
 /**
  * Polynomial C¹-smooth maximum (smooth intersection): smax(a, b) = -smin(-a, -b)
  */
-export function smaxPoly(a: number, b: number, k: number = 0.1): { val: number; dda: number; ddb: number } {
+export function smaxPoly(
+  a: number,
+  b: number,
+  k: number = 0.1,
+): { val: number; dda: number; ddb: number } {
   const { val, dda, ddb } = sminPoly(-a, -b, k);
   return { val: -val, dda, ddb };
 }
@@ -101,7 +120,7 @@ export function smaxPoly(a: number, b: number, k: number = 0.1): { val: number; 
 export function evalGradientAndHessian(
   sdfFunc: (p: [number, number, number]) => number,
   p: [number, number, number],
-  eps: number = 1e-4
+  eps: number = 1e-4,
 ): { gradient: [number, number, number]; hessian: Matrix3x3; normal: [number, number, number] } {
   const [x, y, z] = p;
   const f0 = sdfFunc(p);
@@ -160,7 +179,7 @@ export function evalGradientAndHessian(
 export class DifferentiableSdfNode {
   constructor(
     public readonly evalDistance: (p: [number, number, number]) => number,
-    public readonly name: string = "diff_sdf_node"
+    public readonly name: string = "diff_sdf_node",
   ) {}
 
   public evaluate(p: [number, number, number]): DifferentiableSdfResult {
@@ -204,7 +223,7 @@ export class DifferentiableSdfNode {
    */
   public withNearSurfaceRefinement(
     displacementFn: (p: [number, number, number]) => number,
-    bandWidth: number = 0.15
+    bandWidth: number = 0.15,
   ): DifferentiableSdfNode {
     return new DifferentiableSdfNode((p) => {
       const baseDist = this.evalDistance(p);
@@ -232,7 +251,7 @@ export function raymarchDifferentiableSdf(
   direction: [number, number, number],
   maxDist: number = 20.0,
   tol: number = 1e-4,
-  maxSteps: number = 64
+  maxSteps: number = 64,
 ): {
   hit: boolean;
   distance: number;
@@ -281,11 +300,7 @@ export function raymarchDifferentiableSdf(
   // Implicit derivative: dt/do = - \nabla SDF / (\nabla SDF \cdot d)
   const dotND = nx * dx + ny * dy + nz * dz;
   const denom = Math.abs(dotND) > 1e-6 ? dotND : -1.0;
-  const dDistance_dOrigin: [number, number, number] = [
-    -nx / denom,
-    -ny / denom,
-    -nz / denom,
-  ];
+  const dDistance_dOrigin: [number, number, number] = [-nx / denom, -ny / denom, -nz / denom];
 
   return {
     hit,
@@ -297,13 +312,7 @@ export function raymarchDifferentiableSdf(
   };
 }
 
-export type DiffSdfPrimitiveType =
-  | "sphere"
-  | "box"
-  | "capsule"
-  | "cylinder"
-  | "obb"
-  | "plane";
+export type DiffSdfPrimitiveType = "sphere" | "box" | "capsule" | "cylinder" | "obb" | "plane";
 
 export interface DiffSdfPrimitive {
   id: number;
@@ -335,7 +344,11 @@ export class DifferentiableSceneSDF {
     return id;
   }
 
-  public addCapsule(a: [number, number, number], b: [number, number, number], radius: number): number {
+  public addCapsule(
+    a: [number, number, number],
+    b: [number, number, number],
+    radius: number,
+  ): number {
     const id = this.nextId++;
     this.primitives.push({ id, type: "capsule", params: { a, b, radius } });
     return id;
@@ -367,7 +380,10 @@ export class DifferentiableSceneSDF {
     this.primitives = [];
   }
 
-  public evaluate(p: [number, number, number], smoothing = this.defaultSmoothing): DiffSdfEvaluation {
+  public evaluate(
+    p: [number, number, number],
+    smoothing = this.defaultSmoothing,
+  ): DiffSdfEvaluation {
     const n = this.primitives.length;
     if (n === 0) {
       return { distance: Infinity, gradient: [0, 1, 0], normal: [0, 1, 0], weights: [] };
@@ -406,7 +422,9 @@ export class DifferentiableSceneSDF {
     const invSum = 1.0 / (sumExp || 1e-12);
     const softMinDist = minD - k * Math.log(Math.max(1e-12, sumExp));
 
-    let gx = 0, gy = 0, gz = 0;
+    let gx = 0,
+      gy = 0,
+      gz = 0;
     const weights: Array<{ id: number; weight: number }> = new Array(n);
 
     for (let i = 0; i < n; i++) {
@@ -425,7 +443,11 @@ export class DifferentiableSceneSDF {
     return { distance: softMinDist, gradient: [gx, gy, gz], normal, weights };
   }
 
-  public projectToSurface(startP: [number, number, number], maxIters = 20, tol = 1e-4): [number, number, number] {
+  public projectToSurface(
+    startP: [number, number, number],
+    maxIters = 20,
+    tol = 1e-4,
+  ): [number, number, number] {
     let curr: [number, number, number] = [startP[0], startP[1], startP[2]];
 
     for (let iter = 0; iter < maxIters; iter++) {
@@ -457,7 +479,10 @@ export class DifferentiableSceneSDF {
       case "obb":
         return sdfOBB(p, prim.params.center, prim.params.halfExtents, prim.params.rotationMatrix);
       case "plane": {
-        const dot = p[0] * prim.params.normal[0] + p[1] * prim.params.normal[1] + p[2] * prim.params.normal[2];
+        const dot =
+          p[0] * prim.params.normal[0] +
+          p[1] * prim.params.normal[1] +
+          p[2] * prim.params.normal[2];
         const dist = dot + (prim.params.offset || 0);
         return { distance: dist, normal: prim.params.normal, gradient: prim.params.normal };
       }

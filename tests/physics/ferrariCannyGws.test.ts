@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clampArmTargetPosition,
   computeFerrariCannyGWS,
+  computeKukaFK,
+  isTargetKukaReachable,
   MANIPULABLE_OBJECT_PRESETS,
   solveKukaIK,
-  computeKukaFK,
-  clampArmTargetPosition,
-  isTargetKukaReachable,
 } from "../../app/lib/armInverseKinematics";
 import { createSceneFromHouseFurniture } from "../../app/lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../../app/lib/houseScenes";
@@ -53,7 +53,7 @@ describe("Ferrari-Canny Grasp Wrench Space & Manipulation Physics", () => {
     const dist = Math.hypot(
       target[0] - endEffector[0],
       target[1] - endEffector[1],
-      target[2] - endEffector[2]
+      target[2] - endEffector[2],
     );
     expect(dist).toBeLessThan(0.015); // <1.5cm analytical precision
   });
@@ -61,7 +61,12 @@ describe("Ferrari-Canny Grasp Wrench Space & Manipulation Physics", () => {
   test("enforces tabletop non-penetration constraint Y >= 0.78m", () => {
     const scene = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture);
     const belowTable: [number, number, number] = [0.2, 0.5, 0.1]; // Y=0.5 is 28cm inside table!
-    const { clampedTarget, isColliding } = clampArmTargetPosition(belowTable, scene.obstacles, 0.78, 0.04);
+    const { clampedTarget, isColliding } = clampArmTargetPosition(
+      belowTable,
+      scene.obstacles,
+      0.78,
+      0.04,
+    );
 
     expect(clampedTarget[1]).toBeGreaterThanOrEqual(0.78 + 0.04);
   });

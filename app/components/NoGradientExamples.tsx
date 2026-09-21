@@ -1,22 +1,22 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  PlaneTakeoff,
-  Building2,
-  BrainCircuit,
-  Timer,
-  Zap,
   AlertTriangle,
-  Flame,
+  BrainCircuit,
+  Building2,
   CheckCircle2,
+  Flame,
+  PlaneTakeoff,
+  Shuffle,
+  Timer,
   TrendingDown,
-  Shuffle
+  Zap,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BridgeViz } from "./BridgeViz";
-import { TransformerViz } from "./TransformerViz";
 import { LatexRenderer } from "./LatexRenderer";
+import { TransformerViz } from "./TransformerViz";
 
 /**
  * Interactive "Why Finite-Differences Fail" Simulator Widget:
@@ -32,13 +32,16 @@ function FiniteDifferenceFailDemo() {
 
   // Objective with high-frequency simulation noise / discrete meshing artifacts
   const trueFn = (x: number) => 0.5 * (x - 0.2) ** 2 + 0.2;
-  const noisySimFn = useCallback((x: number) => {
-    // Deterministic pseudo-noise mimicking CFD turbulence and discretization jumps
-    const noise =
-      noiseAmplitude *
-      (Math.sin(65 * x) * 0.5 + Math.cos(140 * x) * 0.3 + (Math.sin(310 * x) > 0 ? 0.2 : -0.2));
-    return trueFn(x) + noise;
-  }, [noiseAmplitude]);
+  const noisySimFn = useCallback(
+    (x: number) => {
+      // Deterministic pseudo-noise mimicking CFD turbulence and discretization jumps
+      const noise =
+        noiseAmplitude *
+        (Math.sin(65 * x) * 0.5 + Math.cos(140 * x) * 0.3 + (Math.sin(310 * x) > 0 ? 0.2 : -0.2));
+      return trueFn(x) + noise;
+    },
+    [noiseAmplitude],
+  );
 
   const { trueGrad, fdGrad, error } = useMemo(() => {
     const tg = sampleX - 0.2; // d/dx of 0.5*(x-0.2)^2
@@ -48,7 +51,7 @@ function FiniteDifferenceFailDemo() {
     return {
       trueGrad: tg,
       fdGrad: fd,
-      error: Math.abs(fd - tg)
+      error: Math.abs(fd - tg),
     };
   }, [sampleX, epsilon, noisySimFn]);
 
@@ -168,7 +171,8 @@ function FiniteDifferenceFailDemo() {
               Why Numerical Gradients Fail in Black Boxes
             </h3>
             <p className="text-xs text-slate-400">
-              Perturbation noise explodes finite differences [f(x+ε) - f(x)] / ε, while CMA-ES ranks whole neighborhoods
+              Perturbation noise explodes finite differences [f(x+ε) - f(x)] / ε, while CMA-ES ranks
+              whole neighborhoods
             </p>
           </div>
         </div>
@@ -235,7 +239,10 @@ function FiniteDifferenceFailDemo() {
                 className="w-full accent-amber-400"
               />
               <p className="text-[0.68rem] text-slate-500 flex items-center gap-1">
-                <span>Smaller</span> <LatexRenderer math="\varepsilon" block={false} /> <span>explodes noise; larger</span> <LatexRenderer math="\varepsilon" block={false} /> <span>causes severe truncation bias.</span>
+                <span>Smaller</span> <LatexRenderer math="\varepsilon" block={false} />{" "}
+                <span>explodes noise; larger</span>{" "}
+                <LatexRenderer math="\varepsilon" block={false} />{" "}
+                <span>causes severe truncation bias.</span>
               </p>
             </div>
 
@@ -288,7 +295,10 @@ function FiniteDifferenceFailDemo() {
               <span>The Limit of Numerical Gradients</span>
             </div>
             <p className="leading-relaxed">
-              With <LatexRenderer math="n = 20" block={false} /> dimensions, forward finite differences require <strong>21 simulation runs per step</strong>, and localized perturbation noise points the resulting vector in a misleading direction. CMA-ES estimates collective distribution shifts over the population to remain stable.
+              With <LatexRenderer math="n = 20" block={false} /> dimensions, forward finite
+              differences require <strong>21 simulation runs per step</strong>, and localized
+              perturbation noise points the resulting vector in a misleading direction. CMA-ES
+              estimates collective distribution shifts over the population to remain stable.
             </p>
           </div>
         </div>
@@ -308,9 +318,9 @@ export function NoGradientExamples() {
         "Navier-Stokes CFD meshing with turbulence boundary layer transitions",
         "Blended scalar penalty: lift-to-drag ratio, wave drag, stall onset, root bending stress",
         "Categorical NACA airfoil family indices introduce discrete step discontinuities",
-        "Grid search is intractable: 10 sample points across 15 dimensions requires 10¹⁵ evaluations"
+        "Grid search is intractable: 10 sample points across 15 dimensions requires 10¹⁵ evaluations",
       ],
-      solution: "CMA-ES discovers optimal sweep and aspect ratio combinations in ~40 generations."
+      solution: "CMA-ES discovers optimal sweep and aspect ratio combinations in ~40 generations.",
     },
     {
       id: "bridge",
@@ -321,9 +331,10 @@ export function NoGradientExamples() {
         "Solves nonlinear elasticity systems under dead, live, wind, and seismic load combinations",
         "Step changes occur when buckling modes cross or tensile stress exceeds the material's yield limit (250–1200 MPa depending on grade)",
         "Non-smooth constraint penalties degrade second-order Taylor approximations",
-        "Rank-based selection handles discontinuous penalty boundaries without numerical overflow"
+        "Rank-based selection handles discontinuous penalty boundaries without numerical overflow",
       ],
-      solution: "CMA-ES adapts covariance to relieve high-stress zones while minimizing total steel tonnage."
+      solution:
+        "CMA-ES adapts covariance to relieve high-stress zones while minimizing total steel tonnage.",
     },
     {
       id: "transformer",
@@ -334,21 +345,25 @@ export function NoGradientExamples() {
         "Continuous parameters: learning rate schedule, weight decay, SwiGLU beta, LayerNorm eps",
         "Discrete architectural integers: layer count L ∈ [6..48], d_model, attention head counts",
         "Evaluation requires multi-hour cluster training with stochastic validation scores",
-        "Unit-box encoding maps discrete choices into continuous search space without custom heuristics"
+        "Unit-box encoding maps discrete choices into continuous search space without custom heuristics",
       ],
-      solution: "CMA-ES navigates multi-objective trade-offs between validation accuracy and inference latency."
-    }
+      solution:
+        "CMA-ES navigates multi-objective trade-offs between validation accuracy and inference latency.",
+    },
   ];
 
   return (
     <div className="space-y-12">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
-          When people first encounter optimization without analytic gradients, a common suggestion is to approximate derivatives via finite differences.
+          When people first encounter optimization without analytic gradients, a common suggestion
+          is to approximate derivatives via finite differences.
         </p>
 
         <p>
-          In production engineering pipelines, simulations contain turbulence switches, finite-element meshing boundaries, and categorical parameters. Finite difference quotients amplify localized noise into arbitrary vectors.
+          In production engineering pipelines, simulations contain turbulence switches,
+          finite-element meshing boundaries, and categorical parameters. Finite difference quotients
+          amplify localized noise into arbitrary vectors.
         </p>
       </div>
 
@@ -378,7 +393,9 @@ export function NoGradientExamples() {
               </div>
 
               <h3 className="text-base font-bold text-white font-display mb-1">{a.title}</h3>
-              <p className="text-xs text-slate-400 mb-4 font-medium leading-relaxed">{a.subtitle}</p>
+              <p className="text-xs text-slate-400 mb-4 font-medium leading-relaxed">
+                {a.subtitle}
+              </p>
 
               <ul className="space-y-2 mb-6 text-xs text-slate-300">
                 {a.metrics.map((m) => (
@@ -412,7 +429,8 @@ export function NoGradientExamples() {
                 Interactive Case Study: Suspension Bridge Under Dynamic Load
               </h3>
               <p className="text-xs text-slate-400">
-                Live analytic beam-and-cable stress surrogate with moving traffic & structural optimization
+                Live analytic beam-and-cable stress surrogate with moving traffic & structural
+                optimization
               </p>
             </div>
           </div>

@@ -1,8 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Globe2, TerminalSquare, Code2, ExternalLink, Copy, Check, Zap, Shield, FileCode } from "lucide-react";
+import {
+  Check,
+  Code2,
+  Copy,
+  ExternalLink,
+  FileCode,
+  Globe2,
+  Shield,
+  TerminalSquare,
+  Zap,
+} from "lucide-react";
+import type React from "react";
+import { useState } from "react";
 
 type Lang = "ts" | "rust" | "python";
 
@@ -37,10 +48,8 @@ function highlightCodeLine(line: string, lang: Lang): React.ReactNode {
 }
 
 function highlightTokens(code: string, lang: Lang): React.ReactNode[] {
-  const tokenRegex = new RegExp(
-    '(f?"(?:[^"\\\\]|\\\\.)*"|f?\'(?:[^\'\\\\]|\\\\.)*\'|#\\[[a-zA-Z0-9_]+\\]|\\b(?:vec!|println!|format!|panic!)\\b|\\b\\d+(?:\\.\\d+)?(?:_\\d+)*\\b|=>|->|\\*\\*|\\+=|-=|\\*=|/=|==|!=|<=|>=|&&|\\|\\||::|[+\\-*%<>=!&|/]|[{}()\\[\\],;.:]|\\b[a-zA-Z_][a-zA-Z0-9_]*\\b|\\s+)',
-    'g'
-  );
+  const tokenRegex =
+    /(f?"(?:[^"\\]|\\.)*"|f?'(?:[^'\\]|\\.)*'|#\[[a-zA-Z0-9_]+\]|\b(?:vec!|println!|format!|panic!)\b|\b\d+(?:\.\d+)?(?:_\d+)*\b|=>|->|\*\*|\+=|-=|\*=|\/=|==|!=|<=|>=|&&|\|\||::|[+\-*%<>=!&|/]|[{}()[\],;.:]|\b[a-zA-Z_][a-zA-Z0-9_]*\b|\s+)/g;
 
   const matches = code.match(tokenRegex) || [code];
   return matches.map((token, i) => {
@@ -71,9 +80,7 @@ function highlightTokens(code: string, lang: Lang): React.ReactNode[] {
                 return (
                   <span key={idx}>
                     <span className="text-pink-400 font-bold">{"{"}</span>
-                    <span className="text-amber-200 font-medium">
-                      {sp.slice(1, -1)}
-                    </span>
+                    <span className="text-amber-200 font-medium">{sp.slice(1, -1)}</span>
                     <span className="text-pink-400 font-bold">{"}"}</span>
                   </span>
                 );
@@ -209,11 +216,7 @@ function highlightTokens(code: string, lang: Lang): React.ReactNode[] {
       );
     }
 
-    if (
-      /^(?:=>|->|\*\*|\+=|-=|\*=|(?:\/=)|==|!=|<=|>=|&&|\|\||::|[+\-*%=<>!&|]|\/)$/.test(
-        token
-      )
-    ) {
+    if (/^(?:=>|->|\*\*|\+=|-=|\*=|(?:\/=)|==|!=|<=|>=|&&|\|\||::|[+\-*%=<>!&|]|\/)$/.test(token)) {
       return (
         <span key={i} className="text-rose-400 font-medium">
           {token}
@@ -221,7 +224,7 @@ function highlightTokens(code: string, lang: Lang): React.ReactNode[] {
       );
     }
 
-    if (/^[{}()\[\],;.:]$/.test(token)) {
+    if (/^[{}()[\],;.:]$/.test(token)) {
       return (
         <span key={i} className="text-slate-400">
           {token}
@@ -245,13 +248,7 @@ function highlightTokens(code: string, lang: Lang): React.ReactNode[] {
   });
 }
 
-function CodeBlockViewer({
-  code,
-  lang,
-}: {
-  code: string;
-  lang: Lang;
-}) {
+function CodeBlockViewer({ code, lang }: { code: string; lang: Lang }) {
   const lines = code.trim().split("\n");
 
   return (
@@ -358,8 +355,8 @@ fn main() {
     <div className="space-y-8">
       <div className="prose-cmaes">
         <p className="text-lg text-slate-300 leading-relaxed">
-          High-performance production implementations in Rust, targeting WebAssembly for browser deployment
-          and native C/Python bindings for cluster workloads.
+          High-performance production implementations in Rust, targeting WebAssembly for browser
+          deployment and native C/Python bindings for cluster workloads.
         </p>
       </div>
 
@@ -380,7 +377,9 @@ fn main() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white font-display">wasm_cmaes</h3>
-                  <p className="text-xs text-slate-400">WebAssembly + SIMD + Web Worker Parallelism</p>
+                  <p className="text-xs text-slate-400">
+                    WebAssembly + SIMD + Web Worker Parallelism
+                  </p>
                 </div>
               </div>
 
@@ -390,7 +389,8 @@ fn main() {
             </div>
 
             <p className="text-sm text-slate-300 leading-relaxed mb-5">
-              Zero-overhead Rust CMA-ES compiled to WebAssembly. Features sequential and multi-threaded Rayon worker pools with SIMD matrix decomposition.
+              Zero-overhead Rust CMA-ES compiled to WebAssembly. Features sequential and
+              multi-threaded Rayon worker pools with SIMD matrix decomposition.
             </p>
 
             {/* Code Block with Syntax Highlighting */}
@@ -437,7 +437,9 @@ fn main() {
                     {activeTabWasm === "ts" ? "rosenbrock.ts" : "lib.rs"}
                   </span>
                   <button
-                    onClick={() => copyCode(activeTabWasm === "ts" ? wasmTsCode : wasmRustCode, "wasm")}
+                    onClick={() =>
+                      copyCode(activeTabWasm === "ts" ? wasmTsCode : wasmRustCode, "wasm")
+                    }
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono transition-[background-color,color,border-color] ${
                       copiedKey === "wasm"
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
@@ -470,11 +472,18 @@ fn main() {
             <ul className="space-y-2 mb-6 text-xs text-slate-300">
               <li className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-sky-400 shrink-0" />
-                <span>Two distribution bundles: <code className="text-sky-300 font-mono">pkg/</code> (pure JS) and <code className="text-sky-300 font-mono">pkg-par/</code> (SharedArrayBuffer + Rayon).</span>
+                <span>
+                  Two distribution bundles: <code className="text-sky-300 font-mono">pkg/</code>{" "}
+                  (pure JS) and <code className="text-sky-300 font-mono">pkg-par/</code>{" "}
+                  (SharedArrayBuffer + Rayon).
+                </span>
               </li>
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>Deterministic seeded LCG random number generator for reproducible simulation replays.</span>
+                <span>
+                  Deterministic seeded LCG random number generator for reproducible simulation
+                  replays.
+                </span>
               </li>
             </ul>
           </div>
@@ -509,7 +518,9 @@ fn main() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-white font-display">fast_cmaes</h3>
-                  <p className="text-xs text-slate-400">Native Python Bindings + AVX-512 SIMD Acceleration</p>
+                  <p className="text-xs text-slate-400">
+                    Native Python Bindings + AVX-512 SIMD Acceleration
+                  </p>
                 </div>
               </div>
 
@@ -519,7 +530,10 @@ fn main() {
             </div>
 
             <p className="text-sm text-slate-300 leading-relaxed mb-5">
-              A high-throughput Rust engine with a drop-in <code className="text-emerald-300 font-mono">scipy.optimize</code> compatible surface. 10–30× faster than pure Python implementations when the objective itself is cheap and interpreter overhead dominates.
+              A high-throughput Rust engine with a drop-in{" "}
+              <code className="text-emerald-300 font-mono">scipy.optimize</code> compatible surface.
+              10–30× faster than pure Python implementations when the objective itself is cheap and
+              interpreter overhead dominates.
             </p>
 
             {/* Code Block with Syntax Highlighting */}
@@ -566,7 +580,9 @@ fn main() {
                     {activeTabFast === "python" ? "optimize.py" : "main.rs"}
                   </span>
                   <button
-                    onClick={() => copyCode(activeTabFast === "python" ? fastPyCode : fastRustCode, "fast")}
+                    onClick={() =>
+                      copyCode(activeTabFast === "python" ? fastPyCode : fastRustCode, "fast")
+                    }
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono transition-[background-color,color,border-color] ${
                       copiedKey === "fast"
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
@@ -599,11 +615,18 @@ fn main() {
             <ul className="space-y-2 mb-6 text-xs text-slate-300">
               <li className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
-                <span>Rich terminal UI displaying live step size <code className="text-amber-300 font-bold">σ</code>, condition number <code className="text-purple-300 font-bold">κ(C)</code>, and best fitness.</span>
+                <span>
+                  Rich terminal UI displaying live step size{" "}
+                  <code className="text-amber-300 font-bold">σ</code>, condition number{" "}
+                  <code className="text-purple-300 font-bold">κ(C)</code>, and best fitness.
+                </span>
               </li>
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-sky-400 shrink-0" />
-                <span>Full support for diagonal sep-CMA-ES, active covariance, boundary repair, and IPOP/BIPOP restarts.</span>
+                <span>
+                  Full support for diagonal sep-CMA-ES, active covariance, boundary repair, and
+                  IPOP/BIPOP restarts.
+                </span>
               </li>
             </ul>
           </div>

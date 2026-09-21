@@ -15,12 +15,17 @@ describe("Whole-House Multi-Room Navigation Chain Engine", () => {
   test("CRAFTSMAN_DOORWAYS defines doorway corridors for room transitions", () => {
     expect(CRAFTSMAN_DOORWAYS.length).toBe(6);
     for (const door of CRAFTSMAN_DOORWAYS) {
-      expect(door.halfWidth).toBeGreaterThanOrEqual(0.40);
+      expect(door.halfWidth).toBeGreaterThanOrEqual(0.4);
     }
   });
 
   test("simulateHouseNavigation successfully traverses the whole house without collisions", () => {
-    const result = simulateHouseNavigation(CRAFTSMAN_WAYPOINT_CHAIN, CRAFTSMAN_DOORWAYS, 2500, 1 / 60);
+    const result = simulateHouseNavigation(
+      CRAFTSMAN_WAYPOINT_CHAIN,
+      CRAFTSMAN_DOORWAYS,
+      2500,
+      1 / 60,
+    );
 
     expect(result.allWaypointsReached).toBe(true);
     expect(result.completedWaypoints).toBe(7);
@@ -42,7 +47,12 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     // the final sample is result.trajectory[last].clearanceMeters.
     // If the bug regresses, the final sample's clearance would be the
     // min, which is dominated by the doorways (narrow).
-    const result = simulateHouseNavigation(CRAFTSMAN_WAYPOINT_CHAIN, CRAFTSMAN_DOORWAYS, 2500, 1 / 60);
+    const result = simulateHouseNavigation(
+      CRAFTSMAN_WAYPOINT_CHAIN,
+      CRAFTSMAN_DOORWAYS,
+      2500,
+      1 / 60,
+    );
     expect(result.allWaypointsReached).toBe(true);
     const last = result.trajectory[result.trajectory.length - 1];
     // The final sample should be near the bath waypoint (close to

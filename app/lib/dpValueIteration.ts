@@ -244,11 +244,7 @@ export const DEFAULT_MULTI_RESOLUTION: MultiResolutionOptions = {
  * (Ericson 2005 §5.2.6). Returns 0 for points inside the OBB
  * (closest surface point is the clamped point itself).
  */
-export function obbSquaredDistance(
-  px: number,
-  py: number,
-  obb: OBB2D,
-): number {
+export function obbSquaredDistance(px: number, py: number, obb: OBB2D): number {
   const dx = px - obb.center[0];
   const dy = py - obb.center[1];
   const cos = Math.cos(-obb.yaw);
@@ -268,11 +264,7 @@ export function obbSquaredDistance(
  * distance is the inside/outside test; the magnitude is the
  * Euclidean distance to the closest surface.
  */
-export function obbSignedDistance(
-  px: number,
-  py: number,
-  obb: OBB2D,
-): number {
+export function obbSignedDistance(px: number, py: number, obb: OBB2D): number {
   const dx = px - obb.center[0];
   const dy = py - obb.center[1];
   const cos = Math.cos(-obb.yaw);
@@ -280,9 +272,7 @@ export function obbSignedDistance(
   const lx = dx * cos - dy * sin;
   const ly = dx * sin + dy * cos;
   // Inside test: every component is within the half-extent.
-  const inside =
-    Math.abs(lx) <= obb.halfExtents[0] &&
-    Math.abs(ly) <= obb.halfExtents[1];
+  const inside = Math.abs(lx) <= obb.halfExtents[0] && Math.abs(ly) <= obb.halfExtents[1];
   if (inside) {
     // Penetration depth: minimum distance to a face of the OBB.
     const toFaceX = obb.halfExtents[0] - Math.abs(lx);
@@ -305,11 +295,7 @@ export function obbSignedDistance(
  * distance is negative. If the point is outside all OBBs, the
  * distance is positive (or +Infinity if the OBB list is empty).
  */
-export function obbUnionSDF(
-  px: number,
-  py: number,
-  obstacles: readonly OBB2D[],
-): number {
+export function obbUnionSDF(px: number, py: number, obstacles: readonly OBB2D[]): number {
   let minDist = Number.POSITIVE_INFINITY;
   for (const obb of obstacles) {
     const sd = obbSignedDistance(px, py, obb);
@@ -320,7 +306,6 @@ export function obbUnionSDF(
   }
   return minDist;
 }
-
 
 /**
  * 2D SDF: signed distance to the nearest obstacle surface, using the
@@ -502,7 +487,8 @@ export function runValueIteration(
         isBlocked[idx] = 1;
       } else {
         const clearanceViolation = Math.max(0, options.cost.safetyMargin - d);
-        const clearanceCost = options.cost.clearanceWeight * clearanceViolation * clearanceViolation;
+        const clearanceCost =
+          options.cost.clearanceWeight * clearanceViolation * clearanceViolation;
         baseCosts[idx] = options.cost.stepPenalty + clearanceCost;
       }
     }
@@ -562,10 +548,8 @@ export function extractPolicy(grid: ValueGrid, sdf: SDF2D): ValuePolicy {
       const ixm = Math.max(ix - 1, 0);
       const iyp = Math.min(iy + 1, height - 1);
       const iym = Math.max(iy - 1, 0);
-      const dVx = (values[iy * width + ixp] - values[iy * width + ixm]) /
-        (2.0 * resolution);
-      const dVy = (values[iyp * width + ix] - values[iym * width + ix]) /
-        (2.0 * resolution);
+      const dVx = (values[iy * width + ixp] - values[iy * width + ixm]) / (2.0 * resolution);
+      const dVy = (values[iyp * width + ix] - values[iym * width + ix]) / (2.0 * resolution);
       const mag = Math.sqrt(dVx * dVx + dVy * dVy);
       if (mag < 1e-12) {
         gx[idx] = 0;
@@ -607,26 +591,13 @@ export function runClearanceValueIteration(
     cost: { ...DEFAULT_COST_PARAMS, ...(options.cost ?? {}) },
   };
   // Build the SDF (OBB union, or caller-provided).
-  const sdf: SDF2D =
-    opts.sdf ??
-    makeOBBUnionSDF(opts.obstacles ?? []);
+  const sdf: SDF2D = opts.sdf ?? makeOBBUnionSDF(opts.obstacles ?? []);
   // 1. Coarse pass.
   const t0 = performanceNow();
   const coarseOrigin: Vec2 = opts.origin ?? bounds.min;
-  const coarseW = Math.max(
-    1,
-    Math.ceil((bounds.max[0] - coarseOrigin[0]) / opts.coarseResolution),
-  );
-  const coarseH = Math.max(
-    1,
-    Math.ceil((bounds.max[1] - coarseOrigin[1]) / opts.coarseResolution),
-  );
-  const coarseGrid = allocateValueGrid(
-    coarseW,
-    coarseH,
-    coarseOrigin,
-    opts.coarseResolution,
-  );
+  const coarseW = Math.max(1, Math.ceil((bounds.max[0] - coarseOrigin[0]) / opts.coarseResolution));
+  const coarseH = Math.max(1, Math.ceil((bounds.max[1] - coarseOrigin[1]) / opts.coarseResolution));
+  const coarseGrid = allocateValueGrid(coarseW, coarseH, coarseOrigin, opts.coarseResolution);
   // Initialize goal cells in the coarse grid.
   for (const g of goals) {
     setGoalCells(coarseGrid, [g.center], g.radius, sdf);
@@ -639,24 +610,10 @@ export function runClearanceValueIteration(
     maxSweeps: opts.coarseMaxSweeps,
   });
   // 2. Fine pass.
-  const fineOrigin: Vec2 = [
-    start[0] - opts.fineWindow * 0.5,
-    start[1] - opts.fineWindow * 0.5,
-  ];
-  const fineW = Math.max(
-    3,
-    Math.ceil(opts.fineWindow / opts.fineResolution),
-  );
-  const fineH = Math.max(
-    3,
-    Math.ceil(opts.fineWindow / opts.fineResolution),
-  );
-  const fineGrid = allocateValueGrid(
-    fineW,
-    fineH,
-    fineOrigin,
-    opts.fineResolution,
-  );
+  const fineOrigin: Vec2 = [start[0] - opts.fineWindow * 0.5, start[1] - opts.fineWindow * 0.5];
+  const fineW = Math.max(3, Math.ceil(opts.fineWindow / opts.fineResolution));
+  const fineH = Math.max(3, Math.ceil(opts.fineWindow / opts.fineResolution));
+  const fineGrid = allocateValueGrid(fineW, fineH, fineOrigin, opts.fineResolution);
   // Goal cells in the fine grid are inherited from the coarse grid
   // (any fine cell within a goal disc is a goal).
   for (const g of goals) {
@@ -690,10 +647,22 @@ export function runClearanceValueIteration(
       const w10 = fx * (1 - fy);
       const w01 = (1 - fx) * fy;
       const w11 = fx * fy;
-      if (Number.isFinite(v00)) { sum += v00 * w00; totalW += w00; }
-      if (Number.isFinite(v10)) { sum += v10 * w10; totalW += w10; }
-      if (Number.isFinite(v01)) { sum += v01 * w01; totalW += w01; }
-      if (Number.isFinite(v11)) { sum += v11 * w11; totalW += w11; }
+      if (Number.isFinite(v00)) {
+        sum += v00 * w00;
+        totalW += w00;
+      }
+      if (Number.isFinite(v10)) {
+        sum += v10 * w10;
+        totalW += w10;
+      }
+      if (Number.isFinite(v01)) {
+        sum += v01 * w01;
+        totalW += w01;
+      }
+      if (Number.isFinite(v11)) {
+        sum += v11 * w11;
+        totalW += w11;
+      }
       const v = totalW > 0 ? sum / totalW : Number.POSITIVE_INFINITY;
       fineGrid.values[idx] = v;
     }
@@ -771,9 +740,21 @@ export function sampleValueAt(grid: ValueGrid, wx: number, wy: number): number {
   const w10 = fx * (1 - fy);
   const w01 = (1 - fx) * fy;
   const w11 = fx * fy;
-  if (Number.isFinite(v00)) { sum += v00 * w00; totalW += w00; }
-  if (Number.isFinite(v10)) { sum += v10 * w10; totalW += w10; }
-  if (Number.isFinite(v01)) { sum += v01 * w01; totalW += w01; }
-  if (Number.isFinite(v11)) { sum += v11 * w11; totalW += w11; }
+  if (Number.isFinite(v00)) {
+    sum += v00 * w00;
+    totalW += w00;
+  }
+  if (Number.isFinite(v10)) {
+    sum += v10 * w10;
+    totalW += w10;
+  }
+  if (Number.isFinite(v01)) {
+    sum += v01 * w01;
+    totalW += w01;
+  }
+  if (Number.isFinite(v11)) {
+    sum += v11 * w11;
+    totalW += w11;
+  }
   return totalW > 0 ? sum / totalW : Number.POSITIVE_INFINITY;
 }

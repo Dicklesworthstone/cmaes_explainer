@@ -12,17 +12,16 @@
 //   - Different phases produce different intensities at the same frame
 //     (no flicker lockstep).
 
-import type { MeshStandardMaterial } from "three";
-
 import { describe, expect, test } from "bun:test";
+import type { MeshStandardMaterial } from "three";
 
 import {
   ALL_EMISSIVE_KINDS,
-  EMISSIVE_PALETTE,
   applyEmissiveToMaterial,
   blackbodyToRGB,
   createCraftsmanEmissives,
   createEmissiveSurface,
+  EMISSIVE_PALETTE,
   liveEmissiveColor,
   liveEmissiveIntensity,
 } from "../app/lib/emissiveSurfaces";
@@ -140,9 +139,17 @@ describe("emissiveSurfaces", () => {
     let intensity = 0;
     const mat = {
       get emissive() {
-        return { setRGB: (_r: number, _g: number, _b: number) => { r = _r; g = _g; b = _b; } };
+        return {
+          setRGB: (_r: number, _g: number, _b: number) => {
+            r = _r;
+            g = _g;
+            b = _b;
+          },
+        };
       },
-      set emissiveIntensity(v: number) { intensity = v; },
+      set emissiveIntensity(v: number) {
+        intensity = v;
+      },
     };
     const s = createEmissiveSurface("recessed-ceiling-light", [0, 0, 1.5]);
     applyEmissiveToMaterial(s, 100, mat as unknown as MeshStandardMaterial);

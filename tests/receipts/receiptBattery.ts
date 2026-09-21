@@ -57,8 +57,8 @@
  */
 
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 /* ------------------------------------------------------------------ */
 /*  Owner + receipt types.                                            */
@@ -199,10 +199,7 @@ export interface SnapshotDiff {
  * the contributor updates the snapshot file in the same commit that
  * changed the kernel.
  */
-export function compareSnapshot(
-  captured: OwnerReceipt,
-  committed: OwnerReceipt,
-): SnapshotDiff {
+export function compareSnapshot(captured: OwnerReceipt, committed: OwnerReceipt): SnapshotDiff {
   const summaryDiffs: string[] = [];
   for (const key of Object.keys(committed.summary) as Array<keyof typeof committed.summary>) {
     if (committed.summary[key] !== captured.summary[key]) {

@@ -47,8 +47,8 @@ import {
   assertDeterministic,
   flattenNumeric,
   maxAbsDiff,
-  parityHarness,
   type ParityCase,
+  parityHarness,
 } from "./parityHarness";
 
 /* ------------------------------------------------------------------ */
@@ -187,14 +187,7 @@ const ccdSdfCases: Array<ParityCase<unknown, unknown>> = [
       velocityB: [-1, 0, 0] as const, // moving toward A at 1 m/s
       radiusB: 0.5,
     },
-    ts: referenceSphereSphereCcd(
-      [0, 0, 0],
-      [0, 0, 0],
-      0.5,
-      [1.5, 0, 0],
-      [-1, 0, 0],
-      0.5,
-    ),
+    ts: referenceSphereSphereCcd([0, 0, 0], [0, 0, 0], 0.5, [1.5, 0, 0], [-1, 0, 0], 0.5),
     kernel: undefined,
     tolerance: 1e-6,
   },
@@ -251,14 +244,7 @@ describe("parity: CCD-on-SDF (kernel vs analytical oracle)", () => {
     // Wait, A is at 0 with radius 0.5 (surface at 0.5), B at 1.5 with
     // radius 0.5 (surface at 1.0). Initial gap = 0.5. B moving at -1, so
     // gap closes at rate 1. Time to contact = 0.5 / 1 = 0.5.
-    const t = referenceSphereSphereCcd(
-      [0, 0, 0],
-      [0, 0, 0],
-      0.5,
-      [1.5, 0, 0],
-      [-1, 0, 0],
-      0.5,
-    );
+    const t = referenceSphereSphereCcd([0, 0, 0], [0, 0, 0], 0.5, [1.5, 0, 0], [-1, 0, 0], 0.5);
     expect(t).toBeCloseTo(0.5, 12);
   });
 

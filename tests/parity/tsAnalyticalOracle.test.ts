@@ -13,13 +13,15 @@ import { assertDeterministic, flattenNumeric, maxAbsDiff, parityHarness } from "
 
 describe("parity comparison integrity", () => {
   function compare(ts: unknown, kernel: unknown, oracle?: unknown) {
-    return parityHarness("regression", [{
-      id: "structured-output",
-      input: null,
-      ts,
-      kernel,
-      ...(oracle === undefined ? {} : { oracle }),
-    }]);
+    return parityHarness("regression", [
+      {
+        id: "structured-output",
+        input: null,
+        ts,
+        kernel,
+        ...(oracle === undefined ? {} : { oracle }),
+      },
+    ]);
   }
 
   test("compares nested objects and typed arrays with exact metadata and keys", () => {
@@ -49,28 +51,55 @@ describe("parity comparison integrity", () => {
 
   test("rejects different shapes even when flattened numbers agree", () => {
     for (const [a, b] of [
-      [[1, [2]], [1, 2]],
+      [
+        [1, [2]],
+        [1, 2],
+      ],
       [{ a: 1 }, { b: 1 }],
       [new Float64Array([1]), new Float32Array([1])],
       [[1], new Float64Array([1])],
-      [{ n: 1, ok: true }, { n: 1, ok: false }],
+      [
+        { n: 1, ok: true },
+        { n: 1, ok: false },
+      ],
       [{ n: 1 }, { n: 1, missing: undefined }],
-    ]) expect(() => compare(a, b)).toThrow();
+    ])
+      expect(() => compare(a, b)).toThrow();
   });
 
   test("checks both answers against the supplied analytical oracle", () => {
     expect(() => compare({ value: 7 }, { value: 7 }, { value: 8 })).toThrow("numeric mismatch");
     expect(compare({ value: 8 }, { value: 8 }, { value: 8 }).passed).toBe(1);
-    expect(() => parityHarness("oracle", [{ id: "missing", input: null, ts: 1, kernel: 1, oracle: undefined }])).toThrow("missing value");
+    expect(() =>
+      parityHarness("oracle", [
+        { id: "missing", input: null, ts: 1, kernel: 1, oracle: undefined },
+      ]),
+    ).toThrow("missing value");
   });
 
   test("validates tolerances, rejects no-case passes, and bounds relative error", () => {
     for (const tolerance of [-1, NaN, Infinity]) {
-      expect(() => parityHarness("invalid", [{ id: "one", input: 0, ts: 1, kernel: 1, tolerance }])).toThrow("tolerance");
+      expect(() =>
+        parityHarness("invalid", [{ id: "one", input: 0, ts: 1, kernel: 1, tolerance }]),
+      ).toThrow("tolerance");
     }
     expect(() => parityHarness("empty", [])).toThrow("no cases");
-    expect(parityHarness("relative", [{ id: "large", input: 0, ts: 1e10, kernel: 1e10 + 1, relativeTolerance: 1e-9 }]).passed).toBe(1);
-    expect(() => parityHarness("overflow", [{ id: "opposite", input: 0, ts: Number.MAX_VALUE, kernel: -Number.MAX_VALUE, relativeTolerance: 1 }])).toThrow("numeric mismatch");
+    expect(
+      parityHarness("relative", [
+        { id: "large", input: 0, ts: 1e10, kernel: 1e10 + 1, relativeTolerance: 1e-9 },
+      ]).passed,
+    ).toBe(1);
+    expect(() =>
+      parityHarness("overflow", [
+        {
+          id: "opposite",
+          input: 0,
+          ts: Number.MAX_VALUE,
+          kernel: -Number.MAX_VALUE,
+          relativeTolerance: 1,
+        },
+      ]),
+    ).toThrow("numeric mismatch");
   });
 
   test("rejects cyclic and unsupported outputs instead of comparing nothing", () => {
@@ -78,7 +107,16 @@ describe("parity comparison integrity", () => {
     cyclic.self = cyclic;
     expect(() => compare(cyclic, cyclic)).toThrow("cyclic");
     expect(() => compare(new Map([["n", 1]]), new Map([["n", 1]]))).toThrow("unsupported");
-    expect(() => compare({ get n() { return 1; } }, { n: 1 })).toThrow("accessor");
+    expect(() =>
+      compare(
+        {
+          get n() {
+            return 1;
+          },
+        },
+        { n: 1 },
+      ),
+    ).toThrow("accessor");
   });
 
   test("determinism isolates mutable inputs and snapshots reused result buffers", () => {
@@ -86,7 +124,16 @@ describe("parity comparison integrity", () => {
     assertDeterministic("input", (x) => ({ value: ++x.value }), input);
     expect(input.value).toBe(0);
     const output = { value: 0 };
-    expect(() => assertDeterministic("shared", () => { output.value++; return output; }, null)).toThrow("numeric mismatch");
+    expect(() =>
+      assertDeterministic(
+        "shared",
+        () => {
+          output.value++;
+          return output;
+        },
+        null,
+      ),
+    ).toThrow("numeric mismatch");
     expect(() => assertDeterministic("empty", () => [], null)).toThrow("zero numeric");
     expect(() => assertDeterministic("one-trial", () => 1, null, 1)).toThrow("two trials");
   });

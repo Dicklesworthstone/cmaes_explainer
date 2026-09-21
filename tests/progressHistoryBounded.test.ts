@@ -19,7 +19,7 @@
 //   - React state holds only the 200-point window, so re-renders
 //     stay bounded and the chart only sees what it can display.
 
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 const HISTORY_CAP = 200;
 const HEAD = 10;
@@ -141,7 +141,7 @@ describe("progressHistory bounded at 200 with head+body+tail downsample", () => 
       rec.append({ generation: i, bestObjective: 1, sigma: 0.005 });
     }
     for (let i = 1; i < rec.state.length; i++) {
-      expect((rec.state[i]?.generation ?? 0)).toBeGreaterThanOrEqual(
+      expect(rec.state[i]?.generation ?? 0).toBeGreaterThanOrEqual(
         rec.state[i - 1]?.generation ?? 0,
       );
     }

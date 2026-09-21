@@ -1,8 +1,11 @@
-import { describe, test, expect } from "bun:test";
-import { FRANKENSIM_OWNER_KERNEL_VERSION, type HouseholdManipulationAdmission } from "../app/lib/frankensimCmaes";
+import { describe, expect, test } from "bun:test";
+import {
+  FRANKENSIM_OWNER_KERNEL_VERSION,
+  type HouseholdManipulationAdmission,
+} from "../app/lib/frankensimCmaes";
 import { armVerifySharedExperiment } from "../app/lib/g1OptimizationProtocol";
-import { householdKernelObstacleRoster } from "../app/lib/houseMultiObstacleKernel";
 import type { SharedArmExperiment } from "../app/lib/g1PolicyShare";
+import { householdKernelObstacleRoster } from "../app/lib/houseMultiObstacleKernel";
 
 /**
  * Integration tests for the real optimization-worker compare-family races.
@@ -21,7 +24,11 @@ function runWorkerCompare(
   workerPath: string,
   message: object,
   timeoutMs: number,
-): Promise<{ messages: MessageFromWorker[]; complete: MessageFromWorker | null; error: string | null }> {
+): Promise<{
+  messages: MessageFromWorker[];
+  complete: MessageFromWorker | null;
+  error: string | null;
+}> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(workerPath, { type: "module" });
     const messages: MessageFromWorker[] = [];
@@ -66,7 +73,9 @@ function runWorkerPreview(
   timeoutMs: number,
 ): Promise<{ messages: MessageFromWorker[]; traces: MessageFromWorker[]; error: string | null }> {
   return new Promise((resolve) => {
-    const worker = new Worker(new URL("./g1CompareTestWorker.ts", import.meta.url).href, { type: "module" });
+    const worker = new Worker(new URL("./g1CompareTestWorker.ts", import.meta.url).href, {
+      type: "module",
+    });
     const messages: MessageFromWorker[] = [];
     const traces: MessageFromWorker[] = [];
     let error: string | null = null;
@@ -105,70 +114,86 @@ function runWorkerPreview(
 }
 
 describe("armOptimizationWorker compareFamilies integration", () => {
-  test("archives the actual roster through preview, replay and learning in the real worker", async () => {
-    const worker = new Worker(new URL("./armCompareTestWorker.ts", import.meta.url).href, { type: "module" });
-    type Trace = {
-      type: "trace";
-      admission: HouseholdManipulationAdmission;
-      policy: Float64Array;
-      experiment: SharedArmExperiment;
-      sigma: number;
-      generation: number;
-      trace: unknown;
-    };
-    const request = (message: object) => new Promise<Trace>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Arm worker request timed out")), 30_000);
-      worker.onmessage = (event: MessageEvent<Trace | { type: "error"; message: string }>) => {
-        if (event.data.type === "trace") {
-          clearTimeout(timer);
-          resolve(event.data);
-        } else if (event.data.type === "error") {
-          clearTimeout(timer);
-          reject(new Error(event.data.message));
-        }
+  test(
+    "archives the actual roster through preview, replay and learning in the real worker",
+    async () => {
+      const worker = new Worker(new URL("./armCompareTestWorker.ts", import.meta.url).href, {
+        type: "module",
+      });
+      type Trace = {
+        type: "trace";
+        admission: HouseholdManipulationAdmission;
+        policy: Float64Array;
+        experiment: SharedArmExperiment;
+        sigma: number;
+        generation: number;
+        trace: unknown;
       };
-      worker.onerror = (event) => {
-        clearTimeout(timer);
-        reject(new Error(event.message));
-      };
-      worker.postMessage(message);
-    });
-    try {
-      for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
-        const preview = await request({ type: "preview", task, seedIndex: 1 });
-        const imported = {
-          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-          task,
-          challenge: "household",
-          family: "lm-ma",
-          generation: 7,
-          sigma: 0.0007,
-          policy: preview.policy,
-          experiment: preview.experiment,
-        };
-        const config = {
-          ...preview.admission.config,
-          obstacles: householdKernelObstacleRoster(preview.admission.scene.supportHeightMeters, task),
-        };
-        expect(config.obstacles.length).toBe(preview.admission.scene.extraObstacleCount);
-        expect(config.obstacles.length).toBeGreaterThan(20);
-        expect(armVerifySharedExperiment(imported, config)).toEqual(preview.experiment);
-        const replay = await request({ type: "replay", imported });
-        expect(replay.trace).toEqual(preview.trace);
-        expect(replay.experiment).toEqual(preview.experiment);
-        expect(replay.sigma).toBe(imported.sigma);
-        const learned = await request({
-          type: "optimize", task, family: imported.family, generations: 2,
-          seedIndex: 1, mode: "fresh", sigma: imported.sigma, resumeFrom: imported.policy,
+      const request = (message: object) =>
+        new Promise<Trace>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("Arm worker request timed out")), 30_000);
+          worker.onmessage = (event: MessageEvent<Trace | { type: "error"; message: string }>) => {
+            if (event.data.type === "trace") {
+              clearTimeout(timer);
+              resolve(event.data);
+            } else if (event.data.type === "error") {
+              clearTimeout(timer);
+              reject(new Error(event.data.message));
+            }
+          };
+          worker.onerror = (event) => {
+            clearTimeout(timer);
+            reject(new Error(event.message));
+          };
+          worker.postMessage(message);
         });
-        expect(learned.generation).toBe(2);
-        expect(learned.experiment).toEqual(preview.experiment);
-        expect(learned.sigma).toBeGreaterThan(0);
+      try {
+        for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
+          const preview = await request({ type: "preview", task, seedIndex: 1 });
+          const imported = {
+            kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+            task,
+            challenge: "household",
+            family: "lm-ma",
+            generation: 7,
+            sigma: 0.0007,
+            policy: preview.policy,
+            experiment: preview.experiment,
+          };
+          const config = {
+            ...preview.admission.config,
+            obstacles: householdKernelObstacleRoster(
+              preview.admission.scene.supportHeightMeters,
+              task,
+            ),
+          };
+          expect(config.obstacles.length).toBe(preview.admission.scene.extraObstacleCount);
+          expect(config.obstacles.length).toBeGreaterThan(20);
+          expect(armVerifySharedExperiment(imported, config)).toEqual(preview.experiment);
+          const replay = await request({ type: "replay", imported });
+          expect(replay.trace).toEqual(preview.trace);
+          expect(replay.experiment).toEqual(preview.experiment);
+          expect(replay.sigma).toBe(imported.sigma);
+          const learned = await request({
+            type: "optimize",
+            task,
+            family: imported.family,
+            generations: 2,
+            seedIndex: 1,
+            mode: "fresh",
+            sigma: imported.sigma,
+            resumeFrom: imported.policy,
+          });
+          expect(learned.generation).toBe(2);
+          expect(learned.experiment).toEqual(preview.experiment);
+          expect(learned.sigma).toBeGreaterThan(0);
+        }
+      } finally {
+        worker.terminate();
       }
-    } finally {
-      worker.terminate();
-    }
-  }, { timeout: 100_000 });
+    },
+    { timeout: 100_000 },
+  );
 
   test(
     "runs a bounded 128-D equal-budget race across all four CMA families",
@@ -194,20 +219,8 @@ describe("armOptimizationWorker compareFamilies integration", () => {
       const statusMessages = messages.filter((m) => m.type === "status");
       expect(statusMessages.length).toBeGreaterThanOrEqual(1);
       const comparisonMessages = messages.filter((m) => m.type === "comparison");
-      expect(comparisonMessages.map((m) => m.complete)).toEqual([
-        false,
-        false,
-        false,
-        false,
-        true,
-      ]);
-      expect(comparisonMessages.map((m) => (m.rows as unknown[]).length)).toEqual([
-        1,
-        2,
-        3,
-        4,
-        4,
-      ]);
+      expect(comparisonMessages.map((m) => m.complete)).toEqual([false, false, false, false, true]);
+      expect(comparisonMessages.map((m) => (m.rows as unknown[]).length)).toEqual([1, 2, 3, 4, 4]);
     },
     { timeout: 130_000 },
   );
@@ -263,18 +276,8 @@ describe("g1OptimizationWorker compareFamilies integration", () => {
         expect(row.evaluations).toBe(32);
       }
       const comparisonMessages = messages.filter((m) => m.type === "comparison");
-      expect(comparisonMessages.map((m) => m.complete)).toEqual([
-        false,
-        false,
-        false,
-        true,
-      ]);
-      expect(comparisonMessages.map((m) => (m.rows as unknown[]).length)).toEqual([
-        1,
-        2,
-        3,
-        3,
-      ]);
+      expect(comparisonMessages.map((m) => m.complete)).toEqual([false, false, false, true]);
+      expect(comparisonMessages.map((m) => (m.rows as unknown[]).length)).toEqual([1, 2, 3, 3]);
     },
     { timeout: 200_000 },
   );

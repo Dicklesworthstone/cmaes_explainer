@@ -68,7 +68,7 @@ export function stepContactRestitution(
   pz += vz * safeDt;
 
   const bottomY = py - body.radius;
-  let penetration = floorY - bottomY;
+  const penetration = floorY - bottomY;
   let contactOccurred = false;
   let normalImpulse = 0.0;
   let settled = false;

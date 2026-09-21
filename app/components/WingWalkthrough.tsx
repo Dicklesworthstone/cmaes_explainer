@@ -1,23 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Activity,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Cpu,
+  Layers,
+  Pause,
+  Play,
+  RefreshCw,
+  Sparkles,
+  TrendingDown,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { LatexRenderer, TextWithLatex } from "./LatexRenderer";
 import { WingViz } from "./WingViz";
-import {
-  Compass,
-  ArrowRight,
-  ChevronRight,
-  ChevronLeft,
-  Sparkles,
-  Layers,
-  Activity,
-  Cpu,
-  RefreshCw,
-  TrendingDown,
-  Play,
-  Pause
-} from "lucide-react";
 
 export function WingWalkthrough() {
   const [activeStep, setActiveStep] = useState(0);
@@ -30,7 +30,7 @@ export function WingWalkthrough() {
       subtitle: "Warm-start the Gaussian prior at the current design in $[0, 1]^8$",
       math: "\\textcolor{#c084fc}{m^{(0)}} = \\text{encode}(x_{\\text{design}}) \\in [0,1]^8, \\quad \\textcolor{#fbbf24}{\\sigma^{(0)}} = 0.25, \\quad \\textcolor{#34d399}{C^{(0)}} = I_8",
       desc: "All 8 physical parameters are encoded into the unit hypercube $[0, 1]^8$: aspect ratio, sweep angle, thickness ratio, camber, camber position, taper ratio, categorical airfoil family bins, and internal structural ribs. The mean starts at the encoded current design (a standard warm start), and $C = I_8$ establishes an isotropic, unbiased prior across all design dimensions.",
-      tag: "Setup"
+      tag: "Setup",
     },
     {
       step: 2,
@@ -38,7 +38,7 @@ export function WingWalkthrough() {
       subtitle: "Sample $\\lambda$ offspring & evaluate the analytic aero-structural model",
       math: "\\textcolor{#60a5fa}{x_i^{(1)}} \\sim \\mathcal{N}(\\textcolor{#c084fc}{m^{(0)}}, (\\textcolor{#fbbf24}{\\sigma^{(0)}})^2 \\textcolor{#34d399}{I_8}), \\quad i = 1, \\dots, \\lambda",
       desc: "Sample $\\lambda = 16$ candidate wings (the default rule $\\lambda = 4 + \\lfloor 3 \\ln 8 \\rfloor = 10$ is raised to 16 here so each generation's sample cloud is easier to see). For each vector, decode the physical parameters and evaluate a closed-form lifting-line, profile-drag, wave-drag, bending-moment, and mass surrogate. The 3D mesh visualizes the currently displayed design; it is not a CFD mesh. Sort samples by relative rank.",
-      tag: "Sampling"
+      tag: "Sampling",
     },
     {
       step: 3,
@@ -46,7 +46,7 @@ export function WingWalkthrough() {
       subtitle: "Move mean toward the weighted top $\\mu$ elites",
       math: "\\textcolor{#c084fc}{m^{(1)}} = \\sum_{i=1}^{\\mu} \\textcolor{#fb923c}{w_i} \\textcolor{#60a5fa}{x_{i:\\lambda}^{(1)}}, \\quad \\textcolor{#c084fc}{\\Delta m} = \\textcolor{#c084fc}{m^{(1)}} - \\textcolor{#c084fc}{m^{(0)}}",
       desc: "Compute the new distribution center as a weighted average of the best $\\mu = 8$ wings (half the population). The shift $\\Delta m$ represents the empirical direction of positive aerodynamic performance.",
-      tag: "Recombination"
+      tag: "Recombination",
     },
     {
       step: 4,
@@ -54,7 +54,7 @@ export function WingWalkthrough() {
       subtitle: "Track momentum for step size ($p_\\sigma$) and covariance ($p_c$)",
       math: "\\textcolor{#fb7185}{p_\\sigma} \\leftarrow (1-\\textcolor{#fbbf24}{c_\\sigma}) \\textcolor{#fb7185}{p_\\sigma} + \\sqrt{\\textcolor{#fbbf24}{c_\\sigma}(2-\\textcolor{#fbbf24}{c_\\sigma})\\textcolor{#fb923c}{\\mu_{\\text{eff}}}}\\, \\textcolor{#34d399}{C^{-1/2}} \\frac{\\textcolor{#c084fc}{\\Delta m}}{\\textcolor{#fbbf24}{\\sigma}}",
       desc: "The path $p_\\sigma$ accumulates steps in isotropic whitened coordinates. If consecutive steps point consistently in similar directions, $p_\\sigma$ grows longer (triggering $\\sigma$ expansion via $\\sigma \\leftarrow \\sigma \\exp(\\frac{c_\\sigma}{d_\\sigma}(\\frac{\\|p_\\sigma\\|}{\\mathbb{E}\\|\\mathcal{N}(0,I)\\|} - 1))$). If steps oscillate, $p_\\sigma$ contracts. A sibling path $p_c$ accumulates the same mean shifts without whitening and feeds the rank-1 covariance update in the next phase.",
-      tag: "Memory"
+      tag: "Memory",
     },
     {
       step: 5,
@@ -62,7 +62,7 @@ export function WingWalkthrough() {
       subtitle: "Stretch the ellipsoid along aerodynamic ridges",
       math: "\\textcolor{#34d399}{C^{(1)}} = (1 - \\textcolor{#fbbf24}{c_1} - \\textcolor{#fbbf24}{c_\\mu}) \\textcolor{#34d399}{C^{(0)}} + \\textcolor{#fbbf24}{c_1} \\textcolor{#fb7185}{p_c p_c^\\top} + \\textcolor{#fbbf24}{c_\\mu} \\sum_{i=1}^{\\mu} \\textcolor{#fb923c}{w_i} \\textcolor{#60a5fa}{y_i y_i^\\top}",
       desc: "Rank-1 updates elongate $C$ along historical momentum path $p_c$. Rank-$\\mu$ updates align the ellipsoid with the spread of the current elite cloud. The Gaussian transforms from a sphere into an elongated ellipsoid.",
-      tag: "Adaptation"
+      tag: "Adaptation",
     },
     {
       step: 6,
@@ -70,7 +70,7 @@ export function WingWalkthrough() {
       subtitle: "Approximating the transonic inverse Hessian $H^{-1}$ up to scale",
       math: "\\textcolor{#34d399}{C} \\propto \\textcolor{#34d399}{H^{-1}_{\\text{aero}}}, \\quad \\textcolor{#fbbf24}{\\sigma} \\text{ automatically contracts}",
       desc: "Over successive batches, CMA-ES discovers that thicker airfoil sections are tolerable when paired with more sweep, whereas a thick unswept wing triggers early drag divergence. The ellipsoid aligns with this benign thickness-sweep diagonal, and the scale of the learned shape is carried by $\\sigma$.",
-      tag: "Curvature"
+      tag: "Curvature",
     },
     {
       step: 7,
@@ -78,8 +78,8 @@ export function WingWalkthrough() {
       subtitle: "Precision convergence and IPOP/BIPOP global sweeps",
       math: "\\textcolor{#fbbf24}{\\sigma} \\to 10^{-4}, \\quad \\textcolor{#60a5fa}{x^*} = \\arg\\min f, \\;\\; f = -\\textcolor{#38bdf8}{L/D} + \\text{mass penalty}",
       desc: "In late generations, $\\sigma$ shrinks to micro-scale, performing precision tuning on camber and thickness distributions. If progress stalls or multiple basins exist, restart: IPOP doubles $\\lambda$ at each restart, while BIPOP alternates large-$\\lambda$ runs with small-$\\lambda$, small-$\\sigma$ runs under a shared budget.",
-      tag: "Convergence"
-    }
+      tag: "Convergence",
+    },
   ];
 
   // Autoplay step cycler
@@ -102,14 +102,15 @@ export function WingWalkthrough() {
         <p className="text-lg text-slate-300 leading-relaxed">
           Let&apos;s trace CMA-ES through a concrete engineering challenge: designing an optimal
           transonic aircraft wing across an 8-dimensional mixed parameter space{" "}
-          <LatexRenderer math="x \in [0, 1]^8" block={false} /> spanning continuous planform geometry,
-          discrete structural rib counts, and categorical airfoil family profiles.
+          <LatexRenderer math="x \in [0, 1]^8" block={false} /> spanning continuous planform
+          geometry, discrete structural rib counts, and categorical airfoil family profiles.
         </p>
 
         <p>
-          Each aerodynamic evaluation trades lift-to-drag (<LatexRenderer math="L/D" block={false} />) against
-          the structural mass driven by the wing root bending moment. The drag total inside{" "}
-          <LatexRenderer math="L/D" block={false} /> already folds in transonic wave drag and skin friction.
+          Each aerodynamic evaluation trades lift-to-drag (
+          <LatexRenderer math="L/D" block={false} />) against the structural mass driven by the wing
+          root bending moment. The drag total inside <LatexRenderer math="L/D" block={false} />{" "}
+          already folds in transonic wave drag and skin friction.
         </p>
       </div>
 
@@ -128,7 +129,8 @@ export function WingWalkthrough() {
                 CMA-ES Generation Lifecycle in Slow Motion
               </h3>
               <p className="text-xs text-slate-400">
-                Click through the 7 algorithmic phases or press Play to watch the live step-by-step cycle
+                Click through the 7 algorithmic phases or press Play to watch the live step-by-step
+                cycle
               </p>
             </div>
           </div>
@@ -196,7 +198,9 @@ export function WingWalkthrough() {
                   : "bg-slate-950/40 border-white/5 text-slate-400 hover:bg-slate-900 hover:text-slate-200"
               }`}
             >
-              <div className="text-[0.65rem] font-mono text-sky-400 font-bold uppercase">Phase {s.step}</div>
+              <div className="text-[0.65rem] font-mono text-sky-400 font-bold uppercase">
+                Phase {s.step}
+              </div>
               <div className="text-xs font-semibold truncate mt-0.5">{s.tag}</div>
             </button>
           ))}

@@ -29,8 +29,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   distanceToOBB,
-  projectPointOutOfOBB,
   type OrientedBoundingBox,
+  projectPointOutOfOBB,
 } from "../app/lib/houseMultiObstacleKernel";
 
 function obb(
@@ -50,13 +50,7 @@ describe("projectPointOutOfOBB — interior-point regression (cmaes-u76s, cmaes-
     // mug. The previous implementation projected the wrist to the
     // -Z side, which is still inside the mug. The corrected behavior
     // pushes the wrist OUT through the nearest face.
-    const mug = obb(
-      [0.4, 0.8275, 0.2],
-      [0.0425, 0.045, 0.0425],
-      0,
-      "kitchen-mug",
-      "mug-1"
-    );
+    const mug = obb([0.4, 0.8275, 0.2], [0.0425, 0.045, 0.0425], 0, "kitchen-mug", "mug-1");
     const wristPos: [number, number, number] = [0.4, 0.8275, 0.21];
     const sdf = distanceToOBB(wristPos, mug);
     expect(sdf).toBeLessThan(0); // wrist IS inside the mug
@@ -73,12 +67,7 @@ describe("projectPointOutOfOBB — interior-point regression (cmaes-u76s, cmaes-
   });
 
   test("end-effector link inside a kitchen mug (X axis) must be pushed out through the +X face", () => {
-    const mug = obb(
-      [0.4, 0.8275, 0.2],
-      [0.0425, 0.045, 0.0425],
-      0,
-      "kitchen-mug"
-    );
+    const mug = obb([0.4, 0.8275, 0.2], [0.0425, 0.045, 0.0425], 0, "kitchen-mug");
     // Wrist origin 1 cm past the mug center on the +X axis.
     const wristPos: [number, number, number] = [0.41, 0.8275, 0.2];
     expect(distanceToOBB(wristPos, mug)).toBeLessThan(0);
@@ -91,13 +80,7 @@ describe("projectPointOutOfOBB — interior-point regression (cmaes-u76s, cmaes-
     // A chair seat rotated 30 deg about Y. The wrist origin is 2 cm
     // inside the seat on the local +X axis (which maps to world
     // (cos(-30), 0, sin(-30)) direction).
-    const chairSeat = obb(
-      [1.0, 0.45, 0.5],
-      [0.2, 0.05, 0.2],
-      Math.PI / 6,
-      "chair-seat",
-      "chair-1"
-    );
+    const chairSeat = obb([1.0, 0.45, 0.5], [0.2, 0.05, 0.2], Math.PI / 6, "chair-seat", "chair-1");
     // Place the wrist at the seat center, then offset 5 cm in world +X.
     const wristPos: [number, number, number] = [1.05, 0.45, 0.5];
     expect(distanceToOBB(wristPos, chairSeat)).toBeLessThan(0);

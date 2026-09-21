@@ -1,21 +1,12 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
-import {
-  G1_RESIDUAL_HEAD_LENGTH,
-  residualHeadFromArtifact,
-} from "../lib/frankensimCmaes";
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type {
   G1TraceReceipt,
   G1TransformerChallenge,
   G1TransformerProgress,
 } from "../lib/frankensimCmaes";
+import { G1_RESIDUAL_HEAD_LENGTH, residualHeadFromArtifact } from "../lib/frankensimCmaes";
 import {
   decodeResidualFragment,
   encodeResidualFragment,
@@ -71,8 +62,7 @@ const SAVED_RUN_KEY = "cmaes.g1-residual-run.v1";
  * refuses anything that does not hold up here, so this cannot silently ship a
  * policy that does not work.
  */
-const SHIPPED_POLICY_URL =
-  "/robots/g1/transformer/g1-real-physics-residual-flat.bin";
+const SHIPPED_POLICY_URL = "/robots/g1/transformer/g1-real-physics-residual-flat.bin";
 const SHIPPED_POLICY_CONDITION: G1TransformerChallenge = "flat";
 
 interface SavedRun {
@@ -273,9 +263,7 @@ function GaitPaths({
   const pelvis = (trace: G1TraceReceipt) =>
     trace.samples
       .map((sample) => sample.linkPoses[0]?.position)
-      .filter((position): position is [number, number, number] =>
-        Boolean(position),
-      )
+      .filter((position): position is [number, number, number] => Boolean(position))
       .map((position) => ({ forward: position[0], up: position[2] }));
 
   const trainedPath = pelvis(trained);
@@ -293,8 +281,7 @@ function GaitPaths({
     points
       .map((point, index) => {
         const x = pad + ((point.forward - minX) / spanX) * (width - pad * 2);
-        const y =
-          height - pad - ((point.up - minY) / spanY) * (height - pad * 2);
+        const y = height - pad - ((point.up - minY) / spanY) * (height - pad * 2);
         return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
@@ -325,27 +312,22 @@ function GaitPaths({
       </svg>
       <figcaption className="mt-2 text-xs leading-5 text-slate-500">
         Pelvis height against forward travel through one 1.5 s rollout{" "}
-        {condition === "terrain" ? "on terrain with pushes" : "on flat ground"},
-        from the owner&apos;s own trace.{" "}
-        <span className="text-emerald-300">Solid green</span> is the policy you
-        trained ({trained.distanceMeters.toFixed(3)} m);{" "}
-        <span className="text-slate-400">dashed grey</span> is the tuned
-        controller it started from ({baseline.distanceMeters.toFixed(3)} m).
-        Vertical scale is exaggerated to the range walked.
+        {condition === "terrain" ? "on terrain with pushes" : "on flat ground"}, from the
+        owner&apos;s own trace. <span className="text-emerald-300">Solid green</span> is the policy
+        you trained ({trained.distanceMeters.toFixed(3)} m);{" "}
+        <span className="text-slate-400">dashed grey</span> is the tuned controller it started from
+        ({baseline.distanceMeters.toFixed(3)} m). Vertical scale is exaggerated to the range walked.
         {condition === "both" ? (
           <>
             {" "}
-            A rollout is one condition, so this is the flat leg of the pair this
-            run averages — which is why its distance differs from the averaged
-            figure in the table.
+            A rollout is one condition, so this is the flat leg of the pair this run averages —
+            which is why its distance differs from the averaged figure in the table.
           </>
         ) : null}
         {stale ? (
           <>
             {" "}
-            <strong className="text-amber-300">
-              The search has improved since this was drawn
-            </strong>{" "}
+            <strong className="text-amber-300">The search has improved since this was drawn</strong>{" "}
             — show the gait again to see the current best.
           </>
         ) : null}
@@ -365,8 +347,7 @@ export function G1ResidualTrainer() {
   // what the shipped figures above are measured on, is one dropdown away and
   // the copy says which is which.
   const [challenge, setChallenge] = useState<G1TransformerChallenge>("flat");
-  const [runChallenge, setRunChallenge] =
-    useState<G1TransformerChallenge>("flat");
+  const [runChallenge, setRunChallenge] = useState<G1TransformerChallenge>("flat");
   /**
    * The condition the live run was started for, readable from the worker's
    * message handler. That handler is captured once when the worker is spawned,
@@ -416,8 +397,7 @@ export function G1ResidualTrainer() {
     () => EMPTY_SAVED_RUNS,
   );
   const localSave = savedRuns[challenge] ?? null;
-  const sharedForCondition =
-    sharedRun && sharedRun.condition === challenge ? sharedRun : null;
+  const sharedForCondition = sharedRun && sharedRun.condition === challenge ? sharedRun : null;
   const sharedAsSave: SavedRun | null = sharedForCondition
     ? {
         challenge: sharedForCondition.condition,
@@ -433,8 +413,7 @@ export function G1ResidualTrainer() {
   // trained past it their own run must not be shouted down by the link every
   // time the page reloads — and the link stays in the address bar.
   const preferShared =
-    sharedAsSave !== null &&
-    (localSave === null || sharedAsSave.objective < localSave.objective);
+    sharedAsSave !== null && (localSave === null || sharedAsSave.objective < localSave.objective);
   const savedHead: SavedRun | null = preferShared ? sharedAsSave : localSave;
   const shared = preferShared;
 
@@ -512,11 +491,7 @@ export function G1ResidualTrainer() {
       })
         .then(async (fragment) => {
           if (revision !== shareRevisionRef.current) return;
-          const url = residualShareUrl(
-            window.location.origin,
-            window.location.pathname,
-            fragment,
-          );
+          const url = residualShareUrl(window.location.origin, window.location.pathname, fragment);
           try {
             await navigator.clipboard.writeText(url);
             if (revision !== shareRevisionRef.current) return;
@@ -531,8 +506,7 @@ export function G1ResidualTrainer() {
         .catch((cause: unknown) => {
           if (revision !== shareRevisionRef.current) return;
           setError({
-            message:
-              cause instanceof Error ? cause.message : "Could not build a link.",
+            message: cause instanceof Error ? cause.message : "Could not build a link.",
             fatal: false,
           });
         });
@@ -638,9 +612,7 @@ export function G1ResidualTrainer() {
         if (!live) return;
         setError({
           message:
-            cause instanceof Error
-              ? cause.message
-              : "This shared policy link could not be read.",
+            cause instanceof Error ? cause.message : "This shared policy link could not be read.",
           fatal: false,
         });
       });
@@ -648,8 +620,6 @@ export function G1ResidualTrainer() {
       live = false;
     };
   }, []);
-
-
 
   const post = (request: TrainingWorkerRequest) => {
     const failWorker = (error: unknown) => {
@@ -677,9 +647,7 @@ export function G1ResidualTrainer() {
         };
         worker.onmessageerror = () => {
           if (workerRef.current === worker) {
-            failWorker(
-              new Error("The training worker response could not be read."),
-            );
+            failWorker(new Error("The training worker response could not be read."));
           }
         };
       }
@@ -806,9 +774,7 @@ export function G1ResidualTrainer() {
     fetch(SHIPPED_POLICY_URL)
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(
-            `Could not load the shipped policy (${response.status}).`,
-          );
+          throw new Error(`Could not load the shipped policy (${response.status}).`);
         }
         adoptLoadedPolicy(
           revision,
@@ -823,10 +789,7 @@ export function G1ResidualTrainer() {
         if (revision !== selectionRevisionRef.current) return;
         setShippedPending(false);
         setError({
-          message:
-            cause instanceof Error
-              ? cause.message
-              : "Could not load the shipped policy.",
+          message: cause instanceof Error ? cause.message : "Could not load the shipped policy.",
           fatal: false,
         });
       });
@@ -860,9 +823,7 @@ export function G1ResidualTrainer() {
         if (revision !== selectionRevisionRef.current) return;
         setError({
           message:
-            cause instanceof Error
-              ? cause.message
-              : "That file could not be read as a policy.",
+            cause instanceof Error ? cause.message : "That file could not be read as a policy.",
           fatal: false,
         });
       });
@@ -878,12 +839,8 @@ export function G1ResidualTrainer() {
     post({ type: "trace" });
   };
 
-  const gain = progress
-    ? gainPercent(progress.baselineObjective, progress.bestObjective)
-    : 0;
-  const improved = progress
-    ? progress.bestObjective < progress.baselineObjective
-    : false;
+  const gain = progress ? gainPercent(progress.baselineObjective, progress.bestObjective) : 0;
+  const improved = progress ? progress.bestObjective < progress.baselineObjective : false;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-5">
@@ -988,15 +945,11 @@ export function G1ResidualTrainer() {
           )}{" "}
           — {savedHead.evaluations.toLocaleString()} rollouts, reaching{" "}
           <strong className="text-emerald-300">
-            {gainPercent(
-              savedHead.baselineObjective,
-              savedHead.objective,
-            ).toFixed(1)}
-            %
+            {gainPercent(savedHead.baselineObjective, savedHead.objective).toFixed(1)}%
           </strong>{" "}
           better than the tuned controller. Starting will{" "}
-          {shared ? "load and continue it" : "continue from it"}; the owner
-          re-runs it here and will say so if it does not hold up.
+          {shared ? "load and continue it" : "continue from it"}; the owner re-runs it here and will
+          say so if it does not hold up.
         </p>
       ) : null}
 
@@ -1054,9 +1007,7 @@ export function G1ResidualTrainer() {
               {progress ? progress.baselineObjective.toFixed(2) : "—"}
             </td>
             <td className="py-2 text-right tabular-nums">
-              {progress
-                ? `${progress.baselineDistanceMeters.toFixed(4)} m`
-                : "—"}
+              {progress ? `${progress.baselineDistanceMeters.toFixed(4)} m` : "—"}
             </td>
           </tr>
           <tr className={improved ? "font-semibold text-emerald-300" : ""}>
@@ -1076,16 +1027,13 @@ export function G1ResidualTrainer() {
       <p className="mt-4 text-sm leading-6 text-slate-400">
         {progress ? (
           <>
-            {progress.evaluations.toLocaleString()} rollouts,{" "}
-            {progress.generation.toLocaleString()} generations,{" "}
-            {progress.restarts} restarts, population {progress.population}.{" "}
+            {progress.evaluations.toLocaleString()} rollouts, {progress.generation.toLocaleString()}{" "}
+            generations, {progress.restarts} restarts, population {progress.population}.{" "}
             {improved ? (
               <>
                 The residual is{" "}
-                <strong className="text-emerald-300">
-                  {gain.toFixed(1)}% better
-                </strong>{" "}
-                than the controller it started from
+                <strong className="text-emerald-300">{gain.toFixed(1)}% better</strong> than the
+                controller it started from
                 {runChallenge === "flat" ? (
                   <> on flat ground, the easiest of the three conditions</>
                 ) : runChallenge === "terrain" ? (
@@ -1101,10 +1049,10 @@ export function G1ResidualTrainer() {
           </>
         ) : (
           <>
-            Nothing is running. Training searches the 960-parameter output layer
-            with LM-CMA against the owner&apos;s own objective; each rollout is
-            1.5 s of simulated walking. Leave it running and the curve keeps
-            falling — the run has no fixed budget and stops when you stop it.
+            Nothing is running. Training searches the 960-parameter output layer with LM-CMA against
+            the owner&apos;s own objective; each rollout is 1.5 s of simulated walking. Leave it
+            running and the curve keeps falling — the run has no fixed budget and stops when you
+            stop it.
           </>
         )}
       </p>

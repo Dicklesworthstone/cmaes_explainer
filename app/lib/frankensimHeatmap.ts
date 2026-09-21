@@ -74,7 +74,7 @@ type WasmModule = {
     g0: number,
     gk: number,
     b0: number,
-    bk: number
+    bk: number,
   ) => string;
   heatmap_rgba_ptr?: () => number;
   heatmap_rgba_len?: () => number;
@@ -119,8 +119,15 @@ export function initFrankenSimHeatmap(): Promise<HeatmapKernelStatus> {
   if (loadPromise) return loadPromise;
   loadPromise = (async (): Promise<HeatmapKernelStatus> => {
     try {
-      const mod = await loadWasmModule("/wasm/fs-heatmap/fs_heatmap_wasm.js", "/wasm/fs-heatmap/fs_heatmap_wasm_bg.wasm");
-      const required: (keyof WasmModule)[] = ["heatmap_render", "heatmap_rgba_ptr", "heatmap_rgba_len"];
+      const mod = await loadWasmModule(
+        "/wasm/fs-heatmap/fs_heatmap_wasm.js",
+        "/wasm/fs-heatmap/fs_heatmap_wasm_bg.wasm",
+      );
+      const required: (keyof WasmModule)[] = [
+        "heatmap_render",
+        "heatmap_rgba_ptr",
+        "heatmap_rgba_len",
+      ];
       for (const name of required) {
         if (typeof mod[name] !== "function") {
           return { source: "ts-fallback", kernelVersion: null, error: `missing export ${name}` };
@@ -133,7 +140,11 @@ export function initFrankenSimHeatmap(): Promise<HeatmapKernelStatus> {
       const version = typeof mod.heatmap_version === "function" ? mod.heatmap_version() : null;
       return { source: "wasm", kernelVersion: version, error: null };
     } catch (err) {
-      return { source: "ts-fallback", kernelVersion: null, error: err instanceof Error ? err.message : String(err) };
+      return {
+        source: "ts-fallback",
+        kernelVersion: null,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   })();
   return loadPromise;
@@ -184,7 +195,8 @@ export function renderHeatmapJs(spec: HeatmapSpec): ImageData | null {
 /** Kernel-side render; null when the kernel is unavailable or refuses. */
 function renderHeatmapWasm(spec: HeatmapSpec): ImageData | null {
   const mod = heatmapModule;
-  if (!mod?.heatmap_render || !mod.heatmap_rgba_ptr || !mod.heatmap_rgba_len || !heatmapMemory) return null;
+  if (!mod?.heatmap_render || !mod.heatmap_rgba_ptr || !mod.heatmap_rgba_len || !heatmapMemory)
+    return null;
   try {
     const envelope = JSON.parse(
       mod.heatmap_render(
@@ -202,8 +214,8 @@ function renderHeatmapWasm(spec: HeatmapSpec): ImageData | null {
         spec.ramp.g0,
         spec.ramp.gk,
         spec.ramp.b0,
-        spec.ramp.bk
-      )
+        spec.ramp.bk,
+      ),
     ) as { ok?: { width: number; height: number }; refusal?: { code: string } };
     if (!envelope.ok) {
       if (envelope.refusal) console.warn("[fs-heatmap] refusal:", envelope.refusal.code);

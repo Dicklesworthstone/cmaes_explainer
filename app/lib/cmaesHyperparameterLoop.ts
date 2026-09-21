@@ -23,8 +23,8 @@
 //       mirrored (antithetic) sampling + common random numbers reduce the variance of the
 //       fitness estimate told back to CMA-ES.
 
-import { LiveCmaesOptimizer } from "./liveCmaesHousehold";
 import { G1TrainEnv } from "./g1StepwiseEnv";
+import { LiveCmaesOptimizer } from "./liveCmaesHousehold";
 
 export interface HpoParameterSpec {
   name: string;
@@ -36,12 +36,12 @@ export interface HpoParameterSpec {
 
 export const G1_TRAINING_HYPERPARAMETERS: HpoParameterSpec[] = [
   { name: "muon_learning_rate", minVal: 1e-4, maxVal: 1e-1, defaultValue: 0.02, isLogScale: true },
-  { name: "muon_momentum", minVal: 0.80, maxVal: 0.99, defaultValue: 0.95 },
+  { name: "muon_momentum", minVal: 0.8, maxVal: 0.99, defaultValue: 0.95 },
   { name: "ppo_entropy_coef", minVal: 1e-4, maxVal: 5e-2, defaultValue: 0.005, isLogScale: true },
   { name: "weight_progress", minVal: 5.0, maxVal: 30.0, defaultValue: 15.0 },
   { name: "weight_upright", minVal: 0.1, maxVal: 2.0, defaultValue: 0.5 },
   { name: "weight_energy", minVal: 1e-4, maxVal: 1e-2, defaultValue: 0.002, isLogScale: true },
-  { name: "gae_lambda", minVal: 0.90, maxVal: 0.99, defaultValue: 0.95 },
+  { name: "gae_lambda", minVal: 0.9, maxVal: 0.99, defaultValue: 0.95 },
   { name: "value_loss_coef", minVal: 0.1, maxVal: 1.0, defaultValue: 0.5 },
 ];
 
@@ -62,7 +62,6 @@ export interface HpoSweepResult {
   bestHyperparameters: HpoCandidateDecoded;
   evaluationsCount: number;
 }
-
 
 /**
  * Optional outer-loop upgrades. All default OFF/1 so the historical behavior
@@ -136,7 +135,8 @@ export function encodeGenotype(
   return vals.map((val, i) => {
     const spec = specs[i];
     const u = spec.isLogScale
-      ? (Math.log10(val) - Math.log10(spec.minVal)) / (Math.log10(spec.maxVal) - Math.log10(spec.minVal))
+      ? (Math.log10(val) - Math.log10(spec.minVal)) /
+        (Math.log10(spec.maxVal) - Math.log10(spec.minVal))
       : (val - spec.minVal) / (spec.maxVal - spec.minVal);
     return 2.0 * Math.max(0.0, Math.min(1.0, u)) - 1.0;
   });
@@ -270,9 +270,7 @@ export class CmaesHyperparameterOptimizer {
         // injects exploration noise — also clipped to a sane range.
         const amp = hparams.muonLearningRate * 10.0;
         const noise = hparams.ppoEntropyCoef * 20.0;
-        const baseAction = new Array(15).fill(0.0).map((_, idx) =>
-          Math.sin(s * 0.1 + idx) * amp,
-        );
+        const baseAction = new Array(15).fill(0.0).map((_, idx) => Math.sin(s * 0.1 + idx) * amp);
         const rawAction = baseAction.map((value, idx) => {
           const perturbed = value + (noise > 0 ? noiseStep(0, noise) : 0);
           return momentum * prevAction[idx] + (1 - momentum) * perturbed;
@@ -289,7 +287,10 @@ export class CmaesHyperparameterOptimizer {
     }
 
     // Objective minimization: negative mean total reward
-    return { fitness: -aggregate / this.replicationsPerCandidate, rollouts: this.replicationsPerCandidate };
+    return {
+      fitness: -aggregate / this.replicationsPerCandidate,
+      rollouts: this.replicationsPerCandidate,
+    };
   }
 
   public stepGeneration(): HpoSweepResult {

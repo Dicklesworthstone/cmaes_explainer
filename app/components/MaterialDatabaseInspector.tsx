@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { getMaterialPairFriction, type HouseholdMaterial } from "../lib/materialPairFriction";
+import React, { useMemo, useState } from "react";
 import { EMISSIVE_PALETTE, kelvinToRgb } from "../lib/emissiveSurfaces";
+import { getMaterialPairFriction, type HouseholdMaterial } from "../lib/materialPairFriction";
 
 export interface PbrMaterialSpec {
   id: string;
@@ -120,7 +120,7 @@ export const CRAFTSMAN_MATERIAL_DATABASE: PbrMaterialSpec[] = [
     roughness: 0.55,
     metalness: 0.0,
     clearcoat: 0.15,
-    ior: 1.50,
+    ior: 1.5,
     densityKgM3: 900,
     frictionClass: "leather",
   },
@@ -137,7 +137,10 @@ export function MaterialDatabaseInspector() {
   }, [filterCategory]);
 
   const activeMat = useMemo(() => {
-    return CRAFTSMAN_MATERIAL_DATABASE.find((m) => m.id === selectedMatId) ?? CRAFTSMAN_MATERIAL_DATABASE[0];
+    return (
+      CRAFTSMAN_MATERIAL_DATABASE.find((m) => m.id === selectedMatId) ??
+      CRAFTSMAN_MATERIAL_DATABASE[0]
+    );
   }, [selectedMatId]);
 
   const frictionProps = useMemo(() => {
@@ -148,11 +151,17 @@ export function MaterialDatabaseInspector() {
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-neutral-800 pb-3 mb-4">
         <div>
-          <h2 className="text-base font-bold text-amber-400">PBR Material Database & Physical Matrix</h2>
-          <p className="text-xs text-neutral-400">Craftsman 1928 Catalog • Shading Parameters & Contact Presets</p>
+          <h2 className="text-base font-bold text-amber-400">
+            PBR Material Database & Physical Matrix
+          </h2>
+          <p className="text-xs text-neutral-400">
+            Craftsman 1928 Catalog • Shading Parameters & Contact Presets
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="material-category-filter" className="text-xs text-neutral-400">Filter:</label>
+          <label htmlFor="material-category-filter" className="text-xs text-neutral-400">
+            Filter:
+          </label>
           <select
             id="material-category-filter"
             className="min-h-11 max-w-full bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-neutral-200"
@@ -203,7 +212,9 @@ export function MaterialDatabaseInspector() {
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-300">PBR Surface BRDF</span>
-            <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-amber-400">Cook-Torrance GGX</span>
+            <span className="text-[10px] bg-neutral-800 px-1.5 py-0.5 rounded text-amber-400">
+              Cook-Torrance GGX
+            </span>
           </div>
 
           <div
@@ -222,19 +233,27 @@ export function MaterialDatabaseInspector() {
           <div className="space-y-1.5 text-xs">
             <div className="flex justify-between text-neutral-400">
               <span>Roughness:</span>
-              <span className="text-neutral-200 font-semibold">{activeMat.roughness.toFixed(2)}</span>
+              <span className="text-neutral-200 font-semibold">
+                {activeMat.roughness.toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Metalness:</span>
-              <span className="text-neutral-200 font-semibold">{activeMat.metalness.toFixed(2)}</span>
+              <span className="text-neutral-200 font-semibold">
+                {activeMat.metalness.toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Clearcoat:</span>
-              <span className="text-neutral-200 font-semibold">{(activeMat.clearcoat ?? 0).toFixed(2)}</span>
+              <span className="text-neutral-200 font-semibold">
+                {(activeMat.clearcoat ?? 0).toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Index of Refraction (IOR):</span>
-              <span className="text-neutral-200 font-semibold">{(activeMat.ior ?? 1.5).toFixed(2)}</span>
+              <span className="text-neutral-200 font-semibold">
+                {(activeMat.ior ?? 1.5).toFixed(2)}
+              </span>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Bulk Density:</span>
@@ -265,7 +284,9 @@ export function MaterialDatabaseInspector() {
             <div className="p-2 rounded bg-neutral-900/80 border border-neutral-800">
               <div className="flex justify-between text-neutral-400 mb-1">
                 <span>Static Friction (μ_s):</span>
-                <span className="text-emerald-400 font-bold">{frictionProps.staticFriction.toFixed(2)}</span>
+                <span className="text-emerald-400 font-bold">
+                  {frictionProps.staticFriction.toFixed(2)}
+                </span>
               </div>
               <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
                 <div
@@ -278,7 +299,9 @@ export function MaterialDatabaseInspector() {
             <div className="p-2 rounded bg-neutral-900/80 border border-neutral-800">
               <div className="flex justify-between text-neutral-400 mb-1">
                 <span>Kinetic Friction (μ_k):</span>
-                <span className="text-cyan-400 font-bold">{frictionProps.kineticFriction.toFixed(2)}</span>
+                <span className="text-cyan-400 font-bold">
+                  {frictionProps.kineticFriction.toFixed(2)}
+                </span>
               </div>
               <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
                 <div
@@ -290,12 +313,16 @@ export function MaterialDatabaseInspector() {
 
             <div className="flex justify-between text-neutral-400 text-xs px-1">
               <span>Rolling Friction (μ_r):</span>
-              <span className="text-amber-400 font-semibold">{frictionProps.rollingFriction.toFixed(3)}</span>
+              <span className="text-amber-400 font-semibold">
+                {frictionProps.rollingFriction.toFixed(3)}
+              </span>
             </div>
 
             <div className="flex justify-between text-neutral-400 text-xs px-1">
               <span>Restitution (e):</span>
-              <span className="text-purple-400 font-semibold">{frictionProps.restitution.toFixed(2)}</span>
+              <span className="text-purple-400 font-semibold">
+                {frictionProps.restitution.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>

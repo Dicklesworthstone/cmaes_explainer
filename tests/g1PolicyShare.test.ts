@@ -5,14 +5,14 @@ import {
   decodeSharedPolicy,
   encodePolicyFragment,
   encodeResidualFragment,
-  type SharedResidual,
   encodeSharedPolicy,
   policyFileContents,
   policyFragmentFromHash,
   policyFromFileContents,
   policyShareUrl,
-  type SharedPolicyMeta,
   type SharedG1Experiment,
+  type SharedPolicyMeta,
+  type SharedResidual,
 } from "../app/lib/g1PolicyShare";
 
 const META: SharedPolicyMeta = {
@@ -51,9 +51,7 @@ describe("trained residual links", () => {
   test("preserves the model's f32 head and measurements for every condition", async () => {
     for (const condition of ["flat", "terrain", "both"] as const) {
       const original = { ...residual, condition };
-      const decoded = await decodeResidualFragment(
-        await encodeResidualFragment(original),
-      );
+      const decoded = await decodeResidualFragment(await encodeResidualFragment(original));
       expect(decoded).toEqual({
         ...original,
         head: original.head.map(Math.fround),
@@ -74,9 +72,7 @@ describe("trained residual links", () => {
       { evaluations: 1.5 },
       { evaluations: 0x1_0000_0000 },
     ]) {
-      await expect(
-        encodeResidualFragment({ ...residual, ...invalid }),
-      ).rejects.toThrow();
+      await expect(encodeResidualFragment({ ...residual, ...invalid })).rejects.toThrow();
     }
   });
 
@@ -121,29 +117,16 @@ function learnedOf(baseline: Float64Array, amplitude = 0.004): Float64Array {
 
 describe("G1 policy share codec", () => {
   test("preserves exact experiment bytes through binary, file and compressed fragment", async () => {
-    const policy = Float64Array.of(
-      -0,
-      Number.MIN_VALUE,
-      1e-20,
-      Number.MAX_VALUE,
-    );
+    const policy = Float64Array.of(-0, Number.MIN_VALUE, 1e-20, Number.MAX_VALUE);
     const meta = { ...META, experiment: EXPERIMENT };
     const copies = [
       decodeSharedPolicy(encodeSharedPolicy(policy, meta), policy.length),
-      policyFromFileContents(
-        JSON.stringify(policyFileContents(policy, meta)),
-        policy.length,
-      ),
-      await decodePolicyFragment(
-        await encodePolicyFragment(policy, meta),
-        policy.length,
-      ),
+      policyFromFileContents(JSON.stringify(policyFileContents(policy, meta)), policy.length),
+      await decodePolicyFragment(await encodePolicyFragment(policy, meta), policy.length),
     ];
     for (const copy of copies) {
       expect(copy.experiment).toEqual(EXPERIMENT);
-      expect(new Uint8Array(copy.policy.buffer)).toEqual(
-        new Uint8Array(policy.buffer),
-      );
+      expect(new Uint8Array(copy.policy.buffer)).toEqual(new Uint8Array(policy.buffer));
     }
   });
 
@@ -162,9 +145,7 @@ describe("G1 policy share codec", () => {
       { ...EXPERIMENT, inputBytes: "0".repeat(65) },
     ]) {
       const meta = { ...META, experiment: bad } as SharedPolicyMeta;
-      expect(() => encodeSharedPolicy(policy, meta)).toThrow(
-        "invalid robot experiment",
-      );
+      expect(() => encodeSharedPolicy(policy, meta)).toThrow("invalid robot experiment");
       const file = { ...policyFileContents(policy, META), experiment: bad };
       expect(() => policyFromFileContents(JSON.stringify(file), 1)).toThrow(
         "invalid robot experiment",
@@ -175,9 +156,7 @@ describe("G1 policy share codec", () => {
       experiment: EXPERIMENT,
     });
     new DataView(bytes.buffer).setUint32(20, 16_385, true);
-    expect(() => decodeSharedPolicy(bytes, 1)).toThrow(
-      "unsupported header flags",
-    );
+    expect(() => decodeSharedPolicy(bytes, 1)).toThrow("unsupported header flags");
   });
 
   test("round-trips a learned policy exactly", () => {
@@ -211,10 +190,7 @@ describe("G1 policy share codec", () => {
 
   test("a policy identical to the seed round-trips exactly", () => {
     const baseline = baselineOf(128);
-    const decoded = decodeSharedPolicy(
-      encodeSharedPolicy(baseline, META),
-      baseline.length,
-    );
+    const decoded = decodeSharedPolicy(encodeSharedPolicy(baseline, META), baseline.length);
     for (let index = 0; index < baseline.length; index++) {
       expect(decoded.policy[index]).toBe(baseline[index]);
     }
@@ -271,9 +247,9 @@ describe("G1 policy share codec", () => {
   test("refuses a truncated payload rather than reconstructing nonsense", () => {
     const baseline = baselineOf(64);
     const payload = encodeSharedPolicy(learnedOf(baseline), META);
-    expect(() => decodeSharedPolicy(payload.subarray(0, payload.length - 20), baseline.length)).toThrow(
-      /does not match its header/,
-    );
+    expect(() =>
+      decodeSharedPolicy(payload.subarray(0, payload.length - 20), baseline.length),
+    ).toThrow(/does not match its header/);
   });
 
   test("refuses non-finite coefficients at encode time", () => {
@@ -352,7 +328,16 @@ describe("G1 policy share codec", () => {
   });
 
   test("preserves cancellation cases, extreme finite values and signed zero bit for bit", async () => {
-    const policy = Float64Array.of(1e-20, -0, 0, Number.MIN_VALUE, -Number.MIN_VALUE, Number.MAX_VALUE, -Number.MAX_VALUE, Math.PI);
+    const policy = Float64Array.of(
+      1e-20,
+      -0,
+      0,
+      Number.MIN_VALUE,
+      -Number.MIN_VALUE,
+      Number.MAX_VALUE,
+      -Number.MAX_VALUE,
+      Math.PI,
+    );
     const fragment = await encodePolicyFragment(policy, META);
     const copies = [
       decodeSharedPolicy(encodeSharedPolicy(policy, META), policy.length),
@@ -367,14 +352,21 @@ describe("G1 policy share codec", () => {
   test("rejects invalid metadata and binary format instead of truncating fields", () => {
     const policy = Float64Array.of(1);
     for (const bad of [
-      { generation: -1 }, { generation: 2 ** 32 }, { generation: 1.5 },
-      { sigma: NaN }, { sigma: 0 }, { sigma: Infinity },
+      { generation: -1 },
+      { generation: 2 ** 32 },
+      { generation: 1.5 },
+      { sigma: NaN },
+      { sigma: 0 },
+      { sigma: Infinity },
       // Provenance strings are checked structurally, not against one robot's
       // vocabulary: this format carries manipulation policies too, and
       // whitelisting walking task names refused the arm's own exports.
-      { task: "" }, { challenge: "   " }, { family: "f".repeat(256) },
+      { task: "" },
+      { challenge: "   " },
+      { family: "f".repeat(256) },
       { kernelVersion: "x".repeat(256) },
-    ]) expect(() => encodeSharedPolicy(policy, { ...META, ...bad } as SharedPolicyMeta)).toThrow();
+    ])
+      expect(() => encodeSharedPolicy(policy, { ...META, ...bad } as SharedPolicyMeta)).toThrow();
     // A manipulation policy is valid provenance, not a foreign object.
     expect(() =>
       encodeSharedPolicy(policy, {
@@ -399,12 +391,25 @@ describe("G1 policy share codec", () => {
       expect(() => policyFromFileContents(root, 1)).toThrow("not a Frankensim G1 policy");
     }
     const file = policyFileContents(Float64Array.of(1), META);
-    expect(() => policyFromFileContents(JSON.stringify({ ...file, formatVersion: 99 }), 1)).toThrow("cannot read");
-    expect(() => policyFromFileContents(JSON.stringify({ ...file, sigma: null }), 1)).toThrow("search radius");
+    expect(() => policyFromFileContents(JSON.stringify({ ...file, formatVersion: 99 }), 1)).toThrow(
+      "cannot read",
+    );
+    expect(() => policyFromFileContents(JSON.stringify({ ...file, sigma: null }), 1)).toThrow(
+      "search radius",
+    );
     expect(() => policyFromFileContents(" ".repeat(2_000_001), 1)).toThrow("too large");
     await expect(decodePolicyFragment("a".repeat(800_000), 1)).rejects.toThrow();
-    const compressedBomb = new Uint8Array(await new Response(new Blob([new Uint8Array(600_000)]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
-    const encoded = btoa(String.fromCharCode(...compressedBomb)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const compressedBomb = new Uint8Array(
+      await new Response(
+        new Blob([new Uint8Array(600_000)])
+          .stream()
+          .pipeThrough(new CompressionStream("deflate-raw")),
+      ).arrayBuffer(),
+    );
+    const encoded = btoa(String.fromCharCode(...compressedBomb))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
     await expect(decodePolicyFragment(encoded, 1)).rejects.toThrow("decoded payload is too large");
   });
 
@@ -440,10 +445,7 @@ describe("G1 policy share codec", () => {
       /not a Frankensim G1 policy/,
     );
     expect(() =>
-      policyFromFileContents(
-        JSON.stringify({ format: "frankensim-g1-policy", policy: [1, 2] }),
-        8,
-      ),
+      policyFromFileContents(JSON.stringify({ format: "frankensim-g1-policy", policy: [1, 2] }), 8),
     ).toThrow(/expects 8/);
     expect(() =>
       policyFromFileContents(
@@ -462,9 +464,7 @@ describe("residual head width", () => {
     // loader, which means nothing but this stops them drifting apart — and a
     // drift would reject every legitimate policy with a misleading reason.
     const { RESIDUAL_HEAD_LENGTH } = await import("../app/lib/g1PolicyShare");
-    const { G1_RESIDUAL_HEAD_LENGTH } = await import(
-      "../app/lib/frankensimCmaes"
-    );
+    const { G1_RESIDUAL_HEAD_LENGTH } = await import("../app/lib/frankensimCmaes");
     expect(RESIDUAL_HEAD_LENGTH).toBe(G1_RESIDUAL_HEAD_LENGTH);
   });
 });

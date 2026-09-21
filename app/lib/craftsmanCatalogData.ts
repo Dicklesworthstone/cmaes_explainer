@@ -29,7 +29,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak (Fumed)",
     joinery: "Corbeled solid beam with mortise & tenon",
     finish: "Hand-rubbed fumed oil & dark wax",
-    description: "Massive clinker brick fireplace with recessed firebox, corbeled solid oak mantel shelf, and flanked by built-in inglenook fireside settle benches.",
+    description:
+      "Massive clinker brick fireplace with recessed firebox, corbeled solid oak mantel shelf, and flanked by built-in inglenook fireside settle benches.",
     dimensionsMeters: [2.36, 0.65, 2.6],
     historicalPrice: "$48.50 (in 1928 kit)",
   },
@@ -42,7 +43,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak",
     joinery: "Through-tenon pinned joinery with keyed slats",
     finish: "Fumed dark ammonia fumed oak with shellac",
-    description: "Iconic Arts & Crafts armchair with 4-position reclining back, heavy 4-inch wide armrests, side slats, and brown saddle leather cushion.",
+    description:
+      "Iconic Arts & Crafts armchair with 4-position reclining back, heavy 4-inch wide armrests, side slats, and brown saddle leather cushion.",
     dimensionsMeters: [0.92, 0.96, 0.98],
     historicalPrice: "$24.75",
   },
@@ -55,7 +57,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak",
     joinery: "Blind mortise-and-tenon with edge chamfers",
     finish: "Dark Mission brown stain",
-    description: "Sturdy three-seat settle featuring vertical back and side slats, broad arm rails, and deep cushions upholstered in olive wool rep fabric.",
+    description:
+      "Sturdy three-seat settle featuring vertical back and side slats, broad arm rails, and deep cushions upholstered in olive wool rep fabric.",
     dimensionsMeters: [1.82, 0.88, 0.86],
     historicalPrice: "$38.00",
   },
@@ -68,7 +71,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Solid White Oak",
     joinery: "Through-tenons with walnut locking keys",
     finish: "Golden oak satin varnish",
-    description: "Solid 2-inch top library table with lower stretcher magazine shelf, square legs, and prominent through-tenons showing authentic craft construction.",
+    description:
+      "Solid 2-inch top library table with lower stretcher magazine shelf, square legs, and prominent through-tenons showing authentic craft construction.",
     dimensionsMeters: [1.32, 0.72, 0.76],
     historicalPrice: "$16.25",
   },
@@ -81,7 +85,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Hand-hammered copper / Mineral Mica",
     joinery: "Riveted copper strapping over sheet mica",
     finish: "Fire-patinated dark chocolate bronze",
-    description: "Hand-hammered conical four-panel amber mineral mica shade that emits a warm, soothing golden incandescent glow when lit.",
+    description:
+      "Hand-hammered conical four-panel amber mineral mica shade that emits a warm, soothing golden incandescent glow when lit.",
     dimensionsMeters: [0.46, 0.46, 0.58],
     historicalPrice: "$18.50",
   },
@@ -94,7 +99,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak",
     joinery: "Trestle base with pinned through-tenon stretcher",
     finish: "Nut brown satin lacquer",
-    description: "Heavy oak dining table with substantial end trestles, keyed center stretcher, and matching slatted high-back dining chairs.",
+    description:
+      "Heavy oak dining table with substantial end trestles, keyed center stretcher, and matching slatted high-back dining chairs.",
     dimensionsMeters: [1.68, 0.94, 0.76],
     historicalPrice: "$32.50",
   },
@@ -107,7 +113,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak",
     joinery: "Dovetail drawer boxes with leaded glass doors",
     finish: "Dark fumed oak with antique brass bail pulls",
-    description: "Full architectural built-in sideboard with leaded art glass display cabinets, beveled mirror splashback, five linen drawers, and lower double cupboards.",
+    description:
+      "Full architectural built-in sideboard with leaded art glass display cabinets, beveled mirror splashback, five linen drawers, and lower double cupboards.",
     dimensionsMeters: [2.1, 0.52, 1.85],
     historicalPrice: "$65.00 (built-in kit)",
   },
@@ -120,7 +127,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Northern Hard Maple & White Enamel",
     joinery: "Tambour roll-front with tongue-and-groove casing",
     finish: "Pure white porcelain enamel & gloss enamel",
-    description: "The ultimate 1920s kitchen command center: porcelain enamel slide-out worktable, roll-curtain flour sifter bin, spice carousel, and glassware cupboards.",
+    description:
+      "The ultimate 1920s kitchen command center: porcelain enamel slide-out worktable, roll-curtain flour sifter bin, spice carousel, and glassware cupboards.",
     dimensionsMeters: [1.22, 0.72, 1.78],
     historicalPrice: "$42.50",
   },
@@ -133,7 +141,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Cast Iron & Vitreous Porcelain Enamel",
     joinery: "Interlocking cast panels with nickel-plated legs",
     finish: "White porcelain and black iron with temperature gauge",
-    description: "Period gas range with four cooktop burners, high warming closet, elevated baking oven, and thermometer gauge on cabriole cast iron legs.",
+    description:
+      "Period gas range with four cooktop burners, high warming closet, elevated baking oven, and thermometer gauge on cabriole cast iron legs.",
     dimensionsMeters: [0.95, 0.72, 1.35],
     historicalPrice: "$56.00",
   },
@@ -146,7 +155,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Heavy Enameled Cast Iron",
     joinery: "Integrated fluted drainboard with wall hanger",
     finish: "Vitreous china white with brass fixtures",
-    description: "Deep single-basin apron-front kitchen sink with integral left-hand fluted ribbed drainboard and dual compression porcelain hot/cold bibb faucets.",
+    description:
+      "Deep single-basin apron-front kitchen sink with integral left-hand fluted ribbed drainboard and dual compression porcelain hot/cold bibb faucets.",
     dimensionsMeters: [1.35, 0.58, 0.88],
     historicalPrice: "$29.50",
   },
@@ -159,7 +169,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Cypress & White Oak",
     joinery: "Reinforced mortise & tenon with heavy eye bolts",
     finish: "Spar varnish weather-resistant dark oak",
-    description: "Generous 5-foot slatted porch swing suspended from the beadboard porch ceiling by solid brass chains, featuring rolled armrests and canvas cushions.",
+    description:
+      "Generous 5-foot slatted porch swing suspended from the beadboard porch ceiling by solid brass chains, featuring rolled armrests and canvas cushions.",
     dimensionsMeters: [1.55, 0.65, 0.58],
     historicalPrice: "$11.75",
   },
@@ -172,7 +183,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Quartersawn White Oak",
     joinery: "Bed-bolt fastened corner posts with vertical slats",
     finish: "Hand-rubbed wax on fumed oak",
-    description: "Substantial Craftsman queen bedstead with high slatted headboard, matching footboard, stout square posts, and period patchwork quilt.",
+    description:
+      "Substantial Craftsman queen bedstead with high slatted headboard, matching footboard, stout square posts, and period patchwork quilt.",
     dimensionsMeters: [1.62, 2.12, 1.25],
     historicalPrice: "$28.50",
   },
@@ -185,7 +197,8 @@ export const SEARS_CRAFTSMAN_CATALOG: Record<string, CraftsmanPieceInfo> = {
     woodSpecies: "Enameled Cast Iron / Polished Nickel",
     joinery: "Ball-and-claw cast iron feet with lock bolts",
     finish: "High-gloss vitreous enamel and polished nickel",
-    description: "5.5-foot roll-rim soaking bathtub with ornate eagle-claw-on-ball feet, exterior white enamel, and telephone-cradle hand shower fixtures.",
+    description:
+      "5.5-foot roll-rim soaking bathtub with ornate eagle-claw-on-ball feet, exterior white enamel, and telephone-cradle hand shower fixtures.",
     dimensionsMeters: [1.68, 0.76, 0.62],
     historicalPrice: "$36.00",
   },
@@ -196,64 +209,106 @@ export const ROOM_ARCHITECTURAL_DETAILS = [
     id: "living",
     name: "Living Room (Parlor)",
     icon: "couch",
-    description: "Central gathering room with quartersawn white oak flooring, 1.35m board-and-batten wainscoting, inglenook brick fireplace, and exposed coffered ceiling box beams.",
+    description:
+      "Central gathering room with quartersawn white oak flooring, 1.35m board-and-batten wainscoting, inglenook brick fireplace, and exposed coffered ceiling box beams.",
     areaSqM: 23.5,
     ceilingHeightM: 2.85,
-    focalFeatures: ["Clinker brick fireplace", "Coffered ceiling box beams", "Stickley Morris armchair", "Dirk van Erp mica lamp"],
+    focalFeatures: [
+      "Clinker brick fireplace",
+      "Coffered ceiling box beams",
+      "Stickley Morris armchair",
+      "Dirk van Erp mica lamp",
+    ],
   },
   {
     id: "dining",
     name: "Formal Dining Room",
     icon: "utensils",
-    description: "Connected to living room via cased colonnade bookcases. Features built-in leaded glass china buffet, heavy trestle dining table, and amber glass pendant chandelier.",
+    description:
+      "Connected to living room via cased colonnade bookcases. Features built-in leaded glass china buffet, heavy trestle dining table, and amber glass pendant chandelier.",
     areaSqM: 16.2,
     ceilingHeightM: 2.85,
-    focalFeatures: ["Built-in china buffet", "Trestle table & 6 chairs", "Colonnade room divider", "Leaded casement windows"],
+    focalFeatures: [
+      "Built-in china buffet",
+      "Trestle table & 6 chairs",
+      "Colonnade room divider",
+      "Leaded casement windows",
+    ],
   },
   {
     id: "kitchen",
     name: "Craftsman Kitchen & Pantry",
     icon: "chef-hat",
-    description: "Period culinary workstation equipped with a Hoosier cabinet, Glenwood 4-burner cast iron gas range, apron-front farmhouse porcelain sink, and butcher block island.",
+    description:
+      "Period culinary workstation equipped with a Hoosier cabinet, Glenwood 4-burner cast iron gas range, apron-front farmhouse porcelain sink, and butcher block island.",
     areaSqM: 14.8,
     ceilingHeightM: 2.85,
-    focalFeatures: ["Hoosier baking cabinet", "Cast iron cooking stove", "Apron-front sink", "Butcher block island"],
+    focalFeatures: [
+      "Hoosier baking cabinet",
+      "Cast iron cooking stove",
+      "Apron-front sink",
+      "Butcher block island",
+    ],
   },
   {
     id: "porch",
     name: "Front Veranda / Porch",
     icon: "sun",
-    description: "Deep covered front porch with riverstone foundation piers, double square wood columns, slatted cypress porch swing, and fir tongue-and-groove decking.",
+    description:
+      "Deep covered front porch with riverstone foundation piers, double square wood columns, slatted cypress porch swing, and fir tongue-and-groove decking.",
     areaSqM: 12.4,
     ceilingHeightM: 2.65,
-    focalFeatures: ["Riverstone piers & columns", "Slatted porch swing", "Beaded ceiling & lantern", "Craftsman entry door"],
+    focalFeatures: [
+      "Riverstone piers & columns",
+      "Slatted porch swing",
+      "Beaded ceiling & lantern",
+      "Craftsman entry door",
+    ],
   },
   {
     id: "bedroom",
     name: "Master Bedroom",
     icon: "bed",
-    description: "Restful retreat with quartersawn oak slatted queen bedstead, nightstands with brass/mica lamps, 5-drawer bureau with swivel mirror, and double wardrobe.",
+    description:
+      "Restful retreat with quartersawn oak slatted queen bedstead, nightstands with brass/mica lamps, 5-drawer bureau with swivel mirror, and double wardrobe.",
     areaSqM: 15.6,
     ceilingHeightM: 2.85,
-    focalFeatures: ["Oak slatted bedstead", "5-drawer bureau & mirror", "Double wardrobe", "Bedside mica lamps"],
+    focalFeatures: [
+      "Oak slatted bedstead",
+      "5-drawer bureau & mirror",
+      "Double wardrobe",
+      "Bedside mica lamps",
+    ],
   },
   {
     id: "bathroom",
     name: "Craftsman Bathroom",
     icon: "bath",
-    description: "Period bathroom featuring white subway tile wainscoting with black trim, hexagonal porcelain mosaic floor, clawfoot cast-iron tub, and pedestal sink.",
+    description:
+      "Period bathroom featuring white subway tile wainscoting with black trim, hexagonal porcelain mosaic floor, clawfoot cast-iron tub, and pedestal sink.",
     areaSqM: 6.8,
     ceilingHeightM: 2.85,
-    focalFeatures: ["Clawfoot cast-iron tub", "Hex mosaic tile floor", "Subway tile wainscoting", "Pedestal washbasin"],
+    focalFeatures: [
+      "Clawfoot cast-iron tub",
+      "Hex mosaic tile floor",
+      "Subway tile wainscoting",
+      "Pedestal washbasin",
+    ],
   },
   {
     id: "cutaway",
     name: "Full Dollhouse Cutaway",
     icon: "home",
-    description: "Complete isometric architectural cutaway of the entire 1928 Sears Craftsman Bungalow, showing all 7 furnished rooms, floorplan circulation, and walking pathways.",
+    description:
+      "Complete isometric architectural cutaway of the entire 1928 Sears Craftsman Bungalow, showing all 7 furnished rooms, floorplan circulation, and walking pathways.",
     areaSqM: 95.0,
     ceilingHeightM: 3.2,
-    focalFeatures: ["All 7 rooms simultaneously", "Continuous circulation paths", "Wall cross-sections", "Exterior roof eaves & foundation"],
+    focalFeatures: [
+      "All 7 rooms simultaneously",
+      "Continuous circulation paths",
+      "Wall cross-sections",
+      "Exterior roof eaves & foundation",
+    ],
   },
 ] as const;
 
@@ -276,7 +331,8 @@ export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
   {
     id: "grand-tour",
     name: "Whole-House Grand Tour",
-    description: "Full estate traversal from front veranda through parlor, dining, kitchen, hallway, and bedroom suite.",
+    description:
+      "Full estate traversal from front veranda through parlor, dining, kitchen, hallway, and bedroom suite.",
     totalDistanceMeters: 18.2,
     waypoints: [
       { name: "Porch Entry", pos: [0.003, 4.9], speed: 0.6 },
@@ -304,7 +360,8 @@ export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
   {
     id: "living-inglenook",
     name: "Living Room Inglenook Circuit",
-    description: "Navigating between the Gustav Stickley Morris armchair, oak coffee table, and the glowing brick fireplace hearth.",
+    description:
+      "Navigating between the Gustav Stickley Morris armchair, oak coffee table, and the glowing brick fireplace hearth.",
     totalDistanceMeters: 7.4,
     waypoints: [
       { name: "Entry Aisle", pos: [-0.05, 2.087], speed: 0.6 },
@@ -324,7 +381,8 @@ export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
   {
     id: "dining-circulation",
     name: "Dining Room & Buffet Loop",
-    description: "Circulating smoothly around the 6-seat oak trestle dining table and inspecting the built-in china buffet.",
+    description:
+      "Circulating smoothly around the 6-seat oak trestle dining table and inspecting the built-in china buffet.",
     totalDistanceMeters: 9.7,
     waypoints: [
       { name: "Colonnade Arch", pos: [0.327, 2.491], speed: 0.55 },
@@ -347,7 +405,8 @@ export const CRAFTSMAN_WALKING_ROUTES: CraftsmanWalkingRoute[] = [
   {
     id: "kitchen-prep",
     name: "Kitchen Work Triangle",
-    description: "Classic culinary triangle between the Hoosier baking cabinet, Glenwood gas stove, and farmhouse apron sink.",
+    description:
+      "Classic culinary triangle between the Hoosier baking cabinet, Glenwood gas stove, and farmhouse apron sink.",
     totalDistanceMeters: 15.9,
     waypoints: [
       { name: "Prep Island", pos: [2.0, -1.0], speed: 0.55 },

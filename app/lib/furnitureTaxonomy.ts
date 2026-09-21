@@ -216,15 +216,15 @@ const PICTURE_FRAME: [number, number, number] = [0.6, 0.03, 0.4];
 const PLANT: [number, number, number] = [0.5, 0.5, 1.2];
 const PLATE: [number, number, number] = [0.27, 0.27, 0.02];
 const GLASS: [number, number, number] = [0.07, 0.07, 0.13];
-const MUG: [number, number, number] = [0.09, 0.09, 0.10];
+const MUG: [number, number, number] = [0.09, 0.09, 0.1];
 const BOTTLE: [number, number, number] = [0.08, 0.08, 0.28];
-const PAN: [number, number, number] = [0.45, 0.30, 0.08];
+const PAN: [number, number, number] = [0.45, 0.3, 0.08];
 const BOOK: [number, number, number] = [0.18, 0.25, 0.03];
 const GRILL: [number, number, number] = [0.6, 0.5, 1.1];
 const PATIO_CHAIR: [number, number, number] = [0.6, 0.7, 0.9];
 const PLANTER: [number, number, number] = [0.5, 0.5, 0.6];
 const HOSE_REEL: [number, number, number] = [0.4, 0.4, 0.85];
-const PET_CAT: [number, number, number] = [0.45, 0.20, 0.25];
+const PET_CAT: [number, number, number] = [0.45, 0.2, 0.25];
 const PERSON_SILHOUETTE: [number, number, number] = [0.45, 0.25, 1.75];
 
 // ---------- Per-kind default table ----------
@@ -1153,7 +1153,7 @@ export function furnitureKindDefaults(kind: FurnitureKind): FurnitureKindDefault
 
 /** All kinds, in declaration order. */
 export const ALL_FURNITURE_KINDS: FurnitureKind[] = Object.keys(
-  FURNITURE_KIND_DEFAULTS
+  FURNITURE_KIND_DEFAULTS,
 ) as FurnitureKind[];
 
 /** All families. */

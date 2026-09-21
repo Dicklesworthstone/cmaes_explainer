@@ -1,28 +1,28 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import {
+  AlertTriangle,
+  ArrowRight,
+  Calculator,
+  CheckCircle2,
   Compass,
   Cpu,
-  Layers,
-  Sparkles,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
   Flame,
+  Layers,
   ShieldCheck,
-  Calculator,
   Sliders,
+  Sparkles,
   Timer,
-  ArrowRight,
-  Waves
+  Waves,
+  Zap,
 } from "lucide-react";
-import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
-import { NoiseExplorer } from "./NoiseExplorer";
-import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
+import { useMemo, useState } from "react";
 import { ActiveCovarianceDemo } from "./ActiveCovarianceDemo";
-import { RestartStrategyViewer } from "./RestartStrategyViewer";
+import { ConstraintRepairDemo } from "./ConstraintRepairDemo";
+import { EncodeDecodePlayground } from "./EncodeDecodePlayground";
 import { LatexRenderer } from "./LatexRenderer";
+import { NoiseExplorer } from "./NoiseExplorer";
+import { RestartStrategyViewer } from "./RestartStrategyViewer";
 
 /**
  * Interactive CMA-ES Hyperparameter & Problem Sizing Calculator
@@ -59,10 +59,7 @@ function HyperparameterCalculator() {
 
     // Covariance learning rates
     const c1 = 2 / ((n + 1.3) ** 2 + muEff);
-    const cMu = Math.min(
-      1 - c1,
-      (2 * (muEff - 2 + 1 / muEff)) / ((n + 2) ** 2 + muEff)
-    );
+    const cMu = Math.min(1 - c1, (2 * (muEff - 2 + 1 / muEff)) / ((n + 2) ** 2 + muEff));
 
     // Estimated evaluation budget. Mean and step-size progress needs O(n)
     // generations while full covariance learning takes up to O(n^2); the
@@ -92,7 +89,7 @@ function HyperparameterCalculator() {
       cMu,
       totalGenerations,
       totalEvals,
-      formattedTime: formatTime(totalTimeSec)
+      formattedTime: formatTime(totalTimeSec),
     };
   }, [dim, evalTimeMs, noiseLevel, isMultimodal]);
 
@@ -108,7 +105,8 @@ function HyperparameterCalculator() {
               Interactive CMA-ES Hyperparameter & Budget Sizer
             </h3>
             <p className="text-xs text-slate-400">
-              Calculate exact Hansen default parameters, population sizes, and wall-clock budgets for your problem dimension
+              Calculate exact Hansen default parameters, population sizes, and wall-clock budgets
+              for your problem dimension
             </p>
           </div>
         </div>
@@ -138,7 +136,9 @@ function HyperparameterCalculator() {
           {/* Dimension Slider */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs font-medium">
-              <span className="text-slate-300">Dimension (<code className="font-mono text-sky-300">n</code>)</span>
+              <span className="text-slate-300">
+                Dimension (<code className="font-mono text-sky-300">n</code>)
+              </span>
               <span className="text-sky-300 font-mono bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
                 {dim} parameters
               </span>
@@ -182,7 +182,9 @@ function HyperparameterCalculator() {
 
           {/* Noise Level */}
           <div className="space-y-1.5 pt-2 border-t border-white/5">
-            <span className="text-xs font-medium text-slate-300 block mb-1">Evaluation Noise Level</span>
+            <span className="text-xs font-medium text-slate-300 block mb-1">
+              Evaluation Noise Level
+            </span>
             <div className="grid grid-cols-3 gap-2">
               {(["none", "mild", "heavy"] as const).map((lvl) => (
                 <button
@@ -213,7 +215,9 @@ function HyperparameterCalculator() {
               <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
                 <span>Population Size</span> (<LatexRenderer math="\lambda" block={false} />)
               </div>
-              <div className="text-lg font-bold text-sky-200 font-mono">{stats.lambda} offspring</div>
+              <div className="text-lg font-bold text-sky-200 font-mono">
+                {stats.lambda} offspring
+              </div>
               <div className="text-[0.65rem] text-slate-400 font-mono">
                 <LatexRenderer
                   math={
@@ -232,7 +236,10 @@ function HyperparameterCalculator() {
               </div>
               <div className="text-lg font-bold text-emerald-200 font-mono">{stats.mu} elites</div>
               <div className="text-[0.65rem] text-slate-400 font-mono">
-                <LatexRenderer math={`\\mu_{\\text{eff}} \\approx ${stats.muEff.toFixed(2)}`} block={false} />
+                <LatexRenderer
+                  math={`\\mu_{\\text{eff}} \\approx ${stats.muEff.toFixed(2)}`}
+                  block={false}
+                />
               </div>
             </div>
 
@@ -240,16 +247,24 @@ function HyperparameterCalculator() {
               <div className="text-[0.65rem] text-slate-400 uppercase font-mono flex items-center gap-1">
                 <span>Rank-1 Rate</span> (<LatexRenderer math="c_1" block={false} />)
               </div>
-              <div className="text-base font-bold text-purple-200 font-mono">{stats.c1.toFixed(4)}</div>
+              <div className="text-base font-bold text-purple-200 font-mono">
+                {stats.c1.toFixed(4)}
+              </div>
               <div className="text-[0.65rem] text-slate-400 font-mono">
                 <LatexRenderer math={`c_\\mu \\approx ${stats.cMu.toFixed(4)}`} block={false} />
               </div>
             </div>
 
             <div className="bg-slate-950/60 p-4 rounded-2xl border border-amber-500/20 space-y-1">
-              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">Est. Wall-Clock Time</div>
-              <div className="text-lg font-bold text-amber-200 font-mono">{stats.formattedTime}</div>
-              <div className="text-[0.62rem] text-slate-500 font-mono">~{stats.totalEvals.toLocaleString()} evals</div>
+              <div className="text-[0.65rem] text-slate-400 uppercase font-mono">
+                Est. Wall-Clock Time
+              </div>
+              <div className="text-lg font-bold text-amber-200 font-mono">
+                {stats.formattedTime}
+              </div>
+              <div className="text-[0.62rem] text-slate-500 font-mono">
+                ~{stats.totalEvals.toLocaleString()} evals
+              </div>
             </div>
           </div>
 
@@ -259,7 +274,15 @@ function HyperparameterCalculator() {
               <span>Fixed Internal Learning Rates</span>
             </div>
             <p>
-              Unlike stochastic gradient descent (which requires tuning learning rates, momentum, decay schedules, and weight decay for every model), CMA-ES computes all internal learning rates as deterministic functions of dimension <LatexRenderer math="n" block={false} /> and selection mass <LatexRenderer math="\mu_{\text{eff}}" block={false} />, so they are never tuned per problem. The choices left to you are the initial point <LatexRenderer math="x_0" block={false} />, the initial step size <LatexRenderer math="\sigma_0" block={false} /> (about 0.3 times the parameter range), and optionally <LatexRenderer math="\lambda" block={false} />.
+              Unlike stochastic gradient descent (which requires tuning learning rates, momentum,
+              decay schedules, and weight decay for every model), CMA-ES computes all internal
+              learning rates as deterministic functions of dimension{" "}
+              <LatexRenderer math="n" block={false} /> and selection mass{" "}
+              <LatexRenderer math="\mu_{\text{eff}}" block={false} />, so they are never tuned per
+              problem. The choices left to you are the initial point{" "}
+              <LatexRenderer math="x_0" block={false} />, the initial step size{" "}
+              <LatexRenderer math="\sigma_0" block={false} /> (about 0.3 times the parameter range),
+              and optionally <LatexRenderer math="\lambda" block={false} />.
             </p>
           </div>
         </div>
@@ -279,23 +302,45 @@ export function PracticalPlaybook() {
           <ShieldCheck className="h-4 w-4" />
           <span>Practical Playbook: Constraints, Noise, Budgets</span>
         </div>
-        
+
         <div className="grid gap-6 md:grid-cols-2 text-sm">
           <div className="rounded-2xl border border-sky-500/10 bg-sky-500/5 p-5">
-            <div className="mb-3 text-xs font-bold text-sky-200 uppercase tracking-wide">Constraints & Bounds</div>
+            <div className="mb-3 text-xs font-bold text-sky-200 uppercase tracking-wide">
+              Constraints & Bounds
+            </div>
             <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-sky-500">
-              <li>Work in an unconstrained space; logit/tanh to map back. If you clip/reflect at bounds instead, add a penalty on the repair distance so the boundary plateau cannot stall step-size adaptation.</li>
-              <li>Categories: carve [0,1] into intervals, quantize late; keeps search smoother. Unordered categories with many options often do better one-hot encoded.</li>
-              <li>Hard constraints: add rank-based penalties; repair samples instead of rejecting.</li>
+              <li>
+                Work in an unconstrained space; logit/tanh to map back. If you clip/reflect at
+                bounds instead, add a penalty on the repair distance so the boundary plateau cannot
+                stall step-size adaptation.
+              </li>
+              <li>
+                Categories: carve [0,1] into intervals, quantize late; keeps search smoother.
+                Unordered categories with many options often do better one-hot encoded.
+              </li>
+              <li>
+                Hard constraints: add rank-based penalties; repair samples instead of rejecting.
+              </li>
             </ul>
           </div>
-          
+
           <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/5 p-5">
-            <div className="mb-3 text-xs font-bold text-emerald-200 uppercase tracking-wide">Noise & Budgets</div>
-             <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-emerald-500">
-              <li>For noisy f: enlarge λ, reevaluate elites and average their fitness, or lower the two covariance learning rates. Active (negative-weight) updates amplify misranked samples, so they are not a noise remedy.</li>
-              <li>Budgeting: λ = 4 + ⌊3 ln n⌋; expect on the order of n to n² generations when C must adapt; restart if stalled.</li>
-              <li>Keep seeds and ask/tell logs so you can replay and debug; determinism saves days.</li>
+            <div className="mb-3 text-xs font-bold text-emerald-200 uppercase tracking-wide">
+              Noise & Budgets
+            </div>
+            <ul className="space-y-2.5 text-slate-300 text-[0.85rem] list-disc pl-4 marker:text-emerald-500">
+              <li>
+                For noisy f: enlarge λ, reevaluate elites and average their fitness, or lower the
+                two covariance learning rates. Active (negative-weight) updates amplify misranked
+                samples, so they are not a noise remedy.
+              </li>
+              <li>
+                Budgeting: λ = 4 + ⌊3 ln n⌋; expect on the order of n to n² generations when C must
+                adapt; restart if stalled.
+              </li>
+              <li>
+                Keep seeds and ask/tell logs so you can replay and debug; determinism saves days.
+              </li>
             </ul>
           </div>
         </div>

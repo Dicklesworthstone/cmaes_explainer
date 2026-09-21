@@ -24,11 +24,11 @@
 // Usage: bun run scripts/check-large-js.mjs
 // Exit 0 OK, 1 any-chunk-over-budget, 2 read error.
 
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ABSOLUTE_LIMIT_BYTES = 1_100_000; // 1.1 MB
-const RELATIVE_GROWTH_RATIO = 1.15;     // 15% growth vs baseline = FAIL
+const RELATIVE_GROWTH_RATIO = 1.15; // 15% growth vs baseline = FAIL
 const CHUNKS_DIR = ".next/static/chunks";
 const BASELINE_FILE = "scripts/check-large-js.baseline.json";
 
@@ -81,7 +81,7 @@ for (const { file, sizeBytes } of chunks) {
     if (sizeBytes > base * RELATIVE_GROWTH_RATIO) {
       offenders.push({
         file,
-        reason: `growth ${(sizeBytes / 1024).toFixed(1)} KB > ${(base * RELATIVE_GROWTH_RATIO / 1024).toFixed(0)} KB (baseline ${(base / 1024).toFixed(1)} KB × ${RELATIVE_GROWTH_RATIO})`,
+        reason: `growth ${(sizeBytes / 1024).toFixed(1)} KB > ${((base * RELATIVE_GROWTH_RATIO) / 1024).toFixed(0)} KB (baseline ${(base / 1024).toFixed(1)} KB × ${RELATIVE_GROWTH_RATIO})`,
       });
     }
   }

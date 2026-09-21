@@ -8,13 +8,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { OBB2D, ValueGrid } from "./dpValueIteration";
 import {
   ACTIONS_4,
   ACTIONS_8,
-  DEFAULT_COST_PARAMS,
-  DEFAULT_MULTI_RESOLUTION,
   allocateValueGrid,
   bellmanSweep,
+  DEFAULT_COST_PARAMS,
+  DEFAULT_MULTI_RESOLUTION,
   extractPolicy,
   makeOBBUnionSDF,
   obbSignedDistance,
@@ -25,7 +26,6 @@ import {
   sampleValueAt,
   setGoalCells,
 } from "./dpValueIteration";
-import type { OBB2D, ValueGrid } from "./dpValueIteration";
 import { CRAFTSMAN_BUNGALOW_1928 } from "./houseScenes";
 
 // ---------------------------------------------------------------------------
@@ -382,44 +382,39 @@ describe("sampleValueAt (bilinear interpolation)", () => {
 // ---------------------------------------------------------------------------
 
 describe("Performance (acceptance criterion <50ms for whole-house value grid)", () => {
-  test(
-    "8m x 11m room with a few OBBs computes in <150ms (CI-loose bound)",
-    () => {
-      // 8m x 11m room, 0.2m coarse grid -> 40x55 = 2200 cells.
-      const walls: OBB2D[] = [
-        { center: [0, 0], halfExtents: [1.5, 0.2], yaw: 0 },
-        { center: [2, 2], halfExtents: [0.5, 0.5], yaw: 0 },
-        { center: [-2, -2], halfExtents: [0.5, 0.5], yaw: 0 },
-        { center: [0, -3], halfExtents: [0.8, 0.3], yaw: 0.5 },
-      ];
-      const t0 = (globalThis as { performance?: { now(): number } })
-        .performance?.now?.() ?? 0;
-      const result = runClearanceValueIteration(
-        { min: [-4, -5.5], max: [4, 5.5] },
-        [-3, -4],
-        // Goal at cell center (3.5, 4.5); radius 0.6 covers it.
-        [{ center: [3.5, 4.5], radius: 0.6 }],
-        {
-          ...DEFAULT_MULTI_RESOLUTION,
-          coarseResolution: 0.2,
-          fineResolution: 0.05,
-          fineWindow: 2.0,
-          coarseMaxSweeps: 2000,
-          fineMaxSweeps: 200,
-          actions: ACTIONS_4,
-          obstacles: walls,
-        },
-      );
-      const t1 = (globalThis as { performance?: { now(): number } })
-        .performance?.now?.() ?? 0;
-      const wallMs = t1 - t0;
-      // The acceptance target is "computes in <50ms" on a 2020
-      // laptop. Parallel CI runners vary under CPU contention, so we assert
-      // a loose bound to absorb noise while preventing 10x regressions.
-      expect(result.elapsedMs).toBeLessThan(500);
-      expect(wallMs).toBeLessThan(750);
-    },
-  );
+  test("8m x 11m room with a few OBBs computes in <150ms (CI-loose bound)", () => {
+    // 8m x 11m room, 0.2m coarse grid -> 40x55 = 2200 cells.
+    const walls: OBB2D[] = [
+      { center: [0, 0], halfExtents: [1.5, 0.2], yaw: 0 },
+      { center: [2, 2], halfExtents: [0.5, 0.5], yaw: 0 },
+      { center: [-2, -2], halfExtents: [0.5, 0.5], yaw: 0 },
+      { center: [0, -3], halfExtents: [0.8, 0.3], yaw: 0.5 },
+    ];
+    const t0 = (globalThis as { performance?: { now(): number } }).performance?.now?.() ?? 0;
+    const result = runClearanceValueIteration(
+      { min: [-4, -5.5], max: [4, 5.5] },
+      [-3, -4],
+      // Goal at cell center (3.5, 4.5); radius 0.6 covers it.
+      [{ center: [3.5, 4.5], radius: 0.6 }],
+      {
+        ...DEFAULT_MULTI_RESOLUTION,
+        coarseResolution: 0.2,
+        fineResolution: 0.05,
+        fineWindow: 2.0,
+        coarseMaxSweeps: 2000,
+        fineMaxSweeps: 200,
+        actions: ACTIONS_4,
+        obstacles: walls,
+      },
+    );
+    const t1 = (globalThis as { performance?: { now(): number } }).performance?.now?.() ?? 0;
+    const wallMs = t1 - t0;
+    // The acceptance target is "computes in <50ms" on a 2020
+    // laptop. Parallel CI runners vary under CPU contention, so we assert
+    // a loose bound to absorb noise while preventing 10x regressions.
+    expect(result.elapsedMs).toBeLessThan(500);
+    expect(wallMs).toBeLessThan(750);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -432,13 +427,7 @@ describe("bellmanSweep", () => {
     // Goal center (2.5, 2.5) = cell (2, 2) center; radius 0.6.
     setGoalCells(grid, [[2.5, 2.5]], 0.6, makeOBBUnionSDF([]));
     expect(grid.values[2 * 5 + 2]).toBe(0);
-    bellmanSweep(
-      grid,
-      makeOBBUnionSDF([]),
-      0.99,
-      ACTIONS_4,
-      DEFAULT_COST_PARAMS,
-    );
+    bellmanSweep(grid, makeOBBUnionSDF([]), 0.99, ACTIONS_4, DEFAULT_COST_PARAMS);
     expect(grid.values[2 * 5 + 2]).toBe(0);
   });
 });
@@ -488,10 +477,7 @@ describe("Integration: full Craftsman bungalow catalog (74 furniture pieces, 4 g
     const obbs = catalogFurnitureToOBBs();
     const result = runClearanceValueIteration(
       CRAFTSMAN_BUNGALOW_1928.bounds,
-      [
-        CRAFTSMAN_BUNGALOW_1928.startPose[0],
-        CRAFTSMAN_BUNGALOW_1928.startPose[1],
-      ],
+      [CRAFTSMAN_BUNGALOW_1928.startPose[0], CRAFTSMAN_BUNGALOW_1928.startPose[1]],
       CRAFTSMAN_BUNGALOW_1928.goals.map((g) => ({
         center: g.center,
         radius: g.radius,
@@ -528,10 +514,7 @@ describe("Integration: full Craftsman bungalow catalog (74 furniture pieces, 4 g
     // bounded.
     const result = runClearanceValueIteration(
       CRAFTSMAN_BUNGALOW_1928.bounds,
-      [
-        CRAFTSMAN_BUNGALOW_1928.startPose[0],
-        CRAFTSMAN_BUNGALOW_1928.startPose[1],
-      ],
+      [CRAFTSMAN_BUNGALOW_1928.startPose[0], CRAFTSMAN_BUNGALOW_1928.startPose[1]],
       CRAFTSMAN_BUNGALOW_1928.goals.map((g) => ({
         center: g.center,
         radius: g.radius,
@@ -580,10 +563,7 @@ describe("Integration: full Craftsman bungalow catalog (74 furniture pieces, 4 g
     // inherits the coarse value via warm-start.
     const result = runClearanceValueIteration(
       CRAFTSMAN_BUNGALOW_1928.bounds,
-      [
-        CRAFTSMAN_BUNGALOW_1928.startPose[0],
-        CRAFTSMAN_BUNGALOW_1928.startPose[1],
-      ],
+      [CRAFTSMAN_BUNGALOW_1928.startPose[0], CRAFTSMAN_BUNGALOW_1928.startPose[1]],
       CRAFTSMAN_BUNGALOW_1928.goals.map((g) => ({
         center: g.center,
         radius: g.radius,

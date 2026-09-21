@@ -5,9 +5,7 @@
 // We set a synthetic origin here before importing the real worker module so
 // that the compare-family integration test can run against the actual code.
 const runtimeLocation =
-  typeof globalThis.location?.href === "string"
-    ? new URL(globalThis.location.href)
-    : null;
+  typeof globalThis.location?.href === "string" ? new URL(globalThis.location.href) : null;
 if (!runtimeLocation || runtimeLocation.protocol === "file:") {
   // Bun Workers have no location.href, but the WASM loader needs a base URL
   // to resolve the root-relative /wasm/fs-cmaes/... paths. Use a file:// URL

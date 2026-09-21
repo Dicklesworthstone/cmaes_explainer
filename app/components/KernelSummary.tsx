@@ -26,24 +26,20 @@ export function KernelSummary() {
         </p>
       </div>
       <p className="mt-3 text-sm leading-6 text-slate-300">
-        Every animation on this site is driven by a compiled Rust multibody
-        kernel (semi-implicit Euler at 1/480 s, penalty contact, Coulomb
-        friction, Featherstone forward dynamics on the arm). The browser
-        receives the per-link poses and renders them. That is the kernel
-        contract.
+        Every animation on this site is driven by a compiled Rust multibody kernel (semi-implicit
+        Euler at 1/480 s, penalty contact, Coulomb friction, Featherstone forward dynamics on the
+        arm). The browser receives the per-link poses and renders them. That is the kernel contract.
       </p>
       <p className="mt-2 text-sm leading-6 text-slate-300">
-        The kernel is obstacle-blind (it has no catalogue of the Craftsman
-        bungalow furniture), so a CMA-ES search can place a link inside a
-        chair, table, or wall. The browser runs a visualization-layer
-        link-OBB projection (Ericson 2005 §5.5.6, OBBTree SIGGRAPH 1996)
-        to snap every link to the nearest furniture surface with a
-        positive clearance. The kernel trace is unchanged; the projection
-        is renderer-only. A regression test
-        (<code className="text-amber-200">g1LinkPenetrationProjection.test.ts</code>,
-        <code className="text-amber-200">armLinkCollisionResponse.test.ts</code>)
-        locks the behavior. If the kernel ever grows a real
-        link-vs-furniture check, the renderer projection can be removed.
+        The kernel is obstacle-blind (it has no catalogue of the Craftsman bungalow furniture), so a
+        CMA-ES search can place a link inside a chair, table, or wall. The browser runs a
+        visualization-layer link-OBB projection (Ericson 2005 §5.5.6, OBBTree SIGGRAPH 1996) to snap
+        every link to the nearest furniture surface with a positive clearance. The kernel trace is
+        unchanged; the projection is renderer-only. A regression test (
+        <code className="text-amber-200">g1LinkPenetrationProjection.test.ts</code>,
+        <code className="text-amber-200">armLinkCollisionResponse.test.ts</code>) locks the
+        behavior. If the kernel ever grows a real link-vs-furniture check, the renderer projection
+        can be removed.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
@@ -56,14 +52,13 @@ export function KernelSummary() {
             <li>· Penalty + Coulomb contact (foot / object)</li>
             <li>· Featherstone forward dynamics (arm)</li>
             <li>· Link-OBB penetration projection (renderer)</li>
-            <li>· Swept-volume CCD (renderer, G1 + arm) - the link
-                position is checked against every furniture OBB
-                between frames, so a fast link that would tunnel
-                through a thin obstacle is snapped to the swept
-                entry point, not the deep-interior closest point.
-                Locked by tests/sweptCcd.test.ts and the arm&rsquo;s
-                previousProjectedPositions pipeline in
-                HouseholdArmFlagship.</li>
+            <li>
+              · Swept-volume CCD (renderer, G1 + arm) - the link position is checked against every
+              furniture OBB between frames, so a fast link that would tunnel through a thin obstacle
+              is snapped to the swept entry point, not the deep-interior closest point. Locked by
+              tests/sweptCcd.test.ts and the arm&rsquo;s previousProjectedPositions pipeline in
+              HouseholdArmFlagship.
+            </li>
           </ul>
         </div>
         <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
@@ -91,15 +86,12 @@ export function KernelSummary() {
         </div>
       </div>
       <p className="mt-4 text-[0.72rem] leading-5 text-slate-400">
-        A walker that survives the kernel can still fall on real hardware.
-        The page deliberately stops at a deterministic explainer
-        experiment; treating it as a hardware validation would be a
-        category error. Open the
-        {" "}
+        A walker that survives the kernel can still fall on real hardware. The page deliberately
+        stops at a deterministic explainer experiment; treating it as a hardware validation would be
+        a category error. Open the{" "}
         <a href="#honesty" className="text-sky-300 underline-offset-2 hover:underline">
           Honesty ledger
-        </a>
-        {" "}
+        </a>{" "}
         below for the per-claim source, test, and citation.
       </p>
     </div>

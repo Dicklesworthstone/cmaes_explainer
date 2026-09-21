@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
-  KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
   buildKmrBaseMesh,
   computeDimensions,
   computeMountingPlatePose,
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
   type KmrGeometryConfig,
+  KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
 } from "../app/lib/kmrGeometry";
 
 describe("KUKA KMR iiwa geometry (cmaes-kmr-base)", () => {
@@ -15,9 +15,7 @@ describe("KUKA KMR iiwa geometry (cmaes-kmr-base)", () => {
     expect(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters).toBe(0.7);
     expect(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg).toBe(375);
     expect(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.maximumPayloadKg).toBe(175);
-    expect(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.sourceUrl).toContain(
-      "kuka_kmriiwa_en.pdf",
-    );
+    expect(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.sourceUrl).toContain("kuka_kmriiwa_en.pdf");
     expect(KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.baseLengthMeters).toBe(0.8);
     expect(KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.baseWidthMeters).toBe(0.6);
     expect(KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.wheelDiameterMeters).toBe(0.15);
@@ -52,7 +50,9 @@ describe("KUKA KMR iiwa geometry (cmaes-kmr-base)", () => {
         ...KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
         mountingPlateOffsetXMeters: 0.05,
       },
-      1.5, 2.0, 0.0,
+      1.5,
+      2.0,
+      0.0,
     );
     expect(pose.xMeters).toBe(1.55); // 1.5 + 0.05
     expect(pose.yMeters).toBe(2.0);

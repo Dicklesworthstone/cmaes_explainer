@@ -21,7 +21,7 @@ export type Quaternion = [number, number, number, number]; // [x, y, z, w]
 export type Matrix3x3 = [
   [number, number, number],
   [number, number, number],
-  [number, number, number]
+  [number, number, number],
 ];
 
 export type ShapeType = "sphere" | "box" | "capsule" | "cylinder" | "plane";
@@ -102,11 +102,7 @@ export function vecDot(a: Vector3, b: Vector3): number {
 }
 
 export function vecCross(a: Vector3, b: Vector3): Vector3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 export function vecLength(a: Vector3): number {
@@ -130,11 +126,11 @@ export function buildOrthonormalBasis(n: Vector3): [Vector3, Vector3] {
   if (Math.abs(nz) < 0.70710678) {
     const s = Math.hypot(nx, ny) || 1.0;
     t1 = [-ny / s, nx / s, 0];
-    t2 = [-nz * nx / s, -nz * ny / s, s];
+    t2 = [(-nz * nx) / s, (-nz * ny) / s, s];
   } else {
     const s = Math.hypot(ny, nz) || 1.0;
     t1 = [0, -nz / s, ny / s];
-    t2 = [s, -nx * ny / s, -nx * nz / s];
+    t2 = [s, (-nx * ny) / s, (-nx * nz) / s];
   }
 
   return [vecNormalize(t1), vecNormalize(t2)];
@@ -146,9 +142,12 @@ export function buildOrthonormalBasis(n: Vector3): [Vector3, Vector3] {
 
 export function eulerToMatrix(rpy: Vector3): Matrix3x3 {
   const [r, p, y] = rpy;
-  const cr = Math.cos(r), sr = Math.sin(r);
-  const cp = Math.cos(p), sp = Math.sin(p);
-  const cy = Math.cos(y), sy = Math.sin(y);
+  const cr = Math.cos(r),
+    sr = Math.sin(r);
+  const cp = Math.cos(p),
+    sp = Math.sin(p);
+  const cy = Math.cos(y),
+    sy = Math.sin(y);
 
   return [
     [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
@@ -187,10 +186,7 @@ export function computeWorldInvInertia(R: Matrix3x3, invIbody: Vector3): Matrix3
 
   for (let i = 0; i < 3; i++) {
     for (let j = 0; j < 3; j++) {
-      out[i][j] =
-        R[i][0] * ix * R[j][0] +
-        R[i][1] * iy * R[j][1] +
-        R[i][2] * iz * R[j][2];
+      out[i][j] = R[i][0] * ix * R[j][0] + R[i][1] * iy * R[j][1] + R[i][2] * iz * R[j][2];
     }
   }
 
@@ -215,9 +211,12 @@ export function computeBodyAABB(body: RigidBody, margin: number = 0.02): AABB {
     const h = shape.halfExtents || [0.5, 0.5, 0.5];
     const R = eulerToMatrix(body.rotation);
     // Transformed box extent: e_i = \sum_j |R_{ij}| h_j
-    const ex = Math.abs(R[0][0]) * h[0] + Math.abs(R[0][1]) * h[1] + Math.abs(R[0][2]) * h[2] + margin;
-    const ey = Math.abs(R[1][0]) * h[0] + Math.abs(R[1][1]) * h[1] + Math.abs(R[1][2]) * h[2] + margin;
-    const ez = Math.abs(R[2][0]) * h[0] + Math.abs(R[2][1]) * h[1] + Math.abs(R[2][2]) * h[2] + margin;
+    const ex =
+      Math.abs(R[0][0]) * h[0] + Math.abs(R[0][1]) * h[1] + Math.abs(R[0][2]) * h[2] + margin;
+    const ey =
+      Math.abs(R[1][0]) * h[0] + Math.abs(R[1][1]) * h[1] + Math.abs(R[1][2]) * h[2] + margin;
+    const ez =
+      Math.abs(R[2][0]) * h[0] + Math.abs(R[2][1]) * h[1] + Math.abs(R[2][2]) * h[2] + margin;
     return {
       min: [pos[0] - ex, pos[1] - ey, pos[2] - ez],
       max: [pos[0] + ex, pos[1] + ey, pos[2] + ez],
@@ -410,8 +409,14 @@ export function collideBodyPlane(bodyA: RigidBody, planeBody: RigidBody): Contac
 
     // Test all 8 box corners against the plane
     const signs = [
-      [-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1],
-      [-1, -1, 1], [1, -1, 1], [-1, 1, 1], [1, 1, 1],
+      [-1, -1, -1],
+      [1, -1, -1],
+      [-1, 1, -1],
+      [1, 1, -1],
+      [-1, -1, 1],
+      [1, -1, 1],
+      [-1, 1, 1],
+      [1, 1, 1],
     ];
 
     const [t1, t2] = buildOrthonormalBasis(planeN);

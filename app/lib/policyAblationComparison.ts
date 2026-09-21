@@ -23,14 +23,14 @@
 //     golden-vector parity test covers the forward pass, and the receipt's
 //     Rust-side greedy metrics are cross-checked in tests).
 
+import { runCmaesPolicySearch } from "./cmaesAblationPolicy";
 import { G1_TRAIN_ENV_CONTRACT, G1TrainEnv } from "./g1StepwiseEnv";
 import {
   GaitTransformerPolicy,
-  LoadedTransformerWeights,
+  type LoadedTransformerWeights,
   loadGaitTransformerWeights,
   TRANSFORMER_WEIGHTS_URL,
 } from "./gaitTransformer";
-import { runCmaesPolicySearch } from "./cmaesAblationPolicy";
 
 export interface PolicyAblationReceipt {
   policyName: string;
@@ -109,7 +109,12 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   const arch = record.architecture;
   const training = record.training;
   const evaluation = record.evaluation;
-  if (typeof arch !== "object" || arch === null || typeof training !== "object" || training === null) {
+  if (
+    typeof arch !== "object" ||
+    arch === null ||
+    typeof training !== "object" ||
+    training === null
+  ) {
     throw new Error("train receipt: missing architecture/training");
   }
   const archRecord = arch as Record<string, unknown>;
@@ -118,9 +123,7 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   const samplesConsumed = trainingRecord.samplesConsumed;
   const wallclockSeconds = trainingRecord.wallclockSeconds;
   const trainingEnvironment =
-    typeof trainingRecord.environment === "string"
-      ? trainingRecord.environment
-      : "unknown";
+    typeof trainingRecord.environment === "string" ? trainingRecord.environment : "unknown";
   const environmentContract =
     typeof record.environmentContract === "string"
       ? record.environmentContract
@@ -131,7 +134,10 @@ export function parseTrainReceipt(raw: unknown): TransformerTrainReceipt {
   if (!isPositiveSafeInteger(parameterCount) || !isPositiveSafeInteger(samplesConsumed)) {
     throw new Error("train receipt: bad parameterCount/samplesConsumed");
   }
-  if (wallclockSeconds !== undefined && (!isFiniteNumber(wallclockSeconds) || wallclockSeconds < 0)) {
+  if (
+    wallclockSeconds !== undefined &&
+    (!isFiniteNumber(wallclockSeconds) || wallclockSeconds < 0)
+  ) {
     throw new Error("train receipt: bad wallclockSeconds");
   }
   const trainingWallclockMinutes = isFiniteNumber(wallclockSeconds) ? wallclockSeconds / 60 : 0;
@@ -302,8 +308,7 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
     survivalRatePercent: (tfRun.completed / FINAL_STEPS) * 100,
     evaluationEnvironmentContract: G1_TRAIN_ENV_CONTRACT,
     trainingEnvironmentContract: inputs.trainReceipt.environmentContract,
-    trainedOnEvaluationContract:
-      inputs.trainReceipt.environmentContract === G1_TRAIN_ENV_CONTRACT,
+    trainedOnEvaluationContract: inputs.trainReceipt.environmentContract === G1_TRAIN_ENV_CONTRACT,
   };
 
   // ── CMA-ES side (real search, real rollouts) ──

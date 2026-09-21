@@ -10,8 +10,8 @@
 // Run after any change to the shipped weights (v2) or gaitTransformer.ts:
 //   bun scripts/regen_golden.ts
 import { readFileSync, writeFileSync } from "fs";
-import { loadGaitTransformerWeights, GaitTransformerPolicy } from "../app/lib/gaitTransformer";
 import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
+import { GaitTransformerPolicy, loadGaitTransformerWeights } from "../app/lib/gaitTransformer";
 
 const weightsBuf = readFileSync("public/robots/g1/transformer/g1-ablation-weights-v3.bin").buffer;
 const weights = loadGaitTransformerWeights(weightsBuf);
@@ -20,7 +20,7 @@ const policy = new GaitTransformerPolicy(weights);
 // Generate golden vectors using the same LCG as the test.
 function goldenObsRow(position: number): number[] {
   let state = 0xa5a55a5a1234abcdn;
-  const f64Two31 = Math.pow(2, 31);
+  const f64Two31 = 2 ** 31;
   const row: number[] = new Array(42);
   for (let t = 0; t <= position; t++) {
     for (let i = 0; i < 42; i++) {
@@ -52,7 +52,7 @@ writeFileSync(
 // Run the rollout to get the receipt's greedy720 numbers.
 policy.reset();
 const env = new G1TrainEnv({ maxSteps: 720 });
-let obs = env.reset(42);
+const obs = env.reset(42);
 let totalReward = 0;
 let completed = 0;
 let fell = false;
@@ -77,14 +77,14 @@ let paramCount = 0;
 paramCount += cfg.dModel * cfg.nInputs;
 for (let l = 0; l < cfg.nLayers; l++) {
   paramCount += cfg.dModel * cfg.dModel * 2; // wq, wo
-  paramCount += cfg.kvDim * cfg.dModel * 2;  // wk, wv
+  paramCount += cfg.kvDim * cfg.dModel * 2; // wk, wv
   paramCount += cfg.mlpHidden * cfg.dModel * 2; // wGate, wUp
-  paramCount += cfg.dModel * cfg.mlpHidden;     // wDown
-  paramCount += cfg.dModel * 2;                  // norm1, norm2
+  paramCount += cfg.dModel * cfg.mlpHidden; // wDown
+  paramCount += cfg.dModel * 2; // norm1, norm2
 }
-paramCount += cfg.dModel;                          // finalNorm
-paramCount += cfg.nOutputs * cfg.dModel;          // policyHead
-paramCount += cfg.dModel;                          // valueW
+paramCount += cfg.dModel; // finalNorm
+paramCount += cfg.nOutputs * cfg.dModel; // policyHead
+paramCount += cfg.dModel; // valueW
 
 // The training receipt is NOT written here, deliberately.
 //

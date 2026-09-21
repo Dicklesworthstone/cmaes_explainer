@@ -10,10 +10,10 @@
 import { describe, expect, test } from "bun:test";
 import { makeOBBUnionSDF, type OBB2D } from "./dpValueIteration";
 import {
+  type BRTParams,
   isSafeStart,
   sampleTimeAt,
   solveBackwardReachableTube,
-  type BRTParams,
 } from "./hjiReachability";
 
 const EMPTY_ROOM: BRTParams = {
@@ -147,13 +147,21 @@ describe("BRT determinism and validation", () => {
       solveBackwardReachableTube(sdf, { center: [5, 5], radius: 0.5 }, { ...EMPTY_ROOM, nx: 1 }),
     ).toThrow();
     expect(() =>
-      solveBackwardReachableTube(sdf, { center: [5, 5], radius: 0.5 }, { ...EMPTY_ROOM, nTheta: 0 }),
+      solveBackwardReachableTube(
+        sdf,
+        { center: [5, 5], radius: 0.5 },
+        { ...EMPTY_ROOM, nTheta: 0 },
+      ),
     ).toThrow();
     expect(() =>
       solveBackwardReachableTube(sdf, { center: [5, 5], radius: 0.5 }, { ...EMPTY_ROOM, vMax: 0 }),
     ).toThrow();
     expect(() =>
-      solveBackwardReachableTube(sdf, { center: [5, 5], radius: 0.5 }, { ...EMPTY_ROOM, omegaMax: -1 }),
+      solveBackwardReachableTube(
+        sdf,
+        { center: [5, 5], radius: 0.5 },
+        { ...EMPTY_ROOM, omegaMax: -1 },
+      ),
     ).toThrow();
   });
 });
@@ -177,7 +185,9 @@ describe("BRT house-scale performance", () => {
     };
     const field = solveBackwardReachableTube(sdf, { center: [1, 1], radius: 0.3 }, params);
     // Logged for the perf receipt; generous bound avoids CI flake.
-    console.log(`[hjiReachability] 200x200x72 solve: ${field.solveMs.toFixed(0)}ms, settled=${field.settledNodes}`);
+    console.log(
+      `[hjiReachability] 200x200x72 solve: ${field.solveMs.toFixed(0)}ms, settled=${field.settledNodes}`,
+    );
     expect(field.solveMs).toBeLessThan(20000);
     expect(Number.isFinite(sampleTimeAt(field, 9, 9, 0))).toBe(true);
   }, 60000);

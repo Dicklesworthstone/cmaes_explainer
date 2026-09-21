@@ -24,13 +24,7 @@ describe("KMR room destinations", () => {
       expect(sdf(destination.x, destination.y)).toBeGreaterThanOrEqual(
         KMR_PLANAR_CLEARANCE_RADIUS_METERS,
       );
-      const plan = planWaypointPath(
-        start,
-        destination,
-        scene.obstacles,
-        undefined,
-        scene.bounds,
-      );
+      const plan = planWaypointPath(start, destination, scene.obstacles, undefined, scene.bounds);
       expect(plan.path.points.length).toBeGreaterThan(0);
       expect(plan.path.minimumClearanceMeters).toBeGreaterThanOrEqual(0);
     }

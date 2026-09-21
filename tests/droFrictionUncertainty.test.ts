@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   CATALOG_VIEW,
-  SYNTHETIC_BANNER_TEXT,
   cvarUpper,
   evaluateRobustPair,
+  type FrictionSample,
   getFrictionDistribution,
+  SYNTHETIC_BANNER_TEXT,
   sampleSupremum,
   wassersteinBallRadius,
-  type FrictionSample,
 } from "../app/lib/droFrictionUncertainty";
 
 /**
@@ -64,14 +64,12 @@ describe("droFrictionUncertainty", () => {
     // alpha fraction. Sample of 10, alpha = 0.10 -> ceil(0.10 * 10) = 1
     // -> mean of the single highest value.
     const samples = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-    const cvar = cvarUpper(samples, 0.10);
+    const cvar = cvarUpper(samples, 0.1);
     expect(cvar).toBe(1.0);
     // alpha = 0.50 -> mean of the top 5 values.
-    expect(cvarUpper(samples, 0.50)).toBe((0.6 + 0.7 + 0.8 + 0.9 + 1.0) / 5);
+    expect(cvarUpper(samples, 0.5)).toBe((0.6 + 0.7 + 0.8 + 0.9 + 1.0) / 5);
     // Monotone in alpha: smaller tail is closer to the supremum.
-    expect(cvarUpper(samples, 0.10)).toBeGreaterThanOrEqual(
-      cvarUpper(samples, 0.50),
-    );
+    expect(cvarUpper(samples, 0.1)).toBeGreaterThanOrEqual(cvarUpper(samples, 0.5));
     expect(sampleSupremum(samples)).toBe(1.0);
   });
 
@@ -79,8 +77,8 @@ describe("droFrictionUncertainty", () => {
     // Sample of 20 values. Brute force per RU2000: sort, take the
     // top ceil(alpha*N) values, average them.
     const samples = [
-      0.05, 0.12, 0.18, 0.21, 0.27, 0.33, 0.39, 0.44, 0.50, 0.55,
-      0.61, 0.66, 0.71, 0.77, 0.82, 0.88, 0.93, 0.99, 1.05, 1.12,
+      0.05, 0.12, 0.18, 0.21, 0.27, 0.33, 0.39, 0.44, 0.5, 0.55, 0.61, 0.66, 0.71, 0.77, 0.82, 0.88,
+      0.93, 0.99, 1.05, 1.12,
     ];
     const bruteForce = (alpha: number): number => {
       const sorted = [...samples].sort((a, b) => a - b);
@@ -88,7 +86,7 @@ describe("droFrictionUncertainty", () => {
       const tail = sorted.slice(sorted.length - tailCount);
       return tail.reduce((acc, value) => acc + value, 0) / tail.length;
     };
-    for (const alpha of [0.05, 0.10, 0.20, 0.30, 0.50]) {
+    for (const alpha of [0.05, 0.1, 0.2, 0.3, 0.5]) {
       expect(cvarUpper(samples, alpha)).toBeCloseTo(bruteForce(alpha), 12);
     }
   });
@@ -118,12 +116,12 @@ describe("droFrictionUncertainty", () => {
     // Capture-and-restore: re-evaluate the same pair, must match.
     const r1 = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
       confidence: 0.95,
     });
     const r2 = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
       confidence: 0.95,
     });
     expect(r1).not.toBeNull();
@@ -158,18 +156,10 @@ describe("droFrictionUncertainty", () => {
     if (result === null) return;
     // The values are exactly the same object fields (no
     // transformation).
-    expect(result.worstCase.staticFriction).toBe(
-      result.pointEstimate.staticFriction,
-    );
-    expect(result.worstCase.kineticFriction).toBe(
-      result.pointEstimate.kineticFriction,
-    );
-    expect(result.worstCase.rollingFriction).toBe(
-      result.pointEstimate.rollingFriction,
-    );
-    expect(result.worstCase.restitution).toBe(
-      result.pointEstimate.restitution,
-    );
+    expect(result.worstCase.staticFriction).toBe(result.pointEstimate.staticFriction);
+    expect(result.worstCase.kineticFriction).toBe(result.pointEstimate.kineticFriction);
+    expect(result.worstCase.rollingFriction).toBe(result.pointEstimate.rollingFriction);
+    expect(result.worstCase.restitution).toBe(result.pointEstimate.restitution);
     expect(result.worstCase.damping).toBe(result.pointEstimate.damping);
   });
 
@@ -223,7 +213,7 @@ describe("droFrictionUncertainty", () => {
     // the RU2000 CVaR is the mean of the top 2 of 16 samples.
     const result = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
     });
     expect(result).not.toBeNull();
     if (result === null) return;
@@ -236,10 +226,7 @@ describe("droFrictionUncertainty", () => {
     );
     // The radius matches the data-driven formula for N = 16.
     expect(result.kernelSize).toBe(16);
-    expect(result.radius).toBeCloseTo(
-      wassersteinBallRadius(16, 0.95),
-      12,
-    );
+    expect(result.radius).toBeCloseTo(wassersteinBallRadius(16, 0.95), 12);
   });
   test("Robust evaluation: static friction is anchored to muS = muK * 1.20 (CRC §F-13)", () => {
     // Per CRC Handbook §F-13, mu_s / mu_k is in [1.05, 1.30] for
@@ -249,12 +236,12 @@ describe("droFrictionUncertainty", () => {
     // so neither is its low muS.
     const result = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
     });
     expect(result).not.toBeNull();
     if (result === null) return;
     // The anchored contract: muS = muK * 1.20 (within f64 epsilon).
-    const expectedMuS = result.worstCase.kineticFriction * 1.20;
+    const expectedMuS = result.worstCase.kineticFriction * 1.2;
     expect(result.worstCase.staticFriction).toBeCloseTo(expectedMuS, 12);
     // And the worst-case muS must be >= the point muS (the worst-case
     // muK is at least the point muK by the upper-tail property).
@@ -268,7 +255,7 @@ describe("droFrictionUncertainty", () => {
     // worst case is the upper tail of the e distribution.
     const result = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
     });
     expect(result).not.toBeNull();
     if (result === null) return;
@@ -296,19 +283,17 @@ describe("droFrictionUncertainty", () => {
     // estimate and <= the sample supremum.
     const strict = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.10,
+      alpha: 0.1,
     });
     const loose = evaluateRobustPair("rubber", "hardwood", {
       robust: true,
-      alpha: 0.50,
+      alpha: 0.5,
     });
     expect(strict).not.toBeNull();
     expect(loose).not.toBeNull();
     if (strict === null || loose === null) return;
     const sup = sampleSupremum(
-      (getFrictionDistribution("rubber", "hardwood")?.samples ?? []).map(
-        (s) => s.muK,
-      ),
+      (getFrictionDistribution("rubber", "hardwood")?.samples ?? []).map((s) => s.muK),
     );
     // Both CVaRs are in the sample range (between min and supremum),
     // and the tighter tail is at least as conservative as the looser

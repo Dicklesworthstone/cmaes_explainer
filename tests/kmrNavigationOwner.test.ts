@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { KmrNavigationOwner } from "../app/lib/kmrNavigationOwner";
-import { planWaypointPath, type WaypointPath } from "../app/lib/kmrWaypointNav";
 import {
   createHouseNavigationScene,
   type OrientedBoundingBox,
 } from "../app/lib/houseMultiObstacleKernel";
+import { KmrNavigationOwner } from "../app/lib/kmrNavigationOwner";
+import { planWaypointPath, type WaypointPath } from "../app/lib/kmrWaypointNav";
 
 const wall: OrientedBoundingBox = {
   id: "wall",
@@ -30,9 +30,7 @@ describe("KMR deterministic mecanum navigation owner", () => {
     expect(receipt.distanceTraveledMeters).toBeGreaterThan(2.0);
     expect(receipt.minimumClearanceMeters).toBeGreaterThanOrEqual(0.0);
     expect(receipt.collisionRefusals).toBe(0);
-    expect(Math.hypot(receipt.pose.x - 2.0, receipt.pose.y)).toBeLessThanOrEqual(
-      0.08,
-    );
+    expect(Math.hypot(receipt.pose.x - 2.0, receipt.pose.y)).toBeLessThanOrEqual(0.08);
   });
 
   test("wheel speeds are a real inverse/forward kinematic command, not display motion", () => {
@@ -47,42 +45,52 @@ describe("KMR deterministic mecanum navigation owner", () => {
 
   test("refuses an unsafe externally supplied path before execution", () => {
     const unsafe: WaypointPath = {
-      points: [[0, 0], [2, 0]],
+      points: [
+        [0, 0],
+        [2, 0],
+      ],
       totalDistanceMeters: 2,
       minimumClearanceMeters: -1,
       planner: "clearance-value-iteration",
     };
-    expect(() =>
-      new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, unsafe, [wall]),
-    ).toThrow(/refuses a path/);
+    expect(() => new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, unsafe, [wall])).toThrow(
+      /refuses a path/,
+    );
   });
 
   test("refuses a path whose declared start does not match the owner's pose", () => {
     const detached: WaypointPath = {
-      points: [[1, 1], [2, 1]],
+      points: [
+        [1, 1],
+        [2, 1],
+      ],
       totalDistanceMeters: 1,
       minimumClearanceMeters: 1,
       planner: "clearance-value-iteration",
     };
-    expect(() =>
-      new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, detached, []),
-    ).toThrow(/does not match/);
+    expect(() => new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, detached, [])).toThrow(
+      /does not match/,
+    );
   });
 
   test("rejects non-finite poses and non-positive integration settings", () => {
     const path: WaypointPath = {
-      points: [[0, 0], [1, 0]],
+      points: [
+        [0, 0],
+        [1, 0],
+      ],
       totalDistanceMeters: 1,
       minimumClearanceMeters: 1,
       planner: "clearance-value-iteration",
     };
-    expect(() =>
-      new KmrNavigationOwner({ x: Number.NaN, y: 0, theta: 0 }, path, []),
-    ).toThrow(/finite initial pose/);
-    expect(() =>
-      new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, path, [], {
-        dtSeconds: 0,
-      }),
+    expect(() => new KmrNavigationOwner({ x: Number.NaN, y: 0, theta: 0 }, path, [])).toThrow(
+      /finite initial pose/,
+    );
+    expect(
+      () =>
+        new KmrNavigationOwner({ x: 0, y: 0, theta: 0 }, path, [], {
+          dtSeconds: 0,
+        }),
     ).toThrow(/finite positive/);
   });
 
@@ -90,13 +98,7 @@ describe("KMR deterministic mecanum navigation owner", () => {
     const scene = createHouseNavigationScene();
     const initial = { x: -1.4, y: 2.6, theta: 0 };
     const target = { x: -2, y: 0 };
-    const plan = planWaypointPath(
-      initial,
-      target,
-      scene.obstacles,
-      undefined,
-      scene.bounds,
-    );
+    const plan = planWaypointPath(initial, target, scene.obstacles, undefined, scene.bounds);
     const owner = new KmrNavigationOwner(initial, plan.path, scene.obstacles);
     let receipt = owner.receipt();
     for (let step = 0; step < 10000 && !receipt.completed; step++) {

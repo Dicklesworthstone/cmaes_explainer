@@ -1,10 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  ledgerImprovementFactor,
-  type LearningLedgerPoint,
-} from "../lib/g1LearningLedger";
+import { type LearningLedgerPoint, ledgerImprovementFactor } from "../lib/g1LearningLedger";
 
 /**
  * What the robot is actually getting better AT, in units a person can judge.
@@ -94,9 +91,7 @@ function Stat({
   return (
     <div
       className={`rounded-xl border px-3 py-2 ${
-        emphasis
-          ? "border-emerald-300/25 bg-emerald-950/30"
-          : "border-white/10 bg-white/[0.025]"
+        emphasis ? "border-emerald-300/25 bg-emerald-950/30" : "border-white/10 bg-white/[0.025]"
       }`}
     >
       <div className="text-[0.58rem] uppercase tracking-wider text-slate-400">{label}</div>
@@ -139,14 +134,16 @@ export function LearningLedger({
     const margin = { top: 14, right: 12, bottom: 18, left: 46 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
-    const x = (generation: number) =>
-      margin.left + ((generation - genMin) / genRange) * chartWidth;
+    const x = (generation: number) => margin.left + ((generation - genMin) / genRange) * chartWidth;
     const y = (value: number) =>
       margin.top +
       chartHeight -
       ((value - (ecoMin - ecoRange * 0.12)) / (ecoRange * 1.24)) * chartHeight;
     const line = plottable
-      .map((point, index) => `${index === 0 ? "M" : "L"}${x(point.generation).toFixed(1)},${y(point.metersPerKilojoule).toFixed(1)}`)
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"}${x(point.generation).toFixed(1)},${y(point.metersPerKilojoule).toFixed(1)}`,
+      )
       .join(" ");
     // Speed tracking rides its own scale so both curves are readable at once:
     // one is m/kJ, the other a fraction, and forcing them onto one axis would
@@ -221,11 +218,7 @@ export function LearningLedger({
           hint={economyHint}
           emphasis
         />
-        <Stat
-          label="Distance"
-          value={formatMeters(latest.distanceMeters)}
-          hint={distanceHint}
-        />
+        <Stat label="Distance" value={formatMeters(latest.distanceMeters)} hint={distanceHint} />
         <Stat
           label="Speed vs command"
           value={
@@ -301,12 +294,7 @@ export function LearningLedger({
           >
             {formatAxisValue(chart.ecoMin)}
           </text>
-          <text
-            x={chart.margin.left}
-            y={height - 5}
-            className="fill-slate-500"
-            fontSize="8"
-          >
+          <text x={chart.margin.left} y={height - 5} className="fill-slate-500" fontSize="8">
             gen {chart.genMin}
           </text>
           <text
@@ -321,9 +309,9 @@ export function LearningLedger({
         </svg>
       ) : (
         <p className="mt-2 text-[0.6rem] leading-4 text-slate-500">
-          Metres per kilojoule is plotted once two replayed policies have both
-          covered forward ground. A policy that falls has no economy to report,
-          which is the honest answer rather than a zero.
+          Metres per kilojoule is plotted once two replayed policies have both covered forward
+          ground. A policy that falls has no economy to report, which is the honest answer rather
+          than a zero.
         </p>
       )}
 
@@ -340,13 +328,8 @@ export function LearningLedger({
         <p className="mt-2 text-[0.66rem] leading-4 text-slate-300">
           {trainingSeconds >= 1 ? `In ${formatDuration(trainingSeconds)} and ` : "In "}
           {latest.generation.toLocaleString()} generations, the robot went from{" "}
-          <span className="font-mono text-slate-100">
-            {formatMeters(seed.distanceMeters)}
-          </span>{" "}
-          to{" "}
-          <span className="font-mono text-emerald-200">
-            {formatMeters(latest.distanceMeters)}
-          </span>
+          <span className="font-mono text-slate-100">{formatMeters(seed.distanceMeters)}</span> to{" "}
+          <span className="font-mono text-emerald-200">{formatMeters(latest.distanceMeters)}</span>
           {seed.speedTrackingFraction !== null && latest.speedTrackingFraction !== null
             ? `, and from ${(seed.speedTrackingFraction * 100).toFixed(0)}% to ${(latest.speedTrackingFraction * 100).toFixed(0)}% of the speed it was asked for`
             : ""}
@@ -354,10 +337,9 @@ export function LearningLedger({
         </p>
       ) : null}
       <p className="mt-1 text-[0.6rem] leading-4 text-slate-500">
-        Read from the same owner receipt as the objective, so these cannot
-        disagree with it. Distance per kilojoule of actuator work is the
-        mass-free form of cost of transport: how far this gait gets on a fixed
-        energy budget.
+        Read from the same owner receipt as the objective, so these cannot disagree with it.
+        Distance per kilojoule of actuator work is the mass-free form of cost of transport: how far
+        this gait gets on a fixed energy budget.
       </p>
     </div>
   );

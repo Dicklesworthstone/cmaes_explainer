@@ -1,13 +1,13 @@
 "use client";
 
+import { Activity, Gauge, Shield, Sliders, Zap } from "lucide-react";
 import React from "react";
-import { Sliders, Zap, Shield, Activity, Gauge } from "lucide-react";
+import type { FrankenRobotsReceiptLens } from "../lib/frankenrobotsBridge";
 import type {
-  MultiFactorResult,
   MultiFactorChannel,
+  MultiFactorResult,
   MultiFactorWeights,
 } from "../lib/g1MultiFactor";
-import type { FrankenRobotsReceiptLens } from "../lib/frankenrobotsBridge";
 
 export interface ReceiptAnalysisPreset {
   id: FrankenRobotsReceiptLens;
@@ -19,11 +19,7 @@ export interface ReceiptAnalysisPreset {
   icon: typeof Zap;
   weights: Pick<
     MultiFactorWeights,
-    | "meanForwardSpeed"
-    | "postureIntegral"
-    | "workPerMeter"
-    | "slipIntegral"
-    | "impactIntegral"
+    "meanForwardSpeed" | "postureIntegral" | "workPerMeter" | "slipIntegral" | "impactIntegral"
   >;
 }
 
@@ -166,9 +162,7 @@ export function G1ObjectiveEqualizer({
               </div>
 
               <div className="mt-3 border-t border-white/5 pt-2">
-                <span className="text-[0.65rem] text-slate-300 font-mono">
-                  Lens: {p.lensStyle}
-                </span>
+                <span className="text-[0.65rem] text-slate-300 font-mono">Lens: {p.lensStyle}</span>
               </div>
             </button>
           );
@@ -176,8 +170,8 @@ export function G1ObjectiveEqualizer({
       </div>
 
       <p className="mt-3 text-[0.7rem] leading-5 text-slate-400">
-        These presets recompute the visible receipt analysis only. They do not alter the owner&apos;s
-        fixed task objective, rerun CMA-ES, or claim that the rendered gait changed.
+        These presets recompute the visible receipt analysis only. They do not alter the
+        owner&apos;s fixed task objective, rerun CMA-ES, or claim that the rendered gait changed.
       </p>
 
       {/* 3. Live 11-Channel Equalizer Bar Display */}
@@ -210,9 +204,7 @@ export function G1ObjectiveEqualizer({
                     <span className="font-semibold text-slate-300 truncate" title={ch.label}>
                       {ch.label}
                     </span>
-                    <span className="font-mono text-slate-400">
-                      {ch.value.toFixed(2)}
-                    </span>
+                    <span className="font-mono text-slate-400">{ch.value.toFixed(2)}</span>
                   </div>
 
                   {/* Visual Glowing EQ Meter Bar */}
@@ -230,7 +222,9 @@ export function G1ObjectiveEqualizer({
                   <div className="mt-1.5 flex items-center justify-between text-[0.62rem] text-slate-500 font-mono">
                     <span>w={formatWeight(ch.weight)}</span>
                     <span className={isPositivePenalty ? "text-rose-300" : "text-emerald-300"}>
-                      {ch.contribution > 0 ? `+${ch.contribution.toFixed(2)}` : ch.contribution.toFixed(2)}
+                      {ch.contribution > 0
+                        ? `+${ch.contribution.toFixed(2)}`
+                        : ch.contribution.toFixed(2)}
                     </span>
                   </div>
                 </div>

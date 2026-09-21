@@ -1,10 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Square, Wand2, MoveRight, Shuffle, Paintbrush, Play, Pause, RotateCcw, ShieldCheck, ArrowRight } from "lucide-react";
-import { LatexRenderer } from "./LatexRenderer";
-import { CMAESOptimizer, CMAESGenerationState } from "../lib/cmaesEngine";
+import {
+  ArrowRight,
+  MoveRight,
+  Paintbrush,
+  Pause,
+  Play,
+  RotateCcw,
+  ShieldCheck,
+  Shuffle,
+  Square,
+  Wand2,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type CMAESGenerationState, CMAESOptimizer } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
+import { LatexRenderer } from "./LatexRenderer";
 
 const SIZE = 800;
 
@@ -14,7 +25,10 @@ const objectiveFn = (x: number, y: number) => {
   return (x - 1.35) ** 2 + 2.5 * (y - 1.35) ** 2 + 0.1 * Math.sin(6 * x);
 };
 
-function repairPoint(raw: [number, number], strategy: "reflect" | "clamp" | "logit"): [number, number] {
+function repairPoint(
+  raw: [number, number],
+  strategy: "reflect" | "clamp" | "logit",
+): [number, number] {
   if (strategy === "clamp") {
     return [Math.max(0, Math.min(1, raw[0])), Math.max(0, Math.min(1, raw[1]))];
   } else if (strategy === "reflect") {
@@ -55,8 +69,8 @@ export function ConstraintRepairDemo() {
           initialMean: [0.2, 0.2],
           initialSigma: 0.35,
           lambda: 14,
-          repairStrategy: "none"
-        }
+          repairStrategy: "none",
+        },
       );
       // Replay the generation already shown in the seeded history so the
       // first user step advances rather than duplicating generation 1.
@@ -77,8 +91,8 @@ export function ConstraintRepairDemo() {
         initialMean: [0.2, 0.2],
         initialSigma: 0.35,
         lambda: 14,
-        repairStrategy: "none"
-      }
+        repairStrategy: "none",
+      },
     );
     return [opt.step()];
   });
@@ -96,8 +110,8 @@ export function ConstraintRepairDemo() {
         initialMean: [0.2, 0.2],
         initialSigma: 0.35,
         lambda: 14,
-        repairStrategy: "none"
-      }
+        repairStrategy: "none",
+      },
     );
     optimizerRef.current = opt;
     setHistory([opt.step()]);
@@ -149,7 +163,7 @@ export function ConstraintRepairDemo() {
       fallbackField: (x, y) => {
         const [rx, ry] = repairPoint([x, y], strategy);
         return objectiveFn(rx, ry);
-      }
+      },
     }).then((canvas) => {
       if (live && canvas) setBgCanvas(canvas);
     });
@@ -336,11 +350,15 @@ export function ConstraintRepairDemo() {
             {latestState && (
               <div className="absolute top-3 right-3 bg-slate-950/85 backdrop-blur-md p-3 rounded-xl border border-white/10 text-xs font-mono space-y-1 pointer-events-none">
                 <div className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span>Best <LatexRenderer math="f_{\text{best}}" block={false} />:</span>
+                  <span>
+                    Best <LatexRenderer math="f_{\text{best}}" block={false} />:
+                  </span>
                   <span>{latestState.bestFitness.toFixed(4)}</span>
                 </div>
                 <div className="text-sky-300 flex items-center gap-1">
-                  <span>Step <LatexRenderer math="\sigma" block={false} />:</span>
+                  <span>
+                    Step <LatexRenderer math="\sigma" block={false} />:
+                  </span>
                   <span>{latestState.sigma.toFixed(4)}</span>
                 </div>
                 <div className="text-slate-400">Gen: {latestState.generation}/36</div>
@@ -381,42 +399,89 @@ export function ConstraintRepairDemo() {
               </button>
             </div>
 
-            <span className="text-xs font-mono text-slate-400 capitalize">Strategy: {strategy}</span>
+            <span className="text-xs font-mono text-slate-400 capitalize">
+              Strategy: {strategy}
+            </span>
           </div>
         </div>
 
         {/* Strategy Comparison Breakdown */}
         <div className="space-y-3.5 text-xs">
-          <div className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
-            strategy === "reflect" ? "bg-sky-500/10 border-sky-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
-          }`}>
+          <div
+            className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
+              strategy === "reflect"
+                ? "bg-sky-500/10 border-sky-500/40 text-white"
+                : "bg-slate-950/40 border-white/5 text-slate-400"
+            }`}
+          >
             <div className="font-bold uppercase tracking-wider text-[0.7rem] text-sky-300 mb-1">
               1. Boundary Reflection
             </div>
             <p className="leading-relaxed">
-              When samples overshoot bounds (<span className="inline-block"><LatexRenderer math="x > 1" block={false} /></span>), reflect them back into the interior (<span className="inline-block"><LatexRenderer math="2 - x" block={false} /></span>). Preserves step variance without collapsing covariance eigenvalues. Production implementations pair any repair with a penalty on the repair distance and feed the unrepaired sample back to the update.
+              When samples overshoot bounds (
+              <span className="inline-block">
+                <LatexRenderer math="x > 1" block={false} />
+              </span>
+              ), reflect them back into the interior (
+              <span className="inline-block">
+                <LatexRenderer math="2 - x" block={false} />
+              </span>
+              ). Preserves step variance without collapsing covariance eigenvalues. Production
+              implementations pair any repair with a penalty on the repair distance and feed the
+              unrepaired sample back to the update.
             </p>
           </div>
 
-          <div className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
-            strategy === "clamp" ? "bg-amber-500/10 border-amber-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
-          }`}>
+          <div
+            className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
+              strategy === "clamp"
+                ? "bg-amber-500/10 border-amber-500/40 text-white"
+                : "bg-slate-950/40 border-white/5 text-slate-400"
+            }`}
+          >
             <div className="font-bold uppercase tracking-wider text-[0.7rem] text-amber-300 mb-1">
               2. Hard Clamping / Projection
             </div>
             <p className="leading-relaxed">
-              Piles up multiple samples onto the boundary line (<span className="inline-block"><LatexRenderer math="x = 1.0" block={false} /></span>). Wastes degrees of freedom and causes severe covariance matrix condition number degradation along normal vectors.
+              Piles up multiple samples onto the boundary line (
+              <span className="inline-block">
+                <LatexRenderer math="x = 1.0" block={false} />
+              </span>
+              ). Wastes degrees of freedom and causes severe covariance matrix condition number
+              degradation along normal vectors.
             </p>
           </div>
 
-          <div className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
-            strategy === "logit" ? "bg-purple-500/10 border-purple-500/40 text-white" : "bg-slate-950/40 border-white/5 text-slate-400"
-          }`}>
+          <div
+            className={`p-4 rounded-2xl border transition-[background-color,border-color,color] duration-200 ${
+              strategy === "logit"
+                ? "bg-purple-500/10 border-purple-500/40 text-white"
+                : "bg-slate-950/40 border-white/5 text-slate-400"
+            }`}
+          >
             <div className="font-bold uppercase tracking-wider text-[0.7rem] text-purple-300 mb-1">
               3. Logit / Sigmoid Mapping
             </div>
             <p className="leading-relaxed">
-              Search operates in unbounded <span className="inline-block"><LatexRenderer math="\mathbb{R}^n" block={false} /></span>; the smooth sigmoid <span className="inline-block"><LatexRenderer math="\sigma(z) = 1/(1+e^{-3(z - 0.5)})" block={false} /></span> maps onto the open box <span className="inline-block"><LatexRenderer math="(0, 1)" block={false} /></span>, so overshoot is impossible by construction. The trade-off: the map is asymptotic, so an optimum sitting exactly on the boundary (like the corner target here) is only approached as <span className="inline-block"><LatexRenderer math="z \to \infty" block={false} /></span> and progress flattens near the edges.
+              Search operates in unbounded{" "}
+              <span className="inline-block">
+                <LatexRenderer math="\mathbb{R}^n" block={false} />
+              </span>
+              ; the smooth sigmoid{" "}
+              <span className="inline-block">
+                <LatexRenderer math="\sigma(z) = 1/(1+e^{-3(z - 0.5)})" block={false} />
+              </span>{" "}
+              maps onto the open box{" "}
+              <span className="inline-block">
+                <LatexRenderer math="(0, 1)" block={false} />
+              </span>
+              , so overshoot is impossible by construction. The trade-off: the map is asymptotic, so
+              an optimum sitting exactly on the boundary (like the corner target here) is only
+              approached as{" "}
+              <span className="inline-block">
+                <LatexRenderer math="z \to \infty" block={false} />
+              </span>{" "}
+              and progress flattens near the edges.
             </p>
           </div>
         </div>

@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import { sdfSphere } from "../app/lib/analyticSdf";
 import {
-  solveDDP,
-  linearizeDynamics,
-  evalDynamics,
-  evaluateTrajectoryCost,
   type DDPConfig,
   type DDPWeights,
+  evalDynamics,
+  evaluateTrajectoryCost,
+  linearizeDynamics,
+  solveDDP,
 } from "../app/lib/ddpTrajectoryOptimization";
-import { type MultibodyTree } from "../app/lib/featherstoneDynamics";
 import { DifferentiableSdfNode } from "../app/lib/differentiableSdf";
-import { sdfSphere } from "../app/lib/analyticSdf";
+import type { MultibodyTree } from "../app/lib/featherstoneDynamics";
 
 describe("Differential Dynamic Programming (DDP / iLQR / Crocoddyl)", () => {
   const singlePendulum: MultibodyTree = {
@@ -151,7 +151,9 @@ describe("Differential Dynamic Programming (DDP / iLQR / Crocoddyl)", () => {
 
   describe("Obstacle Barrier Penalty Integration", () => {
     it("incorporates differentiable SDF obstacle barrier into trajectory cost", () => {
-      const sphereObstacle = new DifferentiableSdfNode((p) => sdfSphere(p, [0.5, 0.5, 0], 0.3).distance);
+      const sphereObstacle = new DifferentiableSdfNode(
+        (p) => sdfSphere(p, [0.5, 0.5, 0], 0.3).distance,
+      );
       const states = [
         [0.5, 0.5, 0, 0], // exact obstacle center: dist = -0.3 < dSafe
         [2.0, 2.0, 0, 0], // far away
@@ -167,8 +169,20 @@ describe("Differential Dynamic Programming (DDP / iLQR / Crocoddyl)", () => {
         dSafe: 0.4,
       };
 
-      const costWithObs = evaluateTrajectoryCost(states, controls, targetState, weightsWithBarrier, [sphereObstacle]);
-      const costWithoutObs = evaluateTrajectoryCost(states, controls, targetState, { ...weightsWithBarrier, wObstacleBarrier: 0 }, [sphereObstacle]);
+      const costWithObs = evaluateTrajectoryCost(
+        states,
+        controls,
+        targetState,
+        weightsWithBarrier,
+        [sphereObstacle],
+      );
+      const costWithoutObs = evaluateTrajectoryCost(
+        states,
+        controls,
+        targetState,
+        { ...weightsWithBarrier, wObstacleBarrier: 0 },
+        [sphereObstacle],
+      );
 
       expect(costWithObs).toBeGreaterThan(costWithoutObs);
     });

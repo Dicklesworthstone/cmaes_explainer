@@ -24,12 +24,9 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
-import {
-  GaitTransformerPolicy,
-  loadGaitTransformerWeights,
-} from "../app/lib/gaitTransformer";
 import { runCmaesPolicySearch } from "../app/lib/cmaesAblationPolicy";
+import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
+import { GaitTransformerPolicy, loadGaitTransformerWeights } from "../app/lib/gaitTransformer";
 
 const WEIGHTS_IN = "public/robots/g1/transformer/g1-ablation-weights-v1.bin";
 const WEIGHTS_OUT = "public/robots/g1/transformer/g1-ablation-weights-v2.bin";
@@ -130,7 +127,11 @@ async function main(): Promise<void> {
   const episodeSteps = 720;
 
   console.log("1. Training the phase-prior reference with CMA-ES on the same env…");
-  const search = runCmaesPolicySearch({ seed: 7, budgetEvaluations: 4_000, finalSteps: episodeSteps });
+  const search = runCmaesPolicySearch({
+    seed: 7,
+    budgetEvaluations: 4_000,
+    finalSteps: episodeSteps,
+  });
   const genotype = search.bestGenotype;
   const referenceDistance = rollout(
     (obs) => applyPhasePolicy(genotype, buildFeatures(obs)),
@@ -194,9 +195,7 @@ async function main(): Promise<void> {
   console.log("3. Collecting trunk features along that gait…");
 
   // Normal equations, accumulated so nothing large is held in memory.
-  const policy = new GaitTransformerPolicy(
-    loadGaitTransformerWeights(raw.buffer as ArrayBuffer),
-  );
+  const policy = new GaitTransformerPolicy(loadGaitTransformerWeights(raw.buffer as ArrayBuffer));
   const gram = new Float64Array(dModel * dModel);
   const rhs = new Float64Array(ACTUATOR_COUNT * dModel);
   let samples = 0;
@@ -264,9 +263,7 @@ async function main(): Promise<void> {
   writeFileSync(WEIGHTS_OUT, raw);
 
   console.log("6. Measuring the fitted transformer driving the environment…");
-  const fitted = new GaitTransformerPolicy(
-    loadGaitTransformerWeights(raw.buffer as ArrayBuffer),
-  );
+  const fitted = new GaitTransformerPolicy(loadGaitTransformerWeights(raw.buffer as ArrayBuffer));
   fitted.reset();
   let step = 0;
   const transformerDistance = rollout(

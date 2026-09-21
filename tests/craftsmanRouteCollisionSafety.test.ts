@@ -15,11 +15,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { CRAFTSMAN_WALKING_ROUTES } from "../app/lib/craftsmanCatalogData";
-import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 import {
   createSceneFromHouseFurniture,
   queryMultiObstacleScene,
 } from "../app/lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 const ROBOT_RADIUS = 0.2;
 // 2 mm manufacturing/stand-point tolerance, identical to the relocation audit.
@@ -65,10 +65,7 @@ describe("Craftsman walking-route gate collision safety", () => {
       expect(route.waypoints.length).toBeGreaterThanOrEqual(2);
       const seenByName: Record<string, true> = {};
       for (const wp of route.waypoints) {
-        expect(
-          wp.name in seenByName,
-          `${route.id}: duplicate gate name "${wp.name}"`,
-        ).toBe(false);
+        expect(wp.name in seenByName, `${route.id}: duplicate gate name "${wp.name}"`).toBe(false);
         seenByName[wp.name] = true;
       }
     }

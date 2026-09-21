@@ -36,12 +36,11 @@ describe("G1 default spawn position (cmaes-s0ey regression guard)", () => {
   });
 
   test("clamp is a no-op on the default spawn", () => {
-    const { isColliding, nearestObstacleName, minClearance } =
-      clampPositionAgainstHouseCollisions(
-        DEFAULT_G1_PELVIS,
-        allObstacles,
-        ROBOT_BODY_RADIUS,
-      );
+    const { isColliding, nearestObstacleName, minClearance } = clampPositionAgainstHouseCollisions(
+      DEFAULT_G1_PELVIS,
+      allObstacles,
+      ROBOT_BODY_RADIUS,
+    );
     expect(
       isColliding,
       `default spawn is colliding with ${nearestObstacleName ?? "<unknown>"} (minClearance=${minClearance.toFixed(4)} m)`,
@@ -80,14 +79,8 @@ describe("clampPositionAgainstHouseCollisions — yawed OBB regression", () => {
     };
     // Pelvis 1 cm past the chair center on the +X axis.
     const pelvis: [number, number, number] = [1.01, 0.85, 1.6];
-    const r = clampPositionAgainstHouseCollisions(
-      pelvis,
-      [yawedChair],
-      0.32,
-    );
-    expect(distanceToOBB(r.clampedPosition, yawedChair)).toBeGreaterThanOrEqual(
-      0.32 - 1e-6,
-    );
+    const r = clampPositionAgainstHouseCollisions(pelvis, [yawedChair], 0.32);
+    expect(distanceToOBB(r.clampedPosition, yawedChair)).toBeGreaterThanOrEqual(0.32 - 1e-6);
     // The Y coordinate must have been updated (the chair is tall enough
     // to push the pelvis above the original Y).
     expect(r.clampedPosition[1]).toBeGreaterThan(pelvis[1]);

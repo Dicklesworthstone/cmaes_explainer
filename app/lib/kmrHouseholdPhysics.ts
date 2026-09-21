@@ -7,12 +7,12 @@
 import type { RigidBody } from "./contactGraph";
 import {
   createHouseholdWorld,
-  stepHouseholdPhysicsWorld,
   type HouseholdBodyMeta,
   type HouseholdWorld,
+  stepHouseholdPhysicsWorld,
 } from "./householdPhysicsWorld";
-import type { KmrNavigationReceipt, KmrPose2D } from "./kmrNavigationOwner";
 import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS } from "./kmrGeometry";
+import type { KmrNavigationReceipt, KmrPose2D } from "./kmrNavigationOwner";
 
 const GROUND_ID = "kmr-coupling-ground";
 const BASE_ID = "kmr-kinematic-base";

@@ -10,13 +10,13 @@
 // runtime consumers).
 
 import { describe, expect, test } from "bun:test";
+import type { RigidBody } from "../app/lib/contactGraph";
 import {
   createHouseholdWorld,
-  stepHouseholdPhysicsWorld,
-  type HouseholdWorld,
   type HouseholdBodyMeta,
+  type HouseholdWorld,
+  stepHouseholdPhysicsWorld,
 } from "../app/lib/householdPhysicsWorld";
-import type { RigidBody } from "../app/lib/contactGraph";
 
 const PLANE = (id: string): RigidBody => ({
   id,
@@ -96,7 +96,7 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
     meta.set("roller", { boundingRadius: 0.3, material: "hardwood", rolling: true });
     const world = createHouseholdWorld([plane, chair], meta, { dt: 1 / 60 });
 
-    let lastPos = chair.position[0];
+    const lastPos = chair.position[0];
     for (let t = 0; t < 60; t++) stepHouseholdPhysicsWorld(world);
     const r = world.contactGraph.getBody("roller")!;
     expect(r.position[0]).toBeGreaterThan(lastPos);

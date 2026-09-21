@@ -6,19 +6,19 @@
 // verify every waypoint is collision-free using the existing
 // distanceToOBB helper.
 
-import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
 import {
   type AABB2D,
   ACTIONS_8,
   type ClearanceCostParams,
+  makeOBBUnionSDF,
   type OBB2D,
+  runClearanceValueIteration,
   type SDF2D,
   type ValueGrid,
   type ValuePolicy,
   type Vec2,
-  makeOBBUnionSDF,
-  runClearanceValueIteration,
 } from "./dpValueIteration";
+import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
 export interface WaypointPath {
   points: Vec2[];
@@ -52,9 +52,7 @@ const GOAL_RADIUS = 0.18;
 // KUKA's larger official whole-vehicle envelope; the UI discloses that limit.
 export const KMR_PLANAR_CLEARANCE_RADIUS_METERS = 0.32;
 
-function planarObstacles(
-  obstacles: readonly OrientedBoundingBox[],
-): OBB2D[] {
+function planarObstacles(obstacles: readonly OrientedBoundingBox[]): OBB2D[] {
   return obstacles
     .filter((obstacle) => !obstacle.exemptFromPenalty)
     .map((obstacle) => ({
@@ -65,26 +63,18 @@ function planarObstacles(
 }
 
 /** Shared planar X/Z obstacle field consumed by planner, LiDAR, and owner. */
-export function createKmrPlanarSdf(
-  obstacles: readonly OrientedBoundingBox[],
-): SDF2D {
+export function createKmrPlanarSdf(obstacles: readonly OrientedBoundingBox[]): SDF2D {
   return makeOBBUnionSDF(planarObstacles(obstacles));
 }
 
 function pointToGridIndex(grid: ValueGrid, point: Vec2): [number, number] {
   const ix = Math.max(
     0,
-    Math.min(
-      grid.width - 1,
-      Math.floor((point[0] - grid.origin[0]) / grid.resolution),
-    ),
+    Math.min(grid.width - 1, Math.floor((point[0] - grid.origin[0]) / grid.resolution)),
   );
   const iy = Math.max(
     0,
-    Math.min(
-      grid.height - 1,
-      Math.floor((point[1] - grid.origin[1]) / grid.resolution),
-    ),
+    Math.min(grid.height - 1, Math.floor((point[1] - grid.origin[1]) / grid.resolution)),
   );
   return [ix, iy];
 }
@@ -201,8 +191,7 @@ function extractValueGuidedPath(
     const ix = index % grid.width;
     const iy = Math.floor(index / grid.width);
     const center = gridCellCenter(grid, ix, iy);
-    return Math.hypot(center[0] - target[0], center[1] - target[1]) /
-      grid.resolution;
+    return Math.hypot(center[0] - target[0], center[1] - target[1]) / grid.resolution;
   };
 
   let goalIndex = -1;
@@ -233,15 +222,8 @@ function extractValueGuidedPath(
       const neighbor = gridCellCenter(grid, nx, ny);
       const clearance = sdf(neighbor[0], neighbor[1]) - clearanceRadiusMeters;
       if (clearance < 0) continue;
-      if (
-        !segmentHasClearance(
-          current,
-          neighbor,
-          sdf,
-          clearanceRadiusMeters,
-          grid.resolution / 5,
-        )
-      ) continue;
+      if (!segmentHasClearance(current, neighbor, sdf, clearanceRadiusMeters, grid.resolution / 5))
+        continue;
 
       const stepLength = Math.hypot(dx, dy);
       const clearancePenalty = Math.max(0, 0.25 - clearance) * 4;
@@ -356,10 +338,7 @@ export function planWaypointPath(
     {
       cost: {
         ...costmapParams,
-        safetyMargin: Math.max(
-          costmapParams.safetyMargin,
-          clearanceRadiusMeters,
-        ),
+        safetyMargin: Math.max(costmapParams.safetyMargin, clearanceRadiusMeters),
       },
       obstacles: obbs,
       actions: ACTIONS_8,

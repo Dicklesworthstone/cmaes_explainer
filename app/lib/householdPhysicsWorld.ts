@@ -8,27 +8,22 @@
 //   6. stepRollingSphere per flag    (rollingContactDynamics)
 // Bead: cmaes-vpib. Related: cmaes-epic-dyn-physics-qrq, cmaes-phr6-qij.
 
+import { ContactGraph, type ContactManifold, type RigidBody, type Vector3 } from "./contactGraph";
+import { stepContactRestitution } from "./contactRestitutionIntegrator";
 import {
-  ContactGraph,
-  type RigidBody,
-  type ContactManifold,
-  type Vector3,
-} from "./contactGraph";
-import { stepPhysicsWorld, DEFAULT_LCP_CONFIG } from "./lcpSolver";
+  type CcdResult,
+  queryContinuousCollisionSDF,
+  type SdfEvaluator3D,
+} from "./continuousCollisionDetection";
+import { DEFAULT_LCP_CONFIG, stepPhysicsWorld } from "./lcpSolver";
+import type { HouseholdMaterial } from "./materialPairFriction";
 import {
-  MultiBodySleepManager,
   DEFAULT_SLEEP_CONFIG,
+  MultiBodySleepManager,
   type SleepableBody,
   type SleepTransitionEvent,
 } from "./multiBodySleepState";
-import { stepContactRestitution } from "./contactRestitutionIntegrator";
-import type { HouseholdMaterial } from "./materialPairFriction";
-import {
-  queryContinuousCollisionSDF,
-  type SdfEvaluator3D,
-  type CcdResult,
-} from "./continuousCollisionDetection";
-import { stepRollingSphere, type RollingBody } from "./rollingContactDynamics";
+import { type RollingBody, stepRollingSphere } from "./rollingContactDynamics";
 
 export interface HouseholdBodyMeta {
   boundingRadius: number;
@@ -114,9 +109,7 @@ function vecLength3(v: Vector3): number {
   return Math.hypot(v[0], v[1], v[2]);
 }
 
-export function stepHouseholdPhysicsWorld(
-  world: HouseholdWorld,
-): HouseholdStepResult {
+export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepResult {
   const bodies = new Map<string, RigidBody>();
   for (const b of world.contactGraph.getAllBodies()) bodies.set(b.id, b);
 
@@ -209,11 +202,7 @@ export function stepHouseholdPhysicsWorld(
       type: "sphere",
       position: [body.position[0], body.position[2], body.position[1]],
       velocity: [body.linearVelocity[0], body.linearVelocity[2], body.linearVelocity[1]],
-      angularVelocity: [
-        body.angularVelocity[0],
-        body.angularVelocity[2],
-        body.angularVelocity[1],
-      ],
+      angularVelocity: [body.angularVelocity[0], body.angularVelocity[2], body.angularVelocity[1]],
       mass: body.mass,
       radius: meta.boundingRadius,
       muSliding: body.friction,
@@ -222,11 +211,7 @@ export function stepHouseholdPhysicsWorld(
       restitution: body.restitution,
     };
     stepRollingSphere(rollingBody, 0.0, world.dt);
-    body.position = [
-      rollingBody.position[0],
-      rollingBody.position[2],
-      rollingBody.position[1],
-    ];
+    body.position = [rollingBody.position[0], rollingBody.position[2], rollingBody.position[1]];
     body.linearVelocity = [
       rollingBody.velocity[0],
       rollingBody.velocity[2],
@@ -247,6 +232,5 @@ export function stepHouseholdPhysicsWorld(
     lcpMaxResidual: lcp.maxResidual,
     lcpConverged: lcp.converged,
     sleepTransitions,
+  };
 }
-}
-

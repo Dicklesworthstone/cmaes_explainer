@@ -1,26 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
 import {
+  CheckCircle2,
+  Compass,
+  Footprints,
   Home,
+  Info,
+  Layers,
+  Moon,
+  ShieldCheck,
+  Sliders,
+  Sparkles,
   Sun,
   Sunset,
-  Moon,
-  Info,
-  Compass,
-  CheckCircle2,
-  Layers,
-  Footprints,
-  Sparkles,
-  Sliders,
-  ShieldCheck,
 } from "lucide-react";
+import React, { useState } from "react";
 import {
-  SEARS_CRAFTSMAN_CATALOG,
-  ROOM_ARCHITECTURAL_DETAILS,
   CRAFTSMAN_WALKING_ROUTES,
   type CraftsmanPieceInfo,
   type CraftsmanWalkingRoute,
+  ROOM_ARCHITECTURAL_DETAILS,
+  SEARS_CRAFTSMAN_CATALOG,
 } from "../lib/craftsmanCatalogData";
 
 export interface CraftsmanArchitecturalInspectorProps {
@@ -47,16 +47,14 @@ export function CraftsmanArchitecturalInspector({
   const [selectedPieceId, setSelectedPieceId] = useState<string>("fireplace-inglenook");
 
   const activeRoomMeta =
-    ROOM_ARCHITECTURAL_DETAILS.find((r) => r.id === activeRoom) ??
-    ROOM_ARCHITECTURAL_DETAILS[0];
+    ROOM_ARCHITECTURAL_DETAILS.find((r) => r.id === activeRoom) ?? ROOM_ARCHITECTURAL_DETAILS[0];
 
   const pieceList = Object.values(SEARS_CRAFTSMAN_CATALOG);
   const selectedPiece: CraftsmanPieceInfo =
     SEARS_CRAFTSMAN_CATALOG[selectedPieceId] ?? pieceList[0];
 
   const activeRoute: CraftsmanWalkingRoute =
-    CRAFTSMAN_WALKING_ROUTES.find((r) => r.id === activeRouteId) ??
-    CRAFTSMAN_WALKING_ROUTES[0];
+    CRAFTSMAN_WALKING_ROUTES.find((r) => r.id === activeRouteId) ?? CRAFTSMAN_WALKING_ROUTES[0];
 
   return (
     <div className="rounded-2xl border border-amber-500/20 bg-slate-950/90 p-5 shadow-2xl backdrop-blur-xl space-y-4">
@@ -68,15 +66,14 @@ export function CraftsmanArchitecturalInspector({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className="text-base font-bold text-white">
-                1928 Sears Craftsman Bungalow
-              </h3>
+              <h3 className="text-base font-bold text-white">1928 Sears Craftsman Bungalow</h3>
               <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[0.65rem] font-semibold text-amber-300 border border-amber-400/30">
                 Honor Bilt Kit Architecture
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              Parametric architectural reconstruction with 70+ authentic period furnishings & multi-room navigation
+              Parametric architectural reconstruction with 70+ authentic period furnishings &
+              multi-room navigation
             </p>
           </div>
         </div>
@@ -191,9 +188,7 @@ export function CraftsmanArchitecturalInspector({
               );
             })}
           </div>
-          <p className="mt-2 text-[0.7rem] text-slate-400">
-            {activeRoute.description}
-          </p>
+          <p className="mt-2 text-[0.7rem] text-slate-400">{activeRoute.description}</p>
         </div>
       )}
 
@@ -205,12 +200,11 @@ export function CraftsmanArchitecturalInspector({
             {activeRoomMeta.name} Physical Environment Profile
           </h4>
           <span className="font-mono text-xs text-slate-400">
-            Room Area: {activeRoomMeta.areaSqM} m² · Ceiling Height: {activeRoomMeta.ceilingHeightM} m
+            Room Area: {activeRoomMeta.areaSqM} m² · Ceiling Height: {activeRoomMeta.ceilingHeightM}{" "}
+            m
           </span>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-slate-300">
-          {activeRoomMeta.description}
-        </p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-300">{activeRoomMeta.description}</p>
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {activeRoomMeta.focalFeatures.map((feat, idx) => (

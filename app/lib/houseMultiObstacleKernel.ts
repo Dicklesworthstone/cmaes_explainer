@@ -20,11 +20,7 @@ export function enclosingSpawnRadius(
     (radius, point) =>
       Math.max(
         radius,
-        Math.hypot(
-          point[0] - center[0],
-          point[1] - center[1],
-          point[2] - center[2],
-        ) + shellPadding,
+        Math.hypot(point[0] - center[0], point[1] - center[1], point[2] - center[2]) + shellPadding,
       ),
     minimumRadius,
   );
@@ -257,11 +253,16 @@ export function resolveCameraBoom(
     }
   }
   return {
-    position: [lookAt[0] + dx * bestFraction, lookAt[1] + dy * bestFraction, lookAt[2] + dz * bestFraction],
+    position: [
+      lookAt[0] + dx * bestFraction,
+      lookAt[1] + dy * bestFraction,
+      lookAt[2] + dz * bestFraction,
+    ],
     fraction: bestFraction,
     blockedBy,
   };
 }
+
 // Multi-Obstacle Household Scene & Furniture Collision Kernel (cmaes-u53 / cmaes-4vs / cmaes-1yu).
 //
 // Extends single-obstacle scene definitions to an arbitrary list of N Oriented Bounding Box (OBB)
@@ -285,15 +286,15 @@ export function resolveCameraBoom(
 //   - Ericson, "Real-Time Collision Detection" (Morgan Kaufmann 2005)
 //   - Jo, Zhang, Yang, Luo, "Geometry-Aware Control Barrier Functions" (ICRA 2026)
 
+import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
 import {
+  ARM_COUNTER_PLACEMENTS,
   CRAFTSMAN_BUNGALOW_1928,
   CRAFTSMAN_FLOOR_SUPPORT,
   type HouseFurniture,
-  ARM_COUNTER_PLACEMENTS,
   type HouseSceneConfig,
   type HouseWall,
 } from "./houseScenes";
-import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
 import { filterCorridorVelocityQP } from "./segmentSafeCbf";
 
 /**
@@ -366,10 +367,7 @@ export interface MultiObstacleQueryResult {
 /**
  * Computes exact Signed Distance Function (SDF) from a query point to an Oriented Bounding Box (OBB).
  */
-export function distanceToOBB(
-  point: [number, number, number],
-  obb: OrientedBoundingBox,
-): number {
+export function distanceToOBB(point: [number, number, number], obb: OrientedBoundingBox): number {
   const cosY = Math.cos(-obb.rotationYawRad);
   const sinY = Math.sin(-obb.rotationYawRad);
 
@@ -423,11 +421,7 @@ export function conservativeSegmentClearanceToOBB(
     const t = index / intervals;
     minimumSampleDistance = Math.min(
       minimumSampleDistance,
-      distanceToOBB([
-        start[0] + dx * t,
-        start[1] + dy * t,
-        start[2] + dz * t,
-      ], obb),
+      distanceToOBB([start[0] + dx * t, start[1] + dy * t, start[2] + dz * t], obb),
     );
   }
   return minimumSampleDistance - intervalLength * 0.5;
@@ -545,14 +539,8 @@ export function sweptSphereOBBEntryPoint(
     }
     const movesStrictlyInward =
       boundaryAxes.length > 0 &&
-      boundaryAxes.every(
-        (axis) => start[axis] * direction[axis] < -boundaryTolerance,
-      );
-    if (
-      startsWithinExpandedBox &&
-      boundaryAxes.length > 0 &&
-      !movesStrictlyInward
-    ) {
+      boundaryAxes.every((axis) => start[axis] * direction[axis] < -boundaryTolerance);
+    if (startsWithinExpandedBox && boundaryAxes.length > 0 && !movesStrictlyInward) {
       return { wasHit: false };
     }
   }
@@ -572,7 +560,6 @@ export function sweptSphereOBBEntryPoint(
 }
 
 export function closestPointOnOBB(
-
   point: [number, number, number],
   obb: OrientedBoundingBox,
 ): [number, number, number] {
@@ -605,140 +592,148 @@ export function projectPointOutOfOBB(
   obb: OrientedBoundingBox,
   clearanceMeters: number,
 ): { point: [number, number, number]; wasInside: boolean; surfacePoint: [number, number, number] } {
- const sdf = distanceToOBB(point, obb);
- if (sdf >= clearanceMeters) {
- return { point: [point[0], point[1], point[2]], wasInside: false, surfacePoint: point };
- }
- const surface = closestPointOnOBB(point, obb);
- // Direction of push-out (SDF gradient pointing AWAY from the OBB).
- // For an EXTERIOR query (sdf > 0), closestPointOnOBB returns the boundary
- // point nearest the query, so (point - surface) points away from the
- // OBB — the correct push direction.
- // For an INTERIOR query (sdf < 0), closestPointOnOBB returns the query
- // itself (Ericson §5.5.6 only handles the exterior case), so
- // (point - surface) is the zero vector. We must use the local-frame
- // nearest-face projection: the surface is on the face with the smallest
- // inward clearance, and the push direction is (surface - point) which
- // points from the link to that face (i.e. out of the OBB).
- const isInterior = sdf < 0;
- let dirX: number;
- let dirY: number;
- let dirZ: number;
- if (isInterior) {
- // Compute the interior closest point by snapping to the nearest face.
- const cosY = Math.cos(-obb.rotationYawRad);
- const sinY = Math.sin(-obb.rotationYawRad);
- const dx = point[0] - obb.center[0];
- const dy = point[1] - obb.center[1];
- const dz = point[2] - obb.center[2];
- const lx = cosY * dx - sinY * dz;
- const ly = dy;
- const lz = sinY * dx + cosY * dz;
- // Inward clearance to each face: positive when query is inside.
- const cx = obb.halfExtents[0] - Math.abs(lx);
- const cy = obb.halfExtents[1] - Math.abs(ly);
- const cz = obb.halfExtents[2] - Math.abs(lz);
- // Pick the nearest face and snap the surface point onto it.
- const nearest = cx <= cy && cx <= cz ? "x" : cy <= cz ? "y" : "z";
- let sLx: number;
- let sLy: number;
- let sLz: number;
- if (nearest === "x") {
- sLx = lx >= 0 ? obb.halfExtents[0] : -obb.halfExtents[0];
- sLy = ly;
- sLz = lz;
- } else if (nearest === "y") {
- sLx = lx;
- sLy = ly >= 0 ? obb.halfExtents[1] : -obb.halfExtents[1];
- sLz = lz;
- } else {
- sLx = lx;
- sLy = ly;
- sLz = lz >= 0 ? obb.halfExtents[2] : -obb.halfExtents[2];
- }
- // Forward rotate the local surface point back to world coordinates.
- const wSx = cosY * sLx + sinY * sLz;
- const wSy = sLy;
- const wSz = -sinY * sLx + cosY * sLz;
- const surfaceX = obb.center[0] + wSx;
- const surfaceY = obb.center[1] + wSy;
- const surfaceZ = obb.center[2] + wSz;
- dirX = surfaceX - point[0];
- dirY = surfaceY - point[1];
- dirZ = surfaceZ - point[2];
- } else {
- dirX = point[0] - surface[0];
- dirY = point[1] - surface[1];
- dirZ = point[2] - surface[2];
- }
- const len = Math.hypot(dirX, dirY, dirZ);
- if (len < 1e-9) {
- // Degenerate: point is on the surface but the SDF says we are inside.
- // Use the world-axis-aligned gradient (the maximum |qx|, |qy|, |qz|
- // direction in local frame) to pick an exit direction.
- const cosY = Math.cos(-obb.rotationYawRad);
- const sinY = Math.sin(-obb.rotationYawRad);
- const dx = point[0] - obb.center[0];
- const dy = point[1] - obb.center[1];
- const dz = point[2] - obb.center[2];
- const localX = cosY * dx - sinY * dz;
- const localY = dy;
- const localZ = sinY * dx + cosY * dz;
- const absX = Math.abs(localX) - obb.halfExtents[0];
- const absY = Math.abs(localY) - obb.halfExtents[1];
- const absZ = Math.abs(localZ) - obb.halfExtents[2];
- const m = Math.max(absX, absY, absZ);
- if (m === absX) {
- const sign = localX >= 0 ? 1 : -1;
- const worldDx = cosY * sign;
- const worldDz = -sinY * sign;
- return {
- point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
- wasInside: true,
- surfacePoint: surface,
- };
- }
- if (m === absY) {
- const sign = localY >= 0 ? 1 : -1;
- return {
- point: [point[0], point[1] + sign * clearanceMeters, point[2]],
- wasInside: true,
- surfacePoint: surface,
- };
- }
- const sign = localZ >= 0 ? 1 : -1;
- const worldDx = sinY * sign;
- const worldDz = cosY * sign;
- return {
- point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
- wasInside: true,
- surfacePoint: surface,
- };
- }
- const inv = 1 / len;
- const delta = clearanceMeters - sdf;
- return {
- point: [point[0] + dirX * inv * delta, point[1] + dirY * inv * delta, point[2] + dirZ * inv * delta],
- wasInside: true,
- surfacePoint: surface,
- };
+  const sdf = distanceToOBB(point, obb);
+  if (sdf >= clearanceMeters) {
+    return { point: [point[0], point[1], point[2]], wasInside: false, surfacePoint: point };
+  }
+  const surface = closestPointOnOBB(point, obb);
+  // Direction of push-out (SDF gradient pointing AWAY from the OBB).
+  // For an EXTERIOR query (sdf > 0), closestPointOnOBB returns the boundary
+  // point nearest the query, so (point - surface) points away from the
+  // OBB — the correct push direction.
+  // For an INTERIOR query (sdf < 0), closestPointOnOBB returns the query
+  // itself (Ericson §5.5.6 only handles the exterior case), so
+  // (point - surface) is the zero vector. We must use the local-frame
+  // nearest-face projection: the surface is on the face with the smallest
+  // inward clearance, and the push direction is (surface - point) which
+  // points from the link to that face (i.e. out of the OBB).
+  const isInterior = sdf < 0;
+  let dirX: number;
+  let dirY: number;
+  let dirZ: number;
+  if (isInterior) {
+    // Compute the interior closest point by snapping to the nearest face.
+    const cosY = Math.cos(-obb.rotationYawRad);
+    const sinY = Math.sin(-obb.rotationYawRad);
+    const dx = point[0] - obb.center[0];
+    const dy = point[1] - obb.center[1];
+    const dz = point[2] - obb.center[2];
+    const lx = cosY * dx - sinY * dz;
+    const ly = dy;
+    const lz = sinY * dx + cosY * dz;
+    // Inward clearance to each face: positive when query is inside.
+    const cx = obb.halfExtents[0] - Math.abs(lx);
+    const cy = obb.halfExtents[1] - Math.abs(ly);
+    const cz = obb.halfExtents[2] - Math.abs(lz);
+    // Pick the nearest face and snap the surface point onto it.
+    const nearest = cx <= cy && cx <= cz ? "x" : cy <= cz ? "y" : "z";
+    let sLx: number;
+    let sLy: number;
+    let sLz: number;
+    if (nearest === "x") {
+      sLx = lx >= 0 ? obb.halfExtents[0] : -obb.halfExtents[0];
+      sLy = ly;
+      sLz = lz;
+    } else if (nearest === "y") {
+      sLx = lx;
+      sLy = ly >= 0 ? obb.halfExtents[1] : -obb.halfExtents[1];
+      sLz = lz;
+    } else {
+      sLx = lx;
+      sLy = ly;
+      sLz = lz >= 0 ? obb.halfExtents[2] : -obb.halfExtents[2];
+    }
+    // Forward rotate the local surface point back to world coordinates.
+    const wSx = cosY * sLx + sinY * sLz;
+    const wSy = sLy;
+    const wSz = -sinY * sLx + cosY * sLz;
+    const surfaceX = obb.center[0] + wSx;
+    const surfaceY = obb.center[1] + wSy;
+    const surfaceZ = obb.center[2] + wSz;
+    dirX = surfaceX - point[0];
+    dirY = surfaceY - point[1];
+    dirZ = surfaceZ - point[2];
+  } else {
+    dirX = point[0] - surface[0];
+    dirY = point[1] - surface[1];
+    dirZ = point[2] - surface[2];
+  }
+  const len = Math.hypot(dirX, dirY, dirZ);
+  if (len < 1e-9) {
+    // Degenerate: point is on the surface but the SDF says we are inside.
+    // Use the world-axis-aligned gradient (the maximum |qx|, |qy|, |qz|
+    // direction in local frame) to pick an exit direction.
+    const cosY = Math.cos(-obb.rotationYawRad);
+    const sinY = Math.sin(-obb.rotationYawRad);
+    const dx = point[0] - obb.center[0];
+    const dy = point[1] - obb.center[1];
+    const dz = point[2] - obb.center[2];
+    const localX = cosY * dx - sinY * dz;
+    const localY = dy;
+    const localZ = sinY * dx + cosY * dz;
+    const absX = Math.abs(localX) - obb.halfExtents[0];
+    const absY = Math.abs(localY) - obb.halfExtents[1];
+    const absZ = Math.abs(localZ) - obb.halfExtents[2];
+    const m = Math.max(absX, absY, absZ);
+    if (m === absX) {
+      const sign = localX >= 0 ? 1 : -1;
+      const worldDx = cosY * sign;
+      const worldDz = -sinY * sign;
+      return {
+        point: [
+          point[0] + worldDx * clearanceMeters,
+          point[1],
+          point[2] + worldDz * clearanceMeters,
+        ],
+        wasInside: true,
+        surfacePoint: surface,
+      };
+    }
+    if (m === absY) {
+      const sign = localY >= 0 ? 1 : -1;
+      return {
+        point: [point[0], point[1] + sign * clearanceMeters, point[2]],
+        wasInside: true,
+        surfacePoint: surface,
+      };
+    }
+    const sign = localZ >= 0 ? 1 : -1;
+    const worldDx = sinY * sign;
+    const worldDz = cosY * sign;
+    return {
+      point: [point[0] + worldDx * clearanceMeters, point[1], point[2] + worldDz * clearanceMeters],
+      wasInside: true,
+      surfacePoint: surface,
+    };
+  }
+  const inv = 1 / len;
+  const delta = clearanceMeters - sdf;
+  return {
+    point: [
+      point[0] + dirX * inv * delta,
+      point[1] + dirY * inv * delta,
+      point[2] + dirZ * inv * delta,
+    ],
+    wasInside: true,
+    surfacePoint: surface,
+  };
 }
 
 export function queryMultiObstacleScene(
- query: MultiObstacleQuery,
- scene: MultiObstacleSceneConfig,
- collisionWeight = 100.0,
+  query: MultiObstacleQuery,
+  scene: MultiObstacleSceneConfig,
+  collisionWeight = 100.0,
 ): MultiObstacleQueryResult {
- const rRobot = query.robotRadius ?? 0.25;
- const margin = query.safetyMargin ?? 0.05;
- const threshold = rRobot + margin;
+  const rRobot = query.robotRadius ?? 0.25;
+  const margin = query.safetyMargin ?? 0.05;
+  const threshold = rRobot + margin;
 
   let minClearance = Infinity;
   let nearestId: string | null = null;
   let nearestName: string | null = null;
   let totalPenalty = 0.0;
   let gradX = 0.0;
-  let gradY = 0.0;
+  const gradY = 0.0;
   let gradZ = 0.0;
 
   for (const obb of scene.obstacles) {
@@ -859,11 +854,7 @@ export function createHouseWallObstacles(
       obstacles.push({
         id: `wall-${wallIndex}-segment-${segmentIndex}`,
         name: `wall ${wallIndex + 1}, segment ${segmentIndex + 1}`,
-        center: [
-          wall.from[0] + ux * along,
-          wall.height / 2,
-          wall.from[1] + uz * along,
-        ],
+        center: [wall.from[0] + ux * along, wall.height / 2, wall.from[1] + uz * along],
         halfExtents: [segmentLength / 2, wall.height / 2, wall.thickness / 2],
         rotationYawRad: yaw,
         materialId: "house-wall",
@@ -882,10 +873,7 @@ export function createHouseNavigationScene(
     sceneId: `${furnitureScene.sceneId}-with-walls`,
     name: `${furnitureScene.name} with physical wall apertures`,
     bounds: house.bounds,
-    obstacles: [
-      ...furnitureScene.obstacles,
-      ...createHouseWallObstacles(house.walls),
-    ],
+    obstacles: [...furnitureScene.obstacles, ...createHouseWallObstacles(house.walls)],
   };
 }
 
@@ -997,10 +985,7 @@ export function evaluateHouseholdObjectiveWithFurniture(
   }
 
   const totalObjective =
-    -wGoal * goalCost +
-    wProg * progress -
-    wEnergy * totalEnergy -
-    wFurn * totalFurnPenalty;
+    -wGoal * goalCost + wProg * progress - wEnergy * totalEnergy - wFurn * totalFurnPenalty;
 
   return {
     totalObjective,
@@ -1056,8 +1041,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     id: "g1-porch",
     name: "Porch Origin",
     position: [1.5, -2.5] as [number, number],
-    acceptanceRadius: 0.40,
-    targetSpeed: 0.60,
+    acceptanceRadius: 0.4,
+    targetSpeed: 0.6,
     room: "porch",
     maxTimeSeconds: 5.0,
   },
@@ -1065,7 +1050,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     id: "g1-parlor",
     name: "Parlor Living Area",
     position: [1.5, 0.0] as [number, number],
-    acceptanceRadius: 0.40,
+    acceptanceRadius: 0.4,
     targetSpeed: 0.65,
     room: "parlor",
     maxTimeSeconds: 12.0,
@@ -1074,7 +1059,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     id: "g1-dining",
     name: "Dining Room Center",
     position: [3.5, 1.2] as [number, number],
-    acceptanceRadius: 0.40,
+    acceptanceRadius: 0.4,
     targetSpeed: 0.65,
     room: "dining",
     maxTimeSeconds: 20.0,
@@ -1083,8 +1068,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     id: "g1-kitchen",
     name: "Kitchen Island",
     position: [4.5, 3.5] as [number, number],
-    acceptanceRadius: 0.40,
-    targetSpeed: 0.60,
+    acceptanceRadius: 0.4,
+    targetSpeed: 0.6,
     room: "kitchen",
     maxTimeSeconds: 30.0,
   },
@@ -1101,8 +1086,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     id: "g1-bedroom",
     name: "Master Bedroom",
     position: [1.0, 5.5] as [number, number],
-    acceptanceRadius: 0.40,
-    targetSpeed: 0.60,
+    acceptanceRadius: 0.4,
+    targetSpeed: 0.6,
     room: "bedroom",
     maxTimeSeconds: 52.0,
   },
@@ -1111,7 +1096,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
     name: "Ensuite Bathroom Goal",
     position: [3.0, 6.5] as [number, number],
     acceptanceRadius: 0.35,
-    targetSpeed: 0.50,
+    targetSpeed: 0.5,
     room: "bath",
     maxTimeSeconds: 65.0,
   },
@@ -1125,7 +1110,7 @@ export function simulateG1HouseNavigationChallenge(
   config: G1HouseNavigationChallengeConfig = {},
 ): G1HouseNavigationChallengeResult {
   const waypoints = config.waypoints ?? CRAFTSMAN_G1_CHALLENGE_WAYPOINTS;
-  const robotRadius = config.robotRadius ?? 0.20;
+  const robotRadius = config.robotRadius ?? 0.2;
   const maxDuration = config.maxDurationSeconds ?? 90.0;
   const dt = config.dt ?? 1 / 60;
   const maxSteps = Math.floor(maxDuration / dt);
@@ -1211,7 +1196,7 @@ export function simulateG1HouseNavigationChallenge(
     }
 
     // Repulsive steering away from furniture if near
-    if (obsQuery.minimumClearanceMeters < 0.30 && !filterRes.isCorridorActive) {
+    if (obsQuery.minimumClearanceMeters < 0.3 && !filterRes.isCorridorActive) {
       safeVx += obsQuery.gradientVector[0] * 0.65;
       safeVz += obsQuery.gradientVector[2] * 0.65;
     }
@@ -1242,10 +1227,7 @@ export function simulateG1HouseNavigationChallenge(
 
   // Multi-factor challenge objective
   const finalObjective =
-    completedCount * 50.0 +
-    totalDistance * 10.0 -
-    (hardCollision ? 500.0 : 0.0) -
-    totalTime * 0.5;
+    completedCount * 50.0 + totalDistance * 10.0 - (hardCollision ? 500.0 : 0.0) - totalTime * 0.5;
 
   return {
     challengeName: "G1 Humanoid HouseNavigation 7-Room Bungalow Challenge",
@@ -1275,76 +1257,72 @@ export function clampPositionAgainstHouseCollisions(
     maxX: 3.7,
     minZ: -4.4,
     maxZ: 5.2,
-  }
+  },
 ): {
- clampedPosition: [number, number, number];
- isColliding: boolean;
- nearestObstacleName: string | null;
- minClearance: number;
+  clampedPosition: [number, number, number];
+  isColliding: boolean;
+  nearestObstacleName: string | null;
+  minClearance: number;
 } {
- let cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, point[0]));
- let cy = point[1];
- let cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, point[2]));
+  let cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, point[0]));
+  let cy = point[1];
+  let cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, point[2]));
 
- let isColliding = false;
- let nearestObstacleName: string | null = null;
- let minClearance = 999.0;
+  let isColliding = false;
+  let nearestObstacleName: string | null = null;
+  let minClearance = 999.0;
 
- // SOTA OBB projection: use the true SDF gradient (handles interior
- // points, yawed OBBs, and non-cubic aspect ratios). The previous
- // radial-from-center projection landed targets inside yawed furniture
- // (e.g. chairs rotated 180 degrees about Y). Run multiple Gauss-Seidel
- // passes to relax the case where one OBB's push-out drives the target
- // into a second OBB.
- for (let pass = 0; pass < 4; pass++) {
- let passMoved = false;
- for (const obb of obstacles) {
- if (obb.exemptFromPenalty) continue;
- const dist = distanceToOBB([cx, cy, cz], obb);
- const clearance = dist - safeRadius;
- if (clearance < minClearance) {
- minClearance = clearance;
- nearestObstacleName = obb.name;
- }
- if (dist < safeRadius) {
- isColliding = true;
- nearestObstacleName = obb.name;
- const projected = projectPointOutOfOBB(
- [cx, cy, cz],
- obb,
- safeRadius,
- );
- if (projected.wasInside) {
- cx = projected.point[0];
- cy = projected.point[1];
- cz = projected.point[2];
- passMoved = true;
- }
- }
- }
- if (!passMoved) break;
- // Re-clamp bounds after push-out
- cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, cx));
- cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, cz));
- }
+  // SOTA OBB projection: use the true SDF gradient (handles interior
+  // points, yawed OBBs, and non-cubic aspect ratios). The previous
+  // radial-from-center projection landed targets inside yawed furniture
+  // (e.g. chairs rotated 180 degrees about Y). Run multiple Gauss-Seidel
+  // passes to relax the case where one OBB's push-out drives the target
+  // into a second OBB.
+  for (let pass = 0; pass < 4; pass++) {
+    let passMoved = false;
+    for (const obb of obstacles) {
+      if (obb.exemptFromPenalty) continue;
+      const dist = distanceToOBB([cx, cy, cz], obb);
+      const clearance = dist - safeRadius;
+      if (clearance < minClearance) {
+        minClearance = clearance;
+        nearestObstacleName = obb.name;
+      }
+      if (dist < safeRadius) {
+        isColliding = true;
+        nearestObstacleName = obb.name;
+        const projected = projectPointOutOfOBB([cx, cy, cz], obb, safeRadius);
+        if (projected.wasInside) {
+          cx = projected.point[0];
+          cy = projected.point[1];
+          cz = projected.point[2];
+          passMoved = true;
+        }
+      }
+    }
+    if (!passMoved) break;
+    // Re-clamp bounds after push-out
+    cx = Math.max(bounds.minX + safeRadius, Math.min(bounds.maxX - safeRadius, cx));
+    cz = Math.max(bounds.minZ + safeRadius, Math.min(bounds.maxZ - safeRadius, cz));
+  }
 
- // Recompute isColliding based on the FINAL state so the caller learns
- // whether the projection succeeded.
- let finalColliding = false;
- for (const obb of obstacles) {
- if (obb.exemptFromPenalty) continue;
- if (distanceToOBB([cx, cy, cz], obb) < safeRadius) {
- finalColliding = true;
- break;
- }
- }
+  // Recompute isColliding based on the FINAL state so the caller learns
+  // whether the projection succeeded.
+  let finalColliding = false;
+  for (const obb of obstacles) {
+    if (obb.exemptFromPenalty) continue;
+    if (distanceToOBB([cx, cy, cz], obb) < safeRadius) {
+      finalColliding = true;
+      break;
+    }
+  }
 
- return {
- clampedPosition: [cx, cy, cz],
- isColliding: finalColliding,
- nearestObstacleName,
- minClearance: Math.max(0, minClearance),
- };
+  return {
+    clampedPosition: [cx, cy, cz],
+    isColliding: finalColliding,
+    nearestObstacleName,
+    minClearance: Math.max(0, minClearance),
+  };
 }
 
 /**
@@ -1485,8 +1463,11 @@ export function armStageFurniture(
   rooms: readonly string[] = ARM_STAGE_ROOMS,
 ): HouseFurniture[] {
   const placement = ARM_COUNTER_PLACEMENTS[task];
-  return house.furniture.filter((piece) =>
-    rooms.includes(piece.room) || piece.name === placement.obstacleFurniture || piece.name === placement.goalFurniture,
+  return house.furniture.filter(
+    (piece) =>
+      rooms.includes(piece.room) ||
+      piece.name === placement.obstacleFurniture ||
+      piece.name === placement.goalFurniture,
   );
 }
 
@@ -1506,16 +1487,16 @@ export function armStageObstacles(
 ): OrientedBoundingBox[] {
   const workbench = armWorkbenchObstacles(supportHeightMeters, task);
   const base: [number, number, number] = [0, 0, 0];
-  const staged = new Set(
-    armStageFurniture(task, house, rooms).map((piece) => piece.name),
-  );
+  const staged = new Set(armStageFurniture(task, house, rooms).map((piece) => piece.name));
   const nearest = createSceneFromHouseFurniture(house.furniture)
     .obstacles.filter((obb) => !obb.exemptFromPenalty && staged.has(obb.name))
     .map((obb) => ({ obb, d: distanceToOBB(base, obb) }))
     .sort((a, b) => a.d - b.d)
     .map((entry) => entry.obb);
   if (!Number.isInteger(limit) || limit < workbench.length + nearest.length) {
-    throw new Error(`Arm scene requires ${workbench.length + nearest.length} keep-out bodies; capacity ${limit} cannot represent the rendered scene.`);
+    throw new Error(
+      `Arm scene requires ${workbench.length + nearest.length} keep-out bodies; capacity ${limit} cannot represent the rendered scene.`,
+    );
   }
   return [...workbench, ...nearest];
 }
@@ -1636,10 +1617,7 @@ export function g1KernelObstacleRoster(
     .sort((a, b) => a.d - b.d)
     .slice(0, Math.max(0, limit - HOUSE_STRUCTURAL_SURFACES.length))
     .map(({ obb }) => relative(obb, "keep-out"));
-  return [
-    ...HOUSE_STRUCTURAL_SURFACES.map((obb) => relative(obb, "support")),
-    ...keepOut,
-  ];
+  return [...HOUSE_STRUCTURAL_SURFACES.map((obb) => relative(obb, "support")), ...keepOut];
 }
 
 /**

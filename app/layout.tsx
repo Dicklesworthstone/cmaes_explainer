@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { ServiceWorkerRegistration } from "./components/ServiceWorkerRegistration";
 import { SmoothScroll } from "./components/SmoothScroll";
@@ -7,20 +7,21 @@ import { SmoothScroll } from "./components/SmoothScroll";
 export const viewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#020617" },
-    { media: "(prefers-color-scheme: light)", color: "#020617" }
+    { media: "(prefers-color-scheme: light)", color: "#020617" },
   ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  viewportFit: "cover"
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://cmaes-explainer.vercel.app"),
   title: "CMA-ES: A Love Letter to My Favorite Black-Box Optimizer",
-  description: "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
+  description:
+    "A living, interactive explainer of CMA-ES, with high-performance Rust implementations for browser and Python.",
   authors: [{ name: "Jeffrey Emanuel", url: "https://jeffreyemanuel.com/" }],
-  creator: "Jeffrey Emanuel"
+  creator: "Jeffrey Emanuel",
 };
 // NOTE: no explicit openGraph/twitter metadata here — app/opengraph-image.tsx
 // and app/twitter-image.tsx are auto-detected by Next.js and emit <meta> tags

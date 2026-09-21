@@ -48,19 +48,18 @@ export const KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE = {
  * whole-vehicle envelope above is the authoritative published boundary.
  */
 export const KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS: KmrGeometryConfig = {
-  baseLengthMeters: 0.800,
-  baseWidthMeters: 0.600,
-  baseHeightMeters: 0.380,
-  wheelDiameterMeters: 0.150,
-  wheelbaseXMeters: 0.600,
-  wheelbaseYMeters: 0.450,
-  mountingPlateHeightMeters: 0.380,
+  baseLengthMeters: 0.8,
+  baseWidthMeters: 0.6,
+  baseHeightMeters: 0.38,
+  wheelDiameterMeters: 0.15,
+  wheelbaseXMeters: 0.6,
+  wheelbaseYMeters: 0.45,
+  mountingPlateHeightMeters: 0.38,
   mountingPlateOffsetXMeters: 0.0,
 };
 
 /** @deprecated Use the explicitly named procedural assumptions constant. */
-export const KUKA_KMR_IIWA_PUBLIC_SPEC =
-  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
+export const KUKA_KMR_IIWA_PUBLIC_SPEC = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS;
 
 export interface KmrDimensions {
   wheelRadiusMeters: number;
@@ -179,14 +178,7 @@ function buildMecanumWheel(
   const wheelWidth = wheelRadius * 0.6;
 
   // The wheel hub (main cylinder).
-  const hubGeo = new THREE.CylinderGeometry(
-    wheelRadius,
-    wheelRadius,
-    wheelWidth,
-    24,
-    1,
-    false,
-  );
+  const hubGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelWidth, 24, 1, false);
   // Cylinder default is along Y axis; rotate to X axis (wheel rolls
   // forward when rotating around the X axis).
   hubGeo.rotateZ(Math.PI / 2);
@@ -203,12 +195,7 @@ function buildMecanumWheel(
   const rollerLength = wheelWidth * 0.85;
   for (let i = 0; i < numRollers; i += 1) {
     const angle = (i / numRollers) * Math.PI * 2.0;
-    const rollerGeo = new THREE.CylinderGeometry(
-      rollerRadius,
-      rollerRadius,
-      rollerLength,
-      8,
-    );
+    const rollerGeo = new THREE.CylinderGeometry(rollerRadius, rollerRadius, rollerLength, 8);
     // Orient the roller tangent to the wheel circumference, then rotate
     // 45 degrees around the wheel's spin axis to get the diagonal
     // pattern (mecanum signature).
@@ -228,11 +215,7 @@ function buildMecanumWheel(
   for (const sign of [-1, 1]) {
     const capGeo = new THREE.CircleGeometry(wheelRadius * 0.9, 24);
     const cap = new THREE.Mesh(capGeo, materials.wheelHub);
-    cap.position.set(
-      positionX + sign * (wheelWidth / 2 + 0.001),
-      0,
-      positionY,
-    );
+    cap.position.set(positionX + sign * (wheelWidth / 2 + 0.001), 0, positionY);
     cap.rotation.y = sign > 0 ? 0 : Math.PI;
     group.add(cap);
   }
@@ -295,24 +278,15 @@ export function buildKmrBaseMesh(
     [-1, -1, "kmr_wheel_RL"],
     [1, -1, "kmr_wheel_RR"],
   ] as const) {
-    const wheel = buildMecanumWheel(
-      config,
-      signX * a,
-      signY * b,
-      materials,
-      cornerName,
-    );
+    const wheel = buildMecanumWheel(config, signX * a, signY * b, materials, cornerName);
     group.add(wheel);
   }
 
   // LiDAR scanner housing.
   const lidarHousingGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.07, 16);
-  const lidarHousingMesh = new THREE.Mesh(
-    lidarHousingGeo,
-    materials.lidarHousing,
-  );
+  const lidarHousingMesh = new THREE.Mesh(lidarHousingGeo, materials.lidarHousing);
   lidarHousingMesh.position.set(
-    config.mountingPlateOffsetXMeters + config.baseLengthMeters * 0.30,
+    config.mountingPlateOffsetXMeters + config.baseLengthMeters * 0.3,
     config.mountingPlateHeightMeters + 0.04,
     0,
   );
@@ -322,7 +296,7 @@ export function buildKmrBaseMesh(
   const lidarLensGeo = new THREE.CircleGeometry(0.028, 16);
   const lidarLensMesh = new THREE.Mesh(lidarLensGeo, materials.lidarLens);
   lidarLensMesh.position.set(
-    config.mountingPlateOffsetXMeters + config.baseLengthMeters * 0.30 + 0.0351,
+    config.mountingPlateOffsetXMeters + config.baseLengthMeters * 0.3 + 0.0351,
     config.mountingPlateHeightMeters + 0.04,
     0,
   );

@@ -19,10 +19,10 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  type ArmLinkSpec,
   closestPointOnOBB,
   projectArmLinksOutOfObstacles,
   projectLinkOutOfOBB,
-  type ArmLinkSpec,
 } from "../app/lib/armLinkCollisionResponse";
 import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 
@@ -38,30 +38,30 @@ function obb(
 }
 
 describe("closestPointOnOBB (SOTA OBB surface projection)", () => {
- test("snaps to nearest face when the query is at the OBB's center", () => {
- const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
- const closest = closestPointOnOBB([0, 0, 0], box);
- // Center of a unit OBB is equidistant from all six faces. Tie-break
- // picks the +X face, so the closest surface point is (0.5, 0, 0).
- // (The SOTA projection variant picks the nearest face for interior
- // points, in contrast to Ericson §5.5.6 which returns the query.)
- expect(closest[0]).toBeCloseTo(0.5, 6);
- expect(closest[1]).toBeCloseTo(0.0, 6);
- expect(closest[2]).toBeCloseTo(0.0, 6);
- });
+  test("snaps to nearest face when the query is at the OBB's center", () => {
+    const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
+    const closest = closestPointOnOBB([0, 0, 0], box);
+    // Center of a unit OBB is equidistant from all six faces. Tie-break
+    // picks the +X face, so the closest surface point is (0.5, 0, 0).
+    // (The SOTA projection variant picks the nearest face for interior
+    // points, in contrast to Ericson §5.5.6 which returns the query.)
+    expect(closest[0]).toBeCloseTo(0.5, 6);
+    expect(closest[1]).toBeCloseTo(0.0, 6);
+    expect(closest[2]).toBeCloseTo(0.0, 6);
+  });
 
- test("respects yaw rotation when projecting a query outside a rotated OBB", () => {
- // Rotate 90 degrees about Y. The local +X face sits at world +Z.
- // A query at (0, 0, 0.7) is outside the OBB on the +Z side and
- // projects onto the local +X face. With half-extents 0.5, that
- // closest point in local is (0.5, 0, 0), which maps back to world
- // (0, 0, 0.5).
- const box = obb([0, 0, 0], [0.5, 0.5, 0.5], Math.PI / 2);
- const closest = closestPointOnOBB([0, 0, 0.7], box);
- expect(closest[0]).toBeCloseTo(0.0, 6);
- expect(closest[1]).toBeCloseTo(0.0, 6);
- expect(closest[2]).toBeCloseTo(0.5, 6);
- });
+  test("respects yaw rotation when projecting a query outside a rotated OBB", () => {
+    // Rotate 90 degrees about Y. The local +X face sits at world +Z.
+    // A query at (0, 0, 0.7) is outside the OBB on the +Z side and
+    // projects onto the local +X face. With half-extents 0.5, that
+    // closest point in local is (0.5, 0, 0), which maps back to world
+    // (0, 0, 0.5).
+    const box = obb([0, 0, 0], [0.5, 0.5, 0.5], Math.PI / 2);
+    const closest = closestPointOnOBB([0, 0, 0.7], box);
+    expect(closest[0]).toBeCloseTo(0.0, 6);
+    expect(closest[1]).toBeCloseTo(0.0, 6);
+    expect(closest[2]).toBeCloseTo(0.5, 6);
+  });
 
   test("rotated OBB: a query at (0.7, 0, 0) projects to (0.5, 0, 0) under no yaw", () => {
     const box = obb([0, 0, 0], [0.5, 0.5, 0.5], 0);
@@ -184,7 +184,7 @@ describe("projectArmLinksOutOfObstacles (SOTA per-frame arm collision response)"
     const res = projectArmLinksOutOfObstacles(links, [mug]);
     const { distanceToOBB } = require("../app/lib/houseMultiObstacleKernel");
     const wristRadius = res.resolvedLinkPositions.map((_, i) =>
-      i === 0 ? 0.16 : i === 7 ? 0.058 : 0.06
+      i === 0 ? 0.16 : i === 7 ? 0.058 : 0.06,
     )[7];
     const wristDist = distanceToOBB(res.resolvedLinkPositions[7], mug);
     // Wrist origin MUST be at least wristRadius (0.058) outside the OBB.
@@ -228,7 +228,7 @@ describe("projectArmLinksOutOfObstacles (SOTA per-frame arm collision response)"
       0,
       "rug",
       "rug-1",
-      true /* exemptFromPenalty */
+      true /* exemptFromPenalty */,
     );
     const links = flagShipTrace([
       [0, 0.78, 0],

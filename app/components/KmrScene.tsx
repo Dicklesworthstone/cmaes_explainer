@@ -8,33 +8,30 @@
 // the integration is additive: the arm and the KMR each have
 // their own coordinate system and their own canvas.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import {
+  createHouseNavigationScene,
+  type OrientedBoundingBox,
+  stageBoxRenderTransform,
+} from "../lib/houseMultiObstacleKernel";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import {
   buildKmrBaseMesh,
   defaultKmrMaterialSet,
-  KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
   KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
+  KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
 } from "../lib/kmrGeometry";
-import { scanLidar, KUKA_KMR_IIWA_LIDAR_DEFAULT } from "../lib/kmrLidar";
-import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
-import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
-import {
-  createHouseNavigationScene,
-  stageBoxRenderTransform,
-  type OrientedBoundingBox,
-} from "../lib/houseMultiObstacleKernel";
-import {
-  KmrNavigationOwner,
-  type KmrNavigationReceipt,
-} from "../lib/kmrNavigationOwner";
 import {
   createKmrHouseholdPhysicsCoupling,
-  stepKmrHouseholdPhysics,
   type KmrHouseholdPhysicsCoupling,
   type KmrHouseholdPhysicsReceipt,
+  stepKmrHouseholdPhysics,
 } from "../lib/kmrHouseholdPhysics";
+import { KUKA_KMR_IIWA_LIDAR_DEFAULT, scanLidar } from "../lib/kmrLidar";
+import { KmrNavigationOwner, type KmrNavigationReceipt } from "../lib/kmrNavigationOwner";
+import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
 
 interface KmrPose {
   x: number;
@@ -68,14 +65,7 @@ function KmrThreeScene({
   );
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
   const scan = useMemo(
-    () =>
-      scanLidar(
-        pose.x,
-        pose.y,
-        obstacles,
-        KUKA_KMR_IIWA_LIDAR_DEFAULT,
-        pose.theta,
-      ),
+    () => scanLidar(pose.x, pose.y, obstacles, KUKA_KMR_IIWA_LIDAR_DEFAULT, pose.theta),
     [pose.x, pose.y, pose.theta, obstacles],
   );
   const pathLine = useMemo(() => {
@@ -83,10 +73,7 @@ function KmrThreeScene({
     const geometry = new THREE.BufferGeometry().setFromPoints(
       path.points.map((point) => new THREE.Vector3(point[0], 0.025, point[1])),
     );
-    return new THREE.Line(
-      geometry,
-      new THREE.LineBasicMaterial({ color: "#22d3ee" }),
-    );
+    return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#22d3ee" }));
   }, [path]);
 
   useEffect(
@@ -109,26 +96,15 @@ function KmrThreeScene({
 
   return (
     <group>
-      <primitive
-        object={baseGroup}
-        position={[pose.x, 0, pose.y]}
-        rotation={[0, -pose.theta, 0]}
-      />
+      <primitive object={baseGroup} position={[pose.x, 0, pose.y]} rotation={[0, -pose.theta, 0]} />
       {scan.rays.map((r, i) => {
         if (!r.hit) return null;
         const cosA = Math.cos(r.angleRadians + pose.theta);
         const sinA = Math.sin(r.angleRadians + pose.theta);
         const x = pose.x + r.rangeMeters * cosA;
         const y = pose.y + r.rangeMeters * sinA;
-        const z =
-          KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.mountingPlateHeightMeters +
-          0.06;
-        const color =
-          r.rangeMeters < 1.0
-            ? "#ef4444"
-            : r.rangeMeters < 3.0
-              ? "#f59e0b"
-              : "#22c55e";
+        const z = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.mountingPlateHeightMeters + 0.06;
+        const color = r.rangeMeters < 1.0 ? "#ef4444" : r.rangeMeters < 3.0 ? "#f59e0b" : "#22c55e";
         return (
           <mesh key={i} position={[x, z, y]}>
             <sphereGeometry args={[0.025, 6, 6]} />
@@ -140,10 +116,7 @@ function KmrThreeScene({
         if (obstacle.exemptFromPenalty) return null;
         const isWall = obstacle.materialId === "house-wall";
         return (
-          <mesh
-            key={obstacle.id}
-            {...stageBoxRenderTransform(obstacle)}
-          >
+          <mesh key={obstacle.id} {...stageBoxRenderTransform(obstacle)}>
             <boxGeometry
               args={[
                 obstacle.halfExtents[0] * 2,
@@ -174,18 +147,11 @@ function KmrThreeScene({
           <meshStandardMaterial color="#a16207" roughness={0.82} />
         </mesh>
       ) : null}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.001, 0]}
-        onClick={handleClick}
-      >
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]} onClick={handleClick}>
         <planeGeometry args={[20, 20]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
-      <gridHelper
-        args={[20, 20, "#1e293b", "#334155"]}
-        position={[0, 0.005, 0]}
-      />
+      <gridHelper args={[20, 20, "#1e293b", "#334155"]} position={[0, 0.005, 0]} />
     </group>
   );
 }
@@ -216,8 +182,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
   );
   const [path, setPath] = useState<WaypointPath | null>(null);
   const [receipt, setReceipt] = useState<KmrNavigationReceipt | null>(null);
-  const [dynamicReceipt, setDynamicReceipt] =
-    useState<KmrHouseholdPhysicsReceipt | null>(null);
+  const [dynamicReceipt, setDynamicReceipt] = useState<KmrHouseholdPhysicsReceipt | null>(null);
   const [planningError, setPlanningError] = useState<string | null>(null);
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
   const animRef = useRef<number | null>(null);
@@ -246,17 +211,11 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       const worldDy = dx * sinT + dy * cosT;
       const nextX = Math.max(
         CRAFTSMAN_BUNGALOW_1928.bounds.min[0] + 0.35,
-        Math.min(
-          CRAFTSMAN_BUNGALOW_1928.bounds.max[0] - 0.35,
-          pose.x + worldDx,
-        ),
+        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[0] - 0.35, pose.x + worldDx),
       );
       const nextY = Math.max(
         CRAFTSMAN_BUNGALOW_1928.bounds.min[1] + 0.35,
-        Math.min(
-          CRAFTSMAN_BUNGALOW_1928.bounds.max[1] - 0.35,
-          pose.y + worldDy,
-        ),
+        Math.min(CRAFTSMAN_BUNGALOW_1928.bounds.max[1] - 0.35, pose.y + worldDy),
       );
       const nextTheta = (pose.theta + dTheta + Math.PI * 2) % (Math.PI * 2);
 
@@ -281,9 +240,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       if (!collision) {
         setPose({ x: nextX, y: nextY, theta: nextTheta });
       } else {
-        setPlanningError(
-          "Manual drive stopped: obstacle clearance envelope reached.",
-        );
+        setPlanningError("Manual drive stopped: obstacle clearance envelope reached.");
       }
     },
     [pose, obstacles],
@@ -355,20 +312,14 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       if (!activeOwner) return;
       const previousFrame = lastFrameMsRef.current ?? now;
       lastFrameMsRef.current = now;
-      accumulatedSecondsRef.current += Math.min(
-        0.1,
-        (now - previousFrame) / 1000,
-      );
+      accumulatedSecondsRef.current += Math.min(0.1, (now - previousFrame) / 1000);
       let nextReceipt = activeOwner.receipt();
       let nextDynamicReceipt: KmrHouseholdPhysicsReceipt | null = null;
       let substeps = 0;
       while (accumulatedSecondsRef.current >= 1 / 60 && substeps < 6) {
         nextReceipt = activeOwner.step();
         if (householdCouplingRef.current) {
-          nextDynamicReceipt = stepKmrHouseholdPhysics(
-            householdCouplingRef.current,
-            nextReceipt,
-          );
+          nextDynamicReceipt = stepKmrHouseholdPhysics(householdCouplingRef.current, nextReceipt);
         }
         accumulatedSecondsRef.current -= 1 / 60;
         substeps += 1;
@@ -379,9 +330,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
         if (nextDynamicReceipt) setDynamicReceipt(nextDynamicReceipt);
       }
       if (nextReceipt.collisionRefusals > 0) {
-        setPlanningError(
-          "Kinematic owner refused a swept step; movement stopped before contact.",
-        );
+        setPlanningError("Kinematic owner refused a swept step; movement stopped before contact.");
         ownerRef.current = null;
         animRef.current = null;
       } else if (!nextReceipt.completed) {
@@ -401,9 +350,8 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
             KMR base: collision-aware household navigation
           </h3>
           <p className="text-xs text-slate-400">
-            Click a floor point, select a room preset, or use the D-Pad / WASD /
-            Arrow keys to drive the 4-mecanum mobile base in real-time with 2D
-            LiDAR raycasting.
+            Click a floor point, select a room preset, or use the D-Pad / WASD / Arrow keys to drive
+            the 4-mecanum mobile base in real-time with 2D LiDAR raycasting.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -449,12 +397,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
         >
           <color attach="background" args={["#0c1322"]} />
           <ambientLight intensity={0.6} color="#fff1dc" />
-          <directionalLight
-            castShadow
-            position={[5, 8, 5]}
-            intensity={1.3}
-            color="#fff5e6"
-          />
+          <directionalLight castShadow position={[5, 8, 5]} intensity={1.3} color="#fff5e6" />
           <KmrThreeScene
             pose={pose}
             path={path}
@@ -538,19 +481,17 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
         <span>
           Official whole-vehicle envelope:{" "}
-          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.lengthMeters * 1000)}
-          ×{Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.widthMeters * 1000)}
-          ×
-          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters * 1000)}{" "}
-          mm, {KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg} kg. Inner chassis
-          and wheelbase are disclosed procedural assumptions.
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.lengthMeters * 1000)}×
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.widthMeters * 1000)}×
+          {Math.round(KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.heightMeters * 1000)} mm,{" "}
+          {KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE.massKg} kg. Inner chassis and wheelbase are
+          disclosed procedural assumptions.
         </span>
         <span className="sm:text-right">
           {path ? (
             <>
-              Value path: {path.points.length} waypoints,{" "}
-              {path.totalDistanceMeters.toFixed(2)} m, planned clearance{" "}
-              {path.minimumClearanceMeters.toFixed(3)} m
+              Value path: {path.points.length} waypoints, {path.totalDistanceMeters.toFixed(2)} m,
+              planned clearance {path.minimumClearanceMeters.toFixed(3)} m
             </>
           ) : (
             "No path yet"
@@ -568,11 +509,7 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
             gate: {receipt.waypointIndex + 1}/{receipt.totalWaypoints}
           </span>
           <span>
-            wheels:{" "}
-            {receipt.wheelSpeeds.speeds
-              .map((speed) => speed.toFixed(1))
-              .join(" / ")}{" "}
-            rad/s
+            wheels: {receipt.wheelSpeeds.speeds.map((speed) => speed.toFixed(1)).join(" / ")} rad/s
           </span>
           <span>{receipt.completed ? "goal reached" : "integrating"}</span>
         </div>
@@ -580,16 +517,9 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       {dynamicReceipt ? (
         <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-amber-500/20 bg-amber-950/10 p-3 font-mono text-[11px] text-amber-100 sm:grid-cols-4">
           <span>matter owner: household contact/LCP TS</span>
-          <span>
-            base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}
-          </span>
-          <span>
-            chair speed:{" "}
-            {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s
-          </span>
-          <span>
-            LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}
-          </span>
+          <span>base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}</span>
+          <span>chair speed: {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s</span>
+          <span>LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}</span>
         </div>
       ) : null}
     </div>

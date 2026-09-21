@@ -1,11 +1,28 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Brain,
+  ChevronLeft,
+  ChevronRight,
+  Command,
+  Github,
+  Keyboard,
+  Menu,
+  Rocket,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Github, Brain, Rocket, Menu, X, ChevronLeft, ChevronRight, Keyboard, Command, ShieldCheck } from "lucide-react";
-import { useEffect, useState, useRef, useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useScrollSpy } from "../hooks/useScrollSpy";
-import { AnimatePresence, motion } from "framer-motion";
 
 const sections = [
   { id: "what-is-cmaes", label: "Basics" },
@@ -21,7 +38,10 @@ const sections = [
 
 export function Navbar() {
   const pathname = usePathname();
-  const getHref = useCallback((id: string) => (pathname === "/" ? `#${id}` : `/#${id}`), [pathname]);
+  const getHref = useCallback(
+    (id: string) => (pathname === "/" ? `#${id}` : `/#${id}`),
+    [pathname],
+  );
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
@@ -116,7 +136,7 @@ export function Navbar() {
         if (el) el.scrollIntoView({ behavior: "smooth" });
       }
     },
-    [activeId]
+    [activeId],
   );
 
   useEffect(() => {
@@ -173,8 +193,8 @@ export function Navbar() {
     const dialog = e.currentTarget;
     const focusables = Array.from(
       dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
     ).filter((el) => el.offsetParent !== null);
     if (focusables.length === 0) {
       e.preventDefault();
@@ -390,18 +410,22 @@ export function Navbar() {
                     <Keyboard className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white font-display">Keyboard Shortcuts</h3>
-                    <p className="text-xs text-slate-400">Navigate the interactive explainer with speed</p>
+                    <h3 className="text-base font-bold text-white font-display">
+                      Keyboard Shortcuts
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Navigate the interactive explainer with speed
+                    </p>
                   </div>
                 </div>
-                  <button
-                    ref={closeBtnRef}
-                    onClick={() => setShortcutsModalOpen(false)}
-                    aria-label="Close keyboard shortcuts"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 hover:bg-white/10"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+                <button
+                  ref={closeBtnRef}
+                  onClick={() => setShortcutsModalOpen(false)}
+                  aria-label="Close keyboard shortcuts"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white bg-white/5 hover:bg-white/10"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
               <div className="space-y-2.5 text-xs">
@@ -412,7 +436,7 @@ export function Navbar() {
                   { keys: ["M"], desc: "Jump to Mathematical Addendum" },
                   { keys: ["T"], desc: "Scroll smoothly to top of page" },
                   { keys: ["?"], desc: "Toggle this keyboard shortcuts dialog" },
-                  { keys: ["Esc"], desc: "Close open dialog or drawer" }
+                  { keys: ["Esc"], desc: "Close open dialog or drawer" },
                 ].map((item, idx) => (
                   <div
                     key={idx}
@@ -434,7 +458,11 @@ export function Navbar() {
               </div>
 
               <div className="pt-2 text-center text-[0.7rem] text-slate-500">
-                Tip: Press <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/10 font-mono text-slate-400">Esc</kbd> anytime to dismiss.
+                Tip: Press{" "}
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/10 font-mono text-slate-400">
+                  Esc
+                </kbd>{" "}
+                anytime to dismiss.
               </div>
             </motion.div>
           </div>
@@ -481,9 +509,7 @@ export function Navbar() {
                   <span className="text-[0.65rem] font-bold uppercase tracking-wider text-cyan-300 block">
                     Flagship 1
                   </span>
-                  <span className="text-sm font-bold text-white block mt-0.5">
-                    G1 Walking
-                  </span>
+                  <span className="text-sm font-bold text-white block mt-0.5">G1 Walking</span>
                   <span className="text-[0.7rem] text-cyan-200/70 block mt-1">
                     5,040-D Whole-Body
                   </span>
@@ -497,9 +523,7 @@ export function Navbar() {
                   <span className="text-[0.65rem] font-bold uppercase tracking-wider text-orange-300 block">
                     Flagship 2
                   </span>
-                  <span className="text-sm font-bold text-white block mt-0.5">
-                    iiwa 7 Arm
-                  </span>
+                  <span className="text-sm font-bold text-white block mt-0.5">iiwa 7 Arm</span>
                   <span className="text-[0.7rem] text-orange-200/70 block mt-1">
                     128-D Household
                   </span>
@@ -534,7 +558,8 @@ export function Navbar() {
                   <span className="font-bold text-white font-display">Run the Live WASM Demo</span>
                 </div>
                 <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                  Execute SIMD WebAssembly optimization kernels with real-time 2D and 3D phase-space visualization directly in your browser.
+                  Execute SIMD WebAssembly optimization kernels with real-time 2D and 3D phase-space
+                  visualization directly in your browser.
                 </p>
                 <a
                   href="#live-demo"

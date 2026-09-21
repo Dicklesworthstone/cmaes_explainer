@@ -23,7 +23,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const TEMPLATE_PATH = resolve(__dirname, "../../scripts/perf/sota-rubric.template.md");
@@ -53,7 +53,10 @@ function parseScores(markdown: string): ScoreRow[] {
       inScores = false;
       continue;
     }
-    const cells = line.split("|").map((c) => c.trim()).filter((c) => c.length > 0);
+    const cells = line
+      .split("|")
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
     if (cells.length < 6) continue;
     const parseScore = (raw: string): number => {
       const match = raw.match(/^(\d+)/);

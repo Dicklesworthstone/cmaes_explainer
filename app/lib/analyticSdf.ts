@@ -40,7 +40,11 @@ export interface HeightfieldData {
 /**
  * Exact Sphere SDF.
  */
-export function sdfSphere(p: [number, number, number], center: [number, number, number], radius: number): SDFEvaluation {
+export function sdfSphere(
+  p: [number, number, number],
+  center: [number, number, number],
+  radius: number,
+): SDFEvaluation {
   const dx = p[0] - center[0];
   const dy = p[1] - center[1];
   const dz = p[2] - center[2];
@@ -86,9 +90,15 @@ export function sdfBox(
 
   // Compute gradient using finite differences or analytical pieces
   const eps = 1e-5;
-  const dx = (evalBoxDist(px + eps, py, pz, halfExtents) - evalBoxDist(px - eps, py, pz, halfExtents)) / (2 * eps);
-  const dy = (evalBoxDist(px, py + eps, pz, halfExtents) - evalBoxDist(px, py - eps, pz, halfExtents)) / (2 * eps);
-  const dz = (evalBoxDist(px, py, pz + eps, halfExtents) - evalBoxDist(px, py, pz - eps, halfExtents)) / (2 * eps);
+  const dx =
+    (evalBoxDist(px + eps, py, pz, halfExtents) - evalBoxDist(px - eps, py, pz, halfExtents)) /
+    (2 * eps);
+  const dy =
+    (evalBoxDist(px, py + eps, pz, halfExtents) - evalBoxDist(px, py - eps, pz, halfExtents)) /
+    (2 * eps);
+  const dz =
+    (evalBoxDist(px, py, pz + eps, halfExtents) - evalBoxDist(px, py, pz - eps, halfExtents)) /
+    (2 * eps);
 
   const gLen = Math.hypot(dx, dy, dz) || 1;
   const normal: [number, number, number] = [dx / gLen, dy / gLen, dz / gLen];
@@ -186,9 +196,18 @@ export function sdfCylinder(
 
   // Gradients
   const eps = 1e-5;
-  const dX = (evalCylDist(px + eps, py, pz, radius, height) - evalCylDist(px - eps, py, pz, radius, height)) / (2 * eps);
-  const dY = (evalCylDist(px, py + eps, pz, radius, height) - evalCylDist(px, py - eps, pz, radius, height)) / (2 * eps);
-  const dZ = (evalCylDist(px, py, pz + eps, radius, height) - evalCylDist(px, py, pz - eps, radius, height)) / (2 * eps);
+  const dX =
+    (evalCylDist(px + eps, py, pz, radius, height) -
+      evalCylDist(px - eps, py, pz, radius, height)) /
+    (2 * eps);
+  const dY =
+    (evalCylDist(px, py + eps, pz, radius, height) -
+      evalCylDist(px, py - eps, pz, radius, height)) /
+    (2 * eps);
+  const dZ =
+    (evalCylDist(px, py, pz + eps, radius, height) -
+      evalCylDist(px, py, pz - eps, radius, height)) /
+    (2 * eps);
 
   const gLen = Math.hypot(dX, dY, dZ) || 1;
   return { distance, normal: [dX / gLen, dY / gLen, dZ / gLen], gradient: [dX, dY, dZ] };
@@ -257,7 +276,11 @@ export function sdfPlane(
 ): SDFEvaluation {
   const dot = p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2];
   const distance = dot + offset;
-  return { distance, normal: [normal[0], normal[1], normal[2]], gradient: [normal[0], normal[1], normal[2]] };
+  return {
+    distance,
+    normal: [normal[0], normal[1], normal[2]],
+    gradient: [normal[0], normal[1], normal[2]],
+  };
 }
 
 /**
@@ -321,7 +344,7 @@ export function sdfHeightfield(
  */
 export function smin(a: number, b: number, k = 0.1): number {
   if (k <= 0) return Math.min(a, b);
-  const h = Math.max(0, Math.min(1, 0.5 + 0.5 * (b - a) / k));
+  const h = Math.max(0, Math.min(1, 0.5 + (0.5 * (b - a)) / k));
   return b * (1 - h) + a * h - k * h * (1 - h);
 }
 

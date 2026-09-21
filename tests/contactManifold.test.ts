@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type ContactPoint,
   collideBoxBox,
   collideSphereBox,
   collideSphereSphere,
   computeTangentBasis,
-  type ContactPoint,
   type RigidBodyState,
   resolveContactImpulse,
 } from "../app/lib/contactManifold";
@@ -35,7 +35,8 @@ describe("Contact Manifold & Penetration Depth", () => {
       expect(dotN2).toBeCloseTo(0.0, 4);
 
       // Tangents must be mutually orthogonal
-      const dot12 = tangent1[0] * tangent2[0] + tangent1[1] * tangent2[1] + tangent1[2] * tangent2[2];
+      const dot12 =
+        tangent1[0] * tangent2[0] + tangent1[1] * tangent2[1] + tangent1[2] * tangent2[2];
       expect(dot12).toBeCloseTo(0.0, 4);
     }
   });
@@ -76,7 +77,11 @@ describe("Contact Manifold & Penetration Depth", () => {
       angularVelocity: [0, 0, 0],
       mass: 2.0,
       invMass: 0.5,
-      invInertiaWorld: [[0.5, 0, 0], [0, 0.5, 0], [0, 0, 0.5]],
+      invInertiaWorld: [
+        [0.5, 0, 0],
+        [0, 0.5, 0],
+        [0, 0, 0.5],
+      ],
     };
 
     const bodyB: RigidBodyState = {
@@ -85,7 +90,11 @@ describe("Contact Manifold & Penetration Depth", () => {
       angularVelocity: [0, 0, 0],
       mass: 1e9,
       invMass: 0,
-      invInertiaWorld: [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+      invInertiaWorld: [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ],
     };
 
     const contact: ContactPoint = {

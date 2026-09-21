@@ -17,7 +17,7 @@
 // The same gate is used by G1WalkingFlagship.post() and the
 // HouseholdArmFlagship.post() and selectTask() paths. The test
 // verifies the gate logic that all three share.
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 interface PendingMessage {
   type: string;
@@ -50,8 +50,12 @@ function makeGate(worker: { postMessage: (m: PendingMessage) => void }) {
     for (const l of listeners) l(busy);
   }
 
-  function getBusy() { return busy; }
-  function isInFlight() { return inFlightRef.current; }
+  function getBusy() {
+    return busy;
+  }
+  function isInFlight() {
+    return inFlightRef.current;
+  }
   function onChange(fn: (mode: "preview" | "optimize" | "compare" | null) => void) {
     listeners.push(fn);
   }
@@ -62,12 +66,16 @@ function makeGate(worker: { postMessage: (m: PendingMessage) => void }) {
 describe("post() single-flight gate", () => {
   it("rejects the second of two synchronous post() calls", () => {
     const posted: PendingMessage[] = [];
-    const gate = makeGate({ postMessage: (m) => { posted.push(m); } });
+    const gate = makeGate({
+      postMessage: (m) => {
+        posted.push(m);
+      },
+    });
 
     const a = gate.post({ type: "optimize", family: "lm-cma", generations: 16 }, "optimize");
     const b = gate.post({ type: "optimize", family: "separable", generations: 16 }, "optimize");
 
-    expect(a).toBe(true);  // first call accepted
+    expect(a).toBe(true); // first call accepted
     expect(b).toBe(false); // second call rejected by the synchronous ref
     expect(posted.length).toBe(1);
     expect(posted[0]?.family).toBe("lm-cma");
@@ -77,7 +85,11 @@ describe("post() single-flight gate", () => {
 
   it("accepts a new post() after the previous one releases", () => {
     const posted: PendingMessage[] = [];
-    const gate = makeGate({ postMessage: (m) => { posted.push(m); } });
+    const gate = makeGate({
+      postMessage: (m) => {
+        posted.push(m);
+      },
+    });
 
     gate.post({ type: "preview" }, "preview");
     expect(gate.isInFlight()).toBe(true);
@@ -93,7 +105,11 @@ describe("post() single-flight gate", () => {
     // This is the exact bug: busy is React state, async. Two clicks in the
     // same tick both see busy === null. The ref gate is what prevents it.
     const posted: PendingMessage[] = [];
-    const gate = makeGate({ postMessage: (m) => { posted.push(m); } });
+    const gate = makeGate({
+      postMessage: (m) => {
+        posted.push(m);
+      },
+    });
 
     // Simulate the React render cycle: setBusy(mode) is queued, not applied.
     // The ref updates synchronously.
@@ -113,10 +129,10 @@ describe("post() single-flight gate", () => {
 
     gate.post({ type: "preview" }, "preview"); // [preview]
     gate.post({ type: "optimize" }, "optimize"); // rejected, no event
-    gate.post({ type: "compare" }, "compare");   // rejected, no event
-    gate.release();                              // [null]
+    gate.post({ type: "compare" }, "compare"); // rejected, no event
+    gate.release(); // [null]
     gate.post({ type: "optimize" }, "optimize"); // [optimize]
-    gate.release();                              // [null]
+    gate.release(); // [null]
 
     expect(events).toEqual(["preview", null, "optimize", null]);
   });
@@ -126,7 +142,11 @@ describe("post() single-flight gate", () => {
     // the same ref. The main thread uses the same `busy` boolean for all
     // three modes (see G1WalkingFlagship.tsx), so the gate is shared.
     const posted: PendingMessage[] = [];
-    const gate = makeGate({ postMessage: (m) => { posted.push(m); } });
+    const gate = makeGate({
+      postMessage: (m) => {
+        posted.push(m);
+      },
+    });
 
     gate.post({ type: "optimize", family: "lm-cma" }, "optimize");
     const previewWhileOptimize = gate.post({ type: "preview" }, "preview");
@@ -151,7 +171,9 @@ describe("selectTask() gate (HouseholdArmFlagship)", () => {
       posted.push({ type: "preview", challenge: task });
       return true;
     }
-    function release() { inFlightRef.current = false; }
+    function release() {
+      inFlightRef.current = false;
+    }
     return { selectTask, release, getPosted: () => posted };
   }
 

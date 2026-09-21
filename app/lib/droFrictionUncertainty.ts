@@ -228,13 +228,10 @@ function syntheticSamples(
   const samples: FrictionSample[] = [];
   for (let index = 0; index < sampleCount; index += 1) {
     // Uniform perturbation: -15% to +15% of the point estimate.
-    const muK = point.kineticFriction * (1.0 + (rng() - 0.5) * 0.30);
+    const muK = point.kineticFriction * (1.0 + (rng() - 0.5) * 0.3);
     // Restitution perturbation: +/-0.10 ABSOLUTE (not relative),
     // clamped to the physical range [0, 1].
-    const e = Math.max(
-      0.0,
-      Math.min(1.0, point.restitution + (rng() - 0.5) * 0.20),
-    );
+    const e = Math.max(0.0, Math.min(1.0, point.restitution + (rng() - 0.5) * 0.2));
     samples.push({ muK, e, source: "synthetic-perturbation" });
   }
   return samples;
@@ -335,19 +332,12 @@ export function getFrictionDistribution(
  * @param confidence  The confidence level, in (0, 1). Default 0.95.
  * @returns  The heuristic Wasserstein-1 ball radius.
  */
-export function wassersteinBallRadius(
-  sampleCount: number,
-  confidence: number = 0.95,
-): number {
+export function wassersteinBallRadius(sampleCount: number, confidence: number = 0.95): number {
   if (!Number.isFinite(sampleCount) || sampleCount < 1) {
-    throw new Error(
-      `wassersteinBallRadius: sampleCount must be >= 1 (got ${sampleCount})`,
-    );
+    throw new Error(`wassersteinBallRadius: sampleCount must be >= 1 (got ${sampleCount})`);
   }
   if (confidence <= 0.0 || confidence >= 1.0) {
-    throw new Error(
-      `wassersteinBallRadius: confidence must be in (0, 1) (got ${confidence})`,
-    );
+    throw new Error(`wassersteinBallRadius: confidence must be in (0, 1) (got ${confidence})`);
   }
   const tailMass = 1.0 - confidence;
   const C = Math.sqrt(2.0 * Math.log(1.0 / tailMass));
@@ -382,10 +372,7 @@ export function wassersteinBallRadius(
  *               the worst 10% of samples).
  * @returns  The CVaR value.
  */
-export function cvarUpper(
-  samples: ReadonlyArray<number>,
-  alpha: number = 0.10,
-): number {
+export function cvarUpper(samples: ReadonlyArray<number>, alpha: number = 0.1): number {
   if (samples.length === 0) {
     throw new Error("cvarUpper: samples must be non-empty");
   }
@@ -466,7 +453,7 @@ export function evaluateRobustPair(
   if (dist === null) {
     return null;
   }
-  const alpha = options.alpha ?? 0.10;
+  const alpha = options.alpha ?? 0.1;
   const confidence = options.confidence ?? 0.95;
   const sampleCount = dist.samples.length;
   const radius = options.forceRadius ?? wassersteinBallRadius(sampleCount, confidence);
@@ -502,7 +489,7 @@ export function evaluateRobustPair(
   const worstCase: MaterialPairProperties = {
     ...point,
     kineticFriction: worstMuK,
-    staticFriction: worstMuK * 1.20,
+    staticFriction: worstMuK * 1.2,
     restitution: worstE,
   };
   return {
@@ -513,7 +500,6 @@ export function evaluateRobustPair(
     provenance: dist.provenance,
   };
 }
-
 
 // ---------------------------------------------------------------------------
 // Diagnostics

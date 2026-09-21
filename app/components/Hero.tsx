@@ -1,12 +1,22 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wand2, Cpu, Sparkles, Compass, ArrowDownRight, Layers, BarChart3, Award, ExternalLink } from "lucide-react";
-import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { CovarianceScene } from "./CovarianceScene";
+import {
+  ArrowDownRight,
+  Award,
+  BarChart3,
+  Compass,
+  Cpu,
+  ExternalLink,
+  Layers,
+  Sparkles,
+  Wand2,
+} from "lucide-react";
+import { useEffect, useRef } from "react";
 import { usePrefersReducedMotion } from "../hooks/usePrefersReducedMotion";
+import { CovarianceScene } from "./CovarianceScene";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -34,9 +44,9 @@ export function Hero() {
           trigger: el,
           start: "top top",
           end: "bottom+=400 top",
-          scrub: true
-        }
-      }
+          scrub: true,
+        },
+      },
     );
 
     return () => {
@@ -89,8 +99,11 @@ export function Hero() {
               className="text-balance max-w-xl"
             >
               When gradients are cheap and smooth, Adam and SGD excel. But when gradients{" "}
-              <strong className="text-sky-200 font-semibold">do not exist, suffer from severe noise, or cost hours per evaluation</strong>
-              , such as in aircraft CFD, suspension bridge FEA, or discrete neural architecture search, CMA-ES is the standard workhorse.
+              <strong className="text-sky-200 font-semibold">
+                do not exist, suffer from severe noise, or cost hours per evaluation
+              </strong>
+              , such as in aircraft CFD, suspension bridge FEA, or discrete neural architecture
+              search, CMA-ES is the standard workhorse.
             </motion.p>
 
             <motion.p
@@ -99,7 +112,11 @@ export function Hero() {
               transition={{ duration: 0.75, delay: 0.25 }}
               className="text-balance max-w-xl text-sm sm:text-base text-slate-400"
             >
-              Instead of stepping a single point downhill, CMA-ES maintains a <strong className="text-slate-200">Gaussian search distribution</strong>, shifting its mean toward better samples and bending its covariance matrix toward a multiple of the objective&apos;s inverse Hessian, discovering landscape curvature without calculating derivatives.
+              Instead of stepping a single point downhill, CMA-ES maintains a{" "}
+              <strong className="text-slate-200">Gaussian search distribution</strong>, shifting its
+              mean toward better samples and bending its covariance matrix toward a multiple of the
+              objective&apos;s inverse Hessian, discovering landscape curvature without calculating
+              derivatives.
             </motion.p>
           </div>
 
@@ -163,7 +180,8 @@ export function Hero() {
                 <span>Rank Invariant</span>
               </div>
               <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
-                Invariant to strictly monotone transformations <code className="font-mono text-sky-300 text-[0.65rem]">g(f(x))</code>.
+                Invariant to strictly monotone transformations{" "}
+                <code className="font-mono text-sky-300 text-[0.65rem]">g(f(x))</code>.
               </div>
             </div>
 
@@ -173,17 +191,22 @@ export function Hero() {
                 <span>Affine Invariant</span>
               </div>
               <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
-                Identical trajectories under affine maps <code className="font-mono text-emerald-300 text-[0.65rem]">Ax + b</code> once the initial distribution is transformed to match.
+                Identical trajectories under affine maps{" "}
+                <code className="font-mono text-emerald-300 text-[0.65rem]">Ax + b</code> once the
+                initial distribution is transformed to match.
               </div>
             </div>
 
             <div className="glass-card p-3 border-white/5 hover:border-amber-500/30 transition-colors">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
                 <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span>Learns <code className="font-mono font-bold text-amber-300">H⁻¹</code></span>
+                <span>
+                  Learns <code className="font-mono font-bold text-amber-300">H⁻¹</code>
+                </span>
               </div>
               <div className="mt-1 text-[0.72rem] text-slate-400 leading-snug">
-                Covariance <code className="font-mono text-amber-300 text-[0.65rem]">C</code> approaches a multiple of the inverse Hessian without derivatives.
+                Covariance <code className="font-mono text-amber-300 text-[0.65rem]">C</code>{" "}
+                approaches a multiple of the inverse Hessian without derivatives.
               </div>
             </div>
 
@@ -208,7 +231,7 @@ export function Hero() {
         >
           <div className="relative aspect-square max-h-[540px] w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60 shadow-[0_20px_70px_rgba(0,0,0,0.7)] backdrop-blur-md">
             <CovarianceScene />
-            
+
             {/* Soft edge vignette */}
             <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(2,6,23,0.8)]" />
           </div>

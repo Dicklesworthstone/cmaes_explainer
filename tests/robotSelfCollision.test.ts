@@ -95,8 +95,9 @@ describe("Robot Self-Collision Detection Engine", () => {
     const res = checkArmSelfCollision(arm);
     expect(res.hasCollision).toBe(true);
     const collidingWithBase = res.collidingPairs.some(
-      (p) => (p.linkA === "link0_base" && p.linkB === "link6_gripper") ||
-             (p.linkA === "link6_gripper" && p.linkB === "link0_base")
+      (p) =>
+        (p.linkA === "link0_base" && p.linkB === "link6_gripper") ||
+        (p.linkA === "link6_gripper" && p.linkB === "link0_base"),
     );
     expect(collidingWithBase).toBe(true);
   });

@@ -24,10 +24,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
-import {
-  GaitTransformerPolicy,
-  loadGaitTransformerWeights,
-} from "../app/lib/gaitTransformer";
+import { GaitTransformerPolicy, loadGaitTransformerWeights } from "../app/lib/gaitTransformer";
 
 const WEIGHTS_IN = "public/robots/g1/transformer/g1-ablation-weights-v2.bin";
 const WEIGHTS_OUT = "public/robots/g1/transformer/g1-ablation-weights-v3.bin";

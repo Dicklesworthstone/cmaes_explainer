@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   decodeFrankenRobotsNativeCommand,
+  type FrankenRobotsLab,
+  type FrankenRobotsNativeCommand,
   installFrankenRobotsNativeCommandHandler,
   reportFrankenRobotsEngineState,
   reportFrankenRobotsTraceState,
-  type FrankenRobotsLab,
-  type FrankenRobotsNativeCommand,
 } from "./frankenrobotsBridge";
 
 describe("FrankenRobots native command contract", () => {
@@ -44,9 +44,7 @@ describe("FrankenRobots native command contract", () => {
     expect(
       decodeFrankenRobotsNativeCommand({ ...selection, task: "dancing" }, "humanoid"),
     ).toBeNull();
-    expect(
-      decodeFrankenRobotsNativeCommand({ ...valid, task: "walking" }, "humanoid"),
-    ).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...valid, task: "walking" }, "humanoid")).toBeNull();
   });
 
   test("accepts strict challenge and optimizer-family selections", () => {
@@ -66,17 +64,15 @@ describe("FrankenRobots native command contract", () => {
       family: "lm-ma",
     } as const;
     expect(decodeFrankenRobotsNativeCommand(scalableFamily, "humanoid")).toEqual(scalableFamily);
-    expect(
-      decodeFrankenRobotsNativeCommand({ ...scalableFamily, lab: "arm" }, "arm"),
-    ).toEqual({ ...scalableFamily, lab: "arm" });
+    expect(decodeFrankenRobotsNativeCommand({ ...scalableFamily, lab: "arm" }, "arm")).toEqual({
+      ...scalableFamily,
+      lab: "arm",
+    });
     expect(
       decodeFrankenRobotsNativeCommand({ ...scalableFamily, family: "full" }, "humanoid"),
     ).toBeNull();
     expect(
-      decodeFrankenRobotsNativeCommand(
-        { ...scalableFamily, lab: "arm", family: "full" },
-        "arm",
-      ),
+      decodeFrankenRobotsNativeCommand({ ...scalableFamily, lab: "arm", family: "full" }, "arm"),
     ).not.toBeNull();
     expect(
       decodeFrankenRobotsNativeCommand({ ...challenge, task: "walking" }, "humanoid"),
@@ -99,14 +95,16 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...seek, speed: 1 }, "humanoid")).toBeNull();
 
     for (const speed of [0.25, 0.5, 1, 2] as const) {
-      const selection = { ...valid, commandId: `speed-${speed}`, command: "set-speed", speed } as const;
+      const selection = {
+        ...valid,
+        commandId: `speed-${speed}`,
+        command: "set-speed",
+        speed,
+      } as const;
       expect(decodeFrankenRobotsNativeCommand(selection, "humanoid")).toEqual(selection);
     }
     expect(
-      decodeFrankenRobotsNativeCommand(
-        { ...valid, command: "set-speed", speed: 4 },
-        "humanoid",
-      ),
+      decodeFrankenRobotsNativeCommand({ ...valid, command: "set-speed", speed: 4 }, "humanoid"),
     ).toBeNull();
 
     const humanoidCamera = {
@@ -165,10 +163,7 @@ describe("FrankenRobots native command contract", () => {
     } as const;
     expect(decodeFrankenRobotsNativeCommand(frictionCones, "arm")).toEqual(frictionCones);
     expect(
-      decodeFrankenRobotsNativeCommand(
-        { ...frictionCones, receiptLens: "owner-receipt" },
-        "arm",
-      ),
+      decodeFrankenRobotsNativeCommand({ ...frictionCones, receiptLens: "owner-receipt" }, "arm"),
     ).toBeNull();
   });
 
@@ -180,9 +175,10 @@ describe("FrankenRobots native command contract", () => {
       seedIndex: 1,
     } as const;
     expect(decodeFrankenRobotsNativeCommand(seed, "humanoid")).toEqual(seed);
-    expect(
-      decodeFrankenRobotsNativeCommand({ ...seed, lab: "arm" }, "arm"),
-    ).toEqual({ ...seed, lab: "arm" });
+    expect(decodeFrankenRobotsNativeCommand({ ...seed, lab: "arm" }, "arm")).toEqual({
+      ...seed,
+      lab: "arm",
+    });
     expect(decodeFrankenRobotsNativeCommand({ ...seed, seedIndex: 3 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand({ ...seed, seedIndex: 1.5 }, "humanoid")).toBeNull();
 
@@ -193,11 +189,11 @@ describe("FrankenRobots native command contract", () => {
       sigma: 0.0005,
     } as const;
     expect(decodeFrankenRobotsNativeCommand(sigma, "humanoid")).toEqual(sigma);
-    expect(
-      decodeFrankenRobotsNativeCommand({ ...sigma, lab: "arm" }, "arm"),
-    ).toBeNull();
+    expect(decodeFrankenRobotsNativeCommand({ ...sigma, lab: "arm" }, "arm")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand({ ...sigma, sigma: 0.0001 }, "humanoid")).toBeNull();
-    expect(decodeFrankenRobotsNativeCommand({ ...sigma, sigma: Number.NaN }, "humanoid")).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...sigma, sigma: Number.NaN }, "humanoid"),
+    ).toBeNull();
     expect(
       decodeFrankenRobotsNativeCommand({ ...sigma, secretOverride: true }, "humanoid"),
     ).toBeNull();
@@ -210,7 +206,9 @@ describe("FrankenRobots native command contract", () => {
     expect(decodeFrankenRobotsNativeCommand({ ...valid, schemaVersion: 2 }, "humanoid")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(valid, "arm")).toBeNull();
     expect(decodeFrankenRobotsNativeCommand({ ...valid, command: "eval" }, "humanoid")).toBeNull();
-    expect(decodeFrankenRobotsNativeCommand({ ...valid, commandId: "bad id" }, "humanoid")).toBeNull();
+    expect(
+      decodeFrankenRobotsNativeCommand({ ...valid, commandId: "bad id" }, "humanoid"),
+    ).toBeNull();
     expect(decodeFrankenRobotsNativeCommand(null, "humanoid")).toBeNull();
   });
 
@@ -220,7 +218,9 @@ describe("FrankenRobots native command contract", () => {
     const fakeWindow = {
       webkit: {
         messageHandlers: {
-          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+          frankenrobots: {
+            postMessage: (message: Record<string, unknown>) => messages.push(message),
+          },
         },
       },
     };
@@ -231,9 +231,11 @@ describe("FrankenRobots native command contract", () => {
         invocations += 1;
         return { accepted: true, detail: "Owner run accepted." };
       });
-      const receive = (fakeWindow as typeof fakeWindow & {
-        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-      }).__frankenrobotsReceiveNativeCommand;
+      const receive = (
+        fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }
+      ).__frankenrobotsReceiveNativeCommand;
       expect(receive(valid)).toBe(true);
       expect(receive(valid)).toBe(true);
       expect(invocations).toBe(1);
@@ -249,9 +251,11 @@ describe("FrankenRobots native command contract", () => {
         replacementInvocations += 1;
         return { accepted: true, detail: "This must not replace the first receipt." };
       });
-      const receiveReplacement = (fakeWindow as typeof fakeWindow & {
-        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-      }).__frankenrobotsReceiveNativeCommand;
+      const receiveReplacement = (
+        fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }
+      ).__frankenrobotsReceiveNativeCommand;
       expect(receiveReplacement(valid)).toBe(true);
       expect(replacementInvocations).toBe(0);
       expect(messages).toHaveLength(3);
@@ -273,7 +277,9 @@ describe("FrankenRobots native command contract", () => {
     const fakeWindow = {
       webkit: {
         messageHandlers: {
-          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+          frankenrobots: {
+            postMessage: (message: Record<string, unknown>) => messages.push(message),
+          },
         },
       },
     };
@@ -284,9 +290,11 @@ describe("FrankenRobots native command contract", () => {
         invocations += 1;
         return { accepted: true, detail: "Owner mutation accepted." };
       });
-      const receive = (fakeWindow as typeof fakeWindow & {
-        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-      }).__frankenrobotsReceiveNativeCommand;
+      const receive = (
+        fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }
+      ).__frankenrobotsReceiveNativeCommand;
       const first = { ...valid, commandId: "collision-one" } as const;
       const conflicting = {
         ...valid,
@@ -336,9 +344,11 @@ describe("FrankenRobots native command contract", () => {
         invocations += 1;
         return { accepted: true, detail: "Owner mutation accepted." };
       });
-      const receive = (fakeWindow as typeof fakeWindow & {
-        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-      }).__frankenrobotsReceiveNativeCommand;
+      const receive = (
+        fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }
+      ).__frankenrobotsReceiveNativeCommand;
       const commands = Array.from({ length: 40 }, (_, index) => ({
         ...valid,
         commandId: `long-route-${index}`,
@@ -361,7 +371,9 @@ describe("FrankenRobots native command contract", () => {
     const fakeWindow = {
       webkit: {
         messageHandlers: {
-          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+          frankenrobots: {
+            postMessage: (message: Record<string, unknown>) => messages.push(message),
+          },
         },
       },
     };
@@ -409,9 +421,11 @@ describe("FrankenRobots native command contract", () => {
           invocations += 1;
           return { accepted: true, detail: `Accepted ${item.command.command}.` };
         });
-        const receive = (fakeWindow as typeof fakeWindow & {
-          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-        }).__frankenrobotsReceiveNativeCommand;
+        const receive = (
+          fakeWindow as typeof fakeWindow & {
+            __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+          }
+        ).__frankenrobotsReceiveNativeCommand;
         const command = { ...item.command, commandId: `mutation-${index}` };
         const collision = {
           ...valid,
@@ -443,7 +457,9 @@ describe("FrankenRobots native command contract", () => {
     const fakeWindow = {
       webkit: {
         messageHandlers: {
-          frankenrobots: { postMessage: (message: Record<string, unknown>) => messages.push(message) },
+          frankenrobots: {
+            postMessage: (message: Record<string, unknown>) => messages.push(message),
+          },
         },
       },
     };
@@ -453,9 +469,11 @@ describe("FrankenRobots native command contract", () => {
         accepted: false,
         detail: "An owner request is already running.",
       }));
-      const receive = (fakeWindow as typeof fakeWindow & {
-        __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
-      }).__frankenrobotsReceiveNativeCommand;
+      const receive = (
+        fakeWindow as typeof fakeWindow & {
+          __frankenrobotsReceiveNativeCommand: (payload: unknown) => boolean;
+        }
+      ).__frankenrobotsReceiveNativeCommand;
       const refused = { ...valid, commandId: "9B84A8A2-refused" } as const;
       expect(receive(refused)).toBe(true);
       expect(messages).toHaveLength(1);

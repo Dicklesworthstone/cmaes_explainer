@@ -32,8 +32,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/featherstoneDynamics.ts",
     testFile: "tests/featherstoneDynamics.test.ts",
     citation: "Roy Featherstone, Rigid Body Dynamics Algorithms (Springer 2008)",
-    mathFormula: "\\mathbf{I}^A_i = \\mathbf{I}_i + \\sum_{j \\in \\mu(i)} \\left( \\mathbf{I}^A_j - \\frac{\\mathbf{I}^A_j \\mathbf{s}_j \\mathbf{s}_j^T \\mathbf{I}^A_j}{\\mathbf{s}_j^T \\mathbf{I}^A_j \\mathbf{s}_j} \\right)",
-    claim: "TypeScript articulated-dynamics helper. Arbitrary-axis correctness and agreement with the deployed Rust owner are not established by this entry.",
+    mathFormula:
+      "\\mathbf{I}^A_i = \\mathbf{I}_i + \\sum_{j \\in \\mu(i)} \\left( \\mathbf{I}^A_j - \\frac{\\mathbf{I}^A_j \\mathbf{s}_j \\mathbf{s}_j^T \\mathbf{I}^A_j}{\\mathbf{s}_j^T \\mathbf{I}^A_j \\mathbf{s}_j} \\right)",
+    claim:
+      "TypeScript articulated-dynamics helper. Arbitrary-axis correctness and agreement with the deployed Rust owner are not established by this entry.",
     status: "implemented",
   },
   {
@@ -44,8 +46,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/rollingFurniturePieces.ts",
     testFile: "tests/rollingFurniturePieces.test.ts",
     citation: "Goyal, Ruina, Papadopoulos, Planar Sliding with Dry Friction (Wear 1991)",
-    mathFormula: "F_{\\text{roll}} = -c_{rr} F_N \\text{sgn}(v_{\\text{long}}), \\quad \\tau_{\\text{swivel}} = -d_{\\text{trail}} F_{\\text{lat}} - c_{\\text{damp}} \\dot{\\theta}",
-    claim: "Standalone rolling-friction and caster-trail model. This does not show that the G1 owner simulates movable household furniture.",
+    mathFormula:
+      "F_{\\text{roll}} = -c_{rr} F_N \\text{sgn}(v_{\\text{long}}), \\quad \\tau_{\\text{swivel}} = -d_{\\text{trail}} F_{\\text{lat}} - c_{\\text{damp}} \\dot{\\theta}",
+    claim:
+      "Standalone rolling-friction and caster-trail model. This does not show that the G1 owner simulates movable household furniture.",
     status: "implemented",
   },
   {
@@ -55,9 +59,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "physics",
     sourceFile: "app/lib/lcpSolver.ts",
     testFile: "tests/lcpSolver.test.ts",
-    citation: "Erleben, Numerical Methods for Linear Complementarity Problems in Physics-Based Animation (2013)",
-    mathFormula: "\\lambda_i^{k+1} = \\text{proj}_{\\mathcal{K}_i} \\left( \\lambda_i^k - \\omega \\frac{\\mathbf{A}_{ii}^{-1} (\\mathbf{A} \\boldsymbol{\\lambda}^k + \\mathbf{b})_i}{1 + \\epsilon} \\right)",
-    claim: "Iterative projected contact solver with an eight-sided friction approximation. Convergence depends on the problem, tolerances and iteration budget.",
+    citation:
+      "Erleben, Numerical Methods for Linear Complementarity Problems in Physics-Based Animation (2013)",
+    mathFormula:
+      "\\lambda_i^{k+1} = \\text{proj}_{\\mathcal{K}_i} \\left( \\lambda_i^k - \\omega \\frac{\\mathbf{A}_{ii}^{-1} (\\mathbf{A} \\boldsymbol{\\lambda}^k + \\mathbf{b})_i}{1 + \\epsilon} \\right)",
+    claim:
+      "Iterative projected contact solver with an eight-sided friction approximation. Convergence depends on the problem, tolerances and iteration budget.",
     status: "implemented",
   },
   {
@@ -67,9 +74,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "physics",
     sourceFile: "app/lib/xpbdSoftBody.ts",
     testFile: "tests/xpbdSoftBody.test.ts",
-    citation: "Macklin et al., XPBD: Position-Based Simulation of Compliant Constrained Dynamics (MIG 2016)",
-    mathFormula: "\\Delta \\lambda = \\frac{-C(\\mathbf{x}) - \\tilde{\\alpha} \\lambda}{\\sum w_i \\|\\nabla C_i\\|^2 + \\tilde{\\alpha}}, \\quad \\tilde{\\alpha} = \\frac{\\alpha}{\\Delta t^2}",
-    claim: "Budgeted compliant-constraint helper for soft objects. Coupled deformation in a flagship owner episode remains a separate integration requirement.",
+    citation:
+      "Macklin et al., XPBD: Position-Based Simulation of Compliant Constrained Dynamics (MIG 2016)",
+    mathFormula:
+      "\\Delta \\lambda = \\frac{-C(\\mathbf{x}) - \\tilde{\\alpha} \\lambda}{\\sum w_i \\|\\nabla C_i\\|^2 + \\tilde{\\alpha}}, \\quad \\tilde{\\alpha} = \\frac{\\alpha}{\\Delta t^2}",
+    claim:
+      "Budgeted compliant-constraint helper for soft objects. Coupled deformation in a flagship owner episode remains a separate integration requirement.",
     status: "implemented",
   },
   {
@@ -79,9 +89,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "physics",
     sourceFile: "app/lib/contactRestitutionIntegrator.ts",
     testFile: "tests/contactRestitutionIntegrator.test.ts",
-    citation: "Hunt & Crossley, Coefficient of Restitution Interpreted as Damping in Vibroimpact (ASME JAM 1975)",
-    mathFormula: "F_N = k_c \\delta^{1.5} + d_c \\delta^{1.5} \\dot{\\delta}, \\quad \\dot{E}_{\\text{total}} \\le 0",
-    claim: "Contact-response helper with velocity thresholds and viscoelastic damping. Energy behavior must be checked for each integration setup.",
+    citation:
+      "Hunt & Crossley, Coefficient of Restitution Interpreted as Damping in Vibroimpact (ASME JAM 1975)",
+    mathFormula:
+      "F_N = k_c \\delta^{1.5} + d_c \\delta^{1.5} \\dot{\\delta}, \\quad \\dot{E}_{\\text{total}} \\le 0",
+    claim:
+      "Contact-response helper with velocity thresholds and viscoelastic damping. Energy behavior must be checked for each integration setup.",
     status: "implemented",
   },
   {
@@ -91,9 +104,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "clipping",
     sourceFile: "app/lib/continuousCollisionDetection.ts",
     testFile: "tests/continuousCollisionDetection.test.ts",
-    citation: "Conservative advancement and signed-distance collision queries; the implementation below is not a validated reproduction of a specific paper.",
-    mathFormula: "t^* = \\min \\{ t \\in [0, 1] \\mid d_{\\text{SDF}}(\\mathbf{x}_0 + t \\mathbf{v} \\Delta t) \\le r_{\\text{body}} \\}",
-    claim: "SDF sweep helper with finite iteration and step limits. It does not establish a universal no-tunneling guarantee or deployed-owner parity.",
+    citation:
+      "Conservative advancement and signed-distance collision queries; the implementation below is not a validated reproduction of a specific paper.",
+    mathFormula:
+      "t^* = \\min \\{ t \\in [0, 1] \\mid d_{\\text{SDF}}(\\mathbf{x}_0 + t \\mathbf{v} \\Delta t) \\le r_{\\text{body}} \\}",
+    claim:
+      "SDF sweep helper with finite iteration and step limits. It does not establish a universal no-tunneling guarantee or deployed-owner parity.",
     status: "implemented",
   },
   {
@@ -104,8 +120,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/multiBodySleepState.ts",
     testFile: "tests/multiBodySleepState.test.ts",
     citation: "Guendelman, Bridson, & Fedkiw, Nonconvex Rigid Bodies with Stacking (SIGGRAPH 2003)",
-    mathFormula: "E_k(t) < E_{\\text{thresh}} \\; \\forall t \\in [t - T_{\\text{dwell}}, t] \\implies \\text{Sleep}, \\quad \\|\\mathbf{J}_{\\text{ext}}\\| \\ge J_{\\text{wake}} \\implies \\text{Wake}",
-    claim: "Energy-threshold and wake-propagation logic for a contact graph. Actual furniture-owner scheduling and performance need episode measurements.",
+    mathFormula:
+      "E_k(t) < E_{\\text{thresh}} \\; \\forall t \\in [t - T_{\\text{dwell}}, t] \\implies \\text{Sleep}, \\quad \\|\\mathbf{J}_{\\text{ext}}\\| \\ge J_{\\text{wake}} \\implies \\text{Wake}",
+    claim:
+      "Energy-threshold and wake-propagation logic for a contact graph. Actual furniture-owner scheduling and performance need episode measurements.",
     status: "implemented",
   },
   {
@@ -116,8 +134,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/kernelPerfProfiler.ts",
     testFile: "tests/kernelPerfProfiler.test.ts",
     citation: "Jain & Chlamtac, The P2 Algorithm for Dynamic Quantile Estimation (CACM 1985)",
-    mathFormula: "t_{\\text{total}} = t_{\\text{broad}} + t_{\\text{narrow}} + t_{\\text{lcp}} + t_{\\text{integ}}, \\quad \\text{Overrun} = t_{\\text{total}} > T_{\\text{budget}}",
-    claim: "Timing aggregation and rolling quantiles for supplied samples. Clock resolution and measured workload are properties of the recording environment.",
+    mathFormula:
+      "t_{\\text{total}} = t_{\\text{broad}} + t_{\\text{narrow}} + t_{\\text{lcp}} + t_{\\text{integ}}, \\quad \\text{Overrun} = t_{\\text{total}} > T_{\\text{budget}}",
+    claim:
+      "Timing aggregation and rolling quantiles for supplied samples. Clock resolution and measured workload are properties of the recording environment.",
     status: "implemented",
   },
   {
@@ -128,8 +148,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/safetyFilterRecovery.ts",
     testFile: "tests/safetyFilterRecovery.test.ts",
     citation: "Ames et al., Control Barrier Functions: Theory and Applications (ECC 2019)",
-    mathFormula: "\\min_{\\mathbf{u}} \\frac{1}{2} \\|\\mathbf{u} - \\mathbf{u}_{\\text{des}}\\|^2 \\quad \\text{s.t.} \\quad \\nabla h(\\mathbf{x})^T \\mathbf{u} + \\gamma h(\\mathbf{x}) \\ge -\\epsilon_{\\text{slack}}",
-    claim: "Three-tier projection and recovery helper. A safe retreat requires a reachable, collision-checked path under the actual robot dynamics.",
+    mathFormula:
+      "\\min_{\\mathbf{u}} \\frac{1}{2} \\|\\mathbf{u} - \\mathbf{u}_{\\text{des}}\\|^2 \\quad \\text{s.t.} \\quad \\nabla h(\\mathbf{x})^T \\mathbf{u} + \\gamma h(\\mathbf{x}) \\ge -\\epsilon_{\\text{slack}}",
+    claim:
+      "Three-tier projection and recovery helper. A safe retreat requires a reachable, collision-checked path under the actual robot dynamics.",
     status: "implemented",
   },
   {
@@ -139,9 +161,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "obstacle-avoidance",
     sourceFile: "app/lib/segmentSafeCbf.ts",
     testFile: "tests/segmentSafeCbf.test.ts",
-    citation: "Corridor-coordinate barrier construction; the cited implementation must be evaluated under its own geometry and dynamics assumptions.",
-    mathFormula: "h_{\\text{lat}}(\\mathbf{x}) = (w_{\\text{half}} - r_{\\text{robot}}) - |\\mathbf{n}_{\\perp} \\cdot (\\mathbf{x} - \\mathbf{a})| \\ge 0",
-    claim: "Planar corridor barrier helper. Full-body doorway clearance and feasible control are not demonstrated by the scalar corridor calculation.",
+    citation:
+      "Corridor-coordinate barrier construction; the cited implementation must be evaluated under its own geometry and dynamics assumptions.",
+    mathFormula:
+      "h_{\\text{lat}}(\\mathbf{x}) = (w_{\\text{half}} - r_{\\text{robot}}) - |\\mathbf{n}_{\\perp} \\cdot (\\mathbf{x} - \\mathbf{a})| \\ge 0",
+    claim:
+      "Planar corridor barrier helper. Full-body doorway clearance and feasible control are not demonstrated by the scalar corridor calculation.",
     status: "implemented",
   },
   {
@@ -151,9 +176,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "obstacle-avoidance",
     sourceFile: "app/lib/learnedCostmap.ts",
     testFile: "tests/learnedCostmap.test.ts",
-    citation: "Tancik et al., Fourier Features Let Networks Learn High Frequency Functions (NeurIPS 2020)",
-    mathFormula: "\\gamma(\\mathbf{x}) = [\\cos(2\\pi \\mathbf{B} \\mathbf{x}), \\sin(2\\pi \\mathbf{B} \\mathbf{x})]^T, \\quad V(\\mathbf{x}) = w_g \\|\\mathbf{x} - \\mathbf{x}_g\\| + w_c \\hat{c}(\\gamma(\\mathbf{x}))",
-    claim: "Fourier-feature MLP prototype. No trained costmap artifact or held-out navigation improvement is supplied by this registry.",
+    citation:
+      "Tancik et al., Fourier Features Let Networks Learn High Frequency Functions (NeurIPS 2020)",
+    mathFormula:
+      "\\gamma(\\mathbf{x}) = [\\cos(2\\pi \\mathbf{B} \\mathbf{x}), \\sin(2\\pi \\mathbf{B} \\mathbf{x})]^T, \\quad V(\\mathbf{x}) = w_g \\|\\mathbf{x} - \\mathbf{x}_g\\| + w_c \\hat{c}(\\gamma(\\mathbf{x}))",
+    claim:
+      "Fourier-feature MLP prototype. No trained costmap artifact or held-out navigation improvement is supplied by this registry.",
     status: "conceptual",
   },
   {
@@ -164,8 +192,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/decorAndSocialObstacles.ts",
     testFile: "tests/decorAndSocialObstacles.test.ts",
     citation: "Helbing & Molnar, Social Force Model for Pedestrian Dynamics (Phys. Rev. E 1995)",
-    mathFormula: "V_{\\text{social}}(\\mathbf{x}) = A \\exp\\left( -\\frac{1}{2} [(\\Delta x / \\sigma_{\\text{fwd}})^2 + (\\Delta z / \\sigma_{\\text{side}})^2] \\right)",
-    claim: "Anisotropic comfort-cost helper for people and pets. A potential value alone does not constrain the trajectory of a deployed robot.",
+    mathFormula:
+      "V_{\\text{social}}(\\mathbf{x}) = A \\exp\\left( -\\frac{1}{2} [(\\Delta x / \\sigma_{\\text{fwd}})^2 + (\\Delta z / \\sigma_{\\text{side}})^2] \\right)",
+    claim:
+      "Anisotropic comfort-cost helper for people and pets. A potential value alone does not constrain the trajectory of a deployed robot.",
     status: "implemented",
   },
   {
@@ -176,8 +206,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/screenSpaceReflections.ts",
     testFile: "tests/screenSpaceReflections.test.ts",
     citation: "Uludag, Hi-Z Screen-Space Cone-Traced Reflections (GPU Pro 5 2014)",
-    mathFormula: "\\mathbf{r} = \\mathbf{v} - 2 (\\mathbf{v} \\cdot \\mathbf{n}) \\mathbf{n}, \\quad F(\\theta) = F_0 + (1 - F_0) (1 - \\cos\\theta)^5",
-    claim: "Depth-buffer reflection helpers and shader code. The registry does not establish that the flagship render pipeline executes this pass.",
+    mathFormula:
+      "\\mathbf{r} = \\mathbf{v} - 2 (\\mathbf{v} \\cdot \\mathbf{n}) \\mathbf{n}, \\quad F(\\theta) = F_0 + (1 - F_0) (1 - \\cos\\theta)^5",
+    claim:
+      "Depth-buffer reflection helpers and shader code. The registry does not establish that the flagship render pipeline executes this pass.",
     status: "implemented",
   },
   {
@@ -188,8 +220,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/volumetricLighting.ts",
     testFile: "tests/volumetricLighting.test.ts",
     citation: "Henyey & Greenstein, Diffuse Radiation in the Galaxy (Astrophys. J. 1941)",
-    mathFormula: "p(\\theta, g) = \\frac{1}{4\\pi} \\frac{1 - g^2}{(1 + g^2 - 2g\\cos\\theta)^{3/2}}, \\quad \\tau(y_0, y_1, L) = \\rho_0 L \\frac{e^{-b(y_0 - y_{\\text{ref}})} - e^{-b(y_1 - y_{\\text{ref}})}}{b(y_1 - y_0)}",
-    claim: "Height-fog integration and scattering helpers. Their presence does not establish a measured volumetric-lighting pass in the flagship.",
+    mathFormula:
+      "p(\\theta, g) = \\frac{1}{4\\pi} \\frac{1 - g^2}{(1 + g^2 - 2g\\cos\\theta)^{3/2}}, \\quad \\tau(y_0, y_1, L) = \\rho_0 L \\frac{e^{-b(y_0 - y_{\\text{ref}})} - e^{-b(y_1 - y_{\\text{ref}})}}{b(y_1 - y_0)}",
+    claim:
+      "Height-fog integration and scattering helpers. Their presence does not establish a measured volumetric-lighting pass in the flagship.",
     status: "implemented",
   },
   {
@@ -199,9 +233,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "graphics",
     sourceFile: "app/lib/emissiveSurfaces.ts",
     testFile: "tests/emissiveSurfaces.test.ts",
-    citation: "Planck, On the Law of Distribution of Energy in the Normal Spectrum (Ann. Phys. 1901)",
-    mathFormula: "B_{\\lambda}(T) = \\frac{2hc^2}{\\lambda^5 \\left(e^{\\frac{hc}{\\lambda k_B T}} - 1\\right)}, \\quad I_{\\text{flame}}(t) = I_0 \\left(0.85 + 0.15 \\sum_{k=1}^3 2^{1-k} \\sin(\\omega_k t)\\right)",
-    claim: "Approximate Kelvin-to-RGB color and procedural flame modulation. These are visual approximations, not spectral radiometry or fluid simulation.",
+    citation:
+      "Planck, On the Law of Distribution of Energy in the Normal Spectrum (Ann. Phys. 1901)",
+    mathFormula:
+      "B_{\\lambda}(T) = \\frac{2hc^2}{\\lambda^5 \\left(e^{\\frac{hc}{\\lambda k_B T}} - 1\\right)}, \\quad I_{\\text{flame}}(t) = I_0 \\left(0.85 + 0.15 \\sum_{k=1}^3 2^{1-k} \\sin(\\omega_k t)\\right)",
+    claim:
+      "Approximate Kelvin-to-RGB color and procedural flame modulation. These are visual approximations, not spectral radiometry or fluid simulation.",
     status: "display-only",
   },
   {
@@ -212,8 +249,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/houseNavigationChain.ts",
     testFile: "tests/houseNavigationChain.test.ts",
     citation: "LaValle, Planning Algorithms (Cambridge University Press 2006)",
-    mathFormula: "\\|\\mathbf{x}(t) - \\mathbf{w}_k\\| \\le R_{\\text{accept}} \\implies k \\leftarrow k + 1",
-    claim: "Seven-room waypoint sequence with a planar navigation helper. Physical G1 traversal with preserved robot state is not demonstrated here.",
+    mathFormula:
+      "\\|\\mathbf{x}(t) - \\mathbf{w}_k\\| \\le R_{\\text{accept}} \\implies k \\leftarrow k + 1",
+    claim:
+      "Seven-room waypoint sequence with a planar navigation helper. Physical G1 traversal with preserved robot state is not demonstrated here.",
     status: "implemented",
   },
   {
@@ -224,8 +263,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/multiRoomTour.ts",
     testFile: "tests/multiRoomTour.test.ts",
     citation: "Yuksel, Schaefer, Keyser, On the Parameterization of Catmull-Rom Curves (CGF 2011)",
-    mathFormula: "\\mathbf{C}(u) = \\text{CatmullRom}_{\\alpha=0.5}(\\mathbf{P}_0, \\mathbf{P}_1, \\mathbf{P}_2, \\mathbf{P}_3, u)",
-    claim: "Centripetal spline camera-path generator. Its camera samples are display frames, not robot physics steps or successful navigation episodes.",
+    mathFormula:
+      "\\mathbf{C}(u) = \\text{CatmullRom}_{\\alpha=0.5}(\\mathbf{P}_0, \\mathbf{P}_1, \\mathbf{P}_2, \\mathbf{P}_3, u)",
+    claim:
+      "Centripetal spline camera-path generator. Its camera samples are display frames, not robot physics steps or successful navigation episodes.",
     status: "display-only",
   },
   {
@@ -236,8 +277,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/neuralSdfRefinement.ts",
     testFile: "tests/neuralSdfRefinement.test.ts",
     citation: "Park et al., DeepSDF: Learning Continuous Signed Distance Functions (CVPR 2019)",
-    mathFormula: "d_{\\text{refined}}(\\mathbf{x}) = d_{\\text{base}}(\\mathbf{x}) + \\exp\\left(-\\frac{d_{\\text{base}}^2}{2\\sigma^2}\\right) \\text{MLP}_{\\le 20\\text{k}}(\\gamma(\\mathbf{x}))",
-    claim: "Neural residual-SDF prototype. A trained artifact, bounded geometric error and measured query allocations are not supplied by this registry.",
+    mathFormula:
+      "d_{\\text{refined}}(\\mathbf{x}) = d_{\\text{base}}(\\mathbf{x}) + \\exp\\left(-\\frac{d_{\\text{base}}^2}{2\\sigma^2}\\right) \\text{MLP}_{\\le 20\\text{k}}(\\gamma(\\mathbf{x}))",
+    claim:
+      "Neural residual-SDF prototype. A trained artifact, bounded geometric error and measured query allocations are not supplied by this registry.",
     status: "conceptual",
   },
   {
@@ -247,9 +290,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "obstacle-avoidance",
     sourceFile: "app/lib/ddpTrajectoryOptimization.ts",
     testFile: "tests/ddpTrajectoryOptimization.test.ts",
-    citation: "Mayne 1966 (2nd-order gradient); Tassa, Mansard, Stewart, Vijayakumar 2012/2014 (iLQR); Mastalli et al. 2020 (Crocoddyl).",
-    mathFormula: "\\delta u = k + K\\delta x, \\quad k = -Q_{uu}^{-1}Q_u, \\quad K = -Q_{uu}^{-1}Q_{ux} \\quad (Q_{uu} \\succ 0)",
-    claim: "Trajectory-optimization prototype with regularization and line search. Whole-body dynamics fidelity, derivative accuracy and optimum quality need separate validation.",
+    citation:
+      "Mayne 1966 (2nd-order gradient); Tassa, Mansard, Stewart, Vijayakumar 2012/2014 (iLQR); Mastalli et al. 2020 (Crocoddyl).",
+    mathFormula:
+      "\\delta u = k + K\\delta x, \\quad k = -Q_{uu}^{-1}Q_u, \\quad K = -Q_{uu}^{-1}Q_{ux} \\quad (Q_{uu} \\succ 0)",
+    claim:
+      "Trajectory-optimization prototype with regularization and line search. Whole-body dynamics fidelity, derivative accuracy and optimum quality need separate validation.",
     status: "implemented",
   },
   {
@@ -260,8 +306,10 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     sourceFile: "app/lib/contactImplicitTrajectoryOpt.ts",
     testFile: "tests/contactImplicitTrajectoryOpt.test.ts",
     citation: "Posa, Cantu, Tedrake 2014 (IJRR); Manchester, Kuindersma 2020 (IEEE TAC).",
-    mathFormula: "\\Phi_{FB}(a, b, \\varepsilon) = a + b - \\sqrt{a^2 + b^2 + 2\\varepsilon^2}; \\quad 0 \\le \\gamma_{N,i}(t) \\perp \\phi_i(q(t)) \\ge 0 \\mathrm{via}\\ \\lim_{\\varepsilon\\to 0^+}\\Phi_{FB} = 0",
-    claim: "Smoothed-complementarity trajectory prototype. Solver convergence, physical contact feasibility and deployed whole-body avoidance remain unproven by this entry.",
+    mathFormula:
+      "\\Phi_{FB}(a, b, \\varepsilon) = a + b - \\sqrt{a^2 + b^2 + 2\\varepsilon^2}; \\quad 0 \\le \\gamma_{N,i}(t) \\perp \\phi_i(q(t)) \\ge 0 \\mathrm{via}\\ \\lim_{\\varepsilon\\to 0^+}\\Phi_{FB} = 0",
+    claim:
+      "Smoothed-complementarity trajectory prototype. Solver convergence, physical contact feasibility and deployed whole-body avoidance remain unproven by this entry.",
     status: "implemented",
   },
 ];

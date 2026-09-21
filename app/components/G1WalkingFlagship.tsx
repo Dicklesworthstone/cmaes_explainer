@@ -1,49 +1,50 @@
 "use client";
 
-import React, { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, FlyControls, PerspectiveCamera, RoundedBox, Html } from "@react-three/drei";
+import { FlyControls, Html, OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
+import React, { Canvas, type ThreeEvent, useFrame } from "@react-three/fiber";
 import {
-  advanceTracePlayback,
-  useTracePlaybackPreference,
-} from "../hooks/usePrefersReducedMotion";
-import { Bot, BrainCircuit, Cpu, Gauge, Play, RotateCcw, Sparkles, Square, Eye, Camera, Compass, Zap, Sliders, Shield, Activity, Flame, Radio, Sun, Moon, Sunset, Volume2, VolumeX, Wrench, Download } from "lucide-react";
-import { useInView } from "../hooks/useScrollSpy";
+  Activity,
+  Bot,
+  BrainCircuit,
+  Camera,
+  Compass,
+  Cpu,
+  Download,
+  Eye,
+  Flame,
+  Gauge,
+  Moon,
+  Play,
+  Radio,
+  RotateCcw,
+  Shield,
+  Sliders,
+  Sparkles,
+  Square,
+  Sun,
+  Sunset,
+  Volume2,
+  VolumeX,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { robotAudio } from "../lib/robotAudioSynthesizer";
-import { LearningLedger } from "./LearningLedger";
-import { PolicyExchange } from "./PolicyExchange";
+import { advanceTracePlayback, useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
+import { useInView } from "../hooks/useScrollSpy";
 import {
-  decodePolicyFragment,
-  policyFragmentFromHash,
-  type SharedPolicy,
-  type SharedPolicyMeta,
-} from "../lib/g1PolicyShare";
+  type FrankenRobotsPlaybackSpeed,
+  type FrankenRobotsReceiptLens,
+  installFrankenRobotsNativeCommandHandler,
+  reportFrankenRobotsEngineState,
+  reportFrankenRobotsTraceState,
+} from "../lib/frankenrobotsBridge";
 import {
-  describeAge,
-  loadTrainingSession,
-  saveTrainingSession,
-} from "../lib/g1TrainingSession";
-import {
-  appendLedgerPoint,
-  learningLedgerPoint,
-  type LearningLedgerPoint,
-} from "../lib/g1LearningLedger";
-import {
-  G1_BODY_LINK_RADIUS_METERS,
-  G1_INTERACTIVE_PINS,
-  clampSphereAgainstHouse,
-  clampSphereAgainstLinks,
-  limbPinRestPosition,
-  solveFullBodyG1IK,
-  type InteractiveLimbPinId,
-} from "../lib/humanoidRagdollIk";
-import {
+  type CmaFamily,
   DEFAULT_G1_WALKING_CONFIG,
   FRANKENSIM_OWNER_ARTIFACT,
   FRANKENSIM_OWNER_KERNEL_VERSION,
-  type CmaFamily,
   type G1Admission,
   type G1Challenge,
   type G1Task,
@@ -51,47 +52,65 @@ import {
   type G1TraceSample,
 } from "../lib/frankensimCmaes";
 import {
+  appendLedgerPoint,
+  type LearningLedgerPoint,
+  learningLedgerPoint,
+} from "../lib/g1LearningLedger";
+import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
+import {
   G1_DEFAULT_SEARCH_SIGMA,
   G1_HOUSE_SEAT,
-  g1SharedExperiment,
-  g1RestoreSharedExperiment,
   type G1OptimizationRequest,
   type G1SceneReceipt,
+  g1RestoreSharedExperiment,
+  g1SharedExperiment,
 } from "../lib/g1OptimizationProtocol";
-import { computeMultiFactorObjective, type MultiFactorChannel } from "../lib/g1MultiFactor";
+import {
+  decodePolicyFragment,
+  policyFragmentFromHash,
+  type SharedPolicy,
+  type SharedPolicyMeta,
+} from "../lib/g1PolicyShare";
 import { resolveG1PushVisualization } from "../lib/g1PushVisualization";
-import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
-import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
-import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
-import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
-import { G1PhysicsDebugOverlay } from "./G1PhysicsDebugOverlay";
-import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
-import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
-import { G1TimelineScrubber } from "./G1TimelineScrubber";
-import {
-  G1ObjectiveEqualizer,
-  RECEIPT_ANALYSIS_PRESETS,
-  type ReceiptAnalysisPreset,
-} from "./G1ObjectiveEqualizer";
-import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
-import { WalkQualityComparison } from "./WalkQualityComparison";
-import {
-  installFrankenRobotsNativeCommandHandler,
-  reportFrankenRobotsEngineState,
-  reportFrankenRobotsTraceState,
-  type FrankenRobotsPlaybackSpeed,
-  type FrankenRobotsReceiptLens,
-} from "../lib/frankenrobotsBridge";
+import { describeAge, loadTrainingSession, saveTrainingSession } from "../lib/g1TrainingSession";
 import {
   clampPositionAgainstHouseCollisions,
   closestPointOnOBB,
   createHouseNavigationScene,
   distanceToOBB,
   findClearTrajectorySpawnOffset,
-  resolveCameraBoom,
   type OrientedBoundingBox,
+  resolveCameraBoom,
 } from "../lib/houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
+import {
+  clampSphereAgainstHouse,
+  clampSphereAgainstLinks,
+  G1_BODY_LINK_RADIUS_METERS,
+  G1_INTERACTIVE_PINS,
+  type InteractiveLimbPinId,
+  limbPinRestPosition,
+  solveFullBodyG1IK,
+} from "../lib/humanoidRagdollIk";
+import { robotAudio } from "../lib/robotAudioSynthesizer";
+import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
+import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
+import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
+import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
+import { G1BiomechanicsOverlay } from "./G1BiomechanicsOverlay";
+import {
+  G1ObjectiveEqualizer,
+  RECEIPT_ANALYSIS_PRESETS,
+  type ReceiptAnalysisPreset,
+} from "./G1ObjectiveEqualizer";
+import { G1PhysicsDebugOverlay } from "./G1PhysicsDebugOverlay";
+import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
+import { G1TimelineScrubber } from "./G1TimelineScrubber";
+import { LearningLedger } from "./LearningLedger";
+import { PolicyExchange } from "./PolicyExchange";
+import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
+import { WalkQualityComparison } from "./WalkQualityComparison";
+
 type ScalableFamily = Exclude<CmaFamily, "full">;
 type G1TraceOrigin = CmaFamily | "stabilizer" | "curriculum";
 
@@ -177,8 +196,8 @@ const LINK_NAMES = [
   "right wrist yaw",
 ] as const;
 const LINK_PARENTS = [
-  -1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14,
-  15, 16, 17, 18, 19, 20, 21, 15, 23, 24, 25, 26, 27, 28,
+  -1, 0, 1, 2, 3, 4, 5, 0, 7, 8, 9, 10, 11, 0, 13, 14, 15, 16, 17, 18, 19, 20, 21, 15, 23, 24, 25,
+  26, 27, 28,
 ] as const;
 const G1_MESH_DIR = "/robots/g1/";
 const G1_MESH_FILES: Record<string, string> = {
@@ -217,7 +236,7 @@ const G1_MESH_FILES: Record<string, string> = {
   "right hand": "right_rubber_hand.STL",
 };
 const G1_HORIZON_STEPS = Math.round(
-  DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds
+  DEFAULT_G1_WALKING_CONFIG.durationSeconds / DEFAULT_G1_WALKING_CONFIG.stepSeconds,
 );
 
 // Source-bound dimensional scaffold for the parametric visual model.
@@ -262,7 +281,7 @@ const G1_LINK_CLEARANCE_MARGIN_METERS = 0.015;
 const G1_LINK_CLEARANCE_METERS = G1_LINK_RADIUS_METERS + G1_LINK_CLEARANCE_MARGIN_METERS;
 
 const FAMILY_COPY: Record<CmaFamily, { title: string; representation: string; order: string }> = {
- full: {
+  full: {
     title: "Full CMA-ES",
     representation: "Every covariance interaction",
     order: "O(n²) storage · O(n³) update",
@@ -323,20 +342,20 @@ function ownerQuaternionToThree(quaternionWxyz: readonly number[]): THREE.Quater
     quaternionWxyz[1],
     quaternionWxyz[3],
     -quaternionWxyz[2],
-    quaternionWxyz[0]
+    quaternionWxyz[0],
   );
 }
 
 function ownerLocalPointToThree(
   position: readonly number[],
   quaternionWxyz: readonly number[],
-  localPoint: readonly number[]
+  localPoint: readonly number[],
 ): [number, number, number] {
   const world = new THREE.Vector3(...ownerToThree(position));
   world.add(
     new THREE.Vector3(...ownerToThree(localPoint)).applyQuaternion(
-      ownerQuaternionToThree(quaternionWxyz)
-    )
+      ownerQuaternionToThree(quaternionWxyz),
+    ),
   );
   return [world.x, world.y, world.z];
 }
@@ -368,7 +387,7 @@ function LocalCapsule({
     const length = Math.max(direction.length(), 0.025);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0)
+      direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0),
     );
     return { midpoint, quaternion, cylinderLength: Math.max(length - 2 * radius, 0.001) };
   }, [startOwner, endOwner, radius]);
@@ -407,7 +426,15 @@ function JointMotor({
   );
 }
 
-function FootContact({ position, active, side }: { position: readonly number[]; active: boolean; side: "left" | "right" }) {
+function FootContact({
+  position,
+  active,
+  side,
+}: {
+  position: readonly number[];
+  active: boolean;
+  side: "left" | "right";
+}) {
   return (
     <group position={[position[0], Math.max(0.018, position[1]), position[2]]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -419,15 +446,20 @@ function FootContact({ position, active, side }: { position: readonly number[]; 
           side={THREE.DoubleSide}
         />
       </mesh>
-      {active ? <pointLight color={side === "left" ? "#22d3ee" : "#a78bfa"} intensity={1.2} distance={0.65} /> : null}
+      {active ? (
+        <pointLight
+          color={side === "left" ? "#22d3ee" : "#a78bfa"}
+          intensity={1.2}
+          distance={0.65}
+        />
+      ) : null}
     </group>
   );
 }
 
 function TerrainSurface({ admission }: { admission: G1Admission | null }) {
-  const amplitude = admission?.config.challenge === "terrain-and-push"
-    ? admission.terrainAmplitudeMeters
-    : 0;
+  const amplitude =
+    admission?.config.challenge === "terrain-and-push" ? admission.terrainAmplitudeMeters : 0;
   const wavenumber = admission?.terrainWavenumberRadiansPerMeter ?? 1;
   const geometry = useMemo(() => {
     if (amplitude <= 0) return null;
@@ -441,10 +473,7 @@ function TerrainSurface({ admission }: { admission: G1Admission | null }) {
       const sine = Math.sin(wavenumber * x);
       positions.setY(
         vertex,
-        amplitude *
-          sine *
-          sine *
-          (1 + (TERRAIN_PEAK_FACTOR - 1) * Math.sin(3 * ownerY))
+        amplitude * sine * sine * (1 + (TERRAIN_PEAK_FACTOR - 1) * Math.sin(3 * ownerY)),
       );
     }
     positions.needsUpdate = true;
@@ -493,7 +522,10 @@ function PushArrow({
     <arrowHelper
       args={[
         dir,
-        pelvisPos.clone().add(new THREE.Vector3(0, 0.16, 0)).sub(dir.clone().multiplyScalar(arrowLength)),
+        pelvisPos
+          .clone()
+          .add(new THREE.Vector3(0, 0.16, 0))
+          .sub(dir.clone().multiplyScalar(arrowLength)),
         arrowLength,
         "#fb7185",
         0.12 * Math.max(0.8, Math.min(1.6, pushImpulseNs / 15)),
@@ -512,7 +544,6 @@ function PushArrow({
 // pointers; ArmGroup nests each link inside its parent's frame, so transforms
 // compose exactly like the URDF stack.
 
-
 function RobotPoseMeshes({
   sample,
   meshes,
@@ -521,7 +552,10 @@ function RobotPoseMeshes({
   pushImpulseNs = 15,
 }: {
   sample: G1TraceSample;
-  meshes: { geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial };
+  meshes: {
+    geometries: Record<string, THREE.BufferGeometry>;
+    material: THREE.MeshStandardMaterial;
+  };
   pushFraction: number;
   pushAngleDeg?: number;
   pushImpulseNs?: number;
@@ -529,12 +563,12 @@ function RobotPoseMeshes({
   const leftFootPoint = ownerLocalPointToThree(
     sample.linkPoses[6].position,
     sample.linkPoses[6].quaternionWxyz,
-    [0.035, 0, -0.032]
+    [0.035, 0, -0.032],
   );
   const rightFootPoint = ownerLocalPointToThree(
     sample.linkPoses[12].position,
     sample.linkPoses[12].quaternionWxyz,
-    [0.035, 0, -0.032]
+    [0.035, 0, -0.032],
   );
   return (
     <group>
@@ -546,21 +580,33 @@ function RobotPoseMeshes({
             position={ownerToThree(pose.position)}
             quaternion={ownerQuaternionToThree(pose.quaternionWxyz)}
           >
-            <mesh geometry={meshes.geometries[name]} material={meshes.material} castShadow receiveShadow />
+            <mesh
+              geometry={meshes.geometries[name]}
+              material={meshes.material}
+              castShadow
+              receiveShadow
+            />
             {name === "torso" ? (
               <group position={ownerToThree(G1_HEAD_JOINT_ORIGIN)}>
                 <mesh geometry={meshes.geometries.head} material={meshes.material} castShadow />
               </group>
             ) : name === "left wrist yaw" ? (
               <group position={ownerToThree([0.0415, 0.003, 0])}>
-                <mesh geometry={meshes.geometries["left hand"]} material={meshes.material} castShadow />
+                <mesh
+                  geometry={meshes.geometries["left hand"]}
+                  material={meshes.material}
+                  castShadow
+                />
               </group>
             ) : name === "right wrist yaw" ? (
               <group position={ownerToThree([0.0415, -0.003, 0])}>
-                <mesh geometry={meshes.geometries["right hand"]} material={meshes.material} castShadow />
+                <mesh
+                  geometry={meshes.geometries["right hand"]}
+                  material={meshes.material}
+                  castShadow
+                />
               </group>
             ) : null}
-            
           </group>
         );
       })}
@@ -595,7 +641,7 @@ function Segment({
     const length = Math.max(direction.length(), 0.025);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(
       new THREE.Vector3(0, 1, 0),
-      direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0)
+      direction.lengthSq() > 1e-12 ? direction.normalize() : new THREE.Vector3(0, 1, 0),
     );
     return { midpoint, quaternion, cylinderLength: Math.max(length - 2 * radius, 0.001) };
   }, [start, end, radius]);
@@ -607,7 +653,6 @@ function Segment({
     </mesh>
   );
 }
-
 
 function RobotPose({
   sample,
@@ -630,22 +675,22 @@ function RobotPose({
   const leftFootPoint = ownerLocalPointToThree(
     sample.linkPoses[6].position,
     sample.linkPoses[6].quaternionWxyz,
-    [0.035, 0, -0.032]
+    [0.035, 0, -0.032],
   );
   const rightFootPoint = ownerLocalPointToThree(
     sample.linkPoses[12].position,
     sample.linkPoses[12].quaternionWxyz,
-    [0.035, 0, -0.032]
+    [0.035, 0, -0.032],
   );
   const leftFootCenter = ownerLocalPointToThree(
     sample.linkPoses[6].position,
     sample.linkPoses[6].quaternionWxyz,
-    [0.035, 0, -0.0095]
+    [0.035, 0, -0.0095],
   );
   const rightFootCenter = ownerLocalPointToThree(
     sample.linkPoses[12].position,
     sample.linkPoses[12].quaternionWxyz,
-    [0.035, 0, -0.0095]
+    [0.035, 0, -0.0095],
   );
 
   return (
@@ -703,7 +748,13 @@ function RobotPose({
         </mesh>
         <mesh position={[0, 0.34, 0]} castShadow>
           <sphereGeometry args={[0.105, 24, 16]} />
-          <meshPhysicalMaterial color="#cbd5e1" transparent opacity={0.28} roughness={0.2} metalness={0.5} />
+          <meshPhysicalMaterial
+            color="#cbd5e1"
+            transparent
+            opacity={0.28}
+            roughness={0.2}
+            metalness={0.5}
+          />
         </mesh>
         <mesh position={[0, 0.12, 0]}>
           <boxGeometry args={[0.12, 0.055, 0.46]} />
@@ -770,10 +821,20 @@ function computeRobotAnchors(
   const ox = offset ? offset[0] : 0;
   const oy = offset ? offset[1] : 0;
   const oz = offset ? offset[2] : 0;
-  const shift = (p: [number, number, number]): [number, number, number] => [p[0] + ox, p[1] + oy, p[2] + oz];
+  const shift = (p: [number, number, number]): [number, number, number] => [
+    p[0] + ox,
+    p[1] + oy,
+    p[2] + oz,
+  ];
   const linkWorld = (index: number) => shift(ownerToThree(sample.linkPoses[index].position));
   const localWorld = (index: number, local: [number, number, number]) =>
-    shift(ownerLocalPointToThree(sample.linkPoses[index].position, sample.linkPoses[index].quaternionWxyz, local));
+    shift(
+      ownerLocalPointToThree(
+        sample.linkPoses[index].position,
+        sample.linkPoses[index].quaternionWxyz,
+        local,
+      ),
+    );
   const torso = linkWorld(G1_LINK_TORSO);
   return {
     pelvis: linkWorld(G1_LINK_PELVIS),
@@ -798,7 +859,9 @@ function robotHeading(trace: G1TraceReceipt, sampleIndex: number): [number, numb
   const n = trace.samples.length;
   if (n === 0) return [1, 0];
   const pose = trace.samples[Math.max(0, Math.min(n - 1, sampleIndex))].linkPoses[G1_LINK_PELVIS];
-  const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(ownerQuaternionToThree(pose.quaternionWxyz));
+  const forward = new THREE.Vector3(1, 0, 0).applyQuaternion(
+    ownerQuaternionToThree(pose.quaternionWxyz),
+  );
   const len = Math.hypot(forward.x, forward.z);
   if (len < 0.05) return [1, 0];
   return [forward.x / len, forward.z / len];
@@ -841,15 +904,12 @@ function RobotPlayback({
   // applying an explicit seek only when it changes on this mounted rig.
   const playbackSeconds = useRef(trace.samples[sampleIndex]?.timeSeconds ?? 0);
   const appliedSeek = useRef({ trace, playbackSeek });
-  const sampleTimes = useMemo(
-    () => trace.samples.map((sample) => sample.timeSeconds),
-    [trace],
-  );
+  const sampleTimes = useMemo(() => trace.samples.map((sample) => sample.timeSeconds), [trace]);
   useLayoutEffect(() => {
-    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek) return;
+    if (appliedSeek.current.trace === trace && appliedSeek.current.playbackSeek === playbackSeek)
+      return;
     appliedSeek.current = { trace, playbackSeek };
-    playbackSeconds.current =
-      trace.samples[playbackSeek.sampleIndex]?.timeSeconds ?? 0;
+    playbackSeconds.current = trace.samples[playbackSeek.sampleIndex]?.timeSeconds ?? 0;
   }, [trace, playbackSeek]);
   useLayoutEffect(() => {
     if (!isPlaying) {
@@ -867,7 +927,8 @@ function RobotPlayback({
       true,
     );
     playbackSeconds.current = next.elapsedSeconds;
-    if (next.sampleIndex !== sampleIndex) onSampleIndexChange(next.sampleIndex, playbackSeek.revision);
+    if (next.sampleIndex !== sampleIndex)
+      onSampleIndexChange(next.sampleIndex, playbackSeek.revision);
   });
 
   const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
@@ -897,20 +958,30 @@ function RobotPlayback({
     ownerPushEndSeconds: admission?.pushEndSeconds ?? null,
     ownerImpulseNewtonSeconds: trace.pushImpulseNewtonSeconds,
   });
-  const pelvisThree = renderSample ? ownerToThree(renderSample.linkPoses[0].position) : [0, 0.75, 0] as [number, number, number];
-  const leftFootThree = renderSample ? ownerLocalPointToThree(
-    renderSample.linkPoses[6].position,
-    renderSample.linkPoses[6].quaternionWxyz,
-    [0.04, 0, -0.03]
-  ) : [0, 0, 0] as [number, number, number];
-  const rightFootThree = renderSample ? ownerLocalPointToThree(
-    renderSample.linkPoses[12].position,
-    renderSample.linkPoses[12].quaternionWxyz,
-    [0.04, 0, -0.03]
-  ) : [0, 0, 0] as [number, number, number];
+  const pelvisThree = renderSample
+    ? ownerToThree(renderSample.linkPoses[0].position)
+    : ([0, 0.75, 0] as [number, number, number]);
+  const leftFootThree = renderSample
+    ? ownerLocalPointToThree(
+        renderSample.linkPoses[6].position,
+        renderSample.linkPoses[6].quaternionWxyz,
+        [0.04, 0, -0.03],
+      )
+    : ([0, 0, 0] as [number, number, number]);
+  const rightFootThree = renderSample
+    ? ownerLocalPointToThree(
+        renderSample.linkPoses[12].position,
+        renderSample.linkPoses[12].quaternionWxyz,
+        [0.04, 0, -0.03],
+      )
+    : ([0, 0, 0] as [number, number, number]);
 
   return renderSample ? (
-    <group position={positionOffset ? [positionOffset[0], positionOffset[1], positionOffset[2]] : [0, 0, 0]}>
+    <group
+      position={
+        positionOffset ? [positionOffset[0], positionOffset[1], positionOffset[2]] : [0, 0, 0]
+      }
+    >
       {meshState.phase === "ready" ? (
         <RobotPoseMeshes
           sample={renderSample}
@@ -938,7 +1009,6 @@ function RobotPlayback({
   ) : null;
 }
 
-
 // Page-lifetime cache of raw parsed mesh data. Reused across mount/unmount
 // (the stage unmounts offscreen but the parsed geometry stays). Built once
 // per page load by the worker, then converted to THREE.BufferGeometry only
@@ -960,54 +1030,52 @@ function ensureG1Meshes(): Promise<Record<string, G1ParsedMesh>> {
         type: "module",
         name: "g1-mesh-parser",
       });
-      const result = await new Promise<Record<string, G1ParsedMesh>>(
-        (resolve, reject) => {
-          let settled = false;
-          const finish = (
-            outcome:
-              | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
-              | { type: "error"; error: string },
-          ) => {
-            if (settled) return;
-            settled = true;
-            window.clearTimeout(timeout);
-            worker.terminate();
-            if (outcome.type === "ok") resolve(outcome.geometries);
-            else reject(new Error(outcome.error));
-          };
-          const timeout = window.setTimeout(() => {
-            finish({
-              type: "error",
-              error: "Timed out while loading the Unitree G1 mesh rig.",
-            });
-          }, G1_MESH_WORKER_TIMEOUT_MS);
-          worker.onmessage = (e: MessageEvent<unknown>) => {
-            const m = e.data as
-              | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
-              | { type: "error"; error: string };
-            finish(m);
-          };
-          worker.onerror = (event) => {
-            event.preventDefault();
-            finish({
-              type: "error",
-              error: event.message || "The Unitree G1 mesh worker failed to start.",
-            });
-          };
-          worker.onmessageerror = () => {
-            finish({
-              type: "error",
-              error: "The Unitree G1 mesh worker returned unreadable data.",
-            });
-          };
-          worker.postMessage({
-            type: "parse",
-            files: G1_MESH_FILES,
-            baseUrl: G1_MESH_DIR,
-            rotateXRad: -Math.PI / 2,
+      const result = await new Promise<Record<string, G1ParsedMesh>>((resolve, reject) => {
+        let settled = false;
+        const finish = (
+          outcome:
+            | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
+            | { type: "error"; error: string },
+        ) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          worker.terminate();
+          if (outcome.type === "ok") resolve(outcome.geometries);
+          else reject(new Error(outcome.error));
+        };
+        const timeout = window.setTimeout(() => {
+          finish({
+            type: "error",
+            error: "Timed out while loading the Unitree G1 mesh rig.",
           });
-        },
-      );
+        }, G1_MESH_WORKER_TIMEOUT_MS);
+        worker.onmessage = (e: MessageEvent<unknown>) => {
+          const m = e.data as
+            | { type: "ok"; geometries: Record<string, G1ParsedMesh> }
+            | { type: "error"; error: string };
+          finish(m);
+        };
+        worker.onerror = (event) => {
+          event.preventDefault();
+          finish({
+            type: "error",
+            error: event.message || "The Unitree G1 mesh worker failed to start.",
+          });
+        };
+        worker.onmessageerror = () => {
+          finish({
+            type: "error",
+            error: "The Unitree G1 mesh worker returned unreadable data.",
+          });
+        };
+        worker.postMessage({
+          type: "parse",
+          files: G1_MESH_FILES,
+          baseUrl: G1_MESH_DIR,
+          rotateXRad: -Math.PI / 2,
+        });
+      });
       g1MeshCache = result;
       return result;
     })().catch((error: unknown) => {
@@ -1042,7 +1110,11 @@ function buildG1Geometries(parsed: Record<string, G1ParsedMesh>): {
 type G1MeshState =
   | { phase: "idle" }
   | { phase: "loading" }
-  | { phase: "ready"; geometries: Record<string, THREE.BufferGeometry>; material: THREE.MeshStandardMaterial }
+  | {
+      phase: "ready";
+      geometries: Record<string, THREE.BufferGeometry>;
+      material: THREE.MeshStandardMaterial;
+    }
   | { phase: "failed"; error: string };
 
 function useG1Meshes(active: boolean): [G1MeshState, () => void] {
@@ -1087,7 +1159,10 @@ function useG1Meshes(active: boolean): [G1MeshState, () => void] {
 
 const cameraScratchVec = new THREE.Vector3();
 
-const ROOM_VIEWPOINTS: Record<string, { pos: [number, number, number]; target: [number, number, number] }> = {
+const ROOM_VIEWPOINTS: Record<
+  string,
+  { pos: [number, number, number]; target: [number, number, number] }
+> = {
   porch: { pos: [0, 1.6, 5.8], target: [0, 0.75, 2.75] },
   living: { pos: [1.85, 1.45, 2.5], target: [-0.5, 0.75, 0.0] },
   dining: { pos: [3.8, 1.6, 2.8], target: [2.1, 0.85, 0.0] },
@@ -1099,7 +1174,15 @@ const ROOM_VIEWPOINTS: Record<string, { pos: [number, number, number]; target: [
 };
 
 type CameraView = "orbit" | "follow" | "pov" | "blueprint" | "fly";
-type ActiveRoom = "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+type ActiveRoom =
+  | "all"
+  | "living"
+  | "dining"
+  | "kitchen"
+  | "porch"
+  | "bedroom"
+  | "bathroom"
+  | "cutaway";
 
 // Camera may roam the bungalow interior plus the porch, and rise above the
 // 2.5 m walls for overviews, but never leave the lot or sink into the floor.
@@ -1160,7 +1243,8 @@ function chooseBoom(
   preferred: number | null,
 ): { azimuthDeg: number; position: [number, number, number]; fraction: number } {
   const baseAngle = Math.atan2(heading[1], heading[0]) + Math.PI; // behind the robot
-  let best: { azimuthDeg: number; position: [number, number, number]; fraction: number } | null = null;
+  let best: { azimuthDeg: number; position: [number, number, number]; fraction: number } | null =
+    null;
   let bestScore = -Infinity;
   for (const azimuthDeg of FOLLOW_AZIMUTHS_DEG) {
     // Positive azimuth swings toward the robot's left: rotate the "behind"
@@ -1173,7 +1257,12 @@ function chooseBoom(
     ];
     const clamped = new THREE.Vector3(...desired);
     clampCameraToHouse(clamped);
-    const resolved = resolveCameraBoom(lookAt, [clamped.x, clamped.y, clamped.z], obstacles, CAMERA_PROBE_RADIUS);
+    const resolved = resolveCameraBoom(
+      lookAt,
+      [clamped.x, clamped.y, clamped.z],
+      obstacles,
+      CAMERA_PROBE_RADIUS,
+    );
     // Small enough that a preferred boom only wins a near-tie; 0.25 let a
     // badly blocked previous choice beat a clear new one.
     const score = resolved.fraction + (preferred === azimuthDeg ? 0.08 : 0);
@@ -1205,7 +1294,9 @@ function CameraRig({
   const targetLookAt = useRef<THREE.Vector3 | null>(null);
   // Smoothed look-at shared by every mode so a mode switch glides instead
   // of cutting.
-  const lookAtRef = useRef(new THREE.Vector3(pelvisThree[0], pelvisThree[1] + 0.15, pelvisThree[2]));
+  const lookAtRef = useRef(
+    new THREE.Vector3(pelvisThree[0], pelvisThree[1] + 0.15, pelvisThree[2]),
+  );
   const smoothedHeading = useRef(new THREE.Vector2(heading[0], heading[1]));
   const followAzimuth = useRef<number | null>(null);
   const lastFramedPelvis = useRef<THREE.Vector3 | null>(null);
@@ -1252,7 +1343,9 @@ function CameraRig({
     if (cameraView !== "orbit") return;
     if (lastRoomRef.current === activeRoom) return;
     lastRoomRef.current = activeRoom;
-    const robotRoom = hasRobot ? activeRoomForPoint(pelvisRef.current[0], pelvisRef.current[2]) : null;
+    const robotRoom = hasRobot
+      ? activeRoomForPoint(pelvisRef.current[0], pelvisRef.current[2])
+      : null;
     if (hasRobot && (activeRoom === robotRoom || (robotRoom === null && activeRoom === "living"))) {
       frameRobot();
     } else {
@@ -1292,7 +1385,10 @@ function CameraRig({
     }
     // Frame-rate independent damping: k = 1 - exp(-rate * dt).
     const ease = (rate: number) => 1 - Math.exp(-rate * dt);
-    smoothedHeading.current.lerp(new THREE.Vector2(headingRef.current[0], headingRef.current[1]), ease(3));
+    smoothedHeading.current.lerp(
+      new THREE.Vector2(headingRef.current[0], headingRef.current[1]),
+      ease(3),
+    );
     if (smoothedHeading.current.lengthSq() < 1e-6) smoothedHeading.current.set(1, 0);
     smoothedHeading.current.normalize();
     const h: [number, number] = [smoothedHeading.current.x, smoothedHeading.current.y];
@@ -1353,7 +1449,14 @@ function CameraRig({
 
     if (cameraView === "follow") {
       const lookAt: [number, number, number] = [pelvis[0], pelvis[1] + 0.15, pelvis[2]];
-      const boom = chooseBoom(lookAt, h, FOLLOW_BOOM_LENGTH, FOLLOW_BOOM_HEIGHT, obstacles, followAzimuth.current);
+      const boom = chooseBoom(
+        lookAt,
+        h,
+        FOLLOW_BOOM_LENGTH,
+        FOLLOW_BOOM_HEIGHT,
+        obstacles,
+        followAzimuth.current,
+      );
       followAzimuth.current = boom.azimuthDeg;
       // A terminated rollout can put the look-at point inside a keep-out
       // body. Every swept boom then collapses to that point, placing the
@@ -1410,12 +1513,7 @@ function CameraRig({
   ) : cameraView === "fly" ? (
     // Free-fly 6-DOF: W/A/S/D + Q/E or RMB drag. The useFrame pass above
     // clamps the result to the house footprint and out of every OBB.
-    <FlyControls
-      movementSpeed={1.4}
-      rollSpeed={0.6}
-      dragToLook
-      autoForward={false}
-    />
+    <FlyControls movementSpeed={1.4} rollSpeed={0.6} dragToLook autoForward={false} />
   ) : null;
 }
 
@@ -1489,7 +1587,12 @@ function LimbPinHandle({
     ];
 
     const house = clampSphereAgainstHouse(proposed, pin.radius, houseSceneData.obstacles, 0.02);
-    const body = clampSphereAgainstLinks(house.clamped, pin.radius, anchors.links, G1_BODY_LINK_RADIUS_METERS);
+    const body = clampSphereAgainstLinks(
+      house.clamped,
+      pin.radius,
+      anchors.links,
+      G1_BODY_LINK_RADIUS_METERS,
+    );
 
     if (house.contact || body.overlapped) {
       robotAudio.playCollisionBump(0.03);
@@ -1646,7 +1749,11 @@ function RagdollDragger({
   /** Fired once when the operator releases the robot, not on every move. */
   onDragCommit?: () => void;
   onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
-  onCollisionChange: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
+  onCollisionChange: (col: {
+    isColliding: boolean;
+    obstacleName: string | null;
+    clearance: number;
+  }) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [lastColliding, setLastColliding] = useState(false);
@@ -1656,7 +1763,11 @@ function RagdollDragger({
   const dragPlaneRef = useRef(new THREE.Plane());
   const dragPointRef = useRef(new THREE.Vector3());
   const currentPos: [number, number, number] = dragOffset
-    ? [pelvisThree[0] + dragOffset[0], pelvisThree[1] + dragOffset[1], pelvisThree[2] + dragOffset[2]]
+    ? [
+        pelvisThree[0] + dragOffset[0],
+        pelvisThree[1] + dragOffset[1],
+        pelvisThree[2] + dragOffset[2],
+      ]
     : pelvisThree;
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
@@ -1754,10 +1865,7 @@ function RagdollDragger({
       </group>
 
       {/* Dynamic Collision Boundary Safety Ring on Floor */}
-      <mesh
-        position={[currentPos[0], 0.02, currentPos[2]]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
+      <mesh position={[currentPos[0], 0.02, currentPos[2]]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.32, 0.38, 36]} />
         <meshBasicMaterial
           color={isDragging ? "#fb7185" : "#34d399"}
@@ -1906,7 +2014,15 @@ function RobotStage({
   physicsDebug: boolean;
   cameraView: "orbit" | "follow" | "pov" | "blueprint" | "fly";
   timeOfDay: "afternoon-sun" | "golden-hour" | "evening-glow";
-  activeRoom: "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway";
+  activeRoom:
+    | "all"
+    | "living"
+    | "dining"
+    | "kitchen"
+    | "porch"
+    | "bedroom"
+    | "bathroom"
+    | "cutaway";
   showRoof?: boolean;
   activeRouteId?: string;
   isPlaying: boolean;
@@ -1925,19 +2041,19 @@ function RobotStage({
   onRobotDragChange?: (offset: [number, number, number] | null) => void;
   onRobotDragCommit?: () => void;
   onLimbDragChange?: (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => void;
-  onDragCollisionChange?: (col: { isColliding: boolean; obstacleName: string | null; clearance: number }) => void;
+  onDragCollisionChange?: (col: {
+    isColliding: boolean;
+    obstacleName: string | null;
+    clearance: number;
+  }) => void;
 }) {
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
-  const pelvisThree = sample ? ownerToThree(sample.linkPoses[0].position) : ([0.0, 0.75, 0.0] as [number, number, number]);
+  const pelvisThree = sample
+    ? ownerToThree(sample.linkPoses[0].position)
+    : ([0.0, 0.75, 0.0] as [number, number, number]);
   // Handles, diagnostics and the camera use the same unmodified owner pose.
   const anchors = useMemo(
-    () =>
-      sample
-        ? computeRobotAnchors(
-            sample,
-            robotDragOffset ?? null,
-          )
-        : null,
+    () => (sample ? computeRobotAnchors(sample, robotDragOffset ?? null) : null),
     [sample, robotDragOffset],
   );
   const heading = useMemo<[number, number]>(
@@ -1960,7 +2076,8 @@ function RobotStage({
         ]
       : pelvisThree;
 
-  const bgColor = timeOfDay === "golden-hour" ? "#1e1308" : timeOfDay === "evening-glow" ? "#070b14" : "#0f172a";
+  const bgColor =
+    timeOfDay === "golden-hour" ? "#1e1308" : timeOfDay === "evening-glow" ? "#070b14" : "#0f172a";
 
   return (
     <Canvas
@@ -2124,8 +2241,6 @@ function stageSceneHint(
   return "1928 Sears Craftsman Living Room";
 }
 
-
-
 export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } = {}) {
   const { reduceMotion, isPlaying, setIsPlaying, resetPlayback, playbackActiveRef } =
     useTracePlaybackPreference();
@@ -2225,10 +2340,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // Latest unrendered progress message and its scheduled flush. Generations
   // arrive faster than a reader can perceive; rendering each one re-rendered
   // the stage mid-scroll.
-  const pendingProgressRef = useRef<Extract<
-    WorkerResponse,
-    { type: "progress" }
-  > | null>(null);
+  const pendingProgressRef = useRef<Extract<WorkerResponse, { type: "progress" }> | null>(null);
   const progressFlushRef = useRef<number | null>(null);
   // Drop a progress message that has not been rendered yet. Every run reset
   // must call this: a queued flush would otherwise repaint the previous run's
@@ -2253,8 +2365,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [hudExpanded, setHudExpanded] = useState(false);
   const [xrayMode, setXrayMode] = useState(false);
   const [physicsDebug, setPhysicsDebug] = useState(false);
-  const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">("afternoon-sun");
-  const [activeRoom, setActiveRoom] = useState<"all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway">("living");
+  const [timeOfDay, setTimeOfDay] = useState<"afternoon-sun" | "golden-hour" | "evening-glow">(
+    "afternoon-sun",
+  );
+  const [activeRoom, setActiveRoom] = useState<
+    "all" | "living" | "dining" | "kitchen" | "porch" | "bedroom" | "bathroom" | "cutaway"
+  >("living");
   const [showRoof, setShowRoof] = useState(false);
   const [activeRouteId, setActiveRouteId] = useState<string>("grand-tour");
   const [cameraView, setCameraView] = useState<"orbit" | "follow" | "pov" | "blueprint" | "fly">(
@@ -2269,12 +2385,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     setPlaybackSeek({ revision, sampleIndex: index });
     setSampleIndex(index);
   }, []);
-  const handleSampleIndexChange = useCallback((index: number, revision: number) => {
-    // A frame from the separate Canvas root cannot undo a newer seek.
-    setSampleIndex((current) =>
-      revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
-    );
-  }, [playbackActiveRef]);
+  const handleSampleIndexChange = useCallback(
+    (index: number, revision: number) => {
+      // A frame from the separate Canvas root cannot undo a newer seek.
+      setSampleIndex((current) =>
+        revision === playbackRevisionRef.current && playbackActiveRef.current ? index : current,
+      );
+    },
+    [playbackActiveRef],
+  );
   const nativeTraceReportAtRef = useRef(0);
   const nativeTraceSettingsRef = useRef("");
   const [currentChapter, setCurrentChapter] = useState(1);
@@ -2287,11 +2406,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const [soundEnabled, setSoundEnabled] = useState(false);
   // A requested placement is a handle, not an edited physical trace. Only a
   // returned owner scene moves the robot and its receipt together.
-  const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(G1_HOUSE_SEAT.offset);
+  const [robotDragOffset, setRobotDragOffset] = useState<[number, number, number] | null>(
+    G1_HOUSE_SEAT.offset,
+  );
 
-  const displayedMeasurement = trace && admission
-    ? learningLedgerPoint(trace, stagePolicyMeta?.generation ?? generation, admission.config.stepSeconds, admission.config.targetSpeed)
-    : null;
+  const displayedMeasurement =
+    trace && admission
+      ? learningLedgerPoint(
+          trace,
+          stagePolicyMeta?.generation ?? generation,
+          admission.config.stepSeconds,
+          admission.config.targetSpeed,
+        )
+      : null;
 
   const handleExportTelemetry = useCallback(() => {
     if (!trace) return;
@@ -2340,10 +2467,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     if (!trace || !scene) return null;
     const sample = trace.samples[Math.min(sampleIndex, trace.samples.length - 1)];
     if (!sample) return null;
-    const anchors = computeRobotAnchors(
-      sample,
-      scene.seat,
-    );
+    const anchors = computeRobotAnchors(sample, scene.seat);
     return nearestRigidObstacle(anchors.links, houseSceneData.obstacles);
   }, [trace, sampleIndex, scene]);
   const [dragCollisionState, setDragCollisionState] = useState<{
@@ -2372,37 +2496,46 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     sigmaRef.current = searchSigma;
   }, [task, challenge, family, seedIndex, searchSigma]);
   const [dragMode, setDragMode] = useState<"pelvis" | "limbs">("pelvis");
-  const [limbOffsets, setLimbOffsets] = useState<Partial<Record<InteractiveLimbPinId, [number, number, number]>>>({});
+  const [limbOffsets, setLimbOffsets] = useState<
+    Partial<Record<InteractiveLimbPinId, [number, number, number]>>
+  >({});
 
   const handleRobotDragChange = useCallback((offset: [number, number, number] | null) => {
     if (inFlightRef.current) return;
     robotDragOffsetRef.current = offset;
     setRobotDragOffset(offset);
     if (offset !== null) setUserHasDragged(true);
-    setStatus("Placement preview: the ring marks the requested position. Release to evaluate it with the owner.");
+    setStatus(
+      "Placement preview: the ring marks the requested position. Release to evaluate it with the owner.",
+    );
   }, []);
 
+  const handleLimbDrag = useCallback(
+    (pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => {
+      setLimbOffsets((prev) => ({
+        ...prev,
+        [pinId]: offset ? offset : undefined,
+      }));
+    },
+    [],
+  );
 
-  const handleLimbDrag = useCallback((pinId: InteractiveLimbPinId, offset: [number, number, number] | null) => {
-    setLimbOffsets((prev) => ({
-      ...prev,
-      [pinId]: offset ? offset : undefined,
-    }));
-  }, []);
-
-  const post = useCallback((message: G1OptimizationRequest, mode: "preview" | "optimize" | "compare") => {
-    if (!workerRef.current) return;
-    // Synchronous gate — must precede setBusy (which is async). Two rapid
-    // clicks in the same render tick both see busy === null without this.
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setError(null);
-    setBusy(mode);
-    workerRef.current.postMessage({
-      ...message,
-      seat: message.seat ?? robotDragOffsetRef.current ?? G1_HOUSE_SEAT.offset,
-    } satisfies G1OptimizationRequest);
-  }, []);
+  const post = useCallback(
+    (message: G1OptimizationRequest, mode: "preview" | "optimize" | "compare") => {
+      if (!workerRef.current) return;
+      // Synchronous gate — must precede setBusy (which is async). Two rapid
+      // clicks in the same render tick both see busy === null without this.
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      setError(null);
+      setBusy(mode);
+      workerRef.current.postMessage({
+        ...message,
+        seat: message.seat ?? robotDragOffsetRef.current ?? G1_HOUSE_SEAT.offset,
+      } satisfies G1OptimizationRequest);
+    },
+    [],
+  );
 
   const startContinuousOptimization = useCallback(() => {
     if (!admission || !scene) return;
@@ -2442,34 +2575,37 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     } satisfies G1OptimizationRequest);
   }, [busy, stopRequested, task, family, seedIndex, challenge, scene]);
 
-  const requestPreview = useCallback((nextTask: G1Task, nextChallenge: G1Challenge) => {
-    pendingChapterPriorRef.current = null;
-    resumedPolicyRef.current = null;
-    setTask(nextTask);
-    setChallenge(nextChallenge);
-    setTrace(null);
-    setAdmission(null);
-    seekPlayback(0);
-    resetPlayback();
-    setStabilizerReplay(null);
-    setCurriculumReplay(null);
-    setGeneration(0);
-    setBestObjective(null);
-    setComparison(null);
-    setActiveTrace("curriculum");
-    progressHistoryRef.current = [];
-    discardPendingProgress();
-    setLedger([]);
-    // Each task/challenge keeps its own saved run, so switching experiments
-    // must look for that experiment's run rather than staying with the one
-    // already attempted.
-    recoveryAttemptedRef.current = false;
-    resumedPolicyRef.current = null;
-    setRestoredNotice(null);
-    setProgressHistory([]);
-    setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
-    post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
-  }, [post, seekPlayback, resetPlayback, discardPendingProgress]);
+  const requestPreview = useCallback(
+    (nextTask: G1Task, nextChallenge: G1Challenge) => {
+      pendingChapterPriorRef.current = null;
+      resumedPolicyRef.current = null;
+      setTask(nextTask);
+      setChallenge(nextChallenge);
+      setTrace(null);
+      setAdmission(null);
+      seekPlayback(0);
+      resetPlayback();
+      setStabilizerReplay(null);
+      setCurriculumReplay(null);
+      setGeneration(0);
+      setBestObjective(null);
+      setComparison(null);
+      setActiveTrace("curriculum");
+      progressHistoryRef.current = [];
+      discardPendingProgress();
+      setLedger([]);
+      // Each task/challenge keeps its own saved run, so switching experiments
+      // must look for that experiment's run rather than staying with the one
+      // already attempted.
+      recoveryAttemptedRef.current = false;
+      resumedPolicyRef.current = null;
+      setRestoredNotice(null);
+      setProgressHistory([]);
+      setStatus(`Loading the owner-composed ${G1_TASK_COPY[nextTask].action} experiment…`);
+      post({ type: "preview", task: nextTask, challenge: nextChallenge }, "preview");
+    },
+    [post, seekPlayback, resetPlayback, discardPendingProgress],
+  );
 
   // Keep the last measured robot in place until the owner answers for the
   // requested position. A refusal leaves that previous trace intact.
@@ -2554,9 +2690,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       setLedger([]);
       trainingSecondsRef.current = 0;
       setTrainingSeconds(0);
-      setRestoredNotice(imported.experiment
-        ? "Restored the saved owner, placement, configuration and seed. Learning starts from these coefficients."
-        : "This archive has no saved scene or seed. Re-evaluating its coefficients in this owner's default scene with Seed 1.");
+      setRestoredNotice(
+        imported.experiment
+          ? "Restored the saved owner, placement, configuration and seed. Learning starts from these coefficients."
+          : "This archive has no saved scene or seed. Re-evaluating its coefficients in this owner's default scene with Seed 1.",
+      );
       setStagePolicy(imported.policy);
       post(
         {
@@ -2617,7 +2755,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Learning continues from it.`,
       );
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [policyBaseline, handlePolicyImport]);
 
   useEffect(() => {
@@ -2643,22 +2783,27 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     };
   }, [policyBaseline, handlePolicyImport]);
 
-  const selectPriorReplay = useCallback((origin: "curriculum" | "stabilizer") => {
-    const replay = origin === "curriculum" ? curriculumReplay : stabilizerReplay;
-    if (inFlightRef.current || !replay) return false;
-    setTrace(replay.trace);
-    setStagePolicy(replay.policy);
-    setStagePolicyMeta(replay.meta);
-    setActiveTrace(origin);
-    setGeneration(replay.meta.generation);
-    setBestObjective(replay.trace.objective);
-    seekPlayback(0);
-    resetPlayback();
-    setStatus(origin === "curriculum"
-      ? `${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`
-      : `Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`);
-    return true;
-  }, [curriculumReplay, stabilizerReplay, task, seekPlayback, resetPlayback]);
+  const selectPriorReplay = useCallback(
+    (origin: "curriculum" | "stabilizer") => {
+      const replay = origin === "curriculum" ? curriculumReplay : stabilizerReplay;
+      if (inFlightRef.current || !replay) return false;
+      setTrace(replay.trace);
+      setStagePolicy(replay.policy);
+      setStagePolicyMeta(replay.meta);
+      setActiveTrace(origin);
+      setGeneration(replay.meta.generation);
+      setBestObjective(replay.trace.objective);
+      seekPlayback(0);
+      resetPlayback();
+      setStatus(
+        origin === "curriculum"
+          ? `${G1_TASK_COPY[task].label} policy seed replayed from Frankensim WASM.`
+          : `Standing-only prior replayed; compare its contacts with the ${G1_TASK_COPY[task].action} policy seed.`,
+      );
+      return true;
+    },
+    [curriculumReplay, stabilizerReplay, task, seekPlayback, resetPlayback],
+  );
 
   useEffect(() => {
     if (!embedded) return;
@@ -2725,10 +2870,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         }
         const playing = command.command === "play";
         setIsPlaying(playing);
-        return { accepted: true, detail: playing ? "Humanoid replay is playing." : "Humanoid replay is paused." };
+        return {
+          accepted: true,
+          detail: playing ? "Humanoid replay is playing." : "Humanoid replay is paused.",
+        };
       }
       if (command.command === "seek") {
-        if (!trace || command.sampleIndex === undefined || command.sampleIndex >= trace.samples.length) {
+        if (
+          !trace ||
+          command.sampleIndex === undefined ||
+          command.sampleIndex >= trace.samples.length
+        ) {
           return { accepted: false, detail: "That Humanoid replay frame is unavailable." };
         }
         seekPlayback(command.sampleIndex);
@@ -2750,7 +2902,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       }
       if (command.command === "set-seed") {
         if (busy !== null || inFlightRef.current || command.seedIndex === undefined) {
-          return { accepted: false, detail: "Finish the current owner request before changing seed." };
+          return {
+            accepted: false,
+            detail: "Finish the current owner request before changing seed.",
+          };
         }
         setSeedIndex(command.seedIndex);
         return {
@@ -2760,7 +2915,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       }
       if (command.command === "set-sigma") {
         if (busy !== null || inFlightRef.current || command.sigma === undefined) {
-          return { accepted: false, detail: "Finish the current owner request before changing sigma." };
+          return {
+            accepted: false,
+            detail: "Finish the current owner request before changing sigma.",
+          };
         }
         sigmaRef.current = command.sigma;
         setSearchSigma(command.sigma);
@@ -2802,7 +2960,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           return { accepted: false, detail: "The physical challenge was not provided." };
         }
         if (selectedChallenge === challenge) {
-          return { accepted: true, detail: `${selectedChallenge === "flat" ? "Flat ground" : "Terrain + push"} is already active.` };
+          return {
+            accepted: true,
+            detail: `${selectedChallenge === "flat" ? "Flat ground" : "Terrain + push"} is already active.`,
+          };
         }
         requestPreview(task, selectedChallenge);
         return {
@@ -2881,36 +3042,50 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     queueMicrotask(() => {
       if (active && selectPriorReplay("stabilizer")) pendingChapterPriorRef.current = null;
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [busy, stabilizerReplay, selectPriorReplay]);
 
-  const handleSelectChapter = useCallback((ch: StoryChapter) => {
-    if (inFlightRef.current) return;
-    setCurrentChapter(ch.id);
-    if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
-      familyRef.current = ch.targetTrace;
-      setFamily(ch.targetTrace);
-    }
-    if (ch.challenge !== challenge) {
-      requestPreview(task, ch.challenge);
-      recoveryAttemptedRef.current = true;
-      if (ch.targetTrace === "stabilizer") pendingChapterPriorRef.current = "stabilizer";
+  const handleSelectChapter = useCallback(
+    (ch: StoryChapter) => {
+      if (inFlightRef.current) return;
+      setCurrentChapter(ch.id);
+      if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
+        familyRef.current = ch.targetTrace;
+        setFamily(ch.targetTrace);
+      }
+      if (ch.challenge !== challenge) {
+        requestPreview(task, ch.challenge);
+        recoveryAttemptedRef.current = true;
+        if (ch.targetTrace === "stabilizer") pendingChapterPriorRef.current = "stabilizer";
+        seekPlayback(0);
+        resetPlayback();
+        return;
+      }
+      if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
+        selectPriorReplay("stabilizer");
+      } else if (ch.targetTrace === "curriculum" && curriculumTrace) {
+        selectPriorReplay("curriculum");
+      } else if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
+        setFamily(ch.targetTrace);
+        requestPreview(task, ch.challenge);
+        recoveryAttemptedRef.current = true;
+      }
       seekPlayback(0);
       resetPlayback();
-      return;
-    }
-    if (ch.targetTrace === "stabilizer" && stabilizerTrace) {
-      selectPriorReplay("stabilizer");
-    } else if (ch.targetTrace === "curriculum" && curriculumTrace) {
-      selectPriorReplay("curriculum");
-    } else if (ch.targetTrace === "separable" || ch.targetTrace === "lm-cma") {
-      setFamily(ch.targetTrace);
-      requestPreview(task, ch.challenge);
-      recoveryAttemptedRef.current = true;
-    }
-    seekPlayback(0);
-    resetPlayback();
-  }, [task, challenge, stabilizerTrace, curriculumTrace, selectPriorReplay, requestPreview, seekPlayback, resetPlayback]);
+    },
+    [
+      task,
+      challenge,
+      stabilizerTrace,
+      curriculumTrace,
+      selectPriorReplay,
+      requestPreview,
+      seekPlayback,
+      resetPlayback,
+    ],
+  );
 
   const handleSelectPreset = useCallback((p: ReceiptAnalysisPreset) => {
     setSelectedPreset(p.id);
@@ -2956,16 +3131,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       pendingProgressRef.current = null;
       if (trainingStartedAtRef.current !== null) {
         setTrainingSeconds(
-          trainingSecondsRef.current +
-            (Date.now() - trainingStartedAtRef.current) / 1000,
+          trainingSecondsRef.current + (Date.now() - trainingStartedAtRef.current) / 1000,
         );
       }
       setGeneration(message.generation);
       setBestObjective(message.bestObjective);
       setProgressHistory(downsampleConvergence(progressHistoryRef.current));
-      setStatus(message.continuous
-        ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
-        : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`
+      setStatus(
+        message.continuous
+          ? `${FAMILY_COPY[message.family].title}: generation ${message.generation} · learning until you press Stop · σ ${message.sigma.toExponential(2)}`
+          : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
       );
     };
 
@@ -3015,25 +3190,27 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         }
         pendingProgressRef.current = message;
         if (progressFlushRef.current === null) {
-          progressFlushRef.current = window.setTimeout(
-            flushProgress,
-            PROGRESS_FLUSH_MS,
-          );
+          progressFlushRef.current = window.setTimeout(flushProgress, PROGRESS_FLUSH_MS);
         }
       } else if (message.type === "trace") {
         const policyMeta: SharedPolicyMeta = {
           kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
           task: message.admission.config.task,
           challenge: message.admission.config.challenge,
-          family: message.family === "curriculum" || message.family === "stabilizer"
-            ? familyRef.current : message.family,
+          family:
+            message.family === "curriculum" || message.family === "stabilizer"
+              ? familyRef.current
+              : message.family,
           sigma: sigmaRef.current,
           generation: message.generation,
           experiment: g1SharedExperiment(message.scene, seedIndexRef.current),
         };
         if (message.family === "stabilizer") {
-          if (message.policy) setStabilizerReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
-          setStatus(`Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`);
+          if (message.policy)
+            setStabilizerReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
+          setStatus(
+            `Standing prior received; loading the ${G1_TASK_COPY[message.admission.config.task].action} policy seed…`,
+          );
           return;
         }
         setAdmission(message.admission);
@@ -3092,7 +3269,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           ),
         );
         if (message.continuing) {
-          setStatus(`Learning continuously · generation ${message.generation} best policy now on stage.`);
+          setStatus(
+            `Learning continuously · generation ${message.generation} best policy now on stage.`,
+          );
           return;
         }
         // Bank the elapsed search time: the run has ended, so the clock stops
@@ -3109,8 +3288,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           message.stopped
             ? `Stopped at generation ${message.generation}; replaying the best policy found.`
             : message.family === "curriculum"
-            ? `${G1_TASK_COPY[message.admission.config.task].label} policy seed replayed from Frankensim WASM.`
-            : `Best ${FAMILY_COPY[message.family].title} policy replayed through the full experiment.`
+              ? `${G1_TASK_COPY[message.admission.config.task].label} policy seed replayed from Frankensim WASM.`
+              : `Best ${FAMILY_COPY[message.family].title} policy replayed through the full experiment.`,
         );
       } else if (message.type === "comparison") {
         setComparison(message.rows);
@@ -3140,7 +3319,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({ type: "preview", task: "walking", challenge: "flat" } satisfies G1OptimizationRequest);
+    optimizerWorker.postMessage({
+      type: "preview",
+      task: "walking",
+      challenge: "flat",
+    } satisfies G1OptimizationRequest);
     return () => {
       active = false;
       if (progressFlushRef.current !== null) {
@@ -3164,7 +3347,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     reportFrankenRobotsEngineState(
       "humanoid",
       bridgeState,
-      bridgeState === "failed" ? error ?? status : status,
+      bridgeState === "failed" ? (error ?? status) : status,
       {
         generation,
         bestObjective,
@@ -3177,7 +3360,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         activeSigma: searchSigma,
       },
     );
-  }, [embedded, workerAvailable, admission, error, busy, trace, status, generation, bestObjective, task, challenge, family, seedIndex, searchSigma]);
+  }, [
+    embedded,
+    workerAvailable,
+    admission,
+    error,
+    busy,
+    trace,
+    status,
+    generation,
+    bestObjective,
+    task,
+    challenge,
+    family,
+    seedIndex,
+    searchSigma,
+  ]);
 
   useEffect(() => {
     if (!embedded) return;
@@ -3211,11 +3409,21 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       return () => window.clearTimeout(timer);
     }
     report();
-  }, [embedded, trace, sampleIndex, isPlaying, playbackSpeed, cameraView, selectedPreset, xrayMode, physicsDebug, playbackSeek.revision]);
+  }, [
+    embedded,
+    trace,
+    sampleIndex,
+    isPlaying,
+    playbackSpeed,
+    cameraView,
+    selectedPreset,
+    xrayMode,
+    physicsDebug,
+    playbackSeek.revision,
+  ]);
 
-  const curriculumObjectiveDelta = trace && curriculumTrace
-    ? curriculumTrace.objective - trace.objective
-    : null;
+  const curriculumObjectiveDelta =
+    trace && curriculumTrace ? curriculumTrace.objective - trace.objective : null;
   // Multi-factor objective over time (cmaes-0m3): expose the v068 kernel's
   // per-channel integrals (actuatorWorkJoules, slipIntegral, postureIntegral,
   // impactIntegral, jointLimitIntegral, contactScheduleMismatchIntegral,
@@ -3237,10 +3445,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   const receiptCards = trace
     ? [
         ["objective ↓ (kernel scalar)", number(trace.objective, 2)],
-        [
-          "multi-factor ↓",
-          multiFactor ? number(multiFactor.weighted, 2) : "—",
-        ],
+        ["multi-factor ↓", multiFactor ? number(multiFactor.weighted, 2) : "—"],
         [
           "vs curriculum",
           activeTrace === "curriculum" || !curriculumTrace
@@ -3264,7 +3469,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         ["terrain peak", `${number(1_000 * trace.maximumAbsoluteTerrainHeightMeters, 1)} mm`],
         [
           "maximum tilt",
-          `${number(Math.asin(Math.min(1, trace.maximumTiltSine)) * 180 / Math.PI, 1)}°`,
+          `${number((Math.asin(Math.min(1, trace.maximumTiltSine)) * 180) / Math.PI, 1)}°`,
         ],
         ["minimum base", `${number(trace.minimumBaseHeightMeters, 3)} m`],
         ["steps integrated", `${trace.completedSteps.toLocaleString()} / ${G1_HORIZON_STEPS}`],
@@ -3283,11 +3488,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     : [];
 
   return (
-    <div className="space-y-8" data-g1-scene-digest={scene?.digest} data-g1-scene-seat={scene ? JSON.stringify(scene.seat) : undefined}>
+    <div
+      className="space-y-8"
+      data-g1-scene-digest={scene?.digest}
+      data-g1-scene-seat={scene ? JSON.stringify(scene.seat) : undefined}
+    >
       {/* Keep the robot first in embedded mode; its complete story tour is
           restored immediately after the primary stage/control grid below. */}
       {!embedded ? (
-        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} receipt={trace} admission={admission} kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION} disabled={busy !== null || !workerAvailable} />
+        <G1StoryTour
+          currentChapter={currentChapter}
+          onSelectChapter={handleSelectChapter}
+          receipt={trace}
+          admission={admission}
+          kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION}
+          disabled={busy !== null || !workerAvailable}
+        />
       ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
@@ -3304,372 +3520,402 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
               } sm:flex-row sm:items-start sm:justify-between`}
             >
-            {/* Top Badges & Interactive Mode Bar */}
-            <div className="flex flex-wrap gap-2 pointer-events-auto">
-              <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
-                {TRACE_TITLES[activeTrace]}
-              </span>
+              {/* Top Badges & Interactive Mode Bar */}
+              <div className="flex flex-wrap gap-2 pointer-events-auto">
+                <span className="rounded-full border border-violet-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-violet-200 backdrop-blur-md">
+                  {TRACE_TITLES[activeTrace]}
+                </span>
 
-              <button
-                type="button"
-                onClick={() => setHudExpanded(!hudExpanded)}
-                aria-expanded={hudExpanded}
-                aria-controls="g1-hud-controls"
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  hudExpanded
-                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100"
-                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
-                }`}
-                title="Show or hide the stage controls"
-              >
-                <Wrench className="h-3.5 w-3.5" />
-                {hudExpanded ? "Hide controls" : "Controls"}
-              </button>
-
-              {hudExpanded ? (
-              <>
-              <span className="max-sm:hidden rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
-                owner poses · 480 Hz terrain physics
-              </span>
-
-              {/* Render Mode Toggle: Photo-Real vs X-Ray */}
-              <button
-                type="button"
-                onClick={() => setXrayMode(!xrayMode)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  xrayMode
-                    ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
-                }`}
-                title="Toggle between Photo-Realistic House and Cybernetic Biomechanics X-Ray View"
-              >
-                <Eye className="h-3.5 w-3.5" />
-                <span className="sm:hidden">{xrayMode ? "⚡ X-Ray" : "🏡 House"}</span>
-                <span className="max-sm:hidden">{xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}</span>
-              </button>
-
-              {/* Physics Debug Overlay Toggle — inspect link poses, drag proxy, and obstacle OBBs */}
-              <button
-                type="button"
-                onClick={() => setPhysicsDebug(!physicsDebug)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  physicsDebug
-                    ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
-                }`}
-                title="Inspect link pose envelopes, the pelvis drag proxy, and house obstacle OBBs"
-              >
-                <Wrench className="h-3.5 w-3.5" />
-                <span className="sm:hidden">{physicsDebug ? "🔧 Physics" : "🔧 Off"}</span>
-                <span className="max-sm:hidden">{physicsDebug ? "🔧 Physics Debug" : "🔧 Physics"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSoundEnabled(robotAudio.toggleMute())}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  soundEnabled
-                    ? "border-emerald-400 bg-emerald-500/25 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
-                    : "border-white/20 bg-slate-950/80 text-slate-400 hover:text-slate-200"
-                }`}
-                title="Toggle Synthesized Footstep & Actuator Acoustics"
-              >
-                {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-                <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
-              </button>
-
-              {/* Push Wand & Direction Controller */}
-              <div className="relative flex items-center gap-0.5">
                 <button
                   type="button"
-                  onClick={handleApplyShove}
-                  className="flex items-center gap-1.5 rounded-l-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors shadow-[0_0_10px_rgba(244,63,94,0.25)]"
-                  title={`Preview a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. This does not change the owner rollout.`}
-                  aria-label={`Preview display-only push vector: ${pushImpulseNs} newton-seconds at ${pushAngleDeg} degrees`}
-                >
-                  <Zap className="h-3.5 w-3.5 text-rose-300" />
-                  <span>🥊 Preview {pushImpulseNs} N·s ({pushAngleDeg}°)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPushOptions(!showPushOptions)}
-                  className={`rounded-r-full border-y border-r border-rose-400/40 px-2 py-1 text-[0.68rem] font-bold text-rose-200 backdrop-blur-md transition-colors ${
-                    showPushOptions ? "bg-rose-500/40 text-white" : "bg-rose-500/20 hover:bg-rose-500/30"
+                  onClick={() => setHudExpanded(!hudExpanded)}
+                  aria-expanded={hudExpanded}
+                  aria-controls="g1-hud-controls"
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                    hudExpanded
+                      ? "border-cyan-400 bg-cyan-500/25 text-cyan-100"
+                      : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
                   }`}
-                  title="Configure the display-only push-vector preview"
-                  aria-label="Configure display-only push-vector preview"
+                  title="Show or hide the stage controls"
                 >
-                  <Sliders className="h-3 w-3" />
+                  <Wrench className="h-3.5 w-3.5" />
+                  {hudExpanded ? "Hide controls" : "Controls"}
                 </button>
 
-                {showPushOptions && (
-                  <div className="absolute top-full left-0 mt-2 z-50 w-64 rounded-xl border border-rose-500/30 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-2">
-                      <span className="text-[0.7rem] font-bold uppercase tracking-wider text-rose-300">🥊 Display-only vector</span>
-                      <span className="text-[0.65rem] text-slate-400">{pushAngleDeg}° · {pushImpulseNs} N·s</span>
-                    </div>
+                {hudExpanded ? (
+                  <>
+                    <span className="max-sm:hidden rounded-full border border-cyan-300/25 bg-slate-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-cyan-200 backdrop-blur-md">
+                      owner poses · 480 Hz terrain physics
+                    </span>
 
-                    <p className="mb-2.5 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-2 py-1.5 text-[0.62rem] leading-4 text-amber-100">
-                      Visualization preview only. The owner experiment keeps its admitted lateral pulse
-                      {admission ? ` (${number(admission.pushPeakForceNewtons, 1)} N peak)` : ""}; no controller,
-                      HOCBF result, trajectory, or receipt is recomputed.
-                    </p>
-
-                    {/* Quick Direction Selector */}
-                    <div className="mb-2.5">
-                      <label htmlFor="g1-push-preview-angle" className="text-[0.62rem] text-slate-400 mb-1 block">Preview direction:</label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[
-                          { label: "⬅️ Left", angle: 90 },
-                          { label: "➡️ Right", angle: 270 },
-                          { label: "⬆️ Back", angle: 0 },
-                          { label: "⬇️ Front", angle: 180 },
-                        ].map((d) => (
-                          <button
-                            key={d.angle}
-                            type="button"
-                            onClick={() => setPushAngleDeg(d.angle)}
-                            className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
-                              pushAngleDeg === d.angle
-                                ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
-                                : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
-                            }`}
-                          >
-                            {d.label}
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        id="g1-push-preview-angle"
-                        type="range"
-                        min={0}
-                        max={360}
-                        step={5}
-                        value={pushAngleDeg}
-                        onChange={(e) => setPushAngleDeg(Number(e.target.value))}
-                        className="mt-1.5 w-full accent-rose-400 h-1.5 rounded-lg bg-slate-800 cursor-pointer"
-                      />
-                    </div>
-
-                    {/* Impulse Magnitude Selector */}
-                    <div className="mb-3">
-                      <div className="text-[0.62rem] text-slate-400 mb-1">Preview magnitude:</div>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[10, 15, 25, 45].map((ns) => (
-                          <button
-                            key={ns}
-                            type="button"
-                            onClick={() => setPushImpulseNs(ns)}
-                            className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
-                              pushImpulseNs === ns
-                                ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
-                                : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
-                            }`}
-                          >
-                            {ns} N·s
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
+                    {/* Render Mode Toggle: Photo-Real vs X-Ray */}
                     <button
                       type="button"
-                      onClick={() => {
-                        handleApplyShove();
-                        setShowPushOptions(false);
-                      }}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 py-1.5 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:brightness-110 active:scale-[0.98] transition-all"
+                      onClick={() => setXrayMode(!xrayMode)}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                        xrayMode
+                          ? "border-cyan-400 bg-cyan-500/25 text-cyan-100 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                          : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                      }`}
+                      title="Toggle between Photo-Realistic House and Cybernetic Biomechanics X-Ray View"
                     >
-                      <Zap className="h-3.5 w-3.5" />
-                      Preview vector only
+                      <Eye className="h-3.5 w-3.5" />
+                      <span className="sm:hidden">{xrayMode ? "⚡ X-Ray" : "🏡 House"}</span>
+                      <span className="max-sm:hidden">
+                        {xrayMode ? "⚡ Cybernetic X-Ray Active" : "🏡 Photo-Real House"}
+                      </span>
                     </button>
-                  </div>
-                )}
-              </div>
 
-              {/* Export Telemetry Receipt Button */}
-              {trace && (
-                <button
-                  type="button"
-                  onClick={handleExportTelemetry}
-                  aria-label="Export Telemetry"
-                  className="flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-cyan-200 backdrop-blur-md hover:bg-cyan-900/60 transition-colors"
-                  title="Export full kinematic & dynamic trajectory receipt as JSON"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span className="sm:hidden">Export</span>
-                  <span className="max-sm:hidden">Export Telemetry</span>
-                </button>
-              )}
+                    {/* Physics Debug Overlay Toggle — inspect link poses, drag proxy, and obstacle OBBs */}
+                    <button
+                      type="button"
+                      onClick={() => setPhysicsDebug(!physicsDebug)}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                        physicsDebug
+                          ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                          : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                      }`}
+                      title="Inspect link pose envelopes, the pelvis drag proxy, and house obstacle OBBs"
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      <span className="sm:hidden">{physicsDebug ? "🔧 Physics" : "🔧 Off"}</span>
+                      <span className="max-sm:hidden">
+                        {physicsDebug ? "🔧 Physics Debug" : "🔧 Physics"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSoundEnabled(robotAudio.toggleMute())}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                        soundEnabled
+                          ? "border-emerald-400 bg-emerald-500/25 text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                          : "border-white/20 bg-slate-950/80 text-slate-400 hover:text-slate-200"
+                      }`}
+                      title="Toggle Synthesized Footstep & Actuator Acoustics"
+                    >
+                      {soundEnabled ? (
+                        <Volume2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <VolumeX className="h-3.5 w-3.5" />
+                      )}
+                      <span>{soundEnabled ? "Sound ON" : "Muted"}</span>
+                    </button>
 
-              {/* Drag Mode Selector: Pelvis vs 6-Pin Multi-Limb IK */}
-              <button
-                type="button"
-                onClick={() => setDragMode(dragMode === "pelvis" ? "limbs" : "pelvis")}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                  dragMode === "limbs"
-                    ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
-                    : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
-                }`}
-                title="Toggle between Whole-Body Pelvis Drag and 6-Pin Multi-Limb Ragdoll IK"
-              >
-                <Bot className="h-3.5 w-3.5" />
-                <span>{dragMode === "limbs" ? "🖐️ 6-Pin IK Mode" : "📍 Root Drag"}</span>
-              </button>
+                    {/* Push Wand & Direction Controller */}
+                    <div className="relative flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={handleApplyShove}
+                        className="flex items-center gap-1.5 rounded-l-full border border-rose-400/40 bg-rose-500/20 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-rose-200 backdrop-blur-md hover:bg-rose-500/30 transition-colors shadow-[0_0_10px_rgba(244,63,94,0.25)]"
+                        title={`Preview a display-only ${pushImpulseNs} N·s vector at ${pushAngleDeg}°. This does not change the owner rollout.`}
+                        aria-label={`Preview display-only push vector: ${pushImpulseNs} newton-seconds at ${pushAngleDeg} degrees`}
+                      >
+                        <Zap className="h-3.5 w-3.5 text-rose-300" />
+                        <span>
+                          🥊 Preview {pushImpulseNs} N·s ({pushAngleDeg}°)
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowPushOptions(!showPushOptions)}
+                        className={`rounded-r-full border-y border-r border-rose-400/40 px-2 py-1 text-[0.68rem] font-bold text-rose-200 backdrop-blur-md transition-colors ${
+                          showPushOptions
+                            ? "bg-rose-500/40 text-white"
+                            : "bg-rose-500/20 hover:bg-rose-500/30"
+                        }`}
+                        title="Configure the display-only push-vector preview"
+                        aria-label="Configure display-only push-vector preview"
+                      >
+                        <Sliders className="h-3 w-3" />
+                      </button>
 
-              {/* Drag Status & Contact Safety Readout */}
-              {(userHasDragged && robotDragOffset) || Object.keys(limbOffsets).length > 0 ? (
-                <div className="flex items-center gap-1.5 pointer-events-auto">
-                  <span
-                    className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
-                      dragCollisionState.isColliding
-                        ? "border border-rose-400/80 bg-rose-950/85 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
-                        : "border border-emerald-400/80 bg-emerald-950/85 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
-                    }`}
-                  >
-                    {dragCollisionState.isColliding
-                      ? `⚠️ Clamped: ${dragCollisionState.obstacleName || "Obstacle"}`
-                      : `🖐️ Dragged (${dragCollisionState.clearance.toFixed(2)}m free)`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (inFlightRef.current) return;
-                      robotDragOffsetRef.current = G1_HOUSE_SEAT.offset;
-                      setRobotDragOffset(G1_HOUSE_SEAT.offset);
-                      setLimbOffsets({});
-                      setUserHasDragged(false);
-                      handleRobotDragCommit();
-                    }}
-                    className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
-                    title="Reset robot and limbs to nominal position"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Reset
-                  </button>
-                </div>
-              ) : null}
+                      {showPushOptions && (
+                        <div className="absolute top-full left-0 mt-2 z-50 w-64 rounded-xl border border-rose-500/30 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
+                          <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-2">
+                            <span className="text-[0.7rem] font-bold uppercase tracking-wider text-rose-300">
+                              🥊 Display-only vector
+                            </span>
+                            <span className="text-[0.65rem] text-slate-400">
+                              {pushAngleDeg}° · {pushImpulseNs} N·s
+                            </span>
+                          </div>
 
-              {/* Owner obstacle verdict: the kernel now scores the walking
+                          <p className="mb-2.5 rounded-lg border border-amber-300/20 bg-amber-300/[0.07] px-2 py-1.5 text-[0.62rem] leading-4 text-amber-100">
+                            Visualization preview only. The owner experiment keeps its admitted
+                            lateral pulse
+                            {admission
+                              ? ` (${number(admission.pushPeakForceNewtons, 1)} N peak)`
+                              : ""}
+                            ; no controller, HOCBF result, trajectory, or receipt is recomputed.
+                          </p>
+
+                          {/* Quick Direction Selector */}
+                          <div className="mb-2.5">
+                            <label
+                              htmlFor="g1-push-preview-angle"
+                              className="text-[0.62rem] text-slate-400 mb-1 block"
+                            >
+                              Preview direction:
+                            </label>
+                            <div className="grid grid-cols-4 gap-1">
+                              {[
+                                { label: "⬅️ Left", angle: 90 },
+                                { label: "➡️ Right", angle: 270 },
+                                { label: "⬆️ Back", angle: 0 },
+                                { label: "⬇️ Front", angle: 180 },
+                              ].map((d) => (
+                                <button
+                                  key={d.angle}
+                                  type="button"
+                                  onClick={() => setPushAngleDeg(d.angle)}
+                                  className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
+                                    pushAngleDeg === d.angle
+                                      ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
+                                      : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
+                                  }`}
+                                >
+                                  {d.label}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              id="g1-push-preview-angle"
+                              type="range"
+                              min={0}
+                              max={360}
+                              step={5}
+                              value={pushAngleDeg}
+                              onChange={(e) => setPushAngleDeg(Number(e.target.value))}
+                              className="mt-1.5 w-full accent-rose-400 h-1.5 rounded-lg bg-slate-800 cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Impulse Magnitude Selector */}
+                          <div className="mb-3">
+                            <div className="text-[0.62rem] text-slate-400 mb-1">
+                              Preview magnitude:
+                            </div>
+                            <div className="grid grid-cols-4 gap-1">
+                              {[10, 15, 25, 45].map((ns) => (
+                                <button
+                                  key={ns}
+                                  type="button"
+                                  onClick={() => setPushImpulseNs(ns)}
+                                  className={`rounded-lg py-1 text-[0.65rem] font-semibold transition-all ${
+                                    pushImpulseNs === ns
+                                      ? "bg-rose-500/30 text-rose-200 border border-rose-400/50 shadow-sm"
+                                      : "bg-slate-800/60 text-slate-300 hover:bg-slate-700/60"
+                                  }`}
+                                >
+                                  {ns} N·s
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleApplyShove();
+                              setShowPushOptions(false);
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500 py-1.5 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:brightness-110 active:scale-[0.98] transition-all"
+                          >
+                            <Zap className="h-3.5 w-3.5" />
+                            Preview vector only
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Export Telemetry Receipt Button */}
+                    {trace && (
+                      <button
+                        type="button"
+                        onClick={handleExportTelemetry}
+                        aria-label="Export Telemetry"
+                        className="flex items-center gap-1.5 rounded-full border border-cyan-400/30 bg-cyan-950/80 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider text-cyan-200 backdrop-blur-md hover:bg-cyan-900/60 transition-colors"
+                        title="Export full kinematic & dynamic trajectory receipt as JSON"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span className="sm:hidden">Export</span>
+                        <span className="max-sm:hidden">Export Telemetry</span>
+                      </button>
+                    )}
+
+                    {/* Drag Mode Selector: Pelvis vs 6-Pin Multi-Limb IK */}
+                    <button
+                      type="button"
+                      onClick={() => setDragMode(dragMode === "pelvis" ? "limbs" : "pelvis")}
+                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                        dragMode === "limbs"
+                          ? "border-amber-400 bg-amber-500/25 text-amber-100 shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+                          : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
+                      }`}
+                      title="Toggle between Whole-Body Pelvis Drag and 6-Pin Multi-Limb Ragdoll IK"
+                    >
+                      <Bot className="h-3.5 w-3.5" />
+                      <span>{dragMode === "limbs" ? "🖐️ 6-Pin IK Mode" : "📍 Root Drag"}</span>
+                    </button>
+
+                    {/* Drag Status & Contact Safety Readout */}
+                    {(userHasDragged && robotDragOffset) || Object.keys(limbOffsets).length > 0 ? (
+                      <div className="flex items-center gap-1.5 pointer-events-auto">
+                        <span
+                          className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                            dragCollisionState.isColliding
+                              ? "border border-rose-400/80 bg-rose-950/85 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                              : "border border-emerald-400/80 bg-emerald-950/85 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                          }`}
+                        >
+                          {dragCollisionState.isColliding
+                            ? `⚠️ Clamped: ${dragCollisionState.obstacleName || "Obstacle"}`
+                            : `🖐️ Dragged (${dragCollisionState.clearance.toFixed(2)}m free)`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (inFlightRef.current) return;
+                            robotDragOffsetRef.current = G1_HOUSE_SEAT.offset;
+                            setRobotDragOffset(G1_HOUSE_SEAT.offset);
+                            setLimbOffsets({});
+                            setUserHasDragged(false);
+                            handleRobotDragCommit();
+                          }}
+                          className="flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-950/80 px-2.5 py-1 text-[0.68rem] font-bold uppercase text-cyan-200 hover:bg-cyan-900/60 transition-colors"
+                          title="Reset robot and limbs to nominal position"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Reset
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Owner obstacle verdict: the kernel now scores the walking
                   policy against the house itself, so this reports the
                   kernel's own measurement, not a browser re-derivation. */}
-              {trace ? (
-                <span
-                  className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
-                    trace.terminationReason === "body obstacle"
-                      ? "border-rose-400/80 bg-rose-950/85 text-rose-200"
-                      : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
-                  }`}
-                  title={`The owner tested all 30 links against ${scene?.declaredBodyCount ?? 0} of ${scene?.catalogBodyCount ?? 0} catalog bodies. Remaining bodies and detailed estate meshes are outside this receipt's collision scope. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m.`}
-                >
-                  {trace.terminationReason === "body obstacle"
-                    ? `🧱 Owner stopped on contact · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm into geometry`
-                    : `🧱 ${scene?.declaredBodyCount ?? 0}/${scene?.catalogBodyCount ?? 0} catalog bodies · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm penetration`}
-                </span>
-              ) : null}
+                    {trace ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                          trace.terminationReason === "body obstacle"
+                            ? "border-rose-400/80 bg-rose-950/85 text-rose-200"
+                            : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
+                        }`}
+                        title={`The owner tested all 30 links against ${scene?.declaredBodyCount ?? 0} of ${scene?.catalogBodyCount ?? 0} catalog bodies. Remaining bodies and detailed estate meshes are outside this receipt's collision scope. Deepest measured penetration: ${trace.maximumBodyPenetrationMeters.toFixed(4)} m.`}
+                      >
+                        {trace.terminationReason === "body obstacle"
+                          ? `🧱 Owner stopped on contact · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm into geometry`
+                          : `🧱 ${scene?.declaredBodyCount ?? 0}/${scene?.catalogBodyCount ?? 0} catalog bodies · ${(trace.maximumBodyPenetrationMeters * 100).toFixed(1)} cm penetration`}
+                      </span>
+                    ) : null}
 
-              {/* Live clearance readout: nearest rigid surface to any link. */}
-              {liveClearance ? (
-                <span
-                  className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
-                    liveClearance.distance < G1_CLEARANCE_BREACH_METERS
-                      ? "border-rose-400/70 bg-rose-950/85 text-rose-200"
-                      : liveClearance.distance < 0.3
-                        ? "border-amber-400/70 bg-amber-950/85 text-amber-200"
-                        : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
-                  }`}
-                  title="Visual diagnostic: distance from a link origin to the catalog surface. This is separate from the owner collider clearance and HOCBF result."
-                >
-                  📏 {liveClearance.distance.toFixed(2)} m · {liveClearance.obstacleName}
-                </span>
-              ) : null}
-              </>
-              ) : null}
-            </div>
+                    {/* Live clearance readout: nearest rigid surface to any link. */}
+                    {liveClearance ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                          liveClearance.distance < G1_CLEARANCE_BREACH_METERS
+                            ? "border-rose-400/70 bg-rose-950/85 text-rose-200"
+                            : liveClearance.distance < 0.3
+                              ? "border-amber-400/70 bg-amber-950/85 text-amber-200"
+                              : "border-emerald-400/50 bg-slate-950/85 text-emerald-200"
+                        }`}
+                        title="Visual diagnostic: distance from a link origin to the catalog surface. This is separate from the owner collider clearance and HOCBF result."
+                      >
+                        📏 {liveClearance.distance.toFixed(2)} m · {liveClearance.obstacleName}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
 
-            {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
-            <div
-              id="g1-hud-controls"
-              className="flex flex-wrap items-center gap-2 pointer-events-auto self-start"
-            >
-              {/* Lighting Atmosphere Selector. Cosmetic only — it changes the
+              {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
+              <div
+                id="g1-hud-controls"
+                className="flex flex-wrap items-center gap-2 pointer-events-auto self-start"
+              >
+                {/* Lighting Atmosphere Selector. Cosmetic only — it changes the
                   sky and exposure, never the physics or the receipt — so it
                   lives behind the controls disclosure rather than occupying
                   the top band by default. */}
-              <div
-                className={`items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md ${
-                  hudExpanded ? "flex" : "hidden"
-                }`}
-              >
-                {(
-                  [
-                    { id: "afternoon-sun", label: "Day", icon: Sun },
-                    { id: "golden-hour", label: "Sunset", icon: Sunset },
-                    { id: "evening-glow", label: "Evening", icon: Moon },
-                  ] as const
-                ).map((tod) => {
-                  const Icon = tod.icon;
-                  const isSelected = timeOfDay === tod.id;
-                  return (
-                    <button
-                      key={tod.id}
-                      type="button"
-                      onClick={() => setTimeOfDay(tod.id)}
-                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
-                        isSelected
-                          ? "bg-amber-500/30 text-amber-200 border border-amber-400/40"
-                          : "text-slate-400 hover:text-slate-200"
-                      }`}
-                      title={`Craftsman atmosphere: ${tod.label}`}
-                    >
-                      <Icon className="h-3 w-3" />
-                      {tod.label}
-                    </button>
-                  );
-                })}
-              </div>
+                <div
+                  className={`items-center gap-1 rounded-xl border border-amber-500/20 bg-slate-950/85 p-1 backdrop-blur-md ${
+                    hudExpanded ? "flex" : "hidden"
+                  }`}
+                >
+                  {(
+                    [
+                      { id: "afternoon-sun", label: "Day", icon: Sun },
+                      { id: "golden-hour", label: "Sunset", icon: Sunset },
+                      { id: "evening-glow", label: "Evening", icon: Moon },
+                    ] as const
+                  ).map((tod) => {
+                    const Icon = tod.icon;
+                    const isSelected = timeOfDay === tod.id;
+                    return (
+                      <button
+                        key={tod.id}
+                        type="button"
+                        onClick={() => setTimeOfDay(tod.id)}
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                          isSelected
+                            ? "bg-amber-500/30 text-amber-200 border border-amber-400/40"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                        title={`Craftsman atmosphere: ${tod.label}`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {tod.label}
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {/* Camera Perspective Selector. Five buttons is most of a phone's
+                {/* Camera Perspective Selector. Five buttons is most of a phone's
                   width, so below sm it joins the disclosure; on wider screens
                   it stays out as primary navigation. */}
-              <div
-                className={`items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex ${
-                  hudExpanded ? "flex" : "hidden"
-                }`}
-              >
-                {(
-                  [
-                    { id: "orbit", label: "Orbit", icon: Camera },
-                    { id: "follow", label: "Follow", icon: Activity },
-                    { id: "pov", label: "POV", icon: Eye },
-                    { id: "blueprint", label: "Map", icon: Radio },
-    { id: "fly", label: "Free-fly", icon: Compass },
-                  ] as const
-                ).map((cam) => {
-                  const Icon = cam.icon;
-                  const isSelected = cameraView === cam.id;
-                  return (
-                    <button
-                      key={cam.id}
-                      type="button"
-                      onClick={() => setCameraView(cam.id)}
-                      className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
-                        isSelected
-                          ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
-                          : "text-slate-400 hover:text-slate-200"
-                      }`}
-                      title={`Switch camera to ${cam.label} view`}
-                    >
-                      <Icon className="h-3 w-3" />
-                      {cam.label}
-                    </button>
-                  );
-                })}
+                <div
+                  className={`items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex ${
+                    hudExpanded ? "flex" : "hidden"
+                  }`}
+                >
+                  {(
+                    [
+                      { id: "orbit", label: "Orbit", icon: Camera },
+                      { id: "follow", label: "Follow", icon: Activity },
+                      { id: "pov", label: "POV", icon: Eye },
+                      { id: "blueprint", label: "Map", icon: Radio },
+                      { id: "fly", label: "Free-fly", icon: Compass },
+                    ] as const
+                  ).map((cam) => {
+                    const Icon = cam.icon;
+                    const isSelected = cameraView === cam.id;
+                    return (
+                      <button
+                        key={cam.id}
+                        type="button"
+                        onClick={() => setCameraView(cam.id)}
+                        className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                          isSelected
+                            ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                        title={`Switch camera to ${cam.label} view`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {cam.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
             </div>
 
             {meshState.phase === "loading" ? (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" role="status" aria-live="polite">
+              <div
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+                role="status"
+                aria-live="polite"
+              >
                 <span className="rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2 text-xs text-slate-300 backdrop-blur-md">
                   Loading the real Unitree G1 mesh rig…
                 </span>
@@ -3688,15 +3934,24 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 aria-hidden={!rigReadyVisible}
               >
                 <span className="rounded-xl border border-emerald-300/20 bg-emerald-950/70 px-3 py-2 text-[0.7rem] text-emerald-100 backdrop-blur-md">
-                  Real Unitree G1 rig ready · {Object.keys(meshState.geometries).length} mesh parts decoded
+                  Real Unitree G1 rig ready · {Object.keys(meshState.geometries).length} mesh parts
+                  decoded
                 </span>
               </div>
             ) : null}
             {meshState.phase === "failed" ? (
-              <div className="absolute bottom-20 left-5 right-5 z-20 flex justify-center" role="alert">
+              <div
+                className="absolute bottom-20 left-5 right-5 z-20 flex justify-center"
+                role="alert"
+              >
                 <div className="max-w-xl rounded-xl border border-amber-300/20 bg-amber-950/80 px-3 py-2 text-[0.7rem] text-amber-100 shadow-lg backdrop-blur-md">
-                  <p>Real mesh assets could not load. The owner-driven kinematic skeleton remains active.</p>
-                  <p className="mt-1 break-words font-mono text-[0.62rem] text-amber-200/80">{meshState.error}</p>
+                  <p>
+                    Real mesh assets could not load. The owner-driven kinematic skeleton remains
+                    active.
+                  </p>
+                  <p className="mt-1 break-words font-mono text-[0.62rem] text-amber-200/80">
+                    {meshState.error}
+                  </p>
                   <button
                     type="button"
                     onClick={retryMeshes}
@@ -3725,7 +3980,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </span>
               {!embedded ? (
                 <span className="max-sm:hidden rounded-xl border border-amber-300/20 bg-amber-950/65 px-3 py-2 text-[0.7rem] text-amber-100 backdrop-blur-md">
-                  Rose arrow: owner lateral pulse during playback; manual vector preview is display-only · arm joints are kernel-posed with real mass (head/hands: display-only)
+                  Rose arrow: owner lateral pulse during playback; manual vector preview is
+                  display-only · arm joints are kernel-posed with real mass (head/hands:
+                  display-only)
                 </span>
               ) : null}
             </div>
@@ -3765,7 +4022,6 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
           </div>
 
-
           <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
             <label htmlFor="g1-sigma">Exploration σ (search radius)</label>
             <span className="font-mono text-purple-200">{searchSigma.toFixed(4)}</span>
@@ -3797,7 +4053,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           {/* 2. Interactive Timeline & Milestone Scrubber */}
           <G1TimelineScrubber
             trace={trace}
-            pushStartSeconds={admission?.config.challenge === "terrain-and-push" ? admission.pushStartSeconds : null}
+            pushStartSeconds={
+              admission?.config.challenge === "terrain-and-push" ? admission.pushStartSeconds : null
+            }
             currentSampleIndex={sampleIndex}
             isPlaying={isPlaying}
             playbackSpeed={playbackSpeed}
@@ -3814,7 +4072,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           />
           {reduceMotion ? (
             <p className="mt-2 text-xs text-slate-400">
-              Autoplay is off. Play the trace or inspect individual frames with the slider and step buttons.
+              Autoplay is off. Play the trace or inspect individual frames with the slider and step
+              buttons.
             </p>
           ) : null}
 
@@ -3845,20 +4104,28 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <Bot className="h-6 w-6 text-cyan-200" />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Frankensim G1 flagship</p>
-              <h3 className="mt-1 text-xl font-bold text-white">Optimize a 5,040-D {G1_TASK_COPY[task].action} policy</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+                Frankensim G1 flagship
+              </p>
+              <h3 className="mt-1 text-xl font-bold text-white">
+                Optimize a 5,040-D {G1_TASK_COPY[task].action} policy
+              </h3>
             </div>
           </div>
 
           <p className="mt-5 text-sm leading-6 text-slate-400">
-            Fifteen learned actuator rows each read 42 physical signals through eight gait-phase basis terms:
-            <span className="mt-2 block font-mono text-cyan-200">15 × 42 × 8 = 5,040 learned weights</span>
+            Fifteen learned actuator rows each read 42 physical signals through eight gait-phase
+            basis terms:
+            <span className="mt-2 block font-mono text-cyan-200">
+              15 × 42 × 8 = 5,040 learned weights
+            </span>
           </p>
 
           <p className="mt-3 text-xs leading-5 text-slate-500">
             A disclosed full-CMA curriculum learned 105 meaningful owner coordinates: standing bias,
-            periodic foot unloading, then pelvis feedback. Live search expands that curriculum to all
-            5,040 weights. Every candidate is scored on the same 1.5-second, 720-step task and challenge you watch.
+            periodic foot unloading, then pelvis feedback. Live search expands that curriculum to
+            all 5,040 weights. Every candidate is scored on the same 1.5-second, 720-step task and
+            challenge you watch.
           </p>
 
           {admission && (
@@ -3868,17 +4135,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </summary>
               <div data-testid="g1-owner-admission" className="mt-2 space-y-2">
                 <p>
-                  {admission.physicalActuatorCount} physical actuators, {admission.linkCount} links:
-                  {" "}{admission.learnedPolicyRowCount} learned rows and
-                  {" "}{admission.reflexActuatorCount} reflex-controlled arm joints.
-                  All joints participate in the owner dynamics.
+                  {admission.physicalActuatorCount} physical actuators, {admission.linkCount} links:{" "}
+                  {admission.learnedPolicyRowCount} learned rows and {admission.reflexActuatorCount}{" "}
+                  reflex-controlled arm joints. All joints participate in the owner dynamics.
                 </p>
                 <p>
-                  The initializer supplies {admission.curriculumIndices.bias.length} standing biases,
-                  {" "}{admission.curriculumIndices.phase.length} phase coefficients and
-                  {" "}{admission.curriculumIndices.feedback.length} inertial-feedback coefficients.
-                  Arm swing ramps smoothly from {admission.armSwingGateStartSeconds.toFixed(3)} to
-                  {" "}{admission.armSwingGateEndSeconds.toFixed(3)} physical seconds; changing gait frequency keeps these times fixed.
+                  The initializer supplies {admission.curriculumIndices.bias.length} standing
+                  biases, {admission.curriculumIndices.phase.length} phase coefficients and{" "}
+                  {admission.curriculumIndices.feedback.length} inertial-feedback coefficients. Arm
+                  swing ramps smoothly from {admission.armSwingGateStartSeconds.toFixed(3)} to{" "}
+                  {admission.armSwingGateEndSeconds.toFixed(3)} physical seconds; changing gait
+                  frequency keeps these times fixed.
                 </p>
                 <a
                   className="text-cyan-300 underline underline-offset-2"
@@ -3908,10 +4175,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           </div>
 
           <div className="mt-6">
-            <span id="g1-task-label" className="block text-xs font-semibold uppercase tracking-wider text-slate-300">
+            <span
+              id="g1-task-label"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-300"
+            >
               Physical objective
             </span>
-            <div role="radiogroup" aria-labelledby="g1-task-label" className="mt-2 grid grid-cols-3 gap-2">
+            <div
+              role="radiogroup"
+              aria-labelledby="g1-task-label"
+              className="mt-2 grid grid-cols-3 gap-2"
+            >
               {(["balance", "stepping", "walking"] as const).map((candidateTask) => (
                 <button
                   key={candidateTask}
@@ -3930,11 +4204,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </div>
             <p className="mt-2 text-xs leading-5 text-slate-500">
               {G1_TASK_COPY[task].detail}
-              {admission ? ` Owner admission: ${admission.config.task}.` : " Awaiting owner admission."}
+              {admission
+                ? ` Owner admission: ${admission.config.task}.`
+                : " Awaiting owner admission."}
             </p>
           </div>
 
-          <label className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-family">
+          <label
+            className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300"
+            htmlFor="g1-family"
+          >
             Scalable covariance representation
           </label>
           <select
@@ -3949,10 +4228,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <option value="lm-ma">LM-MA — bounded transform</option>
           </select>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Full CMA is implemented on the 128-D arm below, but its O(n²) covariance would contain 25,401,600 entries here; the browser boundary honestly refuses it above 256-D.
+            Full CMA is implemented on the 128-D arm below, but its O(n²) covariance would contain
+            25,401,600 entries here; the browser boundary honestly refuses it above 256-D.
           </p>
 
-          <label className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300" htmlFor="g1-seed">
+          <label
+            className="mt-5 block text-xs font-semibold uppercase tracking-wider text-slate-300"
+            htmlFor="g1-seed"
+          >
             Declared Philox seed
           </label>
           <select
@@ -3969,8 +4252,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
           <div className="mt-4 rounded-xl border border-rose-300/15 bg-rose-400/[0.055] p-3 text-[0.68rem] leading-5 text-slate-400">
             The wave field and half-sine lateral shove are deterministic owner inputs. Survival is
-            lexicographically primary: one extra integrated physics step beats every possible shaping-score
-            difference. “Recovery” is horizon-censored when the robot never returns to the disclosed upright band.
+            lexicographically primary: one extra integrated physics step beats every possible
+            shaping-score difference. “Recovery” is horizon-censored when the robot never returns to
+            the disclosed upright band.
           </div>
 
           <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
@@ -4022,14 +4306,29 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <div className="mt-4 grid grid-cols-3 gap-3">
             <button
               type="button"
-              disabled={!workerAvailable || !admission || (busy !== null && busy !== "optimize") || stopRequested}
-              onClick={busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization}
+              disabled={
+                !workerAvailable ||
+                !admission ||
+                (busy !== null && busy !== "optimize") ||
+                stopRequested
+              }
+              onClick={
+                busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization
+              }
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {busy === "optimize" ? <Square className="h-4 w-4 fill-current" /> : <Sparkles className="h-4 w-4" />}
+              {busy === "optimize" ? (
+                <Square className="h-4 w-4 fill-current" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               {busy === "optimize"
-                ? (stopRequested ? "Stopping…" : `Stop · gen ${generation}`)
-                : (generation > 0 ? `Keep learning · gen ${generation}` : "Start learning")}
+                ? stopRequested
+                  ? "Stopping…"
+                  : `Stop · gen ${generation}`
+                : generation > 0
+                  ? `Keep learning · gen ${generation}`
+                  : "Start learning"}
             </button>
             <button
               type="button"
@@ -4047,7 +4346,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <button
               type="button"
               disabled={busy !== null || !workerAvailable || !stabilizerTrace}
-              onClick={() => { selectPriorReplay("stabilizer"); }}
+              onClick={() => {
+                selectPriorReplay("stabilizer");
+              }}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <RotateCcw className="h-4 w-4" />
@@ -4055,7 +4356,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </button>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4" aria-live="polite">
+          <div
+            className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4"
+            aria-live="polite"
+          >
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
               {busy ? (
                 <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
@@ -4069,14 +4373,15 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             {generation > 0 ? (
               <div className="mt-3 flex justify-between font-mono text-[0.7rem] text-slate-400">
                 <span>generation {generation}</span>
-                <span>best objective {bestObjective === null ? "—" : number(bestObjective, 4)}</span>
+                <span>
+                  best objective {bestObjective === null ? "—" : number(bestObjective, 4)}
+                </span>
               </div>
             ) : null}
             {restoredNotice ? (
               <p className="mt-2 rounded-xl border border-cyan-300/20 bg-cyan-950/30 px-3 py-2 text-[0.66rem] leading-4 text-cyan-100">
-                {restoredNotice} The search itself restarts from this policy —
-                its covariance was not saved, so this is a warm restart rather
-                than a resumed run.
+                {restoredNotice} The search itself restarts from this policy — its covariance was
+                not saved, so this is a warm restart rather than a resumed run.
               </p>
             ) : null}
             {ledger.length > 0 ? (
@@ -4088,14 +4393,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <PolicyExchange
                 policy={stagePolicy}
                 disabled={busy !== null || !workerAvailable || !trace || !admission}
-                meta={stagePolicyMeta ?? {
-                  kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-                  task,
-                  challenge,
-                  family,
-                  generation,
-                  sigma: searchSigma,
-                }}
+                meta={
+                  stagePolicyMeta ?? {
+                    kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+                    task,
+                    challenge,
+                    family,
+                    generation,
+                    sigma: searchSigma,
+                  }
+                }
                 measured={
                   trace && admission
                     ? {
@@ -4132,13 +4439,24 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 />
               </div>
             ) : null}
-            {error ? <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">
+                {error}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
 
       {embedded ? (
-        <G1StoryTour currentChapter={currentChapter} onSelectChapter={handleSelectChapter} receipt={trace} admission={admission} kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION} disabled={busy !== null || !workerAvailable} />
+        <G1StoryTour
+          currentChapter={currentChapter}
+          onSelectChapter={handleSelectChapter}
+          receipt={trace}
+          admission={admission}
+          kernelVersion={FRANKENSIM_OWNER_KERNEL_VERSION}
+          disabled={busy !== null || !workerAvailable}
+        />
       ) : null}
       {trace ? (
         <div className="space-y-3">
@@ -4149,8 +4467,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 title={`${label}: ${value}`}
                 className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
               >
-                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
+                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  {label}
+                </p>
+                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>
+                  {value}
+                </p>
               </div>
             ))}
           </div>
@@ -4161,8 +4483,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 title={`${label}: ${value}`}
                 className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
               >
-                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>{value}</p>
+                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  {label}
+                </p>
+                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>
+                  {value}
+                </p>
               </div>
             ))}
           </div>
@@ -4227,11 +4553,11 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </p>
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-300">
-            The kernel scalar <span className="font-mono text-slate-100">objective ↓</span> collapses
-            many signals into one number and so can punish small stabilizing corrections. The
-            weighted sum above re-exposes an owner-inspired receipt decomposition as a transparent
-            sum of eleven per-step / per-trajectory channels. A selected lens can rebias the
-            post-hoc comparison between speed, stability, and efficiency. It does not change the
+            The kernel scalar <span className="font-mono text-slate-100">objective ↓</span>{" "}
+            collapses many signals into one number and so can punish small stabilizing corrections.
+            The weighted sum above re-exposes an owner-inspired receipt decomposition as a
+            transparent sum of eleven per-step / per-trajectory channels. A selected lens can rebias
+            the post-hoc comparison between speed, stability, and efficiency. It does not change the
             kernel scalar that CMA-ES minimized, mutate the trace, or claim the rendered gait
             changed.
           </p>
@@ -4264,16 +4590,27 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         <div className="glass-card p-6 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">Scalable variants, one physical budget</p>
-              <h3 className="mt-1 text-xl font-bold text-white">A live 5,040-D {task}, {challenge} race</h3>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
+                Scalable variants, one physical budget
+              </p>
+              <h3 className="mt-1 text-xl font-bold text-white">
+                A live 5,040-D {task}, {challenge} race
+              </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Same curriculum mean, Philox seed, population of 16, physical evaluator, and evaluation budget. Full CMA is absent only because the owner correctly refuses dense covariance above 256 dimensions; all four families race on the 128-D arm.
+                Same curriculum mean, Philox seed, population of 16, physical evaluator, and
+                evaluation budget. Full CMA is absent only because the owner correctly refuses dense
+                covariance above 256 dimensions; all four families race on the 128-D arm.
               </p>
             </div>
             <button
               type="button"
               disabled={busy !== null || !workerAvailable || !admission || !scene}
-              onClick={() => post({ type: "compare", task, generations: 4, challenge, seat: scene?.seat }, "compare")}
+              onClick={() =>
+                post(
+                  { type: "compare", task, generations: 4, challenge, seat: scene?.seat },
+                  "compare",
+                )
+              }
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/25 bg-violet-400/10 px-4 text-sm font-semibold text-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Play className="h-4 w-4" />
@@ -4296,10 +4633,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <tbody>
                   {comparison.map((row) => (
                     <tr key={row.family} className="border-b border-white/5 text-slate-300">
-                      <td className="py-3 font-semibold text-white">{FAMILY_COPY[row.family].title}</td>
-                      <td className="py-3 font-mono">{row.initialBest.toExponential(2)} → {row.finalBest.toExponential(2)}</td>
+                      <td className="py-3 font-semibold text-white">
+                        {FAMILY_COPY[row.family].title}
+                      </td>
+                      <td className="py-3 font-mono">
+                        {row.initialBest.toExponential(2)} → {row.finalBest.toExponential(2)}
+                      </td>
                       <td className="py-3 font-mono">{row.evaluations}</td>
-                      <td className="py-3 font-mono">{row.persistentScalars.toLocaleString()} / {row.workspaceScalars.toLocaleString()}</td>
+                      <td className="py-3 font-mono">
+                        {row.persistentScalars.toLocaleString()} /{" "}
+                        {row.workspaceScalars.toLocaleString()}
+                      </td>
                       <td className="py-3 font-mono">{number(row.elapsedMilliseconds, 1)} ms</td>
                     </tr>
                   ))}
@@ -4311,11 +4655,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               {(Object.keys(FAMILY_COPY) as CmaFamily[]).map((name) => (
                 <div key={name} className="rounded-2xl border border-white/10 bg-black/15 p-4">
                   <div className="flex items-center gap-2">
-                    {name === "full" ? <BrainCircuit className="h-4 w-4 text-sky-300" /> : <Cpu className="h-4 w-4 text-violet-300" />}
-                    <p className="text-sm font-semibold text-slate-100">{FAMILY_COPY[name].title}</p>
+                    {name === "full" ? (
+                      <BrainCircuit className="h-4 w-4 text-sky-300" />
+                    ) : (
+                      <Cpu className="h-4 w-4 text-violet-300" />
+                    )}
+                    <p className="text-sm font-semibold text-slate-100">
+                      {FAMILY_COPY[name].title}
+                    </p>
                   </div>
                   <p className="mt-2 text-xs text-slate-400">{FAMILY_COPY[name].representation}</p>
-                  <p className="mt-1 font-mono text-[0.68rem] text-slate-500">{FAMILY_COPY[name].order}</p>
+                  <p className="mt-1 font-mono text-[0.68rem] text-slate-500">
+                    {FAMILY_COPY[name].order}
+                  </p>
                 </div>
               ))}
             </div>
@@ -4328,13 +4680,41 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <h3 className="font-bold text-white">What is physically real here?</h3>
           </div>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-400">
-            <li><strong className="text-slate-200">Owner-composed:</strong> free-floating multibody dynamics, SE(3) poses, fixed 1/480 s integration, normal contact, friction, policy map, and objective.</li>
-            <li><strong className="text-slate-200">Rendered verbatim:</strong> every opaque limb segment connects world-frame link positions emitted by Frankensim; contact rings use its booleans.</li>
-            <li><strong className="text-slate-200">Real support polygon:</strong> four declared compliant patches under each source foot accumulate both forces and moments. Static Hertz preload supports the model from step one instead of beginning with a fictitious drop.</li>
-            <li><strong className="text-slate-200">Survival first:</strong> each skipped 480 Hz step—and a terminal guard—costs 1,000 while all secondary shaping is bounded to ±400. One more survived step therefore beats every possible shaping difference.</li>
-            <li><strong className="text-slate-200">Exact endings:</strong> the receipt distinguishes horizon completion, height, tilt, contact, and joint-limit guards; “fell” is not inferred in the browser.</li>
-            <li><strong className="text-slate-200">Controller split:</strong> 29 physical actuators drive 30 simulated links. Fifteen learned lower-body/waist rows combine with 14 reflex-controlled arm joints; fingers are not independently actuated.</li>
-            <li><strong className="text-slate-200">No hardware claim:</strong> this is a deterministic explainer experiment, not a validated Unitree controller or sim-to-real result.</li>
+            <li>
+              <strong className="text-slate-200">Owner-composed:</strong> free-floating multibody
+              dynamics, SE(3) poses, fixed 1/480 s integration, normal contact, friction, policy
+              map, and objective.
+            </li>
+            <li>
+              <strong className="text-slate-200">Rendered verbatim:</strong> every opaque limb
+              segment connects world-frame link positions emitted by Frankensim; contact rings use
+              its booleans.
+            </li>
+            <li>
+              <strong className="text-slate-200">Real support polygon:</strong> four declared
+              compliant patches under each source foot accumulate both forces and moments. Static
+              Hertz preload supports the model from step one instead of beginning with a fictitious
+              drop.
+            </li>
+            <li>
+              <strong className="text-slate-200">Survival first:</strong> each skipped 480 Hz
+              step—and a terminal guard—costs 1,000 while all secondary shaping is bounded to ±400.
+              One more survived step therefore beats every possible shaping difference.
+            </li>
+            <li>
+              <strong className="text-slate-200">Exact endings:</strong> the receipt distinguishes
+              horizon completion, height, tilt, contact, and joint-limit guards; “fell” is not
+              inferred in the browser.
+            </li>
+            <li>
+              <strong className="text-slate-200">Controller split:</strong> 29 physical actuators
+              drive 30 simulated links. Fifteen learned lower-body/waist rows combine with 14
+              reflex-controlled arm joints; fingers are not independently actuated.
+            </li>
+            <li>
+              <strong className="text-slate-200">No hardware claim:</strong> this is a deterministic
+              explainer experiment, not a validated Unitree controller or sim-to-real result.
+            </li>
           </ul>
         </aside>
       </div>
@@ -4343,14 +4723,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 sm:p-5 [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-amber-300" />
-            <h3 className="font-bold text-white">What the kernel actually does (and doesn&apos;t)</h3>
+            <h3 className="font-bold text-white">
+              What the kernel actually does (and doesn&apos;t)
+            </h3>
           </div>
-          <span className="text-xs font-semibold text-slate-400 group-open:hidden">tap to expand</span>
-          <span className="text-xs font-semibold text-slate-400 hidden group-open:inline">tap to collapse</span>
+          <span className="text-xs font-semibold text-slate-400 group-open:hidden">
+            tap to expand
+          </span>
+          <span className="text-xs font-semibold text-slate-400 hidden group-open:inline">
+            tap to collapse
+          </span>
         </summary>
         <div className="grid gap-3 border-t border-white/5 p-4 sm:grid-cols-3 sm:p-5">
           <div className="rounded-xl border border-emerald-300/15 bg-emerald-950/20 p-3">
-            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">Modeled</p>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-emerald-300">
+              Modeled
+            </p>
             <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
               <li>· 15 actuated DoFs (legs + waist)</li>
               <li>· Free-floating base, SE(3) poses</li>
@@ -4361,7 +4749,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </ul>
           </div>
           <div className="rounded-xl border border-amber-300/15 bg-amber-950/20 p-3">
-            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-amber-300">Simplified</p>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-amber-300">
+              Simplified
+            </p>
             <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
               <li>· Four compliant foot patches, not full soles</li>
               <li>· No torso arms, hands, or upper shell</li>
@@ -4372,7 +4762,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             </ul>
           </div>
           <div className="rounded-xl border border-rose-300/15 bg-rose-950/20 p-3">
-            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-rose-300">Not modeled</p>
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-rose-300">
+              Not modeled
+            </p>
             <ul className="mt-2 space-y-1.5 text-[0.78rem] leading-5 text-slate-300">
               <li>· No rolling or sliding friction asymmetry</li>
               <li>· No slip detection or recovery reflex</li>

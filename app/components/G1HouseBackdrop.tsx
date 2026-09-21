@@ -17,10 +17,10 @@
  * it alone; do not edit its visuals.
  */
 
-import React, { useMemo, useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture, type HouseWall } from "../lib/houseScenes";
 import { buildFurniture, CRAFTSMAN_PALETTE } from "../lib/houseFurniture";
+import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture, type HouseWall } from "../lib/houseScenes";
 
 export interface G1HouseBackdropProps {
   showFurniture?: boolean;
@@ -89,7 +89,11 @@ export function G1HouseBackdrop({
   const wallGeometries = useMemo(() => {
     if (!showWalls) return [];
 
-    const walls: { geometry: THREE.BufferGeometry; position: [number, number, number]; rotation: number }[] = [];
+    const walls: {
+      geometry: THREE.BufferGeometry;
+      position: [number, number, number];
+      rotation: number;
+    }[] = [];
 
     CRAFTSMAN_BUNGALOW_1928.walls.forEach((w: HouseWall) => {
       const dx = w.to[0] - w.from[0];
@@ -169,10 +173,7 @@ export function G1HouseBackdrop({
       </mesh>
 
       {/* Parquet floor seam grid */}
-      <gridHelper
-        args={[14, 28, "#5c4033", "#4a2912"]}
-        position={[0, 0.001, 0]}
-      />
+      <gridHelper args={[14, 28, "#5c4033", "#4a2912"]} position={[0, 0.001, 0]} />
 
       {/* 2. Sears Craftsman Walls */}
       {showWalls &&
@@ -196,11 +197,7 @@ export function G1HouseBackdrop({
       {/* 3. Parameterized Physical Furniture */}
       {showFurniture &&
         furnitureMeshes.map((f) => (
-          <group
-            key={f.name}
-            position={f.position}
-            rotation={f.rotation}
-          >
+          <group key={f.name} position={f.position} rotation={f.rotation}>
             <primitive object={f.group} />
           </group>
         ))}
@@ -213,7 +210,12 @@ export function G1HouseBackdrop({
             <group key={g.name} position={[gx, gy, gz]}>
               <mesh rotation={[-Math.PI / 2, 0, 0]}>
                 <ringGeometry args={[g.radius * 0.85, g.radius, 32]} />
-                <meshBasicMaterial color="#06b6d4" transparent opacity={0.65} side={THREE.DoubleSide} />
+                <meshBasicMaterial
+                  color="#06b6d4"
+                  transparent
+                  opacity={0.65}
+                  side={THREE.DoubleSide}
+                />
               </mesh>
               <mesh rotation={[-Math.PI / 2, 0, 0]}>
                 <circleGeometry args={[g.radius * 0.2, 16]} />
@@ -224,10 +226,34 @@ export function G1HouseBackdrop({
         })}
 
       {/* 5. Period Lighting Accents */}
-      <pointLight position={[-1.4, 2.2, -2.6]} intensity={1.8} color="#fed7aa" distance={5.5} decay={2} />
-      <pointLight position={[1.6, 2.4, -2.4]} intensity={2.2} color="#fef08a" distance={6.0} decay={2} />
-      <pointLight position={[1.9, 2.3, 0.6]} intensity={2.0} color="#fef9c3" distance={5.0} decay={2} />
-      <pointLight position={[-1.8, 2.0, 1.9]} intensity={1.4} color="#fdba74" distance={5.0} decay={2} />
+      <pointLight
+        position={[-1.4, 2.2, -2.6]}
+        intensity={1.8}
+        color="#fed7aa"
+        distance={5.5}
+        decay={2}
+      />
+      <pointLight
+        position={[1.6, 2.4, -2.4]}
+        intensity={2.2}
+        color="#fef08a"
+        distance={6.0}
+        decay={2}
+      />
+      <pointLight
+        position={[1.9, 2.3, 0.6]}
+        intensity={2.0}
+        color="#fef9c3"
+        distance={5.0}
+        decay={2}
+      />
+      <pointLight
+        position={[-1.8, 2.0, 1.9]}
+        intensity={1.4}
+        color="#fdba74"
+        distance={5.0}
+        decay={2}
+      />
     </group>
   );
 }

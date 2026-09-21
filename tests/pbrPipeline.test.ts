@@ -12,23 +12,18 @@
 //   - srgb color textures go in srgb slots; linear data textures go in linear slots.
 
 import { describe, expect, test } from "bun:test";
-
+import { ALL_FURNITURE_KINDS } from "../app/lib/furnitureTaxonomy";
 import {
   ALL_PBR_MATERIAL_CLASSES,
-  FURNITURE_KIND_TO_PBR_CLASSES,
-  PBR_MATERIAL_SLOTS,
-  PBRTextureSlot,
   assertColorSpace,
+  FURNITURE_KIND_TO_PBR_CLASSES,
   materialSlotsForKind,
+  PBR_MATERIAL_SLOTS,
+  type PBRTextureSlot,
   totalTextureBudgetMB,
 } from "../app/lib/pbrPipeline";
-import { ALL_FURNITURE_KINDS } from "../app/lib/furnitureTaxonomy";
 
-const SRGB_SLOTS: PBRTextureSlot[] = [
-  "baseColor",
-  "emissive",
-  "sheenColor",
-];
+const SRGB_SLOTS: PBRTextureSlot[] = ["baseColor", "emissive", "sheenColor"];
 const LINEAR_SLOTS: PBRTextureSlot[] = [
   "normal",
   "metallicRoughness",
@@ -119,9 +114,7 @@ describe("pbrPipeline", () => {
       expect(PBR_MATERIAL_SLOTS[cls]).toBeDefined();
     }
     // At least 80% of the palette should be used by some kind.
-    expect(used.size).toBeGreaterThanOrEqual(
-      Math.floor(ALL_PBR_MATERIAL_CLASSES.length * 0.8)
-    );
+    expect(used.size).toBeGreaterThanOrEqual(Math.floor(ALL_PBR_MATERIAL_CLASSES.length * 0.8));
   });
 
   test("materialSlotsForKind() returns the right slots", () => {
@@ -158,9 +151,7 @@ describe("pbrPipeline", () => {
     for (const cls of ALL_PBR_MATERIAL_CLASSES) {
       const s = PBR_MATERIAL_SLOTS[cls];
       const isFabric =
-        cls === "fabric-cotton" ||
-        cls === "fabric-velvet" ||
-        cls === "fabric-leather";
+        cls === "fabric-cotton" || cls === "fabric-velvet" || cls === "fabric-leather";
       if (isFabric) {
         // Sheen may or may not be set per-fabric; cotton and velvet have it.
         // Just check that if sheen is set, it's well-formed.

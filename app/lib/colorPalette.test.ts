@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-
-import {
-  COLOR_STYLES,
-  prepareInteractiveLatex,
-  wrapInteractiveLatexTerm,
-} from "./colorPalette";
 import type { ColorizedEquation } from "../types/equation";
+import { COLOR_STYLES, prepareInteractiveLatex, wrapInteractiveLatexTerm } from "./colorPalette";
 
 describe("color palette: interactive LaTeX helpers", () => {
   test("COLOR_STYLES has an entry for every declared ColorVariant", () => {

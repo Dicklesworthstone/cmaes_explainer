@@ -74,10 +74,7 @@ export class KernelPerfProfiler {
   ): StepTelemetryRecord {
     const calculatedTotal =
       timings.total ??
-      timings.broadphase +
-        timings.narrowphase +
-        timings.lcpSolver +
-        timings.integrator;
+      timings.broadphase + timings.narrowphase + timings.lcpSolver + timings.integrator;
 
     const record: StepTelemetryRecord = {
       stepIndex,

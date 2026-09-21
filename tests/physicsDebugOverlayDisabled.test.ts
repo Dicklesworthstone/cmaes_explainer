@@ -20,24 +20,18 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { renderToString } from "react-dom/server";
 import React from "react";
-import { G1PhysicsDebugOverlay } from "../app/components/G1PhysicsDebugOverlay";
+import { renderToString } from "react-dom/server";
 import { ArmPhysicsDebugOverlay } from "../app/components/ArmPhysicsDebugOverlay";
+import { G1PhysicsDebugOverlay } from "../app/components/G1PhysicsDebugOverlay";
+import type { G1TraceSample, HouseholdManipulationTraceSample } from "../app/lib/frankensimCmaes";
 import {
   createSceneFromHouseFurniture,
   type OrientedBoundingBox,
 } from "../app/lib/houseMultiObstacleKernel";
-import type {
-  G1TraceSample,
-  HouseholdManipulationTraceSample,
-} from "../app/lib/frankensimCmaes";
 
 function readSrc(name: string): string {
-  return readFileSync(
-    join(import.meta.dir, "..", "app", "components", name),
-    "utf-8",
-  );
+  return readFileSync(join(import.meta.dir, "..", "app", "components", name), "utf-8");
 }
 
 const Component = G1PhysicsDebugOverlay as unknown as React.ComponentType<{
@@ -110,30 +104,22 @@ describe("physics debug overlays return null when disabled (perf claim)", () => 
   });
 
   test("G1PhysicsDebugOverlay renders the empty string when enabled={false}", () => {
-    const tree = renderToString(
-      React.createElement(Component, { enabled: false, ...G1Props }),
-    );
+    const tree = renderToString(React.createElement(Component, { enabled: false, ...G1Props }));
     expect(tree).toBe("");
   });
 
   test("ArmPhysicsDebugOverlay renders the empty string when enabled={false}", () => {
-    const tree = renderToString(
-      React.createElement(ArmComponent, { enabled: false, ...ArmProps }),
-    );
+    const tree = renderToString(React.createElement(ArmComponent, { enabled: false, ...ArmProps }));
     expect(tree).toBe("");
   });
 
   test("G1PhysicsDebugOverlay renders non-empty when enabled={true} (positive control)", () => {
-    const tree = renderToString(
-      React.createElement(Component, { enabled: true, ...G1Props }),
-    );
+    const tree = renderToString(React.createElement(Component, { enabled: true, ...G1Props }));
     expect(tree.length).toBeGreaterThan(0);
   });
 
   test("ArmPhysicsDebugOverlay renders non-empty when enabled={true} (positive control)", () => {
-    const tree = renderToString(
-      React.createElement(ArmComponent, { enabled: true, ...ArmProps }),
-    );
+    const tree = renderToString(React.createElement(ArmComponent, { enabled: true, ...ArmProps }));
     expect(tree.length).toBeGreaterThan(0);
   });
 });

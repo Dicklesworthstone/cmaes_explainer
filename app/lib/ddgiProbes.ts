@@ -101,7 +101,7 @@ export function generateOctahedralDirections(): DDGIOctahedralDirections {
  *  Craftsman SH's L00 coefficient). */
 export function createProbe(
   position: [number, number, number],
-  ambient: [number, number, number] = [0.85, 0.78, 0.68]
+  ambient: [number, number, number] = [0.85, 0.78, 0.68],
 ): DDGIProbe {
   return {
     position,
@@ -121,7 +121,7 @@ export function createProbeGrid(
   spacing: [number, number, number] = [2.0, 1.4, 1.25],
   dimensions: [number, number, number] = [4, 8, 3],
   blendAlpha = 0.05,
-  maxRayDistance = 8.0
+  maxRayDistance = 8.0,
 ): DDGIProbeGrid {
   const [nx, ny, nz] = dimensions;
   const total = nx * ny * nz;
@@ -158,7 +158,7 @@ export function sampleProbeGrid(
   grid: DDGIProbeGrid,
   worldPos: [number, number, number],
   worldDir: [number, number, number],
-  surfaceDistance: number
+  surfaceDistance: number,
 ): { rgb: [number, number, number]; visibility: number } {
   if (!grid.enabled) {
     return { rgb: [0, 0, 0], visibility: 0 };
@@ -208,10 +208,7 @@ export function sampleProbeGrid(
         const variance = Math.max(0, meanD2 - meanD * meanD);
         const cheb = Math.max(
           0,
-          Math.min(
-            1,
-            (meanD2 - meanD * surfaceDistance) / (variance + eps)
-          )
+          Math.min(1, (meanD2 - meanD * surfaceDistance) / (variance + eps)),
         );
         vis += cheb * weight;
         w += weight;
@@ -230,9 +227,7 @@ export function sampleProbeGrid(
 /** Map a unit direction to an octahedral cell index (0..63) using the
  *  standard octahedral encoding (Cigolle et al. 2014). 8x8 grid in u/v
  *  coordinates. */
-export function octahedralCellIndex(
-  dir: [number, number, number]
-): number {
+export function octahedralCellIndex(dir: [number, number, number]): number {
   const [x, y, z] = dir;
   const len = Math.hypot(x, y, z);
   if (len < 1e-9) return 0;
@@ -263,7 +258,7 @@ export function hysteresisUpdate(
   probeIdx: number,
   newIrradiance: Float32Array,
   newMeanDistance: Float32Array,
-  newMeanDistanceSq: Float32Array
+  newMeanDistanceSq: Float32Array,
 ): void {
   const probe = grid.probes[probeIdx];
   const alpha = grid.blendAlpha;
@@ -294,23 +289,16 @@ export function resetProbeGrid(grid: DDGIProbeGrid): void {
 
 /** Compute the bounding box of the probe grid in world space (for
  *  visualization / debug overlays). */
-export function probeGridBounds(
-  grid: DDGIProbeGrid
-): { min: [number, number, number]; max: [number, number, number] } {
+export function probeGridBounds(grid: DDGIProbeGrid): {
+  min: [number, number, number];
+  max: [number, number, number];
+} {
   const [nx, ny, nz] = grid.dimensions;
   const [sx, sy, sz] = grid.spacing;
   const [ox, oy, oz] = grid.origin;
   return {
-    min: [
-      ox - (nx * sx) / 2,
-      oy - (ny * sy) / 2,
-      oz - (nz * sz) / 2,
-    ],
-    max: [
-      ox + (nx * sx) / 2,
-      oy + (ny * sy) / 2,
-      oz + (nz * sz) / 2,
-    ],
+    min: [ox - (nx * sx) / 2, oy - (ny * sy) / 2, oz - (nz * sz) / 2],
+    max: [ox + (nx * sx) / 2, oy + (ny * sy) / 2, oz + (nz * sz) / 2],
   };
 }
 
@@ -325,20 +313,26 @@ interface Data3DTextureLike {
 // Cached feature-detect: populated at module load by reading the Three.js
 // namespace once. `null` means this Three.js version does not export
 // Data3DTexture (older builds / React-Native-Web / headless test envs).
-const Data3DTextureCtor: (new (
-  data: Uint8Array,
-  width: number,
-  height: number,
-  depth: number,
-) => Data3DTextureLike) | null =
-  (THREE as unknown as Record<string, unknown>).Data3DTexture instanceof
-  Function
-    ? ((THREE as unknown as Record<string, new (
-        data: Uint8Array,
-        width: number,
-        height: number,
-        depth: number,
-      ) => Data3DTextureLike>).Data3DTexture)
+const Data3DTextureCtor:
+  | (new (
+      data: Uint8Array,
+      width: number,
+      height: number,
+      depth: number,
+    ) => Data3DTextureLike)
+  | null =
+  (THREE as unknown as Record<string, unknown>).Data3DTexture instanceof Function
+    ? (
+        THREE as unknown as Record<
+          string,
+          new (
+            data: Uint8Array,
+            width: number,
+            height: number,
+            depth: number,
+          ) => Data3DTextureLike
+        >
+      ).Data3DTexture
     : null;
 
 /** Three.js DataTexture wrapper for the probe grid irradiance (3D RGBA
@@ -382,7 +376,7 @@ export function probeGridToTexture3D(grid: DDGIProbeGrid): Data3DTextureLike | n
  *  probes don't cover). */
 export function fallbackIrradiance(
   normal: [number, number, number],
-  sh: SphericalHarmonicsL2 = CRAFTSMAN_BUNGALOW_SH
+  sh: SphericalHarmonicsL2 = CRAFTSMAN_BUNGALOW_SH,
 ): [number, number, number] {
   return evaluateSphericalHarmonicsFromSh(normal, sh);
 }
@@ -391,7 +385,7 @@ export function fallbackIrradiance(
  *  the houseLighting wrapper so the test can use a synthetic SH. */
 function evaluateSphericalHarmonicsFromSh(
   normal: [number, number, number],
-  sh: SphericalHarmonicsL2
+  sh: SphericalHarmonicsL2,
 ): [number, number, number] {
   const [x, y, z] = normal;
   const c = sh.coefficients;
@@ -432,9 +426,5 @@ function evaluateSphericalHarmonicsFromSh(
   g += 2 * c[25] * x * y;
   b += 2 * c[26] * x * y;
   // Project to [0, 1] (the SH coefficients are scaled to ambient-color space).
-  return [
-    Math.max(0, Math.min(1, r)),
-    Math.max(0, Math.min(1, g)),
-    Math.max(0, Math.min(1, b)),
-  ];
+  return [Math.max(0, Math.min(1, r)), Math.max(0, Math.min(1, g)), Math.max(0, Math.min(1, b))];
 }

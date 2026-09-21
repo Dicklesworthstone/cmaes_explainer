@@ -1,11 +1,11 @@
 /// <reference lib="webworker" />
 
 import {
+  type CmaFamily,
   createFrankenSimCmaFamilySession,
   createFrankenSimG1WalkingEvaluator,
   type FrankenSimCmaFamilySession,
   type FrankenSimG1WalkingEvaluator,
-  type CmaFamily,
   type G1Admission,
   type G1Challenge,
   type G1Task,
@@ -13,11 +13,11 @@ import {
 } from "../lib/frankensimCmaes";
 import {
   G1_DEFAULT_SEARCH_SIGMA,
+  type G1OptimizationRequest,
+  type G1SceneReceipt,
   g1ExperimentForSeat,
   g1OptimizationRunKey,
   g1ResolveSeat,
-  type G1OptimizationRequest,
-  type G1SceneReceipt,
 } from "../lib/g1OptimizationProtocol";
 import { RoboticsEvaluationPool } from "../lib/roboticsEvaluationPool";
 
@@ -77,7 +77,10 @@ function post(message: WorkerResponse): void {
   worker.postMessage(message);
 }
 
-function requireOk<T>(result: { ok: T } | { refusal: { name: string; detail: number | null } }, label: string): T {
+function requireOk<T>(
+  result: { ok: T } | { refusal: { name: string; detail: number | null } },
+  label: string,
+): T {
   if ("ok" in result) return result.ok;
   const suffix = result.refusal.detail === null ? "" : ` (detail ${result.refusal.detail})`;
   throw new Error(`${label}: ${result.refusal.name}${suffix}`);
@@ -85,7 +88,7 @@ function requireOk<T>(result: { ok: T } | { refusal: { name: string; detail: num
 
 function reportParallelEvaluation(
   receipt: { lanes: number; firstBatchVerified: boolean; fallbackReason: string | null },
-  announced: boolean
+  announced: boolean,
 ): boolean {
   if (announced) return true;
   if (receipt.fallbackReason) {
@@ -107,20 +110,14 @@ function reportParallelEvaluation(
 async function preview(
   task: G1Task,
   challenge: G1Challenge,
-  seat?: [number, number, number]
+  seat?: [number, number, number],
 ): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner-composed G1 evaluator…" });
   const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
-  const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(config),
-    "G1 admission"
-  );
+  const evaluator = requireOk(await createFrankenSimG1WalkingEvaluator(config), "G1 admission");
   try {
     const stabilizerMean = evaluator.stabilizingPolicyMean();
-    const stabilizerTrace = requireOk(
-      evaluator.trace(stabilizerMean),
-      "stabilizing trace"
-    );
+    const stabilizerTrace = requireOk(evaluator.trace(stabilizerMean), "stabilizing trace");
     post({
       type: "trace",
       trace: stabilizerTrace,
@@ -131,10 +128,7 @@ async function preview(
       policy: stabilizerMean.slice(),
     });
     const curriculumMean = evaluator.walkingCurriculumMean();
-    const curriculumTrace = requireOk(
-      evaluator.trace(curriculumMean),
-      "walking curriculum trace"
-    );
+    const curriculumTrace = requireOk(evaluator.trace(curriculumMean), "walking curriculum trace");
     post({
       type: "trace",
       trace: curriculumTrace,
@@ -167,10 +161,7 @@ async function replayPolicy(
 ): Promise<void> {
   post({ type: "status", phase: "loading", detail: "Loading the owner to replay this policy…" });
   const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
-  const evaluator = requireOk(
-    await createFrankenSimG1WalkingEvaluator(config),
-    "G1 admission"
-  );
+  const evaluator = requireOk(await createFrankenSimG1WalkingEvaluator(config), "G1 admission");
   try {
     const trace = requireOk(evaluator.trace(policy), "imported policy trace");
     post({
@@ -250,7 +241,10 @@ async function optimize(
   resumeFrom?: Float64Array,
   seat?: [number, number, number],
 ): Promise<void> {
-  const generations = Math.max(8, Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)));
+  const generations = Math.max(
+    8,
+    Math.min(G1_MAX_TOTAL_GENERATIONS, Math.trunc(requestedGenerations)),
+  );
   const seedIndex = Math.max(0, Math.min(2, Math.trunc(requestedSeedIndex)));
   const population = G1_POPULATION;
   const runKey = g1OptimizationRunKey(task, challenge, family, seedIndex, seat);
@@ -281,10 +275,7 @@ async function optimize(
     // a short proxy and replaying a longer experiment rewards a different
     // behavior than the one the user sees.
     const { config, scene } = await g1ExperimentForSeat(task, challenge, seat);
-    const evaluator = requireOk(
-      await createFrankenSimG1WalkingEvaluator(config),
-      "G1 admission"
-    );
+    const evaluator = requireOk(await createFrankenSimG1WalkingEvaluator(config), "G1 admission");
     const evaluationPool = new RoboticsEvaluationPool({
       model: "g1",
       config,
@@ -296,10 +287,10 @@ async function optimize(
       resumeFrom && resumeFrom.length === evaluator.walkingCurriculumMean().length
         ? Float64Array.from(resumeFrom)
         : evaluator.walkingCurriculumMean();
-    let bestPolicy = startingMean;
-    let bestObjective = requireOk(
+    const bestPolicy = startingMean;
+    const bestObjective = requireOk(
       evaluator.evaluate(startingMean),
-      "G1 curriculum evaluation"
+      "G1 curriculum evaluation",
     ).objective;
     // Budget spans the whole continuation lifetime, not one request.
     const session = requireOk(
@@ -312,9 +303,18 @@ async function optimize(
         maxEvaluations: population * G1_MAX_TOTAL_GENERATIONS,
         seed: 0x4731_5050n + BigInt(seedIndex),
       }),
-      "CMA admission"
+      "CMA admission",
     );
-    const activeRun: G1ActiveRun = { scene, session, evaluator, pool: evaluationPool, bestPolicy, bestObjective, completedGeneration: 0, maxTotalGenerations: G1_MAX_TOTAL_GENERATIONS };
+    const activeRun: G1ActiveRun = {
+      scene,
+      session,
+      evaluator,
+      pool: evaluationPool,
+      bestPolicy,
+      bestObjective,
+      completedGeneration: 0,
+      maxTotalGenerations: G1_MAX_TOTAL_GENERATIONS,
+    };
     run = activeRun;
     // Placement changes create distinct experiments. Retain a small number
     // for continuation, releasing the owner and lane resources on eviction.
@@ -341,17 +341,16 @@ async function optimize(
         break;
       }
       const ask = requireOk(run.session.ask(), "CMA ask");
-      const evaluation = await run.pool.evaluate(
-        ask.candidates,
-        () => requireOk(
+      const evaluation = await run.pool.evaluate(ask.candidates, () =>
+        requireOk(
           run.evaluator.evaluatePopulation(ask.candidates),
-          "sequential G1 population evaluation"
-        )
+          "sequential G1 population evaluation",
+        ),
       );
       parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
       const snapshot = requireOk(
         run.session.tell(ask.generation, evaluation.objectives),
-        "CMA tell"
+        "CMA tell",
       );
       completedGeneration = snapshot.generation;
       run.completedGeneration = completedGeneration;
@@ -440,7 +439,7 @@ async function compareFamilies(
   const { config } = await g1ExperimentForSeat(task, challenge, seat);
   const evaluator = requireOk(
     await createFrankenSimG1WalkingEvaluator(config),
-    "G1 comparison admission"
+    "G1 comparison admission",
   );
   const evaluationPool = new RoboticsEvaluationPool({
     model: "g1",
@@ -452,7 +451,7 @@ async function compareFamilies(
     const mean = evaluator.walkingCurriculumMean();
     const initialBest = requireOk(
       evaluator.evaluate(mean),
-      "G1 comparison curriculum evaluation"
+      "G1 comparison curriculum evaluation",
     ).objective;
     for (const family of families) {
       const session = requireOk(
@@ -465,7 +464,7 @@ async function compareFamilies(
           maxEvaluations: population * generations,
           seed: 0xc0ffee_5040n,
         }),
-        `${family} admission`
+        `${family} admission`,
       );
       // Wall-clock elapsed is a labeled UI/runtime measurement, not a
       // simulation input. Date.now's 1 ms resolution is well below the
@@ -476,17 +475,16 @@ async function compareFamilies(
       try {
         for (let generationIndex = 0; generationIndex < generations; generationIndex++) {
           const ask = requireOk(session.ask(), `${family} ask`);
-          const evaluation = await evaluationPool.evaluate(
-            ask.candidates,
-            () => requireOk(
+          const evaluation = await evaluationPool.evaluate(ask.candidates, () =>
+            requireOk(
               evaluator.evaluatePopulation(ask.candidates),
-              `${family} sequential G1 population`
-            )
+              `${family} sequential G1 population`,
+            ),
           );
           parallelAnnounced = reportParallelEvaluation(evaluation, parallelAnnounced);
           const snapshot = requireOk(
             session.tell(ask.generation, evaluation.objectives),
-            `${family} tell`
+            `${family} tell`,
           );
           finalBest = Math.min(finalBest, snapshot.best?.objective ?? finalBest);
           evaluations = snapshot.evaluations;
@@ -540,9 +538,16 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     }
     return;
   }
-  const optimizationRunKey = request.type === "optimize"
-    ? g1OptimizationRunKey(request.task, request.challenge, request.family, request.seedIndex, request.seat)
-    : null;
+  const optimizationRunKey =
+    request.type === "optimize"
+      ? g1OptimizationRunKey(
+          request.task,
+          request.challenge,
+          request.family,
+          request.seedIndex,
+          request.seat,
+        )
+      : null;
   if (optimizationRunKey) g1OptimizationRequests.add(optimizationRunKey);
   // The work factory is invoked ONLY inside the gate's .then callback,
   // so the async IIFE cannot start until the previous task resolves.
@@ -552,11 +557,7 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
   // first await (createFrankenSimG1WalkingEvaluator).
   const work = () =>
     request.type === "preview"
-      ? preview(
-          request.task ?? "walking",
-          request.challenge ?? "terrain-and-push",
-          request.seat
-        )
+      ? preview(request.task ?? "walking", request.challenge ?? "terrain-and-push", request.seat)
       : request.type === "replay"
         ? replayPolicy(
             request.task ?? "walking",
@@ -566,23 +567,33 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
             request.generation,
             request.seat,
           )
-      : request.type === "compare"
-        ? compareFamilies(request.generations, request.task ?? "walking", request.challenge, request.seat)
-        : optimize(
-            request.family,
-            request.generations,
-            request.seedIndex,
-            request.mode,
-            request.task ?? "walking",
-            request.challenge,
-            request.sigma,
-            request.continuous,
-            request.resumeFrom,
-            request.seat,
-          );
-  const scheduled = g1Gate.then(() => work(), () => work()).catch((error: unknown) => {
-    post({ type: "error", message: error instanceof Error ? error.message : String(error) });
-  });
+        : request.type === "compare"
+          ? compareFamilies(
+              request.generations,
+              request.task ?? "walking",
+              request.challenge,
+              request.seat,
+            )
+          : optimize(
+              request.family,
+              request.generations,
+              request.seedIndex,
+              request.mode,
+              request.task ?? "walking",
+              request.challenge,
+              request.sigma,
+              request.continuous,
+              request.resumeFrom,
+              request.seat,
+            );
+  const scheduled = g1Gate
+    .then(
+      () => work(),
+      () => work(),
+    )
+    .catch((error: unknown) => {
+      post({ type: "error", message: error instanceof Error ? error.message : String(error) });
+    });
   g1Gate = scheduled;
   void scheduled.finally(() => {
     if (!optimizationRunKey) return;
@@ -590,5 +601,3 @@ worker.onmessage = (event: MessageEvent<WorkerRequest>) => {
     g1StopRequests.delete(optimizationRunKey);
   });
 };
-
-export {};

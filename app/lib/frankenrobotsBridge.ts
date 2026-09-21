@@ -118,13 +118,7 @@ function commandSignature(command: FrankenRobotsNativeCommand): string {
   ]);
 }
 
-const COMMAND_ENVELOPE_KEYS = new Set([
-  "type",
-  "schemaVersion",
-  "commandId",
-  "lab",
-  "command",
-]);
+const COMMAND_ENVELOPE_KEYS = new Set(["type", "schemaVersion", "commandId", "lab", "command"]);
 
 const COMMAND_ARGUMENT_KEYS: Record<FrankenRobotsCommandKind, ReadonlySet<string>> = {
   optimize: new Set(),
@@ -144,10 +138,7 @@ const COMMAND_ARGUMENT_KEYS: Record<FrankenRobotsCommandKind, ReadonlySet<string
   "set-sigma": new Set(["sigma"]),
 };
 
-function postNativeMessage(
-  lab: FrankenRobotsLab,
-  payload: Record<string, unknown>,
-): void {
+function postNativeMessage(lab: FrankenRobotsLab, payload: Record<string, unknown>): void {
   const bridge = (window as NativeBridgeWindow).webkit?.messageHandlers?.frankenrobots;
   nextSequenceByLab[lab] += 1;
   bridge?.postMessage({
@@ -417,7 +408,8 @@ export function installFrankenRobotsNativeCommandHandler(
       } catch (error) {
         result = {
           accepted: false,
-          detail: error instanceof Error ? error.message : "The command handler refused the request.",
+          detail:
+            error instanceof Error ? error.message : "The command handler refused the request.",
         };
       }
       if (!result.detail.trim()) {

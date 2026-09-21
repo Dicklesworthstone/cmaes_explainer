@@ -6,6 +6,14 @@
 // it "TS kinematic owner" and must not claim traction/contact dynamics.
 
 import type { SDF2D, Vec2 } from "./dpValueIteration";
+import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
+import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS, type KmrGeometryConfig } from "./kmrGeometry";
+import {
+  createKmrPlanarSdf,
+  KMR_PLANAR_CLEARANCE_RADIUS_METERS,
+  pathIsCollisionFree,
+  type WaypointPath,
+} from "./kmrWaypointNav";
 import {
   applyMecanumLimits,
   forwardMecanum,
@@ -14,17 +22,6 @@ import {
   type MecanumCommand,
   type MecanumWheelSpeeds,
 } from "./mecanumKinematics";
-import {
-  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
-  type KmrGeometryConfig,
-} from "./kmrGeometry";
-import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
-import {
-  createKmrPlanarSdf,
-  KMR_PLANAR_CLEARANCE_RADIUS_METERS,
-  pathIsCollisionFree,
-  type WaypointPath,
-} from "./kmrWaypointNav";
 
 export interface KmrPose2D {
   x: number;
@@ -75,12 +72,7 @@ function finitePositive(value: number): boolean {
   return Number.isFinite(value) && value > 0;
 }
 
-function segmentIsClear(
-  from: Vec2,
-  to: Vec2,
-  sdf: SDF2D,
-  clearanceRadiusMeters: number,
-): boolean {
+function segmentIsClear(from: Vec2, to: Vec2, sdf: SDF2D, clearanceRadiusMeters: number): boolean {
   const distance = Math.hypot(to[0] - from[0], to[1] - from[1]);
   const samples = Math.max(1, Math.ceil(distance / 0.02));
   for (let i = 0; i <= samples; i++) {
@@ -141,11 +133,7 @@ export class KmrNavigationOwner {
     ) {
       throw new Error("KMR owner requires a finite initial pose");
     }
-    if (
-      path.points.some(
-        (point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]),
-      )
-    ) {
+    if (path.points.some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) {
       throw new Error("KMR owner requires finite path coordinates");
     }
     const pathStart = path.points[0];
@@ -155,13 +143,7 @@ export class KmrNavigationOwner {
     ) {
       throw new Error("KMR owner initial pose does not match the supplied path start");
     }
-    if (
-      !pathIsCollisionFree(
-        path,
-        obstacles,
-        this.config.clearanceRadiusMeters,
-      )
-    ) {
+    if (!pathIsCollisionFree(path, obstacles, this.config.clearanceRadiusMeters)) {
       throw new Error("KMR owner refuses a path that intersects the obstacle field");
     }
     this.pose = { ...initialPose };
@@ -187,10 +169,7 @@ export class KmrNavigationOwner {
       if (this.waypointIndex >= this.path.points.length - 1) {
         this.completed = true;
         this.bodyCommand = { vX: 0, vY: 0, omega: 0 };
-        this.wheelSpeeds = inverseMecanum(
-          this.bodyCommand,
-          this.config.geometry,
-        );
+        this.wheelSpeeds = inverseMecanum(this.bodyCommand, this.config.geometry);
         return this.receipt();
       }
       const nextTarget = this.path.points[this.waypointIndex + 1];
@@ -210,10 +189,7 @@ export class KmrNavigationOwner {
       }
     }
 
-    const speed = Math.min(
-      this.config.cruiseSpeedMps,
-      distanceToTarget / this.config.dtSeconds,
-    );
+    const speed = Math.min(this.config.cruiseSpeedMps, distanceToTarget / this.config.dtSeconds);
     const worldVx = (dx / distanceToTarget) * speed;
     const worldVy = (dy / distanceToTarget) * speed;
     const cos = Math.cos(this.pose.theta);
@@ -223,9 +199,7 @@ export class KmrNavigationOwner {
       {
         vX: cos * worldVx + sin * worldVy,
         vY: -sin * worldVx + cos * worldVy,
-        omega:
-          wrapAngle(desiredHeading - this.pose.theta) *
-          this.config.headingGainPerSecond,
+        omega: wrapAngle(desiredHeading - this.pose.theta) * this.config.headingGainPerSecond,
       },
       KUKA_KMR_IIWA_LIMITS,
     );
@@ -236,9 +210,7 @@ export class KmrNavigationOwner {
     const proposed: KmrPose2D = {
       x: this.pose.x + realizedWorldVx * this.config.dtSeconds,
       y: this.pose.y + realizedWorldVy * this.config.dtSeconds,
-      theta: wrapAngle(
-        this.pose.theta + realized.omega * this.config.dtSeconds,
-      ),
+      theta: wrapAngle(this.pose.theta + realized.omega * this.config.dtSeconds),
     };
 
     if (
@@ -251,10 +223,7 @@ export class KmrNavigationOwner {
     ) {
       this.collisionRefusals += 1;
       this.bodyCommand = { vX: 0, vY: 0, omega: 0 };
-      this.wheelSpeeds = inverseMecanum(
-        this.bodyCommand,
-        this.config.geometry,
-      );
+      this.wheelSpeeds = inverseMecanum(this.bodyCommand, this.config.geometry);
       this.elapsedSeconds += this.config.dtSeconds;
       return this.receipt();
     }

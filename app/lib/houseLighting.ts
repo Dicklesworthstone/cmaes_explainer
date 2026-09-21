@@ -44,7 +44,7 @@ export const CRAFTSMAN_BUNGALOW_SH: SphericalHarmonicsL2 = {
     // L10 (z-gradient)
     0.15, 0.12, 0.08,
     // L11 (x-gradient)
-    0.25, 0.20, 0.12,
+    0.25, 0.2, 0.12,
     // L2-2 (xy quadratic)
     0.08, 0.06, 0.04,
     // L2-1 (yz quadratic)
@@ -136,12 +136,12 @@ export function generateCraftsmanHdrEnvMap(width = 256, height = 128): THREE.Dat
       const sunDirY = 0.6;
       const sunDirZ = 0.62;
       const dotSun = Math.max(0, dirX * sunDirX + dirY * sunDirY + dirZ * sunDirZ);
-      const sunSpot = Math.pow(dotSun, 64.0) * 12.0;
+      const sunSpot = dotSun ** 64.0 * 12.0;
 
       // Warm interior pendant highlights
       const lampDirY = 0.9;
       const dotLamp = Math.max(0, dirY * lampDirY);
-      const lampGlow = Math.pow(dotLamp, 16.0) * 2.5;
+      const lampGlow = dotLamp ** 16.0 * 2.5;
 
       data[idx + 0] = shR + sunSpot * 1.0 + lampGlow * 1.0;
       data[idx + 1] = shG + sunSpot * 0.92 + lampGlow * 0.85;

@@ -1,14 +1,14 @@
 "use client";
 
-import * as THREE from "three";
-import { createMulberry32 } from "../lib/cmaesEngine";
+import { Float, Line, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { safePointerEvents } from "./safeR3FEvents";
-import { useRef, useMemo, useState, useEffect } from "react";
+import { FastForward, Pause, Play, RotateCcw, Sliders, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import { useInView } from "../hooks/useInView";
 import { useInView as useElementInView } from "../hooks/useScrollSpy";
-import { PerspectiveCamera, Float, Line, OrbitControls } from "@react-three/drei";
-import { Play, Pause, RotateCcw, FastForward, Sparkles, Sliders } from "lucide-react";
+import { createMulberry32 } from "../lib/cmaesEngine";
+import { safePointerEvents } from "./safeR3FEvents";
 
 // --- 3D CMA-ES Mathematical Simulator for Hero ---
 
@@ -31,7 +31,12 @@ interface HeroGenerationState {
   condNum: number;
 }
 
-function evaluate3D(x: number, y: number, z: number, landscape: "rosenbrock" | "cigar" | "rastrigin"): number {
+function evaluate3D(
+  x: number,
+  y: number,
+  z: number,
+  landscape: "rosenbrock" | "cigar" | "rastrigin",
+): number {
   if (landscape === "cigar") {
     // Highly anisotropic curved trough
     return 100 * x * x + (y - x * x) ** 2 + 10 * z * z;
@@ -48,7 +53,9 @@ function evaluate3D(x: number, y: number, z: number, landscape: "rosenbrock" | "
   return 100 * (y - x * x) ** 2 + (1 - x) ** 2 + 100 * (z - y * y) ** 2 + (1 - y) ** 2;
 }
 
-function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin"): HeroGenerationState[] {
+function generateHeroTrajectory(
+  landscape: "rosenbrock" | "cigar" | "rastrigin",
+): HeroGenerationState[] {
   const traj: HeroGenerationState[] = [];
   const maxGen = 45;
   const mean0: [number, number, number] = [-1.4, 1.2, -0.8];
@@ -75,15 +82,21 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
     const t = g / maxGen;
     // Morph mean towards the optimum along a curved path
     const curMean: [number, number, number] = [
-      mean0[0] + (target[0] - mean0[0]) * (1 - Math.exp(-3 * t)) + Math.sin(g * 0.4) * 0.04 * (1 - t),
-      mean0[1] + (target[1] - mean0[1]) * (1 - Math.exp(-2.5 * t)) + Math.cos(g * 0.3) * 0.05 * (1 - t),
-      mean0[2] + (target[2] - mean0[2]) * (1 - Math.exp(-2.8 * t))
+      mean0[0] +
+        (target[0] - mean0[0]) * (1 - Math.exp(-3 * t)) +
+        Math.sin(g * 0.4) * 0.04 * (1 - t),
+      mean0[1] +
+        (target[1] - mean0[1]) * (1 - Math.exp(-2.5 * t)) +
+        Math.cos(g * 0.3) * 0.05 * (1 - t),
+      mean0[2] + (target[2] - mean0[2]) * (1 - Math.exp(-2.8 * t)),
     ];
 
     // Shape schedule starts isotropic (C = I). Rosenbrock/cigar stretch along
     // the leading axis and contract the others; Rastrigin has no single
     // useful direction, so its C stays near-isotropic and only sigma shrinks.
-    const rxRaw = isRastrigin ? Math.max(0.6, 1 - 0.25 * t) : Math.max(0.35, (1 + 1.2 * t) * (1 - 0.35 * t));
+    const rxRaw = isRastrigin
+      ? Math.max(0.6, 1 - 0.25 * t)
+      : Math.max(0.35, (1 + 1.2 * t) * (1 - 0.35 * t));
     const ryRaw = isRastrigin ? Math.max(0.55, 1 - 0.3 * t) : Math.max(0.16, Math.exp(-1.6 * t));
     const rzRaw = isRastrigin ? Math.max(0.55, 1 - 0.28 * t) : Math.max(0.2, Math.exp(-1.3 * t));
     const curSigma = Math.max(0.15, sigma0 * Math.exp(-1.2 * t));
@@ -92,7 +105,7 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
     const curRot: [number, number, number] = [
       rot0[0] + t * 0.8 + Math.sin(t * Math.PI) * 0.3,
       rot0[1] + t * 1.2,
-      rot0[2] + t * 0.5
+      rot0[2] + t * 0.5,
     ];
 
     // Displayed 1-sigma radii fold in sigma (like sigma * sqrt(eigenvalue))
@@ -135,7 +148,7 @@ function generateHeroTrajectory(landscape: "rosenbrock" | "cigar" | "rastrigin")
       rotation: curRot,
       samples,
       bestF: samples[0].fitness,
-      condNum: cond
+      condNum: cond,
     });
   }
   return traj;
@@ -150,11 +163,7 @@ const centerMeanGeo = new THREE.SphereGeometry(0.045, 16, 16);
 const eliteSphereGeo = new THREE.SphereGeometry(0.04, 16, 16);
 const otherSphereGeo = new THREE.SphereGeometry(0.025, 12, 12);
 
-function CovarianceEllipsoid({
-  state
-}: {
-  state: HeroGenerationState;
-}) {
+function CovarianceEllipsoid({ state }: { state: HeroGenerationState }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
   // No decorative spin here: the ellipsoid's orientation is state.rotation,
@@ -183,9 +192,30 @@ function CovarianceEllipsoid({
       </mesh>
 
       {/* Principal Eigenvector Axes (slightly past the 1-sigma surface) */}
-      <Line points={[[-rx * 1.05, 0, 0], [rx * 1.05, 0, 0]]} color="#38bdf8" lineWidth={2} />
-      <Line points={[[0, -ry * 1.05, 0], [0, ry * 1.05, 0]]} color="#a855f7" lineWidth={2} />
-      <Line points={[[0, 0, -rz * 1.05], [0, 0, rz * 1.05]]} color="#34d399" lineWidth={2} />
+      <Line
+        points={[
+          [-rx * 1.05, 0, 0],
+          [rx * 1.05, 0, 0],
+        ]}
+        color="#38bdf8"
+        lineWidth={2}
+      />
+      <Line
+        points={[
+          [0, -ry * 1.05, 0],
+          [0, ry * 1.05, 0],
+        ]}
+        color="#a855f7"
+        lineWidth={2}
+      />
+      <Line
+        points={[
+          [0, 0, -rz * 1.05],
+          [0, 0, rz * 1.05],
+        ]}
+        color="#34d399"
+        lineWidth={2}
+      />
 
       {/* Center Mean Marker */}
       <mesh geometry={centerMeanGeo}>
@@ -259,7 +289,13 @@ function PopulationSamples({ samples }: { samples: Point3D[] }) {
   );
 }
 
-function TrajectoryRibbon({ allVectorPoints, currentGen }: { allVectorPoints: THREE.Vector3[]; currentGen: number }) {
+function TrajectoryRibbon({
+  allVectorPoints,
+  currentGen,
+}: {
+  allVectorPoints: THREE.Vector3[];
+  currentGen: number;
+}) {
   const points = useMemo(() => {
     return allVectorPoints.slice(0, currentGen + 1);
   }, [allVectorPoints, currentGen]);
@@ -292,7 +328,10 @@ export function CovarianceScene() {
   const shouldMount = useElementInView(mountGateRef, { rootMargin: "600px 0px 600px 0px" });
 
   const trajectory = useMemo(() => generateHeroTrajectory(landscape), [landscape]);
-  const allVectorPoints = useMemo(() => trajectory.map((s) => new THREE.Vector3(...s.mean)), [trajectory]);
+  const allVectorPoints = useMemo(
+    () => trajectory.map((s) => new THREE.Vector3(...s.mean)),
+    [trajectory],
+  );
 
   useEffect(() => {
     if (!isPlaying || !inView) return;
@@ -309,42 +348,47 @@ export function CovarianceScene() {
       {/* 3D Canvas */}
       <div ref={mountGateRef} className="absolute inset-0">
         {shouldMount && (
-        <Canvas
-          events={safePointerEvents}
-          dpr={[1, 2]}
-          frameloop={inView ? "always" : "demand"}
-          camera={{ position: [2.8, 2.0, 3.6], fov: 38 }}
-          className="h-full w-full"
-        >
-          <color attach="background" args={["#020617"]} />
-          <fog attach="fog" args={["#020617", 4, 18]} />
-          
-          <ambientLight intensity={0.4} />
-          <directionalLight position={[5, 8, 4]} intensity={1.5} color="#e0f2fe" />
-          <pointLight position={[-4, -3, -4]} intensity={0.8} color="#38bdf8" />
-          <pointLight position={[currentState.mean[0], currentState.mean[1] + 1, currentState.mean[2]]} intensity={2} color="#34d399" distance={4} />
+          <Canvas
+            events={safePointerEvents}
+            dpr={[1, 2]}
+            frameloop={inView ? "always" : "demand"}
+            camera={{ position: [2.8, 2.0, 3.6], fov: 38 }}
+            className="h-full w-full"
+          >
+            <color attach="background" args={["#020617"]} />
+            <fog attach="fog" args={["#020617", 4, 18]} />
 
-          <OrbitControls
-            makeDefault
-            enableDamping
-            dampingFactor={0.06}
-            minDistance={2.5}
-            maxDistance={9}
-            maxPolarAngle={Math.PI / 2 + 0.08}
-            target={[0, 0, 0]}
-          />
+            <ambientLight intensity={0.4} />
+            <directionalLight position={[5, 8, 4]} intensity={1.5} color="#e0f2fe" />
+            <pointLight position={[-4, -3, -4]} intensity={0.8} color="#38bdf8" />
+            <pointLight
+              position={[currentState.mean[0], currentState.mean[1] + 1, currentState.mean[2]]}
+              intensity={2}
+              color="#34d399"
+              distance={4}
+            />
 
-          <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.2}>
-            <group position={[0, -0.2, 0]}>
-              <CovarianceEllipsoid state={currentState} />
-              <PopulationSamples samples={currentState.samples} />
-              <TrajectoryRibbon allVectorPoints={allVectorPoints} currentGen={genIndex} />
-              
-              {/* Subtle Grid Floor */}
-              <gridHelper args={[10, 20, "#1e293b", "#0f172a"]} position={[0, -1.4, 0]} />
-            </group>
-          </Float>
-        </Canvas>
+            <OrbitControls
+              makeDefault
+              enableDamping
+              dampingFactor={0.06}
+              minDistance={2.5}
+              maxDistance={9}
+              maxPolarAngle={Math.PI / 2 + 0.08}
+              target={[0, 0, 0]}
+            />
+
+            <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.2}>
+              <group position={[0, -0.2, 0]}>
+                <CovarianceEllipsoid state={currentState} />
+                <PopulationSamples samples={currentState.samples} />
+                <TrajectoryRibbon allVectorPoints={allVectorPoints} currentGen={genIndex} />
+
+                {/* Subtle Grid Floor */}
+                <gridHelper args={[10, 20, "#1e293b", "#0f172a"]} position={[0, -1.4, 0]} />
+              </group>
+            </Float>
+          </Canvas>
         )}
       </div>
 

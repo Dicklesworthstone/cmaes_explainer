@@ -1,7 +1,4 @@
-import type {
-  G1WalkingConfig,
-  HouseholdManipulationConfig,
-} from "./frankensimCmaes";
+import type { G1WalkingConfig, HouseholdManipulationConfig } from "./frankensimCmaes";
 
 type RoboticsPoolConfig =
   | { model: "g1"; config: G1WalkingConfig; dimension: 5_040 }
@@ -44,7 +41,8 @@ export class RoboticsEvaluationPool {
     try {
       for (let lane = 0; lane < lanes; lane++) {
         const evaluationWorker = new Worker(
-          new URL("../workers/roboticsEvaluationWorker.ts", import.meta.url), {
+          new URL("../workers/roboticsEvaluationWorker.ts", import.meta.url),
+          {
             type: "module",
             name: `frankensim-${config.model}-evaluation-${lane + 1}`,
           },
@@ -68,15 +66,16 @@ export class RoboticsEvaluationPool {
 
   async evaluate(
     policies: Float64Array,
-    sequential: () => Float64Array
+    sequential: () => Float64Array,
   ): Promise<ParallelEvaluationReceipt> {
     const rows = policies.length / this.config.dimension;
     if (!Number.isSafeInteger(rows) || rows < 1) {
       throw new Error("robotics evaluation pool received a malformed population");
     }
     if (this.fallbackReason || this.workers.length < 2 || rows < 2) {
-      const fallbackReason = this.fallbackReason
-        ?? (this.workers.length < 2
+      const fallbackReason =
+        this.fallbackReason ??
+        (this.workers.length < 2
           ? "fewer than two browser evaluation lanes are available"
           : "the population contains fewer than two candidates");
       if (this.fallbackReason) this.terminateWorkers();
@@ -94,10 +93,7 @@ export class RoboticsEvaluationPool {
       for (let lane = 0; lane < activeWorkers; lane++) {
         const start = Math.floor((lane * rows) / activeWorkers);
         const end = Math.floor(((lane + 1) * rows) / activeWorkers);
-        const shard = policies.slice(
-          start * this.config.dimension,
-          end * this.config.dimension
-        );
+        const shard = policies.slice(start * this.config.dimension, end * this.config.dimension);
         requests.push(this.evaluateShard(this.workers[lane], start, shard));
       }
       const shards = await Promise.all(requests);
@@ -143,7 +139,7 @@ export class RoboticsEvaluationPool {
   private evaluateShard(
     worker: Worker,
     start: number,
-    policies: Float64Array
+    policies: Float64Array,
   ): Promise<{ start: number; objectives: Float64Array }> {
     const requestId = ++this.requestId;
     return new Promise((resolve, reject) => {
@@ -186,7 +182,7 @@ export class RoboticsEvaluationPool {
           config: this.config.config,
           policies,
         },
-        [policies.buffer]
+        [policies.buffer],
       );
     });
   }

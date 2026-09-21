@@ -21,7 +21,7 @@ function patchTimerTimer(timerCtor: TimerCtor | undefined) {
     if (!doc && typeof window !== "undefined") doc = window.document;
     // Bail out entirely if we still don't have a usable document or listeners
     if (!doc || typeof doc.addEventListener !== "function") return;
-    
+
     return original.call(this, doc);
   };
   if (process.env.NODE_ENV === "development" && typeof console !== "undefined") {
@@ -31,11 +31,13 @@ function patchTimerTimer(timerCtor: TimerCtor | undefined) {
 
 // Patch the module instance we import
 import * as THREE from "three";
+
 patchTimerTimer((THREE as unknown as { Timer?: TimerCtor }).Timer);
 
 // Patch a global THREE if it appears later (e.g., other bundles)
 if (typeof window !== "undefined") {
-  const maybePatchGlobal = () => patchTimerTimer((window as unknown as { THREE?: { Timer?: TimerCtor } }).THREE?.Timer);
+  const maybePatchGlobal = () =>
+    patchTimerTimer((window as unknown as { THREE?: { Timer?: TimerCtor } }).THREE?.Timer);
   maybePatchGlobal();
   // Re-check a few times after startup in case THREE is attached later.
   let attempts = 0;

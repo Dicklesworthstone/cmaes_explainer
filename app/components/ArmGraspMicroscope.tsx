@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useMemo, useEffect, useState } from "react";
+import { Activity, CheckCircle2, Gauge, ShieldAlert, Sparkles } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
-import { Gauge, CheckCircle2, ShieldAlert, Sparkles, Activity } from "lucide-react";
+import {
+  computeFerrariCannyGWS,
+  IIWA_OWNER_JOINT_LIMIT_DEGREES,
+} from "../lib/armInverseKinematics";
 import type { HouseholdManipulationTraceSample } from "../lib/frankensimCmaes";
-import { computeFerrariCannyGWS, IIWA_OWNER_JOINT_LIMIT_DEGREES } from "../lib/armInverseKinematics";
 
 interface ArmGraspMicroscopeProps {
   sample: HouseholdManipulationTraceSample | null;
@@ -57,23 +60,13 @@ export function ArmGraspMicroscopeOverlay({
       {/* Left Finger Friction Cone */}
       <mesh position={[-0.04, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
         <primitive object={coneGeometry} attach="geometry" />
-        <meshBasicMaterial
-          color="#38bdf8"
-          wireframe
-          transparent
-          opacity={isGrasped ? 0.7 : 0.25}
-        />
+        <meshBasicMaterial color="#38bdf8" wireframe transparent opacity={isGrasped ? 0.7 : 0.25} />
       </mesh>
 
       {/* Right Finger Friction Cone */}
       <mesh position={[0.04, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
         <primitive object={coneGeometry} attach="geometry" />
-        <meshBasicMaterial
-          color="#38bdf8"
-          wireframe
-          transparent
-          opacity={isGrasped ? 0.7 : 0.25}
-        />
+        <meshBasicMaterial color="#38bdf8" wireframe transparent opacity={isGrasped ? 0.7 : 0.25} />
       </mesh>
     </group>
   );
@@ -131,7 +124,8 @@ export function ArmGraspMicroscopeHUD({ sample }: ArmGraspMicroscopeProps) {
       {manualMode && (
         <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 flex items-center gap-3">
           <span className="text-xs text-amber-200 font-medium whitespace-nowrap">
-            Manual Pinch Probe: <strong className="font-mono text-amber-300">{manualForce.toFixed(1)} N</strong>
+            Manual Pinch Probe:{" "}
+            <strong className="font-mono text-amber-300">{manualForce.toFixed(1)} N</strong>
           </span>
           <input
             type="range"
@@ -201,7 +195,10 @@ const JOINT_SPECS = [
   { name: "A7 Flange" },
 ];
 
-export function ArmJointKinematicsStrip({ jointAngles, probeJointAngles }: ArmJointKinematicsStripProps) {
+export function ArmJointKinematicsStrip({
+  jointAngles,
+  probeJointAngles,
+}: ArmJointKinematicsStripProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -235,7 +232,7 @@ export function ArmJointKinematicsStrip({ jointAngles, probeJointAngles }: ArmJo
             const angle = jointAngles?.[idx] ?? NaN;
             const deg = (angle * 180) / Math.PI;
             const limitDeg = IIWA_OWNER_JOINT_LIMIT_DEGREES[idx];
-            const limit = limitDeg * Math.PI / 180;
+            const limit = (limitDeg * Math.PI) / 180;
             const absRatio = Number.isFinite(angle) ? Math.min(1, Math.abs(angle) / limit) : 0;
             const isNearLimit = Math.abs(angle) >= limit - 0.22;
 
@@ -252,10 +249,16 @@ export function ArmJointKinematicsStrip({ jointAngles, probeJointAngles }: ArmJo
                   <span className="font-semibold">{spec.name}</span>
                   <span className="font-mono">±{limitDeg.toFixed(0)}°</span>
                 </div>
-                <div className={`mt-1 font-mono text-sm font-bold ${
-                  isNearLimit ? "text-amber-300" : "text-white"
-                }`}>
-                  {!Number.isFinite(deg) ? "Unavailable" : deg >= 0 ? `+${deg.toFixed(1)}°` : `${deg.toFixed(1)}°`}
+                <div
+                  className={`mt-1 font-mono text-sm font-bold ${
+                    isNearLimit ? "text-amber-300" : "text-white"
+                  }`}
+                >
+                  {!Number.isFinite(deg)
+                    ? "Unavailable"
+                    : deg >= 0
+                      ? `+${deg.toFixed(1)}°`
+                      : `${deg.toFixed(1)}°`}
                 </div>
                 {probeJointAngles && (
                   <div className="mt-1 font-mono text-[0.6rem] text-cyan-300">

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
-import { type BVHPrimitive, BVH } from "../app/lib/bvhBroadphase";
+import { BVH, type BVHPrimitive } from "../app/lib/bvhBroadphase";
 
 describe("BVH / SAH Broadphase Engine", () => {
   test("builds BVH from primitive bounding boxes", () => {

@@ -116,7 +116,10 @@ export function solveContactImplicitCollocation(problem: CitoProblem): CitoTraje
     // Default 2 contact candidates (e.g. left foot, right foot)
     const clearances = [0.0, 0.0];
     const normalForces = [problem.mass * 9.81 * 0.5, problem.mass * 9.81 * 0.5];
-    const tangentForces = [[0.0, 0.0], [0.0, 0.0]];
+    const tangentForces = [
+      [0.0, 0.0],
+      [0.0, 0.0],
+    ];
 
     trajectory.push({
       time: k * dt,
@@ -157,8 +160,8 @@ export function solveContactImplicitCollocation(problem: CitoProblem): CitoTraje
       // Contact mode resolution via Fischer-Burmeister relaxation:
       // If phi > 0 (foot lifted in swing phase), normal force -> 0
       // If phi == 0 (foot on ground in stance phase), normal force supports weight
-      const gamma_L = phi_L < 0.01 ? (problem.mass * 9.81 * 0.5) : 0.0;
-      const gamma_R = phi_R < 0.01 ? (problem.mass * 9.81 * 0.5) : 0.0;
+      const gamma_L = phi_L < 0.01 ? problem.mass * 9.81 * 0.5 : 0.0;
+      const gamma_R = phi_R < 0.01 ? problem.mass * 9.81 * 0.5 : 0.0;
 
       step.normalForces = [gamma_L, gamma_R];
 
@@ -183,7 +186,7 @@ export function solveContactImplicitCollocation(problem: CitoProblem): CitoTraje
 
   let maxGap = 0;
   let maxFrictionViolation = 0;
-  let totalCost = 0;
+  const totalCost = 0;
 
   for (const step of trajectory) {
     if (step.complementarityGap > maxGap) maxGap = step.complementarityGap;

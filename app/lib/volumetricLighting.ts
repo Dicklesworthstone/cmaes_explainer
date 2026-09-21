@@ -48,7 +48,7 @@ export const DEFAULT_FOG_CONFIG: Required<VolumetricFogConfig> = {
 export function henyeyGreensteinPhase(cosTheta: number, g = 0.7): number {
   const clampedCos = Math.max(-1.0, Math.min(1.0, cosTheta));
   const g2 = g * g;
-  const denom = Math.pow(1.0 + g2 - 2.0 * g * clampedCos, 1.5);
+  const denom = (1.0 + g2 - 2.0 * g * clampedCos) ** 1.5;
   if (denom < 1e-6) return 1.0 / (4.0 * Math.PI);
   return (1.0 / (4.0 * Math.PI)) * ((1.0 - g2) / denom);
 }
@@ -149,7 +149,7 @@ export function raymarchVolumetricSunbeams(
   const cosTheta = rayDir[0] * sunDir[0] + rayDir[1] * sunDir[1] + rayDir[2] * sunDir[2];
   const phase = henyeyGreensteinPhase(cosTheta, g);
 
-  let accumulatedRadiance: [number, number, number] = [0, 0, 0];
+  const accumulatedRadiance: [number, number, number] = [0, 0, 0];
   let accumulatedOpticalDepth = 0.0;
 
   for (let i = 0; i < steps; i++) {

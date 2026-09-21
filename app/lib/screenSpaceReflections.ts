@@ -68,7 +68,7 @@ export function evaluateSchlickFresnel(
   f0 = 0.04, // Default dielectric (glass/plastic/wood) F0 = 0.04
 ): number {
   const clampedCos = Math.max(0.0, Math.min(1.0, cosTheta));
-  return f0 + (1.0 - f0) * Math.pow(1.0 - clampedCos, 5.0);
+  return f0 + (1.0 - f0) * (1.0 - clampedCos) ** 5.0;
 }
 
 /**
@@ -126,7 +126,9 @@ export function traceScreenSpaceRay(
   const edgeFadeStart = config.edgeFadeStart ?? DEFAULT_SSR_CONFIG.edgeFadeStart;
 
   // Compute Fresnel
-  const cosTheta = Math.abs(viewDir[0] * viewNormal[0] + viewDir[1] * viewNormal[1] + viewDir[2] * viewNormal[2]);
+  const cosTheta = Math.abs(
+    viewDir[0] * viewNormal[0] + viewDir[1] * viewNormal[1] + viewDir[2] * viewNormal[2],
+  );
   const fresnel = evaluateSchlickFresnel(cosTheta, 0.04);
 
   // Normalize screen ray direction

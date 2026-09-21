@@ -19,7 +19,7 @@
 // This test isolates the gate logic without instantiating the worker.
 // No real timers — order is determined by the microtask queue.
 
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 /** Minimal re-implementation of the worker gate. */
 function makeGate() {
@@ -47,9 +47,12 @@ function makeGate() {
     );
     // Update the gate to the new task. The error handler preserves the
     // chain when a task rejects — the next task still runs.
-    gate = task.then(() => {}, () => {});
+    gate = task.then(
+      () => {},
+      () => {},
+    );
     return task.catch(() => {});
-   }
+  }
 
   return { enqueue, getLog: () => log };
 }
@@ -71,8 +74,12 @@ async function drainMicrotasks(rounds = 4): Promise<void> {
 describe("worker single-flight gate", () => {
   it("runs two enqueued tasks in order, not concurrently", async () => {
     const { enqueue, getLog } = makeGate();
-    const aDone = enqueue("A", async () => { await Promise.resolve(); });
-    const bDone = enqueue("B", async () => { await Promise.resolve(); });
+    const aDone = enqueue("A", async () => {
+      await Promise.resolve();
+    });
+    const bDone = enqueue("B", async () => {
+      await Promise.resolve();
+    });
     await Promise.all([aDone, bDone]);
     // A must finish before B starts. Both are async but neither blocks
     // — the gate's microtask scheduling is what enforces order.
@@ -81,8 +88,12 @@ describe("worker single-flight gate", () => {
 
   it("continues the chain after a task rejects", async () => {
     const { enqueue, getLog } = makeGate();
-    const aDone = enqueue("A", async () => { throw new Error("A failed"); });
-    const bDone = enqueue("B", async () => { await Promise.resolve(); });
+    const aDone = enqueue("A", async () => {
+      throw new Error("A failed");
+    });
+    const bDone = enqueue("B", async () => {
+      await Promise.resolve();
+    });
     await Promise.all([aDone, bDone]);
     // A rejects but the chain still runs B (the gate's recovery handler
     // catches the rejection and proceeds to the next task).
@@ -92,7 +103,9 @@ describe("worker single-flight gate", () => {
   it("serializes ten rapid requests without interleaving", async () => {
     const { enqueue, getLog } = makeGate();
     const tasks = Array.from({ length: 10 }, (_, i) =>
-      enqueue(`T${i}`, async () => { await Promise.resolve(); })
+      enqueue(`T${i}`, async () => {
+        await Promise.resolve();
+      }),
     );
     await Promise.all(tasks);
     // Every T_i:start must precede T_i:end, and T_i:end must precede
@@ -110,7 +123,9 @@ describe("worker single-flight gate", () => {
     const { enqueue, getLog } = makeGate();
     const deferredA = makeDeferred();
     const aDone = enqueue("A", () => deferredA.promise);
-    const bDone = enqueue("B", async () => { await Promise.resolve(); });
+    const bDone = enqueue("B", async () => {
+      await Promise.resolve();
+    });
     // A is still pending. B is queued behind it.
     await drainMicrotasks();
     expect(getLog()).toEqual(["A:start"]);
@@ -126,9 +141,15 @@ describe("worker single-flight gate", () => {
     // reordered older requests would be a "smart" optimization that
     // masks the bug.
     const { enqueue, getLog } = makeGate();
-    const aDone = enqueue("A", async () => { await Promise.resolve(); });
-    const bDone = enqueue("B", async () => { await Promise.resolve(); });
-    const cDone = enqueue("C", async () => { await Promise.resolve(); });
+    const aDone = enqueue("A", async () => {
+      await Promise.resolve();
+    });
+    const bDone = enqueue("B", async () => {
+      await Promise.resolve();
+    });
+    const cDone = enqueue("C", async () => {
+      await Promise.resolve();
+    });
     await Promise.all([aDone, bDone, cDone]);
     expect(getLog()).toEqual(["A:start", "A:end", "B:start", "B:end", "C:start", "C:end"]);
   });

@@ -5,7 +5,7 @@
  * Designed for high-contrast dark themes in CMA-ES explainer.
  */
 
-import type { ColorVariant, ColorizedEquation } from "../types/equation";
+import type { ColorizedEquation, ColorVariant } from "../types/equation";
 
 export interface ColorStyleConfig {
   name: string;
@@ -127,7 +127,7 @@ export const COLOR_STYLES: Record<ColorVariant, ColorStyleConfig> = {
 export function wrapInteractiveLatexTerm(
   varId: string,
   symbolLatex: string,
-  color: ColorVariant
+  color: ColorVariant,
 ): string {
   const cfg = COLOR_STYLES[color];
   const hex = cfg.hex;

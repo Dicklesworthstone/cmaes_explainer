@@ -23,10 +23,7 @@
 //   3. Store the safe position as a robotDragOffset.
 
 import { describe, expect, test } from "bun:test";
-import {
-  clampArmTargetPosition,
-  isTargetKukaReachable,
-} from "../app/lib/armInverseKinematics";
+import { clampArmTargetPosition, isTargetKukaReachable } from "../app/lib/armInverseKinematics";
 import {
   createSceneFromHouseFurniture,
   distanceToOBB,
@@ -36,21 +33,14 @@ import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
 const tableHeight = 0.78;
 const safeRadius = 0.04;
-const armObstacles = createSceneFromHouseFurniture(
-  CRAFTSMAN_BUNGALOW_1928.furniture,
-).obstacles;
+const armObstacles = createSceneFromHouseFurniture(CRAFTSMAN_BUNGALOW_1928.furniture).obstacles;
 const houseObstacles = createSceneFromHouseFurniture().obstacles;
 
 /**
  * Mirrors the spawn-safe useEffect logic in HouseholdArmFlagship.
  */
 function computeArmSafeSpawn(raw: [number, number, number]): [number, number, number] {
-  const { clampedTarget } = clampArmTargetPosition(
-    raw,
-    armObstacles,
-    tableHeight,
-    safeRadius,
-  );
+  const { clampedTarget } = clampArmTargetPosition(raw, armObstacles, tableHeight, safeRadius);
   if (isTargetKukaReachable(clampedTarget)) return clampedTarget;
   return [0, 0.82, 0.4]; // canonical fallback (above the workbench)
 }
@@ -65,13 +55,8 @@ function computeG1SafeSpawn(): [number, number, number] {
 describe("arm flagship spawn-safe algorithm", () => {
   test("a raw target inside a wall is replaced with a collision-free, reachable result", () => {
     if (armObstacles.length === 0) return;
-    const wall =
-      armObstacles.find((o) => o.name.toLowerCase().includes("wall")) ?? armObstacles[0];
-    const interior: [number, number, number] = [
-      wall.center[0],
-      tableHeight,
-      wall.center[2],
-    ];
+    const wall = armObstacles.find((o) => o.name.toLowerCase().includes("wall")) ?? armObstacles[0];
+    const interior: [number, number, number] = [wall.center[0], tableHeight, wall.center[2]];
     const safe = computeArmSafeSpawn(interior);
     // Reachability invariant: the result is reachable by the arm.
     expect(isTargetKukaReachable(safe)).toBe(true);

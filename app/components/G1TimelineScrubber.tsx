@@ -1,9 +1,17 @@
 "use client";
 
+import {
+  AlertCircle,
+  CheckCircle2,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+} from "lucide-react";
 import React from "react";
-import { Play, Pause, RotateCcw, SkipBack, SkipForward, AlertCircle, CheckCircle2 } from "lucide-react";
-import type { G1TraceReceipt } from "../lib/frankensimCmaes";
 import type { FrankenRobotsPlaybackSpeed } from "../lib/frankenrobotsBridge";
+import type { G1TraceReceipt } from "../lib/frankensimCmaes";
 
 interface G1TimelineScrubberProps {
   trace: G1TraceReceipt | null;
@@ -29,7 +37,8 @@ export function G1TimelineScrubber({
   onReset,
 }: G1TimelineScrubberProps) {
   const totalSamples = trace?.samples.length ?? 0;
-  const currentSample = trace?.samples[Math.min(currentSampleIndex, Math.max(0, totalSamples - 1))] ?? null;
+  const currentSample =
+    trace?.samples[Math.min(currentSampleIndex, Math.max(0, totalSamples - 1))] ?? null;
   const currentTime = currentSample?.timeSeconds ?? 0;
   const totalTime = trace?.samples[Math.max(0, totalSamples - 1)]?.timeSeconds ?? 1.5;
   const endedEarly = trace ? trace.terminationReason !== "horizon" : false;
@@ -42,8 +51,17 @@ export function G1TimelineScrubber({
       { time: 0.0, label: "Start", type: "normal" },
     ];
 
-    if (pushStartSeconds !== null && pushStartSeconds >= 0 && pushStartSeconds <= totalTime && trace.pushImpulseNewtonSeconds > 0) {
-      events.push({ time: pushStartSeconds, label: `Owner push (${trace.pushImpulseNewtonSeconds.toFixed(1)} N·s)`, type: "push" });
+    if (
+      pushStartSeconds !== null &&
+      pushStartSeconds >= 0 &&
+      pushStartSeconds <= totalTime &&
+      trace.pushImpulseNewtonSeconds > 0
+    ) {
+      events.push({
+        time: pushStartSeconds,
+        label: `Owner push (${trace.pushImpulseNewtonSeconds.toFixed(1)} N·s)`,
+        type: "push",
+      });
     }
 
     if (endedEarly) {
@@ -58,7 +76,11 @@ export function G1TimelineScrubber({
   if (!trace || totalSamples < 2) return null;
 
   return (
-    <div role="group" aria-label="Simulation trace playback" className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 backdrop-blur-md">
+    <div
+      role="group"
+      aria-label="Simulation trace playback"
+      className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 backdrop-blur-md"
+    >
       {/* 1. Header with Live Telemetry Autopsy Callout */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3 text-xs">
         <div className="flex flex-wrap items-center gap-3">
@@ -78,8 +100,8 @@ export function G1TimelineScrubber({
               {currentSample.leftContact && currentSample.rightContact
                 ? "Double Foot Support"
                 : currentSample.leftContact
-                ? "Left Sole Grounded"
-                : "Right Sole Grounded"}
+                  ? "Left Sole Grounded"
+                  : "Right Sole Grounded"}
             </span>
           ) : (
             <span className="flex items-center gap-1 text-[0.7rem] text-amber-300">
@@ -122,15 +144,18 @@ export function G1TimelineScrubber({
                     m.type === "fall"
                       ? "bg-rose-500"
                       : m.type === "push"
-                      ? "bg-amber-400"
-                      : "bg-cyan-400"
+                        ? "bg-amber-400"
+                        : "bg-cyan-400"
                   }`}
                 />
               </div>
             );
           })}
         </div>
-        <ul aria-label="Measured trace milestones" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
+        <ul
+          aria-label="Measured trace milestones"
+          className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300"
+        >
           {milestones.map((milestone) => (
             <li key={milestone.label}>
               {milestone.time.toFixed(3)} s: {milestone.label}

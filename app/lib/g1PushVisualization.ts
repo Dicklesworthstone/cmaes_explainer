@@ -35,18 +35,13 @@ function nonNegativeFinite(value: number, fallback: number): number {
  * visualization preview. The real playback pulse always uses the owner's
  * fixed +Y direction and the impulse measured by the trace receipt.
  */
-export function resolveG1PushVisualization(
-  input: G1PushVisualizationInput,
-): G1PushVisualization {
+export function resolveG1PushVisualization(input: G1PushVisualizationInput): G1PushVisualization {
   if (input.manualPreviewActive) {
     return {
       source: "manual-preview",
       fraction: 0.95,
       angleDegrees: normalizedAngleDegrees(input.manualAngleDegrees),
-      impulseNewtonSeconds: nonNegativeFinite(
-        input.manualImpulseNewtonSeconds,
-        15,
-      ),
+      impulseNewtonSeconds: nonNegativeFinite(input.manualImpulseNewtonSeconds, 15),
     };
   }
 
@@ -70,10 +65,7 @@ export function resolveG1PushVisualization(
       source: "owner",
       fraction: Math.sin(Math.PI * phase),
       angleDegrees: G1_OWNER_PUSH_ANGLE_DEGREES,
-      impulseNewtonSeconds: nonNegativeFinite(
-        input.ownerImpulseNewtonSeconds,
-        0,
-      ),
+      impulseNewtonSeconds: nonNegativeFinite(input.ownerImpulseNewtonSeconds, 0),
     };
   }
 

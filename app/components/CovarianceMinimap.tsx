@@ -1,7 +1,7 @@
 "use client";
 
+import { Activity, ArrowRight, Compass, Sliders, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Sliders, Activity, Compass, ArrowRight, Sparkles } from "lucide-react";
 import { eigen2x2 } from "../lib/cmaesEngine";
 import { buildHeatmapCanvas } from "../lib/frankensimHeatmap";
 import { LatexRenderer } from "./LatexRenderer";
@@ -18,20 +18,20 @@ const objectives = {
     label: "Ill-Conditioned Cigar",
     f: (x: number, y: number) => 100 * x * x + y * y,
     optimum: [0, 0] as [number, number],
-    hessian: () => [200, 0, 0, 2]
+    hessian: () => [200, 0, 0, 2],
   },
   rosenbrock: {
     label: "Rosenbrock Valley",
     f: (x: number, y: number) => 100 * (y - x * x) ** 2 + (1 - x) ** 2,
     optimum: [1, 1] as [number, number],
-    hessian: () => [802, -400, -400, 200]
+    hessian: () => [802, -400, -400, 200],
   },
   sphere: {
     label: "Isotropic Sphere",
     f: (x: number, y: number) => x * x + y * y,
     optimum: [0, 0] as [number, number],
-    hessian: () => [2, 0, 0, 2]
-  }
+    hessian: () => [2, 0, 0, 2],
+  },
 } as const;
 
 type ObjKey = keyof typeof objectives;
@@ -65,7 +65,11 @@ export function CovarianceMinimap() {
   useEffect(() => {
     let live = true;
     const fieldId =
-      objKey === "cigar" ? ("cigar-x100" as const) : objKey === "rosenbrock" ? ("rosenbrock100" as const) : ("sphere" as const);
+      objKey === "cigar"
+        ? ("cigar-x100" as const)
+        : objKey === "rosenbrock"
+          ? ("rosenbrock100" as const)
+          : ("sphere" as const);
     buildHeatmapCanvas({
       field: fieldId,
       width: WIDTH,
@@ -76,7 +80,7 @@ export function CovarianceMinimap() {
       ymax: DOMAIN,
       norm: { mode: "tanh", k: 30 },
       ramp: { r0: 10, rk: 15, g0: 25, gk: 75, b0: 45, bk: 120 },
-      fallbackField: fn.f
+      fallbackField: fn.f,
     }).then((canvas) => {
       if (live && canvas) setBgCanvas(canvas);
     });
@@ -120,7 +124,7 @@ export function CovarianceMinimap() {
     const [optX, optY] = fn.optimum;
     const curMean: [number, number] = [
       startMean[0] + (optX - startMean[0]) * t,
-      startMean[1] + (optY - startMean[1]) * t
+      startMean[1] + (optY - startMean[1]) * t,
     ];
 
     // Target covariance is proportional to inverse Hessian
@@ -130,7 +134,7 @@ export function CovarianceMinimap() {
       Hmat[3] / det,
       -Hmat[1] / det,
       -Hmat[2] / det,
-      Hmat[0] / det
+      Hmat[0] / det,
     ];
 
     // Scale inverse Hessian for visualization
@@ -142,7 +146,7 @@ export function CovarianceMinimap() {
       I[0] * (1 - t) + targetC[0] * t,
       I[1] * (1 - t) + targetC[1] * t,
       I[2] * (1 - t) + targetC[2] * t,
-      I[3] * (1 - t) + targetC[3] * t
+      I[3] * (1 - t) + targetC[3] * t,
     ];
 
     const eigen = eigen2x2(curC[0], curC[1], curC[3]);
@@ -190,8 +194,10 @@ export function CovarianceMinimap() {
     // 5. Draw Euclidean vs Natural Gradient Vectors
     // Numerical gradient at curMean
     const eps = 1e-4;
-    const gradX = (fn.f(curMean[0] + eps, curMean[1]) - fn.f(curMean[0] - eps, curMean[1])) / (2 * eps);
-    const gradY = (fn.f(curMean[0], curMean[1] + eps) - fn.f(curMean[0], curMean[1] - eps)) / (2 * eps);
+    const gradX =
+      (fn.f(curMean[0] + eps, curMean[1]) - fn.f(curMean[0] - eps, curMean[1])) / (2 * eps);
+    const gradY =
+      (fn.f(curMean[0], curMean[1] + eps) - fn.f(curMean[0], curMean[1] - eps)) / (2 * eps);
     // At the optimum the central difference is pure floating-point residue;
     // normalizing it would draw a full-length arrow in a meaningless
     // direction, so suppress the arrows instead.
@@ -229,7 +235,7 @@ export function CovarianceMinimap() {
         ctx.moveTo(cx, cy);
         ctx.lineTo(
           toPxX(curMean[0] - nNatX * stepData * 1.25),
-          toPxY(curMean[1] - nNatY * stepData * 1.25)
+          toPxY(curMean[1] - nNatY * stepData * 1.25),
         );
         ctx.stroke();
       }
@@ -257,7 +263,8 @@ export function CovarianceMinimap() {
               Covariance Metric Adaptation & Natural Gradient Alignment
             </h4>
             <p className="text-xs text-slate-400">
-              Illustrative interpolation from an isotropic covariance to the local inverse-Hessian shape
+              Illustrative interpolation from an isotropic covariance to the local inverse-Hessian
+              shape
             </p>
           </div>
         </div>
@@ -296,7 +303,9 @@ export function CovarianceMinimap() {
                 </div>
               </>
             ) : (
-              <span className="text-slate-400">At the optimum ∇f ≈ 0: no descent direction to draw</span>
+              <span className="text-slate-400">
+                At the optimum ∇f ≈ 0: no descent direction to draw
+              </span>
             )}
           </div>
         </div>
@@ -329,7 +338,10 @@ export function CovarianceMinimap() {
               <span>Why Natural Gradients Win</span>
             </div>
             <p>
-              In ill-conditioned valleys, standard Euclidean descent (red) points perpendicular to the valley floor, causing catastrophic zig-zagging. The natural gradient (mint), preconditioned by covariance <LatexRenderer math="C" block={false} />, aims directly down the canyon.
+              In ill-conditioned valleys, standard Euclidean descent (red) points perpendicular to
+              the valley floor, causing catastrophic zig-zagging. The natural gradient (mint),
+              preconditioned by covariance <LatexRenderer math="C" block={false} />, aims directly
+              down the canyon.
             </p>
           </div>
         </div>

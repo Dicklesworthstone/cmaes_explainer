@@ -1,11 +1,11 @@
 "use client";
 
+import { CheckCircle2, Cpu, ExternalLink, ShieldAlert, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Cpu, ExternalLink, Sparkles, CheckCircle2, ShieldAlert } from "lucide-react";
-import { initFrankenSim, FrankenSimStatus } from "../lib/frankensimPhysics";
 import { initFrankenSimCmaes } from "../lib/frankensimCmaes";
-import { initFrankenSimLenia } from "../lib/frankensimLenia";
 import { initFrankenSimHeatmap } from "../lib/frankensimHeatmap";
+import { initFrankenSimLenia } from "../lib/frankensimLenia";
+import { type FrankenSimStatus, initFrankenSim } from "../lib/frankensimPhysics";
 
 export function FrankenSimBadge({ className = "" }: { className?: string }) {
   const [status, setStatus] = useState<FrankenSimStatus>({
@@ -15,7 +15,7 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
     hasTrusspath: false,
     hasFlyerAero: false,
     hasBemt: false,
-    hasDemoPhysics: false
+    hasDemoPhysics: false,
   });
   // Per-kernel provenance rows (each loader is single-flight and shared with
   // the components that actually use the kernel, so probing here is free).
@@ -46,7 +46,9 @@ export function FrankenSimBadge({ className = "" }: { className?: string }) {
   const isWasm = status.source === "wasm";
 
   return (
-    <div className={`relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 hover:bg-slate-900/90 border border-sky-500/30 hover:border-sky-400/60 backdrop-blur-md shadow-glow-sm transition-[background-color,border-color,box-shadow] select-none ${className}`}>
+    <div
+      className={`relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/80 hover:bg-slate-900/90 border border-sky-500/30 hover:border-sky-400/60 backdrop-blur-md shadow-glow-sm transition-[background-color,border-color,box-shadow] select-none ${className}`}
+    >
       {/* Glowing Engine Icon & Toggle */}
       <button
         type="button"

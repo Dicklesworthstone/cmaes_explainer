@@ -15,19 +15,19 @@
  */
 
 import {
-  RigidBody,
-  ContactManifold,
-  ContactPoint,
-  Vector3,
-  Matrix3x3,
-  vecAdd,
-  vecSub,
-  vecScale,
-  vecDot,
-  vecCross,
-  eulerToMatrix,
-  rotateVector,
+  type ContactManifold,
+  type ContactPoint,
   computeWorldInvInertia,
+  eulerToMatrix,
+  type Matrix3x3,
+  type RigidBody,
+  rotateVector,
+  type Vector3,
+  vecAdd,
+  vecCross,
+  vecDot,
+  vecScale,
+  vecSub,
 } from "./contactGraph";
 
 export interface LCPSolverConfig {
@@ -79,7 +79,7 @@ function computeEffectiveMass(
   invIB: Matrix3x3,
   rA: Vector3,
   rB: Vector3,
-  d: Vector3
+  d: Vector3,
 ): number {
   let k = (bodyA.isStatic ? 0 : bodyA.invMass) + (bodyB.isStatic ? 0 : bodyB.invMass);
 
@@ -105,7 +105,7 @@ export function buildContactConstraints(
   bodies: Map<string, RigidBody>,
   manifolds: ContactManifold[],
   dt: number,
-  config: LCPSolverConfig = DEFAULT_LCP_CONFIG
+  config: LCPSolverConfig = DEFAULT_LCP_CONFIG,
 ): ContactConstraint[] {
   const constraints: ContactConstraint[] = [];
   const invDt = dt > 0 ? 1.0 / dt : 60.0;
@@ -150,18 +150,18 @@ export function buildContactConstraints(
       // Relative velocity at contact point
       const vA_contact = vecAdd(
         bodyA.isStatic ? [0, 0, 0] : bodyA.linearVelocity,
-        bodyA.isStatic ? [0, 0, 0] : vecCross(bodyA.angularVelocity, rA)
+        bodyA.isStatic ? [0, 0, 0] : vecCross(bodyA.angularVelocity, rA),
       );
       const vB_contact = vecAdd(
         bodyB.isStatic ? [0, 0, 0] : bodyB.linearVelocity,
-        bodyB.isStatic ? [0, 0, 0] : vecCross(bodyB.angularVelocity, rB)
+        bodyB.isStatic ? [0, 0, 0] : vecCross(bodyB.angularVelocity, rB),
       );
       const vRel = vecSub(vB_contact, vA_contact);
       const vRelNormal = vecDot(vRel, c.normal);
 
       // Baumgarte position bias
       const penetrationExcess = Math.max(0, c.penetrationDepth - config.penetrationSlop);
-      let bias = (config.baumgarteBeta * invDt) * penetrationExcess;
+      let bias = config.baumgarteBeta * invDt * penetrationExcess;
 
       // Restitution velocity bias
       if (vRelNormal < -config.restitutionVelocityThreshold) {
@@ -197,7 +197,7 @@ function applyImpulse(
   invIB: Matrix3x3,
   rA: Vector3,
   rB: Vector3,
-  impulse: Vector3
+  impulse: Vector3,
 ): void {
   if (!bodyA.isStatic) {
     bodyA.linearVelocity = vecSub(bodyA.linearVelocity, vecScale(impulse, bodyA.invMass));
@@ -220,7 +220,7 @@ function applyImpulse(
 export function solveLCP(
   bodies: Map<string, RigidBody>,
   constraints: ContactConstraint[],
-  config: LCPSolverConfig = DEFAULT_LCP_CONFIG
+  config: LCPSolverConfig = DEFAULT_LCP_CONFIG,
 ): LCPSolveResult {
   // Pre-calculate world inverse inertias
   const worldInvInertias = new Map<string, Matrix3x3>();
@@ -245,7 +245,7 @@ export function solveLCP(
     const normalImpulseVec = vecScale(c.contact.normal, c.contact.normalImpulse);
     const tangentImpulseVec = vecAdd(
       vecScale(c.contact.tangent1, c.contact.tangentImpulse1),
-      vecScale(c.contact.tangent2, c.contact.tangentImpulse2)
+      vecScale(c.contact.tangent2, c.contact.tangentImpulse2),
     );
     const totalImpulse = vecAdd(normalImpulseVec, tangentImpulseVec);
 
@@ -266,11 +266,11 @@ export function solveLCP(
       // Relative velocity at contact
       const vA_contact = vecAdd(
         c.bodyA.isStatic ? [0, 0, 0] : c.bodyA.linearVelocity,
-        c.bodyA.isStatic ? [0, 0, 0] : vecCross(c.bodyA.angularVelocity, c.rA)
+        c.bodyA.isStatic ? [0, 0, 0] : vecCross(c.bodyA.angularVelocity, c.rA),
       );
       const vB_contact = vecAdd(
         c.bodyB.isStatic ? [0, 0, 0] : c.bodyB.linearVelocity,
-        c.bodyB.isStatic ? [0, 0, 0] : vecCross(c.bodyB.angularVelocity, c.rB)
+        c.bodyB.isStatic ? [0, 0, 0] : vecCross(c.bodyB.angularVelocity, c.rB),
       );
       const vRel = vecSub(vB_contact, vA_contact);
 
@@ -279,7 +279,10 @@ export function solveLCP(
       const deltaLambdaT1 = -vRelT1 * c.tangentMass1;
       const maxFriction = c.friction * c.contact.normalImpulse;
       const oldLambdaT1 = c.contact.tangentImpulse1;
-      c.contact.tangentImpulse1 = Math.max(-maxFriction, Math.min(maxFriction, oldLambdaT1 + deltaLambdaT1));
+      c.contact.tangentImpulse1 = Math.max(
+        -maxFriction,
+        Math.min(maxFriction, oldLambdaT1 + deltaLambdaT1),
+      );
       const appliedLambdaT1 = c.contact.tangentImpulse1 - oldLambdaT1;
       applyImpulse(
         c.bodyA,
@@ -288,14 +291,17 @@ export function solveLCP(
         invIB,
         c.rA,
         c.rB,
-        vecScale(c.contact.tangent1, appliedLambdaT1)
+        vecScale(c.contact.tangent1, appliedLambdaT1),
       );
 
       // --- Friction Tangent 2 ---
       const vRelT2 = vecDot(vRel, c.contact.tangent2);
       const deltaLambdaT2 = -vRelT2 * c.tangentMass2;
       const oldLambdaT2 = c.contact.tangentImpulse2;
-      c.contact.tangentImpulse2 = Math.max(-maxFriction, Math.min(maxFriction, oldLambdaT2 + deltaLambdaT2));
+      c.contact.tangentImpulse2 = Math.max(
+        -maxFriction,
+        Math.min(maxFriction, oldLambdaT2 + deltaLambdaT2),
+      );
       const appliedLambdaT2 = c.contact.tangentImpulse2 - oldLambdaT2;
       applyImpulse(
         c.bodyA,
@@ -304,7 +310,7 @@ export function solveLCP(
         invIB,
         c.rA,
         c.rB,
-        vecScale(c.contact.tangent2, appliedLambdaT2)
+        vecScale(c.contact.tangent2, appliedLambdaT2),
       );
 
       // --- Normal Impulse ---
@@ -322,10 +328,11 @@ export function solveLCP(
         invIB,
         c.rA,
         c.rB,
-        vecScale(c.contact.normal, appliedLambdaN)
+        vecScale(c.contact.normal, appliedLambdaN),
       );
 
-      const change = Math.abs(appliedLambdaN) + Math.abs(appliedLambdaT1) + Math.abs(appliedLambdaT2);
+      const change =
+        Math.abs(appliedLambdaN) + Math.abs(appliedLambdaT1) + Math.abs(appliedLambdaT2);
       if (change > maxResidual) {
         maxResidual = change;
       }
@@ -360,7 +367,7 @@ export function stepPhysicsWorld(
   manifolds: ContactManifold[],
   gravity: Vector3 = [0, 0, -9.81],
   dt: number = 0.01666,
-  config: LCPSolverConfig = DEFAULT_LCP_CONFIG
+  config: LCPSolverConfig = DEFAULT_LCP_CONFIG,
 ): LCPSolveResult {
   // 1. Apply gravity forces
   for (const b of bodies.values()) {

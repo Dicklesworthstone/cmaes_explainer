@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
 import { Download, Link2, Upload } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import type { PolicyFile } from "../lib/g1PolicyShare";
 import {
   encodePolicyFragment,
   MAX_POLICY_FILE_BYTES,
@@ -11,7 +12,6 @@ import {
   type SharedPolicy,
   type SharedPolicyMeta,
 } from "../lib/g1PolicyShare";
-import type { PolicyFile } from "../lib/g1PolicyShare";
 
 /**
  * Getting a trained gait out of the tab, and someone else's back in.
@@ -85,7 +85,10 @@ export function PolicyExchange({
       anchor.remove();
       URL.revokeObjectURL(url);
     }, 0);
-    setNotice({ tone: "ok", text: `Saved ${anchor.download} — ${policy.length} coefficients, full precision.` });
+    setNotice({
+      tone: "ok",
+      text: `Saved ${anchor.download} — ${policy.length} coefficients, full precision.`,
+    });
   }, [policy, subject, meta, measured]);
 
   const share = useCallback(async () => {
@@ -115,7 +118,8 @@ export function PolicyExchange({
     } catch (error) {
       setNotice({
         tone: "error",
-        text: error instanceof Error ? error.message : "Could not build a share link for this policy.",
+        text:
+          error instanceof Error ? error.message : "Could not build a share link for this policy.",
       });
     } finally {
       setBusy(false);
@@ -127,10 +131,7 @@ export function PolicyExchange({
       setBusy(true);
       try {
         if (file.size > MAX_POLICY_FILE_BYTES) throw new Error("That policy file is too large.");
-        const imported = policyFromFileContents(
-          await file.text(),
-          policy?.length ?? 5_040,
-        );
+        const imported = policyFromFileContents(await file.text(), policy?.length ?? 5_040);
         await onImport(imported);
         // A policy from a different owner build is replayed rather than
         // refused, so where it came from has to be said out loud: the receipt
@@ -234,15 +235,13 @@ export function PolicyExchange({
         </p>
       ) : (
         <p className="mt-2 text-[0.62rem] leading-4 text-slate-500">
-          Both are exact. The file is the archival form; the link carries the
-          policy inside the URL fragment, so it is never uploaded anywhere. The
-          link is long — around{" "}
+          Both are exact. The file is the archival form; the link carries the policy inside the URL
+          fragment, so it is never uploaded anywhere. The link is long — around{" "}
           {ready
             ? `${Math.round((policy.length * LINK_BYTES_PER_COEFFICIENT * 1.37) / 1024)} kB`
             : "50 kB"}{" "}
-          — because anything smaller stopped reproducing the gait that was
-          trained: a rollout this long amplifies rounding, and a lossy link came
-          back walking 0.57 m instead of 0.66 m.
+          — because anything smaller stopped reproducing the gait that was trained: a rollout this
+          long amplifies rounding, and a lossy link came back walking 0.57 m instead of 0.66 m.
         </p>
       )}
     </div>

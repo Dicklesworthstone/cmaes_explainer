@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
-  computeObbSdf,
-  solveCbfQp,
-  buildWholeBodyCbfConstraints,
   applySafetyFilter,
-  evaluateObstacleObjective,
+  buildWholeBodyCbfConstraints,
+  computeObbSdf,
   DEFAULT_CBF_CONFIG,
+  evaluateObstacleObjective,
   type Obstacle3D,
   type RobotLinkState,
+  solveCbfQp,
 } from "./obstacleAvoidance";
 
 describe("SOTA Control Barrier Functions & Obstacle Avoidance", () => {
