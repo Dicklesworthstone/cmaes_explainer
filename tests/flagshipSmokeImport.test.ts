@@ -57,4 +57,46 @@ describe("flagship components import without throwing", () => {
     const elapsedMs = performance.now() - start;
     expect(elapsedMs).toBeLessThan(5_000);
   });
+
+  test("embedded humanoid renders direct navigation to real learning controls and back", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { G1WalkingFlagship } = await import("../app/components/G1WalkingFlagship");
+    for (const embedded of [true, false]) {
+      const html = renderToStaticMarkup(
+        createElement<{ embedded?: boolean }>(G1WalkingFlagship, { embedded }),
+      );
+      const buttons: string[] = [];
+      const regions: string[] = [];
+      const parser = new HTMLRewriter()
+        .on(
+          'button[aria-controls="g1-learning-controls"], button[aria-controls="g1-robot-stage"]',
+          {
+            element(element) {
+              expect(element.getAttribute("type")).toBe("button");
+              expect(element.getAttribute("disabled")).toBeNull();
+              expect(element.getAttribute("class")).toContain("min-h-11");
+              buttons.push(element.getAttribute("aria-controls")!);
+            },
+          },
+        )
+        .on("#g1-learning-controls, #g1-robot-stage", {
+          element(element) {
+            expect(element.getAttribute("role")).toBe("region");
+            expect(element.getAttribute("tabindex")).toBe("-1");
+            expect(element.getAttribute("aria-label")).toBeTruthy();
+            regions.push(element.getAttribute("id")!);
+          },
+        });
+      await parser.transform(new Response(html)).text();
+      expect(buttons).toEqual(embedded ? ["g1-learning-controls", "g1-robot-stage"] : []);
+      expect(regions).toEqual(["g1-robot-stage", "g1-learning-controls"]);
+      // Real server render, not a simulated click or browser-layout assertion.
+      // The full lab remains present even when the stage HUD is collapsed.
+      expect(html).toContain('id="g1-sigma"');
+      expect(html).toContain('id="g1-family"');
+      expect(html).toContain("Start learning");
+      expect(html.includes("Learn &amp; inspect")).toBe(embedded);
+    }
+  });
 });
