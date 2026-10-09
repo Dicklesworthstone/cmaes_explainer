@@ -1,0 +1,8 @@
+# Generated executable bytes are bound to their reviewed SHA-256 manifests.
+# Reformatting these artifacts breaks browser and native owner admission.
+public/wasm/
+public/wasm-demo/pkg/
+public/wasm-demo/pkg-par/
+
+# Retained native rollback bundles must keep their recorded executable bytes.
+ios/Engine.previous-*/
