@@ -1,6 +1,6 @@
 "use client";
 
-import { FlyControls, Html, OrbitControls, PerspectiveCamera, RoundedBox } from "@react-three/drei";
+import { FlyControls, Html, OrbitControls, RoundedBox } from "@react-three/drei";
 import React, { Canvas, type ThreeEvent, useFrame } from "@react-three/fiber";
 import {
   Activity,
@@ -108,6 +108,7 @@ import { G1StoryTour, STORY_CHAPTERS, type StoryChapter } from "./G1StoryTour";
 import { G1TimelineScrubber } from "./G1TimelineScrubber";
 import { LearningLedger } from "./LearningLedger";
 import { PolicyExchange } from "./PolicyExchange";
+import { ResponsiveRobotCamera } from "./ResponsiveRobotCamera";
 import { SearsCraftsmanEstate } from "./SearsCraftsmanEstate";
 import { WalkQualityComparison } from "./WalkQualityComparison";
 
@@ -2092,7 +2093,7 @@ function RobotStage({
     >
       <color attach="background" args={[bgColor]} />
       <fog attach="fog" args={[bgColor, 7.5, 18.0]} />
-      <PerspectiveCamera makeDefault position={[1.85, 1.15, 2.35]} fov={36} near={0.05} far={40} />
+      <ResponsiveRobotCamera position={[1.85, 1.15, 2.35]} fov={36} near={0.05} far={40} />
 
       {/* 1928 Sears Craftsman Estate (Complete 7-Room Whole-House Architectural Environment) */}
       <SearsCraftsmanEstate

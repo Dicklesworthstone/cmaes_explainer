@@ -5,6 +5,9 @@ const flagship = readFileSync(
   new URL("../app/components/G1WalkingFlagship.tsx", import.meta.url),
   "utf8",
 );
+// JSX folds source line wrapping into spaces in these rendered messages.
+// Keep the copy contract without making it depend on formatter line breaks.
+const normalizedCopy = flagship.replace(/\s+/g, " ");
 
 describe("G1 real-mesh lifecycle contract", () => {
   test("a failed page-lifetime parse can start a fresh real worker attempt", () => {
@@ -16,9 +19,9 @@ describe("G1 real-mesh lifecycle contract", () => {
 
   test("success and failure remain explicit instead of mocking a loaded state", () => {
     expect(flagship).toContain("Object.keys(meshState.geometries).length");
-    expect(flagship).toContain("mesh parts decoded");
+    expect(normalizedCopy).toContain("mesh parts decoded");
     expect(flagship).toContain("{meshState.error}");
-    expect(flagship).toContain("kinematic skeleton remains active");
+    expect(normalizedCopy).toContain("kinematic skeleton remains active");
     expect(flagship).not.toContain('setState({ phase: "ready", geometries: {}');
   });
 });
