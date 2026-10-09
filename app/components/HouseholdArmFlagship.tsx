@@ -2353,13 +2353,15 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         <div className={embedded ? "space-y-0" : "space-y-4"}>
           <div
             className={`glass-card relative overflow-hidden border-orange-400/15 bg-slate-950/80 ${
-              embedded ? "min-h-[calc(100svh-64px)]" : "min-h-[570px]"
+              embedded ? "flex flex-col" : "min-h-[570px]"
             }`}
           >
-            {/* Top HUD: stacks vertically on phones; corners ≥sm */}
+            {/* Native controls occupy their own rows, never the robot's pixels. */}
             <div
-              className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${
-                embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
+              role="group"
+              aria-label="Arm stage controls"
+              className={`pointer-events-none z-10 flex flex-col gap-2 ${
+                embedded ? "relative p-3" : "absolute inset-x-5 top-5"
               } sm:flex-row sm:items-start sm:justify-between`}
             >
               {/* Top Toolbar Badges */}
@@ -2590,7 +2592,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                       aria-label={`${cam.label} camera`}
                       onClick={() => setCameraMode(cam.id)}
                       className={`flex min-w-0 items-center whitespace-nowrap rounded-lg py-1 font-bold transition-all ${
-                        embedded ? "gap-0.5 px-1.5 text-[0.58rem]" : "gap-1 px-2 text-[0.65rem]"
+                        embedded
+                          ? "min-h-11 flex-1 flex-col justify-center gap-0.5 px-1 text-[0.62rem]"
+                          : "gap-1 px-2 text-[0.65rem]"
                       } ${
                         isSelected
                           ? "bg-orange-500/30 text-orange-200 border border-orange-400/40"
@@ -2606,10 +2610,10 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             </div>
 
             <div
-              className={`pointer-events-none absolute z-10 flex flex-wrap items-end justify-between gap-2 ${
+              className={`pointer-events-none z-10 flex flex-wrap items-end justify-between gap-2 ${
                 embedded
-                  ? "bottom-3 left-3 right-3"
-                  : "bottom-5 left-5 right-5 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
+                  ? "relative order-last p-3"
+                  : "absolute bottom-5 left-5 right-5 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
               }`}
             >
               <span
@@ -2749,7 +2753,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             </div>
             <div
               ref={stageRef}
-              className={embedded ? "h-[calc(100svh-64px)] w-full" : "h-[570px] w-full"}
+              role="region"
+              aria-label="Arm visualization"
+              className={embedded ? "h-[min(52svh,420px)] min-h-[240px] w-full" : "h-[570px] w-full"}
             >
               {shouldMountStage ? (
                 <ArmStage

@@ -141,4 +141,51 @@ describe("flagship components import without throwing", () => {
       expect(html.includes("Learn &amp; inspect")).toBe(embedded);
     }
   });
+
+  test("embedded Arm retains every camera and playback control outside the scene", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { HouseholdArmFlagship } = await import("../app/components/HouseholdArmFlagship");
+    for (const embedded of [true, false]) {
+      const html = renderToStaticMarkup(
+        createElement<{ embedded?: boolean }>(HouseholdArmFlagship, { embedded }),
+      );
+      const cameras: string[] = [];
+      let stageControls = 0;
+      let visualizations = 0;
+      const parser = new HTMLRewriter()
+        .on('[aria-label="Arm stage controls"]', {
+          element(element) {
+            stageControls++;
+            expect(element.getAttribute("class")).toContain(embedded ? "relative" : "absolute");
+          },
+        })
+        .on('[aria-label="Arm visualization"]', {
+          element(element) {
+            visualizations++;
+            expect(element.getAttribute("role")).toBe("region");
+          },
+        })
+        .on('button[aria-label$=" camera"]', {
+          element(element) {
+            cameras.push(element.getAttribute("aria-label")!);
+            expect(element.getAttribute("disabled")).toBeNull();
+            if (embedded) expect(element.getAttribute("class")).toContain("min-h-11");
+          },
+        });
+      await parser.transform(new Response(html)).text();
+      expect(stageControls).toBe(1);
+      expect(visualizations).toBe(1);
+      expect(cameras).toEqual([
+        "Studio camera", "Grasp Focus camera", "Top camera",
+        "Side camera", "Front camera", "Free-Fly camera",
+      ]);
+      expect(html).toContain('aria-label="Arm trace playback"');
+      expect(html).toContain('aria-label="Arm trace position"');
+      expect(html).toContain('aria-label="Arm trace playback speed"');
+      expect(html).toContain("Start learning");
+      // SSR checks retained controls and layout intent, not pixel overlap.
+      // Actual canvas/toolbar/timeline rectangles are checked in the export.
+    }
+  });
 });
