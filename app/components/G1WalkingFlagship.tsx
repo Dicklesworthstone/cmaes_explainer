@@ -2248,6 +2248,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
   // keeps it warm while approaching (see WingViz rationale).
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const learningControlsRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
   // Real G1 meshes load only while the stage is near the viewport; the
   // capsule rig stays as the honest fallback when assets can't load. Meshes
@@ -3511,7 +3512,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         <div className="space-y-4">
           <div
             className={`glass-card relative overflow-hidden border-cyan-400/15 bg-slate-950/80 ${
-              embedded ? "min-h-[100svh]" : "min-h-[620px]"
+              embedded ? "h-[var(--robot-stage-height,100svh)]" : "min-h-[620px]"
             }`}
           >
             {/* Top HUD: stacks vertically on phones (both clusters shared the
@@ -3542,6 +3543,25 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   <Wrench className="h-3.5 w-3.5" />
                   {hudExpanded ? "Hide controls" : "Controls"}
                 </button>
+
+                {embedded ? (
+                  <button
+                    type="button"
+                    aria-controls="g1-learning-controls"
+                    onClick={() => {
+                      learningControlsRef.current?.focus({ preventScroll: true });
+                      learningControlsRef.current?.scrollIntoView({
+                        behavior: reduceMotion ? "auto" : "smooth",
+                        block: "start",
+                      });
+                    }}
+                    className="flex min-h-11 items-center gap-1.5 rounded-full border border-cyan-300/35 bg-cyan-950/90 px-3 py-1 text-xs font-bold text-cyan-100 backdrop-blur-md transition-colors hover:bg-cyan-900"
+                    title="Jump to learning, optimizer settings, saved policies, and measured results"
+                  >
+                    <Sliders className="h-3.5 w-3.5" />
+                    Learn &amp; inspect
+                  </button>
+                ) : null}
 
                 {hudExpanded ? (
                   <>
@@ -3987,7 +4007,14 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 </span>
               ) : null}
             </div>
-            <div ref={stageRef} className={embedded ? "h-[100svh] w-full" : "h-[620px] w-full"}>
+            <div
+              ref={stageRef}
+              id="g1-robot-stage"
+              role="region"
+              aria-label="Humanoid visualization"
+              tabIndex={-1}
+              className={embedded ? "h-full w-full" : "h-[620px] w-full"}
+            >
               {shouldMountStage && (
                 <RobotStage
                   trace={trace}
@@ -4099,7 +4126,31 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           )}
         </div>
 
-        <div className="glass-card p-5 sm:p-6">
+        <div
+          ref={learningControlsRef}
+          id="g1-learning-controls"
+          role="region"
+          aria-label="Humanoid learning and inspection"
+          tabIndex={-1}
+          className="glass-card scroll-mt-3 p-5 sm:p-6"
+        >
+          {embedded ? (
+            <button
+              type="button"
+              aria-controls="g1-robot-stage"
+              onClick={() => {
+                stageRef.current?.focus({ preventScroll: true });
+                stageRef.current?.scrollIntoView({
+                  behavior: reduceMotion ? "auto" : "smooth",
+                  block: "start",
+                });
+              }}
+              className="mb-4 flex min-h-11 items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/20"
+            >
+              <Bot className="h-4 w-4" />
+              Back to robot
+            </button>
+          ) : null}
           <div className="flex items-start gap-3">
             <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3">
               <Bot className="h-6 w-6 text-cyan-200" />
