@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { PerspectiveCamera, Vector3 } from "three";
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Vector3 } from "three";
 import {
   robotCameraFittedFov,
   robotCameraFramingCorners,
+  robotCameraHasOccluder,
   robotCameraTraceFramingCorners,
   robotCameraVerticalFov,
 } from "../app/lib/robotCameraFraming";
@@ -88,6 +89,42 @@ describe("robot camera portrait framing", () => {
 });
 
 describe("robot Follow camera fitting", () => {
+  test("rejects rendered obstructions even without a collider, but respects cutaways and glass", () => {
+    const house = new Group();
+    const room = new Group();
+    const geometry = new BoxGeometry(1, 1, 0.3);
+    const material = new MeshBasicMaterial();
+    const beam = new Mesh(geometry, material);
+    beam.position.set(0, 0, 1.5);
+    room.add(beam);
+    house.add(room);
+    house.updateWorldMatrix(true, true);
+    const raycaster = new Raycaster();
+    const eye = new Vector3(0, 0, 3);
+    const target = new Vector3();
+    try {
+      expect(robotCameraHasOccluder(house, eye, target, raycaster)).toBe(true);
+      expect(robotCameraHasOccluder(house, new Vector3(3, 0, 3), target, raycaster)).toBe(false);
+      expect(beam.position.toArray()).toEqual([0, 0, 1.5]);
+      expect(room.visible).toBe(true);
+      room.visible = false;
+      expect(robotCameraHasOccluder(house, eye, target, raycaster)).toBe(false);
+      room.visible = true;
+      material.transparent = true;
+      material.opacity = 0.35;
+      expect(robotCameraHasOccluder(house, eye, target, raycaster)).toBe(false);
+      material.opacity = 1;
+      material.wireframe = true;
+      expect(robotCameraHasOccluder(house, eye, target, raycaster)).toBe(false);
+      material.wireframe = false;
+      expect(robotCameraHasOccluder(house, target, target, raycaster)).toBe(false);
+      expect(robotCameraHasOccluder(house, new Vector3(0, 0, -3), target, raycaster)).toBe(false);
+    } finally {
+      geometry.dispose();
+      material.dispose();
+    }
+  });
+
   test("encloses all input points with mesh allowance without mutating them", () => {
     const points = [
       { x: -0.4, y: -0.8, z: -0.3 },

@@ -1,3 +1,5 @@
+import { Mesh, type Object3D, Raycaster } from "three";
+
 /** Preserve the desktop lens while retaining its horizontal coverage in portrait. */
 export function robotCameraVerticalFov(
   baseFov: number,
@@ -24,6 +26,37 @@ export function robotCameraVerticalFov(
 }
 
 type CameraPoint = Readonly<{ x: number; y: number; z: number }>;
+
+/** Check the rendered house as well as its coarser physics colliders. The
+ * caller updates world matrices once before checking candidate camera booms. */
+export function robotCameraHasOccluder(
+  house: Object3D,
+  eye: CameraPoint,
+  target: CameraPoint,
+  raycaster: Raycaster,
+): boolean {
+  raycaster.ray.origin.set(eye.x, eye.y, eye.z);
+  raycaster.ray.direction.set(target.x, target.y, target.z).sub(raycaster.ray.origin);
+  const distance = raycaster.ray.direction.length();
+  if (distance <= 0.05) return false;
+  raycaster.ray.direction.normalize();
+  raycaster.near = 0;
+  raycaster.far = distance - 0.05;
+  return raycaster.intersectObject(house, true).some((hit) => {
+    if (!(hit.object instanceof Mesh)) return false;
+    for (let parent: Object3D | null = hit.object; parent; parent = parent.parent) {
+      if (!parent.visible) return false;
+    }
+    const material = Array.isArray(hit.object.material)
+      ? hit.object.material[hit.face?.materialIndex ?? 0]
+      : hit.object.material;
+    return (
+      material?.visible &&
+      (!material.transparent || material.opacity >= 0.5) &&
+      !("wireframe" in material && material.wireframe)
+    );
+  });
+}
 
 /** Padded bounds for a set of display points, never a physics correction. */
 export function robotCameraFramingCorners(points: readonly CameraPoint[]): CameraPoint[] {

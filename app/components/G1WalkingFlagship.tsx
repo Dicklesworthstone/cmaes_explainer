@@ -28,7 +28,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { advanceTracePlayback, useTracePlaybackPreference } from "../hooks/usePrefersReducedMotion";
@@ -95,6 +95,7 @@ import {
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
   robotCameraFittedFov,
+  robotCameraHasOccluder,
   robotCameraTraceFramingCorners,
   robotCameraVerticalFov,
 } from "../lib/robotCameraFraming";
@@ -1247,6 +1248,7 @@ function chooseBoom(
   boomHeight: number,
   obstacles: readonly OrientedBoundingBox[],
   preferred: number | null,
+  isOccluded?: (eye: [number, number, number], target: [number, number, number]) => boolean,
 ): { azimuthDeg: number; position: [number, number, number]; fraction: number } {
   const baseAngle = Math.atan2(heading[1], heading[0]) + Math.PI; // behind the robot
   let best: { azimuthDeg: number; position: [number, number, number]; fraction: number } | null =
@@ -1271,7 +1273,10 @@ function chooseBoom(
     );
     // Small enough that a preferred boom only wins a near-tie; 0.25 let a
     // badly blocked previous choice beat a clear new one.
-    const score = resolved.fraction + (preferred === azimuthDeg ? 0.08 : 0);
+    const score =
+      resolved.fraction +
+      (preferred === azimuthDeg ? 0.08 : 0) -
+      (isOccluded?.(resolved.position, lookAt) ? 2 : 0);
     if (score > bestScore) {
       bestScore = score;
       best = { azimuthDeg, position: resolved.position, fraction: resolved.fraction };
@@ -1288,6 +1293,7 @@ function CameraRig({
   obstacles,
   hasRobot,
   framingCorners,
+  renderedHouse,
 }: {
   cameraView: CameraView;
   activeRoom: ActiveRoom;
@@ -1296,6 +1302,7 @@ function CameraRig({
   obstacles: readonly OrientedBoundingBox[];
   hasRobot: boolean;
   framingCorners: readonly THREE.Vector3[];
+  renderedHouse: RefObject<THREE.Group | null>;
 }) {
   const controlsRef = useRef<any>(null);
   const targetCamPos = useRef<THREE.Vector3 | null>(null);
@@ -1316,6 +1323,9 @@ function CameraRig({
     [framingCorners],
   );
   const followFovRef = useRef<number | null>(null);
+  const houseRaycaster = useMemo(() => new THREE.Raycaster(), []);
+  const houseEye = useMemo(() => new THREE.Vector3(), []);
+  const houseTarget = useMemo(() => new THREE.Vector3(), []);
   // Declared before every effect that reads these refs so React runs the
   // sync first within the same commit.
   useEffect(() => {
@@ -1470,6 +1480,15 @@ function CameraRig({
 
     if (cameraView === "follow") {
       const lookAt: [number, number, number] = [pelvis[0], pelvis[1] + 0.15, pelvis[2]];
+      const house = renderedHouse.current;
+      house?.updateWorldMatrix(true, true);
+      const isHouseOccluded = (eye: [number, number, number], target: [number, number, number]) =>
+        house !== null && robotCameraHasOccluder(
+          house,
+          houseEye.set(...eye),
+          houseTarget.set(...target),
+          houseRaycaster,
+        );
       const boom = chooseBoom(
         lookAt,
         h,
@@ -1477,13 +1496,24 @@ function CameraRig({
         FOLLOW_BOOM_HEIGHT,
         obstacles,
         followAzimuth.current,
+        isHouseOccluded,
       );
       followAzimuth.current = boom.azimuthDeg;
       // A terminated rollout can put the look-at point inside a keep-out
       // body. Every swept boom then collapses to that point, placing the
       // camera inside the robot. Show the measured contact from above.
-      if (boom.fraction < 0.45) {
-        cameraScratchVec.set(pelvis[0] + 0.3, 5.5, pelvis[2] + 0.01);
+      if (boom.fraction < 0.45 || isHouseOccluded(boom.position, lookAt)) {
+        // Try a steep interior view before rising above the house. The actual
+        // rendered beams and furniture need not share the collider envelope.
+        const interior: [number, number, number] = [
+          pelvis[0] + 0.3,
+          pelvis[1] + 1.5,
+          pelvis[2] + 0.01,
+        ];
+        const fallback: [number, number, number] = isHouseOccluded(interior, lookAt)
+          ? [pelvis[0] + 0.3, 5.5, pelvis[2] + 0.01]
+          : interior;
+        cameraScratchVec.set(...fallback);
       } else {
         cameraScratchVec.set(...boom.position);
       }
@@ -2087,6 +2117,7 @@ function RobotStage({
     clearance: number;
   }) => void;
 }) {
+  const renderedHouse = useRef<THREE.Group>(null);
   const sample = trace ? trace.samples[Math.min(sampleIndex, trace.samples.length - 1)] : null;
   const pelvisThree = sample
     ? ownerToThree(sample.linkPoses[0].position)
@@ -2150,13 +2181,15 @@ function RobotStage({
       <ResponsiveRobotCamera position={[1.85, 1.15, 2.35]} fov={36} near={0.05} far={40} />
 
       {/* 1928 Sears Craftsman Estate (Complete 7-Room Whole-House Architectural Environment) */}
-      <SearsCraftsmanEstate
-        showFurniture={!xrayMode}
-        showRoof={showRoof}
-        activeRoom={activeRoom}
-        activeRouteId={activeRouteId}
-        timeOfDay={timeOfDay}
-      />
+      <group ref={renderedHouse}>
+        <SearsCraftsmanEstate
+          showFurniture={!xrayMode}
+          showRoof={showRoof}
+          activeRoom={activeRoom}
+          activeRouteId={activeRouteId}
+          timeOfDay={timeOfDay}
+        />
+      </group>
 
       {admission?.config.challenge === "terrain-and-push" && (
         <TerrainSurface admission={admission} />
@@ -2209,6 +2242,7 @@ function RobotStage({
         obstacles={houseSceneData.obstacles}
         hasRobot={Boolean(trace && robotDragOffset)}
         framingCorners={framingCorners}
+        renderedHouse={renderedHouse}
       />
 
       <G1ClearanceBeam readout={clearanceReadout} />
