@@ -1,6 +1,8 @@
 "use client";
 
-import { FlyControls, OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { FlyControls } from "@react-three/drei/core/FlyControls.js";
+import { OrbitControls } from "@react-three/drei/core/OrbitControls.js";
+import { PerspectiveCamera } from "@react-three/drei/core/PerspectiveCamera.js";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
   Activity,

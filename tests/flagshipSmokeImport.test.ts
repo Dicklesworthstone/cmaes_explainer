@@ -11,6 +11,7 @@
 // names the specific component that broke. 5-second budget per
 // flagship module keeps the import-graph cost bounded.
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const FLAGSHIP_MODULES = [
   // Core flagship components
@@ -40,6 +41,47 @@ const FLAGSHIP_MODULES = [
 ];
 
 describe("flagship components import without throwing", () => {
+  for (const name of ["G1WalkingFlagship", "HouseholdArmFlagship", "ResponsiveRobotCamera"]) {
+    test(`${name} cold import does not load unrelated Drei subsystems`, async () => {
+      // Each component gets a fresh module cache. The in-process sweep below
+      // cannot detect cold-start regressions after another test warmed Drei.
+      // Its barrel pulled in HLS, gainmap decoding and a second camera library
+      // even though these labs only use individual controls and primitives.
+      const modulePath = fileURLToPath(new URL(`../app/components/${name}.tsx`, import.meta.url));
+      const child = Bun.spawn({
+        cmd: [
+          process.execPath,
+          "-e",
+          String.raw`const started = performance.now();
+           const component = require(${JSON.stringify(modulePath)});
+           const loaded = Object.keys(require.cache);
+           console.log(JSON.stringify({
+             exportedType: typeof component[${JSON.stringify(name)}],
+             elapsedMs: performance.now() - started,
+             loadedCount: loaded.length,
+             unrelated: loaded.filter(path =>
+               /\/(@react-three\/drei\/index\.|hls\.js\/|@monogrid\/gainmap-js\/|camera-controls\/)/.test(path))
+           }));`,
+        ],
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 5_000,
+      });
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect({ exitCode, stderr }).toEqual({ exitCode: 0, stderr: "" });
+      const result = JSON.parse(stdout);
+      expect(result.exportedType).toBe("function");
+      expect(result.loadedCount).toBeGreaterThan(0);
+      expect(result.elapsedMs).toBeLessThan(5_000);
+      expect(result.unrelated).toEqual([]);
+    });
+  }
+
   for (const modulePath of FLAGSHIP_MODULES) {
     const name = modulePath.split("/").pop();
     test(`${name} imports cleanly`, () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { PerspectiveCamera } from "@react-three/drei";
+import { PerspectiveCamera } from "@react-three/drei/core/PerspectiveCamera.js";
 import { useThree } from "@react-three/fiber";
 import { robotCameraVerticalFov } from "../lib/robotCameraFraming";
 

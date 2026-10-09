@@ -1,6 +1,9 @@
 "use client";
 
-import { FlyControls, Html, OrbitControls, RoundedBox } from "@react-three/drei";
+import { FlyControls } from "@react-three/drei/core/FlyControls.js";
+import { OrbitControls } from "@react-three/drei/core/OrbitControls.js";
+import { RoundedBox } from "@react-three/drei/core/RoundedBox.js";
+import { Html } from "@react-three/drei/web/Html.js";
 import React, { Canvas, type ThreeEvent, useFrame } from "@react-three/fiber";
 import {
   Activity,
