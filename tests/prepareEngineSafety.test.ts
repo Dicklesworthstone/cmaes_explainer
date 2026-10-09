@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import {
   cpSync,
   mkdirSync,
@@ -24,6 +25,34 @@ const benchmarkGallery = readFileSync(
   fileURLToPath(new URL("../public/wasm-demo/examples/viz-benchmarks.html", import.meta.url)),
   "utf8",
 );
+
+test("source fencing ignores retained backups but still sees real untracked source", () => {
+  const directory = mkdtempSync(join(tmpdir(), "frankenrobots-source-ignore-"));
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  cpSync(join(root, ".gitignore"), join(directory, ".gitignore"));
+  const initialized = spawnSync("git", ["init", "--quiet", directory], { encoding: "utf8" });
+  expect(initialized.status).toBe(0);
+  const backups = [
+    "ios/Engine.previous-87a4a25-20260916/source-commit.txt",
+    "ios/Engine.previous-new-checkpoint/frankenrobots/humanoid/index.html",
+    ".beads/recovery_20260916T142845Z/issues.jsonl",
+  ];
+  const source = [
+    "app/components/NewRobotControl.tsx",
+    "ios/Sources/NewRobotControl.swift",
+    "ios/EngineWeb/app/new-lab/page.tsx",
+    "public/robots/g1/new-part.STL",
+    ".beads/issues.jsonl",
+    "tests/newOwner.test.ts",
+  ];
+  const ignored = spawnSync("git", ["check-ignore", "--no-index", "--stdin"], {
+    cwd: directory,
+    input: [...backups, ...source].join("\n") + "\n",
+    encoding: "utf8",
+  });
+  expect({ status: ignored.status, stderr: ignored.stderr }).toEqual({ status: 0, stderr: "" });
+  expect(ignored.stdout.trim().split("\n")).toEqual(backups);
+});
 
 function manifestFixture(): { directory: string; digest: string } {
   const directory = mkdtempSync(join(tmpdir(), "frankenrobots-manifest-test-"));
