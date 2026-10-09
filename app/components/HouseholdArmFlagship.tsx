@@ -2,7 +2,6 @@
 
 import { FlyControls } from "@react-three/drei/core/FlyControls.js";
 import { OrbitControls } from "@react-three/drei/core/OrbitControls.js";
-import { PerspectiveCamera } from "@react-three/drei/core/PerspectiveCamera.js";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
   Activity,
@@ -118,6 +117,7 @@ import { ArmLearningLedger } from "./ArmLearningLedger";
 import { ArmPhysicsDebugOverlay } from "./ArmPhysicsDebugOverlay";
 import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
 import { PolicyExchange } from "./PolicyExchange";
+import { ResponsiveRobotCamera } from "./ResponsiveRobotCamera";
 
 type ArmTraceOrigin = CmaFamily | "curriculum";
 
@@ -1356,7 +1356,7 @@ function ArmStage({
     >
       <color attach="background" args={["#16120e"]} />
       <fog attach="fog" args={["#16120e", 5.0, 14.0]} />
-      <PerspectiveCamera makeDefault position={[1.55, 1.25, 1.8]} fov={38} near={0.03} far={30} />
+      <ResponsiveRobotCamera position={[1.55, 1.25, 1.8]} fov={38} near={0.03} far={30} />
       <ambientLight intensity={0.65} color="#fff1dc" />
       <hemisphereLight args={["#fed7aa", "#78350f", 1.3]} />
       <directionalLight

@@ -9,11 +9,72 @@ import {
 } from "../app/lib/robotCameraFraming";
 import {
   buildG1Config,
+  buildHouseholdManipulationConfig,
   decodeG1Trace,
+  decodeHouseholdManipulationTrace,
   DEFAULT_G1_WALKING_CONFIG,
+  DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG,
 } from "../app/lib/frankensimCmaes";
 
 describe("robot camera portrait framing", () => {
+  test("frames real Arm curriculum poses without changing the studio camera or owner receipt", async () => {
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    await owner.default({
+      module_or_path: await Bun.file(
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
+      ).arrayBuffer(),
+    });
+    let oldLensClippedPoints = 0;
+    for (const task of ["kitchen-mug", "living-room-remote", "backyard-trowel"] as const) {
+      const evaluator = new owner.HouseholdManipulationVizEvaluator(
+        buildHouseholdManipulationConfig({ ...DEFAULT_HOUSEHOLD_MANIPULATION_CONFIG, task }),
+      );
+      try {
+        const decoded = decodeHouseholdManipulationTrace(
+          evaluator.trace(evaluator.curriculum_policy_mean()),
+        );
+        if (!("ok" in decoded)) throw new Error(decoded.refusal.name);
+        const trace = decoded.ok;
+        const before = JSON.stringify(trace);
+        expect(trace.samples.length).toBeGreaterThan(2);
+        for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [844, 390], [1440, 900]]) {
+          const camera = new PerspectiveCamera(38, width / height, 0.03, 30);
+          camera.position.set(1.55, 1.25, 1.8);
+          camera.lookAt(-0.05, 0.48, 0);
+          camera.updateMatrixWorld();
+          const position = camera.position.clone();
+          const orientation = camera.quaternion.clone();
+          // Actual shipped owner poses in the display coordinate convention.
+          // This is projection evidence, not a device or arbitrary-policy claim.
+          const points = trace.samples.flatMap(sample =>
+            [...sample.linkPoses, sample.objectPose].map(pose =>
+              new Vector3(pose.position[0], pose.position[2], -pose.position[1])),
+          );
+          oldLensClippedPoints += points.filter(point => {
+            const projected = point.clone().project(camera);
+            return Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
+          }).length;
+          camera.fov = robotCameraVerticalFov(38, width, height);
+          camera.updateProjectionMatrix();
+          for (const point of points) {
+            const projected = point.clone().project(camera);
+            expect(Math.abs(projected.x)).toBeLessThan(0.9);
+            expect(Math.abs(projected.y)).toBeLessThan(0.9);
+          }
+          if (width >= height) expect(camera.fov).toBe(38);
+          expect(camera.position.equals(position)).toBe(true);
+          expect(camera.quaternion.equals(orientation)).toBe(true);
+          expect(camera.near).toBe(0.03);
+          expect(camera.far).toBe(30);
+        }
+        expect(JSON.stringify(trace)).toBe(before);
+      } finally {
+        evaluator.free();
+      }
+    }
+    expect(oldLensClippedPoints).toBeGreaterThan(0);
+  });
+
   test("keeps the existing desktop and square lens exactly", () => {
     for (const [width, height] of [
       [1440, 900],
