@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +56,29 @@ async function runManifestVerification(directory: string, digest: string) {
   return process.exited;
 }
 
+async function runFilesystemVerification(stage: string, destination: string) {
+  const child = Bun.spawn({
+    cmd: [
+      "zsh",
+      "-c",
+      'source "$1"; verify_same_filesystem "$2" "$3" "atomic activation filesystem check failed"',
+      "verify-filesystem",
+      scriptFilePath,
+      stage,
+      destination,
+    ],
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  return { exitCode, stdout, stderr };
+}
+
 async function resolveOwnerRuntimeDirectory(ownerVersion: string) {
   const outputDirectory = mkdtempSync(join(tmpdir(), "frankenrobots-runtime-dir-test-"));
   const stdoutPath = join(outputDirectory, "stdout.txt");
@@ -90,6 +121,60 @@ describe("FrankenRobots engine exporter safety boundary", () => {
   test("defaults to a staging-only mode", () => {
     expect(script).toContain("without changing ios/Engine (default)");
     expect(script).toContain('MODE="stage"');
+  });
+
+  test("uses the portable filesystem check before both staging and activation", () => {
+    expect(script).toContain('verify_same_filesystem "$STAGE_PARENT" "$SCRIPT_DIR"');
+    expect(script).toContain('verify_same_filesystem "$STAGED_ENGINE" "$SCRIPT_DIR"');
+    expect(script).not.toContain("stat -f %d");
+  });
+
+  test("accepts real same-filesystem directories and follows path aliases", async () => {
+    const root = mkdtempSync(join(tmpdir(), "frankenrobots-filesystem-test-"));
+    const stage = join(root, "staged engine");
+    const destination = join(root, "native shell");
+    const alias = join(root, "stage alias");
+    mkdirSync(stage);
+    mkdirSync(destination);
+    symlinkSync(stage, alias);
+    for (const path of [stage, alias]) {
+      expect(await runFilesystemVerification(path, destination)).toEqual({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+      });
+    }
+  });
+
+  test("refuses a real cross-filesystem stage", async () => {
+    const root = mkdtempSync(join(tmpdir(), "frankenrobots-filesystem-test-"));
+    // /dev is a separate mounted filesystem on the supported macOS/Linux hosts.
+    expect(statSync(root, { bigint: true }).dev).not.toBe(
+      statSync("/dev", { bigint: true }).dev,
+    );
+    const result = await runFilesystemVerification("/dev", root);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("engine paths are on different filesystems");
+    expect(result.stderr).toContain(
+      "Engine export refused: atomic activation filesystem check failed",
+    );
+  });
+
+  test("refuses missing paths including when both lookups fail", async () => {
+    const root = mkdtempSync(join(tmpdir(), "frankenrobots-filesystem-test-"));
+    const missing = join(root, "missing");
+    for (const [stage, destination] of [
+      [missing, root],
+      [root, missing],
+      [missing, missing],
+    ]) {
+      const result = await runFilesystemVerification(stage, destination);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("ENOENT");
+      expect(result.stderr).toContain(
+        "Engine export refused: atomic activation filesystem check failed",
+      );
+    }
   });
 
   test("contains no destructive cleanup or overwrite primitive", () => {

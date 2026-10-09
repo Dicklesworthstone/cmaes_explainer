@@ -40,6 +40,17 @@ verify_source_fences() {
     || fail "cmaes_explainer changed during export"
 }
 
+# Bun is already required by export. Its filesystem API avoids the incompatible
+# BSD/GNU stat flags and fails closed if either path cannot be inspected.
+verify_same_filesystem() {
+  ENGINE_STAGE_PATH="$1" ENGINE_DESTINATION_PATH="$2" bun -e '
+    const { statSync } = await import("node:fs");
+    const stage = statSync(process.env.ENGINE_STAGE_PATH, { bigint: true });
+    const destination = statSync(process.env.ENGINE_DESTINATION_PATH, { bigint: true });
+    if (stage.dev !== destination.dev) throw new Error("engine paths are on different filesystems");
+  ' || fail "$3"
+}
+
 # The engine consumes committed WASM, not the adjacent Rust working tree.
 # Compare the staged manifest with the reviewed project bytes, then use the
 # same hash/schema checks as the browser and interrogate the actual module.
@@ -160,13 +171,13 @@ validate_staged_engine() {
 }
 
 build_stage() {
-  bunx next build ios/EngineWeb
+  bun x next build ios/EngineWeb
   verify_source_fences
 
   STAGE_PARENT=$(mktemp -d "${TMPDIR:-/tmp}/frankenrobots-engine.XXXXXX")
   STAGED_ENGINE="$STAGE_PARENT/Engine"
-  [[ "$(stat -f %d "$STAGE_PARENT")" == "$(stat -f %d "$SCRIPT_DIR")" ]] \
-    || fail "temporary stage is on a different filesystem and cannot be activated atomically: $STAGE_PARENT"
+  verify_same_filesystem "$STAGE_PARENT" "$SCRIPT_DIR" \
+    "temporary stage cannot be verified on the destination filesystem for atomic activation: $STAGE_PARENT"
   mkdir -p "$STAGED_ENGINE"
   cp -R "$SCRIPT_DIR/EngineWeb/out/." "$STAGED_ENGINE/"
   cp -R "$PROJECT_ROOT/public/." "$STAGED_ENGINE/"
@@ -195,8 +206,8 @@ activate_staged_engine() {
 
   [[ -d "$STAGED_ENGINE" ]] || fail "engine stage does not exist: $STAGED_ENGINE"
   [[ "$STAGED_ENGINE" != "$current_engine" ]] || fail "ios/Engine cannot be used as its own activation stage"
-  [[ "$(stat -f %d "$STAGED_ENGINE")" == "$(stat -f %d "$SCRIPT_DIR")" ]] \
-    || fail "stage is on a different filesystem and cannot be activated atomically: $STAGED_ENGINE"
+  verify_same_filesystem "$STAGED_ENGINE" "$SCRIPT_DIR" \
+    "stage cannot be verified on the destination filesystem for atomic activation: $STAGED_ENGINE"
   [[ ! -e "$rollback_engine" ]] || fail "rollback path already exists: $rollback_engine"
   verify_source_fences
   validate_staged_engine "$STAGED_ENGINE" "$EXPECTED_MANIFEST_SHA256"
