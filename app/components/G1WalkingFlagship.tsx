@@ -3987,6 +3987,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   width, so below sm it joins the disclosure; on wider screens
                   it stays out as primary navigation. */}
                 <div
+                  role="group"
+                  aria-label="Humanoid camera views"
                   className={`items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex ${
                     hudExpanded ? "flex" : "hidden"
                   }`}
@@ -4007,6 +4009,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                         key={cam.id}
                         type="button"
                         onClick={() => setCameraView(cam.id)}
+                        aria-label={`${cam.label} camera`}
+                        aria-pressed={isSelected}
                         className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
                           isSelected
                             ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"

@@ -110,7 +110,20 @@ describe("flagship components import without throwing", () => {
       );
       const buttons: string[] = [];
       const regions: string[] = [];
+      const cameras: { label: string; pressed: string | null }[] = [];
+      let cameraGroups = 0;
       const parser = new HTMLRewriter()
+        .on('[role="group"][aria-label="Humanoid camera views"]', {
+          element() { cameraGroups++; },
+        })
+        .on('button[aria-label$=" camera"]', {
+          element(element) {
+            cameras.push({
+              label: element.getAttribute("aria-label")!,
+              pressed: element.getAttribute("aria-pressed"),
+            });
+          },
+        })
         .on(
           'button[aria-controls="g1-learning-controls"], button[aria-controls="g1-robot-stage"]',
           {
@@ -133,6 +146,14 @@ describe("flagship components import without throwing", () => {
       await parser.transform(new Response(html)).text();
       expect(buttons).toEqual(embedded ? ["g1-learning-controls", "g1-robot-stage"] : []);
       expect(regions).toEqual(["g1-robot-stage", "g1-learning-controls"]);
+      expect(cameraGroups).toBe(1);
+      expect(cameras).toEqual([
+        { label: "Orbit camera", pressed: embedded ? "false" : "true" },
+        { label: "Follow camera", pressed: embedded ? "true" : "false" },
+        { label: "POV camera", pressed: "false" },
+        { label: "Map camera", pressed: "false" },
+        { label: "Free-fly camera", pressed: "false" },
+      ]);
       // Real server render, not a simulated click or browser-layout assertion.
       // The full lab remains present even when the stage HUD is collapsed.
       expect(html).toContain('id="g1-sigma"');
@@ -151,6 +172,8 @@ describe("flagship components import without throwing", () => {
         createElement<{ embedded?: boolean }>(HouseholdArmFlagship, { embedded }),
       );
       const cameras: string[] = [];
+      const selectedCameras: string[] = [];
+      let cameraGroups = 0;
       let stageControls = 0;
       let visualizations = 0;
       const parser = new HTMLRewriter()
@@ -166,9 +189,17 @@ describe("flagship components import without throwing", () => {
             expect(element.getAttribute("role")).toBe("region");
           },
         })
+        .on('[role="group"][aria-label="Arm camera views"]', {
+          element() { cameraGroups++; },
+        })
         .on('button[aria-label$=" camera"]', {
           element(element) {
-            cameras.push(element.getAttribute("aria-label")!);
+            const label = element.getAttribute("aria-label")!;
+            cameras.push(label);
+            expect(element.getAttribute("aria-pressed")).toBe(
+              label === "Studio camera" ? "true" : "false",
+            );
+            if (element.getAttribute("aria-pressed") === "true") selectedCameras.push(label);
             expect(element.getAttribute("disabled")).toBeNull();
             if (embedded) expect(element.getAttribute("class")).toContain("min-h-11");
           },
@@ -176,10 +207,12 @@ describe("flagship components import without throwing", () => {
       await parser.transform(new Response(html)).text();
       expect(stageControls).toBe(1);
       expect(visualizations).toBe(1);
+      expect(cameraGroups).toBe(1);
       expect(cameras).toEqual([
         "Studio camera", "Grasp Focus camera", "Top camera",
         "Side camera", "Front camera", "Free-Fly camera",
       ]);
+      expect(selectedCameras).toEqual(["Studio camera"]);
       expect(html).toContain('aria-label="Arm trace playback"');
       expect(html).toContain('aria-label="Arm trace position"');
       expect(html).toContain('aria-label="Arm trace playback speed"');

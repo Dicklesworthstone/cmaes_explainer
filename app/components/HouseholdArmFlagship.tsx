@@ -2539,6 +2539,8 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
 
               {/* Camera View Selector */}
               <div
+                role="group"
+                aria-label="Arm camera views"
                 className={`pointer-events-auto flex items-center rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md ${
                   embedded ? "w-full justify-between gap-0.5" : "self-start gap-1"
                 }`}
@@ -2590,6 +2592,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                       key={cam.id}
                       type="button"
                       aria-label={`${cam.label} camera`}
+                      aria-pressed={isSelected}
                       onClick={() => setCameraMode(cam.id)}
                       className={`flex min-w-0 items-center whitespace-nowrap rounded-lg py-1 font-bold transition-all ${
                         embedded
