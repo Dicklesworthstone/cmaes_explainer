@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { PerspectiveCamera, Vector3 } from "three";
-import { robotCameraVerticalFov } from "../app/lib/robotCameraFraming";
+import {
+  robotCameraFittedFov,
+  robotCameraFramingCorners,
+  robotCameraTraceFramingCorners,
+  robotCameraVerticalFov,
+} from "../app/lib/robotCameraFraming";
+import {
+  buildG1Config,
+  decodeG1Trace,
+  DEFAULT_G1_WALKING_CONFIG,
+} from "../app/lib/frankensimCmaes";
 
 describe("robot camera portrait framing", () => {
   test("keeps the existing desktop and square lens exactly", () => {
@@ -74,5 +84,117 @@ describe("robot camera portrait framing", () => {
       expect(robotCameraVerticalFov(36, width, height)).toBe(36);
     }
     expect(robotCameraVerticalFov(36, 1, 844)).toBe(100);
+  });
+});
+
+describe("robot Follow camera fitting", () => {
+  test("encloses all input points with mesh allowance without mutating them", () => {
+    const points = [
+      { x: -0.4, y: -0.8, z: -0.3 },
+      { x: 0.6, y: 0.7, z: 0.5 },
+    ];
+    const before = JSON.stringify(points);
+    const corners = robotCameraFramingCorners(points);
+    expect(corners).toHaveLength(8);
+    expect(Math.min(...corners.map((p) => p.x))).toBeCloseTo(-0.52, 12);
+    expect(Math.max(...corners.map((p) => p.y))).toBeCloseTo(0.82, 12);
+    expect(Math.min(...corners.map((p) => p.z))).toBeCloseTo(-0.42, 12);
+    expect(JSON.stringify(points)).toBe(before);
+    expect(robotCameraFramingCorners([])).toEqual([]);
+    expect(() => robotCameraFramingCorners([{ x: NaN, y: 0, z: 0 }])).toThrow("Non-finite");
+    expect(robotCameraTraceFramingCorners([])).toEqual([]);
+    expect(() => robotCameraTraceFramingCorners([points, []])).toThrow("Inconsistent");
+    expect(robotCameraTraceFramingCorners([points, points])).toHaveLength(16);
+  });
+
+  test("retains the base lens for distant bounds and caps impossible framing", () => {
+    expect(robotCameraFittedFov(36, 2, [{ x: 0.1, y: 0.1, z: -8 }])).toBeCloseTo(36, 12);
+    expect(robotCameraFittedFov(36, 0, [{ x: 1, y: 1, z: -1 }])).toBe(36);
+    expect(robotCameraFittedFov(36, NaN, [])).toBe(36);
+    expect(robotCameraFittedFov(36, 2, [{ x: 1, y: 1, z: 0 }])).toBe(100);
+    expect(robotCameraFittedFov(36, 2, [{ x: NaN, y: 1, z: -1 }])).toBe(100);
+    expect(robotCameraFittedFov(36, 0.1, [{ x: 10, y: 1, z: -1 }])).toBe(100);
+  });
+
+  test("fits actual owner poses after a shortened boom in portrait and landscape", async () => {
+    const owner = await import("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm.js");
+    await owner.default({
+      module_or_path: await Bun.file(
+        new URL("../public/wasm/fs-cmaes/v0623/fs_cmaes_viz_wasm_bg.wasm", import.meta.url),
+      ).arrayBuffer(),
+    });
+    let oldLensClippedPoints = 0;
+    for (const challenge of ["flat", "terrain-and-push"] as const) {
+      const evaluator = new owner.G1WalkingVizEvaluator(
+        buildG1Config({ ...DEFAULT_G1_WALKING_CONFIG, challenge }),
+      );
+      try {
+        const decoded = decodeG1Trace(evaluator.trace(evaluator.walking_curriculum_mean()));
+        if (!("ok" in decoded)) throw new Error(decoded.refusal.name);
+        const trace = decoded.ok;
+        const before = JSON.stringify(trace);
+        expect(trace.samples).toHaveLength(61);
+        const bodyPoints = trace.samples.map((sample) => {
+          const pelvis = new Vector3(
+            sample.linkPoses[0].position[0],
+            sample.linkPoses[0].position[2],
+            -sample.linkPoses[0].position[1],
+          );
+          const points = sample.linkPoses.map((link) =>
+            new Vector3(link.position[0], link.position[2], -link.position[1]).sub(pelvis),
+          );
+          expect(points).toHaveLength(30);
+          points.push(points[15].clone().add(new Vector3(0, 0.45, 0)));
+          return points;
+        });
+        const corners = robotCameraTraceFramingCorners(bodyPoints);
+        for (const [width, height] of [
+          [844, 390],
+          [390, 844],
+          [320, 568],
+          [1024, 768],
+        ]) {
+          const baseFov = robotCameraVerticalFov(36, width, height);
+          const camera = new PerspectiveCamera(baseFov, width / height, 0.05, 40);
+          // Actual owner poses, but an explicitly geometric camera test, not
+          // device proof. This boom is shorter than the unobstructed 2.6m boom.
+          camera.position.set(1.1, 1, 1.45);
+          camera.lookAt(0, 0.15, 0);
+          camera.updateMatrixWorld();
+          const cameraPoints = corners.map((p) =>
+            new Vector3(p.x, p.y, p.z).applyMatrix4(camera.matrixWorldInverse),
+          );
+          for (const points of bodyPoints) {
+            oldLensClippedPoints += points.filter((p) => {
+              const projected = p.clone().project(camera);
+              return Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1;
+            }).length;
+          }
+          const position = camera.position.clone();
+          const orientation = camera.quaternion.clone();
+          camera.fov = robotCameraFittedFov(baseFov, camera.aspect, cameraPoints);
+          camera.updateProjectionMatrix();
+          expect(camera.fov).toBeGreaterThanOrEqual(baseFov);
+          expect(camera.fov).toBeLessThan(100);
+          for (const points of bodyPoints) {
+            for (const point of points) {
+              const projected = point.clone().project(camera);
+              expect(Math.abs(projected.x)).toBeLessThan(0.85);
+              expect(Math.abs(projected.y)).toBeLessThan(0.85);
+            }
+          }
+          expect(camera.position.equals(position)).toBe(true);
+          expect(camera.quaternion.equals(orientation)).toBe(true);
+          expect(camera.near).toBe(0.05);
+          expect(camera.far).toBe(40);
+        }
+        expect(JSON.stringify(trace)).toBe(before);
+      } finally {
+        evaluator.free();
+      }
+    }
+    // The same real poses fail the old fixed landscape lens. A no-op fitter
+    // cannot turn this negative control into a passing projection suite.
+    expect(oldLensClippedPoints).toBeGreaterThan(0);
   });
 });

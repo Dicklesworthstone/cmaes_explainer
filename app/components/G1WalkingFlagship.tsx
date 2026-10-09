@@ -93,6 +93,11 @@ import {
   solveFullBodyG1IK,
 } from "../lib/humanoidRagdollIk";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
+import {
+  robotCameraFittedFov,
+  robotCameraTraceFramingCorners,
+  robotCameraVerticalFov,
+} from "../lib/robotCameraFraming";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
 import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
@@ -1282,6 +1287,7 @@ function CameraRig({
   heading,
   obstacles,
   hasRobot,
+  framingCorners,
 }: {
   cameraView: CameraView;
   activeRoom: ActiveRoom;
@@ -1289,6 +1295,7 @@ function CameraRig({
   heading: [number, number];
   obstacles: readonly OrientedBoundingBox[];
   hasRobot: boolean;
+  framingCorners: readonly THREE.Vector3[];
 }) {
   const controlsRef = useRef<any>(null);
   const targetCamPos = useRef<THREE.Vector3 | null>(null);
@@ -1304,6 +1311,11 @@ function CameraRig({
   const lastRoomRef = useRef<ActiveRoom | null>(null);
   const pelvisRef = useRef(pelvisThree);
   const headingRef = useRef(heading);
+  const cameraSpaceCorners = useMemo(
+    () => framingCorners.map(() => new THREE.Vector3()),
+    [framingCorners],
+  );
+  const followFovRef = useRef<number | null>(null);
   // Declared before every effect that reads these refs so React runs the
   // sync first within the same commit.
   useEffect(() => {
@@ -1378,9 +1390,17 @@ function CameraRig({
     if (hasRobot) frameRobot();
   }, [cameraView, hasRobot, frameRobot]);
 
-  useFrame(({ camera, scene }, rawDelta) => {
+  useFrame(({ camera, scene, size }, rawDelta) => {
     const dt = Math.min(Math.max(rawDelta, 0), 0.1);
     const pelvis = pelvisRef.current;
+    const baseFov = robotCameraVerticalFov(36, size.width, size.height);
+    if (cameraView !== "follow" && camera instanceof THREE.PerspectiveCamera) {
+      followFovRef.current = null;
+      if (camera.fov !== baseFov) {
+        camera.fov = baseFov;
+        camera.updateProjectionMatrix();
+      }
+    }
     if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
       (window as unknown as { __g1Three?: unknown }).__g1Three = { scene, camera, THREE };
     }
@@ -1497,6 +1517,25 @@ function CameraRig({
     }
     clampCameraToHouse(camera.position);
     camera.lookAt(lookAtRef.current);
+    if (cameraView === "follow" && camera instanceof THREE.PerspectiveCamera) {
+      camera.updateMatrixWorld();
+      for (let index = 0; index < framingCorners.length; index++) {
+        cameraSpaceCorners[index]
+          .copy(framingCorners[index])
+          .add(cameraScratchVec.set(...pelvis))
+          .applyMatrix4(camera.matrixWorldInverse);
+      }
+      const fittedFov = robotCameraFittedFov(baseFov, camera.aspect, cameraSpaceCorners);
+      // Open immediately to avoid a clipped frame; close gently rather than
+      // pumping the zoom as an obstacle or a new policy changes the envelope.
+      const previousFov = followFovRef.current ?? fittedFov;
+      const fov = Math.max(fittedFov, previousFov + (fittedFov - previousFov) * ease(2));
+      followFovRef.current = fov;
+      if (Math.abs(camera.fov - fov) > 0.01) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }
+    }
   });
 
   return cameraView === "orbit" ? (
@@ -2061,6 +2100,21 @@ function RobotStage({
     () => (trace ? robotHeading(trace, sampleIndex) : [1, 0]),
     [trace, sampleIndex],
   );
+  const framingCorners = useMemo(() => {
+    const samples = (trace?.samples ?? []).map((sample) => {
+      const body = computeRobotAnchors(sample, null);
+      const pelvis = new THREE.Vector3(...body.pelvis);
+      return [
+        ...body.links,
+        body.headCrown,
+        body.leftHand,
+        body.rightHand,
+        body.leftFoot,
+        body.rightFoot,
+      ].map((point) => new THREE.Vector3(...point).sub(pelvis));
+    });
+    return robotCameraTraceFramingCorners(samples).map(({ x, y, z }) => new THREE.Vector3(x, y, z));
+  }, [trace]);
   // Memoized: this scans 30 links against every rigid house body, and the
   // stage re-renders for unrelated prop changes (camera mode, room, toggles).
   const clearanceReadout = useMemo(
@@ -2154,6 +2208,7 @@ function RobotStage({
         heading={heading}
         obstacles={houseSceneData.obstacles}
         hasRobot={Boolean(trace && robotDragOffset)}
+        framingCorners={framingCorners}
       />
 
       <G1ClearanceBeam readout={clearanceReadout} />
