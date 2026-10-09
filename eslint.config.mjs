@@ -12,6 +12,8 @@ const config = [
       ".vercel",
       ".next",
       "ios/Engine",
+      // Retained rollback bundles contain exported copies, not editable source.
+      "ios/Engine.previous-*",
       "ios/EngineWeb/.next",
       "ios/EngineWeb/out",
       "ios/build",
