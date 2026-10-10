@@ -95,6 +95,7 @@ import {
   ARM_TABLE_DEPTH,
   ARM_TABLE_THICKNESS,
   ARM_TABLE_WIDTH,
+  armCounterSlabObstacle,
   armStageFurniture,
   armStageObstacles,
   armWorkbenchObstacles,
