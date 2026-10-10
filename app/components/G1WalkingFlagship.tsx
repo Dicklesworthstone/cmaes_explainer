@@ -3601,8 +3601,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         />
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.6fr)]">
+        <div className="min-w-0 space-y-4">
           <div
             className={`glass-card relative overflow-hidden border-cyan-400/15 bg-slate-950/80 ${
               embedded ? "flex flex-col" : "min-h-[620px]"

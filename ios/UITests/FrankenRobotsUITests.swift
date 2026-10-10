@@ -85,7 +85,9 @@ final class FrankenRobotsUITests: XCTestCase {
             )
             XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
             let web = app.webViews.firstMatch
-            let scene = web.descendants(matching: .any)[sceneLabel].firstMatch
+            let scene = web.descendants(matching: .any).matching(
+                NSPredicate(format: "label == %@ OR label == %@", sceneLabel, "\(sceneLabel), region")
+            ).firstMatch
             XCTAssertTrue(scene.waitForExistence(timeout: 12), app.debugDescription)
             let bounds = scene.frame
             XCTAssertGreaterThanOrEqual(bounds.height, 180)
