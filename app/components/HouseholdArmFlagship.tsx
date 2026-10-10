@@ -31,6 +31,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { RobotStageRecovery } from "./RobotStageRecovery";
 import * as THREE from "three";
 import {
   advanceTracePlayback,
@@ -2761,25 +2762,27 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               className={embedded ? "h-[min(52svh,420px)] min-h-[240px] w-full" : "h-[570px] w-full"}
             >
               {shouldMountStage ? (
-                <ArmStage
-                  trace={trace}
-                  admission={admission}
-                  microscopeMode={microscopeMode}
-                  cameraMode={cameraMode}
-                  sampleIndex={sampleIndex}
-                  isPlaying={isPlaying}
-                  playbackActiveRef={playbackActiveRef}
-                  playbackSpeed={playbackSpeed}
-                  playbackSeek={playbackSeek}
-                  onSampleIndexChange={handleSampleIndexChange}
-                  dragTarget={armDragTarget}
-                  onDragTargetChange={setArmDragTarget}
-                  onCollisionChange={setArmCollisionState}
-                  onUnreachableChange={setArmUnreachable}
-                  onSelfCollisionChange={setArmSelfContacts}
-                  physicsDebug={physicsDebug}
-                  allowVerticalPageScroll={embedded}
-                />
+                <RobotStageRecovery>
+                  <ArmStage
+                    trace={trace}
+                    admission={admission}
+                    microscopeMode={microscopeMode}
+                    cameraMode={cameraMode}
+                    sampleIndex={sampleIndex}
+                    isPlaying={isPlaying}
+                    playbackActiveRef={playbackActiveRef}
+                    playbackSpeed={playbackSpeed}
+                    playbackSeek={playbackSeek}
+                    onSampleIndexChange={handleSampleIndexChange}
+                    dragTarget={armDragTarget}
+                    onDragTargetChange={setArmDragTarget}
+                    onCollisionChange={setArmCollisionState}
+                    onUnreachableChange={setArmUnreachable}
+                    onSelfCollisionChange={setArmSelfContacts}
+                    physicsDebug={physicsDebug}
+                    allowVerticalPageScroll={embedded}
+                  />
+                </RobotStageRecovery>
               ) : null}
               <FreeFlyHintBanner visible={cameraMode === "fly"} />
             </div>

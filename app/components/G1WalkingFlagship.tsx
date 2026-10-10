@@ -103,6 +103,7 @@ import {
   robotCameraVerticalFov,
 } from "../lib/robotCameraFraming";
 import { ConvergenceChart, type ConvergencePoint } from "./ConvergenceChart";
+import { RobotStageRecovery } from "./RobotStageRecovery";
 import { CraftsmanArchitecturalInspector } from "./CraftsmanArchitecturalInspector";
 import { CraftsmanLivingRoom } from "./CraftsmanLivingRoom";
 import { FreeFlyHintBanner } from "./FreeFlyHintBanner";
@@ -4113,35 +4114,37 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               className={embedded ? "h-full w-full" : "h-[620px] w-full"}
             >
               {shouldMountStage && (
-                <RobotStage
-                  trace={trace}
-                  admission={admission}
-                  meshState={meshState}
-                  xrayMode={xrayMode}
-                  physicsDebug={physicsDebug}
-                  cameraView={cameraView}
-                  timeOfDay={timeOfDay}
-                  activeRoom={activeRoom}
-                  showRoof={showRoof}
-                  activeRouteId={activeRouteId}
-                  isPlaying={isPlaying}
-                  playbackActiveRef={playbackActiveRef}
-                  playbackSpeed={playbackSpeed}
-                  sampleIndex={sampleIndex}
-                  playbackSeek={playbackSeek}
-                  onSampleIndexChange={handleSampleIndexChange}
-                  shoveActive={shoveActive}
-                  pushAngleDeg={pushAngleDeg}
-                  pushImpulseNs={pushImpulseNs}
-                  robotDragOffset={scene?.seat ?? G1_HOUSE_SEAT.offset}
-                  requestedDragOffset={robotDragOffset}
-                  dragMode={dragMode}
-                  limbOffsets={limbOffsets}
-                  onRobotDragChange={handleRobotDragChange}
-                  onRobotDragCommit={handleRobotDragCommit}
-                  onLimbDragChange={handleLimbDrag}
-                  onDragCollisionChange={setDragCollisionState}
-                />
+                <RobotStageRecovery>
+                  <RobotStage
+                    trace={trace}
+                    admission={admission}
+                    meshState={meshState}
+                    xrayMode={xrayMode}
+                    physicsDebug={physicsDebug}
+                    cameraView={cameraView}
+                    timeOfDay={timeOfDay}
+                    activeRoom={activeRoom}
+                    showRoof={showRoof}
+                    activeRouteId={activeRouteId}
+                    isPlaying={isPlaying}
+                    playbackActiveRef={playbackActiveRef}
+                    playbackSpeed={playbackSpeed}
+                    sampleIndex={sampleIndex}
+                    playbackSeek={playbackSeek}
+                    onSampleIndexChange={handleSampleIndexChange}
+                    shoveActive={shoveActive}
+                    pushAngleDeg={pushAngleDeg}
+                    pushImpulseNs={pushImpulseNs}
+                    robotDragOffset={scene?.seat ?? G1_HOUSE_SEAT.offset}
+                    requestedDragOffset={robotDragOffset}
+                    dragMode={dragMode}
+                    limbOffsets={limbOffsets}
+                    onRobotDragChange={handleRobotDragChange}
+                    onRobotDragCommit={handleRobotDragCommit}
+                    onLimbDragChange={handleLimbDrag}
+                    onDragCollisionChange={setDragCollisionState}
+                  />
+                </RobotStageRecovery>
               )}
               <FreeFlyHintBanner visible={cameraView === "fly"} />
             </div>
