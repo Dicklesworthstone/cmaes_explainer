@@ -53,7 +53,7 @@ describe("robot graphics recovery", () => {
 
   test("healthy stage renders its real children without a recovery prompt", () => {
     const child = createElement("div", { "data-stage-content": "intact" }, "Stage content");
-    const html = renderToStaticMarkup(createElement(RobotStageRecovery, { children: child }));
+    const html = renderToStaticMarkup(createElement(RobotStageRecovery, null, child));
     expect(html).toContain('data-stage-content="intact"');
     expect(html).not.toContain("Retry 3D view");
   });
