@@ -727,6 +727,9 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             let checkpoint = try await checkpointText(web)
             let generation = try await generationNumber(web)
             XCTAssertGreaterThan(generation, 0)
+            if lab == .humanoid {
+                try await verifyLearningActionLayout(web)
+            }
             attachText(checkpoint, name: "\(subject)-policy-before-retry")
             try await snapshot(web, name: "\(subject)-learned-before-loss")
 
@@ -764,6 +767,49 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             try? await stopLearning(web)
             throw error
         }
+    }
+
+    @MainActor
+    private func verifyLearningActionLayout(_ web: WKWebView) async throws {
+        // Exercise the real CSS with a learned (longer) button label. A wide
+        // Mac window still gives this inspector a narrow containing column.
+        let layouts = try await web.evaluateJavaScript("""
+        (() => {
+          const group = document.querySelector('[aria-label="Humanoid learning actions"]');
+          if (!group) throw new Error('Missing real learning actions');
+          const original = group.getAttribute('style');
+          try {
+            return JSON.stringify([280, 560].map(width => {
+              group.style.width = width + 'px';
+              group.style.maxWidth = 'none';
+              const bounds = group.getBoundingClientRect();
+              const buttons = [...group.querySelectorAll('button')];
+              const frames = buttons.map(button => {
+                const r = button.getBoundingClientRect();
+                return { x: r.x, y: r.y, width: r.width, height: r.height,
+                  right: r.right, bottom: r.bottom, label: button.textContent.trim() };
+              });
+              const contained = frames.every(r => r.x >= bounds.x - 1 && r.right <= bounds.right + 1 && r.height >= 44);
+              const nonoverlapping = frames.every((a, i) => frames.slice(i + 1).every(b =>
+                a.right <= b.x + 1 || b.right <= a.x + 1 || a.bottom <= b.y + 1 || b.bottom <= a.y + 1));
+              const primaryFits = frames.length === 3 && (width < 400
+                ? frames[0].width >= bounds.width - 1 && frames[1].y >= frames[0].bottom
+                  && Math.abs(frames[1].y - frames[2].y) <= 1
+                : frames.every(r => Math.abs(r.y - frames[0].y) <= 1));
+              return { width, frames, passed: contained && nonoverlapping && primaryFits };
+            }));
+          } finally {
+            if (original === null) group.removeAttribute('style');
+            else group.setAttribute('style', original);
+          }
+        })()
+        """)
+        let json = try XCTUnwrap(layouts as? String)
+        attachText(json, name: "g1-real-narrow-and-wide-learning-action-layouts")
+        let rows = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue(rows.allSatisfy { $0["passed"] as? Bool == true },
+                      "Learning actions must fit, retain 44px targets, and never overlap: \(json)")
     }
 
     @MainActor

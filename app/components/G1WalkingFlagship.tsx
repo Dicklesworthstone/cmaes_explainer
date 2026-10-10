@@ -4283,7 +4283,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           <div
             role="group"
             aria-label="Humanoid learning actions"
-            className="mt-4 grid grid-cols-3 gap-3"
+            className="mt-4 flex flex-wrap gap-3"
           >
             <button
               type="button"
@@ -4296,12 +4296,12 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               onClick={
                 busy === "optimize" ? stopContinuousOptimization : startContinuousOptimization
               }
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-12 min-w-0 flex-[2_1_14rem] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/40 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {busy === "optimize" ? (
-                <Square className="h-4 w-4 fill-current" />
+                <Square className="h-4 w-4 shrink-0 fill-current" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-4 w-4 shrink-0" />
               )}
               {busy === "optimize"
                 ? stopRequested
@@ -4319,9 +4319,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   post({ type: "preview", task, challenge }, "preview");
                 }
               }}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-12 min-w-0 flex-[1_1_8rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-4 w-4 shrink-0" />
               Policy seed
             </button>
             <button
@@ -4330,9 +4330,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               onClick={() => {
                 selectPriorReplay("stabilizer");
               }}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex min-h-12 min-w-0 flex-[1_1_8rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <RotateCcw className="h-4 w-4" />
+              <RotateCcw className="h-4 w-4 shrink-0" />
               Standing prior
             </button>
           </div>

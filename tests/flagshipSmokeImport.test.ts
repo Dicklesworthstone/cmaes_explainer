@@ -203,12 +203,25 @@ describe("flagship components import without throwing", () => {
       // The jump destination must offer its primary actions before the long
       // setup/source explanations, with no duplicate start/reset controls.
       let learningActionCount = 0;
+      const learningActionClasses: string[] = [];
       await new HTMLRewriter()
+        .on('[aria-label="Humanoid learning actions"]', {
+          element(element) {
+            // The inspector is narrow even on a wide Mac viewport. Its actions
+            // must wrap to their own available width, not a viewport breakpoint.
+            expect(element.getAttribute("class")).toContain("flex-wrap");
+          },
+        })
         .on('[aria-label="Humanoid learning actions"] button', {
-          element() { learningActionCount++; },
+          element(element) {
+            learningActionCount++;
+            learningActionClasses.push(element.getAttribute("class") ?? "");
+          },
         })
         .transform(new Response(html)).text();
       expect(learningActionCount).toBe(3);
+      expect(learningActionClasses[0]).toContain("flex-[2_1_14rem]");
+      expect(learningActionClasses.slice(1).every(value => value.includes("flex-[1_1_8rem]"))).toBe(true);
       const learningActions = html.indexOf('aria-label="Humanoid learning actions"');
       expect(learningActions).toBeGreaterThan(html.indexOf('id="g1-learning-controls"'));
       expect(learningActions).toBeLessThan(html.indexOf("Fifteen learned actuator rows"));
