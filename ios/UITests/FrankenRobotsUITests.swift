@@ -504,7 +504,10 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(optimize.isHittable)
         optimize.tap()
 
-        let receipt = app.descendants(matching: .any)["robot-native-command-detail"]
+        // Stop at the unique native receipt instead of enumerating the large,
+        // continuously changing WebKit subtree while evaluating an 8s deadline.
+        let receipt = app.descendants(matching: .any)
+            .matching(identifier: "robot-native-command-detail").firstMatch
         XCTAssertTrue(receipt.waitForExistence(timeout: 5), app.debugDescription)
         let accepted = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'accepted'"),

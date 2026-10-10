@@ -603,13 +603,17 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
                 """)
             }
             // These helpers live only in this test's page, not in application code.
-            let pageScrollingEnabled = try await truth(web, """
-            getComputedStyle(document.querySelector('[data-robot-stage-recovery] canvas')).touchAction === 'pan-y'
-            """)
-            XCTAssertTrue(pageScrollingEnabled, "Native camera controls must not trap vertical page scrolling")
             _ = try await web.evaluateJavaScript("""
             window.__robotNativeRecoveryProbe = {
               document: document,
+              scrollingEnabled: canvas => {
+                if (!canvas || getComputedStyle(canvas).touchAction !== 'pan-y') return false;
+                for (let node = canvas.parentElement; node; node = node.parentElement) {
+                  const action = getComputedStyle(node).touchAction;
+                  if (action !== 'auto' && action !== 'manipulation' && !action.split(' ').includes('pan-y')) return false;
+                }
+                return true;
+              },
               button: re => [...document.querySelectorAll('button')].find(b => re.test(b.textContent.trim())),
               checkpoints: () => JSON.stringify(Object.keys(localStorage)
                 .filter(k => k.startsWith('cmaes.\(subject).') && k.endsWith('.training-session.v2'))
@@ -635,10 +639,14 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
                 const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
                 return p.document === document && c !== p.oldCanvas && c?.width > 0 &&
                   gl && !gl.isContextLost() && !p.button(/^Retry 3D view$/) &&
-                  getComputedStyle(c).touchAction === 'pan-y';
+                  p.scrollingEnabled(c);
               }
             }; true;
             """)
+            let pageScrollingEnabled = try await truth(web, """
+            window.__robotNativeRecoveryProbe.scrollingEnabled(document.querySelector('[data-robot-stage-recovery] canvas'))
+            """)
+            XCTAssertTrue(pageScrollingEnabled, "Native camera controls and their ancestors must not trap vertical page scrolling")
             try await click(web, matching: "^(Start learning|Keep learning · gen)")
             try await waitUntil("real learned policy checkpoint", timeout: 180) {
                 try await self.truth(web, """

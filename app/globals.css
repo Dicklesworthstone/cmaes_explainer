@@ -235,10 +235,13 @@ canvas {
   max-width: 100%;
 }
 
-/* OrbitControls.connect writes inline touch-action:none after Canvas mounts.
+/* Drei connects OrbitControls to Fiber's wrapper (events.connected), not
+   necessarily the canvas. Its inline touch-action:none also blocks scrolling
+   when a descendant canvas says pan-y: browsers intersect ancestor policies.
    The embedded labs must still let a vertical swipe reach the controls below
    the scene. Scope the override to native stages: horizontal orbit and custom
    two-finger camera gestures remain handled by the existing controls. */
+[data-native-stage-scroll="true"] div:has(canvas),
 [data-native-stage-scroll="true"] canvas {
   touch-action: pan-y !important;
 }
