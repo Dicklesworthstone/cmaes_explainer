@@ -195,6 +195,19 @@ describe("flagship components import without throwing", () => {
       expect(html).toContain('id="g1-sigma"');
       expect(html).toContain('id="g1-family"');
       expect(html).toContain("Start learning");
+      // The jump destination must offer its primary actions before the long
+      // setup/source explanations, with no duplicate start/reset controls.
+      let learningActionCount = 0;
+      await new HTMLRewriter()
+        .on('[aria-label="Humanoid learning actions"] button', {
+          element() { learningActionCount++; },
+        })
+        .transform(new Response(html)).text();
+      expect(learningActionCount).toBe(3);
+      const learningActions = html.indexOf('aria-label="Humanoid learning actions"');
+      expect(learningActions).toBeGreaterThan(html.indexOf('id="g1-learning-controls"'));
+      expect(learningActions).toBeLessThan(html.indexOf("Fifteen learned actuator rows"));
+      expect(learningActions).toBeLessThan(html.indexOf('id="g1-family"'));
       expect(html.includes("Learn &amp; inspect")).toBe(embedded);
     }
   });

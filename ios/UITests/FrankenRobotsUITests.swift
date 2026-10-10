@@ -283,14 +283,18 @@ final class FrankenRobotsUITests: XCTestCase {
         humanoidScene.lifetime = .keepAlways
         add(humanoidScene)
 
+        let learnAndInspect = app.buttons["Learn & inspect"]
+        XCTAssertTrue(learnAndInspect.isHittable, app.debugDescription)
+        learnAndInspect.tap()
         let humanoidStart = app.buttons.matching(
             NSPredicate(
                 format: "label == 'Start learning' OR label BEGINSWITH[c] 'Keep learning'"
             )
         ).firstMatch
-        for _ in 0..<8 where !humanoidStart.isHittable {
-            workspace.swipeUp()
-        }
+        let learningActionsVisible = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hittable == true"), object: humanoidStart
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [learningActionsVisible], timeout: 5), .completed)
         XCTAssertTrue(humanoidStart.isHittable, app.debugDescription)
         let policySeed = app.buttons["Policy seed"]
         XCTAssertTrue(policySeed.isHittable, app.debugDescription)
@@ -495,7 +499,7 @@ final class FrankenRobotsUITests: XCTestCase {
             predicate: NSPredicate(format: "label CONTAINS[c] 'accepted'"),
             object: receipt
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 8), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [accepted], timeout: 8), .completed, app.debugDescription)
 
         let running = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'optimizing'"),
@@ -515,7 +519,7 @@ final class FrankenRobotsUITests: XCTestCase {
             predicate: NSPredicate(format: "label CONTAINS[c] 'accepted stop'"),
             object: receipt
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [stopAccepted], timeout: 8), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [stopAccepted], timeout: 8), .completed, app.debugDescription)
 
         let readyAgain = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
