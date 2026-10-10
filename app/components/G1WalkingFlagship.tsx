@@ -4056,17 +4056,19 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             ) : null}
             {meshState.phase === "ready" ? (
               <div
-                // The top band stacks into two rows on phones, so top-16 sat on
-                // the controls button; clear it below sm and keep the tighter
-                // offset once the band is a single row.
-                className={`pointer-events-none absolute left-5 top-24 z-10 transition-opacity duration-700 sm:top-16 ${
+                // Embedded controls live below the canvas. Their old overlay
+                // offset put this notice over the robot's drag handle on phones.
+                // The standalone view still needs room for its top control band.
+                className={`pointer-events-none absolute z-10 transition-opacity duration-700 ${
+                  embedded ? "left-3 right-3 top-3" : "left-5 right-5 top-24 sm:top-16"
+                } ${
                   rigReadyVisible ? "opacity-100" : "opacity-0"
                 }`}
                 role="status"
                 aria-live="polite"
                 aria-hidden={!rigReadyVisible}
               >
-                <span className="rounded-xl border border-emerald-300/20 bg-emerald-950/70 px-3 py-2 text-[0.7rem] text-emerald-100 backdrop-blur-md">
+                <span className="inline-block max-w-full rounded-xl border border-emerald-300/20 bg-emerald-950/70 px-3 py-2 text-[0.7rem] text-emerald-100 backdrop-blur-md">
                   Real Unitree G1 rig ready · {Object.keys(meshState.geometries).length} mesh parts
                   decoded
                 </span>

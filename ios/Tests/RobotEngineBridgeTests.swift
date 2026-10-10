@@ -812,7 +812,33 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
                   b.textContent.trim() === 'Keep learning · gen \(generation)'); })()
             """)
         }
+        if lab == .humanoid {
+            try await verifyRigNoticeLayout(replacement)
+        }
         try await snapshot(replacement, name: "\(subject)-native-retry-restored-policy")
+    }
+
+    @MainActor
+    private func verifyRigNoticeLayout(_ web: WKWebView) async throws {
+        let noticeLayout = try await web.evaluateJavaScript("""
+        (() => {
+          const canvas = document.querySelector('[data-robot-stage-recovery] canvas');
+          const notice = [...document.querySelectorAll('[role="status"]')].find(e =>
+            e.textContent.trim().startsWith('Real Unitree G1 rig ready'));
+          if (!canvas || !notice) throw new Error('Missing recovered G1 canvas or rig notice');
+          const c = canvas.getBoundingClientRect(), n = notice.getBoundingClientRect();
+          const text = notice.querySelector('span').getBoundingClientRect();
+          return JSON.stringify({ canvasTop: c.top, noticeTop: n.top,
+            canvasLeft: c.left, canvasRight: c.right, textLeft: text.left, textRight: text.right,
+            passed: n.top >= c.top && n.top <= c.top + 16 &&
+              text.left >= c.left && text.right <= c.right });
+        })()
+        """)
+        let json = try XCTUnwrap(noticeLayout as? String)
+        attachText(json, name: "g1-recovered-rig-notice-layout")
+        let layout = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+        XCTAssertEqual(layout["passed"] as? Bool, true,
+                       "Embedded rig notice must stay at the canvas top without horizontal overflow: \(json)")
     }
 
     @MainActor
