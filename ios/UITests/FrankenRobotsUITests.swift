@@ -67,8 +67,19 @@ final class FrankenRobotsUITests: XCTestCase {
         workspace: XCUIElement,
         swipes: Int = 24
     ) {
-        for _ in 0..<swipes where !element.isHittable {
-            workspace.swipeUp()
+        for _ in 0..<swipes {
+            if element.isHittable { return }
+            // A full-velocity swipe can pass a short toolbar altogether. Use
+            // the actual target position and a bounded drag so recovery can
+            // move back up, rather than repeatedly scrolling farther away.
+            let moveDown = element.frame.midY < workspace.frame.midY
+            let start = workspace.coordinate(withNormalizedOffset: CGVector(
+                dx: 0.5, dy: moveDown ? 0.35 : 0.65
+            ))
+            let end = workspace.coordinate(withNormalizedOffset: CGVector(
+                dx: 0.5, dy: moveDown ? 0.65 : 0.35
+            ))
+            start.press(forDuration: 0.05, thenDragTo: end)
         }
     }
 

@@ -2731,6 +2731,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               ref={stageRef}
               role="region"
               aria-label="Arm visualization"
+              data-native-stage-scroll={embedded ? "true" : undefined}
               className={embedded ? "relative order-first h-[min(420px,calc(100svh-5rem))] min-h-[180px] w-full" : "h-[570px] w-full"}
             >
               {shouldMountStage ? (

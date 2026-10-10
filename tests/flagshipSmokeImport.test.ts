@@ -145,6 +145,11 @@ describe("flagship components import without throwing", () => {
             expect(classes).toContain("lg:shrink-0");
           },
         })
+        .on('[aria-label="Humanoid visualization"]', {
+          element(element) {
+            expect(element.getAttribute("data-native-stage-scroll")).toBe(embedded ? "true" : null);
+          },
+        })
         .on('button[aria-label$=" camera"]', {
           element(element) {
             const classes = element.getAttribute("class")!.split(/\s+/);
@@ -236,6 +241,7 @@ describe("flagship components import without throwing", () => {
           element(element) {
             visualizations++;
             expect(element.getAttribute("role")).toBe("region");
+            expect(element.getAttribute("data-native-stage-scroll")).toBe(embedded ? "true" : null);
             expect(element.getAttribute("class")!.includes("order-first")).toBe(embedded);
           },
         })

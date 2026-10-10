@@ -4124,6 +4124,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               id="g1-robot-stage"
               role="region"
               aria-label="Humanoid visualization"
+              data-native-stage-scroll={embedded ? "true" : undefined}
               tabIndex={-1}
               className={embedded ? "relative order-first h-[min(620px,calc(var(--robot-stage-height,100svh)-5rem))] min-h-[240px] w-full" : "h-[620px] w-full"}
             >

@@ -235,6 +235,14 @@ canvas {
   max-width: 100%;
 }
 
+/* OrbitControls.connect writes inline touch-action:none after Canvas mounts.
+   The embedded labs must still let a vertical swipe reach the controls below
+   the scene. Scope the override to native stages: horizontal orbit and custom
+   two-finger camera gestures remain handled by the existing controls. */
+[data-native-stage-scroll="true"] canvas {
+  touch-action: pan-y !important;
+}
+
 /* Mobile-friendly momentum scrolling for code blocks, LaTeX equations, and tables */
 pre, table, .overflow-x-auto, mjx-container, .katex-display {
   -webkit-overflow-scrolling: touch;

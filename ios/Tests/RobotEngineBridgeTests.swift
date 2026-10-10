@@ -603,6 +603,10 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
                 """)
             }
             // These helpers live only in this test's page, not in application code.
+            let pageScrollingEnabled = try await truth(web, """
+            getComputedStyle(document.querySelector('[data-robot-stage-recovery] canvas')).touchAction === 'pan-y'
+            """)
+            XCTAssertTrue(pageScrollingEnabled, "Native camera controls must not trap vertical page scrolling")
             _ = try await web.evaluateJavaScript("""
             window.__robotNativeRecoveryProbe = {
               document: document,
@@ -630,7 +634,8 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
                 const c = document.querySelector('[data-robot-stage-recovery] canvas');
                 const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
                 return p.document === document && c !== p.oldCanvas && c?.width > 0 &&
-                  gl && !gl.isContextLost() && !p.button(/^Retry 3D view$/);
+                  gl && !gl.isContextLost() && !p.button(/^Retry 3D view$/) &&
+                  getComputedStyle(c).touchAction === 'pan-y';
               }
             }; true;
             """)
