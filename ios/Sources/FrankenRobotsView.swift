@@ -613,9 +613,16 @@ struct FrankenRobotsView: View {
                 in: 0...Double(max(1, engine.activeSampleCount - 1)),
                 step: 1,
                 onEditingChanged: { editing in
-                    guard !editing, let scrubIndex else { return }
-                    self.scrubIndex = nil
-                    engine.seekReplay(to: Int(scrubIndex.rounded()))
+                    guard !editing else { return }
+                    let editedLab = lab
+                    // Catalyst can deliver editing-ended before SwiftUI has
+                    // applied the final binding write. Read on the next turn
+                    // so seeking does not lag one gesture behind the thumb.
+                    DispatchQueue.main.async {
+                        guard lab == editedLab, let scrubIndex else { return }
+                        self.scrubIndex = nil
+                        engine.seekReplay(to: Int(scrubIndex.rounded()))
+                    }
                 }
             )
             .tint(lab.accent)
