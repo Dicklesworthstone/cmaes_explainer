@@ -4,6 +4,8 @@ import {
   type OrientedBoundingBox,
   resolveCameraBoom,
 } from "./houseMultiObstacleKernel";
+import { type PerspectiveCamera, Vector3 } from "three";
+import { robotCameraFittedFov, robotCameraFramingCorners } from "./robotCameraFraming";
 
 type ArmTask = "kitchen-mug" | "living-room-remote" | "backyard-trowel";
 
@@ -25,4 +27,20 @@ export function armGraspCameraBoom(
   );
   const boom = candidates.reduce((best, candidate) => candidate.fraction > best.fraction ? candidate : best);
   return { ...boom, lookAt };
+}
+
+/** Fit both the physical workpiece and the wrist/fingers, not just the point
+ * the lens follows. Include mesh thickness and the gripper's local offsets.
+ * This is a presentation-only lens adjustment; owner poses remain untouched. */
+export function armGraspCameraFov(
+  camera: PerspectiveCamera,
+  object: [number, number, number],
+  wrist: [number, number, number],
+  minimumFov: number,
+) {
+  camera.updateMatrixWorld();
+  const corners = robotCameraFramingCorners([object, wrist].map(([x, y, z]) => ({ x, y, z })));
+  return robotCameraFittedFov(minimumFov, camera.aspect, corners.map(point =>
+    new Vector3(point.x, point.y, point.z).applyMatrix4(camera.matrixWorldInverse),
+  ));
 }

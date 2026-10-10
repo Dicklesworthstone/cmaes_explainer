@@ -104,7 +104,8 @@ import {
   type MultiObstacleSceneConfig,
   type OrientedBoundingBox,
 } from "../lib/houseMultiObstacleKernel";
-import { armCameraObstacles, armGraspCameraBoom } from "../lib/armCameraFraming";
+import { armCameraObstacles, armGraspCameraBoom, armGraspCameraFov } from "../lib/armCameraFraming";
+import { robotCameraVerticalFov } from "../lib/robotCameraFraming";
 import { armTaskFurniture } from "../lib/houseScenes";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
@@ -905,10 +906,14 @@ const ARM_FLY_BOUNDS = { minX: -2.6, maxX: 2.6, minY: 0.2, maxY: 3.6, minZ: -0.7
 function ArmCameraRig({
   cameraMode,
   objectPos,
+  workpiecePos,
+  wristPos,
   obstacles,
 }: {
   cameraMode: ArmCameraMode;
   objectPos: [number, number, number];
+  workpiecePos: [number, number, number];
+  wristPos: [number, number, number];
   /** Volumes the lens must not enter, for the task on screen. */
   obstacles: OrientedBoundingBox[];
 }) {
@@ -925,9 +930,15 @@ function ArmCameraRig({
       studioTarget.current = null;
     }
   }, [cameraMode]);
-  useFrame(({ camera }, rawDelta) => {
+  useFrame(({ camera, size }, rawDelta) => {
     const dt = Math.min(Math.max(rawDelta, 0), 0.1);
     const ease = (rate: number) => 1 - Math.exp(-rate * dt);
+    const minimumFov = robotCameraVerticalFov(38, size.width, size.height);
+    // A microscope fit must not leak its wider lens into another camera mode.
+    if (camera instanceof THREE.PerspectiveCamera && cameraMode !== "microscope" && camera.fov !== minimumFov) {
+      camera.fov = minimumFov;
+      camera.updateProjectionMatrix();
+    }
     if (cameraMode === "studio") {
       const controls = controlsRef.current;
       if (studioTarget.current && controls) {
@@ -951,6 +962,15 @@ function ArmCameraRig({
       camera.position.lerp(armCameraScratchVec, ease(4));
       lookAtRef.current.lerp(new THREE.Vector3(...best.lookAt), ease(6));
       camera.lookAt(lookAtRef.current);
+      if (camera instanceof THREE.PerspectiveCamera) {
+        const fittedFov = armGraspCameraFov(camera, workpiecePos, wristPos, minimumFov);
+        // Expand immediately to avoid clipping during a camera transition;
+        // contract smoothly so small owner-pose updates cannot pulse the lens.
+        camera.fov = fittedFov >= camera.fov
+          ? fittedFov
+          : THREE.MathUtils.lerp(camera.fov, fittedFov, ease(3));
+        camera.updateProjectionMatrix();
+      }
     } else if (cameraMode === "overhead") {
       armCameraScratchVec.set(objectPos[0] * 0.5, 3.2, objectPos[2] * 0.5 + 0.01);
       camera.position.lerp(armCameraScratchVec, ease(4));
@@ -1414,7 +1434,13 @@ function ArmStage({
 
       {dragTarget ? <ArmReachPreview target={dragTarget} basePos={armBasePos} /> : null}
 
-      <ArmCameraRig cameraMode={cameraMode} objectPos={objectPos} obstacles={cameraObstacles} />
+      <ArmCameraRig
+        cameraMode={cameraMode}
+        objectPos={objectPos}
+        workpiecePos={rawObjectPos}
+        wristPos={currentSample ? ownerPositionToThree(currentSample.linkPoses[7].position) : rawObjectPos}
+        obstacles={cameraObstacles}
+      />
     </Canvas>
   );
 }
