@@ -195,7 +195,7 @@ final class FrankenRobotsUITests: XCTestCase {
         // UIImage orientation alone can rotate a still-portrait framebuffer.
         // Wait for the actual wide-layout side inspector beside the stage too.
         var screenshot = XCUIScreen.main.screenshot()
-        let stage = app.descendants(matching: .any)["robot-stage"]
+        let stage = app.webViews.firstMatch
         let inspector = app.scrollViews["robot-inspector-scroll"]
         var consecutiveWideFrames = 0
         for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .landscapeLeft] {
