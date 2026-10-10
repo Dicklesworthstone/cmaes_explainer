@@ -95,18 +95,16 @@ import {
   ARM_TABLE_DEPTH,
   ARM_TABLE_THICKNESS,
   ARM_TABLE_WIDTH,
-  armCounterSlabObstacle,
   armStageFurniture,
   armStageObstacles,
   armWorkbenchObstacles,
   conservativeSegmentClearanceToOBB,
-  createHouseNavigationScene,
   distanceToOBB,
   type MultiObstacleSceneConfig,
   type OrientedBoundingBox,
-  resolveCameraBoom,
 } from "../lib/houseMultiObstacleKernel";
-import { armTaskFurniture, CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
+import { armCameraObstacles, armGraspCameraBoom } from "../lib/armCameraFraming";
+import { armTaskFurniture } from "../lib/houseScenes";
 import { computeAdaptiveSafetyMargin } from "../lib/riskAwareMargin";
 import { robotAudio } from "../lib/robotAudioSynthesizer";
 import {
@@ -380,6 +378,7 @@ function ArmEnvironment({ admission }: { admission: HouseholdManipulationAdmissi
   const { task } = admission.config;
   const { scene } = admission;
   const supportY = scene.supportHeightMeters;
+  const backsplash = task === "kitchen-mug" ? armWorkbenchObstacles(supportY, task)[0] : null;
   const goal = ownerPositionToThree(scene.goalObjectPositionMeters);
   const obstacle = ownerPositionToThree(scene.obstacleCenterMeters);
   const obstacleSize: [number, number, number] = [
@@ -413,13 +412,10 @@ function ArmEnvironment({ admission }: { admission: HouseholdManipulationAdmissi
         />
       </mesh>
 
-      {task === "kitchen-mug" ? (
+      {backsplash ? (
         <>
-          <mesh
-            position={[ARM_TABLE_CENTER_X, supportY + 0.5, -ARM_TABLE_DEPTH / 2 + 0.035]}
-            receiveShadow
-          >
-            <boxGeometry args={[ARM_TABLE_WIDTH, 1.05, 0.07]} />
+          <mesh position={backsplash.center} receiveShadow>
+            <boxGeometry args={backsplash.halfExtents.map((extent) => extent * 2) as [number, number, number]} />
             <meshStandardMaterial color="#1d2a40" roughness={0.82} />
           </mesh>
         </>
@@ -903,26 +899,6 @@ export type ArmCameraMode = "studio" | "microscope" | "overhead" | "side" | "fro
 
 const armCameraScratchVec = new THREE.Vector3();
 
-// Volumes the camera must stay out of: the counter slab (camera-only), the
-// workbench backsplash and cabinet shared with the kernel obstacle roster,
-// and the house walls and furniture so the studio backdrop cannot swallow
-// the lens either.
-/**
- * Volumes the camera must stay out of, for the task actually on screen: the
- * counter slab, that task's workbench structures, and the house bodies the
- * stage draws behind them. Built per task because the workbench geometry is
- * anchored to the owner's support height, which differs per task.
- */
-function armCameraObstacles(
-  supportHeightMeters: number,
-  task: HouseholdManipulationTask,
-): OrientedBoundingBox[] {
-  return [
-    armCounterSlabObstacle(supportHeightMeters),
-    ...armWorkbenchObstacles(supportHeightMeters, task),
-    ...createHouseNavigationScene(CRAFTSMAN_BUNGALOW_1928).obstacles,
-  ];
-}
 const ARM_FLY_BOUNDS = { minX: -2.6, maxX: 2.6, minY: 0.2, maxY: 3.6, minZ: -0.75, maxZ: 3.2 };
 
 function ArmCameraRig({
@@ -966,24 +942,13 @@ function ArmCameraRig({
     if (cameraMode === "microscope") {
       // Boom from the object toward the studio corner, shortened by the
       // swept-sphere sweep so the lens never enters the backsplash, the
-      // cabinet, or a house wall when the object sits at the counter's back.
+      // cabinet or other staged furniture at the counter's back.
       // Frame the approach above the workpiece as well as the contact itself.
       // The former 0.5 m boom cropped the fingers at ordinary tablet aspects.
-      const lookAt: [number, number, number] = [objectPos[0], objectPos[1] + 0.1, objectPos[2]];
-      const candidates: [number, number, number][] = [
-        [objectPos[0] + 0.7, objectPos[1] + 0.55, objectPos[2] + 0.7],
-        [objectPos[0] - 0.7, objectPos[1] + 0.55, objectPos[2] + 0.7],
-        [objectPos[0] + 0.9, objectPos[1] + 0.65, objectPos[2] - 0.2],
-        [objectPos[0] - 0.9, objectPos[1] + 0.65, objectPos[2] - 0.2],
-      ];
-      let best = resolveCameraBoom(lookAt, candidates[0], obstacles, 0.06);
-      for (let i = 1; i < candidates.length && best.fraction < 0.999; i++) {
-        const alt = resolveCameraBoom(lookAt, candidates[i], obstacles, 0.06);
-        if (alt.fraction > best.fraction) best = alt;
-      }
+      const best = armGraspCameraBoom(objectPos, obstacles);
       armCameraScratchVec.set(...best.position);
       camera.position.lerp(armCameraScratchVec, ease(4));
-      lookAtRef.current.lerp(new THREE.Vector3(...lookAt), ease(6));
+      lookAtRef.current.lerp(new THREE.Vector3(...best.lookAt), ease(6));
       camera.lookAt(lookAtRef.current);
     } else if (cameraMode === "overhead") {
       armCameraScratchVec.set(objectPos[0] * 0.5, 3.2, objectPos[2] * 0.5 + 0.01);
