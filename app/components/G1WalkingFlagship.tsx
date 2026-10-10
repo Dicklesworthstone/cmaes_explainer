@@ -2341,6 +2341,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
   // page (shadow-mapped robot rig). Free it when far offscreen; 600px margin
   // keeps it warm while approaching (see WingViz rationale).
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const stageControlsRef = useRef<HTMLDivElement | null>(null);
   const learningControlsRef = useRef<HTMLDivElement | null>(null);
   const shouldMountStage = useInView(stageRef, { rootMargin: "600px 0px 600px 0px" });
   // Real G1 meshes load only while the stage is near the viewport; the
@@ -3613,6 +3614,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             <div
               role="group"
               aria-label="Humanoid stage controls"
+              ref={stageControlsRef}
               className={`pointer-events-none z-10 flex flex-col gap-2 ${
                 embedded ? "relative p-3" : "absolute inset-x-5 top-5"
               } lg:flex-row lg:items-start lg:justify-between`}
@@ -3625,7 +3627,18 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
 
                 <button
                   type="button"
-                  onClick={() => setHudExpanded(!hudExpanded)}
+                  onClick={() => {
+                    setHudExpanded(!hudExpanded);
+                    // In the native stage-first layout the disclosure can sit
+                    // at the bottom edge. Bring the options it reveals into
+                    // view instead of making the user guess they must scroll.
+                    if (embedded && !hudExpanded) {
+                      stageControlsRef.current?.scrollIntoView({
+                        behavior: reduceMotion ? "auto" : "smooth",
+                        block: "start",
+                      });
+                    }
+                  }}
                   aria-expanded={hudExpanded}
                   aria-controls="g1-hud-controls"
                   className={`flex min-h-11 items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
