@@ -3607,12 +3607,13 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               embedded ? "h-[var(--robot-stage-height,100svh)]" : "min-h-[620px]"
             }`}
           >
-            {/* Top HUD: stacks vertically on phones (both clusters shared the
-                top band and collided); splits into left/right corners ≥sm. */}
+            {/* Top HUD: phones and tablets stack the two clusters so expanded
+                controls cannot squeeze the camera choices. Wide stages use
+                a reserved camera column beside the wrapping mode controls. */}
             <div
               className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${
                 embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
-              } sm:flex-row sm:items-start sm:justify-between`}
+              } lg:flex-row lg:items-start lg:justify-between`}
             >
               {/* Top Badges & Interactive Mode Bar */}
               <div className="flex flex-wrap gap-2 pointer-events-auto">
@@ -3944,7 +3945,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
               <div
                 id="g1-hud-controls"
-                className="flex w-full min-w-0 flex-wrap items-center gap-2 pointer-events-auto self-start sm:w-auto"
+                className="flex w-full min-w-0 flex-wrap items-center gap-2 pointer-events-auto self-start lg:w-[23rem] lg:shrink-0"
               >
                 {/* Lighting Atmosphere Selector. Cosmetic only — it changes the
                   sky and exposure, never the physics or the receipt — so it
@@ -3989,7 +3990,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <div
                   role="group"
                   aria-label="Humanoid camera views"
-                  className={`w-full min-w-0 grid-cols-5 items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex sm:w-auto ${
+                  className={`w-full min-w-0 grid-cols-5 items-stretch gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:grid lg:flex ${
                     hudExpanded ? "grid" : "hidden"
                   }`}
                 >
@@ -4011,7 +4012,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                         onClick={() => setCameraView(cam.id)}
                         aria-label={`${cam.label} camera`}
                         aria-pressed={isSelected}
-                        className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-1 text-[0.65rem] font-bold transition-all sm:flex-row sm:px-2 ${
+                        className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-1 text-[0.65rem] font-bold transition-all lg:flex-row lg:shrink-0 lg:whitespace-nowrap lg:px-2 ${
                           isSelected
                             ? "bg-cyan-500/30 text-cyan-200 border-cyan-400/40"
                             : "border-transparent text-slate-400 hover:text-slate-200"

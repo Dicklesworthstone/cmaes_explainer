@@ -122,7 +122,15 @@ describe("flagship components import without throwing", () => {
             expect(classes).toContain("w-full");
             expect(classes).toContain("min-w-0");
             expect(classes).toContain("grid-cols-5");
-            expect(classes).toContain("sm:flex");
+            expect(classes).toContain("sm:grid");
+            expect(classes).toContain("lg:flex");
+          },
+        })
+        .on('#g1-hud-controls', {
+          element(element) {
+            const classes = element.getAttribute("class")!.split(/\s+/);
+            expect(classes).toContain("w-full");
+            expect(classes).toContain("lg:shrink-0");
           },
         })
         .on('button[aria-label$=" camera"]', {
@@ -131,7 +139,9 @@ describe("flagship components import without throwing", () => {
             expect(classes).toContain("min-h-11");
             expect(classes).toContain("min-w-0");
             expect(classes).toContain("flex-col");
-            expect(classes).toContain("sm:flex-row");
+            expect(classes).toContain("lg:flex-row");
+            expect(classes).toContain("lg:shrink-0");
+            expect(classes).toContain("lg:whitespace-nowrap");
             cameras.push({
               label: element.getAttribute("aria-label")!,
               pressed: element.getAttribute("aria-pressed"),
