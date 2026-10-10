@@ -211,7 +211,9 @@ final class FrankenRobotsUITests: XCTestCase {
 
         revealHumanoidStageControls(in: app)
         let pushPreview = app.buttons["Configure display-only push-vector preview"]
-        let followCamera = app.buttons["Follow"]
+        // aria-pressed camera controls are exposed as switches by WKWebView.
+        // Query the current accessible name without assuming a button role.
+        let followCamera = app.descendants(matching: .any)["Follow camera"]
         XCTAssertTrue(pushPreview.waitForExistence(timeout: 12), app.debugDescription)
         XCTAssertTrue(pushPreview.isHittable, app.debugDescription)
         XCTAssertTrue(followCamera.waitForExistence(timeout: 5), app.debugDescription)
@@ -253,7 +255,7 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [armReady], timeout: 55), .completed)
 
         let frictionCones = app.buttons["FRICTION CONES"]
-        let graspCamera = app.buttons["Grasp Focus camera"]
+        let graspCamera = app.descendants(matching: .any)["Grasp Focus camera"]
         XCTAssertTrue(frictionCones.waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(frictionCones.isHittable, app.debugDescription)
         XCTAssertTrue(graspCamera.waitForExistence(timeout: 5), app.debugDescription)
@@ -737,6 +739,13 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 55), .completed)
 
         let inspector = app.scrollViews["robot-inspector-scroll"]
+        // Portrait iPads use the compact stage; the same inspector is reached
+        // through Lab guide instead of occupying a permanent side column.
+        if !inspector.exists {
+            let guide = app.buttons["Lab guide"]
+            XCTAssertTrue(guide.isHittable, app.debugDescription)
+            guide.tap()
+        }
         XCTAssertTrue(inspector.waitForExistence(timeout: 8), app.debugDescription)
         let clearance = app.descendants(matching: .any)["robot-live-certified-clearance"]
         let risk = app.descendants(matching: .any)["robot-live-collision-risk"]
@@ -753,6 +762,11 @@ final class FrankenRobotsUITests: XCTestCase {
         portrait.lifetime = .keepAlways
         add(portrait)
 
+        let done = app.buttons["Done"]
+        if done.exists {
+            XCTAssertTrue(done.isHittable, app.debugDescription)
+            done.tap()
+        }
         let stage = app.descendants(matching: .any)["robot-stage"]
         XCTAssertTrue(stage.waitForExistence(timeout: 8))
         // Assert against the rendered framebuffer because XCUIApplication.frame
@@ -765,6 +779,7 @@ final class FrankenRobotsUITests: XCTestCase {
         landscape.lifetime = .keepAlways
         add(landscape)
 
+        XCTAssertTrue(inspector.waitForExistence(timeout: 8), app.debugDescription)
         let exportButton = app.buttons["robot-export-receipt"]
         XCTAssertTrue(exportButton.waitForExistence(timeout: 5), app.debugDescription)
         for _ in 0..<4 where !exportButton.isHittable {
