@@ -51,3 +51,30 @@ nearby checkout cannot stand in for its build identity. If the app shows **Engin
 rerun `prepare-engine.sh` from a clean source tree and rebuild.
 
 See `docs/FRANKENROBOTS_APP_PLAN.md` for the product, bridge, offline, platform, and release gates.
+
+## Native graphics recovery checks
+
+`RobotGraphicsRecoveryIntegrationTests` runs inside the actual app-hosted
+`WKWebView` on iPhone, iPad, or Mac Catalyst. Opt in with
+`FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS=1` in the **test host's environment**;
+otherwise these two integration tests are explicitly skipped. In a copied
+`.xctestrun` file, set this under
+`FrankenRobotsTests.EnvironmentVariables`, then run `test-without-building`
+against the intended device. Keep the original test plan and build receipts.
+Before any Simulator action, require a successful
+`ensure-simulator-audio-safe prepare`; repeat after device/process changes.
+
+Each lab learns a real policy, loses a real WebGL context using
+`WEBGL_lose_context`, and presses the existing **Retry 3D view** control. Two
+paused retries must preserve the entire serialized policy/ledger and generation.
+A third loss during active learning must recover its canvas and continue
+generation progress without replacing the document. The result bundle retains
+policy JSON, progress receipts, and interrupted/recovered screenshots. Inspect
+the screenshots as well as the assertions: an allocated context alone is not
+proof of a visibly recovered scene. Unsupported context-loss extensions fail
+the test rather than being replaced with synthetic events.
+
+These checks establish in-process graphics recovery, not learning persistence
+after a WebContent-process crash, full application restart, or OS termination.
+They also do not replace the existing native touch, camera, export, orientation,
+and feature-discoverability UI tests. A passing Mac run is not iOS evidence.

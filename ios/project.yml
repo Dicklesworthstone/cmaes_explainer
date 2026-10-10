@@ -74,6 +74,7 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: true
         TEST_TARGET_NAME: FrankenRobots
+        SUPPORTS_MACCATALYST: true
     sources:
       - UITests
     dependencies:
@@ -84,6 +85,8 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: true
+        SUPPORTS_MACCATALYST: true
+        "TEST_HOST[sdk=macosx*]": "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/Contents/MacOS/FrankenRobots"
     sources:
       - Tests
     dependencies:

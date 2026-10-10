@@ -286,6 +286,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsUITests;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = FrankenRobots;
 			};
@@ -385,8 +386,10 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsTests;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/FrankenRobots";
+				"TEST_HOST[sdk=macosx*]" = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/Contents/MacOS/FrankenRobots";
 			};
 			name = Debug;
 		};
@@ -402,8 +405,10 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsTests;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/FrankenRobots";
+				"TEST_HOST[sdk=macosx*]" = "$(BUILT_PRODUCTS_DIR)/FrankenRobots.app/Contents/MacOS/FrankenRobots";
 			};
 			name = Release;
 		};
@@ -487,6 +492,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.frankenrobots.FrankenRobotsUITests;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = FrankenRobots;
 			};

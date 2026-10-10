@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import WebKit
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
@@ -560,5 +562,230 @@ private extension JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }
+}
+
+/// Opt-in, app-hosted integration tests against the shipped WKWebView and owner worker.
+/// Run on an audio-safe Simulator or Mac Catalyst with
+/// FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS=1 in the test host's environment.
+/// No synthetic context-loss events or replacement policy/worker implementations are used.
+final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
+    @MainActor
+    func testHumanoidRetainsLearningAcrossActualGraphicsLoss() async throws {
+        try await verifyRecovery(lab: .humanoid, subject: "g1", policyCount: 5_040)
+    }
+
+    @MainActor
+    func testArmRetainsLearningAcrossActualGraphicsLoss() async throws {
+        try await verifyRecovery(lab: .arm, subject: "arm", policyCount: 128)
+    }
+
+    @MainActor
+    private func verifyRecovery(lab: RobotLab, subject: String, policyCount: Int) async throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1",
+            "Requires explicit native graphics test opt-in and Simulator audio preflight."
+        )
+        try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        NotificationCenter.default.post(name: .selectRobotLab, object: lab)
+        try await waitUntil("selected lab navigation") {
+            self.appWebView()?.url?.absoluteString.contains(lab.route) == true
+        }
+        let web = try XCTUnwrap(appWebView())
+        do {
+            try await waitUntil("real owner and stage ready", timeout: 180) {
+                try await self.truth(web, """
+                (() => {
+                  const c = document.querySelector('[data-robot-stage-recovery] canvas');
+                  return c && c.width > 0 && c.height > 0 && [...document.querySelectorAll('button')]
+                    .some(b => !b.disabled && /^(Start learning|Keep learning · gen)/.test(b.textContent.trim()));
+                })()
+                """)
+            }
+            // These helpers live only in this test's page, not in application code.
+            _ = try await web.evaluateJavaScript("""
+            window.__robotNativeRecoveryProbe = {
+              document: document,
+              button: re => [...document.querySelectorAll('button')].find(b => re.test(b.textContent.trim())),
+              checkpoints: () => JSON.stringify(Object.keys(localStorage)
+                .filter(k => k.startsWith('cmaes.\(subject).') && k.endsWith('.training-session.v2'))
+                .sort().map(k => [k, localStorage.getItem(k)])),
+              generation: () => {
+                const b = [...document.querySelectorAll('button')]
+                  .find(b => /^(Stop|Keep learning) · gen/.test(b.textContent.trim()));
+                return Number(b?.textContent.match(/gen (\\d+)/)?.[1] ?? -1);
+              },
+              lose: () => {
+                const c = document.querySelector('[data-robot-stage-recovery] canvas');
+                const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
+                if (!gl || gl.isContextLost()) throw new Error('No healthy native WebGL context');
+                const extension = gl.getExtension('WEBGL_lose_context');
+                if (!extension) throw new Error('Actual context-loss extension unavailable');
+                window.__robotNativeRecoveryProbe.oldCanvas = c;
+                extension.loseContext();
+                return true;
+              },
+              restored: () => {
+                const p = window.__robotNativeRecoveryProbe;
+                const c = document.querySelector('[data-robot-stage-recovery] canvas');
+                const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
+                return p.document === document && c !== p.oldCanvas && c?.width > 0 &&
+                  gl && !gl.isContextLost() && !p.button(/^Retry 3D view$/);
+              }
+            }; true;
+            """)
+            try await click(web, matching: "^(Start learning|Keep learning · gen)")
+            try await waitUntil("real learned policy checkpoint", timeout: 180) {
+                try await self.truth(web, """
+                (() => {
+                  const entries = JSON.parse(window.__robotNativeRecoveryProbe.checkpoints());
+                  return window.__robotNativeRecoveryProbe.generation() >= 10 && entries.some(([, raw]) => {
+                    const p = JSON.parse(raw);
+                    return p.generation > 0 && p.policy.length === \(policyCount);
+                  });
+                })()
+                """)
+            }
+            try await stopLearning(web)
+            let checkpoint = try await checkpointText(web)
+            let generation = try await generationNumber(web)
+            XCTAssertGreaterThan(generation, 0)
+            attachText(checkpoint, name: "\(subject)-policy-before-retry")
+            try await snapshot(web, name: "\(subject)-learned-before-loss")
+
+            // Repeated retries must preserve every serialized coefficient and the entire ledger.
+            for attempt in 1...2 {
+                try await loseAndRetry(web, name: "\(subject)-paused-\(attempt)")
+                let after = try await checkpointText(web)
+                let afterGeneration = try await generationNumber(web)
+                XCTAssertEqual(after, checkpoint, "Graphics retry must not rewrite the learned checkpoint")
+                XCTAssertEqual(afterGeneration, generation, "Graphics retry must not reset learning progress")
+            }
+
+            // Also lose the context with the real optimizer running: it must keep progressing,
+            // rather than restarting a generation-zero worker behind an apparently healthy canvas.
+            try await click(web, matching: "^Keep learning · gen")
+            try await waitUntil("continued optimizer progress", timeout: 180) {
+                try await self.generationNumber(web) > generation
+            }
+            let liveGeneration = try await generationNumber(web)
+            try await loseAndRetry(web, name: "\(subject)-while-learning")
+            try await waitUntil("optimizer survives graphics retry", timeout: 180) {
+                let currentGeneration = try await self.generationNumber(web)
+                let running = try await self.truth(web, "!!window.__robotNativeRecoveryProbe.button(/^Stop · gen/)")
+                return currentGeneration > liveGeneration && running
+            }
+            try await stopLearning(web)
+            let finalGeneration = try await generationNumber(web)
+            XCTAssertGreaterThan(finalGeneration, liveGeneration)
+            attachText(try await checkpointText(web), name: "\(subject)-policy-after-continuing")
+            attachText("before=\(generation)\nliveLoss=\(liveGeneration)\nafter=\(finalGeneration)",
+                       name: "\(subject)-generation-continuity")
+            try await snapshot(web, name: "\(subject)-final-recovered-stage")
+        } catch {
+            try? await snapshot(web, name: "\(subject)-failure")
+            try? await stopLearning(web)
+            throw error
+        }
+    }
+
+    @MainActor
+    private func loseAndRetry(_ web: WKWebView, name: String) async throws {
+        let lost = try await truth(web, "window.__robotNativeRecoveryProbe.lose()")
+        XCTAssertTrue(lost)
+        try await waitUntil("actual context-loss recovery notice") {
+            try await self.truth(web, "!!window.__robotNativeRecoveryProbe.button(/^Retry 3D view$/)")
+        }
+        try await snapshot(web, name: "\(name)-interrupted")
+        try await click(web, matching: "^Retry 3D view$")
+        try await waitUntil("new healthy native WebGL canvas") {
+            try await self.truth(web, "window.__robotNativeRecoveryProbe.restored()")
+        }
+        try await snapshot(web, name: "\(name)-recovered")
+    }
+
+    @MainActor
+    private func stopLearning(_ web: WKWebView) async throws {
+        _ = try await web.evaluateJavaScript("""
+        (() => {
+          const b = [...document.querySelectorAll('button')].find(b => /^Stop · gen/.test(b.textContent.trim()));
+          if (b && !b.disabled) b.click();
+          return true;
+        })()
+        """)
+        try await waitUntil("optimizer stop acknowledged", timeout: 90) {
+            try await self.truth(web, """
+            [...document.querySelectorAll('button')].some(b => !b.disabled && /^(Start learning|Keep learning · gen)/.test(b.textContent.trim()))
+            """)
+        }
+    }
+
+    @MainActor
+    private func click(_ web: WKWebView, matching pattern: String) async throws {
+        let clicked = try await truth(web, """
+        (() => {
+          const b = window.__robotNativeRecoveryProbe.button(/\(pattern)/);
+          if (!b || b.disabled) return false;
+          b.click(); return true;
+        })()
+        """)
+        XCTAssertTrue(clicked, "Missing enabled control: \(pattern)")
+        if !clicked { throw NSError(domain: "RobotGraphicsRecovery", code: 2) }
+    }
+
+    @MainActor
+    private func checkpointText(_ web: WKWebView) async throws -> String {
+        let value = try await web.evaluateJavaScript("window.__robotNativeRecoveryProbe.checkpoints()")
+        return try XCTUnwrap(value as? String)
+    }
+
+    @MainActor
+    private func generationNumber(_ web: WKWebView) async throws -> Int {
+        let value = try await web.evaluateJavaScript("window.__robotNativeRecoveryProbe.generation()")
+        return try XCTUnwrap(value as? NSNumber).intValue
+    }
+
+    @MainActor
+    private func truth(_ web: WKWebView, _ script: String) async throws -> Bool {
+        try await web.evaluateJavaScript("Boolean(\(script))") as? Bool == true
+    }
+
+    @MainActor
+    private func waitUntil(_ label: String, timeout: TimeInterval = 45,
+                           condition: @MainActor () async throws -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if try await condition() { return }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+        XCTFail("Timed out waiting for \(label)")
+        throw NSError(domain: "RobotGraphicsRecovery", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: label])
+    }
+
+    @MainActor
+    private func appWebView() -> WKWebView? {
+        func find(in view: UIView) -> WKWebView? {
+            if let web = view as? WKWebView { return web }
+            return view.subviews.lazy.compactMap { find(in: $0) }.first
+        }
+        return UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).lazy.compactMap { find(in: $0) }.first
+    }
+
+    @MainActor
+    private func snapshot(_ web: WKWebView, name: String) async throws {
+        let image = try await web.takeSnapshot(configuration: nil)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func attachText(_ text: String, name: String) {
+        let attachment = XCTAttachment(string: text)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
