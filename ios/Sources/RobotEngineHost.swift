@@ -848,6 +848,10 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     @Published private(set) var webView: WKWebView
 
+    // Retain the private session across execution-container replacement. A new
+    // nonpersistent store per retry discards the owners' saved policies/ledgers
+    // before their existing warm-recovery code can read them.
+    private let websiteDataStore: WKWebsiteDataStore
     private var server: LoopbackEngineServer?
     private var baseURL: URL?
     private var selectedLab: RobotLab = .humanoid
@@ -878,7 +882,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 #endif
 
     override init() {
-        webView = Self.makeWebView()
+        let dataStore = WKWebsiteDataStore.nonPersistent()
+        websiteDataStore = dataStore
+        webView = Self.makeWebView(websiteDataStore: dataStore)
         super.init()
         installBridge(on: webView)
 
@@ -887,12 +893,12 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         }
     }
 
-    private static func makeWebView() -> WKWebView {
+    private static func makeWebView(websiteDataStore: WKWebsiteDataStore) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        configuration.websiteDataStore = .nonPersistent()
+        configuration.websiteDataStore = websiteDataStore
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.isOpaque = false
         webView.backgroundColor = .clear
@@ -914,7 +920,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         failedWebView.stopLoading()
         failedWebView.configuration.userContentController.removeScriptMessageHandler(forName: "frankenrobots")
 
-        let replacement = Self.makeWebView()
+        let replacement = Self.makeWebView(websiteDataStore: websiteDataStore)
         installBridge(on: replacement)
         webView = replacement
     }

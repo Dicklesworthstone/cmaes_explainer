@@ -762,11 +762,57 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             attachText("before=\(generation)\nliveLoss=\(liveGeneration)\nafter=\(finalGeneration)",
                        name: "\(subject)-generation-continuity")
             try await snapshot(web, name: "\(subject)-final-recovered-stage")
+            try await verifyNativeRetry(web, lab: lab, subject: subject, generation: finalGeneration)
         } catch {
             try? await snapshot(web, name: "\(subject)-failure")
             try? await stopLearning(web)
             throw error
         }
+    }
+
+    @MainActor
+    private func verifyNativeRetry(_ original: WKWebView, lab: RobotLab,
+                                   subject: String, generation: Int) async throws {
+        // Exercise the production native retry path, which replaces WKWebView,
+        // separately from the in-page WebGL retries above. Recovery replays the
+        // saved policy, not the unsaved CMA covariance, and may refresh savedAt.
+        let checkpointScript = """
+        JSON.stringify(Object.keys(localStorage)
+          .filter(k => k.startsWith('cmaes.\(subject).') && k.endsWith('.training-session.v2'))
+          .sort().map(k => { const saved = JSON.parse(localStorage.getItem(k));
+            delete saved.savedAt; return [k, saved]; }))
+        """
+        let beforeValue = try await original.evaluateJavaScript(checkpointScript)
+        let before = try XCTUnwrap(beforeValue as? String)
+        XCTAssertNotEqual(before, "[]", "Native retry must start from a real learned checkpoint")
+        attachText(before, name: "\(subject)-before-native-retry")
+        NotificationCenter.default.post(name: .reloadRobotEngine, object: nil)
+        try await waitUntil("replacement native WebView on the same lab") {
+            guard let web = self.appWebView(), web !== original else { return false }
+            return web.url?.absoluteString.contains(lab.route) == true
+        }
+        let replacement = try XCTUnwrap(appWebView())
+        try await waitUntil("replacement document loaded") {
+            try await self.truth(replacement, """
+            document.readyState === 'complete' && location.pathname.includes('\(lab.route)')
+            """)
+        }
+        let afterValue = try await replacement.evaluateJavaScript(checkpointScript)
+        let after = try XCTUnwrap(afterValue as? String)
+        attachText(after, name: "\(subject)-after-native-retry")
+        XCTAssertEqual(after, before, "Native retry must retain every policy coefficient and ledger entry")
+        guard after == before else { throw NSError(domain: "RobotNativeRetryCheckpoint", code: 1) }
+        XCTAssertTrue(replacement.configuration.websiteDataStore === original.configuration.websiteDataStore)
+        try await waitUntil("real saved policy replayed after native retry", timeout: 180) {
+            try await self.truth(replacement, """
+            (() => { const c = document.querySelector('[data-robot-stage-recovery] canvas');
+              const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
+              return gl && !gl.isContextLost() && document.body.textContent.includes('Recovered your') &&
+                [...document.querySelectorAll('button')].some(b => !b.disabled &&
+                  b.textContent.trim() === 'Keep learning · gen \(generation)'); })()
+            """)
+        }
+        try await snapshot(replacement, name: "\(subject)-native-retry-restored-policy")
     }
 
     @MainActor
