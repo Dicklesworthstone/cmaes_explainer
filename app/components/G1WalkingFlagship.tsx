@@ -3944,7 +3944,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               {/* Top Toolbar: Camera & Sears Craftsman Lighting Atmosphere */}
               <div
                 id="g1-hud-controls"
-                className="flex flex-wrap items-center gap-2 pointer-events-auto self-start"
+                className="flex w-full min-w-0 flex-wrap items-center gap-2 pointer-events-auto self-start sm:w-auto"
               >
                 {/* Lighting Atmosphere Selector. Cosmetic only — it changes the
                   sky and exposure, never the physics or the receipt — so it
@@ -3989,8 +3989,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 <div
                   role="group"
                   aria-label="Humanoid camera views"
-                  className={`items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex ${
-                    hudExpanded ? "flex" : "hidden"
+                  className={`w-full min-w-0 grid-cols-5 items-center gap-1 rounded-xl border border-white/10 bg-slate-950/85 p-1 backdrop-blur-md sm:flex sm:w-auto ${
+                    hudExpanded ? "grid" : "hidden"
                   }`}
                 >
                   {(
@@ -4011,10 +4011,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                         onClick={() => setCameraView(cam.id)}
                         aria-label={`${cam.label} camera`}
                         aria-pressed={isSelected}
-                        className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[0.65rem] font-bold transition-all ${
+                        className={`flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border px-1 py-1 text-[0.65rem] font-bold transition-all sm:flex-row sm:px-2 ${
                           isSelected
-                            ? "bg-cyan-500/30 text-cyan-200 border border-cyan-400/40"
-                            : "text-slate-400 hover:text-slate-200"
+                            ? "bg-cyan-500/30 text-cyan-200 border-cyan-400/40"
+                            : "border-transparent text-slate-400 hover:text-slate-200"
                         }`}
                         title={`Switch camera to ${cam.label} view`}
                       >

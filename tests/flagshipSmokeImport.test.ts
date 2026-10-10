@@ -114,10 +114,24 @@ describe("flagship components import without throwing", () => {
       let cameraGroups = 0;
       const parser = new HTMLRewriter()
         .on('[role="group"][aria-label="Humanoid camera views"]', {
-          element() { cameraGroups++; },
+          element(element) {
+            cameraGroups++;
+            // Structural regression only; actual compact-phone geometry is
+            // verified in the exported app, not inferred from these classes.
+            const classes = element.getAttribute("class")!.split(/\s+/);
+            expect(classes).toContain("w-full");
+            expect(classes).toContain("min-w-0");
+            expect(classes).toContain("grid-cols-5");
+            expect(classes).toContain("sm:flex");
+          },
         })
         .on('button[aria-label$=" camera"]', {
           element(element) {
+            const classes = element.getAttribute("class")!.split(/\s+/);
+            expect(classes).toContain("min-h-11");
+            expect(classes).toContain("min-w-0");
+            expect(classes).toContain("flex-col");
+            expect(classes).toContain("sm:flex-row");
             cameras.push({
               label: element.getAttribute("aria-label")!,
               pressed: element.getAttribute("aria-pressed"),
