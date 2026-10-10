@@ -10,6 +10,7 @@ final class FrankenRobotsUITests: XCTestCase {
             NSPredicate(format: "label ==[c] 'Controls' OR label ==[c] 'Hide controls'")
         ).firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 8), app.debugDescription)
+        revealInWebWorkspace(toggle, workspace: app.webViews.firstMatch)
         if toggle.label.caseInsensitiveCompare("Controls") == .orderedSame {
             XCTAssertTrue(toggle.isHittable, app.debugDescription)
             toggle.tap()
@@ -18,6 +19,20 @@ final class FrankenRobotsUITests: XCTestCase {
             ).firstMatch
             XCTAssertTrue(hideControls.waitForExistence(timeout: 5), app.debugDescription)
         }
+    }
+
+    private func openExperimentSetup(in app: XCUIApplication) {
+        let setup = app.buttons["robot-open-experiment-setup"]
+        XCTAssertTrue(setup.isHittable, app.debugDescription)
+        setup.tap()
+        XCTAssertTrue(app.buttons["robot-close-experiment-setup"].waitForExistence(timeout: 5))
+    }
+
+    private func closeExperimentSetup(in app: XCUIApplication) {
+        let done = app.buttons["robot-close-experiment-setup"]
+        XCTAssertTrue(done.isHittable, app.debugDescription)
+        done.tap()
+        XCTAssertTrue(app.buttons["robot-open-experiment-setup"].waitForExistence(timeout: 5))
     }
 
     private func tapVisibleMenuItem(
@@ -54,6 +69,40 @@ final class FrankenRobotsUITests: XCTestCase {
     ) {
         for _ in 0..<swipes where !element.isHittable {
             workspace.swipeUp()
+        }
+    }
+
+    func testFocusedLabsKeepTheirScenesVisibleAboveWebControls() throws {
+        let app = XCUIApplication()
+        app.launch()
+        for (lab, sceneLabel) in [("Humanoid", "Humanoid visualization"), ("Robot Arm", "Arm visualization")] {
+            let selector = app.segmentedControls.buttons[lab]
+            XCTAssertTrue(selector.waitForExistence(timeout: 12), app.debugDescription)
+            if !selector.isSelected { selector.tap() }
+            let status = app.descendants(matching: .any)["robot-engine-status"]
+            let ready = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+            let web = app.webViews.firstMatch
+            let scene = web.descendants(matching: .any)[sceneLabel].firstMatch
+            XCTAssertTrue(scene.waitForExistence(timeout: 12), app.debugDescription)
+            let bounds = scene.frame
+            XCTAssertGreaterThanOrEqual(bounds.height, 180)
+            XCTAssertGreaterThanOrEqual(bounds.minY, web.frame.minY - 2)
+            XCTAssertLessThanOrEqual(bounds.maxY, web.frame.maxY + 2)
+            XCTAssertGreaterThanOrEqual(bounds.minX, web.frame.minX - 2)
+            XCTAssertLessThanOrEqual(bounds.maxX, web.frame.maxX + 2)
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "Focused \(lab) scene before any scrolling"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            // Setup must be discoverable without replacing the loaded owner.
+            openExperimentSetup(in: app)
+            XCTAssertTrue(app.segmentedControls["robot-native-task-picker"].exists)
+            XCTAssertTrue(app.buttons["robot-native-family-picker"].isHittable)
+            closeExperimentSetup(in: app)
+            XCTAssertEqual(scene.frame, bounds)
         }
     }
 
@@ -142,19 +191,27 @@ final class FrankenRobotsUITests: XCTestCase {
         add(recoveredScreenshot)
     }
 
-    private func settledLandscapeScreenshot(on device: XCUIDevice) -> XCUIScreenshot {
-        // A pre-existing XCUI element is not evidence that rotation settled,
-        // and Simulator occasionally drops an orientation request. Retry both
-        // landscape directions, then let the caller assert on rendered pixels.
+    private func settledLandscapeScreenshot(on device: XCUIDevice, in app: XCUIApplication) -> XCUIScreenshot {
+        // UIImage orientation alone can rotate a still-portrait framebuffer.
+        // Wait for the actual wide-layout side inspector beside the stage too.
         var screenshot = XCUIScreen.main.screenshot()
-        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .landscapeLeft]
-        where screenshot.image.size.width <= screenshot.image.size.height {
+        let stage = app.descendants(matching: .any)["robot-stage"]
+        let inspector = app.scrollViews["robot-inspector-scroll"]
+        var consecutiveWideFrames = 0
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .landscapeLeft] {
             device.orientation = orientation
-            for _ in 0..<16 where screenshot.image.size.width <= screenshot.image.size.height {
+            for _ in 0..<16 {
                 Thread.sleep(forTimeInterval: 0.25)
                 screenshot = XCUIScreen.main.screenshot()
+                let sideBySide = inspector.exists && stage.exists &&
+                    inspector.frame.minX >= stage.frame.maxX - 2 &&
+                    abs(inspector.frame.minY - stage.frame.minY) < 30
+                consecutiveWideFrames = sideBySide && screenshot.image.size.width > screenshot.image.size.height
+                    ? consecutiveWideFrames + 1 : 0
+                if consecutiveWideFrames >= 3 { return screenshot }
             }
         }
+        XCTFail("Landscape pixels and side-by-side stage/inspector did not settle")
         return screenshot
     }
 
@@ -257,8 +314,10 @@ final class FrankenRobotsUITests: XCTestCase {
         let frictionCones = app.buttons["FRICTION CONES"]
         let graspCamera = app.descendants(matching: .any)["Grasp Focus camera"]
         XCTAssertTrue(frictionCones.waitForExistence(timeout: 15), app.debugDescription)
+        revealInWebWorkspace(frictionCones, workspace: workspace)
         XCTAssertTrue(frictionCones.isHittable, app.debugDescription)
         XCTAssertTrue(graspCamera.waitForExistence(timeout: 5), app.debugDescription)
+        revealInWebWorkspace(graspCamera, workspace: workspace)
         XCTAssertTrue(graspCamera.isHittable, app.debugDescription)
 
         let armScene = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -480,6 +539,7 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
+        openExperimentSetup(in: app)
         let challenge = app.buttons["robot-native-challenge-picker"]
         let family = app.buttons["robot-native-family-picker"]
         XCTAssertTrue(challenge.isHittable, app.debugDescription)
@@ -493,12 +553,14 @@ final class FrankenRobotsUITests: XCTestCase {
             object: challenge
         )
         XCTAssertEqual(XCTWaiter.wait(for: [terrainSelected], timeout: 8), .completed)
+        closeExperimentSetup(in: app)
         ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
             object: engineStatus
         )
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
+        openExperimentSetup(in: app)
         family.tap()
         let lmCMA = app.buttons["robot-family-lm-cma"].firstMatch
         tapVisibleMenuItem(lmCMA, in: app)
@@ -527,6 +589,7 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [setupReflected], timeout: 8), .completed)
 
+        closeExperimentSetup(in: app)
         let arm = app.segmentedControls.buttons["Robot Arm"]
         XCTAssertTrue(arm.isHittable, app.debugDescription)
         arm.tap()
@@ -536,6 +599,7 @@ final class FrankenRobotsUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
+        openExperimentSetup(in: app)
         let taskPicker = app.segmentedControls["robot-native-task-picker"]
         XCTAssertTrue(taskPicker.waitForExistence(timeout: 5), app.debugDescription)
         let remote = taskPicker.buttons["Remote"]
@@ -546,12 +610,14 @@ final class FrankenRobotsUITests: XCTestCase {
             object: remote
         )
         XCTAssertEqual(XCTWaiter.wait(for: [remoteSelected], timeout: 8), .completed)
+        closeExperimentSetup(in: app)
         ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"),
             object: engineStatus
         )
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
 
+        openExperimentSetup(in: app)
         let armFamily = app.buttons["robot-native-family-picker"]
         XCTAssertTrue(armFamily.isHittable, app.debugDescription)
         armFamily.tap()
@@ -771,7 +837,7 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(stage.waitForExistence(timeout: 8))
         // Assert against the rendered framebuffer because XCUIApplication.frame
         // can remain in portrait coordinates after a real interface rotation.
-        let landscapeFrame = settledLandscapeScreenshot(on: device)
+        let landscapeFrame = settledLandscapeScreenshot(on: device, in: app)
         XCTAssertGreaterThan(landscapeFrame.image.size.width, landscapeFrame.image.size.height)
 
         let landscape = XCTAttachment(screenshot: landscapeFrame)
@@ -970,10 +1036,6 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(kernelReceipt.waitForExistence(timeout: 10), app.debugDescription)
         let originalKernelLabel = kernelReceipt.label
 
-        let nativeLensMenu = app.buttons["robot-native-receipt-lenses"]
-        XCTAssertTrue(nativeLensMenu.waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(nativeLensMenu.isHittable)
-
         let lenses = [
             (
                 menuItem: "robot-receipt-lens-cautious-monk",
@@ -991,9 +1053,13 @@ final class FrankenRobotsUITests: XCTestCase {
 
         var weightedSumLabels = Set<String>()
         for lens in lenses {
+            openExperimentSetup(in: app)
+            let nativeLensMenu = app.buttons["robot-native-receipt-lenses"]
+            XCTAssertTrue(nativeLensMenu.isHittable, app.debugDescription)
             nativeLensMenu.tap()
             let menuItem = app.buttons[lens.menuItem].firstMatch
             tapVisibleMenuItem(menuItem, in: app)
+            closeExperimentSetup(in: app)
 
             XCTAssertTrue(app.descendants(matching: .any).matching(
                 NSPredicate(format: "label CONTAINS[c] %@", lens.status)

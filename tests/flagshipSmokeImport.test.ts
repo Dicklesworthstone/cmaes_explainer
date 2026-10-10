@@ -113,6 +113,18 @@ describe("flagship components import without throwing", () => {
       const cameras: { label: string; pressed: string | null }[] = [];
       let cameraGroups = 0;
       const parser = new HTMLRewriter()
+        .on('[aria-label="Humanoid stage controls"]', {
+          element(element) {
+            const classes = element.getAttribute("class")!.split(/\s+/);
+            expect(classes).toContain(embedded ? "relative" : "absolute");
+            expect(classes.includes("absolute")).toBe(!embedded);
+          },
+        })
+        .on('#g1-robot-stage', {
+          element(element) {
+            expect(element.getAttribute("class")!.includes("order-first")).toBe(embedded);
+          },
+        })
         .on('[role="group"][aria-label="Humanoid camera views"]', {
           element(element) {
             cameraGroups++;
@@ -211,6 +223,7 @@ describe("flagship components import without throwing", () => {
           element(element) {
             visualizations++;
             expect(element.getAttribute("role")).toBe("region");
+            expect(element.getAttribute("class")!.includes("order-first")).toBe(embedded);
           },
         })
         .on('[role="group"][aria-label="Arm camera views"]', {

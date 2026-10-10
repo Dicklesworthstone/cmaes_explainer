@@ -3605,15 +3605,16 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         <div className="space-y-4">
           <div
             className={`glass-card relative overflow-hidden border-cyan-400/15 bg-slate-950/80 ${
-              embedded ? "h-[var(--robot-stage-height,100svh)]" : "min-h-[620px]"
+              embedded ? "flex flex-col" : "min-h-[620px]"
             }`}
           >
-            {/* Top HUD: phones and tablets stack the two clusters so expanded
-                controls cannot squeeze the camera choices. Wide stages use
-                a reserved camera column beside the wrapping mode controls. */}
+            {/* Embedded controls live below the scene, never over the body.
+                Expanding them must not hide the robot or resize its canvas. */}
             <div
-              className={`pointer-events-none absolute z-10 flex flex-col gap-2 ${
-                embedded ? "inset-x-3 top-3" : "inset-x-5 top-5"
+              role="group"
+              aria-label="Humanoid stage controls"
+              className={`pointer-events-none z-10 flex flex-col gap-2 ${
+                embedded ? "relative p-3" : "absolute inset-x-5 top-5"
               } lg:flex-row lg:items-start lg:justify-between`}
             >
               {/* Top Badges & Interactive Mode Bar */}
@@ -3627,7 +3628,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                   onClick={() => setHudExpanded(!hudExpanded)}
                   aria-expanded={hudExpanded}
                   aria-controls="g1-hud-controls"
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
+                  className={`flex min-h-11 items-center gap-1.5 rounded-full border px-3 py-1 text-[0.68rem] font-bold uppercase tracking-wider backdrop-blur-md transition-all ${
                     hudExpanded
                       ? "border-cyan-400 bg-cyan-500/25 text-cyan-100"
                       : "border-white/20 bg-slate-950/80 text-slate-300 hover:text-white"
@@ -4060,7 +4061,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             ) : null}
             {meshState.phase === "failed" ? (
               <div
-                className="absolute bottom-20 left-5 right-5 z-20 flex justify-center"
+                className={`${embedded ? "relative p-3" : "absolute bottom-20 left-5 right-5"} z-20 flex justify-center`}
                 role="alert"
               >
                 <div className="max-w-xl rounded-xl border border-amber-300/20 bg-amber-950/80 px-3 py-2 text-[0.7rem] text-amber-100 shadow-lg backdrop-blur-md">
@@ -4082,10 +4083,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               </div>
             ) : null}
             <div
-              className={`absolute z-10 flex items-center pointer-events-none ${
+              className={`z-10 flex items-center pointer-events-none ${
                 embedded
-                  ? "bottom-3 left-3 right-3 justify-center"
-                  : "bottom-5 left-5 right-5 flex-wrap justify-between gap-2 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
+                  ? "relative order-last justify-center px-3 pb-3"
+                  : "absolute bottom-5 left-5 right-5 flex-wrap justify-between gap-2 max-sm:bottom-3 max-sm:left-3 max-sm:right-3"
               }`}
             >
               <span
@@ -4111,7 +4112,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               role="region"
               aria-label="Humanoid visualization"
               tabIndex={-1}
-              className={embedded ? "h-full w-full" : "h-[620px] w-full"}
+              className={embedded ? "relative order-first h-[min(620px,calc(var(--robot-stage-height,100svh)-5rem))] min-h-[240px] w-full" : "h-[620px] w-full"}
             >
               {shouldMountStage && (
                 <RobotStageRecovery>

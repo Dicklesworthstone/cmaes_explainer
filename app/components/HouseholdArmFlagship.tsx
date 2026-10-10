@@ -967,12 +967,14 @@ function ArmCameraRig({
       // Boom from the object toward the studio corner, shortened by the
       // swept-sphere sweep so the lens never enters the backsplash, the
       // cabinet, or a house wall when the object sits at the counter's back.
-      const lookAt: [number, number, number] = [objectPos[0], objectPos[1], objectPos[2]];
+      // Frame the approach above the workpiece as well as the contact itself.
+      // The former 0.5 m boom cropped the fingers at ordinary tablet aspects.
+      const lookAt: [number, number, number] = [objectPos[0], objectPos[1] + 0.1, objectPos[2]];
       const candidates: [number, number, number][] = [
-        [objectPos[0] + 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32],
-        [objectPos[0] - 0.32, objectPos[1] + 0.22, objectPos[2] + 0.32],
-        [objectPos[0] + 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
-        [objectPos[0] - 0.4, objectPos[1] + 0.26, objectPos[2] - 0.1],
+        [objectPos[0] + 0.7, objectPos[1] + 0.55, objectPos[2] + 0.7],
+        [objectPos[0] - 0.7, objectPos[1] + 0.55, objectPos[2] + 0.7],
+        [objectPos[0] + 0.9, objectPos[1] + 0.65, objectPos[2] - 0.2],
+        [objectPos[0] - 0.9, objectPos[1] + 0.65, objectPos[2] - 0.2],
       ];
       let best = resolveCameraBoom(lookAt, candidates[0], obstacles, 0.06);
       for (let i = 1; i < candidates.length && best.fraction < 0.999; i++) {
@@ -2295,8 +2297,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
     handlePolicyImportRef.current = handlePolicyImport;
   }, [selectTask, handlePolicyImport]);
 
-  return (
-    <div className={embedded ? "space-y-2" : "space-y-8"}>
+  const taskPicker = (
       <div
         className={`glass-card overflow-hidden border-orange-400/15 bg-slate-950/80 ${
           embedded ? "p-1" : "p-2 sm:p-3"
@@ -2345,7 +2346,11 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
           })}
         </div>
       </div>
+  );
 
+  return (
+    <div className={embedded ? "space-y-2" : "space-y-8"}>
+      {!embedded ? taskPicker : null}
       <div
         className={
           embedded ? "block" : "grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,0.55fr)]"
@@ -2357,6 +2362,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               embedded ? "flex flex-col" : "min-h-[570px]"
             }`}
           >
+            {embedded ? taskPicker : null}
             {/* Native controls occupy their own rows, never the robot's pixels. */}
             <div
               role="group"
@@ -2759,7 +2765,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
               ref={stageRef}
               role="region"
               aria-label="Arm visualization"
-              className={embedded ? "h-[min(52svh,420px)] min-h-[240px] w-full" : "h-[570px] w-full"}
+              className={embedded ? "relative order-first h-[min(420px,calc(100svh-5rem))] min-h-[180px] w-full" : "h-[570px] w-full"}
             >
               {shouldMountStage ? (
                 <RobotStageRecovery>

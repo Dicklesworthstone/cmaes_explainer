@@ -8,6 +8,7 @@ struct FrankenRobotsView: View {
     @State private var lab: RobotLab = .humanoid
     @State private var showingDetails = false
     @State private var showingFullLab = false
+    @State private var showingExperimentSetup = false
     @State private var guidePage: RobotGuidePage = .lab
     @State private var receiptDocument: RobotReceiptDocument?
     @State private var showingReceiptExporter = false
@@ -49,6 +50,26 @@ struct FrankenRobotsView: View {
                 RobotLabBackground()
                 if showingFullLab {
                     fullLabWorkspace(compact: geometry.size.width < 680)
+                } else if geometry.size.height < 500 && geometry.size.width > 600 {
+                    // A landscape phone cannot stack desktop chrome above a
+                    // useful canvas. Keep transport and setup in a scrollable
+                    // side rail, preserving the same live WKWebView and owner.
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            labSelector
+                            RobotAppearanceButton(selection: $appearance)
+                            engineStatus
+                        }
+                        HStack(alignment: .top, spacing: 10) {
+                            stage.frame(maxWidth: .infinity, maxHeight: .infinity)
+                            ScrollView {
+                                nativeCommandBar
+                                liveMetricStrip
+                            }
+                            .frame(width: 300)
+                        }
+                    }
+                    .padding(8)
                 } else {
                     VStack(spacing: geometry.size.height < 650 ? 8 : 12) {
                         masthead(compact: geometry.size.height < 650)
@@ -116,6 +137,32 @@ struct FrankenRobotsView: View {
                             Button("Done") { showingDetails = false }
                         }
                     }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingExperimentSetup) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("Choose the physical objective and optimizer before starting a run. The current experiment stays loaded while this panel is open.")
+                            .font(.subheadline)
+                            .foregroundStyle(RobotTheme.secondary)
+                        nativeTaskPicker
+                        nativeExperimentSelectors
+                        if lab == .humanoid { receiptLensMenu }
+                    }
+                    .padding(20)
+                }
+                .background(RobotLabBackground())
+                .navigationTitle("Experiment setup")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showingExperimentSetup = false }
+                            .accessibilityIdentifier("robot-close-experiment-setup")
+                    }
+                }
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -335,42 +382,29 @@ struct FrankenRobotsView: View {
 
     private var nativeCommandBar: some View {
         VStack(spacing: 7) {
-            nativeTaskPicker
-            nativeExperimentSelectors
-            nativeTransportBar
-            Group {
-                if horizontalStatusHasRoom {
-                    HStack(spacing: 10) {
-                        nativeCommandLabel(title: "NATIVE OWNER CONTROL")
-                        Spacer(minLength: 8)
-                        nativeCommandReceipt
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        if lab == .humanoid {
-                            receiptLensMenu
-                        }
-                        overlayMenu
-                        nativeOptimizeButton
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(spacing: 10) {
-                            if lab == .humanoid {
-                                receiptLensMenu
-                            }
-                            overlayMenu
-                            Spacer(minLength: 8)
-                            nativeOptimizeButton
-                        }
-                        nativeCommandReceipt
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            HStack(spacing: 8) {
+                Button {
+                    showingExperimentSetup = true
+                } label: {
+                    Label("Experiment", systemImage: "slider.horizontal.3")
+                        .font(.system(size: RobotTheme.size(9.5), weight: .bold, design: .rounded))
+                        .frame(minHeight: 38)
                 }
+                .buttonStyle(.bordered)
+                .tint(lab.accent)
+                .accessibilityIdentifier("robot-open-experiment-setup")
+                .accessibilityHint("Physical objective, challenge, optimizer, run setup, and receipt analysis")
+                overlayMenu
+                Spacer(minLength: 0)
+                nativeOptimizeButton
             }
+            nativeTransportBar
+            nativeCommandReceipt
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, horizontalStatusHasRoom && lab != .humanoid ? 0 : 8)
+        .padding(.vertical, 8)
         .frame(minHeight: 44)
         .background(RobotTheme.panel.opacity(0.82), in: RoundedRectangle(cornerRadius: 14))
     }
