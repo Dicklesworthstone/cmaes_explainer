@@ -571,6 +571,70 @@ private extension JSONDecoder {
 /// No synthetic context-loss events or replacement policy/worker implementations are used.
 final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     @MainActor
+    func testArmGraspFocusAtFinalOwnerSample() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
+        try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        NotificationCenter.default.post(name: .selectRobotLab, object: RobotLab.arm)
+        try await waitUntil("Arm navigation") { self.appWebView()?.url?.absoluteString.contains(RobotLab.arm.route) == true }
+        let web = try XCTUnwrap(appWebView())
+        try await waitUntil("Arm owner trace and camera controls", timeout: 180) {
+            try await self.truth(web, """
+            (() => { const position = document.querySelector('input[aria-label="Arm trace position"]');
+              return position && !position.disabled && Number(position.max) === 180 &&
+                !!document.querySelector('button[aria-label="Grasp Focus camera"]') && !!document.querySelector('canvas'); })()
+            """)
+        }
+        let installed = try await truth(web, """
+        (() => {
+          const canvas = document.querySelector('[data-robot-stage-recovery] canvas');
+          const gl = canvas?.getContext('webgl2');
+          if (!gl) return false;
+          const programs = new Set(), original = gl.useProgram;
+          gl.useProgram = function(program) { if (program) programs.add(program); return original.call(this, program); };
+          window.__robotProjectionProbe = { frames: 0, programs, gl, original };
+          const tick = () => { const p = window.__robotProjectionProbe; if (p && p.frames++ < 150) requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+          const send = (command, extra = {}) => window.__frankenrobotsReceiveNativeCommand({type:'engine.command',schemaVersion:1,commandId:'projection-'+command,lab:'arm',command,...extra});
+          send('pause'); send('seek', {sampleIndex:180}); send('set-camera', {camera:'microscope'});
+          send('set-overlay', {overlay:'friction-cones', enabled:true});
+          return true;
+        })()
+        """)
+        addTeardownBlock { @MainActor [weak web] in
+            _ = try? await web?.evaluateJavaScript("""
+            (() => { const p = window.__robotProjectionProbe;
+              if (p) p.gl.useProgram = p.original;
+              delete window.__robotProjectionProbe; return true; })()
+            """)
+        }
+        XCTAssertTrue(installed)
+        try await waitUntil("owner reached the final requested sample") {
+            try await self.truth(web, "document.querySelector('input[aria-label=\"Arm trace position\"]')?.value === '180'")
+        }
+        for frame in [1, 30, 120] {
+            try await waitUntil("native rendered projection frames") {
+                try await self.truth(web, "window.__robotProjectionProbe.frames >= \(frame)")
+            }
+            let closeUpReady = try await truth(web, """
+            !window.__robotProjectionProbe.gl.isContextLost() &&
+            window.__robotProjectionProbe.programs.size > 0 &&
+            document.querySelector('button[aria-label="Grasp Focus camera"]')?.getAttribute('aria-pressed') === 'true' &&
+            document.querySelector('input[aria-label="Arm trace position"]')?.value === '180'
+            """)
+            XCTAssertTrue(closeUpReady, "Final owner pose, selected close-up and live graphics must remain intact")
+            let matrices = try await web.evaluateJavaScript("""
+            JSON.stringify([...window.__robotProjectionProbe.programs].filter(program => window.__robotProjectionProbe.gl.isProgram(program)).map(program => {
+              const gl = window.__robotProjectionProbe.gl;
+              const read = name => { const location = gl.getUniformLocation(program, name); return location ? Array.from(gl.getUniform(program, location)) : null; };
+              return {projection: read('projectionMatrix'), view: read('viewMatrix')};
+            }))
+            """)
+            attachText(String(describing: matrices), name: "arm-close-up-\(frame)-projection")
+            try await snapshot(web, name: "arm-close-up-\(frame)-rendered-frames")
+        }
+    }
+
+    @MainActor
     func testHumanoidRetainsLearningAcrossActualGraphicsLoss() async throws {
         try await verifyRecovery(lab: .humanoid, subject: "g1", policyCount: 5_040)
     }
@@ -788,6 +852,15 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
 
     @MainActor
     private func snapshot(_ web: WKWebView, name: String) async throws {
+        let geometry = try await web.evaluateJavaScript("""
+        JSON.stringify([...document.querySelectorAll('[data-robot-stage-recovery] canvas')].map(c => ({
+          canvas: c.getBoundingClientRect().toJSON(), backing: [c.width, c.height],
+          viewport: [innerWidth, innerHeight],
+          ancestors: [...(function* () { for (let p=c.parentElement; p; p=p.parentElement) yield p; })()]
+            .map(p => ({tag:p.tagName, classes:p.className, rect:p.getBoundingClientRect().toJSON()}))
+        })))
+        """)
+        if let geometry = geometry as? String { attachText(geometry, name: "\(name)-canvas-geometry") }
         let image = try await web.takeSnapshot(configuration: nil)
         let attachment = XCTAttachment(image: image)
         attachment.name = name

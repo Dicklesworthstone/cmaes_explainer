@@ -920,6 +920,7 @@ function ArmCameraRig({
   const lookAtRef = useRef(new THREE.Vector3(0, 0.45, 0));
   const controlsRef = useRef<any>(null);
   const studioTarget = useRef<THREE.Vector3 | null>(null);
+  const previousMode = useRef<ArmCameraMode | null>(null);
   // Re-entering the studio orbit from a top-down or free-fly camera would
   // otherwise leave the orbit parked wherever that camera ended; glide
   // back to the authored studio corner instead.
@@ -931,6 +932,8 @@ function ArmCameraRig({
     }
   }, [cameraMode]);
   useFrame(({ camera, size }, rawDelta) => {
+    const enteringGraspFocus = cameraMode === "microscope" && previousMode.current !== cameraMode;
+    previousMode.current = cameraMode;
     const dt = Math.min(Math.max(rawDelta, 0), 0.1);
     const ease = (rate: number) => 1 - Math.exp(-rate * dt);
     const minimumFov = robotCameraVerticalFov(38, size.width, size.height);
@@ -959,8 +962,16 @@ function ArmCameraRig({
       // The former 0.5 m boom cropped the fingers at ordinary tablet aspects.
       const best = armGraspCameraBoom(objectPos, obstacles);
       armCameraScratchVec.set(...best.position);
-      camera.position.lerp(armCameraScratchVec, ease(4));
-      lookAtRef.current.lerp(new THREE.Vector3(...best.lookAt), ease(6));
+      // Only the destination boom is collision-checked; a fly-through can
+      // cross intervening furniture even when the close-up itself is clear.
+      // Cut to the safe close-up on entry, then keep smooth owner-pose tracking.
+      if (enteringGraspFocus) {
+        camera.position.copy(armCameraScratchVec);
+        lookAtRef.current.set(...best.lookAt);
+      } else {
+        camera.position.lerp(armCameraScratchVec, ease(4));
+        lookAtRef.current.lerp(new THREE.Vector3(...best.lookAt), ease(6));
+      }
       camera.lookAt(lookAtRef.current);
       if (camera instanceof THREE.PerspectiveCamera) {
         const fittedFov = armGraspCameraFov(camera, workpiecePos, wristPos, minimumFov);
