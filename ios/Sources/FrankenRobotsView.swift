@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 struct FrankenRobotsView: View {
     @AppStorage(RobotAppearance.storageKey) private var appearance = RobotAppearance.dark.rawValue
     @AppStorage(RobotTheme.textScaleStorageKey) private var textScale = RobotTheme.defaultTextScale
-    @StateObject private var engine = RobotEngineHost()
-    @State private var lab: RobotLab = .humanoid
+    @StateObject private var engine: RobotEngineHost
+    private var lab: RobotLab { engine.selectedLab }
     @State private var showingDetails = false
     @State private var showingFullLab = false
     @State private var showingExperimentSetup = false
@@ -23,12 +23,13 @@ struct FrankenRobotsView: View {
     @State private var showingOverlaySelection = false
 
     init() {
+        var initialLab: RobotLab = .humanoid
 #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if let rawLab = environment["FROBOTS_INITIAL_LAB"],
            let requestedLab = RobotLab(rawValue: rawLab.lowercased())
         {
-            _lab = State(initialValue: requestedLab)
+            initialLab = requestedLab
         }
         if environment["FROBOTS_SHOW_GUIDE"] == "1" {
             _showingDetails = State(initialValue: true)
@@ -41,6 +42,7 @@ struct FrankenRobotsView: View {
             _guidePage = State(initialValue: requestedPage)
         }
 #endif
+        _engine = StateObject(wrappedValue: RobotEngineHost(initialLab: initialLab))
     }
 
     var body: some View {
@@ -87,15 +89,13 @@ struct FrankenRobotsView: View {
                 }
             }
         }
-        .onChange(of: lab) { _, value in
+        .onChange(of: lab) { _, _ in
             guidePage = .lab
             scrubIndex = nil
-            engine.select(value)
         }
-        .task { engine.select(lab) }
         .onReceive(NotificationCenter.default.publisher(for: .selectRobotLab)) { note in
             guard let value = note.object as? RobotLab else { return }
-            lab = value
+            engine.select(value)
         }
         .onReceive(NotificationCenter.default.publisher(for: .reloadRobotEngine)) { _ in
             engine.reload()
@@ -268,7 +268,10 @@ struct FrankenRobotsView: View {
 
     private var labSelector: some View {
         HStack(spacing: 10) {
-            Picker("Robot laboratory", selection: $lab) {
+            Picker("Robot laboratory", selection: Binding(
+                get: { engine.selectedLab },
+                set: { engine.select($0) }
+            )) {
                 ForEach(RobotLab.allCases) { item in
                     Label(item.title, systemImage: item.symbol).tag(item)
                 }
@@ -327,7 +330,10 @@ struct FrankenRobotsView: View {
                 .accessibilityIdentifier("robot-close-full-lab")
                 .accessibilityHint("Returns to the focused native stage without changing the running owner")
 
-                Picker("Robot laboratory", selection: $lab) {
+                Picker("Robot laboratory", selection: Binding(
+                    get: { engine.selectedLab },
+                    set: { engine.select($0) }
+                )) {
                     ForEach(RobotLab.allCases) { item in
                         Text(item.shortTitle).tag(item)
                     }

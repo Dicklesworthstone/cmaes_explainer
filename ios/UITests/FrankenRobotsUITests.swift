@@ -22,6 +22,11 @@ final class FrankenRobotsUITests: XCTestCase {
     }
 
     private func openExperimentSetup(in app: XCUIApplication) {
+#if targetEnvironment(macCatalyst)
+        // Make foreground ownership explicit before checking Mac pointer
+        // hittability; retain the hit-test assertion and the real tap.
+        app.activate()
+#endif
         let setup = app.buttons["robot-open-experiment-setup"]
         XCTAssertTrue(setup.isHittable, app.debugDescription)
         setup.tap()
@@ -86,6 +91,10 @@ final class FrankenRobotsUITests: XCTestCase {
     func testFocusedLabsKeepTheirScenesVisibleAboveWebControls() throws {
         let app = XCUIApplication()
         app.launch()
+#if targetEnvironment(macCatalyst)
+        app.activate()
+        XCTAssertEqual(app.state, .runningForeground)
+#endif
         for (lab, sceneLabel) in [("Humanoid", "Humanoid visualization"), ("Robot Arm", "Arm visualization")] {
             let selector = app.segmentedControls.buttons[lab]
             XCTAssertTrue(selector.waitForExistence(timeout: 12), app.debugDescription)
@@ -106,7 +115,7 @@ final class FrankenRobotsUITests: XCTestCase {
             XCTAssertLessThanOrEqual(bounds.maxY, web.frame.maxY + 2)
             XCTAssertGreaterThanOrEqual(bounds.minX, web.frame.minX - 2)
             XCTAssertLessThanOrEqual(bounds.maxX, web.frame.maxX + 2)
-            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "Focused \(lab) scene before any scrolling"
             screenshot.lifetime = .keepAlways
             add(screenshot)

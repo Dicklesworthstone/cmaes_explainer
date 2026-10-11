@@ -847,6 +847,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var commandDetail: String?
 
     @Published private(set) var webView: WKWebView
+    // The selector, menu commands and startup all share this one authority.
+    // A delayed view task must not restore an earlier lab over a newer choice.
+    @Published private(set) var selectedLab: RobotLab
 
     // Retain the private session across execution-container replacement. A new
     // nonpersistent store per retry discards the owners' saved policies/ledgers
@@ -854,7 +857,6 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     private let websiteDataStore: WKWebsiteDataStore
     private var server: LoopbackEngineServer?
     private var baseURL: URL?
-    private var selectedLab: RobotLab = .humanoid
     private var activeNavigation: WKNavigation?
     private var readinessTimeoutTask: Task<Void, Never>?
     private var readinessDeadline = RobotReadinessDeadline()
@@ -881,7 +883,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         ProcessInfo.processInfo.environment["FROBOTS_FORCE_WEBCONTENT_TERMINATION_ONCE"] == "1"
 #endif
 
-    override init() {
+    init(initialLab: RobotLab = .humanoid) {
+        selectedLab = initialLab
         let dataStore = WKWebsiteDataStore.nonPersistent()
         websiteDataStore = dataStore
         webView = Self.makeWebView(websiteDataStore: dataStore)
@@ -926,6 +929,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     }
 
     func select(_ lab: RobotLab) {
+        // Selecting the current lab is not Reload Engine: keep its document,
+        // active optimizer, camera and unsaved learning state intact.
+        guard lab != selectedLab else { return }
         selectedLab = lab
         loadSelectedLab()
     }

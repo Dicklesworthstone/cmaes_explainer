@@ -571,6 +571,41 @@ private extension JSONDecoder {
 /// No synthetic context-loss events or replacement policy/worker implementations are used.
 final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     @MainActor
+    func testReselectingCurrentLabPreservesLiveLearning() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
+        try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        NotificationCenter.default.post(name: .selectRobotLab, object: RobotLab.arm)
+        try await waitUntil("Arm navigation") {
+            self.appWebView()?.url?.absoluteString.contains(RobotLab.arm.route) == true
+        }
+        let web = try XCTUnwrap(appWebView())
+        let host = try XCTUnwrap(web.navigationDelegate as? RobotEngineHost)
+        try await waitUntil("real Arm owner ready", timeout: 180) { host.phase == .ready }
+        XCTAssertTrue(host.supportsOptimize)
+        host.optimize()
+        addTeardownBlock { @MainActor [weak web] in
+            guard let web else { return }
+            try? await self.stopLearning(web)
+        }
+        try await waitUntil("live owner learning", timeout: 180) {
+            host.phase == .running && (host.metrics.generation ?? -1) >= 2
+        }
+        let generation = try XCTUnwrap(host.metrics.generation)
+        _ = try await web.evaluateJavaScript("window.__robotSelectionDocument = document; true")
+        host.select(.arm)
+        XCTAssertEqual(host.phase, .running, "Reselecting the current lab must not restart its engine")
+        XCTAssertGreaterThanOrEqual(host.metrics.generation ?? -1, generation)
+        guard host.phase == .running else { return }
+        try await waitUntil("same optimizer continues after reselection", timeout: 180) {
+            host.phase == .running && (host.metrics.generation ?? -1) > generation
+        }
+        let sameDocument = try await truth(web, "window.__robotSelectionDocument === document")
+        XCTAssertTrue(sameDocument, "Reselection must preserve the document and its live worker")
+        try await stopLearning(web)
+        try await snapshot(web, name: "reselected-arm-keeps-live-learning")
+    }
+
+    @MainActor
     func testArmGraspFocusAtFinalOwnerSample() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
         try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
@@ -762,6 +797,9 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             try await waitUntil("real owner and stage ready", timeout: 180) {
                 try await self.truth(web, """
                 (() => {
+                  // WKWebView.url can change before its predecessor document
+                  // is replaced. Never install probes into the outgoing lab.
+                  if (location.pathname !== '\(lab.route)' || document.readyState !== 'complete') return false;
                   const c = document.querySelector('[data-robot-stage-recovery] canvas');
                   return c && c.width > 0 && c.height > 0 && [...document.querySelectorAll('button')]
                     .some(b => !b.disabled && /^(Start learning|Keep learning · gen)/.test(b.textContent.trim()));
