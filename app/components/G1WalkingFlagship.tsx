@@ -2820,48 +2820,6 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     pendingShareRef.current = policyFragmentFromHash(window.location.hash);
   }, []);
 
-  // Recover a run the tab was in the middle of. A share link in the URL is an
-  // explicit request and outranks whatever was left in storage.
-  useEffect(() => {
-    if (!policyBaseline || pendingShareRef.current) return;
-    if (recoveryAttemptedRef.current) return;
-    const saved = loadTrainingSession(
-      policyBaseline.length,
-      "g1",
-      undefined,
-      taskRef.current,
-      challengeRef.current,
-    );
-    if (!saved) {
-      recoveryAttemptedRef.current = true;
-      return;
-    }
-    if (saved.kernelVersion !== FRANKENSIM_OWNER_KERNEL_VERSION) {
-      return;
-    }
-    let active = true;
-    // Deferred: setting state synchronously inside an effect cascades renders,
-    // and nothing here needs to land before the browser paints.
-    queueMicrotask(() => {
-      if (!active) return;
-      try {
-        handlePolicyImport(saved);
-      } catch (error) {
-        setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
-        return;
-      }
-      trainingSecondsRef.current = saved.trainingSeconds;
-      setTrainingSeconds(saved.trainingSeconds);
-      setLedger(saved.ledger.slice());
-      setRestoredNotice(
-        `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Learning continues from it.`,
-      );
-    });
-    return () => {
-      active = false;
-    };
-  }, [policyBaseline, handlePolicyImport]);
-
   useEffect(() => {
     const fragment = pendingShareRef.current;
     if (!fragment || !policyBaseline) return;
@@ -3318,6 +3276,39 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         if (embedded) {
           saveNativeTrainingSelection("g1", policyMeta.task, policyMeta.challenge);
         }
+        // Resolve automatic recovery before publishing the temporary seed as
+        // ready. A deferred effect previously exposed controls whose accepted
+        // playback changes were immediately reset by the saved-policy import.
+        // Explicit shares still outrank the per-experiment storage slot.
+        if (message.baseline && !pendingShareRef.current && !recoveryAttemptedRef.current) {
+          recoveryAttemptedRef.current = true;
+          const saved = loadTrainingSession(
+            message.baseline.length,
+            "g1",
+            undefined,
+            message.admission.config.task,
+            message.admission.config.challenge,
+          );
+          if (saved?.kernelVersion === FRANKENSIM_OWNER_KERNEL_VERSION) {
+            inFlightRef.current = false;
+            try {
+              handlePolicyImport(saved);
+              setPolicyBaseline(message.baseline);
+              trainingSecondsRef.current = saved.trainingSeconds;
+              setTrainingSeconds(saved.trainingSeconds);
+              setLedger(saved.ledger.slice());
+              setRestoredNotice(
+                `Recovered your run from ${describeAge(saved.savedAt)} — generation ${saved.generation.toLocaleString()}. Learning continues from it.`,
+              );
+              setStatus("Restoring your saved policy through the physical owner…");
+              return;
+            } catch (error) {
+              // Rejection must keep the actual curriculum receipt below usable
+              // without replacing the incompatible saved archive.
+              setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
+            }
+          }
+        }
         setAdmission(message.admission);
         setScene(message.scene);
         robotDragOffsetRef.current = message.scene.seat;
@@ -3453,7 +3444,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated, seekPlayback, embedded]);
+  }, [workerActivated, seekPlayback, embedded, handlePolicyImport]);
 
   useEffect(() => {
     if (!embedded) return;

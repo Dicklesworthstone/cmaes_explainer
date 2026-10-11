@@ -574,6 +574,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     func testArmGraspFocusAtFinalOwnerSample() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
         try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        try await observeOwnerTransitions(XCTUnwrap(appWebView()))
         NotificationCenter.default.post(name: .selectRobotLab, object: RobotLab.arm)
         try await waitUntil("Arm navigation") { self.appWebView()?.url?.absoluteString.contains(RobotLab.arm.route) == true }
         let web = try XCTUnwrap(appWebView())
@@ -622,6 +623,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             document.querySelector('input[aria-label="Arm trace position"]')?.value === '180'
             """)
             XCTAssertTrue(closeUpReady, "Final owner pose, selected close-up and live graphics must remain intact")
+            try await attachOwnerTransitions(web, name: "arm-close-up-\(frame)-owner-transitions")
             let matrices = try await web.evaluateJavaScript("""
             JSON.stringify([...window.__robotProjectionProbe.programs].filter(program => window.__robotProjectionProbe.gl.isProgram(program)).map(program => {
               const gl = window.__robotProjectionProbe.gl;
@@ -645,6 +647,94 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testArmPublishesReadyOnlyAfterSavedPolicyRecovery() async throws {
+        try await verifySavedPolicyReadiness(lab: .arm, subject: "arm", policyCount: 128)
+    }
+
+    @MainActor
+    func testHumanoidPublishesReadyOnlyAfterSavedPolicyRecovery() async throws {
+        try await verifySavedPolicyReadiness(lab: .humanoid, subject: "g1", policyCount: 5_040)
+    }
+
+    @MainActor
+    private func verifySavedPolicyReadiness(lab: RobotLab, subject: String, policyCount: Int) async throws {
+        // Create the checkpoint with the real optimizer and first prove that it
+        // survives both graphics loss and native WebView replacement.
+        try await verifyRecovery(lab: lab, subject: subject, policyCount: policyCount)
+        let web = try XCTUnwrap(appWebView())
+        try await observeOwnerTransitions(web)
+        _ = web.reload()
+        try await waitUntil("saved \(subject) policy restored after reload", timeout: 180) {
+            try await self.truth(web, """
+            location.pathname.includes('\(lab.route)') &&
+            document.body.textContent.includes('Recovered your') &&
+            [...document.querySelectorAll('button')].some(b => !b.disabled && /^Keep learning · gen/.test(b.textContent.trim())) &&
+            window.__robotOwnerTransitions?.events.some(e => e.kind === 'trace' && e.generation > 0)
+            """)
+        }
+        try await attachOwnerTransitions(web, name: "\(subject)-restoration-readiness")
+        let readyOnlyAfterRestore = try await truth(web, """
+        (() => {
+          const ready = window.__robotOwnerTransitions.events.filter(e => e.message?.type === 'engine.status' && e.message.state === 'ready');
+          return ready.length > 0 && ready.every(e => e.message.metrics.generation > 0);
+        })()
+        """)
+        XCTAssertTrue(readyOnlyAfterRestore, "Saved-policy recovery must finish before advertising an interactive generation-zero curriculum")
+    }
+
+    @MainActor
+    func testArmRejectedSavedPolicyKeepsVerifiedCurriculumUsable() async throws {
+        try await verifyRejectedSavedPolicy(lab: .arm, subject: "arm", policyCount: 128)
+    }
+
+    @MainActor
+    func testHumanoidRejectedSavedPolicyKeepsVerifiedCurriculumUsable() async throws {
+        try await verifyRejectedSavedPolicy(lab: .humanoid, subject: "g1", policyCount: 5_040)
+    }
+
+    @MainActor
+    private func verifyRejectedSavedPolicy(lab: RobotLab, subject: String, policyCount: Int) async throws {
+        try await verifyRecovery(lab: lab, subject: subject, policyCount: policyCount)
+        let web = try XCTUnwrap(appWebView())
+        // Negative input in this test host's private data store: retain the real
+        // learned coefficients but declare an incompatible owner revision.
+        let value = try await web.evaluateJavaScript("""
+        (() => {
+          const candidates = Object.keys(localStorage)
+            .filter(k => k.startsWith('cmaes.\(subject).') && k.endsWith('.training-session.v2'))
+            .map(key => ({key, before: localStorage.getItem(key), saved: JSON.parse(localStorage.getItem(key))}))
+            .filter(row => row.saved.generation > 0 && row.saved.experiment)
+            .sort((a, b) => b.saved.savedAt - a.saved.savedAt);
+          if (!candidates.length) throw new Error('No real learned \(subject) checkpoint');
+          const row = candidates[0];
+          row.saved.experiment.ownerSourceRevision = '0'.repeat(40);
+          const rejected = JSON.stringify(row.saved);
+          localStorage.setItem(row.key, rejected);
+          return JSON.stringify({key: row.key, before: row.before, rejected});
+        })()
+        """)
+        let archive = try XCTUnwrap(value as? String)
+        addTeardownBlock { @MainActor [weak web] in
+            _ = try? await web?.evaluateJavaScript("(() => { const row = \(archive); localStorage.setItem(row.key, row.before); return true; })()")
+        }
+        _ = web.reload()
+        try await waitUntil("rejected archive leaves a usable verified curriculum", timeout: 180) {
+            try await self.truth(web, """
+            (() => {
+              const c = document.querySelector('[data-robot-stage-recovery] canvas');
+              const gl = c?.getContext('webgl2') ?? c?.getContext('webgl');
+              return location.pathname.includes('\(lab.route)') && gl && !gl.isContextLost() &&
+                document.body.textContent.includes('This exact experiment requires a different owner artifact.') &&
+                [...document.querySelectorAll('button')].some(b => !b.disabled && /^Start learning$/.test(b.textContent.trim()));
+            })()
+            """)
+        }
+        let preserved = try await truth(web, "(() => { const row = \(archive); return localStorage.getItem(row.key) === row.rejected; })()")
+        XCTAssertTrue(preserved, "A refused saved experiment must not be overwritten by the fallback curriculum")
+        try await snapshot(web, name: "\(subject)-rejected-policy-verified-curriculum")
+    }
+
+    @MainActor
     func testNonDefaultHumanoidRetainsLearningAcrossNativeRetry() async throws {
         try await verifyRecovery(lab: .humanoid, subject: "g1", policyCount: 5_040, nonDefault: true)
     }
@@ -662,6 +752,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             "Requires explicit native graphics test opt-in and Simulator audio preflight."
         )
         try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        try await observeOwnerTransitions(XCTUnwrap(appWebView()))
         NotificationCenter.default.post(name: .selectRobotLab, object: lab)
         try await waitUntil("selected lab navigation") {
             self.appWebView()?.url?.absoluteString.contains(lab.route) == true
@@ -982,6 +1073,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
 
     @MainActor
     private func click(_ web: WKWebView, matching pattern: String) async throws {
+        try await attachOwnerTransitions(web, name: "before-control-\(pattern)")
         let clicked = try await truth(web, """
         (() => {
           const b = window.__robotNativeRecoveryProbe.button(/\(pattern)/);
@@ -1008,6 +1100,76 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     @MainActor
     private func truth(_ web: WKWebView, _ script: String) async throws -> Bool {
         try await web.evaluateJavaScript("Boolean(\(script))") as? Bool == true
+    }
+
+    /// Observation only: retain the real worker, bridge and all acceptance predicates.
+    /// WKWebView.url can describe a provisional navigation while JavaScript still
+    /// executes in its predecessor, so capture both identities at each command.
+    @MainActor
+    private func observeOwnerTransitions(_ web: WKWebView) async throws {
+        let source = """
+        (() => {
+          if (window.__robotOwnerTransitions) return true;
+          const events = [];
+          const record = (kind, data) => {
+            events.push({time: performance.now(), kind, url: location.href, ...data});
+            if (events.length > 512) events.shift();
+          };
+          const NativeWorker = window.Worker;
+          const ObservedWorker = class extends NativeWorker {
+            constructor(...args) {
+              super(...args);
+              this.addEventListener('message', event => {
+                const m = event.data;
+                if (m?.type === 'trace') record('trace', {
+                  generation: m.generation, family: m.family,
+                  task: m.admission?.config?.task, continuing: m.continuing
+                });
+              });
+            }
+          };
+          window.Worker = ObservedWorker;
+          const bridge = window.webkit?.messageHandlers?.frankenrobots;
+          const post = bridge?.postMessage;
+          const observedPost = function(message) {
+            record('bridge', {message});
+            return post.call(this, message);
+          };
+          if (post) bridge.postMessage = observedPost;
+          window.__robotOwnerTransitions = {events, restore: () => {
+            if (window.Worker === ObservedWorker) window.Worker = NativeWorker;
+            if (bridge?.postMessage === observedPost) bridge.postMessage = post;
+          }};
+          record('installed', {});
+          return true;
+        })()
+        """
+        let script = WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        let controller = web.configuration.userContentController
+        controller.addUserScript(script)
+        _ = try await web.evaluateJavaScript(source)
+        addTeardownBlock { @MainActor [weak web] in
+            if let web {
+                try? await self.attachOwnerTransitions(web, name: "final-owner-transitions")
+                _ = try? await web.evaluateJavaScript("window.__robotOwnerTransitions?.restore(); delete window.__robotOwnerTransitions; true")
+            }
+            let retained = controller.userScripts.filter { $0 !== script }
+            controller.removeAllUserScripts()
+            retained.forEach { controller.addUserScript($0) }
+        }
+    }
+
+    @MainActor
+    private func attachOwnerTransitions(_ web: WKWebView, name: String) async throws {
+        let value = try await web.evaluateJavaScript("""
+        JSON.stringify({url: location.href, readyState: document.readyState,
+          position: document.querySelector('input[aria-label="Arm trace position"]')?.value,
+          buttons: [...document.querySelectorAll('button')].map(b => ({
+            text: b.textContent.trim(), label: b.getAttribute('aria-label'), disabled: b.disabled
+          })), events: window.__robotOwnerTransitions?.events ?? []})
+        """)
+        let json = try XCTUnwrap(value as? String)
+        attachText("WKWebView URL: \(web.url?.absoluteString ?? "nil")\n\(json)", name: name)
     }
 
     @MainActor

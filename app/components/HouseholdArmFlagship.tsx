@@ -1675,6 +1675,67 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         if (embedded) {
           saveNativeTrainingSelection("arm", message.admission.config.task, "household");
         }
+        const policyMeta: SharedPolicyMeta = {
+          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
+          task: message.admission.config.task,
+          challenge: "household",
+          family: message.family === "curriculum" ? familyRef.current : message.family,
+          sigma: message.sigma,
+          generation: message.generation,
+          experiment: message.experiment,
+        };
+        if (message.family === "curriculum" && message.policy) {
+          // Keep Curriculum available after recovery, but do not advertise its
+          // temporary generation-zero trace as ready while a saved run is pending.
+          setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
+        }
+        if (!recoveryAttemptedRef.current && message.policy && !pendingShareRef.current) {
+          recoveryAttemptedRef.current = true;
+          const saved = loadTrainingSession<ArmLedgerPoint>(
+            message.policy.length,
+            "arm",
+            (point): point is ArmLedgerPoint =>
+              !!point && typeof point === "object" &&
+              typeof (point as ArmLedgerPoint).generation === "number" &&
+              Number.isFinite((point as ArmLedgerPoint).generation) &&
+              Number.isFinite((point as ArmLedgerPoint).placementErrorMeters) &&
+              Number.isFinite((point as ArmLedgerPoint).energyJoules),
+            message.admission.config.task,
+            "household",
+          );
+          const restore = handlePolicyImportRef.current;
+          if (saved && restore && isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION,
+            message.admission.config.task, "household")) {
+            // This preview has finished. Hand its admission directly to the
+            // saved-policy replay without a ready -> loading effect/microtask gap.
+            // Otherwise an accepted pause/seek or task tap can be overwritten by
+            // the later automatic import, making the controls appear unreliable.
+            inFlightRef.current = false;
+            setStatus("Restoring your saved policy through the physical owner…");
+            const curriculumPolicy = message.policy;
+            void restore(saved, saved).catch((error: unknown) => {
+              if (!active) return;
+              setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
+              // A refused archive must not strand the operator on an empty
+              // stage. This is the real curriculum receipt we already received,
+              // not a substituted replay of the rejected saved experiment.
+              setTrace(message.trace);
+              setAdmission(message.admission);
+              setStagePolicy(curriculumPolicy);
+              setStagePolicyMeta(policyMeta);
+              setActiveTrace(message.family);
+              setGeneration(message.generation);
+              setBestObjective(message.trace.objective);
+              setSearchSigma(message.sigma);
+              setLedger((previous) => appendArmLedgerPoint(previous, armLedgerPoint(message.trace, message.generation)));
+              seekPlayback(0);
+              setStatus("Saved policy could not be restored; the verified curriculum remains available.");
+              setBusy(null);
+              inFlightRef.current = false;
+            });
+            return;
+          }
+        }
         const pendingImport = pendingImportRef.current;
         if (pendingImport) {
           // The worker has verified the exact task configuration AND replayed
@@ -1708,19 +1769,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         setTrace(message.trace);
         setAdmission(message.admission);
         seekPlayback(0);
-        const policyMeta: SharedPolicyMeta = {
-          kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
-          task: message.admission.config.task,
-          challenge: "household",
-          family: message.family === "curriculum" ? familyRef.current : message.family,
-          sigma: message.sigma,
-          generation: message.generation,
-          experiment: message.experiment,
-        };
         setSearchSigma(message.sigma);
-        if (message.family === "curriculum" && message.policy) {
-          setCurriculumReplay({ trace: message.trace, policy: message.policy, meta: policyMeta });
-        }
         setActiveTrace(message.family);
         setGeneration(message.generation);
         setBestObjective(message.trace.objective);
@@ -1930,44 +1979,6 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
         pendingShareRef.current = null;
         setError(error instanceof Error ? error.message : "This share link could not be read.");
       });
-    return () => {
-      active = false;
-    };
-  }, [stagePolicy]);
-
-  // Recover a run the tab was in the middle of, once the owner has told us how
-  // long a policy is. Guarded by a ref so a re-render cannot restore twice.
-  useEffect(() => {
-    if (recoveryAttemptedRef.current || !stagePolicy) return;
-    // An explicit link outranks whatever storage happens to hold.
-    if (pendingShareRef.current) return;
-    recoveryAttemptedRef.current = true;
-    const saved = loadTrainingSession<ArmLedgerPoint>(
-      stagePolicy.length,
-      "arm",
-      (point): point is ArmLedgerPoint =>
-        !!point &&
-        typeof point === "object" &&
-        typeof (point as ArmLedgerPoint).generation === "number" &&
-        Number.isFinite((point as ArmLedgerPoint).generation) &&
-        Number.isFinite((point as ArmLedgerPoint).placementErrorMeters) &&
-        Number.isFinite((point as ArmLedgerPoint).energyJoules),
-      taskRef.current,
-      "household",
-    );
-    if (!saved) return;
-    if (!isResumable(saved, FRANKENSIM_OWNER_KERNEL_VERSION, taskRef.current, "household")) {
-      return;
-    }
-    let active = true;
-    // Deferred: setting state synchronously inside an effect cascades renders.
-    queueMicrotask(() => {
-      if (!active) return;
-      void handlePolicyImportRef.current?.(saved, saved).catch((error: unknown) => {
-        if (!active) return;
-        setError(error instanceof Error ? error.message : "Could not restore the saved policy.");
-      });
-    });
     return () => {
       active = false;
     };
