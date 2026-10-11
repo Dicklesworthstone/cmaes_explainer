@@ -75,7 +75,13 @@ import {
   type SharedPolicyMeta,
 } from "../lib/g1PolicyShare";
 import { resolveG1PushVisualization } from "../lib/g1PushVisualization";
-import { describeAge, loadTrainingSession, saveTrainingSession } from "../lib/g1TrainingSession";
+import {
+  describeAge,
+  loadNativeTrainingSelection,
+  loadTrainingSession,
+  saveNativeTrainingSelection,
+  saveTrainingSession,
+} from "../lib/g1TrainingSession";
 import {
   clampPositionAgainstHouseCollisions,
   closestPointOnOBB,
@@ -3309,6 +3315,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           );
           return;
         }
+        if (embedded) {
+          saveNativeTrainingSelection("g1", policyMeta.task, policyMeta.challenge);
+        }
         setAdmission(message.admission);
         setScene(message.scene);
         robotDragOffsetRef.current = message.scene.seat;
@@ -3415,11 +3424,25 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({
-      type: "preview",
-      task: "walking",
-      challenge: "flat",
-    } satisfies G1OptimizationRequest);
+    // Initialize the actual owner on the retained native experiment before
+    // recovery looks up its policy slot. Explicit shared policies still win.
+    const selection = embedded && !policyFragmentFromHash(window.location.hash)
+      ? loadNativeTrainingSelection("g1", G1_TASKS, G1_CHALLENGES)
+      : null;
+    queueMicrotask(() => {
+      if (!active) return;
+      const initialTask = selection?.task ?? "walking";
+      const initialChallenge = selection?.challenge ?? "flat";
+      taskRef.current = initialTask;
+      challengeRef.current = initialChallenge;
+      setTask(initialTask);
+      setChallenge(initialChallenge);
+      optimizerWorker.postMessage({
+        type: "preview",
+        task: initialTask,
+        challenge: initialChallenge,
+      } satisfies G1OptimizationRequest);
+    });
     return () => {
       active = false;
       if (progressFlushRef.current !== null) {
@@ -3430,7 +3453,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated, seekPlayback]);
+  }, [workerActivated, seekPlayback, embedded]);
 
   useEffect(() => {
     if (!embedded) return;

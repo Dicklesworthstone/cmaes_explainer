@@ -12,7 +12,9 @@ import {
   describeAge,
   encodeTrainingSession,
   isResumable,
+  loadNativeTrainingSelection,
   loadTrainingSession,
+  saveNativeTrainingSelection,
   saveTrainingSession,
   type TrainingSessionSnapshot,
 } from "../app/lib/g1TrainingSession";
@@ -44,6 +46,63 @@ function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingS
 }
 
 describe("G1 training session persistence", () => {
+  test("native selection survives retry independently of per-experiment policy slots", () => {
+    const store = new Map<string, string>();
+    const previous = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = { localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    } };
+    try {
+      const walking = snapshotOf({ task: "walking", challenge: "flat" });
+      const balance = snapshotOf({ task: "balance", generation: 12 });
+      expect(saveTrainingSession(walking)).toBe(true);
+      expect(saveTrainingSession(balance)).toBe(true);
+      const policySlots = [...store.entries()];
+      expect(saveNativeTrainingSelection("g1", "balance", "terrain-and-push")).toBe(true);
+      expect(saveNativeTrainingSelection("arm", "living-room-remote", "household")).toBe(true);
+      const selected = loadNativeTrainingSelection(
+        "g1", ["walking", "balance"], ["flat", "terrain-and-push"],
+      );
+      expect(selected).toEqual({ task: "balance", challenge: "terrain-and-push" });
+      expect(loadTrainingSession(32, "g1", undefined, selected!.task, selected!.challenge))
+        .toMatchObject({ generation: 12, policy: balance.policy, ledger: balance.ledger });
+      expect(loadNativeTrainingSelection("arm", ["kitchen-mug", "living-room-remote"], ["household"]))
+        .toEqual({ task: "living-room-remote", challenge: "household" });
+      // Looking at an untrained task must not fall back to a different trained task.
+      saveNativeTrainingSelection("g1", "stepping", "flat");
+      expect(loadNativeTrainingSelection("g1", ["stepping"], ["flat"]))
+        .toEqual({ task: "stepping", challenge: "flat" });
+      expect(loadTrainingSession(32, "g1", undefined, "stepping", "flat")).toBeNull();
+      for (const [key, value] of policySlots) expect(store.get(key)).toBe(value);
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
+  test("native selection refuses corrupt, foreign, unsupported and inaccessible storage", () => {
+    const previous = (globalThis as { window?: unknown }).window;
+    const valid = { version: 1, subject: "g1", task: "balance", challenge: "flat" };
+    try {
+      for (const raw of [null, "bad-json", "null", "[]", "x".repeat(1_025),
+        ...[{ ...valid, version: 2 }, { ...valid, subject: "arm" },
+          { ...valid, task: "kitchen-mug" }, { ...valid, challenge: "household" },
+          { ...valid, task: {} }].map(value => JSON.stringify(value))]) {
+        (globalThis as { window?: unknown }).window = { localStorage: { getItem: () => raw } };
+        expect(loadNativeTrainingSelection("g1", ["balance"], ["flat"])).toBeNull();
+      }
+      (globalThis as { window?: unknown }).window = { localStorage: {
+        getItem: () => { throw new Error("Storage denied"); },
+        setItem: () => { throw new Error("Quota exceeded"); },
+      } };
+      expect(loadNativeTrainingSelection("g1", ["balance"], ["flat"])).toBeNull();
+      expect(saveNativeTrainingSelection("g1", "balance", "flat")).toBe(false);
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
   test("keeps the exact moved experiment and seed alongside recovered policy bits", async () => {
     const { scene } = await g1ExperimentForSeat("walking", "terrain-and-push", [-2, 0, 1]);
     const snapshot = snapshotOf({

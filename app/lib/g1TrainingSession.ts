@@ -29,6 +29,44 @@ import {
  */
 export type TrainingSubject = "g1" | "arm";
 
+/** Native retries must reopen the selected experiment, not just retain its policy slot. */
+export function saveNativeTrainingSelection(
+  subject: TrainingSubject,
+  task: string,
+  challenge: string,
+): boolean {
+  try {
+    window.localStorage.setItem(
+      `cmaes.${subject}.native-selection.v1`,
+      JSON.stringify({ version: 1, subject, task, challenge }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Validate against the current lab's vocabulary before dispatching any owner work. */
+export function loadNativeTrainingSelection<TTask extends string, TChallenge extends string>(
+  subject: TrainingSubject,
+  tasks: readonly TTask[],
+  challenges: readonly TChallenge[],
+): { task: TTask; challenge: TChallenge } | null {
+  try {
+    const raw = window.localStorage.getItem(`cmaes.${subject}.native-selection.v1`);
+    if (!raw || raw.length > 1_024) return null;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== "object") return null;
+    const selection = saved as Record<string, unknown>;
+    if (selection.version !== 1 || selection.subject !== subject) return null;
+    const task = tasks.find((value) => value === selection.task);
+    const challenge = challenges.find((value) => value === selection.challenge);
+    return task && challenge ? { task, challenge } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The walking ledger's own point guard, and the default.
  *

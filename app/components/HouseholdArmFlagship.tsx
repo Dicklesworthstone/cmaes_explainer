@@ -86,7 +86,9 @@ import {
 import {
   describeAge,
   isResumable,
+  loadNativeTrainingSelection,
   loadTrainingSession,
+  saveNativeTrainingSelection,
   saveTrainingSession,
 } from "../lib/g1TrainingSession";
 import { buildFurniture } from "../lib/houseFurniture";
@@ -1670,6 +1672,9 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
         );
       } else if (message.type === "trace") {
+        if (embedded) {
+          saveNativeTrainingSelection("arm", message.admission.config.task, "household");
+        }
         const pendingImport = pendingImportRef.current;
         if (pendingImport) {
           // The worker has verified the exact task configuration AND replayed
@@ -1801,7 +1806,18 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    optimizerWorker.postMessage({ type: "preview", task: "kitchen-mug" });
+    const selection = embedded && !policyFragmentFromHash(window.location.hash)
+      ? loadNativeTrainingSelection(
+          "arm", Object.keys(TASK_COPY) as HouseholdManipulationTask[], ["household"],
+        )
+      : null;
+    queueMicrotask(() => {
+      if (!active) return;
+      const initialTask = selection?.task ?? "kitchen-mug";
+      taskRef.current = initialTask;
+      setTask(initialTask);
+      optimizerWorker.postMessage({ type: "preview", task: initialTask });
+    });
     return () => {
       active = false;
       pendingImportRef.current?.reject(
@@ -1811,7 +1827,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-  }, [workerActivated, seekPlayback, resetPlayback]);
+  }, [workerActivated, seekPlayback, resetPlayback, embedded]);
 
   useEffect(() => {
     if (!embedded) return;

@@ -645,7 +645,18 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
     }
 
     @MainActor
-    private func verifyRecovery(lab: RobotLab, subject: String, policyCount: Int) async throws {
+    func testNonDefaultHumanoidRetainsLearningAcrossNativeRetry() async throws {
+        try await verifyRecovery(lab: .humanoid, subject: "g1", policyCount: 5_040, nonDefault: true)
+    }
+
+    @MainActor
+    func testNonDefaultArmRetainsLearningAcrossNativeRetry() async throws {
+        try await verifyRecovery(lab: .arm, subject: "arm", policyCount: 128, nonDefault: true)
+    }
+
+    @MainActor
+    private func verifyRecovery(lab: RobotLab, subject: String, policyCount: Int,
+                                nonDefault: Bool = false) async throws {
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1",
             "Requires explicit native graphics test opt-in and Simulator audio preflight."
@@ -711,6 +722,9 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             window.__robotNativeRecoveryProbe.scrollingEnabled(document.querySelector('[data-robot-stage-recovery] canvas'))
             """)
             XCTAssertTrue(pageScrollingEnabled, "Native camera controls and their ancestors must not trap vertical page scrolling")
+            if nonDefault {
+                try await selectNonDefaultExperiment(web, lab: lab)
+            }
             try await click(web, matching: "^(Start learning|Keep learning · gen)")
             try await waitUntil("real learned policy checkpoint", timeout: 180) {
                 try await self.truth(web, """
@@ -762,7 +776,8 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             attachText("before=\(generation)\nliveLoss=\(liveGeneration)\nafter=\(finalGeneration)",
                        name: "\(subject)-generation-continuity")
             try await snapshot(web, name: "\(subject)-final-recovered-stage")
-            try await verifyNativeRetry(web, lab: lab, subject: subject, generation: finalGeneration)
+            try await verifyNativeRetry(web, lab: lab, subject: subject,
+                                        generation: finalGeneration, nonDefault: nonDefault)
         } catch {
             try? await snapshot(web, name: "\(subject)-failure")
             try? await stopLearning(web)
@@ -772,7 +787,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
 
     @MainActor
     private func verifyNativeRetry(_ original: WKWebView, lab: RobotLab,
-                                   subject: String, generation: Int) async throws {
+                                   subject: String, generation: Int, nonDefault: Bool) async throws {
         // Exercise the production native retry path, which replaces WKWebView,
         // separately from the in-page WebGL retries above. Recovery replays the
         // saved policy, not the unsaved CMA covariance, and may refresh savedAt.
@@ -803,6 +818,18 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
         XCTAssertEqual(after, before, "Native retry must retain every policy coefficient and ledger entry")
         guard after == before else { throw NSError(domain: "RobotNativeRetryCheckpoint", code: 1) }
         XCTAssertTrue(replacement.configuration.websiteDataStore === original.configuration.websiteDataStore)
+        if nonDefault {
+            try await waitUntil("replacement owner ready for selection check", timeout: 180) {
+                try await self.truth(replacement, """
+                [...document.querySelectorAll('button')].some(b => !b.disabled &&
+                  /^(Start learning|Keep learning · gen)/.test(b.textContent.trim()))
+                """)
+            }
+            let selected = try await truth(replacement, nonDefaultSelectionScript(lab))
+            try await snapshot(replacement, name: "\(subject)-native-retry-selected-experiment")
+            XCTAssertTrue(selected, "Native retry must reopen the learned non-default experiment")
+            guard selected else { throw NSError(domain: "RobotNativeNonDefaultSelection", code: 2) }
+        }
         try await waitUntil("real saved policy replayed after native retry", timeout: 180) {
             try await self.truth(replacement, """
             (() => { const c = document.querySelector('[data-robot-stage-recovery] canvas');
@@ -816,6 +843,44 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             try await verifyRigNoticeLayout(replacement)
         }
         try await snapshot(replacement, name: "\(subject)-native-retry-restored-policy")
+    }
+
+    private func nonDefaultSelectionScript(_ lab: RobotLab) -> String {
+        if lab == .arm {
+            return """
+            [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+              .some(b => b.textContent.trim().startsWith('Remote'))
+            """
+        }
+        return """
+        [...document.querySelectorAll('[role="radio"][aria-checked="true"]')]
+          .some(b => b.textContent.trim() === 'Balance') &&
+        [...document.querySelectorAll('[role="radio"][aria-checked="true"]')]
+          .some(b => b.textContent.trim() === 'Terrain + push')
+        """
+    }
+
+    @MainActor
+    private func selectNonDefaultExperiment(_ web: WKWebView, lab: RobotLab) async throws {
+        // Arm tabs include an additional screen-reader description after the title.
+        let choices = lab == .arm ? ["^Remote"] : ["^Balance$", "^Terrain \\+ push$"]
+        for choice in choices {
+            try await click(web, matching: choice)
+            try await waitUntil("selected non-default owner ready", timeout: 180) {
+                try await self.truth(web, """
+                (() => {
+                  const choice = window.__robotNativeRecoveryProbe.button(/\(choice)/);
+                  return (choice?.getAttribute('aria-checked') === 'true' ||
+                    choice?.getAttribute('aria-selected') === 'true') &&
+                    [...document.querySelectorAll('button')].some(b => !b.disabled &&
+                      /^(Start learning|Keep learning · gen)/.test(b.textContent.trim()));
+                })()
+                """)
+            }
+        }
+        let selected = try await truth(web, nonDefaultSelectionScript(lab))
+        XCTAssertTrue(selected, "Regression must train a real non-default experiment")
+        guard selected else { throw NSError(domain: "RobotNativeNonDefaultSelection", code: 1) }
     }
 
     @MainActor
