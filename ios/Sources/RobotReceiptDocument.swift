@@ -50,6 +50,62 @@ struct RobotReceiptDocument: FileDocument {
     }
 }
 
+/// The original labs also export policies (including binary residual policies)
+/// and full telemetry. Do not decode/re-encode these as native run receipts:
+/// doing so loses the archive's exact coefficient bytes and experiment metadata.
+struct RobotLabDownload: Identifiable, Equatable {
+    let id = UUID()
+    let filename: String
+    let data: Data
+
+    var contentType: UTType {
+        UTType(filenameExtension: (filename as NSString).pathExtension) ?? .data
+    }
+
+    static func safeFilename(_ suggested: String) -> String {
+        let basename = suggested.replacingOccurrences(of: "\\", with: "/")
+            .components(separatedBy: "/").last ?? ""
+        let cleaned = basename.components(separatedBy: .controlCharacters).joined()
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty || cleaned == "." || cleaned == ".."
+            ? "FrankenRobots-export" : cleaned
+    }
+
+    static func allowsDownload(_ url: URL, sourceURL: URL?, baseURL: URL?) -> Bool {
+        guard let baseURL, baseURL.port != nil, let sourceURL else { return false }
+        func isEngineOrigin(_ candidate: URL) -> Bool {
+            candidate.scheme == "http" && candidate.host == "127.0.0.1" &&
+                candidate.port == baseURL.port && baseURL.scheme == "http" &&
+                baseURL.host == "127.0.0.1" && candidate.user == nil && candidate.password == nil
+        }
+        guard isEngineOrigin(sourceURL) else { return false }
+        if url.scheme == "blob" {
+            guard let origin = URL(string: String(url.absoluteString.dropFirst(5))) else { return false }
+            return isEngineOrigin(origin)
+        }
+        return isEngineOrigin(url)
+    }
+}
+
+struct RobotLabDownloadDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json, .data] }
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let contents = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        data = contents
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
 enum RobotReceiptExportError: LocalizedError {
     case noVersionedReceipt
 

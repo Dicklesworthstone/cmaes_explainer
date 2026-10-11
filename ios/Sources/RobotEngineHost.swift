@@ -807,7 +807,7 @@ private final class WeakRobotScriptMessageHandler: NSObject, WKScriptMessageHand
 }
 
 @MainActor
-final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler {
+final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler, WKDownloadDelegate {
     private static let ownerReadyTimeout: Duration = .seconds(45)
 
     @Published private(set) var phase: RobotEnginePhase = .starting
@@ -845,6 +845,11 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var activeSearchSigma = 0.0005
     @Published private(set) var pendingCommandID: String?
     @Published private(set) var commandDetail: String?
+    @Published private(set) var pendingDownloads: [RobotLabDownload] = []
+    @Published var downloadError: String?
+
+    private var activeDownloads: [ObjectIdentifier: WKDownload] = [:]
+    private var downloadDestinations: [ObjectIdentifier: URL] = [:]
 
     @Published private(set) var webView: WKWebView
     // The selector, menu commands and startup all share this one authority.
@@ -1595,14 +1600,82 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             decisionHandler(.cancel)
             return
         }
+        if navigationAction.shouldPerformDownload {
+            let allowed = webView === self.webView && RobotLabDownload.allowsDownload(
+                url, sourceURL: navigationAction.sourceFrame.request.url, baseURL: baseURL
+            )
+            decisionHandler(allowed ? .download : .cancel)
+            return
+        }
         if url.scheme == "about" || (url.host == "127.0.0.1" && url.port == baseURL?.port) {
             decisionHandler(.allow)
             return
         }
         decisionHandler(.cancel)
-        if navigationAction.navigationType == .linkActivated {
+        // A private blob has no meaning outside this WebView. Preserve the
+        // existing external/deep-link behavior for ordinary user-tapped links.
+        if navigationAction.navigationType == .linkActivated, url.scheme != "blob" {
             UIApplication.shared.open(url)
         }
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        activeDownloads[ObjectIdentifier(download)] = download
+        download.delegate = self
+    }
+
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
+                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        let identifier = ObjectIdentifier(download)
+        guard activeDownloads[identifier] != nil else {
+            completionHandler(nil)
+            return
+        }
+        do {
+            // A fresh directory prevents overwrites even when two exports have
+            // the same filename. Only this app-created scratch is later removed.
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("FrankenRobots-download-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            let destination = directory.appendingPathComponent(RobotLabDownload.safeFilename(suggestedFilename))
+            downloadDestinations[identifier] = destination
+            completionHandler(destination)
+        } catch {
+            downloadError = "Could not prepare the lab export: \(error.localizedDescription)"
+            activeDownloads.removeValue(forKey: identifier)
+            completionHandler(nil)
+        }
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        let identifier = ObjectIdentifier(download)
+        activeDownloads.removeValue(forKey: identifier)
+        guard let destination = downloadDestinations.removeValue(forKey: identifier) else { return }
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+                return Result { try Data(contentsOf: destination) }
+            }.value
+            switch result {
+            case let .success(data):
+                self?.pendingDownloads.append(RobotLabDownload(filename: destination.lastPathComponent, data: data))
+            case let .failure(error):
+                self?.downloadError = "Could not read the lab export: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        let identifier = ObjectIdentifier(download)
+        activeDownloads.removeValue(forKey: identifier)
+        if let destination = downloadDestinations.removeValue(forKey: identifier) {
+            try? FileManager.default.removeItem(at: destination.deletingLastPathComponent())
+        }
+        downloadError = "The lab export failed: \(error.localizedDescription). Please try the original export control again."
+    }
+
+    func finishDownloadExport(_ id: UUID) {
+        pendingDownloads.removeAll { $0.id == id }
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

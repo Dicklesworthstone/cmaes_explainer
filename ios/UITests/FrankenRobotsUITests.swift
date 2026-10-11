@@ -893,6 +893,47 @@ final class FrankenRobotsUITests: XCTestCase {
         cancel.tap()
     }
 
+    func testOriginalLabExportsOpenNativeSaveAndCancelWithoutLosingTheLab() throws {
+        let app = XCUIApplication()
+        app.launch()
+        for lab in ["Humanoid", "Robot Arm"] {
+            let selector = app.segmentedControls.buttons[lab]
+            XCTAssertTrue(selector.waitForExistence(timeout: 12), app.debugDescription)
+            if !selector.isSelected { selector.tap() }
+            let status = app.descendants(matching: .any)["robot-engine-status"]
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+            app.buttons["robot-open-full-lab"].tap()
+            let workspace = app.webViews.firstMatch
+            for label in ["Download", "Export Telemetry"] {
+                if lab == "Humanoid" && label == "Export Telemetry" {
+                    revealHumanoidStageControls(in: app)
+                }
+                let button = workspace.buttons.matching(label == "Download"
+                    ? NSPredicate(format: "label ==[c] 'Download'")
+                    : NSPredicate(format: "label ==[c] 'Export Telemetry' OR label ==[c] 'Export'")
+                ).firstMatch
+                XCTAssertTrue(button.waitForExistence(timeout: 8), app.debugDescription)
+                revealInWebWorkspace(button, workspace: workspace)
+                XCTAssertTrue(button.isHittable, app.debugDescription)
+                XCTAssertTrue(button.isEnabled)
+                button.tap()
+                let cancel = app.buttons["Cancel"]
+                XCTAssertTrue(cancel.waitForExistence(timeout: 12), app.debugDescription)
+                let image = XCTAttachment(screenshot: app.screenshot())
+                image.name = "\(lab) original \(label) native Save dialog"
+                image.lifetime = .keepAlways
+                add(image)
+                cancel.tap()
+                XCTAssertTrue(button.waitForExistence(timeout: 8), app.debugDescription)
+                XCTAssertTrue(button.isEnabled, "Cancelling Save must leave the original lab usable")
+            }
+            app.buttons["robot-close-full-lab"].tap()
+            XCTAssertTrue(selector.isSelected)
+            XCTAssertTrue(status.label.localizedCaseInsensitiveContains("ready"))
+        }
+    }
+
     func testArmTracePlaybackControlsReachEmbeddedOwnerTrace() throws {
         let app = XCUIApplication()
         app.launch()

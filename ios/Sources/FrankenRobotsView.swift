@@ -10,9 +10,12 @@ struct FrankenRobotsView: View {
     @State private var showingFullLab = false
     @State private var showingExperimentSetup = false
     @State private var guidePage: RobotGuidePage = .lab
-    @State private var receiptDocument: RobotReceiptDocument?
+    @State private var receiptDocument: RobotLabDownloadDocument?
     @State private var showingReceiptExporter = false
     @State private var receiptExportError: String?
+    @State private var exportFilename = "FrankenRobots-receipt.json"
+    @State private var exportContentType = UTType.json
+    @State private var exportingDownloadID: UUID?
     @State private var scrubIndex: Double?
     @State private var showingChallengeSelection = false
     @State private var showingFamilySelection = false
@@ -110,18 +113,26 @@ struct FrankenRobotsView: View {
             engine.selectNextCamera()
         }
         .preferredColorScheme((RobotAppearance(rawValue: appearance) ?? .dark).colorScheme)
+        .onChange(of: engine.pendingDownloads.first?.id) { _, _ in
+            presentNextDownload()
+        }
+        .onChange(of: engine.downloadError) { _, error in
+            if let error { receiptExportError = error; engine.downloadError = nil }
+        }
         .fileExporter(
             isPresented: $showingReceiptExporter,
             document: receiptDocument,
-            contentType: .json,
-            defaultFilename: "FrankenRobots-\(lab.rawValue)-receipt"
-        ) { result in
-            if case let .failure(error) = result {
-                receiptExportError = error.localizedDescription
-            }
-        }
-        .alert("Receipt export failed", isPresented: receiptExportErrorIsPresented) {
-            Button("OK") { receiptExportError = nil }
+            contentTypes: [exportContentType],
+            defaultFilename: exportFilename,
+            onCompletion: { result in
+                if case let .failure(error) = result {
+                    receiptExportError = error.localizedDescription
+                }
+                finishExport()
+            }, onCancellation: { finishExport() }
+        )
+        .alert("Export failed", isPresented: receiptExportErrorIsPresented) {
+            Button("OK") { receiptExportError = nil; presentNextDownload() }
         } message: {
             Text(receiptExportError ?? "The receipt could not be exported.")
         }
@@ -1147,10 +1158,32 @@ struct FrankenRobotsView: View {
 
     private func exportReceipt() {
         do {
-            receiptDocument = try engine.makeReceiptDocument()
+            receiptDocument = try RobotLabDownloadDocument(data: engine.makeReceiptDocument().data)
+            exportFilename = "FrankenRobots-\(lab.rawValue)-receipt.json"
+            exportContentType = .json
             showingReceiptExporter = true
         } catch {
             receiptExportError = error.localizedDescription
+        }
+    }
+
+    private func presentNextDownload() {
+        guard !showingReceiptExporter, exportingDownloadID == nil, receiptExportError == nil,
+              let download = engine.pendingDownloads.first else { return }
+        receiptDocument = RobotLabDownloadDocument(data: download.data)
+        exportFilename = download.filename
+        exportContentType = download.contentType
+        exportingDownloadID = download.id
+        showingReceiptExporter = true
+    }
+
+    private func finishExport() {
+        if let id = exportingDownloadID { engine.finishDownloadExport(id) }
+        exportingDownloadID = nil
+        // Let SwiftUI finish dismissing this document before presenting another.
+        Task { @MainActor in
+            await Task.yield()
+            presentNextDownload()
         }
     }
 

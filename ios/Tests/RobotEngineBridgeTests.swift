@@ -4,6 +4,42 @@ import WebKit
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testLabDownloadsOnlyAdmitTheCurrentPrivateEngineOrigin() throws {
+        let base = try XCTUnwrap(URL(string: "http://127.0.0.1:43123"))
+        let source = base.appendingPathComponent("robotics")
+        for text in ["blob:http://127.0.0.1:43123/policy", "http://127.0.0.1:43123/policy.bin"] {
+            XCTAssertTrue(RobotLabDownload.allowsDownload(try XCTUnwrap(URL(string: text)), sourceURL: source, baseURL: base))
+        }
+        for text in ["blob:http://127.0.0.1:43124/policy", "blob:null/policy",
+                     "blob:https://example.com/policy", "file:///tmp/policy", "data:application/json,{}",
+                     "http://127.0.0.1:43123@example.com/policy", "https://127.0.0.1:43123/policy"] {
+            XCTAssertFalse(RobotLabDownload.allowsDownload(try XCTUnwrap(URL(string: text)), sourceURL: source, baseURL: base), text)
+        }
+        let blob = try XCTUnwrap(URL(string: "blob:http://127.0.0.1:43123/policy"))
+        XCTAssertFalse(RobotLabDownload.allowsDownload(blob, sourceURL: nil, baseURL: base))
+        XCTAssertFalse(RobotLabDownload.allowsDownload(blob, sourceURL: source, baseURL: nil))
+        XCTAssertFalse(RobotLabDownload.allowsDownload(blob, sourceURL: URL(string: "https://example.com"), baseURL: base))
+    }
+
+    func testLabDownloadNamesCannotEscapeTheirPrivateDestination() {
+        XCTAssertEqual(RobotLabDownload.safeFilename("g1-walking-gen10.policy.json"), "g1-walking-gen10.policy.json")
+        XCTAssertEqual(RobotLabDownload.safeFilename("../../outside/policy.json"), "policy.json")
+        XCTAssertEqual(RobotLabDownload.safeFilename("C:\\outside\\policy.bin"), "policy.bin")
+        XCTAssertEqual(RobotLabDownload.safeFilename("policy\u{0}:10.json"), "policy-10.json")
+        for name in ["", "..", ".", "/", "\n"] {
+            XCTAssertEqual(RobotLabDownload.safeFilename(name), "FrankenRobots-export")
+        }
+    }
+
+    func testLabDownloadDocumentPreservesBinaryAndJSONBytes() {
+        // Includes non-UTF8 bytes and signed-zero/subnormal JSON spellings;
+        // exports must never normalize these through a JSON decoder.
+        for data in [Data([0, 255, 128, 10, 13]), Data("{\"policy\":[-0,1e-320]}\r\n".utf8)] {
+            let download = RobotLabDownload(filename: "policy.bin", data: data)
+            XCTAssertEqual(RobotLabDownloadDocument(data: download.data).data, data)
+        }
+    }
+
     func testReadinessDeadlineRejectsStaleAndTerminalLoads() {
         var deadline = RobotReadinessDeadline()
         let firstHumanoidLoad = deadline.arm(for: .humanoid)
@@ -570,6 +606,111 @@ private extension JSONDecoder {
 /// FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS=1 in the test host's environment.
 /// No synthetic context-loss events or replacement policy/worker implementations are used.
 final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
+    @MainActor
+    func testHumanoidOriginalPolicyAndTelemetryDownloadsPreserveBytesAndLearning() async throws {
+        try await verifyOriginalDownloads(lab: .humanoid)
+    }
+
+    @MainActor
+    func testArmOriginalPolicyAndTelemetryDownloadsPreserveBytesAndLearning() async throws {
+        try await verifyOriginalDownloads(lab: .arm)
+    }
+
+    @MainActor
+    private func verifyOriginalDownloads(lab: RobotLab) async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
+        try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        let parent = try XCTUnwrap(appWebView()?.superview)
+        // A real host and live owner, without a SwiftUI subscriber consuming its
+        // download queue. Native Save-dialog interaction has its own UI journey.
+        let host = RobotEngineHost(initialLab: lab)
+        let web = host.webView
+        web.frame = parent.bounds
+        parent.addSubview(web)
+        defer { web.stopLoading(); web.removeFromSuperview() }
+        try await waitUntil("real \(lab.rawValue) owner ready", timeout: 180) { host.phase == .ready }
+        host.optimize()
+        addTeardownBlock { @MainActor [weak web] in
+            guard let web else { return }
+            try? await self.stopLearning(web)
+        }
+        try await waitUntil("real learned export policy", timeout: 180) {
+            host.phase == .running && (host.metrics.generation ?? -1) >= 2
+        }
+        try await stopLearning(web)
+        try await waitUntil("stopped owner status reflected natively") { host.phase == .ready }
+        let generation = try XCTUnwrap(host.metrics.generation)
+        _ = try await web.evaluateJavaScript("""
+        (() => {
+          const original = URL.createObjectURL, click = HTMLAnchorElement.prototype.click;
+          const blobs = new Map();
+          const checkpoints = () => JSON.stringify(Object.keys(localStorage).sort()
+            .filter(key => key.endsWith('.training-session.v2')).map(key => [key, localStorage.getItem(key)]));
+          window.__robotDownloadProbe = { document, captures: [], original, click, checkpoints, saved: checkpoints() };
+          URL.createObjectURL = function(blob) {
+            const url = original.call(this, blob); blobs.set(url, blob); return url;
+          };
+          HTMLAnchorElement.prototype.click = function() {
+            if (this.download && blobs.has(this.href)) {
+              const row = { filename: this.download, base64: null };
+              window.__robotDownloadProbe.captures.push(row);
+              blobs.get(this.href).arrayBuffer().then(buffer => {
+                let binary = ''; for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
+                row.base64 = btoa(binary);
+              });
+            }
+            return click.call(this);
+          };
+          return true;
+        })()
+        """)
+        addTeardownBlock { @MainActor [weak web] in
+            _ = try? await web?.evaluateJavaScript("""
+            (() => { const p = window.__robotDownloadProbe; if (p) {
+              URL.createObjectURL = p.original; HTMLAnchorElement.prototype.click = p.click;
+              delete window.__robotDownloadProbe;
+            } return true; })()
+            """)
+        }
+        for selector in ["b.textContent.trim() === 'Download'",
+                         "(b.getAttribute('title') ?? '').includes('trajectory receipt as JSON')"] {
+            let clicked = try await truth(web, """
+            (() => { const button = [...document.querySelectorAll('button')].find(b => \(selector));
+              if (!button || button.disabled) return false; button.click(); return true; })()
+            """)
+            XCTAssertTrue(clicked, "The original lab export must remain available")
+        }
+        try await waitUntil("two original WebKit downloads", timeout: 45) {
+            if let error = host.downloadError { throw NSError(domain: "LabDownload", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }
+            return host.pendingDownloads.count == 2
+        }
+        try await waitUntil("unmodified original blob bytes captured") {
+            try await self.truth(web, "window.__robotDownloadProbe.captures.length === 2 && window.__robotDownloadProbe.captures.every(row => row.base64 !== null)")
+        }
+        let capturedValue = try await web.evaluateJavaScript("window.__robotDownloadProbe.captures")
+        let captures = try XCTUnwrap(capturedValue as? [[String: String]])
+        for capture in captures {
+            let filename = try XCTUnwrap(capture["filename"])
+            let expected = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(capture["base64"])))
+            let download = try XCTUnwrap(host.pendingDownloads.first { $0.filename == filename })
+            XCTAssertEqual(download.data, expected, "Native download must preserve every original byte")
+            XCTAssertGreaterThan(download.data.count, 0)
+            attachText("\(filename): \(download.data.count) exact bytes, learned generation \(generation)", name: "\(lab.rawValue)-original-download")
+        }
+        let sameDocument = try await truth(web, "window.__robotDownloadProbe.document === document")
+        XCTAssertTrue(sameDocument, "Export must not navigate away from the learning owner")
+        let sameCheckpoint = try await truth(web, "window.__robotDownloadProbe.saved === window.__robotDownloadProbe.checkpoints()")
+        XCTAssertTrue(sameCheckpoint, "Exports must not rewrite the saved learning state")
+        XCTAssertEqual(host.metrics.generation, generation)
+        XCTAssertEqual(host.phase, .ready)
+        let first = try XCTUnwrap(host.pendingDownloads.first)
+        host.finishDownloadExport(first.id)
+        XCTAssertEqual(host.pendingDownloads.count, 1, "Completing one export must not discard another")
+        XCTAssertNotEqual(host.pendingDownloads.first?.id, first.id)
+        host.finishDownloadExport(first.id)
+        XCTAssertEqual(host.pendingDownloads.count, 1, "Duplicate completion must not consume another export")
+    }
+
     @MainActor
     func testReselectingCurrentLabPreservesLiveLearning() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
