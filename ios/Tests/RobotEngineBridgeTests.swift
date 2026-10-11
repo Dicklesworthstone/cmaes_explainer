@@ -640,6 +640,35 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
         try await stopLearning(web)
         try await waitUntil("stopped owner status reflected natively") { host.phase == .ready }
         let generation = try XCTUnwrap(host.metrics.generation)
+        let subject = lab == .humanoid ? "g1" : "arm"
+        let policyCount = lab == .humanoid ? 5_040 : 128
+        try await waitUntil("learned export checkpoint persisted") {
+            try await self.truth(web, """
+            Object.keys(localStorage).filter(key => key.startsWith('cmaes.\(subject).') &&
+              key.endsWith('.training-session.v2')).some(key => {
+                const saved = JSON.parse(localStorage.getItem(key));
+                return saved.generation === \(generation) && saved.policy.length === \(policyCount);
+              })
+            """)
+        }
+        if lab == .humanoid {
+            // The embedded Humanoid lab intentionally starts with its stage
+            // controls collapsed. Use its real disclosure before finding the
+            // telemetry button; that button is not mounted until it opens.
+            let revealed = try await truth(web, """
+            (() => { const toggle = document.querySelector('button[aria-controls="g1-hud-controls"]');
+              if (!toggle || toggle.disabled) return false;
+              if (toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+              return true; })()
+            """)
+            XCTAssertTrue(revealed, "The original Humanoid Controls disclosure must remain available")
+            try await waitUntil("original Humanoid telemetry control mounted") {
+                try await self.truth(web, """
+                [...document.querySelectorAll('button')].some(b =>
+                  (b.getAttribute('title') ?? '').includes('trajectory receipt as JSON') && !b.disabled)
+                """)
+            }
+        }
         _ = try await web.evaluateJavaScript("""
         (() => {
           const original = URL.createObjectURL, click = HTMLAnchorElement.prototype.click;
@@ -678,7 +707,7 @@ final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
             (() => { const button = [...document.querySelectorAll('button')].find(b => \(selector));
               if (!button || button.disabled) return false; button.click(); return true; })()
             """)
-            XCTAssertTrue(clicked, "The original lab export must remain available")
+            XCTAssertTrue(clicked, "The original lab export must remain available: \(selector)")
         }
         try await waitUntil("two original WebKit downloads", timeout: 45) {
             if let error = host.downloadError { throw NSError(domain: "LabDownload", code: 1, userInfo: [NSLocalizedDescriptionKey: error]) }

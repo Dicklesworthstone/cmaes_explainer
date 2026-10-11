@@ -918,13 +918,37 @@ final class FrankenRobotsUITests: XCTestCase {
                 XCTAssertTrue(button.isHittable, app.debugDescription)
                 XCTAssertTrue(button.isEnabled)
                 button.tap()
+                // Files briefly presents Browse before restoring its last
+                // directory. Wait for the usable Save action, not that
+                // transient Cancel button, before capturing or dismissing it.
+                let save = app.buttons["Save"]
+                let canSave = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in save.exists && save.isEnabled && save.isHittable },
+                    object: save
+                )
+                XCTAssertEqual(XCTWaiter.wait(for: [canSave], timeout: 12), .completed, app.debugDescription)
                 let cancel = app.buttons["Cancel"]
-                XCTAssertTrue(cancel.waitForExistence(timeout: 12), app.debugDescription)
                 let image = XCTAttachment(screenshot: app.screenshot())
                 image.name = "\(lab) original \(label) native Save dialog"
                 image.lifetime = .keepAlways
                 add(image)
+                if !cancel.exists {
+                    // On iPhone, the restored directory exposes Browse/Back;
+                    // Cancel belongs to its parent. Use the actual navigation
+                    // control, never the stale AX Other at the More position.
+                    let browse = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+                        .buttons["BackButton"]
+                    XCTAssertTrue(browse.waitForExistence(timeout: 5), app.debugDescription)
+                    XCTAssertTrue(browse.isHittable, app.debugDescription)
+                    browse.tap()
+                }
+                XCTAssertTrue(cancel.waitForExistence(timeout: 8), app.debugDescription)
+                XCTAssertTrue(cancel.isHittable, app.debugDescription)
                 cancel.tap()
+                let dismissed = XCTNSPredicateExpectation(
+                    predicate: NSPredicate(format: "exists == false"), object: cancel
+                )
+                XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 8), .completed)
                 XCTAssertTrue(button.waitForExistence(timeout: 8), app.debugDescription)
                 XCTAssertTrue(button.isEnabled, "Cancelling Save must leave the original lab usable")
             }
