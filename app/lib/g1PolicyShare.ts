@@ -430,9 +430,21 @@ export async function decodePolicyFragment(
   return decodeSharedPolicy(inflated, expectedLength);
 }
 
-/** Build the shareable URL for a policy fragment. */
+/**
+ * Native labs are served from an ephemeral loopback port. That origin cannot
+ * travel with a policy to another device. Use the public site (also declared
+ * in app/layout.tsx) there, while preserving public/preview deployments.
+ */
+function portableShareOrigin(origin: string): string {
+  const hostname = new URL(origin).hostname.toLowerCase().replace(/\.$/, "");
+  const loopback =
+    hostname === "localhost" || hostname === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+  return loopback ? "https://cmaes-explainer.vercel.app" : origin;
+}
+
+/** Build the shareable URL for a policy fragment without uploading its bytes. */
 export function policyShareUrl(origin: string, pathname: string, fragment: string): string {
-  return `${origin}${pathname}#zpolicy=${fragment}`;
+  return `${portableShareOrigin(origin)}${pathname}#zpolicy=${fragment}`;
 }
 
 /** Read a policy fragment out of a location hash, if one is present. */
@@ -635,7 +647,7 @@ export async function decodeResidualFragment(fragment: string): Promise<SharedRe
 }
 
 export function residualShareUrl(origin: string, pathname: string, fragment: string): string {
-  return `${origin}${pathname}#zresidual=${fragment}`;
+  return `${portableShareOrigin(origin)}${pathname}#zresidual=${fragment}`;
 }
 
 /** Read a residual fragment out of a location hash, if one is present. */

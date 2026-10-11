@@ -10,6 +10,7 @@ import {
   policyFragmentFromHash,
   policyFromFileContents,
   policyShareUrl,
+  residualShareUrl,
   type SharedG1Experiment,
   type SharedPolicyMeta,
   type SharedResidual,
@@ -308,6 +309,61 @@ describe("G1 policy share codec", () => {
     expect(url).toBe("https://cmaes.org/humanoid#zpolicy=PAYLOAD");
     // Everything after the hash stays client-side; nothing is sent to a server.
     expect(url.split("#")[0]).not.toContain("PAYLOAD");
+  });
+
+  test("shares both native labs through a public origin instead of an ephemeral loopback port", () => {
+    for (const origin of [
+      "http://127.0.0.1:49152",
+      "http://localhost:3000",
+      "http://[::1]:49152",
+    ]) {
+      for (const path of ["/frankenrobots/humanoid/", "/frankenrobots/arm/"]) {
+        const url = new URL(policyShareUrl(origin, path, "EXACT_payload-123"));
+        expect(url.origin).toBe("https://cmaes-explainer.vercel.app");
+        expect(url.pathname).toBe(path);
+        expect(url.search).toBe("");
+        expect(policyFragmentFromHash(url.hash)).toBe("EXACT_payload-123");
+      }
+    }
+  });
+
+  test("keeps public and preview origins rather than redirecting someone else's deployment", () => {
+    for (const origin of [
+      "https://cmaes.org",
+      "https://preview.example.com:8443",
+      "https://localhost.example.com",
+      "https://127.example.com",
+    ]) {
+      expect(policyShareUrl(origin, "/humanoid", "EXACT")).toBe(
+        `${origin}/humanoid#zpolicy=EXACT`,
+      );
+    }
+  });
+
+  test("a portable native link retains exact policy coefficients and metadata", async () => {
+    for (const [path, length] of [
+      ["/frankenrobots/humanoid/", 5_040],
+      ["/frankenrobots/arm/", 128],
+    ] as const) {
+      const policy = Float64Array.from({ length }, (_, index) => Math.sin(index) * 1e-20);
+      policy[0] = -0;
+      const fragment = await encodePolicyFragment(policy, META);
+      const url = new URL(policyShareUrl("http://127.0.0.1:54321", path, fragment));
+      const restored = await decodePolicyFragment(policyFragmentFromHash(url.hash)!, length);
+      expect(new Uint8Array(restored.policy.buffer)).toEqual(new Uint8Array(policy.buffer));
+      expect(restored.generation).toBe(META.generation);
+      expect(restored.kernelVersion).toBe(META.kernelVersion);
+      expect(url.origin).toBe("https://cmaes-explainer.vercel.app");
+    }
+  });
+
+  test("residual trainer links use the same portable origin without changing their fragment type", () => {
+    expect(residualShareUrl("http://127.0.0.1:54321", "/humanoid/", "EXACT")).toBe(
+      "https://cmaes-explainer.vercel.app/humanoid/#zresidual=EXACT",
+    );
+    expect(residualShareUrl("https://cmaes.org", "/humanoid/", "EXACT")).toBe(
+      "https://cmaes.org/humanoid/#zresidual=EXACT",
+    );
   });
 
   test("a policy file keeps full precision like the link", () => {

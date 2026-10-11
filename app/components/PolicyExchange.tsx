@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Link2, Upload } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import type { PolicyFile } from "../lib/g1PolicyShare";
 import {
   encodePolicyFragment,
@@ -63,6 +63,8 @@ export function PolicyExchange({
 }: PolicyExchangeProps) {
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
+  const [sharedLink, setSharedLink] = useState<{ url: string; generation: number } | null>(null);
+  const shareLinkId = useId();
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const download = useCallback(() => {
@@ -87,19 +89,23 @@ export function PolicyExchange({
     }, 0);
     setNotice({
       tone: "ok",
-      text: `Saved ${anchor.download} — ${policy.length} coefficients, full precision.`,
+      text: `Download requested: ${anchor.download} — ${policy.length} coefficients, full precision. Choose where to save it if prompted.`,
     });
   }, [policy, subject, meta, measured]);
 
   const share = useCallback(async () => {
     if (!policy) return;
     setBusy(true);
+    setSharedLink(null);
     try {
       const fragment = await encodePolicyFragment(policy, meta);
       const url = policyShareUrl(window.location.origin, window.location.pathname, fragment);
-      // Put it in the address bar regardless: if the clipboard is blocked, the
-      // link is still somewhere the operator can copy it from by hand.
-      window.history.replaceState(null, "", `#zpolicy=${fragment}`);
+      setSharedLink({ url, generation: meta.generation });
+      // Keep local reload/replay working without navigating the embedded lab
+      // to the public share origin. Preserve other view settings in the hash.
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      hash.set("zpolicy", fragment);
+      window.history.replaceState(window.history.state, "", `#${hash.toString()}`);
       const fragile = url.length > FRAGILE_LINK_LENGTH;
       try {
         await navigator.clipboard.writeText(url);
@@ -112,7 +118,7 @@ export function PolicyExchange({
       } catch {
         setNotice({
           tone: "warn",
-          text: "Clipboard permission was denied — the share link is in your address bar, ready to copy.",
+          text: "Clipboard access was unavailable. Select and copy the complete link below, or use Download to share the policy file.",
         });
       }
     } catch (error) {
@@ -163,7 +169,7 @@ export function PolicyExchange({
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="text-[0.62rem] font-semibold uppercase tracking-wider text-slate-300">
           {title}
         </span>
@@ -219,6 +225,28 @@ export function PolicyExchange({
           if (file) void importFile(file);
         }}
       />
+
+      {sharedLink ? (
+        <div className="mt-3 min-w-0">
+          <label htmlFor={shareLinkId} className="text-[0.65rem] font-semibold text-slate-300">
+            Generation {sharedLink.generation.toLocaleString()} share link
+          </label>
+          <textarea
+            id={shareLinkId}
+            aria-label="Policy share link"
+            readOnly
+            rows={3}
+            value={sharedLink.url}
+            onFocus={(event) => event.currentTarget.select()}
+            spellCheck={false}
+            className="mt-1 block w-full min-w-0 resize-y rounded-lg border border-cyan-300/25 bg-slate-950 p-2 font-mono text-xs leading-5 text-cyan-100 focus:border-cyan-300 focus:outline-none"
+          />
+          <p className="mt-1 text-[0.62rem] leading-4 text-slate-400">
+            Select this field to copy the full link. It opens the web lab; the policy stays in the
+            link, not on a server. Download is safer if your messaging app shortens long links.
+          </p>
+        </div>
+      ) : null}
 
       {notice ? (
         <p
