@@ -974,6 +974,17 @@ struct FrankenRobotsView: View {
                 RobotEngineWebView(webView: engine.webView)
                     .id(ObjectIdentifier(engine.webView))
                     .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                    .onAppear {
+                        // All controls shares this live WebView. Reveal the
+                        // first canvas when Stage returns, not the last panel.
+                        // Appearance only: metric updates must not scroll the
+                        // page or reset the document, worker or learned policy.
+                        let scroll = engine.webView.scrollView
+                        let inset = scroll.adjustedContentInset
+                        scroll.setContentOffset(
+                            CGPoint(x: -inset.left, y: -inset.top), animated: false
+                        )
+                    }
 
                 if case let .failed(message) = engine.phase {
                     engineFailure(message)

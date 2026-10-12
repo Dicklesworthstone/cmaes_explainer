@@ -128,6 +128,87 @@ final class FrankenRobotsUITests: XCTestCase {
         }
     }
 
+    func testHumanoidStageReturnRevealsSceneWithoutResettingLearning() throws {
+        try verifyStageReturn(lab: "humanoid", sceneLabel: "Humanoid visualization")
+    }
+
+    func testArmStageReturnRevealsSceneWithoutResettingLearning() throws {
+        try verifyStageReturn(lab: "arm", sceneLabel: "Arm visualization")
+    }
+
+    private func verifyStageReturn(lab: String, sceneLabel: String) throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = lab
+        app.launch()
+#if targetEnvironment(macCatalyst)
+        app.activate()
+#endif
+        let status = app.descendants(matching: .any)["robot-engine-status"]
+        func waitForReady() {
+            let ready = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+        }
+        waitForReady()
+        let generation = app.descendants(matching: .any)["robot-live-generation"]
+        let objective = app.descendants(matching: .any)["robot-live-objective"]
+        XCTAssertTrue(generation.waitForExistence(timeout: 8), app.debugDescription)
+        let originalGeneration = generation.label
+        let optimize = app.buttons["robot-native-optimize"]
+        XCTAssertTrue(optimize.isHittable)
+        optimize.tap()
+        let learned = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                status.label.localizedCaseInsensitiveContains("optimizing") &&
+                    generation.label != originalGeneration
+            }, object: generation
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [learned], timeout: 55), .completed)
+        XCTAssertTrue(optimize.label.localizedCaseInsensitiveContains("stop"))
+        optimize.tap()
+        waitForReady()
+        let savedGeneration = generation.label
+        let savedObjective = objective.label
+        XCTAssertNotEqual(savedGeneration, originalGeneration)
+
+        for journey in 1...2 {
+            app.buttons["robot-open-full-lab"].tap()
+            let workspace = app.webViews.firstMatch
+            let download = workspace.buttons.matching(
+                NSPredicate(format: "label ==[c] 'Download'")
+            ).firstMatch
+            XCTAssertTrue(download.waitForExistence(timeout: 8), app.debugDescription)
+            revealInWebWorkspace(download, workspace: workspace)
+            XCTAssertTrue(download.isHittable, app.debugDescription)
+            let scene = workspace.descendants(matching: .any).matching(
+                NSPredicate(format: "label == %@ OR label == %@", sceneLabel, "\(sceneLabel), region")
+            ).firstMatch
+            // Establish that the journey really left the canvas before
+            // returning. A no-op scroll must not produce a false green.
+            XCTAssertLessThan(scene.frame.maxY, workspace.frame.minY)
+            app.buttons["robot-close-full-lab"].tap()
+            XCTAssertTrue(app.buttons["robot-open-full-lab"].waitForExistence(timeout: 5))
+            let returned = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in
+                    let bounds = scene.frame, viewport = workspace.frame
+                    return bounds.height >= 180 && bounds.minY >= viewport.minY - 2 &&
+                        bounds.maxY <= viewport.maxY + 2 && bounds.minX >= viewport.minX - 2 &&
+                        bounds.maxX <= viewport.maxX + 2
+                }, object: scene
+            )
+            let result = XCTWaiter.wait(for: [returned], timeout: 8)
+            let image = XCTAttachment(screenshot: app.screenshot())
+            image.name = "\(lab) Stage return \(journey) with learned policy"
+            image.lifetime = .keepAlways
+            add(image)
+            XCTAssertEqual(result, .completed, app.debugDescription)
+            XCTAssertEqual(generation.label, savedGeneration)
+            XCTAssertEqual(objective.label, savedObjective)
+            XCTAssertTrue(status.label.localizedCaseInsensitiveContains("ready"))
+        }
+    }
+
     func testReadinessWatchdogFailsClosedThenRetryRecovers() throws {
         let app = XCUIApplication()
         app.launchEnvironment["FROBOTS_FORCE_READINESS_TIMEOUT_ONCE"] = "1"
