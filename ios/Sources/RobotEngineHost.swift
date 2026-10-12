@@ -771,6 +771,31 @@ enum RobotEnginePhase: Equatable {
     }
 }
 
+enum RobotEngineCommandReceipt: Equatable {
+    case message(String)
+    case stopping(String)
+
+    init(acknowledgement: RobotEngineCommandAcknowledgement) {
+        self = acknowledgement.accepted && acknowledgement.command == "stop"
+            ? .stopping(acknowledgement.detail) : .message(acknowledgement.detail)
+    }
+
+    var detail: String {
+        switch self {
+        case let .message(detail), let .stopping(detail): detail
+        }
+    }
+
+    mutating func receiveOwnerPhase(_ phase: RobotEnginePhase) {
+        // Acceptance is not completion. Only the ordered owner ready event
+        // proves its in-flight generation has settled; retain every other
+        // command acknowledgement or delivery failure verbatim.
+        if case .stopping = self, phase == .ready {
+            self = .message("Stopped. Ready to continue learning.")
+        }
+    }
+}
+
 struct RobotReadinessDeadline {
     private(set) var generation = 0
     private(set) var lab: RobotLab?
@@ -844,7 +869,8 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
     @Published private(set) var activeSeedIndex = 0
     @Published private(set) var activeSearchSigma = 0.0005
     @Published private(set) var pendingCommandID: String?
-    @Published private(set) var commandDetail: String?
+    @Published private var commandReceipt: RobotEngineCommandReceipt?
+    var commandDetail: String? { commandReceipt?.detail }
     @Published private(set) var pendingDownloads: [RobotLabDownload] = []
     @Published var downloadError: String?
 
@@ -1306,7 +1332,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         pendingRequestedOverlayEnabled = overlayEnabled
         pendingRequestedSeedIndex = seedIndex
         pendingRequestedSigma = sigma
-        commandDetail = pendingDetail
+        commandReceipt = .message(pendingDetail)
         commandTimeoutTask?.cancel()
         commandTimeoutTask = Task { [weak self] in
             do {
@@ -1316,7 +1342,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             }
             guard let self, self.pendingCommandID == commandID else { return }
             self.clearPendingCommand()
-            self.commandDetail = "The embedded owner did not acknowledge the command within five seconds."
+            self.commandReceipt = .message("The embedded owner did not acknowledge the command within five seconds.")
         }
         var payload: [String: Any] = [
             "type": "engine.command",
@@ -1375,7 +1401,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                     self.commandTimeoutTask?.cancel()
                     self.commandTimeoutTask = nil
                     self.clearPendingCommand()
-                    self.commandDetail = "The embedded owner is not ready to receive native commands."
+                    self.commandReceipt = .message("The embedded owner is not ready to receive native commands.")
                     return
                 }
             } catch {
@@ -1383,7 +1409,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 self.commandTimeoutTask?.cancel()
                 self.commandTimeoutTask = nil
                 self.clearPendingCommand()
-                self.commandDetail = "Native command delivery failed: \(error.localizedDescription)"
+                self.commandReceipt = .message("Native command delivery failed: \(error.localizedDescription)")
             }
         }
     }
@@ -1764,7 +1790,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
                 }
             }
             clearPendingCommand()
-            commandDetail = acknowledgement.detail
+            commandReceipt = RobotEngineCommandReceipt(acknowledgement: acknowledgement)
             return
         }
 
@@ -1824,6 +1850,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
             activeSearchSigma = sigma
         }
         apply(state: event.state, detail: event.detail)
+        commandReceipt?.receiveOwnerPhase(phase)
     }
 
     private func acknowledgementMatchesPendingSelection(
@@ -2078,7 +2105,7 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         activeSearchSigma = selectedLab == .humanoid ? 0.0005 : 0.001
         commandTimeoutTask?.cancel()
         clearPendingCommand()
-        commandDetail = nil
+        commandReceipt = nil
     }
 }
 

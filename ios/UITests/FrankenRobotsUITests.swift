@@ -168,6 +168,9 @@ final class FrankenRobotsUITests: XCTestCase {
         XCTAssertTrue(optimize.label.localizedCaseInsensitiveContains("stop"))
         optimize.tap()
         waitForReady()
+        let receipt = app.descendants(matching: .any)["robot-native-command-detail"]
+        XCTAssertEqual(receipt.label, "Stopped. Ready to continue learning.",
+                       "Ready must not leave either lab claiming a generation is still finishing")
         let savedGeneration = generation.label
         let savedObjective = objective.label
         XCTAssertNotEqual(savedGeneration, originalGeneration)
@@ -207,6 +210,41 @@ final class FrankenRobotsUITests: XCTestCase {
             XCTAssertEqual(objective.label, savedObjective)
             XCTAssertTrue(status.label.localizedCaseInsensitiveContains("ready"))
         }
+
+        // Exercise the original share control in the actual bundled owner,
+        // not a recreated native control or a precomputed codec fixture.
+        app.buttons["robot-open-full-lab"].tap()
+        let workspace = app.webViews.firstMatch
+        let share = workspace.buttons["Share link"]
+        XCTAssertTrue(share.waitForExistence(timeout: 8), app.debugDescription)
+        revealInWebWorkspace(share, workspace: workspace)
+        XCTAssertTrue(share.isHittable)
+        XCTAssertTrue(share.isEnabled)
+        share.tap()
+        let field = workspace.descendants(matching: .any).matching(
+            NSPredicate(format: "label == 'Policy share link'")
+        ).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 8), app.debugDescription)
+        let link = try XCTUnwrap(field.value as? String)
+        let url = try XCTUnwrap(URLComponents(string: link))
+        XCTAssertEqual(url.scheme, "https")
+        XCTAssertEqual(url.host, "cmaes-explainer.vercel.app")
+        XCTAssertEqual(url.path, "/frankenrobots/\(lab)/")
+        XCTAssertTrue(try XCTUnwrap(url.fragment).contains("zpolicy="))
+        let exported = XCTAttachment(string: link)
+        exported.name = "\(lab) actual native policy share link"
+        exported.lifetime = .keepAlways
+        add(exported)
+        revealInWebWorkspace(field, workspace: workspace)
+        XCTAssertTrue(field.isHittable, "The complete link must remain selectable if clipboard access fails")
+        let shareImage = XCTAttachment(screenshot: app.screenshot())
+        shareImage.name = "\(lab) actual native policy sharing"
+        shareImage.lifetime = .keepAlways
+        add(shareImage)
+        app.buttons["robot-close-full-lab"].tap()
+        XCTAssertEqual(generation.label, savedGeneration)
+        XCTAssertEqual(objective.label, savedObjective)
+        XCTAssertEqual(receipt.label, "Stopped. Ready to continue learning.")
     }
 
     func testReadinessWatchdogFailsClosedThenRetryRecovers() throws {
@@ -695,7 +733,10 @@ final class FrankenRobotsUITests: XCTestCase {
         stop.tap()
 
         let stopAccepted = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "label CONTAINS[c] 'accepted stop'"),
+            // A fast generation may finish before accessibility samples the
+            // transient acknowledgement. Both states prove acceptance, but
+            // the final assertion below always requires actual completion.
+            predicate: NSPredicate(format: "label CONTAINS[c] 'accepted stop' OR label == 'Stopped. Ready to continue learning.'"),
             object: receipt
         )
         XCTAssertEqual(XCTWaiter.wait(for: [stopAccepted], timeout: 8), .completed, app.debugDescription)
@@ -705,6 +746,7 @@ final class FrankenRobotsUITests: XCTestCase {
             object: engineStatus
         )
         XCTAssertEqual(XCTWaiter.wait(for: [readyAgain], timeout: 25), .completed)
+        XCTAssertEqual(receipt.label, "Stopped. Ready to continue learning.")
 
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Continuous owner learning stopped with best policy preserved"

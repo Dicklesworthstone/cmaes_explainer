@@ -4,6 +4,46 @@ import WebKit
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testAcceptedStopReceiptWaitsForOwnerReadyAndStaysCompleted() throws {
+        for lab in ["humanoid", "arm"] {
+            let acknowledgement = try XCTUnwrap(RobotEngineCommandAcknowledgement(payload: [
+                "type": "engine.command.ack", "schemaVersion": 1, "sequence": 7,
+                "commandId": "stop-receipt", "lab": lab, "command": "stop",
+                "accepted": true, "detail": "Accepted Stop; finishing the current physical generation safely.",
+            ]))
+            var receipt = RobotEngineCommandReceipt(acknowledgement: acknowledgement)
+            for phase: RobotEnginePhase in [.starting, .loading, .running, .failed("owner failed")] {
+                receipt.receiveOwnerPhase(phase)
+                XCTAssertEqual(receipt.detail, acknowledgement.detail)
+            }
+            receipt.receiveOwnerPhase(.ready)
+            XCTAssertEqual(receipt.detail, "Stopped. Ready to continue learning.")
+            receipt.receiveOwnerPhase(.running)
+            XCTAssertEqual(receipt.detail, "Stopped. Ready to continue learning.",
+                           "A later run must not resurrect a completed stop's pending message")
+        }
+    }
+
+    func testOwnerReadyPreservesRejectedStopsOtherAcknowledgementsAndDeliveryErrors() throws {
+        for (command, accepted, detail) in [
+            ("stop", false, "No learning run is active."),
+            ("optimize", true, "Accepted continuous learning."),
+            ("pause", true, "Replay paused."),
+        ] {
+            let acknowledgement = try XCTUnwrap(RobotEngineCommandAcknowledgement(payload: [
+                "type": "engine.command.ack", "schemaVersion": 1, "sequence": 7,
+                "commandId": "preserved-receipt", "lab": "arm", "command": command,
+                "accepted": accepted, "detail": detail,
+            ]))
+            var receipt = RobotEngineCommandReceipt(acknowledgement: acknowledgement)
+            receipt.receiveOwnerPhase(.ready)
+            XCTAssertEqual(receipt.detail, detail)
+        }
+        var failure = RobotEngineCommandReceipt.message("Native command delivery failed.")
+        failure.receiveOwnerPhase(.ready)
+        XCTAssertEqual(failure.detail, "Native command delivery failed.")
+    }
+
     func testLabDownloadsOnlyAdmitTheCurrentPrivateEngineOrigin() throws {
         let base = try XCTUnwrap(URL(string: "http://127.0.0.1:43123"))
         let source = base.appendingPathComponent("robotics")
