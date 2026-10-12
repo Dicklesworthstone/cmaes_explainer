@@ -334,12 +334,17 @@ struct FrankenRobotsView: View {
                 } label: {
                     Label("Stage", systemImage: "chevron.backward")
                         .font(.system(size: RobotTheme.size(10), weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .frame(minHeight: 40)
                 }
                 .buttonStyle(.bordered)
                 .tint(lab.accent)
                 .accessibilityIdentifier("robot-close-full-lab")
                 .accessibilityHint("Returns to the focused native stage without changing the running owner")
+                // The busy indicator adds a spinner. Keep the navigation
+                // label intact and let the flexible lab picker yield space.
+                .layoutPriority(2)
 
                 Picker("Robot laboratory", selection: Binding(
                     get: { engine.selectedLab },

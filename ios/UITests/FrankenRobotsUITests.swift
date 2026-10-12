@@ -389,6 +389,81 @@ final class FrankenRobotsUITests: XCTestCase {
         )
     }
 
+    func testHumanoidFullLabHeaderStaysReadableWhileLearning() throws {
+        verifyFullLabHeaderWhileLearning(lab: "humanoid")
+    }
+
+    func testArmFullLabHeaderStaysReadableWhileLearning() throws {
+        verifyFullLabHeaderWhileLearning(lab: "arm")
+    }
+
+    private func verifyFullLabHeaderWhileLearning(lab: String) {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = lab
+        app.launch()
+        let status = app.descendants(matching: .any)["robot-engine-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 12), app.debugDescription)
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+
+        let open = app.buttons["robot-open-full-lab"]
+        XCTAssertTrue(open.isHittable, app.debugDescription)
+        open.tap()
+        let stage = app.buttons["robot-close-full-lab"]
+        XCTAssertTrue(stage.waitForExistence(timeout: 5), app.debugDescription)
+        let idleFrame = stage.frame
+        stage.tap()
+
+        let optimize = app.buttons["robot-native-optimize"]
+        XCTAssertTrue(optimize.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(optimize.isHittable, app.debugDescription)
+        optimize.tap()
+        let running = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'optimizing'"), object: status
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [running], timeout: 12), .completed)
+        open.tap()
+        XCTAssertTrue(stage.waitForExistence(timeout: 5), app.debugDescription)
+        let busyFrame = stage.frame
+        let headerControls = [stage, app.segmentedControls.firstMatch,
+                              app.buttons["appearance-toggle"], status]
+        let headerFrames = headerControls.map(\.frame)
+        let allHittable = headerControls.allSatisfy(\.isHittable)
+        let bounds = app.frame
+        let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        capture.name = "\(lab) complete-lab header while optimizing"
+        capture.lifetime = .keepAlways
+        add(capture)
+
+        // Stop the real owner before checking geometry, even in a negative run.
+        stage.tap()
+        let stop = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label BEGINSWITH[c] 'stop'"), object: optimize
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [stop], timeout: 8), .completed)
+        optimize.tap()
+        let stopped = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [stopped], timeout: 25), .completed)
+
+        XCTAssertTrue(allHittable, "Every full-lab header control remains reachable")
+        XCTAssertEqual(busyFrame.width, idleFrame.width, accuracy: 1,
+                       "Busy status must not compress the Stage label")
+        XCTAssertEqual(busyFrame.height, idleFrame.height, accuracy: 1,
+                       "Stage must not wrap while learning")
+        for frame in headerFrames {
+            XCTAssertFalse(frame.isEmpty)
+            XCTAssertGreaterThanOrEqual(frame.minX, bounds.minX)
+            XCTAssertLessThanOrEqual(frame.maxX, bounds.maxX)
+        }
+        for pair in zip(headerFrames, headerFrames.dropFirst()) {
+            XCTAssertLessThanOrEqual(pair.0.maxX, pair.1.minX, "Header controls must not overlap")
+        }
+    }
+
     func testFullLabRestoresOriginalResidualReceiptAndTrainer() throws {
         let app = XCUIApplication()
         app.launch()
