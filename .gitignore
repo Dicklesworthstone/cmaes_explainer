@@ -1,6 +1,9 @@
 .vercel
 .next
 node_modules
+# RCH-managed runtime scratch and macOS Finder metadata are not engine inputs.
+/.rch-tmp/
+.DS_Store
 *.log
 *.tmp
 dist

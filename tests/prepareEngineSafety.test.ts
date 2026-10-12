@@ -26,13 +26,16 @@ const benchmarkGallery = readFileSync(
   "utf8",
 );
 
-test("source fencing ignores retained backups but still sees real untracked source", () => {
+test("source fencing ignores generated metadata and retained backups but still sees real untracked source", () => {
   const directory = mkdtempSync(join(tmpdir(), "frankenrobots-source-ignore-"));
   const root = fileURLToPath(new URL("../", import.meta.url));
   cpSync(join(root, ".gitignore"), join(directory, ".gitignore"));
   const initialized = spawnSync("git", ["init", "--quiet", directory], { encoding: "utf8" });
   expect(initialized.status).toBe(0);
   const backups = [
+    ".rch-tmp/frankenrobots-engine-candidate/Engine/source-commit.txt",
+    ".DS_Store",
+    "app/.DS_Store",
     "ios/Engine.previous-87a4a25-20260916/source-commit.txt",
     "ios/Engine.previous-new-checkpoint/frankenrobots/humanoid/index.html",
     ".beads/recovery_20260916T142845Z/issues.jsonl",
@@ -44,6 +47,8 @@ test("source fencing ignores retained backups but still sees real untracked sour
     "public/robots/g1/new-part.STL",
     ".beads/issues.jsonl",
     "tests/newOwner.test.ts",
+    "app/.rch-tmp/newOwner.ts",
+    ".rch/config.toml",
   ];
   const ignored = spawnSync("git", ["check-ignore", "--no-index", "--stdin"], {
     cwd: directory,
