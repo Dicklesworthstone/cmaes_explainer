@@ -304,9 +304,9 @@ export function WalkQualityComparison({
               return (
                 <div
                   key={channel.label}
-                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.4fr)] items-baseline gap-2 py-0.5 text-[0.65rem]"
+                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(4.5rem,0.9fr)] items-baseline gap-2 py-0.5 text-[0.65rem]"
                 >
-                  <span className="text-slate-300">{channel.label}</span>
+                  <span className="min-w-0 break-words text-slate-300">{channel.label}</span>
                   <span className="font-mono text-slate-400">{formatChannelValue(baseline)}</span>
                   <span className="font-mono text-cyan-100">
                     {candidate === null ? "—" : formatChannelValue(candidate)}
