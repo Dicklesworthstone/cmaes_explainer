@@ -823,16 +823,59 @@ struct RobotReadinessDeadline {
 }
 
 @MainActor
-private final class WeakRobotScriptMessageHandler: NSObject, WKScriptMessageHandler {
+private final class WeakRobotScriptMessageHandler: NSObject, WKScriptMessageHandler, WKScriptMessageHandlerWithReply {
     weak var delegate: WKScriptMessageHandler?
+    weak var replyDelegate: WKScriptMessageHandlerWithReply?
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         delegate?.userContentController(userContentController, didReceive: message)
     }
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
+        guard let replyDelegate else {
+            replyHandler(nil, "The lab is no longer available.")
+            return
+        }
+        replyDelegate.userContentController(userContentController, didReceive: message, replyHandler: replyHandler)
+    }
+}
+
+enum RobotLabClipboard {
+    // Full-precision policy links can exceed 50 kB. Keep a generous bound
+    // without granting arbitrary pages an unbounded native clipboard bridge.
+    static let maximumBytes = 1_048_576
+
+    static func text(_ body: Any, isMainFrame: Bool, sourceURL: URL?, baseURL: URL?) -> String? {
+        guard isMainFrame, let sourceURL,
+              RobotLabDownload.allowsDownload(sourceURL, sourceURL: sourceURL, baseURL: baseURL),
+              let text = body as? String, text.utf8.count <= maximumBytes else { return nil }
+        return text
+    }
+
+    static let script = """
+    (() => {
+      const writeText = text => {
+        if (typeof text !== 'string') return Promise.reject(new TypeError('Expected clipboard text.'));
+        return window.webkit.messageHandlers.frankenrobotsClipboard.postMessage(text).then(() => undefined);
+      };
+      // Preserve other clipboard methods and the web labs' existing Promise
+      // success/failure handling. No read access or silent fallback success.
+      if (navigator.clipboard) {
+        Object.defineProperty(navigator.clipboard, 'writeText', { value: writeText, configurable: true });
+      } else {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      }
+    })();
+    """
 }
 
 @MainActor
-final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, WKScriptMessageHandler, WKDownloadDelegate {
+final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate,
+    WKScriptMessageHandler, WKScriptMessageHandlerWithReply, WKDownloadDelegate {
     private static let ownerReadyTimeout: Duration = .seconds(45)
 
     @Published private(set) var phase: RobotEnginePhase = .starting
@@ -944,7 +987,14 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     private func installBridge(on webView: WKWebView) {
         scriptMessageHandler.delegate = self
+        scriptMessageHandler.replyDelegate = self
         webView.configuration.userContentController.add(scriptMessageHandler, name: "frankenrobots")
+        webView.configuration.userContentController.addScriptMessageHandler(
+            scriptMessageHandler, contentWorld: .page, name: "frankenrobotsClipboard"
+        )
+        webView.configuration.userContentController.addUserScript(WKUserScript(
+            source: RobotLabClipboard.script, injectionTime: .atDocumentStart, forMainFrameOnly: true
+        ))
         webView.navigationDelegate = self
     }
 
@@ -953,6 +1003,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
         failedWebView.navigationDelegate = nil
         failedWebView.stopLoading()
         failedWebView.configuration.userContentController.removeScriptMessageHandler(forName: "frankenrobots")
+        failedWebView.configuration.userContentController.removeScriptMessageHandler(
+            forName: "frankenrobotsClipboard", contentWorld: .page
+        )
 
         let replacement = Self.makeWebView(websiteDataStore: websiteDataStore)
         installBridge(on: replacement)
@@ -1702,6 +1755,26 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate, W
 
     func finishDownloadExport(_ id: UUID) {
         pendingDownloads.removeAll { $0.id == id }
+    }
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage,
+        replyHandler: @escaping (Any?, String?) -> Void
+    ) {
+        guard message.name == "frankenrobotsClipboard", message.webView === webView,
+              message.frameInfo.securityOrigin.protocol == "http",
+              message.frameInfo.securityOrigin.host == "127.0.0.1",
+              message.frameInfo.securityOrigin.port == baseURL?.port,
+              let text = RobotLabClipboard.text(
+                  message.body, isMainFrame: message.frameInfo.isMainFrame,
+                  sourceURL: message.frameInfo.request.url, baseURL: baseURL
+              ) else {
+            replyHandler(nil, "Clipboard copying is available only in the current private lab.")
+            return
+        }
+        UIPasteboard.general.string = text
+        replyHandler(NSNull(), nil)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

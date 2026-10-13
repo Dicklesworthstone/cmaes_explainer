@@ -80,6 +80,31 @@ final class RobotEngineBridgeTests: XCTestCase {
         }
     }
 
+    func testClipboardAcceptsCompletePolicyLinksOnlyFromCurrentMainFrame() throws {
+        let base = try XCTUnwrap(URL(string: "http://127.0.0.1:43123"))
+        let source = base.appendingPathComponent("frankenrobots/humanoid/")
+        let text = "https://cmaes-explainer.vercel.app/frankenrobots/humanoid/#zpolicy=" + String(repeating: "a", count: 60_000)
+        XCTAssertEqual(RobotLabClipboard.text(text, isMainFrame: true, sourceURL: source, baseURL: base), text)
+        XCTAssertEqual(RobotLabClipboard.text("", isMainFrame: true, sourceURL: source, baseURL: base), "")
+        XCTAssertNil(RobotLabClipboard.text(text, isMainFrame: false, sourceURL: source, baseURL: base))
+        XCTAssertNil(RobotLabClipboard.text(text, isMainFrame: true, sourceURL: nil, baseURL: base))
+        XCTAssertNil(RobotLabClipboard.text(text, isMainFrame: true, sourceURL: source, baseURL: nil))
+        for url in ["http://127.0.0.1:43124/", "https://example.com/", "file:///tmp/policy",
+                    "http://127.0.0.1:43123@example.com/", "https://127.0.0.1:43123/"] {
+            XCTAssertNil(RobotLabClipboard.text(text, isMainFrame: true, sourceURL: URL(string: url), baseURL: base), url)
+        }
+    }
+
+    func testClipboardRejectsNonTextAndOversizedUTF8WithoutTruncation() throws {
+        let base = try XCTUnwrap(URL(string: "http://127.0.0.1:43123"))
+        let values: [Any] = [NSNull(), 1, ["text": "policy"],
+                             String(repeating: "x", count: RobotLabClipboard.maximumBytes + 1),
+                             String(repeating: "😀", count: RobotLabClipboard.maximumBytes / 4 + 1)]
+        for value in values {
+            XCTAssertNil(RobotLabClipboard.text(value, isMainFrame: true, sourceURL: base, baseURL: base))
+        }
+    }
+
     func testReadinessDeadlineRejectsStaleAndTerminalLoads() {
         var deadline = RobotReadinessDeadline()
         let firstHumanoidLoad = deadline.arm(for: .humanoid)

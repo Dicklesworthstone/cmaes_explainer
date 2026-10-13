@@ -1156,6 +1156,151 @@ final class FrankenRobotsUITests: XCTestCase {
         }
     }
 
+    func testHumanoidOriginalClipboardAndFilesSave() throws {
+        try verifyOriginalClipboardAndFilesSave(lab: "humanoid")
+    }
+
+    func testArmOriginalClipboardAndFilesSave() throws {
+        try verifyOriginalClipboardAndFilesSave(lab: "arm")
+    }
+
+    private func verifyOriginalClipboardAndFilesSave(lab: String) throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = lab
+        app.launch()
+        let status = app.descendants(matching: .any)["robot-engine-status"]
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 55), .completed)
+        let generation = app.descendants(matching: .any)["robot-live-generation"].label
+        let objective = app.descendants(matching: .any)["robot-live-objective"].label
+        app.buttons["robot-open-full-lab"].tap()
+        let workspace = app.webViews.firstMatch
+        let share = workspace.buttons["Share link"]
+        XCTAssertTrue(share.waitForExistence(timeout: 8), app.debugDescription)
+        revealInWebWorkspace(share, workspace: workspace)
+        XCTAssertTrue(share.isHittable)
+        XCTAssertTrue(share.isEnabled)
+        share.tap()
+        let field = workspace.descendants(matching: .any).matching(
+            NSPredicate(format: "label == 'Policy share link'")
+        ).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 8), app.debugDescription)
+        let link = try XCTUnwrap(field.value as? String)
+        XCTAssertTrue(link.hasPrefix("https://cmaes-explainer.vercel.app/frankenrobots/\(lab)/#"))
+        let copied = workspace.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH 'Link copied ('")
+        ).firstMatch
+        XCTAssertTrue(copied.waitForExistence(timeout: 8), app.debugDescription)
+        // The native test runner's direct UIPasteboard read can block on the
+        // cross-app paste authorization. The device harness must compare this
+        // full value with `simctl pbpaste` after this single journey; this
+        // attachment and the success caption alone are not clipboard proof.
+        let attachment = XCTAttachment(string: link)
+        attachment.name = "\(lab) expected clipboard policy link"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        revealInWebWorkspace(field, workspace: workspace)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "\(lab) original policy copy control"
+        image.lifetime = .keepAlways
+        add(image)
+        let download = workspace.buttons.matching(NSPredicate(format: "label ==[c] 'Download'")).firstMatch
+        revealInWebWorkspace(download, workspace: workspace)
+        XCTAssertTrue(download.isHittable)
+        download.tap()
+        try saveOriginalDownload(in: app, label: lab)
+        app.buttons["robot-close-full-lab"].tap()
+        XCTAssertEqual(app.descendants(matching: .any)["robot-live-generation"].label, generation)
+        XCTAssertEqual(app.descendants(matching: .any)["robot-live-objective"].label, objective)
+        XCTAssertTrue(status.label.localizedCaseInsensitiveContains("ready"))
+    }
+
+    private func saveOriginalDownload(in app: XCUIApplication, label: String) throws {
+        let save = app.buttons["Save"]
+        let canSave = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in save.exists && save.isEnabled && save.isHittable }, object: save
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [canSave], timeout: 12), .completed, app.debugDescription)
+        let name = app.textFields.matching(
+            NSPredicate(format: "value CONTAINS 'policy' OR value CONTAINS 'g1-residual'")
+        ).firstMatch
+        XCTAssertTrue(name.exists, app.debugDescription)
+        let originalName = try XCTUnwrap(name.value as? String)
+        let uniqueName = "FrankenRobots-\(label)-\(UUID().uuidString)"
+        name.tap()
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: originalName.count + 1) + uniqueName)
+        XCTAssertEqual(name.value as? String, uniqueName, app.debugDescription)
+        let destination = XCTAttachment(string: "\(uniqueName)\nOriginal: \(originalName)\n\(app.debugDescription)")
+        destination.name = "\(label) unique Files destination"
+        destination.lifetime = .keepAlways
+        add(destination)
+        XCTAssertTrue(save.isHittable)
+        save.tap()
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: save)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 12), .completed, app.debugDescription)
+        XCTAssertTrue(app.buttons["robot-close-full-lab"].waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertFalse(app.alerts["Export failed"].exists, app.debugDescription)
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "\(label) original lab after actual Files Save"
+        image.lifetime = .keepAlways
+        add(image)
+    }
+
+    func testResidualBinaryPolicySavesThroughFiles() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = "humanoid"
+        app.launch()
+        XCTAssertTrue(app.buttons["robot-open-full-lab"].waitForExistence(timeout: 55))
+        app.buttons["robot-open-full-lab"].tap()
+        let workspace = app.webViews.firstMatch
+        let trainer = app.switches.matching(NSPredicate(format: "label BEGINSWITH 'Train a residual'")).firstMatch
+        XCTAssertTrue(trainer.waitForExistence(timeout: 55), app.debugDescription)
+        revealInWebWorkspace(trainer, workspace: workspace)
+        XCTAssertTrue(trainer.isHittable)
+        trainer.tap()
+        let shipped = workspace.buttons["Start from the shipped policy"]
+        XCTAssertTrue(shipped.waitForExistence(timeout: 8), app.debugDescription)
+        revealInWebWorkspace(shipped, workspace: workspace)
+        XCTAssertTrue(shipped.isHittable)
+        shipped.tap()
+        let download = workspace.buttons["Download policy"]
+        let improved = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in download.exists && download.isEnabled }, object: download
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [improved], timeout: 90), .completed, app.debugDescription)
+        let stop = workspace.buttons["Stop training"]
+        revealInWebWorkspace(stop, workspace: workspace)
+        XCTAssertTrue(stop.isHittable)
+        stop.tap()
+        XCTAssertTrue(workspace.buttons["Train in this browser"].waitForExistence(timeout: 30))
+        let copy = workspace.buttons["Copy share link"]
+        revealInWebWorkspace(copy, workspace: workspace)
+        XCTAssertTrue(copy.isHittable)
+        copy.tap()
+        let copied = workspace.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS 'Share link copied'")
+        ).firstMatch
+        XCTAssertTrue(copied.waitForExistence(timeout: 8), app.debugDescription)
+        let copiedText = copied.label
+        let start = try XCTUnwrap(copiedText.range(of: "https://"))
+        let link = String(copiedText[start.lowerBound...])
+        XCTAssertTrue(link.hasPrefix("https://cmaes-explainer.vercel.app/frankenrobots/humanoid/#zresidual="))
+        let clipboard = XCTAttachment(string: link)
+        clipboard.name = "residual-binary expected clipboard policy link"
+        clipboard.lifetime = .keepAlways
+        add(clipboard)
+        revealInWebWorkspace(download, workspace: workspace)
+        XCTAssertTrue(download.isHittable)
+        XCTAssertTrue(download.isEnabled)
+        download.tap()
+        try saveOriginalDownload(in: app, label: "residual-binary")
+        XCTAssertTrue(download.exists)
+        XCTAssertTrue(download.isEnabled, "Saving must retain the trained residual policy")
+        XCTAssertTrue(workspace.buttons["Copy share link"].isEnabled)
+    }
+
     func testArmTracePlaybackControlsReachEmbeddedOwnerTrace() throws {
         let app = XCUIApplication()
         app.launch()
