@@ -4647,17 +4647,17 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
       ) : null}
       {trace ? (
         <div className="space-y-3">
-          <div className="hidden md:grid md:grid-cols-5 md:gap-3 xl:grid-cols-10">
+          <div className="hidden md:grid md:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] md:gap-3">
             {receiptCards.map(([label, value]) => (
               <div
                 key={label}
                 title={`${label}: ${value}`}
                 className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
               >
-                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                <p className="break-words text-[0.65rem] font-bold uppercase leading-5 tracking-[0.12em] text-slate-400">
                   {label}
                 </p>
-                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>
+                <p className="mt-2 break-words font-mono text-sm text-slate-100" title={String(value)}>
                   {value}
                 </p>
               </div>
@@ -4670,10 +4670,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
                 title={`${label}: ${value}`}
                 className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
               >
-                <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                <p className="break-words text-[0.65rem] font-bold uppercase leading-5 tracking-[0.12em] text-slate-400">
                   {label}
                 </p>
-                <p className="mt-2 truncate font-mono text-sm text-slate-100" title={String(value)}>
+                <p className="mt-2 break-words font-mono text-sm text-slate-100" title={String(value)}>
                   {value}
                 </p>
               </div>
@@ -4748,10 +4748,10 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
             kernel scalar that CMA-ES minimized, mutate the trace, or claim the rendered gait
             changed.
           </p>
-          <div className="mt-3 grid min-w-0 grid-cols-2 gap-x-4 gap-y-1 text-[0.68rem] text-slate-400 sm:grid-cols-3">
+          <div className="mt-3 grid min-w-0 grid-cols-1 gap-x-4 gap-y-2 text-[0.68rem] text-slate-400 sm:grid-cols-2 xl:grid-cols-3">
             {multiFactor.channels.map((c: MultiFactorChannel) => (
-              <div key={c.label} className="flex min-w-0 justify-between font-mono">
-                <span className="truncate pr-2 text-slate-300">{c.label}</span>
+              <div key={c.label} className="flex min-w-0 flex-wrap justify-between gap-x-2 font-mono">
+                <span className="min-w-0 break-words text-slate-300">{c.label}</span>
                 <span className="shrink-0 text-slate-500">
                   {c.value >= 0 ? "+" : ""}
                   {number(c.contribution, 3)} (w {c.weight >= 0 ? "+" : ""}

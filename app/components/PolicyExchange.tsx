@@ -49,9 +49,6 @@ type Notice = { tone: "ok" | "warn" | "error"; text: string } | null;
 /** Chat apps and mail clients start mangling links well before browsers do. */
 const FRAGILE_LINK_LENGTH = 8_000;
 
-/** Bytes per coefficient in a link, for the size hint before one is built. */
-const LINK_BYTES_PER_COEFFICIENT = 8;
-
 export function PolicyExchange({
   policy,
   subject = "g1",
@@ -263,13 +260,10 @@ export function PolicyExchange({
         </p>
       ) : (
         <p className="mt-2 text-[0.62rem] leading-4 text-slate-500">
-          Both are exact. The file is the archival form; the link carries the policy inside the URL
-          fragment, so it is never uploaded anywhere. The link is long — around{" "}
-          {ready
-            ? `${Math.round((policy.length * LINK_BYTES_PER_COEFFICIENT * 1.37) / 1024)} kB`
-            : "50 kB"}{" "}
-          — because anything smaller stopped reproducing the gait that was trained: a rollout this
-          long amplifies rounding, and a lossy link came back walking 0.57 m instead of 0.66 m.
+          Download and Share link both preserve every policy coefficient at full precision.
+          Download saves a file; Share link puts the policy in the URL fragment, without uploading
+          it to a server. Link size depends on the policy and saved experiment. Use the file if
+          your messaging app shortens long links. Load restores a policy file for replay in this lab.
         </p>
       )}
     </div>

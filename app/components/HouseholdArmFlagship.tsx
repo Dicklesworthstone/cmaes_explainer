@@ -3055,19 +3055,19 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             ];
             return (
               <div className="space-y-3">
-                <div className="hidden md:grid md:grid-cols-4 md:gap-3 xl:grid-cols-12">
+                <div className="hidden md:grid md:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] md:gap-3">
                   {cards.map(([label, value]) => (
                     <div
                       key={label}
                       title={`${label}: ${value}`}
                       className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
                     >
-                      <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      <p className="break-words text-[0.65rem] font-bold uppercase leading-5 tracking-[0.12em] text-slate-400">
                         {label}
                       </p>
                       <p
                         title={String(value)}
-                        className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                        className={`mt-2 break-words font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
                       >
                         {value}
                       </p>
@@ -3081,12 +3081,12 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
                       title={`${label}: ${value}`}
                       className="min-w-0 rounded-2xl border border-white/10 bg-slate-900/55 p-4"
                     >
-                      <p className="truncate text-[0.65rem] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      <p className="break-words text-[0.65rem] font-bold uppercase leading-5 tracking-[0.12em] text-slate-400">
                         {label}
                       </p>
                       <p
                         title={String(value)}
-                        className={`mt-2 truncate font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
+                        className={`mt-2 break-words font-mono text-sm ${label === "placement verdict" && trace.placed ? "text-emerald-300" : "text-slate-100"}`}
                       >
                         {value}
                       </p>

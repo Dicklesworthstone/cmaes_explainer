@@ -41,6 +41,44 @@ const FLAGSHIP_MODULES = [
 ];
 
 describe("flagship components import without throwing", () => {
+  test("policy exchange explains exact sharing for both robots, including before readiness", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { PolicyExchange } = await import("../app/components/PolicyExchange");
+    for (const subject of ["g1", "iiwa"]) {
+      for (const policy of [null, new Float64Array(subject === "g1" ? 5_040 : 96)]) {
+        for (const disabled of [false, true]) {
+          const html = renderToStaticMarkup(createElement(PolicyExchange, {
+            policy, subject, disabled,
+            title: subject === "iiwa" ? "Keep this policy" : "Keep this gait",
+            meta: { kernelVersion: "test", task: "test", challenge: "test", family: "test", generation: 0, sigma: 0.1 },
+            measured: null,
+            onImport: () => {},
+          }));
+          expect(html).toContain("preserve every policy coefficient at full precision");
+          expect(html).toContain("Link size depends on the policy and saved experiment");
+          expect(html).toContain("Load restores a policy file for replay in this lab");
+          expect(html).not.toContain("0.57 m");
+          expect(html).not.toContain("50 kB");
+          if (subject === "iiwa") expect(html).not.toContain("gait");
+          const labels: string[] = [];
+          await new HTMLRewriter().on("button", {
+            element(element) {
+              // Download/share depend on policy readiness; Load remains usable
+              // before a policy arrives, provided the real owner is not busy.
+              const index = labels.length;
+              labels.push(element.getAttribute("type") ?? "");
+              expect(element.hasAttribute("disabled")).toBe(
+                index < 2 ? policy === null || disabled : disabled,
+              );
+            },
+          }).transform(new Response(html)).text();
+          expect(labels).toEqual(["button", "button", "button"]);
+        }
+      }
+    }
+  });
+
   for (const name of ["G1WalkingFlagship", "HouseholdArmFlagship", "ResponsiveRobotCamera"]) {
     test(`${name} cold import does not load unrelated Drei subsystems`, async () => {
       // Each component gets a fresh module cache. The in-process sweep below
