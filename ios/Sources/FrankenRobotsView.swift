@@ -24,6 +24,7 @@ struct FrankenRobotsView: View {
     @State private var showingCameraSelection = false
     @State private var showingReceiptLensSelection = false
     @State private var showingOverlaySelection = false
+    @State private var showingLabSectionSelection = false
 
     init() {
         var initialLab: RobotLab = .humanoid
@@ -135,6 +136,14 @@ struct FrankenRobotsView: View {
             Button("OK") { receiptExportError = nil; presentNextDownload() }
         } message: {
             Text(receiptExportError ?? "The receipt could not be exported.")
+        }
+        .alert("Section unavailable", isPresented: Binding(
+            get: { engine.sectionNavigationError != nil },
+            set: { if !$0 { engine.sectionNavigationError = nil } }
+        )) {
+            Button("OK") { engine.sectionNavigationError = nil }
+        } message: {
+            Text(engine.sectionNavigationError ?? "You can still scroll the complete lab.")
         }
         .sheet(isPresented: $showingDetails) {
             NavigationStack {
@@ -364,25 +373,40 @@ struct FrankenRobotsView: View {
             }
 
             HStack(spacing: 8) {
-                Label("COMPLETE LAB", systemImage: "square.grid.3x3.fill")
-                    .font(.system(size: RobotTheme.size(8), weight: .black, design: .monospaced))
-                    .kerning(0.8)
+                Label("Complete lab", systemImage: "square.grid.3x3.fill")
+                    .font(.system(size: RobotTheme.size(12), weight: .semibold, design: .rounded))
                     .foregroundStyle(lab.accent)
-                Text("SCENE · CAMERAS · PHYSICS · TIMELINE · RUN · REPLAY · POLICIES · RECEIPTS")
-                    .font(.system(size: RobotTheme.size(7.2), weight: .bold, design: .monospaced))
-                    .foregroundStyle(RobotTheme.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.58)
+                    .accessibilityLabel("Complete lab: scene, cameras, physics, timeline, run, replay, policies and receipts")
+                    .accessibilityIdentifier("robot-full-lab-capability-map")
                 Spacer(minLength: 0)
-                Text("SCROLL")
-                    .font(.system(size: RobotTheme.size(7.5), weight: .black, design: .monospaced))
-                    .foregroundStyle(RobotTheme.text)
+                Button {
+                    showingLabSectionSelection = true
+                } label: {
+                    Label("Jump to…", systemImage: "list.bullet")
+                        .font(.system(size: RobotTheme.size(13), weight: .bold, design: .rounded))
+                        .frame(minHeight: 44)
+                        .padding(.horizontal, 8)
+                        .contentShape(Rectangle())
+                }
+                .tint(lab.accent)
+                .disabled(engine.pendingSection != nil || (engine.phase != .ready && engine.phase != .running))
+                .accessibilityIdentifier("robot-full-lab-jump")
+                .accessibilityHint("Scrolls to an original section without resetting the current experiment")
+                .confirmationDialog("Jump to a section", isPresented: $showingLabSectionSelection, titleVisibility: .visible) {
+                    ForEach(RobotLabSection.available(for: lab)) { section in
+                        Button(section.title) {
+                            Task { await engine.jumpToSection(section) }
+                        }
+                        .accessibilityIdentifier("robot-jump-\(section.rawValue)")
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("Your current experiment stays loaded.")
+                }
             }
             .padding(.horizontal, 12)
-            .frame(minHeight: 30)
+            .frame(minHeight: 44)
             .background(RobotTheme.panel.opacity(0.92), in: Capsule())
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("robot-full-lab-capability-map")
 
             RobotPanel(accent: lab.accent) {
                 ZStack {

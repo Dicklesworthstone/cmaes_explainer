@@ -3,6 +3,54 @@ import UIKit
 import WebKit
 import CoreFoundation
 
+/// Presentation-only destinations in the original, complete lab document.
+/// These shortcuts never dispatch owner commands or replace the live page.
+enum RobotLabSection: String, CaseIterable, Identifiable {
+    case scene, experiment, policies, receipts, comparison, research
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .scene: "Scene & cameras"
+        case .experiment: "Experiment setup"
+        case .policies: "Save & share policies"
+        case .receipts: "Telemetry receipts"
+        case .comparison: "Compare optimizers"
+        case .research: "Research & trainer"
+        }
+    }
+    static func available(for lab: RobotLab) -> [Self] {
+        allCases.filter { $0 != .research || lab == .humanoid }
+    }
+
+    // Match the shipped owners' existing controls, including responsive
+    // receipt variants. Do not click a disclosure, change the URL fragment
+    // (which may contain a policy), or activate a research/training panel.
+    static let scrollScript = """
+    if (location.pathname !== route) return false;
+    const visible = node => node && node.getClientRects().length > 0;
+    const buttons = [...document.querySelectorAll('button')].filter(visible);
+    const button = text => buttons.find(node => node.textContent.trim() === text);
+    let target;
+    switch (section) {
+      case 'scene': target = document.querySelector(lab === 'humanoid'
+        ? '[aria-label="Humanoid visualization"]' : '[aria-label="Arm visualization"]'); break;
+      case 'experiment': target = document.getElementById(lab === 'humanoid' ? 'g1-family' : 'arm-family'); break;
+      case 'policies': target = button('Share link'); break;
+      case 'receipts': target = buttons.find(node => /^(Copy as JSON|Copy \\d+-row receipt as JSON)$/.test(node.textContent.trim())); break;
+      case 'comparison': target = button(lab === 'humanoid' ? 'Run scalable-family race' : 'Run physical race'); break;
+      case 'research': target = lab === 'humanoid' && [...document.querySelectorAll('h2')]
+        .find(node => node.textContent.trim() === 'Beyond the primary locomotion run'); break;
+      default: return false;
+    }
+    if (!visible(target)) return false;
+    // Explicit instant scrolling also respects Reduce Motion when the
+    // original page's root uses scroll-behavior: smooth.
+    target.scrollIntoView({behavior: 'instant', block: section === 'research' ? 'start' : 'center', inline: 'nearest'});
+    return true;
+    """
+}
+
 enum RobotLocomotionTask: String, Codable, CaseIterable, Identifiable {
     case balance
     case stepping
@@ -916,6 +964,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate,
     var commandDetail: String? { commandReceipt?.detail }
     @Published private(set) var pendingDownloads: [RobotLabDownload] = []
     @Published var downloadError: String?
+    @Published var sectionNavigationError: String?
+    @Published private(set) var pendingSection: RobotLabSection?
+    private var sectionNavigationID = UUID()
 
     private var activeDownloads: [ObjectIdentifier: WKDownload] = [:]
     private var downloadDestinations: [ObjectIdentifier: URL] = [:]
@@ -1540,6 +1591,44 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate,
         armReadinessTimeout(for: selectedLab)
     }
 
+    @discardableResult
+    func jumpToSection(_ section: RobotLabSection) async -> Bool {
+        guard phase == .ready || phase == .running else {
+            sectionNavigationError = "Wait for the lab to finish loading, then try again."
+            return false
+        }
+        guard RobotLabSection.available(for: selectedLab).contains(section) else {
+            sectionNavigationError = "This section is not part of the current lab."
+            return false
+        }
+        let requestID = UUID()
+        sectionNavigationID = requestID
+        let page = webView
+        let lab = selectedLab
+        pendingSection = section
+        sectionNavigationError = nil
+        defer {
+            if sectionNavigationID == requestID { pendingSection = nil }
+        }
+        do {
+            let found = try await page.callAsyncJavaScript(
+                RobotLabSection.scrollScript,
+                arguments: ["section": section.rawValue, "lab": lab.rawValue, "route": lab.route],
+                in: nil, contentWorld: .page
+            )
+            guard sectionNavigationID == requestID, page === webView, lab == selectedLab else { return false }
+            guard found as? Bool == true else {
+                sectionNavigationError = "\(section.title) is not available yet. You can still scroll the complete lab; no experiment settings were changed."
+                return false
+            }
+            return true
+        } catch {
+            guard sectionNavigationID == requestID, page === webView, lab == selectedLab else { return false }
+            sectionNavigationError = "Could not reach \(section.title.lowercased()). Try again when the lab is ready; your experiment has not been reset."
+            return false
+        }
+    }
+
     private func armReadinessTimeout(for lab: RobotLab) {
         readinessTimeoutTask?.cancel()
         let generation = readinessDeadline.arm(for: lab)
@@ -2148,6 +2237,9 @@ final class RobotEngineHost: NSObject, ObservableObject, WKNavigationDelegate,
     }
 
     private func resetBridgeState() {
+        sectionNavigationID = UUID()
+        pendingSection = nil
+        sectionNavigationError = nil
         lastBridgeSequence = 0
         metrics = .empty
         supportsOptimize = false

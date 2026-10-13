@@ -5,6 +5,107 @@ final class FrankenRobotsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testHumanoidSectionMenuReachesOriginalControlsWithoutResettingLearning() throws {
+        try verifySectionMenu(lab: "humanoid")
+    }
+
+    func testArmSectionMenuReachesOriginalControlsWithoutResettingLearning() throws {
+        try verifySectionMenu(lab: "arm")
+    }
+
+    private func verifySectionMenu(lab: String) throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["FROBOTS_INITIAL_LAB"] = lab
+        app.launch()
+        let status = app.descendants(matching: .any)["robot-engine-status"]
+        func waitForReady() {
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "label CONTAINS[c] 'ready'"), object: status
+            )], timeout: 55), .completed)
+        }
+        waitForReady()
+        let generation = app.descendants(matching: .any)["robot-live-generation"]
+        let objective = app.descendants(matching: .any)["robot-live-objective"]
+        let originalGeneration = generation.label
+        let optimize = app.buttons["robot-native-optimize"]
+        optimize.tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                status.label.localizedCaseInsensitiveContains("optimizing") && generation.label != originalGeneration
+            }, object: generation
+        )], timeout: 55), .completed)
+        optimize.tap()
+        waitForReady()
+        let savedGeneration = generation.label
+        let savedObjective = objective.label
+        XCTAssertNotEqual(savedGeneration, originalGeneration)
+        app.buttons["robot-open-full-lab"].tap()
+        let workspace = app.webViews.firstMatch
+        let jump = app.buttons["robot-full-lab-jump"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 8))
+        XCTAssertGreaterThanOrEqual(jump.frame.height, 44)
+        var destinations: [(String, String)] = [
+            ("policies", "label == 'Share link'"),
+            ("comparison", lab == "humanoid" ? "label == 'Run scalable-family race'" : "label == 'Run physical race'"),
+            ("receipts", "label == 'Copy as JSON' OR label MATCHES 'Copy [0-9]+-row receipt as JSON'"),
+            ("experiment", lab == "humanoid" ? "label CONTAINS[c] 'Scalable covariance representation'" : "label ==[c] 'Covariance representation'"),
+        ]
+        if lab == "humanoid" {
+            destinations.append(("research", "label == 'Beyond the primary locomotion run'"))
+        }
+        destinations.append(("scene", lab == "humanoid"
+            ? "label == 'Humanoid visualization' OR label == 'Humanoid visualization, region'"
+            : "label == 'Arm visualization' OR label == 'Arm visualization, region'"))
+        for (section, predicate) in destinations {
+            XCTAssertTrue(jump.isHittable)
+            jump.tap()
+            let choice = app.buttons["robot-jump-\(section)"].firstMatch
+            XCTAssertTrue(choice.waitForExistence(timeout: 5), app.debugDescription)
+            XCTAssertTrue(choice.isEnabled)
+            XCTAssertTrue(app.frame.contains(CGPoint(x: choice.frame.midX, y: choice.frame.midY)))
+            if section == "policies" {
+                let picker = XCTAttachment(screenshot: app.screenshot())
+                picker.name = "\(lab) visible native section picker"
+                picker.lifetime = .keepAlways
+                add(picker)
+            }
+            // Use the existing physical-touch fallback for SwiftUI actions
+            // whose AX hit-test is false despite an on-screen enabled row.
+            // The original destination still has to pass viewport/hit checks.
+            tapVisibleMenuItem(choice, in: app)
+            let target = workspace.descendants(matching: .any).matching(NSPredicate(format: predicate)).firstMatch
+            // No swipes or programmatic target taps: the native shortcut alone
+            // must bring the original control into the actual web viewport.
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in
+                    guard target.exists else { return false }
+                    let bounds = target.frame, viewport = workspace.frame
+                    return bounds.intersects(viewport) && bounds.midY > viewport.minY && bounds.midY < viewport.maxY
+                }, object: target
+            )], timeout: 8), .completed, app.debugDescription)
+            if section == "policies" || section == "comparison" || section == "receipts" {
+                XCTAssertTrue(target.isHittable)
+            }
+            if section == "research" {
+                let trainer = workspace.descendants(matching: .any).matching(
+                    NSPredicate(format: "label BEGINSWITH 'Train a residual'")
+                ).firstMatch
+                XCTAssertTrue(trainer.isHittable, "The research shortcut must reveal the original trainer entry without another scroll")
+            }
+            XCTAssertFalse(app.alerts["Section unavailable"].exists)
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "\(lab) jump to \(section) without scrolling"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        app.buttons["robot-close-full-lab"].tap()
+        XCTAssertEqual(generation.label, savedGeneration)
+        XCTAssertEqual(objective.label, savedObjective)
+        XCTAssertTrue(status.label.localizedCaseInsensitiveContains("ready"))
+        XCTAssertEqual(app.descendants(matching: .any)["robot-native-command-detail"].label,
+                       "Stopped. Ready to continue learning.")
+    }
+
     private func revealHumanoidStageControls(in app: XCUIApplication) {
         let toggle = app.buttons.matching(
             NSPredicate(format: "label ==[c] 'Controls' OR label ==[c] 'Hide controls'")
@@ -390,9 +491,9 @@ final class FrankenRobotsUITests: XCTestCase {
 
         let capabilityMap = app.descendants(matching: .any)["robot-full-lab-capability-map"]
         XCTAssertTrue(capabilityMap.waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(capabilityMap.label.contains("CAMERAS"))
-        XCTAssertTrue(capabilityMap.label.contains("TIMELINE"))
-        XCTAssertTrue(capabilityMap.label.contains("POLICIES"))
+        XCTAssertTrue(capabilityMap.label.localizedCaseInsensitiveContains("cameras"))
+        XCTAssertTrue(capabilityMap.label.localizedCaseInsensitiveContains("timeline"))
+        XCTAssertTrue(capabilityMap.label.localizedCaseInsensitiveContains("policies"))
 
         let workspace = app.webViews.firstMatch
         XCTAssertTrue(workspace.waitForExistence(timeout: 12), app.debugDescription)

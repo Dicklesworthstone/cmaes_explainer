@@ -5,6 +5,13 @@ import UniformTypeIdentifiers
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
+    func testFullLabSectionsExposeOnlyOriginalDestinations() {
+        XCTAssertEqual(RobotLabSection.available(for: .arm), [.scene, .experiment, .policies, .receipts, .comparison])
+        XCTAssertEqual(RobotLabSection.available(for: .humanoid), RobotLabSection.allCases)
+        XCTAssertEqual(Set(RobotLabSection.allCases.map(\.id)).count, RobotLabSection.allCases.count)
+        XCTAssertTrue(RobotLabSection.allCases.allSatisfy { !$0.title.isEmpty })
+    }
+
     func testAcceptedStopReceiptWaitsForOwnerReadyAndStaysCompleted() throws {
         for lab in ["humanoid", "arm"] {
             let acknowledgement = try XCTUnwrap(RobotEngineCommandAcknowledgement(payload: [
@@ -686,6 +693,88 @@ private extension JSONDecoder {
 /// FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS=1 in the test host's environment.
 /// No synthetic context-loss events or replacement policy/worker implementations are used.
 final class RobotGraphicsRecoveryIntegrationTests: XCTestCase {
+    @MainActor
+    func testHumanoidSectionJumpsPreserveDocumentAndLearnedPolicy() async throws {
+        try await verifySectionJumps(lab: .humanoid)
+    }
+
+    @MainActor
+    func testArmSectionJumpsPreserveDocumentAndLearnedPolicy() async throws {
+        try await verifySectionJumps(lab: .arm)
+    }
+
+    @MainActor
+    private func verifySectionJumps(lab: RobotLab) async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FROBOTS_RUN_GRAPHICS_RECOVERY_TESTS"] == "1")
+        try await waitUntil("app-hosted WKWebView") { self.appWebView() != nil }
+        let parent = try XCTUnwrap(appWebView()?.superview)
+        let host = RobotEngineHost(initialLab: lab)
+        let web = host.webView
+        web.frame = parent.bounds
+        parent.addSubview(web)
+        defer { web.stopLoading(); web.removeFromSuperview() }
+        try await waitUntil("real owner ready", timeout: 180) { host.phase == .ready }
+        host.optimize()
+        addTeardownBlock { @MainActor [weak web] in
+            if let web { try? await self.stopLearning(web) }
+        }
+        try await waitUntil("real policy learned", timeout: 180) {
+            host.phase == .running && (host.metrics.generation ?? -1) >= 1
+        }
+        try await stopLearning(web)
+        try await waitUntil("stopped owner") { host.phase == .ready }
+        let generation = host.metrics.generation
+        let subject = lab == .humanoid ? "g1" : "arm"
+        try await waitUntil("learned checkpoint persisted") {
+            try await self.truth(web, """
+            Object.keys(localStorage).filter(key => key.startsWith('cmaes.\(subject).') &&
+              key.endsWith('.training-session.v2')).some(key => JSON.parse(localStorage.getItem(key)).generation === \(generation ?? -1))
+            """)
+        }
+        _ = try await web.evaluateJavaScript("""
+        window.__robotJumpProbe = { document, href: location.href,
+          checkpoints: () => JSON.stringify(Object.keys(localStorage).sort()
+            .filter(key => key.endsWith('.training-session.v2')).map(key => [key, localStorage.getItem(key)])) };
+        window.__robotJumpProbe.saved = window.__robotJumpProbe.checkpoints(); true;
+        """)
+        for section in RobotLabSection.available(for: lab).reversed() {
+            let jumped = await host.jumpToSection(section)
+            XCTAssertTrue(jumped, "\(lab.rawValue)/\(section.rawValue): \(host.sectionNavigationError ?? "no error")")
+            XCTAssertNil(host.sectionNavigationError)
+            XCTAssertNil(host.pendingSection)
+            let preserved = try await truth(web, """
+            window.__robotJumpProbe.document === document && window.__robotJumpProbe.href === location.href &&
+              window.__robotJumpProbe.saved === window.__robotJumpProbe.checkpoints()
+            """)
+            XCTAssertTrue(preserved, "Jump must preserve live document, URL and full saved learning state")
+            XCTAssertEqual(host.metrics.generation, generation)
+            XCTAssertEqual(host.phase, .ready)
+        }
+        // An absent destination must report failure, not jump to another
+        // control or activate a trainer. Restore the original heading after
+        // this deliberate negative probe; no owner settings are modified.
+        if lab == .humanoid {
+            _ = try await web.evaluateJavaScript("""
+            window.__robotJumpHeading = [...document.querySelectorAll('h2')].find(n => n.textContent.trim() === 'Beyond the primary locomotion run');
+            window.__robotJumpHeading.textContent = 'Temporarily unavailable for navigation test'; true;
+            """)
+            let missing = await host.jumpToSection(.research)
+            _ = try await web.evaluateJavaScript("window.__robotJumpHeading.textContent = 'Beyond the primary locomotion run'; delete window.__robotJumpHeading; true")
+            XCTAssertFalse(missing)
+            XCTAssertNotNil(host.sectionNavigationError)
+            let recovered = await host.jumpToSection(.research)
+            XCTAssertTrue(recovered)
+            XCTAssertNil(host.sectionNavigationError)
+        } else {
+            let unsupported = await host.jumpToSection(.research)
+            XCTAssertFalse(unsupported)
+            XCTAssertNotNil(host.sectionNavigationError)
+        }
+        let preserved = try await truth(web, "window.__robotJumpProbe.document === document && window.__robotJumpProbe.saved === window.__robotJumpProbe.checkpoints()")
+        XCTAssertTrue(preserved)
+        attachText("\(lab.rawValue): all section jumps and negative probe preserved generation \(generation ?? -1), original document and full persisted checkpoint", name: "\(lab.rawValue)-section-state-proof")
+    }
+
     @MainActor
     func testHumanoidOriginalPolicyAndTelemetryDownloadsPreserveBytesAndLearning() async throws {
         try await verifyOriginalDownloads(lab: .humanoid)
