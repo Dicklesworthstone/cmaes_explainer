@@ -138,8 +138,6 @@ const PRIMARY_ROWS: MetricRow[] = [
   },
 ];
 
-const CHANNEL_DETAIL_LIMIT = 6;
-
 function formatChannelValue(value: number): string {
   if (Math.abs(value) >= 100) return value.toFixed(0);
   if (Math.abs(value) >= 10) return value.toFixed(1);
@@ -160,9 +158,9 @@ function improvementPct(
     return null;
   }
   if (!higherBetter) {
-    return ((baseline - candidate) / baseline) * 100;
+    return ((baseline - candidate) / Math.abs(baseline)) * 100;
   }
-  return ((candidate - baseline) / baseline) * 100;
+  return ((candidate - baseline) / Math.abs(baseline)) * 100;
 }
 
 function arrowGlyph(pct: number | null): string {
@@ -172,9 +170,10 @@ function arrowGlyph(pct: number | null): string {
   return "≈";
 }
 
-function pctColor(pct: number | null, higherBetter: boolean): string {
+function pctColor(pct: number | null): string {
   if (pct === null) return "text-slate-500";
-  const good = higherBetter ? pct > 0 : pct < 0;
+  // improvementPct already accounts for the metric's desired direction.
+  const good = pct > 0;
   if (Math.abs(pct) < 1) return "text-slate-400";
   return good ? "text-emerald-300" : "text-rose-300";
 }
@@ -205,7 +204,7 @@ function MetricRowView({
       </div>
       <span className="font-mono text-slate-300">{row.format(curriculumMetrics)}</span>
       <span className="font-mono text-cyan-100">{row.format(candidateMetrics)}</span>
-      <span className={`text-right font-mono ${pctColor(pct, row.higherBetter)}`}>
+      <span className={`text-right font-mono ${pctColor(pct)}`}>
         {arrowGlyph(pct)} {pct === null ? "—" : `${Math.abs(pct).toFixed(1)}%`}
       </span>
     </div>
@@ -254,12 +253,12 @@ export function WalkQualityComparison({
 
   // Per-channel comparison (multi-factor breakdown) — only when not compact.
   const channelRows = (() => {
-    if (compact) return [] as Array<{ channel: MultiFactorChannel; baseline: number | null }>;
+    if (compact) return [] as Array<{ channel: MultiFactorChannel; candidate: number | null }>;
     const a = curriculumMetrics?.multiFactor?.channels ?? [];
     const b = candidateMetrics?.multiFactor?.channels ?? [];
     return a.map((channel, i) => ({
       channel,
-      baseline: b[i]?.value ?? null,
+      candidate: b.find(candidate => candidate.label === channel.label)?.value ?? null,
     }));
   })();
 
@@ -282,7 +281,7 @@ export function WalkQualityComparison({
         <span>Metric</span>
         <span className="font-mono">{curriculumLabel}</span>
         <span className="font-mono text-cyan-300">{candidateLabel}</span>
-        <span className="text-right">Δ</span>
+        <span className="text-right" title="Percent improvement: positive is better for each metric">Gain</span>
       </div>
       {PRIMARY_ROWS.map((row) => (
         <MetricRowView
@@ -299,18 +298,18 @@ export function WalkQualityComparison({
             Multi-factor channel breakdown ({channelRows.length})
           </summary>
           <div className="mt-2 space-y-1">
-            {channelRows.slice(0, CHANNEL_DETAIL_LIMIT).map(({ channel, baseline }) => {
-              const cand = channel.value;
-              const delta = baseline !== null ? cand - baseline : null;
+            {channelRows.map(({ channel, candidate }) => {
+              const baseline = channel.value;
+              const delta = candidate !== null ? candidate - baseline : null;
               return (
                 <div
                   key={channel.label}
                   className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.4fr)] items-baseline gap-2 py-0.5 text-[0.65rem]"
                 >
                   <span className="text-slate-300">{channel.label}</span>
-                  <span className="font-mono text-slate-400">{formatChannelValue(cand)}</span>
+                  <span className="font-mono text-slate-400">{formatChannelValue(baseline)}</span>
                   <span className="font-mono text-cyan-100">
-                    {baseline === null ? "—" : formatChannelValue(baseline)}
+                    {candidate === null ? "—" : formatChannelValue(candidate)}
                   </span>
                   <span className="text-right font-mono">
                     {delta === null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`}
