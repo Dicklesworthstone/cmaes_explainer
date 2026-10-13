@@ -29,7 +29,7 @@ import {
  */
 export type TrainingSubject = "g1" | "arm";
 
-/** Native retries must reopen the selected experiment, not just retain its policy slot. */
+/** Reloads and native retries must reopen the experiment, not just retain its policy slot. */
 export function saveNativeTrainingSelection(
   subject: TrainingSubject,
   task: string,
@@ -272,6 +272,23 @@ export function saveTrainingSession<TPoint>(
     // The superseded single-slot entry would otherwise sit in storage forever
     // holding a stale copy of one experiment.
     window.localStorage.removeItem(legacyStorageKey(subject));
+    // A share link is an import instruction, not a forever-pinned recovery
+    // policy. Once the owner has replayed and saved a real run, leaving zpolicy
+    // here makes the next reload import that older snapshot over newer work.
+    // Keep the independent copied link intact, and preserve every other URL
+    // setting and the router's history state. Do not consume the only recovery
+    // path if storage refused the policy or its experiment selection.
+    const fragment = new URLSearchParams(window.location?.hash.slice(1));
+    if (snapshot.generation > 0 && fragment.has("zpolicy")) {
+      if (!saveNativeTrainingSelection(subject, snapshot.task, snapshot.challenge)) return false;
+      fragment.delete("zpolicy");
+      const hash = fragment.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}${hash ? `#${hash}` : ""}`,
+      );
+    }
     return true;
   } catch {
     return false;

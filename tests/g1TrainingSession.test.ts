@@ -46,6 +46,112 @@ function snapshotOf(overrides: Partial<TrainingSessionSnapshot> = {}): TrainingS
 }
 
 describe("G1 training session persistence", () => {
+  test("a saved owner policy retires the stale local share without damaging the copied link", () => {
+    const previous = (globalThis as { window?: unknown }).window;
+    try {
+      for (const subject of ["g1", "arm"] as const) {
+        const store = new Map<string, string>();
+        const snapshot = snapshotOf(subject === "arm"
+          ? { task: "living-room-remote", challenge: "household" }
+          : { task: "balance", challenge: "terrain-and-push" });
+        let location = new URL(`https://example.test/${subject}?mode=lab#view=max&zpolicy=old&camera=side`);
+        const copiedLink = location.href;
+        const state = { router: { preserved: true } };
+        let replacements = 0;
+        (globalThis as { window?: unknown }).window = {
+          get location() { return location; },
+          localStorage: {
+            getItem: (key: string) => store.get(key) ?? null,
+            setItem: (key: string, value: string) => void store.set(key, value),
+            removeItem: (key: string) => void store.delete(key),
+          },
+          history: { state, replaceState: (nextState: unknown, title: string, url: string) => {
+            // Storage must be durable BEFORE removing the link's recovery path.
+            expect(loadTrainingSession(32, subject, undefined, snapshot.task, snapshot.challenge))
+              .toMatchObject({ generation: snapshot.generation, policy: snapshot.policy });
+            expect(loadNativeTrainingSelection(subject, [snapshot.task], [snapshot.challenge]))
+              .toEqual({ task: snapshot.task, challenge: snapshot.challenge });
+            expect(nextState).toBe(state);
+            expect(title).toBe("");
+            location = new URL(url, location);
+            replacements++;
+          } },
+        };
+        expect(saveTrainingSession(snapshot, subject)).toBe(true);
+        expect(location.href).toBe(`https://example.test/${subject}?mode=lab#view=max&camera=side`);
+        expect(new URL(copiedLink).hash).toContain("zpolicy=old");
+        expect(saveTrainingSession(snapshot, subject)).toBe(true);
+        expect(replacements).toBe(1); // No history churn on every learning receipt.
+      }
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
+  test("failed checkpoint or experiment selection never consumes the share link", () => {
+    const previous = (globalThis as { window?: unknown }).window;
+    try {
+      for (const failure of ["checkpoint", "selection"] as const) {
+        const location = new URL("https://example.test/humanoid#zpolicy=only-recovery-copy");
+        let replacements = 0;
+        (globalThis as { window?: unknown }).window = {
+          location,
+          localStorage: {
+            setItem: (key: string) => {
+              if (failure === "checkpoint" || key.includes("native-selection"))
+                throw new Error("Storage quota exceeded");
+            },
+            removeItem: () => {},
+          },
+          history: { state: null, replaceState: () => { replacements++; } },
+        };
+        expect(saveTrainingSession(snapshotOf())).toBe(false);
+        expect(location.hash).toBe("#zpolicy=only-recovery-copy");
+        expect(replacements).toBe(0);
+      }
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
+  test("zero-generation previews and unrelated anchors do not consume a share", () => {
+    const previous = (globalThis as { window?: unknown }).window;
+    try {
+      for (const [hash, generation] of [["#zpolicy=original", 0], ["#learning-controls", 12]] as const) {
+        let replacements = 0;
+        (globalThis as { window?: unknown }).window = {
+          location: new URL(`https://example.test/humanoid${hash}`),
+          localStorage: { setItem: () => {}, removeItem: () => {} },
+          history: { state: null, replaceState: () => { replacements++; } },
+        };
+        expect(saveTrainingSession(snapshotOf({ generation }))).toBe(true);
+        expect(replacements).toBe(0);
+      }
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
+  test("history refusal is reported without discarding the saved checkpoint", () => {
+    const store = new Map<string, string>();
+    const previous = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {
+      location: new URL("https://example.test/humanoid#zpolicy=original"),
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+      history: { state: null, replaceState: () => { throw new Error("History denied"); } },
+    };
+    try {
+      expect(saveTrainingSession(snapshotOf())).toBe(false);
+      expect(loadTrainingSession(32)).toMatchObject({ generation: 512 });
+    } finally {
+      (globalThis as { window?: unknown }).window = previous;
+    }
+  });
+
   test("native selection survives retry independently of per-experiment policy slots", () => {
     const store = new Map<string, string>();
     const previous = (globalThis as { window?: unknown }).window;

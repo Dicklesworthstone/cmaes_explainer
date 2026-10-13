@@ -3273,9 +3273,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
           );
           return;
         }
-        if (embedded) {
-          saveNativeTrainingSelection("g1", policyMeta.task, policyMeta.challenge);
-        }
+        saveNativeTrainingSelection("g1", policyMeta.task, policyMeta.challenge);
         // Resolve automatic recovery before publishing the temporary seed as
         // ready. A deferred effect previously exposed controls whose accepted
         // playback changes were immediately reset by the saved-policy import.
@@ -3335,26 +3333,8 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
         // Persist the run so a reload, a crash, or a closed tab does not throw
         // away hours of search. Only real search is worth restoring; the
         // curriculum replay at generation 0 is what the page loads anyway.
-        if (message.policy && message.generation > 0) {
-          const policy = message.policy;
-          const generation = message.generation;
-          setLedger((current) => {
-            saveTrainingSession({
-              ...policyMeta,
-              generation,
-              trainingSeconds:
-                trainingSecondsRef.current +
-                (trainingStartedAtRef.current === null
-                  ? 0
-                  : (Date.now() - trainingStartedAtRef.current) / 1000),
-              policy,
-              ledger: current,
-            });
-            return current;
-          });
-        }
-        setLedger((previous) =>
-          appendLedgerPoint(
+        setLedger((previous) => {
+          const next = appendLedgerPoint(
             previous,
             learningLedgerPoint(
               message.trace,
@@ -3362,8 +3342,22 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               message.admission.config.stepSeconds,
               message.admission.config.targetSpeed,
             ),
-          ),
-        );
+          );
+          if (message.policy && message.generation > 0) {
+            saveTrainingSession({
+              ...policyMeta,
+              generation: message.generation,
+              trainingSeconds:
+                trainingSecondsRef.current +
+                (trainingStartedAtRef.current === null
+                  ? 0
+                  : (Date.now() - trainingStartedAtRef.current) / 1000),
+              policy: message.policy,
+              ledger: next,
+            });
+          }
+          return next;
+        });
         if (message.continuing) {
           setStatus(
             `Learning continuously · generation ${message.generation} best policy now on stage.`,
@@ -3417,7 +3411,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     };
     // Initialize the actual owner on the retained native experiment before
     // recovery looks up its policy slot. Explicit shared policies still win.
-    const selection = embedded && !policyFragmentFromHash(window.location.hash)
+    const selection = !policyFragmentFromHash(window.location.hash)
       ? loadNativeTrainingSelection("g1", G1_TASKS, G1_CHALLENGES)
       : null;
     queueMicrotask(() => {

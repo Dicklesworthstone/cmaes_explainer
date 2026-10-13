@@ -1672,9 +1672,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
             : `${FAMILY_COPY[message.family].title}: generation ${message.generation}/${message.maxGenerations}, σ ${message.sigma.toExponential(2)}`,
         );
       } else if (message.type === "trace") {
-        if (embedded) {
-          saveNativeTrainingSelection("arm", message.admission.config.task, "household");
-        }
+        saveNativeTrainingSelection("arm", message.admission.config.task, "household");
         const policyMeta: SharedPolicyMeta = {
           kernelVersion: FRANKENSIM_OWNER_KERNEL_VERSION,
           task: message.admission.config.task,
@@ -1855,7 +1853,7 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
       optimizerWorker.terminate();
       workerRef.current = null;
     };
-    const selection = embedded && !policyFragmentFromHash(window.location.hash)
+    const selection = !policyFragmentFromHash(window.location.hash)
       ? loadNativeTrainingSelection(
           "arm", Object.keys(TASK_COPY) as HouseholdManipulationTask[], ["household"],
         )
