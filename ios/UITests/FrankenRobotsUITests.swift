@@ -1223,9 +1223,9 @@ final class FrankenRobotsUITests: XCTestCase {
             predicate: NSPredicate { _, _ in save.exists && save.isEnabled && save.isHittable }, object: save
         )
         XCTAssertEqual(XCTWaiter.wait(for: [canSave], timeout: 12), .completed, app.debugDescription)
-        let name = app.textFields.matching(
-            NSPredicate(format: "value CONTAINS 'policy' OR value CONTAINS 'g1-residual'")
-        ).firstMatch
+        // The filename's value changes as it is edited; use the actual Files
+        // field identifier so subsequent assertions still address that field.
+        let name = app.textFields["DOCPicker.filenameTextField"]
         XCTAssertTrue(name.exists, app.debugDescription)
         let originalName = try XCTUnwrap(name.value as? String)
         let uniqueName = "FrankenRobots-\(label)-\(UUID().uuidString)"
@@ -1257,8 +1257,11 @@ final class FrankenRobotsUITests: XCTestCase {
         let workspace = app.webViews.firstMatch
         let trainer = app.switches.matching(NSPredicate(format: "label BEGINSWITH 'Train a residual'")).firstMatch
         XCTAssertTrue(trainer.waitForExistence(timeout: 55), app.debugDescription)
-        revealInWebWorkspace(trainer, workspace: workspace)
-        XCTAssertTrue(trainer.isHittable)
+        // The complete phone lab includes the full owner receipt and story
+        // before this panel. Keep those features; allow enough bounded scroll
+        // gestures to reach the original trainer rather than bypassing its UI.
+        revealInWebWorkspace(trainer, workspace: workspace, swipes: 80)
+        XCTAssertTrue(trainer.isHittable, app.debugDescription)
         trainer.tap()
         let shipped = workspace.buttons["Start from the shipped policy"]
         XCTAssertTrue(shipped.waitForExistence(timeout: 8), app.debugDescription)
@@ -1283,9 +1286,11 @@ final class FrankenRobotsUITests: XCTestCase {
             NSPredicate(format: "label CONTAINS 'Share link copied'")
         ).firstMatch
         XCTAssertTrue(copied.waitForExistence(timeout: 8), app.debugDescription)
-        let copiedText = copied.label
-        let start = try XCTUnwrap(copiedText.range(of: "https://"))
-        let link = String(copiedText[start.lowerBound...])
+        let sharedLink = workspace.staticTexts.matching(NSPredicate(
+            format: "label BEGINSWITH 'https://cmaes-explainer.vercel.app/frankenrobots/humanoid/#zresidual='"
+        )).firstMatch
+        XCTAssertTrue(sharedLink.waitForExistence(timeout: 8), app.debugDescription)
+        let link = sharedLink.label
         XCTAssertTrue(link.hasPrefix("https://cmaes-explainer.vercel.app/frankenrobots/humanoid/#zresidual="))
         let clipboard = XCTAttachment(string: link)
         clipboard.name = "residual-binary expected clipboard policy link"

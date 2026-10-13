@@ -67,6 +67,12 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         LSApplicationCategoryType: public.app-category.education
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.frankenrobots.gait-transformer-policy
+            UTTypeDescription: FrankenRobots binary policy
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [bin]
   FrankenRobotsUITests:
     type: bundle.ui-testing
     platform: iOS

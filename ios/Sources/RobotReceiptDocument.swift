@@ -54,12 +54,17 @@ struct RobotReceiptDocument: FileDocument {
 /// and full telemetry. Do not decode/re-encode these as native run receipts:
 /// doing so loses the archive's exact coefficient bytes and experiment metadata.
 struct RobotLabDownload: Identifiable, Equatable {
+    // public.data also includes JSON. A concrete exported type keeps Files
+    // from substituting .json when a user renames an original .bin policy.
+    static let binaryPolicyType = UTType(exportedAs: "com.frankenrobots.gait-transformer-policy", conformingTo: .data)
     let id = UUID()
     let filename: String
     let data: Data
 
     var contentType: UTType {
-        UTType(filenameExtension: (filename as NSString).pathExtension) ?? .data
+        let extensionName = (filename as NSString).pathExtension.lowercased()
+        if extensionName == "bin" { return Self.binaryPolicyType }
+        return UTType(filenameExtension: extensionName) ?? .data
     }
 
     static func safeFilename(_ suggested: String) -> String {
@@ -89,7 +94,7 @@ struct RobotLabDownload: Identifiable, Equatable {
 }
 
 struct RobotLabDownloadDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.json, .data] }
+    static var readableContentTypes: [UTType] { [.json, RobotLabDownload.binaryPolicyType, .data] }
     let data: Data
 
     init(data: Data) { self.data = data }

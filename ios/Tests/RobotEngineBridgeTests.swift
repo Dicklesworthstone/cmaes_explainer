@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 import WebKit
+import UniformTypeIdentifiers
 @testable import FrankenRobots
 
 final class RobotEngineBridgeTests: XCTestCase {
@@ -78,6 +79,20 @@ final class RobotEngineBridgeTests: XCTestCase {
             let download = RobotLabDownload(filename: "policy.bin", data: data)
             XCTAssertEqual(RobotLabDownloadDocument(data: download.data).data, data)
         }
+    }
+
+    func testBinaryPolicyExportHasItsOwnDeclaredFilenameType() {
+        for filename in ["policy.bin", "policy.BIN"] {
+            let type = RobotLabDownload(filename: filename, data: Data()).contentType
+            XCTAssertEqual(type.identifier, "com.frankenrobots.gait-transformer-policy")
+            XCTAssertTrue(type.isDeclared)
+            XCTAssertEqual(type.preferredFilenameExtension, "bin")
+            XCTAssertTrue(type.conforms(to: .data))
+            XCTAssertFalse(type.conforms(to: .json))
+            XCTAssertTrue(RobotLabDownloadDocument.writableContentTypes.contains(type))
+        }
+        XCTAssertEqual(RobotLabDownload(filename: "policy.json", data: Data()).contentType, .json)
+        XCTAssertEqual(RobotLabDownload(filename: "policy", data: Data()).contentType, .data)
     }
 
     func testClipboardAcceptsCompletePolicyLinksOnlyFromCurrentMainFrame() throws {
