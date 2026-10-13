@@ -1466,10 +1466,13 @@ export function HouseholdArmFlagship({ embedded = false }: { embedded?: boolean 
   const shouldMountStage = useInView(stageRef, {
     rootMargin: "600px 0px 600px 0px",
   });
-  const workerActivated = useInView(stageRef, {
+  const stageApproached = useInView(stageRef, {
     rootMargin: "600px 0px 600px 0px",
     once: true,
   });
+  // A focused lab can reopen at its policy/receipt controls below the stage.
+  // Restore its owner immediately; offscreen graphics can still stay unmounted.
+  const workerActivated = embedded || stageApproached;
   const workerRef = useRef<Worker | null>(null);
   // Synchronous in-flight gate — see G1WalkingFlagship for the rationale.
   // React state (busy) updates asynchronously; without this, two rapid

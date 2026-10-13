@@ -2372,7 +2372,9 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
     return () => window.clearTimeout(timer);
   }, [meshState.phase]);
   const rigReadyVisible = meshState.phase === "ready" && !rigReadyDismissed;
-  const workerActivated = shouldLoadMeshes;
+  // A focused lab must recover saved learning even when scroll restoration
+  // opens below the stage. Keep graphics/mesh loading lazy, not its owner.
+  const workerActivated = embedded || shouldLoadMeshes;
   const workerRef = useRef<Worker | null>(null);
   // Synchronous in-flight gate. React state (busy) updates
   // asynchronously; two rapid clicks within the same render tick both
