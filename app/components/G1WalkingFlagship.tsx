@@ -4753,7 +4753,7 @@ export function G1WalkingFlagship({ embedded = false }: { embedded?: boolean } =
               <div key={c.label} className="flex min-w-0 flex-wrap justify-between gap-x-2 font-mono">
                 <span className="min-w-0 break-words text-slate-300">{c.label}</span>
                 <span className="shrink-0 text-slate-500">
-                  {c.value >= 0 ? "+" : ""}
+                  {c.contribution >= 0 ? "+" : ""}
                   {number(c.contribution, 3)} (w {c.weight >= 0 ? "+" : ""}
                   {Math.abs(c.weight) < 0.01 && c.weight !== 0
                     ? c.weight.toExponential(1)
