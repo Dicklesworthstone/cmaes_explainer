@@ -26,7 +26,24 @@ export interface CostmapConfig {
   goalWeight?: number; // Goal attraction weight (default 1.0)
   obstacleWeight?: number; // Obstacle repulsion weight (default 5.0)
   clearanceSteepness?: number; // Exponential clearance decay \alpha (default 4.0)
+  learnedWeight?: number; // Weight on neural clearance surrogate (default 0.2)
   seed?: number; // Weight initialization seed
+}
+
+export interface CostmapTrainingSample {
+  pos: [number, number];
+  targetCost: number;
+}
+
+export interface CostmapTrainingReceipt {
+  parameterCount: number;
+  epochs: number;
+  initialTrainMse: number;
+  finalTrainMse: number;
+  initialHeldOutMse: number;
+  finalHeldOutMse: number;
+  maxHeldOutAbsError: number;
+  isTrained: boolean;
 }
 
 export const DEFAULT_COSTMAP_CONFIG: Required<CostmapConfig> = {
@@ -35,6 +52,7 @@ export const DEFAULT_COSTMAP_CONFIG: Required<CostmapConfig> = {
   goalWeight: 1.0,
   obstacleWeight: 5.0,
   clearanceSteepness: 4.0,
+  learnedWeight: 0.2,
   seed: 42,
 };
 
@@ -57,25 +75,68 @@ function seededNormal(seed: number): () => number {
   };
 }
 
+function smoothSoftplus(x: number): number {
+  const ax = Math.abs(x);
+  return Math.max(x, 0.0) + Math.log1p(Math.exp(-ax));
+}
+
+function sigmoid(x: number): number {
+  if (x >= 0) {
+    const z = Math.exp(-x);
+    return 1.0 / (1.0 + z);
+  }
+  const z = Math.exp(x);
+  return z / (1.0 + z);
+}
+
+const GELU_K0 = 0.79788456;
+const GELU_K1 = 0.044715;
+
+function geluWithDerivative(x: number): { value: number; derivative: number } {
+  const x2 = x * x;
+  const u = GELU_K0 * (x + GELU_K1 * x * x2);
+  const t = Math.tanh(u);
+  const value = 0.5 * x * (1.0 + t);
+  const sech2 = 1.0 - t * t;
+  const du = GELU_K0 * (1.0 + 3.0 * GELU_K1 * x2);
+  const derivative = 0.5 * (1.0 + t) + 0.5 * x * sech2 * du;
+  return { value, derivative };
+}
+
 export class LearnedCostmapEngine {
+  public readonly parameterCount: number;
+  public isTrained = false;
   private config: Required<CostmapConfig>;
   private B: number[][]; // [fourierBands, 2]
   private W1: number[][]; // [hiddenDim, 2 * fourierBands]
   private b1: number[]; // [hiddenDim]
   private W2: number[]; // [hiddenDim]
   private b2: number;
+  private analyticFallbackOnly = false;
 
   constructor(config: CostmapConfig = {}) {
     this.config = { ...DEFAULT_COSTMAP_CONFIG, ...config };
-    const rand = seededNormal(this.config.seed);
-
-    // Initialize Fourier projection matrix B
-    this.B = [];
-    for (let i = 0; i < this.config.fourierBands; i++) {
-      this.B.push([rand() * 1.5, rand() * 1.5]);
+    if (!Number.isSafeInteger(this.config.fourierBands) || this.config.fourierBands < 1) {
+      throw new RangeError("fourierBands must be a positive integer");
+    }
+    if (!Number.isSafeInteger(this.config.hiddenDim) || this.config.hiddenDim < 1) {
+      throw new RangeError("hiddenDim must be a positive integer");
+    }
+    if (!Number.isFinite(this.config.clearanceSteepness) || this.config.clearanceSteepness <= 0) {
+      throw new RangeError("clearanceSteepness must be finite and positive");
     }
 
-    // Initialize MLP weights: W1, b1, W2, b2
+    const rand = seededNormal(this.config.seed);
+
+    // Initialize Fourier projection matrix B across multi-scale spatial frequencies
+    this.B = [];
+    for (let i = 0; i < this.config.fourierBands; i++) {
+      const freqScale = 0.35 + 0.25 * (i / Math.max(1, this.config.fourierBands - 1));
+      this.B.push([rand() * freqScale, rand() * freqScale]);
+    }
+
+    // Initialize MLP weights: W1, b1, W2, b2 (small residual scale on W2 so an untrained
+    // network does not overpower the harmonic goal potential before training)
     const inDim = 2 * this.config.fourierBands;
     this.W1 = [];
     this.b1 = [];
@@ -90,9 +151,19 @@ export class LearnedCostmapEngine {
 
     this.W2 = [];
     for (let h = 0; h < this.config.hiddenDim; h++) {
-      this.W2.push(rand() * Math.sqrt(2.0 / this.config.hiddenDim));
+      this.W2.push(rand() * 0.05 * Math.sqrt(2.0 / this.config.hiddenDim));
     }
     this.b2 = 0.1;
+
+    this.parameterCount =
+      this.config.fourierBands * 2 +
+      this.config.hiddenDim * inDim +
+      this.config.hiddenDim +
+      this.config.hiddenDim +
+      1;
+    if (this.parameterCount > 100_000) {
+      throw new RangeError(`Costmap parameter count ${this.parameterCount} exceeds 100k limit`);
+    }
   }
 
   /**
@@ -109,29 +180,245 @@ export class LearnedCostmapEngine {
   }
 
   /**
-   * Evaluates the clearance neural surrogate MLP.
+   * Evaluates the clearance neural surrogate MLP and its exact analytical spatial gradient
+   * \nabla \hat{c}(x, z) via chain rule through Softplus, GELU, and Fourier features.
    */
-  public evaluateNeuralClearance(x: number, z: number): number {
-    const feat = this.encodePosition(x, z);
+  public evaluateNeuralClearanceWithGradient(
+    x: number,
+    z: number,
+  ): { value: number; gradient: [number, number] } {
+    if (this.analyticFallbackOnly) {
+      return { value: 0.0, gradient: [0.0, 0.0] };
+    }
+    const bands = this.config.fourierBands;
+    const inDim = 2 * bands;
+    const feat = new Array<number>(inDim);
+    const dFeatDx = new Array<number>(inDim);
+    const dFeatDz = new Array<number>(inDim);
+
+    for (let i = 0; i < bands; i++) {
+      const bx = this.B[i][0];
+      const bz = this.B[i][1];
+      const proj = 2.0 * Math.PI * (bx * x + bz * z);
+      const c = Math.cos(proj);
+      const s = Math.sin(proj);
+      feat[2 * i] = c;
+      feat[2 * i + 1] = s;
+      dFeatDx[2 * i] = -2.0 * Math.PI * bx * s;
+      dFeatDz[2 * i] = -2.0 * Math.PI * bz * s;
+      dFeatDx[2 * i + 1] = 2.0 * Math.PI * bx * c;
+      dFeatDz[2 * i + 1] = 2.0 * Math.PI * bz * c;
+    }
+
     let output = this.b2;
+    const dOutDFeat = new Array<number>(inDim).fill(0.0);
 
     for (let h = 0; h < this.config.hiddenDim; h++) {
       let act = this.b1[h];
       const row = this.W1[h];
-      for (let j = 0; j < feat.length; j++) {
+      for (let j = 0; j < inDim; j++) {
         act += row[j] * feat[j];
       }
-      // GELU activation: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
-      const gelu = 0.5 * act * (1.0 + Math.tanh(0.79788456 * (act + 0.044715 * act * act * act)));
+      const { value: gelu, derivative: dGelu } = geluWithDerivative(act);
       output += this.W2[h] * gelu;
+      const w2dGelu = this.W2[h] * dGelu;
+      for (let j = 0; j < inDim; j++) {
+        dOutDFeat[j] += w2dGelu * row[j];
+      }
     }
 
-    // Softplus: log(1 + exp(output))
-    return Math.log(1.0 + Math.exp(Math.max(-20, Math.min(20, output))));
+    const value = smoothSoftplus(output);
+    const dSoftplus = sigmoid(output);
+
+    let gradX = 0.0;
+    let gradZ = 0.0;
+    for (let j = 0; j < inDim; j++) {
+      gradX += dSoftplus * dOutDFeat[j] * dFeatDx[j];
+      gradZ += dSoftplus * dOutDFeat[j] * dFeatDz[j];
+    }
+
+    return {
+      value,
+      gradient: [gradX, gradZ],
+    };
   }
 
   /**
-   * Evaluates the composite potential field value V(x, goal, sdf).
+   * Evaluates the clearance neural surrogate MLP.
+   */
+  public evaluateNeuralClearance(x: number, z: number): number {
+    return this.evaluateNeuralClearanceWithGradient(x, z).value;
+  }
+
+  /**
+   * Loads external MLP weights or falls back to the conservative analytic method if
+   * weights are missing, non-finite, or mismatched in dimension.
+   */
+  public loadWeightsOrFallback(weights?: {
+    W1: number[][];
+    b1: number[];
+    W2: number[];
+    b2: number;
+  }): boolean {
+    const inDim = 2 * this.config.fourierBands;
+    const hidden = this.config.hiddenDim;
+    if (
+      !weights ||
+      !Array.isArray(weights.W1) ||
+      weights.W1.length !== hidden ||
+      weights.W1.some((row) => !Array.isArray(row) || row.length !== inDim || !row.every(Number.isFinite)) ||
+      !Array.isArray(weights.b1) ||
+      weights.b1.length !== hidden ||
+      !weights.b1.every(Number.isFinite) ||
+      !Array.isArray(weights.W2) ||
+      weights.W2.length !== hidden ||
+      !weights.W2.every(Number.isFinite) ||
+      !Number.isFinite(weights.b2)
+    ) {
+      this.analyticFallbackOnly = true;
+      this.isTrained = false;
+      return false;
+    }
+
+    this.W1 = weights.W1.map((row) => [...row]);
+    this.b1 = [...weights.b1];
+    this.W2 = [...weights.W2];
+    this.b2 = weights.b2;
+    this.analyticFallbackOnly = false;
+    this.isTrained = true;
+    return true;
+  }
+
+  /**
+   * Fits the Fourier-feature MLP to supervised clearance/navigation cost samples
+   * and evaluates held-out approximation error on a disjoint sample set.
+   */
+  public fitToSdfField(
+    trainSamples: CostmapTrainingSample[],
+    heldOutSamples: CostmapTrainingSample[],
+    options: { epochs?: number; learningRate?: number } = {},
+  ): CostmapTrainingReceipt {
+    if (trainSamples.length === 0 || heldOutSamples.length === 0) {
+      throw new Error("fitToSdfField requires non-empty trainSamples and heldOutSamples");
+    }
+    this.analyticFallbackOnly = false;
+    const epochs = options.epochs ?? 80;
+    const lr = options.learningRate ?? 0.08;
+    const momentum = 0.85;
+    const bands = this.config.fourierBands;
+    const inDim = 2 * bands;
+    const hidden = this.config.hiddenDim;
+
+    const evalMse = (samples: CostmapTrainingSample[]) => {
+      let sq = 0.0;
+      let maxAbs = 0.0;
+      for (const s of samples) {
+        const pred = this.evaluateNeuralClearance(s.pos[0], s.pos[1]);
+        const err = Math.abs(pred - s.targetCost);
+        sq += err * err;
+        if (err > maxAbs) maxAbs = err;
+      }
+      return { mse: sq / samples.length, maxAbs };
+    };
+
+    const initialTrain = evalMse(trainSamples);
+    const initialHeldOut = evalMse(heldOutSamples);
+
+    const vW1 = Array.from({ length: hidden }, () => new Float64Array(inDim));
+    const vb1 = new Float64Array(hidden);
+    const vW2 = new Float64Array(hidden);
+    const vB = Array.from({ length: bands }, () => new Float64Array(2));
+    let vb2 = 0.0;
+
+    for (let ep = 0; ep < epochs; ep++) {
+      const dW1 = Array.from({ length: hidden }, () => new Float64Array(inDim));
+      const db1 = new Float64Array(hidden);
+      const dW2 = new Float64Array(hidden);
+      const dB = Array.from({ length: bands }, () => new Float64Array(2));
+      let db2 = 0.0;
+
+      for (const sample of trainSamples) {
+        const [x, z] = sample.pos;
+        const feat = this.encodePosition(x, z);
+        const geluVals = new Float64Array(hidden);
+        const dGeluVals = new Float64Array(hidden);
+        let output = this.b2;
+
+        for (let h = 0; h < hidden; h++) {
+          let act = this.b1[h];
+          const row = this.W1[h];
+          for (let j = 0; j < inDim; j++) act += row[j] * feat[j];
+          const { value, derivative } = geluWithDerivative(act);
+          geluVals[h] = value;
+          dGeluVals[h] = derivative;
+          output += this.W2[h] * value;
+        }
+
+        const pred = smoothSoftplus(output);
+        const dLossDOut = (pred - sample.targetCost) * sigmoid(output);
+        db2 += dLossDOut;
+
+        const dFeat = new Float64Array(inDim);
+        for (let h = 0; h < hidden; h++) {
+          dW2[h] += dLossDOut * geluVals[h];
+          const dAct = dLossDOut * this.W2[h] * dGeluVals[h];
+          db1[h] += dAct;
+          for (let j = 0; j < inDim; j++) {
+            dW1[h][j] += dAct * feat[j];
+            dFeat[j] += dAct * this.W1[h][j];
+          }
+        }
+
+        for (let i = 0; i < bands; i++) {
+          const c = feat[2 * i];
+          const s = feat[2 * i + 1];
+          const dProj = 2.0 * Math.PI * (-dFeat[2 * i] * s + dFeat[2 * i + 1] * c);
+          dB[i][0] += dProj * x;
+          dB[i][1] += dProj * z;
+        }
+      }
+
+      const invN = 1.0 / trainSamples.length;
+      vb2 = momentum * vb2 + lr * db2 * invN;
+      this.b2 -= vb2;
+      for (let h = 0; h < hidden; h++) {
+        vW2[h] = momentum * vW2[h] + lr * dW2[h] * invN;
+        this.W2[h] -= vW2[h];
+        vb1[h] = momentum * vb1[h] + lr * db1[h] * invN;
+        this.b1[h] -= vb1[h];
+        for (let j = 0; j < inDim; j++) {
+          vW1[h][j] = momentum * vW1[h][j] + lr * dW1[h][j] * invN;
+          this.W1[h][j] -= vW1[h][j];
+        }
+      }
+      for (let i = 0; i < bands; i++) {
+        vB[i][0] = momentum * vB[i][0] + 0.15 * lr * dB[i][0] * invN;
+        vB[i][1] = momentum * vB[i][1] + 0.15 * lr * dB[i][1] * invN;
+        this.B[i][0] -= vB[i][0];
+        this.B[i][1] -= vB[i][1];
+      }
+    }
+
+    this.isTrained = true;
+    const finalTrain = evalMse(trainSamples);
+    const finalHeldOut = evalMse(heldOutSamples);
+
+    return {
+      parameterCount: this.parameterCount,
+      epochs,
+      initialTrainMse: initialTrain.mse,
+      finalTrainMse: finalTrain.mse,
+      initialHeldOutMse: initialHeldOut.mse,
+      finalHeldOutMse: finalHeldOut.mse,
+      maxHeldOutAbsError: finalHeldOut.maxAbs,
+      isTrained: this.isTrained,
+    };
+  }
+
+  /**
+   * Evaluates the composite potential field value V(x, goal, sdf) and its exact analytical
+   * gradient \nabla V(x, goal, sdf). Uses a C^1-continuous linear continuation inside obstacles
+   * (sdfDist < 0) so the obstacle penalty and its gradient agree everywhere.
    */
   public evaluatePotential(
     position: [number, number],
@@ -150,19 +437,27 @@ export class LearnedCostmapEngine {
 
     const { distance: sdfDist, gradient: sdfGrad } = sdfEvaluator(position);
 
-    // Exponential barrier penalty: w_obs * exp(-alpha * sdfDist)
+    // C^1-continuous obstacle barrier:
+    //   sdfDist >= 0: w_obs * exp(-alpha * sdfDist), derivative = -alpha * obsPenalty * sdfGrad
+    //   sdfDist <  0: w_obs * (1 - alpha * sdfDist), derivative = -alpha * w_obs * sdfGrad
     const alpha = this.config.clearanceSteepness;
-    const obsPenalty = this.config.obstacleWeight * Math.exp(-alpha * Math.max(0.0, sdfDist));
+    const wObs = this.config.obstacleWeight;
+    const obsPenalty =
+      sdfDist >= 0.0 ? wObs * Math.exp(-alpha * sdfDist) : wObs * (1.0 - alpha * sdfDist);
+    const dObsDdist = sdfDist >= 0.0 ? -alpha * obsPenalty : -alpha * wObs;
 
-    const learned = 0.2 * this.evaluateNeuralClearance(position[0], position[1]);
+    const wLearned = this.analyticFallbackOnly ? 0.0 : this.config.learnedWeight;
+    const neural = this.evaluateNeuralClearanceWithGradient(position[0], position[1]);
+    const learned = wLearned * neural.value;
     const totalPotential = this.config.goalWeight * goalDist + obsPenalty + learned;
 
-    // Gradient computation: \nabla V = w_goal * (pos - goal)/dist - alpha * obsPenalty * \nabla sdf
-    const unitGoalX = goalDist > 1e-5 ? dx / goalDist : 0;
-    const unitGoalZ = goalDist > 1e-5 ? dz / goalDist : 0;
+    const unitGoalX = goalDist > 1e-8 ? dx / goalDist : 0;
+    const unitGoalZ = goalDist > 1e-8 ? dz / goalDist : 0;
 
-    const gradX = this.config.goalWeight * unitGoalX - alpha * obsPenalty * sdfGrad[0];
-    const gradZ = this.config.goalWeight * unitGoalZ - alpha * obsPenalty * sdfGrad[1];
+    const gradX =
+      this.config.goalWeight * unitGoalX + dObsDdist * sdfGrad[0] + wLearned * neural.gradient[0];
+    const gradZ =
+      this.config.goalWeight * unitGoalZ + dObsDdist * sdfGrad[1] + wLearned * neural.gradient[1];
 
     return {
       totalPotential,
