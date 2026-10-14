@@ -308,15 +308,31 @@ export function collideBoxBox(
   const normal: [number, number, number] = [nx, ny, nz];
   const { tangent1, tangent2 } = computeTangentBasis(normal);
 
-  // Generate 4-point contact patch on contact face
+  // Generate 4-point contact patch on contact face by projecting half-extents onto tangent1 & tangent2
   const contacts: ContactPoint[] = [];
   const midX = (posA[0] + posB[0]) * 0.5;
   const midY = (posA[1] + posB[1]) * 0.5;
   const midZ = (posA[2] + posB[2]) * 0.5;
 
-  const patchX = Math.min(halfA[0], halfB[0]) * 0.8;
-  const patchY = Math.min(halfA[1], halfB[1]) * 0.8;
-  const patchZ = Math.min(halfA[2], halfB[2]) * 0.8;
+  const extA1 =
+    Math.abs(tangent1[0]) * halfA[0] +
+    Math.abs(tangent1[1]) * halfA[1] +
+    Math.abs(tangent1[2]) * halfA[2];
+  const extB1 =
+    Math.abs(tangent1[0]) * halfB[0] +
+    Math.abs(tangent1[1]) * halfB[1] +
+    Math.abs(tangent1[2]) * halfB[2];
+  const extA2 =
+    Math.abs(tangent2[0]) * halfA[0] +
+    Math.abs(tangent2[1]) * halfA[1] +
+    Math.abs(tangent2[2]) * halfA[2];
+  const extB2 =
+    Math.abs(tangent2[0]) * halfB[0] +
+    Math.abs(tangent2[1]) * halfB[1] +
+    Math.abs(tangent2[2]) * halfB[2];
+
+  const patch1 = Math.min(extA1, extB1) * 0.8;
+  const patch2 = Math.min(extA2, extB2) * 0.8;
 
   const offsets: Array<[number, number]> = [
     [-1, -1],
@@ -327,9 +343,9 @@ export function collideBoxBox(
 
   for (const [ox, oy] of offsets) {
     const pA: [number, number, number] = [
-      midX + tangent1[0] * ox * patchX + tangent2[0] * oy * patchY,
-      midY + tangent1[1] * ox * patchX + tangent2[1] * oy * patchY,
-      midZ + tangent1[2] * ox * patchX + tangent2[2] * oy * patchY,
+      midX + tangent1[0] * ox * patch1 + tangent2[0] * oy * patch2,
+      midY + tangent1[1] * ox * patch1 + tangent2[1] * oy * patch2,
+      midZ + tangent1[2] * ox * patch1 + tangent2[2] * oy * patch2,
     ];
     const pB: [number, number, number] = [
       pA[0] - nx * minPen,
