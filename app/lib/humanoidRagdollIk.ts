@@ -299,12 +299,12 @@ export function clampSphereAgainstHouse(
 
   let contact: G1CollisionContact | null = null;
 
-  // Floor contact check
-  if (cy - radius < floorY) {
+  // Floor contact check (evaluated against raw input pos[1] before cy clamping)
+  if (pos[1] - radius < floorY - 1e-6) {
     contact = {
       point: [cx, floorY, cz],
       normal: [0, 1, 0],
-      penetration: floorY - (cy - radius),
+      penetration: floorY - (pos[1] - radius),
       obstacleName: "Hardwood Floor",
     };
   }
@@ -399,8 +399,9 @@ export function solveFullBodyG1IK(
   const rightHip: [number, number, number] = [pX, pY, pZ + G1_KINEMATICS.hipWidth * 0.5];
 
   // 4. Feet IK and collision
-  const nominalLeftFoot: [number, number, number] = [pX, G1_KINEMATICS.footHeight, pZ - 0.12];
-  const nominalRightFoot: [number, number, number] = [pX, G1_KINEMATICS.footHeight, pZ + 0.12];
+  const nominalFootY = Math.max(G1_KINEMATICS.footHeight, G1_KINEMATICS.footRadius);
+  const nominalLeftFoot: [number, number, number] = [pX, nominalFootY, pZ - 0.12];
+  const nominalRightFoot: [number, number, number] = [pX, nominalFootY, pZ + 0.12];
 
   const rawLeftFoot = targets.leftFoot ?? nominalLeftFoot;
   const rawRightFoot = targets.rightFoot ?? nominalRightFoot;
@@ -486,22 +487,25 @@ export function solveFullBodyG1IK(
     [-0.5, 0, 1], // outward/backward
   );
 
-  // Compute minimum clearance across all key body joints
-  const keyPoints = [
-    pelvisClamped,
-    headClamped,
-    leftFootClamped,
-    rightFootClamped,
-    leftLegIK.midPosition,
-    rightLegIK.midPosition,
-    leftHandClamped,
-    rightHandClamped,
+  // Compute minimum surface-to-OBB clearance across all key body spheres
+  const keySpheres: Array<{ pt: [number, number, number]; radius: number }> = [
+    { pt: pelvisClamped, radius: G1_KINEMATICS.bodyRadius },
+    { pt: torsoPos, radius: G1_KINEMATICS.bodyRadius },
+    { pt: headClamped, radius: G1_KINEMATICS.headRadius },
+    { pt: leftFootClamped, radius: G1_KINEMATICS.footRadius },
+    { pt: rightFootClamped, radius: G1_KINEMATICS.footRadius },
+    { pt: leftLegIK.midPosition, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightLegIK.midPosition, radius: G1_KINEMATICS.limbRadius },
+    { pt: leftHandClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightHandClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: leftArmIK.midPosition, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightArmIK.midPosition, radius: G1_KINEMATICS.limbRadius },
   ];
 
-  for (const pt of keyPoints) {
+  for (const { pt, radius } of keySpheres) {
     for (const obb of obstacles) {
       if (obb.exemptFromPenalty) continue;
-      const d = distanceToOBB(pt, obb);
+      const d = distanceToOBB(pt, obb) - radius;
       if (d < minClearance) minClearance = d;
     }
   }

@@ -104,6 +104,34 @@ describe("clampSphereAgainstHouse — yawed OBB regression (cmaes-pvz followup)"
     // to push the sphere above the original Y).
     expect(clamped[1]).toBeGreaterThan(sphere[1]);
   });
+
+  test("detects Hardwood Floor contact when sphere penetrates below floorY + radius and remains contact-free when tangent", () => {
+    const sunken = clampSphereAgainstHouse([0, 0.02, 0], 0.08, [], 0.0);
+    expect(sunken.clamped[1]).toBeCloseTo(0.08, 6);
+    expect(sunken.contact).not.toBeNull();
+    expect(sunken.contact?.obstacleName).toBe("Hardwood Floor");
+    expect(sunken.contact?.penetration).toBeCloseTo(0.06, 6);
+
+    const tangent = clampSphereAgainstHouse([0, 0.08, 0], 0.08, [], 0.0);
+    expect(tangent.clamped[1]).toBeCloseTo(0.08, 6);
+    expect(tangent.contact).toBeNull();
+  });
+
+  test("solveFullBodyG1IK computes surface-to-OBB minClearance subtracting body sphere radii and remains collision-free in open space", () => {
+    const wallBox = {
+      id: "near-pillar",
+      name: "near-pillar",
+      center: [1.0, 0.75, 0] as [number, number, number],
+      halfExtents: [0.2, 0.75, 0.2] as [number, number, number],
+      rotationYawRad: 0,
+    };
+    const res = solveFullBodyG1IK({}, [0, 0.75, 0], [wallBox]);
+    expect(res.isColliding).toBe(false);
+    // Distance from pelvis center (x=0) to pillar surface (x=0.8) is 0.8m;
+    // with hands/elbows reaching forward and sphere radii subtracted, minClearance must be < 0.8 - limbRadius
+    expect(res.minClearance).toBeGreaterThan(0);
+    expect(res.minClearance).toBeLessThan(0.8 - G1_KINEMATICS.limbRadius);
+  });
 });
 
 describe("interactive pins never overlap the humanoid (sphere-inside-robot regression)", () => {
