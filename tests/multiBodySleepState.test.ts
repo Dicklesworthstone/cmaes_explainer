@@ -126,4 +126,41 @@ describe("Multi-Body Sleep State & Impulse-Gated Activation Engine", () => {
     const elapsed = performance.now() - t0;
     expect(elapsed).toBeLessThan(35.0); // <35ms for 60 frames of 100 bodies under parallel load
   });
+
+  test("sleeping island wakes during updateSleepStates when a body receives collision velocity and unregisterBody scrubs island links", () => {
+    const manager = new MultiBodySleepManager({ energyThresholdJoules: 5e-4 });
+
+    manager.registerBody({
+      id: "stack-bottom",
+      massKg: 2.0,
+      momentOfInertia: 0.05,
+      position: [0, 0, 0.2],
+      velocity: [0, 0, 0],
+      angularVelocity: [0, 0, 0],
+      state: "SLEEPING",
+      lowEnergyDwellSeconds: 1.0,
+      connectedBodyIds: ["stack-top"],
+    });
+    manager.registerBody({
+      id: "stack-top",
+      massKg: 1.0,
+      momentOfInertia: 0.02,
+      position: [0, 0, 0.5],
+      velocity: [0.5, 0, 0], // Solver collision imparted 0.5 m/s -> E_k = 0.125 J >> 5e-4 J
+      angularVelocity: [0, 0, 0],
+      state: "SLEEPING",
+      lowEnergyDwellSeconds: 1.0,
+      connectedBodyIds: ["stack-bottom"],
+    });
+
+    const counts = manager.updateSleepStates(1 / 60, 2.0);
+    expect(counts.awakeCount).toBe(2);
+    expect(counts.sleepingCount).toBe(0);
+    expect(manager.getBody("stack-top")?.state).toBe("AWAKE");
+    expect(manager.getBody("stack-bottom")?.state).toBe("AWAKE");
+
+    expect(manager.unregisterBody("stack-top")).toBe(true);
+    expect(manager.getBody("stack-top")).toBeUndefined();
+    expect(manager.getBody("stack-bottom")?.connectedBodyIds).toEqual([]);
+  });
 });

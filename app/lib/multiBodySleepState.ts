@@ -66,6 +66,18 @@ export class MultiBodySleepManager {
     this.bodies.set(body.id, { ...body });
   }
 
+  public unregisterBody(id: string): boolean {
+    const removed = this.bodies.delete(id);
+    if (removed) {
+      for (const b of this.bodies.values()) {
+        if (b.connectedBodyIds.includes(id)) {
+          b.connectedBodyIds = b.connectedBodyIds.filter((cid) => cid !== id);
+        }
+      }
+    }
+    return removed;
+  }
+
   public getBody(id: string): SleepableBody | undefined {
     return this.bodies.get(id);
   }
@@ -159,10 +171,37 @@ export class MultiBodySleepManager {
   } {
     let sleepingCount = 0;
     let awakeCount = 0;
+    const wokenThisTick = new Set<string>();
+    const eventsBeforeWake = this.eventHistory.length;
 
+    // Pass 1: Wake any sleeping bodies (and their connected contact islands) that
+    // gained above-threshold kinetic energy from external collisions or solver impulses.
+    for (const body of this.bodies.values()) {
+      if (body.state !== "SLEEPING") continue;
+      const vSq = body.velocity[0] ** 2 + body.velocity[1] ** 2 + body.velocity[2] ** 2;
+      const omegaSq =
+        body.angularVelocity[0] ** 2 + body.angularVelocity[1] ** 2 + body.angularVelocity[2] ** 2;
+      const eKinetic = 0.5 * body.massKg * vSq + 0.5 * body.momentOfInertia * omegaSq;
+      if (eKinetic >= this.config.energyThresholdJoules) {
+        const eqImpulse = body.massKg * Math.sqrt(vSq);
+        this.wakeIsland(body.id, timeSeconds, "impulse_wake", eqImpulse);
+      }
+    }
+    for (let i = eventsBeforeWake; i < this.eventHistory.length; i++) {
+      const ev = this.eventHistory[i];
+      if (ev.toState === "AWAKE") {
+        wokenThisTick.add(ev.bodyId);
+      }
+    }
+
+    // Pass 2: Evaluate dwell timers for awake bodies and tally final state counts.
     for (const body of this.bodies.values()) {
       if (body.state === "SLEEPING") {
         sleepingCount++;
+        continue;
+      }
+      if (wokenThisTick.has(body.id)) {
+        awakeCount++;
         continue;
       }
 
