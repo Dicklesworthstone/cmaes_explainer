@@ -189,9 +189,93 @@ describe("Featherstone Articulated Body Dynamics (ABA & RNEA)", () => {
 
       const eFinal = computeMechanicalEnergy(doublePendulumTree, q, qDot);
 
-      // Energy change should be small (<5% drift over symplectic integration)
+      // Both potential and kinetic energy must vary non-trivially as the pendulum swings downward
+      expect(Math.abs(eFinal.potentialEnergy - e0.potentialEnergy)).toBeGreaterThan(0.05);
+      expect(eFinal.potentialEnergy).toBeLessThan(e0.potentialEnergy);
+      expect(eFinal.kineticEnergy).toBeGreaterThan(e0.kineticEnergy + 0.05);
+
+      // Total mechanical energy T + V must be conserved (< 1e-2 J drift over 50 steps of dt=0.001)
       const energyDelta = Math.abs(eFinal.totalEnergy - e0.totalEnergy);
-      expect(energyDelta).toBeLessThan(1.0);
+      expect(energyDelta).toBeLessThan(0.01);
+    });
+
+    it("handles arbitrary diagonal and negative revolute axes and prismatic joints in ABA <-> RNEA and matches dV/dq = RNEA(q, 0, 0)", () => {
+      const invSqrt2 = 1 / Math.SQRT2;
+      const invSqrt3 = 1 / Math.sqrt(3);
+      const mixedTree: MultibodyTree = {
+        name: "mixed-arbitrary-axis-rpr-tree",
+        gravity: [0.5, -1.2, -9.81],
+        links: [
+          {
+            id: "base_rev_diag",
+            name: "Diagonal Revolute Link",
+            parentIndex: -1,
+            jointType: "revolute",
+            jointAxis: [invSqrt2, invSqrt2, 0],
+            parentTransform: {
+              rotation: [0.2, -0.15, 0.3],
+              translation: [0.1, -0.2, 0.4],
+            },
+            mass: 1.8,
+            centerOfMass: [0.15, -0.1, -0.35],
+            inertiaPrincipal: [0.09, 0.11, 0.06],
+          },
+          {
+            id: "mid_prismatic",
+            name: "Oblique Prismatic Link",
+            parentIndex: 0,
+            jointType: "prismatic",
+            jointAxis: [0, -invSqrt2, invSqrt2],
+            parentTransform: {
+              rotation: [-0.25, 0.3, -0.1],
+              translation: [0.0, 0.2, -0.5],
+            },
+            mass: 1.2,
+            centerOfMass: [-0.05, 0.12, -0.2],
+            inertiaPrincipal: [0.05, 0.06, 0.04],
+          },
+          {
+            id: "tip_rev_neg",
+            name: "Negative-Axis Revolute Link",
+            parentIndex: 1,
+            jointType: "revolute",
+            jointAxis: [invSqrt3, -invSqrt3, invSqrt3],
+            parentTransform: {
+              rotation: [0.1, 0.2, -0.2],
+              translation: [0.15, -0.1, -0.3],
+            },
+            mass: 0.9,
+            centerOfMass: [0.08, 0.05, -0.25],
+            inertiaPrincipal: [0.03, 0.04, 0.02],
+          },
+        ],
+      };
+
+      const q = [0.65, 0.42, -0.85];
+      const qDot = [0.5, -0.35, 0.9];
+      const qDDotDesired = [-1.1, 0.75, 1.4];
+
+      // 1. Exact inverse identity between RNEA and ABA on mixed revolute + prismatic + arbitrary-axis tree
+      const tau = inverseDynamicsRNEA(mixedTree, q, qDot, qDDotDesired);
+      const { qDDot } = forwardDynamicsABA(mixedTree, q, qDot, tau);
+      for (let i = 0; i < 3; i++) {
+        expect(qDDot[i]).toBeCloseTo(qDDotDesired[i], 6);
+      }
+
+      // 2. Lagrangian consistency: static gravity torque RNEA(q, 0, 0) === dV(q)/dq
+      const zeroVec = [0, 0, 0];
+      const gravityTorqueRnea = inverseDynamicsRNEA(mixedTree, q, zeroVec, zeroVec);
+      const eps = 1e-6;
+      for (let i = 0; i < 3; i++) {
+        const qPlus = [...q];
+        const qMinus = [...q];
+        qPlus[i] += eps;
+        qMinus[i] -= eps;
+        const vPlus = computeMechanicalEnergy(mixedTree, qPlus, zeroVec).potentialEnergy;
+        const vMinus = computeMechanicalEnergy(mixedTree, qMinus, zeroVec).potentialEnergy;
+        const dVdq = (vPlus - vMinus) / (2 * eps);
+        expect(gravityTorqueRnea[i]).toBeCloseTo(dVdq, 5);
+      }
     });
   });
 });

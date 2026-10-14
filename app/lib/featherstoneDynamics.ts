@@ -116,12 +116,16 @@ export function spatialCrossForce(v: SpatialVector, f: SpatialVector): SpatialVe
   return [rnx, rny, rnz, rfx, rfy, rfz];
 }
 
+export type Mat3x3 = [
+  [number, number, number],
+  [number, number, number],
+  [number, number, number],
+];
+
 /**
  * Construct 3D Rotation Matrix from Euler angles [roll, pitch, yaw]
  */
-export function eulerToRotationMatrix(
-  rpy: [number, number, number],
-): [[number, number, number], [number, number, number], [number, number, number]] {
+export function eulerToRotationMatrix(rpy: [number, number, number]): Mat3x3 {
   const [r, p, y] = rpy;
   const cr = Math.cos(r),
     sr = Math.sin(r);
@@ -135,6 +139,129 @@ export function eulerToRotationMatrix(
     [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
     [-sp, cp * sr, cp * cr],
   ];
+}
+
+export function normalizeAxis3(axis: [number, number, number]): [number, number, number] {
+  const [ax, ay, az] = axis;
+  const norm = Math.hypot(ax, ay, az);
+  if (norm < 1e-12) return [0, 0, 0];
+  return [ax / norm, ay / norm, az / norm];
+}
+
+/**
+ * Construct 3D active rotation matrix exp([u]_x * angle) from arbitrary axis and angle (Rodrigues' formula).
+ * Note: Featherstone's parent-to-child coordinate transform E_{i<-p} for joint angle q around axis u
+ * is exp(-[u]_x * q) = axisAngleToRotationMatrix(u, -q).
+ */
+export function axisAngleToRotationMatrix(axis: [number, number, number], angle: number): Mat3x3 {
+  const [ux, uy, uz] = normalizeAxis3(axis);
+  const normSq = ux * ux + uy * uy + uz * uz;
+  if (normSq < 1e-12 || Math.abs(angle) < 1e-15) {
+    return [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ];
+  }
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const t = 1 - c;
+
+  return [
+    [t * ux * ux + c, t * ux * uy - s * uz, t * ux * uz + s * uy],
+    [t * uy * ux + s * uz, t * uy * uy + c, t * uy * uz - s * ux],
+    [t * uz * ux - s * uy, t * uz * uy + s * ux, t * uz * uz + c],
+  ];
+}
+
+export function transposeMat3(M: Mat3x3): Mat3x3 {
+  return [
+    [M[0][0], M[1][0], M[2][0]],
+    [M[0][1], M[1][1], M[2][1]],
+    [M[0][2], M[1][2], M[2][2]],
+  ];
+}
+
+export function multiplyMat3(A: Mat3x3, B: Mat3x3): Mat3x3 {
+  return [
+    [
+      A[0][0] * B[0][0] + A[0][1] * B[1][0] + A[0][2] * B[2][0],
+      A[0][0] * B[0][1] + A[0][1] * B[1][1] + A[0][2] * B[2][1],
+      A[0][0] * B[0][2] + A[0][1] * B[1][2] + A[0][2] * B[2][2],
+    ],
+    [
+      A[1][0] * B[0][0] + A[1][1] * B[1][0] + A[1][2] * B[2][0],
+      A[1][0] * B[0][1] + A[1][1] * B[1][1] + A[1][2] * B[2][1],
+      A[1][0] * B[0][2] + A[1][1] * B[1][2] + A[1][2] * B[2][2],
+    ],
+    [
+      A[2][0] * B[0][0] + A[2][1] * B[1][0] + A[2][2] * B[2][0],
+      A[2][0] * B[0][1] + A[2][1] * B[1][1] + A[2][2] * B[2][1],
+      A[2][0] * B[0][2] + A[2][1] * B[1][2] + A[2][2] * B[2][2],
+    ],
+  ];
+}
+
+export function multiplyMat3Vec3(
+  M: Mat3x3,
+  v: [number, number, number],
+): [number, number, number] {
+  return [
+    M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+    M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+    M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2],
+  ];
+}
+
+/**
+ * Computes Featherstone parent-to-child coordinate rotation R_rel = E_{i<-p},
+ * parent-frame translation r_rel, and joint motion subspace vector S_i.
+ */
+export function computeLinkRelativeTransform(
+  link: RigidBodyLink,
+  qVal: number,
+): {
+  R_rel: Mat3x3;
+  r_rel: [number, number, number];
+  S: SpatialVector;
+} {
+  const unitAxis = normalizeAxis3(link.jointAxis);
+  const [ax, ay, az] = unitAxis;
+
+  let S: SpatialVector;
+  if (link.jointType === "revolute") {
+    S = [ax, ay, az, 0, 0, 0];
+  } else if (link.jointType === "prismatic") {
+    S = [0, 0, 0, ax, ay, az];
+  } else {
+    S = createZeroSpatial();
+  }
+
+  // Static parent-to-child coordinate transform E_{i,0} = R_{p<-i,0}^T
+  const R_parent_active = eulerToRotationMatrix(link.parentTransform.rotation);
+  const E_parent = transposeMat3(R_parent_active);
+
+  let R_rel: Mat3x3;
+  const r_rel: [number, number, number] = [...link.parentTransform.translation];
+
+  if (link.jointType === "revolute") {
+    const E_joint = axisAngleToRotationMatrix(unitAxis, -qVal);
+    R_rel = multiplyMat3(E_joint, E_parent);
+  } else if (link.jointType === "prismatic") {
+    R_rel = E_parent;
+    const deltaParent = multiplyMat3Vec3(R_parent_active, [
+      ax * qVal,
+      ay * qVal,
+      az * qVal,
+    ]);
+    r_rel[0] += deltaParent[0];
+    r_rel[1] += deltaParent[1];
+    r_rel[2] += deltaParent[2];
+  } else {
+    R_rel = E_parent;
+  }
+
+  return { R_rel, r_rel, S };
 }
 
 /**
@@ -402,34 +529,10 @@ export function forwardDynamicsABA(
     const link = tree.links[i];
     const parent = link.parentIndex;
 
-    // Joint motion subspace vector S_i
-    if (link.jointType === "revolute") {
-      const [ax, ay, az] = link.jointAxis;
-      S[i] = [ax, ay, az, 0, 0, 0];
-    } else if (link.jointType === "prismatic") {
-      const [ax, ay, az] = link.jointAxis;
-      S[i] = [0, 0, 0, ax, ay, az];
-    } else {
-      S[i] = createZeroSpatial();
-    }
-
-    // Relative rotation including joint angle q[i]
-    const rpy: [number, number, number] = [...link.parentTransform.rotation];
-    if (link.jointType === "revolute") {
-      // Rotate around axis
-      if (link.jointAxis[2] === 1) rpy[2] += q[i] || 0;
-      else if (link.jointAxis[1] === 1) rpy[1] += q[i] || 0;
-      else if (link.jointAxis[0] === 1) rpy[0] += q[i] || 0;
-    }
-
-    R_rel[i] = eulerToRotationMatrix(rpy);
-    r_rel[i] = [...link.parentTransform.translation];
-    if (link.jointType === "prismatic") {
-      const qVal = q[i] || 0;
-      r_rel[i][0] += link.jointAxis[0] * qVal;
-      r_rel[i][1] += link.jointAxis[1] * qVal;
-      r_rel[i][2] += link.jointAxis[2] * qVal;
-    }
+    const rel = computeLinkRelativeTransform(link, q[i] || 0);
+    S[i] = rel.S;
+    R_rel[i] = rel.R_rel;
+    r_rel[i] = rel.r_rel;
 
     const vJ = spatialScale(S[i], qDot[i] || 0);
 
@@ -554,9 +657,7 @@ export function inverseDynamicsRNEA(
   const [gx, gy, gz] = tree.gravity || [0, 0, -9.81];
   const a0: SpatialVector = [0, 0, 0, -gx, -gy, -gz];
 
-  const R_rel = new Array<
-    [[number, number, number], [number, number, number], [number, number, number]]
-  >(N);
+  const R_rel = new Array<Mat3x3>(N);
   const r_rel = new Array<[number, number, number]>(N);
 
   // Forward Kinematics Pass
@@ -564,25 +665,10 @@ export function inverseDynamicsRNEA(
     const link = tree.links[i];
     const parent = link.parentIndex;
 
-    if (link.jointType === "revolute") {
-      const [ax, ay, az] = link.jointAxis;
-      S[i] = [ax, ay, az, 0, 0, 0];
-    } else if (link.jointType === "prismatic") {
-      const [ax, ay, az] = link.jointAxis;
-      S[i] = [0, 0, 0, ax, ay, az];
-    } else {
-      S[i] = createZeroSpatial();
-    }
-
-    const rpy: [number, number, number] = [...link.parentTransform.rotation];
-    if (link.jointType === "revolute") {
-      if (link.jointAxis[2] === 1) rpy[2] += q[i] || 0;
-      else if (link.jointAxis[1] === 1) rpy[1] += q[i] || 0;
-      else if (link.jointAxis[0] === 1) rpy[0] += q[i] || 0;
-    }
-
-    R_rel[i] = eulerToRotationMatrix(rpy);
-    r_rel[i] = [...link.parentTransform.translation];
+    const rel = computeLinkRelativeTransform(link, q[i] || 0);
+    S[i] = rel.S;
+    R_rel[i] = rel.R_rel;
+    r_rel[i] = rel.r_rel;
 
     const vJ = spatialScale(S[i], qDot[i] || 0);
 
@@ -641,8 +727,13 @@ export function computeMechanicalEnergy(
   // Evaluate velocities with zero acceleration
   const { spatialVelocities } = forwardDynamicsABA(tree, q, qDot, new Array(N).fill(0));
 
+  // World-frame link transforms: R_world[i] maps link i coordinates -> world coordinates
+  const R_world = new Array<Mat3x3>(N);
+  const p_world = new Array<[number, number, number]>(N);
+
   for (let i = 0; i < N; i++) {
     const link = tree.links[i];
+    const parent = link.parentIndex;
     const v = spatialVelocities[i];
     const I = buildSpatialInertia(link.mass, link.centerOfMass, link.inertiaPrincipal);
     const Iv = multiplyInertiaVector(I, v);
@@ -650,10 +741,30 @@ export function computeMechanicalEnergy(
     // T = 0.5 * v^T * I * v
     kinetic += 0.5 * spatialDot(v, Iv);
 
-    // Potential energy: V = - m * g^T * r_world
-    // Using simple link height accumulation
-    const h = link.parentTransform.translation[2] + link.centerOfMass[2];
-    potential += link.mass * 9.81 * h;
+    // Forward kinematics for link i world-frame pose and center of mass
+    const { R_rel, r_rel } = computeLinkRelativeTransform(link, q[i] || 0);
+    const R_parent_from_child = transposeMat3(R_rel);
+
+    if (parent === -1) {
+      R_world[i] = R_parent_from_child;
+      p_world[i] = [...r_rel];
+    } else {
+      R_world[i] = multiplyMat3(R_world[parent], R_parent_from_child);
+      const offsetWorld = multiplyMat3Vec3(R_world[parent], r_rel);
+      p_world[i] = [
+        p_world[parent][0] + offsetWorld[0],
+        p_world[parent][1] + offsetWorld[1],
+        p_world[parent][2] + offsetWorld[2],
+      ];
+    }
+
+    const comOffsetWorld = multiplyMat3Vec3(R_world[i], link.centerOfMass);
+    const comWorldX = p_world[i][0] + comOffsetWorld[0];
+    const comWorldY = p_world[i][1] + comOffsetWorld[1];
+    const comWorldZ = p_world[i][2] + comOffsetWorld[2];
+
+    // Gravitational potential energy: V_i = - m_i * g^T * p_{com,i}
+    potential += -link.mass * (gx * comWorldX + gy * comWorldY + gz * comWorldZ);
   }
 
   return {
