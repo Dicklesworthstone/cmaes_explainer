@@ -47,8 +47,9 @@ export const DEFAULT_FOG_CONFIG: Required<VolumetricFogConfig> = {
  */
 export function henyeyGreensteinPhase(cosTheta: number, g = 0.7): number {
   const clampedCos = Math.max(-1.0, Math.min(1.0, cosTheta));
-  const g2 = g * g;
-  const denom = (1.0 + g2 - 2.0 * g * clampedCos) ** 1.5;
+  const clampedG = Math.max(-0.999, Math.min(0.999, g));
+  const g2 = clampedG * clampedG;
+  const denom = (1.0 + g2 - 2.0 * clampedG * clampedCos) ** 1.5;
   if (denom < 1e-6) return 1.0 / (4.0 * Math.PI);
   return (1.0 / (4.0 * Math.PI)) * ((1.0 - g2) / denom);
 }
@@ -69,15 +70,16 @@ export function computeAnalyticalFogOpticalDepth(
   const dz = p1[2] - p0[2];
   const length = Math.hypot(dx, dy, dz);
 
-  if (length < 1e-5) return 0.0;
+  if (length < 1e-5 || density0 <= 0.0) return 0.0;
 
   const y0 = p0[1] - groundY;
   const y1 = p1[1] - groundY;
 
-  // If ray is approximately horizontal, density is constant along ray
-  if (Math.abs(dy) < 1e-4) {
+  // If ray is approximately horizontal OR fog heightFalloff is near zero (uniform fog),
+  // density along the segment is well-approximated by the midpoint exponential.
+  if (Math.abs(heightFalloff * dy) < 1e-5) {
     const avgY = (y0 + y1) * 0.5;
-    return density0 * length * Math.exp(-heightFalloff * avgY);
+    return Math.max(0.0, density0 * length * Math.exp(-heightFalloff * avgY));
   }
 
   // Analytical integral: \rho_0 * L * (exp(-b*y0) - exp(-b*y1)) / (b * (y1 - y0))
@@ -138,6 +140,7 @@ export function raymarchVolumetricSunbeams(
   steps = 32,
   config: VolumetricFogConfig = DEFAULT_FOG_CONFIG,
 ): [number, number, number] {
+  if (steps <= 0 || maxDistance <= 0) return [0, 0, 0];
   const density0 = config.density0 ?? DEFAULT_FOG_CONFIG.density0;
   const heightFalloff = config.heightFalloff ?? DEFAULT_FOG_CONFIG.heightFalloff;
   const groundY = config.groundY ?? DEFAULT_FOG_CONFIG.groundY;
@@ -145,8 +148,19 @@ export function raymarchVolumetricSunbeams(
   const sunIntensity = config.sunIntensity ?? DEFAULT_FOG_CONFIG.sunIntensity;
   const sunColor = config.sunColor ?? DEFAULT_FOG_CONFIG.sunColor;
 
+  const rayLen = Math.hypot(rayDir[0], rayDir[1], rayDir[2]);
+  if (rayLen < 1e-12) return [0, 0, 0];
+  const rdx = rayDir[0] / rayLen;
+  const rdy = rayDir[1] / rayLen;
+  const rdz = rayDir[2] / rayLen;
+
+  const sunLen = Math.hypot(sunDir[0], sunDir[1], sunDir[2]);
+  const sdx = sunLen > 1e-12 ? sunDir[0] / sunLen : 0;
+  const sdy = sunLen > 1e-12 ? sunDir[1] / sunLen : 1;
+  const sdz = sunLen > 1e-12 ? sunDir[2] / sunLen : 0;
+
   const dt = maxDistance / steps;
-  const cosTheta = rayDir[0] * sunDir[0] + rayDir[1] * sunDir[1] + rayDir[2] * sunDir[2];
+  const cosTheta = rdx * sdx + rdy * sdy + rdz * sdz;
   const phase = henyeyGreensteinPhase(cosTheta, g);
 
   const accumulatedRadiance: [number, number, number] = [0, 0, 0];
@@ -154,20 +168,21 @@ export function raymarchVolumetricSunbeams(
 
   for (let i = 0; i < steps; i++) {
     const t = (i + 0.5) * dt;
-    const px = rayOrigin[0] + rayDir[0] * t;
-    const py = rayOrigin[1] + rayDir[1] * t;
-    const pz = rayOrigin[2] + rayDir[2] * t;
+    const px = rayOrigin[0] + rdx * t;
+    const py = rayOrigin[1] + rdy * t;
+    const pz = rayOrigin[2] + rdz * t;
+
+    const height = py - groundY;
+    const localDensity = density0 * Math.exp(-heightFalloff * height);
+    const stepOpticalDepth = localDensity * dt;
+    const midOpticalDepth = accumulatedOpticalDepth + 0.5 * stepOpticalDepth;
+    accumulatedOpticalDepth += stepOpticalDepth;
 
     const samplePoint: [number, number, number] = [px, py, pz];
     const shadow = shadowEvaluator(samplePoint);
 
     if (shadow > 0.0) {
-      const height = py - groundY;
-      const localDensity = density0 * Math.exp(-heightFalloff * height);
-      const stepOpticalDepth = localDensity * dt;
-      accumulatedOpticalDepth += stepOpticalDepth;
-
-      const transmittance = Math.exp(-accumulatedOpticalDepth);
+      const transmittance = Math.exp(-midOpticalDepth);
       const stepInscatter = shadow * localDensity * phase * sunIntensity * transmittance * dt;
 
       accumulatedRadiance[0] += sunColor[0] * stepInscatter;

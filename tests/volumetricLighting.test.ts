@@ -26,6 +26,10 @@ describe("Volumetric Lighting & Exponential Height Fog Engine", () => {
     // Isotropic case (g = 0) -> 1 / (4 * PI) ~ 0.079577
     const isotropic = henyeyGreensteinPhase(0.5, 0.0);
     expect(isotropic).toBeCloseTo(1.0 / (4.0 * Math.PI), 5);
+
+    // Extreme g = ±1.0 and out-of-range cosTheta must remain finite
+    expect(Number.isFinite(henyeyGreensteinPhase(1.0, 1.0))).toBe(true);
+    expect(Number.isFinite(henyeyGreensteinPhase(-1.0, -1.0))).toBe(true);
   });
 
   test("computeAnalyticalFogOpticalDepth calculates exact density integral", () => {
@@ -48,6 +52,11 @@ describe("Volumetric Lighting & Exponential Height Fog Engine", () => {
     const tauSlant = computeAnalyticalFogOpticalDepth(p0, pSlant, 0.02, 0.5, 0.0);
     expect(tauSlant).toBeGreaterThan(0);
     expect(tauSlant).toBeLessThan(tauGround);
+
+    // Slanted ray (dy = 4 !== 0) with uniform fog (heightFalloff = 0.0) must not produce 0/0 = NaN
+    const tauUniformSlant = computeAnalyticalFogOpticalDepth(p0, [3, 4, 0], 0.02, 0.0, 0.0);
+    expect(Number.isFinite(tauUniformSlant)).toBe(true);
+    expect(tauUniformSlant).toBeCloseTo(0.02 * 5.0, 5);
   });
 
   test("applyExponentialHeightFog blends towards fog color over distance", () => {
@@ -87,5 +96,27 @@ describe("Volumetric Lighting & Exponential Height Fog Engine", () => {
     expect(blockedRays[0]).toBe(0.0);
     expect(blockedRays[1]).toBe(0.0);
     expect(blockedRays[2]).toBe(0.0);
+
+    // Foreground shadowed fog (z < 5m) must still accumulate Beer-Lambert optical depth
+    // and attenuate a distant sunbeam (z >= 5m) compared to a near sunbeam (z < 5m)
+    const nearBeam = raymarchVolumetricSunbeams(
+      cam,
+      rayDir,
+      10.0,
+      sunDir,
+      (pos) => (pos[2] < 5.0 ? 1.0 : 0.0),
+      32,
+      { density0: 0.15, heightFalloff: 0.0 },
+    );
+    const farBeamBehindShadowedFog = raymarchVolumetricSunbeams(
+      cam,
+      rayDir,
+      10.0,
+      sunDir,
+      (pos) => (pos[2] >= 5.0 ? 1.0 : 0.0),
+      32,
+      { density0: 0.15, heightFalloff: 0.0 },
+    );
+    expect(farBeamBehindShadowedFog[0]).toBeLessThan(nearBeam[0]);
   });
 });
