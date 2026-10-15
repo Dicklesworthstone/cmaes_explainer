@@ -109,7 +109,7 @@ export function scanLidar(
   const rSelf = Math.max(config.minRangeMeters * 0.5, 0.05);
   const gauss = makeSeededGaussian(Math.floor(baseXMeters * 1e6) ^ Math.floor(baseYMeters * 1e6));
   for (let i = 0; i < config.numRays; i += 1) {
-    const t = i / Math.max(1, config.numRays - 1);
+    const t = config.numRays === 1 ? 0.5 : i / (config.numRays - 1);
     const angle = startAngle + t * fovRadians;
     const worldAngle = baseYawRadians + angle;
     const worldDirX = Math.cos(worldAngle);
