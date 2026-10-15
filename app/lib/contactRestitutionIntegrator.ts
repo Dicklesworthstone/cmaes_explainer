@@ -21,6 +21,7 @@
 //   - Stewart & Trinkle, "An Implicit Time-Stepping Scheme for Rigid Body Dynamics with Inelastic Collisions and Coulomb Friction" (IJRR 1996)
 //   - Anitescu & Potra, "Formulating Dynamic Multi-Rigid-Body Contact Problems with Friction as Solvable Linear Complementarity Problems" (Nonlinear Dyn. 1997)
 
+import { type DroEvaluationOptions, evaluateRobustPair } from "./droFrictionUncertainty";
 import { getMaterialPairFriction, type HouseholdMaterial } from "./materialPairFriction";
 
 export interface RigidBodyContactState {
@@ -36,12 +37,32 @@ export interface RestitutionStepResult {
   contactOccurred: boolean;
   penetrationDepth: number;
   normalImpulse: number;
+  contactForceNewtons: number;
   mechanicalEnergyJoules: number;
   state: RigidBodyContactState;
 }
 
 const GRAVITY = -9.81;
 const BOUNCE_VELOCITY_THRESHOLD = 0.15; // m/s
+
+/**
+ * Evaluates Hunt-Crossley (1975) nonlinear viscoelastic contact normal force:
+ *   F_N = \max(0, k_c \delta^{1.5} (1 + \frac{3(1 - e_0)}{2 v_0} \dot{\delta}))
+ */
+export function computeHuntCrossleyContactForce(
+  penetrationDepth: number,
+  penetrationRate: number,
+  stiffness = 25000.0,
+  restitution = 0.2,
+  characteristicImpactSpeed = 1.0,
+): number {
+  if (penetrationDepth <= 0.0 || stiffness <= 0.0) return 0.0;
+  const delta15 = penetrationDepth ** 1.5;
+  const safeV0 = Math.max(BOUNCE_VELOCITY_THRESHOLD, Math.abs(characteristicImpactSpeed));
+  const dampingRatio = (1.5 * (1.0 - Math.max(0.0, Math.min(1.0, restitution)))) / safeV0;
+  const force = stiffness * delta15 * (1.0 + dampingRatio * penetrationRate);
+  return Math.max(0.0, force);
+}
 
 /**
  * Steps contact mechanics and restitution dynamics for a dropped rigid body contacting
@@ -53,9 +74,15 @@ export function stepContactRestitution(
   floorY = 0.0,
   dt = 1 / 60,
   stiffness = 25000.0, // N/m contact spring stiffness
+  droOptions?: DroEvaluationOptions,
 ): RestitutionStepResult {
   const safeDt = Math.max(0.0001, Math.min(0.05, dt));
-  const matPair = getMaterialPairFriction(body.material, floorMaterial);
+  const robustEval = droOptions
+    ? evaluateRobustPair(body.material, floorMaterial, droOptions)
+    : null;
+  const matPair = robustEval
+    ? robustEval.worstCase
+    : getMaterialPairFriction(body.material, floorMaterial);
 
   let [px, py, pz] = body.position;
   let [vx, vy, vz] = body.velocity;
@@ -71,13 +98,21 @@ export function stepContactRestitution(
   const penetration = floorY - bottomY;
   let contactOccurred = false;
   let normalImpulse = 0.0;
+  let contactForceNewtons = 0.0;
   let settled = false;
 
   if (penetration > 0.0) {
     contactOccurred = true;
 
-    // Contact velocity normal (incoming velocity is negative vy)
+    // Contact velocity normal (incoming velocity is negative vy; penetrationRate = -vy)
     const vNormalPre = vy;
+    contactForceNewtons = computeHuntCrossleyContactForce(
+      penetration,
+      -vNormalPre,
+      stiffness,
+      matPair.restitution,
+      Math.max(BOUNCE_VELOCITY_THRESHOLD, Math.abs(vNormalPre)),
+    );
 
     if (Math.abs(vNormalPre) < BOUNCE_VELOCITY_THRESHOLD) {
       // Inelastic resting contact mode (zero restitution, full damping)
@@ -129,6 +164,7 @@ export function stepContactRestitution(
     contactOccurred,
     penetrationDepth: Math.max(0.0, penetration),
     normalImpulse,
+    contactForceNewtons,
     mechanicalEnergyJoules,
     state: updatedState,
   };
