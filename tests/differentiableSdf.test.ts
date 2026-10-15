@@ -171,13 +171,29 @@ describe("Differentiable Signed Distance Fields & Exact Gradients", () => {
       expect(Math.abs(finalEv.distance)).toBeLessThan(1e-3);
     });
 
-    it("computes continuous outward clearance direction", () => {
+    it("computes continuous outward clearance direction and normalizes non-unit plane normals", () => {
       const scene = new DifferentiableSceneSDF();
       scene.addSphere([0, 0, 0], 1.0);
-      scene.addPlane([0, 1, 0], 0);
+      scene.addPlane([0, 10, 0], -5); // non-unit normal [0, 10, 0] with offset -5 -> y = 0.5 plane
 
       const dir = scene.computeClearanceDirection([0, 2, 0]);
       expect(dir[1]).toBeGreaterThan(0.5);
+
+      const planeOnly = new DifferentiableSceneSDF();
+      planeOnly.addPlane([0, 10, 0], -5);
+      const evPlane = planeOnly.evaluate([0, 2.5, 0]);
+      expect(evPlane.distance).toBeCloseTo(2.0, 5);
+      expect(Math.hypot(...evPlane.normal)).toBeCloseTo(1.0, 5);
+
+      // Raymarch miss returns hit=false and zero implicit derivative
+      const sphereNode = new DifferentiableSdfNode((p) => sdfSphere(p, [0, 0, 5], 1.0).distance);
+      const missRes = raymarchDifferentiableSdf(sphereNode, [0, 0, 0], [0, 1, 0], 10.0);
+      expect(missRes.hit).toBe(false);
+      expect(missRes.dDistance_dOrigin).toEqual([0, 0, 0]);
+
+      const zeroDirRes = raymarchDifferentiableSdf(sphereNode, [0, 0, 0], [0, 0, 0], 10.0);
+      expect(zeroDirRes.hit).toBe(false);
+      expect(zeroDirRes.distance).toBe(0);
     });
   });
 });

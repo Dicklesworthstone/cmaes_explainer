@@ -261,6 +261,17 @@ export function raymarchDifferentiableSdf(
   dDistance_dOrigin: [number, number, number]; // Implicit derivative: \partial t / \partial o
 } {
   const dirLen = Math.hypot(...direction);
+  if (dirLen < 1e-12) {
+    const eval0 = sdf.evaluate(origin);
+    return {
+      hit: false,
+      distance: 0,
+      hitPoint: [...origin],
+      unitNormal: eval0.unitNormal,
+      steps: 0,
+      dDistance_dOrigin: [0, 0, 0],
+    };
+  }
   const dx = direction[0] / dirLen;
   const dy = direction[1] / dirLen;
   const dz = direction[2] / dirLen;
@@ -297,10 +308,12 @@ export function raymarchDifferentiableSdf(
   const evalAtHit = sdf.evaluate(hitPoint);
   const [nx, ny, nz] = evalAtHit.unitNormal;
 
-  // Implicit derivative: dt/do = - \nabla SDF / (\nabla SDF \cdot d)
+  // Implicit derivative: dt/do = - \nabla SDF / (\nabla SDF \cdot d) on hit; [0, 0, 0] on miss
   const dotND = nx * dx + ny * dy + nz * dz;
   const denom = Math.abs(dotND) > 1e-6 ? dotND : -1.0;
-  const dDistance_dOrigin: [number, number, number] = [-nx / denom, -ny / denom, -nz / denom];
+  const dDistance_dOrigin: [number, number, number] = hit
+    ? [-nx / denom, -ny / denom, -nz / denom]
+    : [0, 0, 0];
 
   return {
     hit,
@@ -479,12 +492,16 @@ export class DifferentiableSceneSDF {
       case "obb":
         return sdfOBB(p, prim.params.center, prim.params.halfExtents, prim.params.rotationMatrix);
       case "plane": {
-        const dot =
-          p[0] * prim.params.normal[0] +
-          p[1] * prim.params.normal[1] +
-          p[2] * prim.params.normal[2];
-        const dist = dot + (prim.params.offset || 0);
-        return { distance: dist, normal: prim.params.normal, gradient: prim.params.normal };
+        const nLen =
+          Math.hypot(prim.params.normal[0], prim.params.normal[1], prim.params.normal[2]) || 1.0;
+        const unitN: [number, number, number] = [
+          prim.params.normal[0] / nLen,
+          prim.params.normal[1] / nLen,
+          prim.params.normal[2] / nLen,
+        ];
+        const dot = p[0] * unitN[0] + p[1] * unitN[1] + p[2] * unitN[2];
+        const dist = dot + (prim.params.offset || 0) / nLen;
+        return { distance: dist, normal: unitN, gradient: unitN };
       }
       default:
         return { distance: Infinity, normal: [0, 1, 0], gradient: [0, 1, 0] };
