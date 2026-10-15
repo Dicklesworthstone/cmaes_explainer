@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { computeKukaFK } from "../app/lib/armInverseKinematics";
 import {
+  buildArmCapsulesFromLinkPositions,
   checkArmSelfCollision,
   checkG1SelfCollision,
   type LinkCapsule,
@@ -80,7 +82,7 @@ describe("Robot Self-Collision Detection Engine", () => {
     expect(res.collidingPairs[0].linkB).toBe("right_knee");
   });
 
-  test("detects arm gripper collision with base on folded 7-DOF arm", () => {
+  test("detects arm gripper collision with base on folded 7-DOF arm and builds capsules from FK", () => {
     // Folded arm where gripper is brought right against base
     const arm: LinkCapsule[] = [
       { name: "link0_base", start: [0, 0, 0], end: [0, 0.1, 0], radius: 0.08 },
@@ -100,5 +102,13 @@ describe("Robot Self-Collision Detection Engine", () => {
         (p.linkA === "link6_gripper" && p.linkB === "link0_base"),
     );
     expect(collidingWithBase).toBe(true);
+
+    // Verify buildArmCapsulesFromLinkPositions with computeKukaFK upright home pose (6 origins -> 5 link segments)
+    const fkUpright = computeKukaFK([0, 0.3, 0, -0.8, 0, 0.5, 0]);
+    const fkCapsules = buildArmCapsulesFromLinkPositions(fkUpright.linkPositions);
+    expect(fkCapsules.length).toBe(5);
+    const uprightCheck = checkArmSelfCollision(fkCapsules);
+    expect(uprightCheck.hasCollision).toBe(false);
+    expect(uprightCheck.minClearance).toBeGreaterThan(0);
   });
 });

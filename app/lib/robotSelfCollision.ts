@@ -308,6 +308,31 @@ const ARM_ADJACENT_PAIRS = new Set<string>([
   "link5_wrist:link6_gripper",
 ]);
 
+const DEFAULT_ARM_CAPSULE_RADII = [0.08, 0.06, 0.05, 0.05, 0.05, 0.04, 0.05];
+
+/**
+ * Converts a sequence of arm joint/link origins (e.g. from computeKukaFK or FrankenSim poses)
+ * into segment capsules named according to ARM_LINK_NAMES for checkArmSelfCollision.
+ */
+export function buildArmCapsulesFromLinkPositions(
+  linkPositions: readonly (readonly [number, number, number])[],
+  radii: readonly number[] = DEFAULT_ARM_CAPSULE_RADII,
+): LinkCapsule[] {
+  const capsules: LinkCapsule[] = [];
+  const segCount = Math.min(ARM_LINK_NAMES.length, Math.max(0, linkPositions.length - 1));
+  for (let i = 0; i < segCount; i++) {
+    const p0 = linkPositions[i];
+    const p1 = linkPositions[i + 1];
+    capsules.push({
+      name: ARM_LINK_NAMES[i],
+      start: [p0[0], p0[1], p0[2]],
+      end: [p1[0], p1[1], p1[2]],
+      radius: radii[i] ?? 0.05,
+    });
+  }
+  return capsules;
+}
+
 export function checkArmSelfCollision(
   links: LinkCapsule[],
   safetyMargin = 0.005,
