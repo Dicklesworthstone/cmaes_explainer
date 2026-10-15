@@ -89,4 +89,25 @@ describe("Continuous Collision Detection (CCD) on Signed Distance Fields", () =>
     const elapsed = performance.now() - t0;
     expect(elapsed).toBeLessThan(50.0); // <500µs per query under parallel test load
   });
+
+  test("evaluates exact t = 1.0 endpoint impact and normalizes non-unit SDF gradients", () => {
+    // Wall at x = 1.02, radius = 0.02 -> contact occurs right at x = 1.0 (t = 1.0)
+    const wallAtEndSdf: SdfEvaluator3D = (pos) => ({
+      distance: 1.02 - pos[0],
+      gradient: [-3.0, 0.0, 0.0], // Unnormalized gradient of length 3
+    });
+
+    const ccdRes = queryContinuousCollisionSDF(
+      {
+        startPosition: [0.0, 0.0, 0.0],
+        endPosition: [1.0, 0.0, 0.0],
+        radius: 0.02,
+      },
+      wallAtEndSdf,
+    );
+
+    expect(ccdRes.hasImpact).toBe(true);
+    expect(ccdRes.timeOfImpact).toBeCloseTo(1.0, 3);
+    expect(ccdRes.surfaceNormal).toEqual([-1.0, 0.0, 0.0]);
+  });
 });
