@@ -220,3 +220,95 @@ export function traceScreenSpaceRay(
     reflectionWeight,
   };
 }
+
+export interface TemporalSsrInput {
+  /** Current frame SSR RGB radiance [R, G, B]. */
+  currentRadiance: [number, number, number];
+  /** Reprojected previous-frame SSR RGB radiance [R, G, B]. */
+  historyRadiance: [number, number, number];
+  /** 3x3 (or local) neighborhood RGB samples from the current frame for AABB clamping. */
+  neighborhoodSamples?: Array<[number, number, number]>;
+  /** Screen-space motion vector [du, dv] in UV coordinates [0..1]. */
+  motionVectorUv?: [number, number];
+  /** Whether the reprojected history UV was valid (inside screen and within depth tolerance). */
+  historyValid?: boolean;
+}
+
+export interface TemporalSsrResult {
+  blendedRadiance: [number, number, number];
+  clampedHistoryRadiance: [number, number, number];
+  effectiveAlpha: number;
+}
+
+/**
+ * Blends current-frame SSR radiance with temporally reprojected history radiance
+ * using exponential moving average (`config.temporalAlpha`) and neighborhood AABB
+ * variance clamping (Karis 2014) to suppress disocclusion ghosting and fireflies.
+ */
+export function blendTemporalSsr(
+  input: TemporalSsrInput,
+  config: SsrConfig = DEFAULT_SSR_CONFIG,
+): TemporalSsrResult {
+  const baseAlpha = Math.max(
+    0.0,
+    Math.min(1.0, config.temporalAlpha ?? DEFAULT_SSR_CONFIG.temporalAlpha),
+  );
+  if (input.historyValid === false) {
+    return {
+      blendedRadiance: [...input.currentRadiance],
+      clampedHistoryRadiance: [...input.currentRadiance],
+      effectiveAlpha: 1.0,
+    };
+  }
+
+  // Compute neighborhood AABB bounds in linear RGB
+  let minR = input.currentRadiance[0];
+  let minG = input.currentRadiance[1];
+  let minB = input.currentRadiance[2];
+  let maxR = input.currentRadiance[0];
+  let maxG = input.currentRadiance[1];
+  let maxB = input.currentRadiance[2];
+
+  if (input.neighborhoodSamples && input.neighborhoodSamples.length > 0) {
+    for (const s of input.neighborhoodSamples) {
+      if (s[0] < minR) minR = s[0];
+      if (s[1] < minG) minG = s[1];
+      if (s[2] < minB) minB = s[2];
+      if (s[0] > maxR) maxR = s[0];
+      if (s[1] > maxG) maxG = s[1];
+      if (s[2] > maxB) maxB = s[2];
+    }
+  } else {
+    minR = -Infinity;
+    minG = -Infinity;
+    minB = -Infinity;
+    maxR = Infinity;
+    maxG = Infinity;
+    maxB = Infinity;
+  }
+
+  const clampedHistoryRadiance: [number, number, number] = [
+    Math.max(minR, Math.min(maxR, input.historyRadiance[0])),
+    Math.max(minG, Math.min(maxG, input.historyRadiance[1])),
+    Math.max(minB, Math.min(maxB, input.historyRadiance[2])),
+  ];
+
+  // Increase current-frame weight under fast camera/object motion to reduce lag
+  const motionMag = input.motionVectorUv
+    ? Math.hypot(input.motionVectorUv[0], input.motionVectorUv[1])
+    : 0.0;
+  const motionBoost = Math.min(1.0, motionMag * 5.0);
+  const effectiveAlpha = baseAlpha + (1.0 - baseAlpha) * motionBoost;
+
+  const blendedRadiance: [number, number, number] = [
+    (1.0 - effectiveAlpha) * clampedHistoryRadiance[0] + effectiveAlpha * input.currentRadiance[0],
+    (1.0 - effectiveAlpha) * clampedHistoryRadiance[1] + effectiveAlpha * input.currentRadiance[1],
+    (1.0 - effectiveAlpha) * clampedHistoryRadiance[2] + effectiveAlpha * input.currentRadiance[2],
+  ];
+
+  return {
+    blendedRadiance,
+    clampedHistoryRadiance,
+    effectiveAlpha,
+  };
+}

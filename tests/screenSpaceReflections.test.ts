@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  blendTemporalSsr,
   computeReflectionVector,
   computeScreenEdgeFade,
   evaluateSchlickFresnel,
@@ -89,5 +90,38 @@ describe("Screen-Space Reflections (SSR) Engine", () => {
 
     expect(res.hit).toBe(false);
     expect(res.reflectionWeight).toBe(0.0);
+  });
+
+  test("blendTemporalSsr applies exponential moving average and clamps ghosting history to 3x3 neighborhood AABB", () => {
+    const neighborhood: Array<[number, number, number]> = [
+      [0.2, 0.2, 0.2],
+      [0.3, 0.3, 0.3],
+      [0.4, 0.4, 0.4],
+    ];
+    // History has a bright firefly [5.0, 5.0, 5.0] outside the neighborhood [0.2, 0.4] box
+    const res = blendTemporalSsr(
+      {
+        currentRadiance: [0.3, 0.3, 0.3],
+        historyRadiance: [5.0, 5.0, 5.0],
+        neighborhoodSamples: neighborhood,
+        motionVectorUv: [0.0, 0.0],
+        historyValid: true,
+      },
+      { temporalAlpha: 0.2 },
+    );
+
+    expect(res.clampedHistoryRadiance).toEqual([0.4, 0.4, 0.4]);
+    // 0.8 * 0.4 + 0.2 * 0.3 = 0.38
+    expect(res.blendedRadiance[0]).toBeCloseTo(0.38, 5);
+    expect(res.effectiveAlpha).toBeCloseTo(0.2, 5);
+
+    // Invalid history falls back immediately to current frame
+    const disoccluded = blendTemporalSsr({
+      currentRadiance: [0.3, 0.3, 0.3],
+      historyRadiance: [5.0, 5.0, 5.0],
+      historyValid: false,
+    });
+    expect(disoccluded.blendedRadiance).toEqual([0.3, 0.3, 0.3]);
+    expect(disoccluded.effectiveAlpha).toBe(1.0);
   });
 });
