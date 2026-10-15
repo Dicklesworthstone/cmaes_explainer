@@ -145,14 +145,34 @@ export function processPixelPostFx(
   uv: [number, number],
   config: PostFxConfig = DEFAULT_POST_FX_CONFIG,
 ): [number, number, number] {
+  const enableAces = config.enableAces ?? DEFAULT_POST_FX_CONFIG.enableAces;
   const exposure = config.exposure ?? DEFAULT_POST_FX_CONFIG.exposure;
+  const bloomThreshold = config.bloomThreshold ?? DEFAULT_POST_FX_CONFIG.bloomThreshold;
+  const bloomIntensity = config.bloomIntensity ?? DEFAULT_POST_FX_CONFIG.bloomIntensity;
   const vignetteStrength = config.vignetteStrength ?? DEFAULT_POST_FX_CONFIG.vignetteStrength;
   const [r0, r1] = config.vignetteRadius ?? DEFAULT_POST_FX_CONFIG.vignetteRadius;
 
-  // 1. Tonemapping
-  let ldr = tonemapColor(hdrColor, exposure);
+  // 1. Physical Bloom Highlight Extraction & Additive Composite
+  const bloom =
+    bloomIntensity > 0
+      ? extractBloomLuminance(hdrColor, bloomThreshold)
+      : ([0, 0, 0] as [number, number, number]);
+  const compositedHdr: [number, number, number] = [
+    hdrColor[0] + bloom[0] * bloomIntensity,
+    hdrColor[1] + bloom[1] * bloomIntensity,
+    hdrColor[2] + bloom[2] * bloomIntensity,
+  ];
 
-  // 2. Vignette
+  // 2. Tonemapping (ACES Filmic or clamped linear exposure)
+  let ldr: [number, number, number] = enableAces
+    ? tonemapColor(compositedHdr, exposure)
+    : [
+        Math.max(0.0, Math.min(1.0, compositedHdr[0] * exposure)),
+        Math.max(0.0, Math.min(1.0, compositedHdr[1] * exposure)),
+        Math.max(0.0, Math.min(1.0, compositedHdr[2] * exposure)),
+      ];
+
+  // 3. Vignette
   const vig = evaluateVignette(uv, r0, r1, vignetteStrength);
   ldr = [ldr[0] * vig, ldr[1] * vig, ldr[2] * vig];
 

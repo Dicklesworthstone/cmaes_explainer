@@ -77,5 +77,16 @@ describe("Post-Processing & Cinematic Color Grading Engine", () => {
     // Corner pixel should be darker due to vignette
     expect(corner[0]).toBeLessThan(center[0]);
     expect(corner[1]).toBeLessThan(center[1]);
+
+    // Bloom intensity boosts super-threshold highlights prior to tonemapping
+    const noBloom = processPixelPostFx([2.5, 2.0, 1.5], [0.5, 0.5], {
+      bloomThreshold: 1.0,
+      bloomIntensity: 0.0,
+    });
+    const withBloom = processPixelPostFx([2.5, 2.0, 1.5], [0.5, 0.5], {
+      bloomThreshold: 1.0,
+      bloomIntensity: 0.8,
+    });
+    expect(withBloom[0]).toBeGreaterThan(noBloom[0]);
   });
 });
