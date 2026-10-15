@@ -101,4 +101,34 @@ describe("Rolling Contact & Limit Surface Friction Engine", () => {
     const slip = body.velocity[0] + body.angularVelocity[2] * body.radius;
     expect(Math.abs(slip)).toBeLessThan(0.05);
   });
+
+  test("clamps Contensou spin torque to halt low vertical spin without reversing sign and integrates airborne external force", () => {
+    const lowSpinBody: RollingBody = {
+      id: "low_spin",
+      type: "sphere",
+      position: [0, 0.1, 0],
+      velocity: [0, 0, 0],
+      angularVelocity: [0, 0.05, 0], // Small positive spin that would reverse sign if unclamped
+      mass: 1.0,
+      radius: 0.1,
+      muSliding: 0.3,
+      muSpinning: 0.5,
+      muRolling: 0.01,
+      restitution: 0.2,
+    };
+
+    stepRollingSphere(lowSpinBody, 0.0, 0.016);
+    expect(lowSpinBody.angularVelocity[1]).toBe(0);
+
+    const airborneBody: RollingBody = {
+      ...lowSpinBody,
+      id: "airborne_pushed",
+      position: [0, 2.0, 0],
+      velocity: [0, 0, 0],
+    };
+    const resAir = stepRollingSphere(airborneBody, 0.0, 0.01, [10.0, 0, -5.0]);
+    expect(resAir.hasContact).toBe(false);
+    expect(airborneBody.velocity[0]).toBeCloseTo(0.1, 6);
+    expect(airborneBody.velocity[2]).toBeCloseTo(-0.05, 6);
+  });
 });
