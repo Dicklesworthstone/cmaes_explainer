@@ -67,5 +67,16 @@ describe("Contact & Soft Shadows Engine", () => {
     ];
     const liftedContact = evaluateFloorContactAO([0.0, 0.0, 0.0], liftedLeg);
     expect(liftedContact).toBe(1.0); // completely faded since height (0.3m) > fadeHeight (0.25m)
+
+    // Compliant footpad slightly penetrating floor (-0.02m) retains full contact shadow instead of vanishing
+    const compliantFoot: GroundContactCaster[] = [
+      { id: "foot-stance", position: [0.0, -0.02, 0.0], radius: 0.08, occlusionStrength: 0.85 },
+    ];
+    expect(evaluateFloorContactAO([0.0, 0.0, 0.0], compliantFoot)).toBeCloseTo(0.15, 4);
+
+    // Unnormalized lightDir [0, 3, 0] matches unit lightDir [0, 1, 0]
+    const unitRay = evaluateSdfSoftShadow([0.6, 0, 0], [0, 1, 0], sphereSdf, 0.02, 10.0, 16.0);
+    const scaledRay = evaluateSdfSoftShadow([0.6, 0, 0], [0, 3, 0], sphereSdf, 0.02, 10.0, 16.0);
+    expect(scaledRay.shadowFactor).toBeCloseTo(unitRay.shadowFactor, 6);
   });
 });
