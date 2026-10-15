@@ -147,11 +147,20 @@ export interface DroEvaluationOptions {
    */
   forceRadius?: number;
   /**
-   * Forced kernel size. If set, the radius formula is short-circuited
-   * and the provided value is returned. Used in tests for
-   * deterministic radius checks.
+   * Forced kernel size. If set, the radius formula uses this kernel size
+   * instead of the empirical sample count.
    */
   forceRadiusKernel?: number;
+  /**
+   * Tail direction for kinetic/static friction (default "upper": higher friction is worst-case,
+   * e.g. push resistance; use "lower" when low friction is worst-case, e.g. icy foot-slip).
+   */
+  frictionTail?: "upper" | "lower";
+  /**
+   * Tail direction for restitution (default "upper": higher bounce is worst-case;
+   * use "lower" when inelastic energy loss is worst-case).
+   */
+  restitutionTail?: "upper" | "lower";
 }
 
 /**
@@ -388,10 +397,27 @@ export function cvarUpper(samples: ReadonlyArray<number>, alpha: number = 0.1): 
 }
 
 /**
+ * Compute the lower CVaR (Conditional Value-at-Risk) over an empirical sample set
+ * at tail probability alpha: the mean of the smallest ceil(alpha * N) sample values.
+ * Used when lower parameter values represent the worst-case physical outcome
+ * (e.g., low kinetic friction causing foot-slip on wet/icy surfaces).
+ */
+export function cvarLower(samples: ReadonlyArray<number>, alpha: number = 0.1): number {
+  if (samples.length === 0) {
+    throw new Error("cvarLower: samples must be non-empty");
+  }
+  if (alpha <= 0.0 || alpha >= 1.0) {
+    throw new Error(`cvarLower: alpha must be in (0, 1) (got ${alpha})`);
+  }
+  const sorted = [...samples].sort((a, b) => a - b);
+  const tailCount = Math.max(1, Math.ceil(alpha * sorted.length));
+  const tail = sorted.slice(0, tailCount);
+  const sum = tail.reduce((acc, value) => acc + value, 0.0);
+  return sum / tail.length;
+}
+
+/**
  * The sample supremum: the maximum of the empirical sample set.
- * Use this for the Wasserstein-ball inner max when the objective
- * is non-monotone over the sample, or when the alpha quantile is
- * too small to capture the worst case.
  */
 export function sampleSupremum(samples: ReadonlyArray<number>): number {
   if (samples.length === 0) {
@@ -404,33 +430,27 @@ export function sampleSupremum(samples: ReadonlyArray<number>): number {
   return max;
 }
 
+/**
+ * The sample infimum: the minimum of the empirical sample set.
+ */
+export function sampleInfimum(samples: ReadonlyArray<number>): number {
+  if (samples.length === 0) {
+    throw new Error("sampleInfimum: samples must be non-empty");
+  }
+  let min = Infinity;
+  for (const value of samples) {
+    if (value < min) min = value;
+  }
+  return min;
+}
+
 // ---------------------------------------------------------------------------
 // Robust evaluation
 // ---------------------------------------------------------------------------
 
 /**
  * Evaluate the (mu_k, e) worst case for a (matA, matB) pair, with
- * the Wasserstein-1 ball radius from the sample size. The
- * evaluation respects the `DroEvaluationOptions.robust` flag:
- *
- *   - `robust: false` (default): returns the point estimate
- *     bit-for-bit identical to `getMaterialPairFriction`.
- *   - `robust: true`: returns the worst-case in the Wasserstein
- *     ball, where the inner max is CVaR_alpha for monotone
- *     objectives (foot-slip penalty, push success) and the sample
- *     supremum otherwise.
- *
- * This function is the integration point. Callers (the multi-factor
- * objective in `cmaesEngine.ts` and the G1/arm kernel adapters)
- * call it once per (matA, matB) per step to obtain the friction
- * pair they would use in the per-step objective increment.
- *
- * @param matA  First material id.
- * @param matB  Second material id.
- * @param options  The robust evaluation options.
- * @returns  The robust evaluation result, or `null` if the pair
- *          is not in the catalog (caller falls back to the
- *          point estimate).
+ * the Wasserstein-1 ball radius from the sample size.
  */
 export function evaluateRobustPair(
   matA: PhysicsMaterialId | string,
@@ -455,37 +475,20 @@ export function evaluateRobustPair(
   }
   const alpha = options.alpha ?? 0.1;
   const confidence = options.confidence ?? 0.95;
-  const sampleCount = dist.samples.length;
+  const sampleCount = options.forceRadiusKernel ?? dist.samples.length;
   const radius = options.forceRadius ?? wassersteinBallRadius(sampleCount, confidence);
-  // Per-channel upper-CVaR on the two sampled coefficient dimensions.
-  // muK and e are treated independently and combined into a single
-  // simultaneous worst-case pair — a DECOUPLED conservative bound
-  // (the joint ball's true inner max is <= the simultaneous worst of
-  // both channels for higher-is-worse objectives), not a claimed
-  // MEK product-form theorem. DIRECTIONALITY CAVEAT: upper tail
-  // presumes higher = worse for BOTH channels; an objective where
-  // lower restitution is worse (e.g. energy absorption) must pass a
-  // negated sample channel until a direction option lands.
+
   const muKValues = dist.samples.map((sample) => sample.muK);
   const eValues = dist.samples.map((sample) => sample.e);
-  const worstMuK = cvarUpper(muKValues, alpha);
-  const worstE = cvarUpper(eValues, alpha);
-  // Reconstruct the worst-case pair.
-  //   * kineticFriction: the CVaR upper tail of the muK samples.
-  //   * staticFriction:  anchored to muS = muK * 1.20 per CRC §F-13
-  //     (mu_s / mu_k in [1.05, 1.30] for household pairs). The
-  //     worst-case muK drags the worst-case muS with it -- a
-  //     low-muK sample is not the worst case, so neither is its
-  //     low muS.
-  //   * restitution:    the CVaR upper tail of the e samples
-  //     (DIRECTIONALITY CAVEAT: assumes higher = worse; an
-  //     objective where lower restitution is worse -- e.g. energy
-  //     absorption -- must pass a negated sample channel until a
-  //     direction option lands).
-  //   * rollingFriction + damping: anchored to the point value
-  //     (not sampled; per bead scope the rolling/damping channels
-  //     are not contact-mode parameters in the kernel friction
-  //     model).
+  const worstMuK =
+    options.frictionTail === "lower"
+      ? cvarLower(muKValues, alpha)
+      : cvarUpper(muKValues, alpha);
+  const worstE =
+    options.restitutionTail === "lower"
+      ? cvarLower(eValues, alpha)
+      : cvarUpper(eValues, alpha);
+
   const worstCase: MaterialPairProperties = {
     ...point,
     kineticFriction: worstMuK,
