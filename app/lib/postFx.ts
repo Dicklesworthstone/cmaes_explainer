@@ -131,17 +131,31 @@ export const POSTFX_PROFILES: Record<string, PostFXProfile> = {
 export function applyPostFXSoftware(
   rgb: [number, number, number],
   profile: PostFXProfile,
+  uv: [number, number] = [0.5, 0.5],
 ): [number, number, number] {
   if (!profile.enabled) return rgb;
   // 1. Exposure + ACES
-  const tonemapped = acesFilmicWithExposure(rgb, profile.exposure);
-  // 2. Bloom (approximated as a soft additive highlight; in the real
-  //    pipeline this is a separate pass on luminance > threshold).
-  const luminance = 0.2126 * tonemapped[0] + 0.7152 * tonemapped[1] + 0.0722 * tonemapped[2];
-  const bloom = Math.max(0, luminance - profile.bloomThreshold) * profile.bloomStrength;
-  // 3. Vignette (no-op in software; the GPU pass does the edge falloff)
-  // 4. CA (no-op in software; the GPU pass does the channel split)
-  return [tonemapped[0] + bloom, tonemapped[1] + bloom, tonemapped[2] + bloom];
+  const expR = rgb[0] * profile.exposure;
+  const expG = rgb[1] * profile.exposure;
+  const expB = rgb[2] * profile.exposure;
+  const tonemapped = acesFilmic([expR, expG, expB]);
+  // 2. Bloom: evaluate on pre-tonemapped HDR luminance with soft shoulder compression
+  //    so profiles with bloomThreshold >= 1.0 (e.g. porch-bright) bloom on HDR sun highlights
+  //    while remaining strictly bounded (< 2.0).
+  const hdrLuminance = 0.2126 * expR + 0.7152 * expG + 0.0722 * expB;
+  const excess = Math.max(0, hdrLuminance - profile.bloomThreshold);
+  const softExcess = excess / (1.0 + excess);
+  const bloom = softExcess * profile.bloomStrength;
+  // 3. Vignette (screen-edge attenuation when UV is away from center [0.5, 0.5])
+  const dx = uv[0] - 0.5;
+  const dy = uv[1] - 0.5;
+  const distSq = dx * dx + dy * dy; // 0 at center, 0.5 at corners
+  const vigFactor = Math.max(0.0, 1.0 - profile.vignetteIntensity * distSq * 2.0);
+  return [
+    (tonemapped[0] + bloom) * vigFactor,
+    (tonemapped[1] + bloom) * vigFactor,
+    (tonemapped[2] + bloom) * vigFactor,
+  ];
 }
 
 /** Deterministic Perlin-flavored flicker for a fireplace. Uses

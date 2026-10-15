@@ -140,4 +140,17 @@ describe("postFx", () => {
     expect(linearToSRGB(1)).toBeCloseTo(1.0, 5);
     expect(linearToSRGB(0.5)).toBeCloseTo(1.055 * 0.5 ** (1 / 2.4) - 0.055, 3);
   });
+
+  test("applyPostFXSoftware triggers HDR bloom on porch-bright (bloomThreshold = 1.0) and attenuates screen edges via vignette UV", () => {
+    const porch = POSTFX_PROFILES["porch-bright"];
+    const noBloomProfile = { ...porch, bloomStrength: 0.0 };
+    const brightSun: [number, number, number] = [4.0, 4.0, 4.0];
+
+    const withBloom = applyPostFXSoftware(brightSun, porch, [0.5, 0.5]);
+    const withoutBloom = applyPostFXSoftware(brightSun, noBloomProfile, [0.5, 0.5]);
+    expect(withBloom[0]).toBeGreaterThan(withoutBloom[0]);
+
+    const cornerOut = applyPostFXSoftware(brightSun, porch, [0.0, 0.0]);
+    expect(cornerOut[0]).toBeLessThan(withBloom[0]);
+  });
 });
