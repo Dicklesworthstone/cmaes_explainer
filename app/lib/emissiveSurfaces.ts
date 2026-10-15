@@ -277,9 +277,25 @@ export function evaluateEmissiveSurface(
     baseRgb = kelvinToRgb(surface.colorTemperatureK);
   }
 
+  if (!surface.on) {
+    return {
+      colorRgb: baseRgb,
+      intensity: 0,
+      totalRadiance: [0, 0, 0],
+      bloomContribution: false,
+    };
+  }
+
   let intensity = surface.baseIntensity;
-  if (surface.kind === "fireplace-hearth" || surface.kind === "fireplace-flame") {
-    const flicker = computeFireplaceFlicker(timeSeconds, surface.flickerSeed ?? 42);
+  if (
+    surface.kind === "fireplace-hearth" ||
+    surface.kind === "fireplace-flame" ||
+    surface.kind === "candle"
+  ) {
+    const flicker = computeFireplaceFlicker(
+      timeSeconds + surface.phase * 0.37,
+      surface.flickerSeed ?? 42,
+    );
     intensity *= flicker;
   }
 

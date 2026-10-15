@@ -27,7 +27,9 @@ import {
   probeGridBounds,
   resetProbeGrid,
   sampleProbeGrid,
+  updateProbeGridFromScene,
 } from "../app/lib/ddgiProbes";
+import { createEmissiveSurface } from "../app/lib/emissiveSurfaces";
 
 describe("ddgiProbes", () => {
   test("generateOctahedralDirections returns 64 unit vectors", () => {
@@ -168,5 +170,56 @@ describe("ddgiProbes", () => {
     expect(result.rgb[1]).toBe(0);
     expect(result.rgb[2]).toBe(0);
     expect(result.visibility).toBe(0);
+  });
+
+  test("Chebyshev visibility suppresses light leakage from occluded probes across a 12cm wall", () => {
+    // 2x2x2 grid centered at [0, 0, 0], spacing [2, 2, 2]: probes at x = -1 (Room A) and x = +1 (Room B)
+    const grid = createProbeGrid([0, 0, 0], [2, 2, 2], [2, 2, 2], 1.0, 8.0);
+    for (const p of grid.probes) {
+      if (p.position[0] < 0) {
+        // Room A (bright room, blocked by wall at distance 0.4m)
+        p.irradiance.fill(10.0);
+        p.meanDistance.fill(0.4);
+        p.meanDistanceSq.fill(0.16);
+      } else {
+        // Room B (dim room, unoccluded up to 5.0m)
+        p.irradiance.fill(0.1);
+        p.meanDistance.fill(5.0);
+        p.meanDistanceSq.fill(25.0);
+      }
+    }
+
+    // Query at [0, 0, 0] (midpoint between x=-1 and x=+1) with surfaceDistance = 1.0m:
+    // Room A probes have meanD = 0.4m < 1.0m (occluded, cheb -> 0), Room B probes have meanD = 5.0m >= 1.0m (cheb = 1)
+    const sampled = sampleProbeGrid(grid, [0, 0, 0], [1, 0, 0], 1.0);
+    expect(sampled.rgb[0]).toBeLessThan(0.15);
+    expect(sampled.visibility).toBeCloseTo(0.5, 2);
+  });
+
+  test("updateProbeGridFromScene updates probe distances and irradiance from dynamic SDF and emissive surfaces", () => {
+    const grid = createProbeGrid([0, 0, 0], [2, 2, 2], [2, 2, 2], 0.5, 6.0);
+    const ceilingLight = createEmissiveSurface("recessed-ceiling-light", [0, 2.2, 0], 0, true);
+
+    // Open room SDF: sphere of radius 3.0m (interior negative, wall at r = 3.0m)
+    const openRoomSdf = (x: number, y: number, z: number) => 3.0 - Math.hypot(x, y, z);
+    updateProbeGridFromScene(grid, openRoomSdf, [ceilingLight], {
+      timeSeconds: 0.5,
+      probeIndices: [0],
+    });
+    const distOpen = grid.probes[0].meanDistance[0];
+    const irrOn = grid.probes[0].irradiance.reduce((acc, v) => acc + v, 0);
+
+    // Insert closer spherical wall at r = 1.8m and turn light off
+    const occludedSdf = (x: number, y: number, z: number) => 1.8 - Math.hypot(x, y, z);
+    const lightOff = createEmissiveSurface("recessed-ceiling-light", [0, 2.2, 0], 0, false);
+    updateProbeGridFromScene(grid, occludedSdf, [lightOff], {
+      timeSeconds: 0.5,
+      probeIndices: [0],
+    });
+    const distOccluded = grid.probes[0].meanDistance[0];
+    const irrOff = grid.probes[0].irradiance.reduce((acc, v) => acc + v, 0);
+
+    expect(distOccluded).toBeLessThan(distOpen);
+    expect(irrOff).toBeLessThan(irrOn);
   });
 });
