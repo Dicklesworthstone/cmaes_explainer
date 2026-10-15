@@ -114,11 +114,16 @@ describe("Analytic Signed Distance Functions (SDF)", () => {
     expect(endRes.distance).toBeCloseTo(1.0);
   });
 
-  test("sdfPlane computes planar distance", () => {
+  test("sdfPlane computes planar distance and normalizes non-unit normals", () => {
     const normal: [number, number, number] = [0, 1, 0];
     const res = sdfPlane([0, 5, 0], normal, -2);
     // y - 2 = 3
     expect(res.distance).toBeCloseTo(3.0);
+
+    // Non-unit normal [0, 2, 0] with scaled offset -4 represents the same plane y = 2
+    const unnormRes = sdfPlane([0, 5, 0], [0, 2, 0], -4);
+    expect(unnormRes.distance).toBeCloseTo(3.0);
+    expect(Math.hypot(...unnormRes.normal)).toBeCloseTo(1.0, 6);
   });
 
   test("sdfHeightfield performs bilinear interpolation", () => {

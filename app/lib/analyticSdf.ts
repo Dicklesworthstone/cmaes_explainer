@@ -274,12 +274,16 @@ export function sdfPlane(
   normal: [number, number, number],
   offset = 0,
 ): SDFEvaluation {
-  const dot = p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2];
-  const distance = dot + offset;
+  const nLen = Math.hypot(normal[0], normal[1], normal[2]) || 1;
+  const nx = normal[0] / nLen;
+  const ny = normal[1] / nLen;
+  const nz = normal[2] / nLen;
+  const dot = p[0] * nx + p[1] * ny + p[2] * nz;
+  const distance = dot + offset / nLen;
   return {
     distance,
-    normal: [normal[0], normal[1], normal[2]],
-    gradient: [normal[0], normal[1], normal[2]],
+    normal: [nx, ny, nz],
+    gradient: [nx, ny, nz],
   };
 }
 
