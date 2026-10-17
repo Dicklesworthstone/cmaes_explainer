@@ -254,20 +254,34 @@ describe("Multi-resolution value iteration", () => {
         obstacles: [wall],
       },
     );
-    const { policy, value } = result;
+    const { policy, coarsePolicy, value } = result;
     expect(policy.gx.length).toBe(value.width * value.height);
     expect(policy.gy.length).toBe(value.width * value.height);
-    // No cell with collision flag should have a non-zero guidance.
+    // Every cell (including cells directly adjacent to +Infinity obstacle cells) must have finite gx/gy.
     let inCollision = 0;
+    let nonZeroGuidance = 0;
     for (let i = 0; i < policy.collision.length; i++) {
+      expect(Number.isFinite(policy.gx[i])).toBe(true);
+      expect(Number.isFinite(policy.gy[i])).toBe(true);
       if (policy.collision[i] === 1) {
         inCollision++;
         expect(policy.gx[i]).toBe(0);
         expect(policy.gy[i]).toBe(0);
+      } else if (value.goal[i] === 0 && Number.isFinite(value.values[i])) {
+        const len = Math.hypot(policy.gx[i], policy.gy[i]);
+        if (len > 0) {
+          nonZeroGuidance++;
+          expect(len).toBeCloseTo(1.0, 6);
+        }
       }
     }
-    // The wall cell is in collision.
+    for (let i = 0; i < coarsePolicy.gx.length; i++) {
+      expect(Number.isFinite(coarsePolicy.gx[i])).toBe(true);
+      expect(Number.isFinite(coarsePolicy.gy[i])).toBe(true);
+    }
+    // The wall cell is in collision and free cells have valid unit guidance.
     expect(inCollision).toBeGreaterThan(0);
+    expect(nonZeroGuidance).toBeGreaterThan(0);
   });
 
   test("value at the goal cell is zero", () => {
