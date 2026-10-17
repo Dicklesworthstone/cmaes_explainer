@@ -166,6 +166,8 @@ export function createEmissiveSurface(
   on = true,
 ): EmissiveSurface {
   const def = defaultParamsForKind(kind);
+  const isDownwardCeilingFixture =
+    kind === "recessed-ceiling-light" || kind === "ceiling-recessed";
   return {
     kind,
     position,
@@ -173,7 +175,7 @@ export function createEmissiveSurface(
     on,
     color: def.color,
     baseIntensity: def.baseIntensity,
-    normal: [0, -1, 0],
+    normal: isDownwardCeilingFixture ? [0, -1, 0] : undefined,
     area: 0.1,
   };
 }
@@ -277,9 +279,25 @@ export function evaluateEmissiveSurface(
     baseRgb = kelvinToRgb(surface.colorTemperatureK);
   }
 
+  if (!surface.on) {
+    return {
+      colorRgb: baseRgb,
+      intensity: 0,
+      totalRadiance: [0, 0, 0],
+      bloomContribution: false,
+    };
+  }
+
   let intensity = surface.baseIntensity;
-  if (surface.kind === "fireplace-hearth" || surface.kind === "fireplace-flame") {
-    const flicker = computeFireplaceFlicker(timeSeconds, surface.flickerSeed ?? 42);
+  if (
+    surface.kind === "fireplace-hearth" ||
+    surface.kind === "fireplace-flame" ||
+    surface.kind === "candle"
+  ) {
+    const flicker = computeFireplaceFlicker(
+      timeSeconds + surface.phase * 0.37,
+      surface.flickerSeed ?? 42,
+    );
     intensity *= flicker;
   }
 
@@ -310,6 +328,11 @@ export function evaluateEmissiveIlluminance(
   timeSeconds = 0.0,
 ): [number, number, number] {
   const totalE: [number, number, number] = [0, 0, 0];
+  const recvNormLen =
+    Math.hypot(receiverNormal[0], receiverNormal[1], receiverNormal[2]) || 1.0;
+  const rnx = receiverNormal[0] / recvNormLen;
+  const rny = receiverNormal[1] / recvNormLen;
+  const rnz = receiverNormal[2] / recvNormLen;
 
   for (let i = 0; i < surfaces.length; i++) {
     const surf = surfaces[i];
@@ -325,13 +348,19 @@ export function evaluateEmissiveIlluminance(
     const ly = dy / dist;
     const lz = dz / dist;
 
-    const cosRecv = Math.max(
-      0.0,
-      receiverNormal[0] * lx + receiverNormal[1] * ly + receiverNormal[2] * lz,
-    );
+    const cosRecv = Math.max(0.0, rnx * lx + rny * ly + rnz * lz);
 
-    const nEmit = surf.normal ?? [0, -1, 0];
-    const cosEmit = Math.max(0.0, -(nEmit[0] * lx + nEmit[1] * ly + nEmit[2] * lz));
+    let cosEmit = 1.0;
+    if (surf.normal) {
+      const nEmit = surf.normal;
+      const nEmitLen = Math.hypot(nEmit[0], nEmit[1], nEmit[2]);
+      if (nEmitLen > 1e-6) {
+        cosEmit = Math.max(
+          0.0,
+          -(nEmit[0] * lx + nEmit[1] * ly + nEmit[2] * lz) / nEmitLen,
+        );
+      }
+    }
 
     if (cosRecv <= 0.0 || cosEmit <= 0.0) {
       continue;

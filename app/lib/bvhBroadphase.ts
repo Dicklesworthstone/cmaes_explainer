@@ -440,21 +440,21 @@ export class BVH {
     const results: number[] = [];
     if (this.nodes.length === 0) return results;
 
-    // Conservative OBB enclosing AABB
-    const radX = obb.halfExtents[0];
-    const radY = obb.halfExtents[1];
-    const radZ = obb.halfExtents[2];
-    const maxRadius = Math.hypot(radX, radY, radZ);
+    const R = obb.rotationMatrix ?? [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    const [ex, ey, ez] = obb.halfExtents;
+    const extX = Math.abs(R[0]) * ex + Math.abs(R[1]) * ey + Math.abs(R[2]) * ez;
+    const extY = Math.abs(R[3]) * ex + Math.abs(R[4]) * ey + Math.abs(R[5]) * ez;
+    const extZ = Math.abs(R[6]) * ex + Math.abs(R[7]) * ey + Math.abs(R[8]) * ez;
 
     const queryMin: [number, number, number] = [
-      obb.center[0] - maxRadius,
-      obb.center[1] - maxRadius,
-      obb.center[2] - maxRadius,
+      obb.center[0] - extX,
+      obb.center[1] - extY,
+      obb.center[2] - extZ,
     ];
     const queryMax: [number, number, number] = [
-      obb.center[0] + maxRadius,
-      obb.center[1] + maxRadius,
-      obb.center[2] + maxRadius,
+      obb.center[0] + extX,
+      obb.center[1] + extY,
+      obb.center[2] + extZ,
     ];
 
     const stack = [this.rootIndex];
@@ -581,27 +581,88 @@ function rayIntersectAABB(
   return tMin >= 0 ? tMin : tMax;
 }
 
-function testOBBvsAABB(obb: OBB, aabb: AABB): boolean {
-  // Center to center delta
+/**
+ * Exact 15-axis Separating Axis Theorem (SAT) overlap test between an Oriented
+ * Bounding Box (OBB) and an Axis-Aligned Bounding Box (AABB) (Ericson RTCD Ch. 4.4).
+ */
+export function testOBBvsAABB(obb: OBB, aabb: AABB): boolean {
   const aabbCenter: [number, number, number] = [
     (aabb.min[0] + aabb.max[0]) * 0.5,
     (aabb.min[1] + aabb.max[1]) * 0.5,
     (aabb.min[2] + aabb.max[2]) * 0.5,
   ];
-  const aabbHalf: [number, number, number] = [
+  const a: [number, number, number] = [
     (aabb.max[0] - aabb.min[0]) * 0.5,
     (aabb.max[1] - aabb.min[1]) * 0.5,
     (aabb.max[2] - aabb.min[2]) * 0.5,
   ];
+  const b = obb.halfExtents;
+  const R = obb.rotationMatrix ?? [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
-  const dx = Math.abs(obb.center[0] - aabbCenter[0]);
-  const dy = Math.abs(obb.center[1] - aabbCenter[1]);
-  const dz = Math.abs(obb.center[2] - aabbCenter[2]);
+  // Translation vector t = obb.center - aabbCenter in world/AABB frame
+  const t: [number, number, number] = [
+    obb.center[0] - aabbCenter[0],
+    obb.center[1] - aabbCenter[1],
+    obb.center[2] - aabbCenter[2],
+  ];
 
-  // Quick slab rejection
-  if (dx > aabbHalf[0] + obb.halfExtents[0] * 1.5) return false;
-  if (dy > aabbHalf[1] + obb.halfExtents[1] * 1.5) return false;
-  if (dz > aabbHalf[2] + obb.halfExtents[2] * 1.5) return false;
+  const EPS = 1e-7;
+  const A00 = Math.abs(R[0]) + EPS;
+  const A01 = Math.abs(R[1]) + EPS;
+  const A02 = Math.abs(R[2]) + EPS;
+  const A10 = Math.abs(R[3]) + EPS;
+  const A11 = Math.abs(R[4]) + EPS;
+  const A12 = Math.abs(R[5]) + EPS;
+  const A20 = Math.abs(R[6]) + EPS;
+  const A21 = Math.abs(R[7]) + EPS;
+  const A22 = Math.abs(R[8]) + EPS;
+
+  // 1. Test 3 AABB face axes (X, Y, Z)
+  if (Math.abs(t[0]) > a[0] + b[0] * A00 + b[1] * A01 + b[2] * A02) return false;
+  if (Math.abs(t[1]) > a[1] + b[0] * A10 + b[1] * A11 + b[2] * A12) return false;
+  if (Math.abs(t[2]) > a[2] + b[0] * A20 + b[1] * A21 + b[2] * A22) return false;
+
+  // 2. Test 3 OBB face axes (columns of R)
+  if (
+    Math.abs(t[0] * R[0] + t[1] * R[3] + t[2] * R[6]) >
+    a[0] * A00 + a[1] * A10 + a[2] * A20 + b[0]
+  )
+    return false;
+  if (
+    Math.abs(t[0] * R[1] + t[1] * R[4] + t[2] * R[7]) >
+    a[0] * A01 + a[1] * A11 + a[2] * A21 + b[1]
+  )
+    return false;
+  if (
+    Math.abs(t[0] * R[2] + t[1] * R[5] + t[2] * R[8]) >
+    a[0] * A02 + a[1] * A12 + a[2] * A22 + b[2]
+  )
+    return false;
+
+  // 3. Test 9 edge-edge cross product axes (A_i x B_j)
+  // A0 x B0, A0 x B1, A0 x B2
+  if (Math.abs(t[2] * R[3] - t[1] * R[6]) > a[1] * A20 + a[2] * A10 + b[1] * A02 + b[2] * A01)
+    return false;
+  if (Math.abs(t[2] * R[4] - t[1] * R[7]) > a[1] * A21 + a[2] * A11 + b[0] * A02 + b[2] * A00)
+    return false;
+  if (Math.abs(t[2] * R[5] - t[1] * R[8]) > a[1] * A22 + a[2] * A12 + b[0] * A01 + b[1] * A00)
+    return false;
+
+  // A1 x B0, A1 x B1, A1 x B2
+  if (Math.abs(t[0] * R[6] - t[2] * R[0]) > a[0] * A20 + a[2] * A00 + b[1] * A12 + b[2] * A11)
+    return false;
+  if (Math.abs(t[0] * R[7] - t[2] * R[1]) > a[0] * A21 + a[2] * A01 + b[0] * A12 + b[2] * A10)
+    return false;
+  if (Math.abs(t[0] * R[8] - t[2] * R[2]) > a[0] * A22 + a[2] * A02 + b[0] * A11 + b[1] * A10)
+    return false;
+
+  // A2 x B0, A2 x B1, A2 x B2
+  if (Math.abs(t[1] * R[0] - t[0] * R[3]) > a[0] * A10 + a[1] * A00 + b[1] * A22 + b[2] * A21)
+    return false;
+  if (Math.abs(t[1] * R[1] - t[0] * R[4]) > a[0] * A11 + a[1] * A01 + b[0] * A22 + b[2] * A20)
+    return false;
+  if (Math.abs(t[1] * R[2] - t[0] * R[5]) > a[0] * A12 + a[1] * A02 + b[0] * A21 + b[1] * A20)
+    return false;
 
   return true;
 }

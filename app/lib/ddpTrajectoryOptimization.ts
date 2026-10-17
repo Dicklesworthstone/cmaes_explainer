@@ -325,7 +325,6 @@ export function solveDDP(
       Vxx[i][i] = wTerm;
     }
 
-    const backwardPassOk = true;
     expectedCostReduction = 0;
 
     for (let t = T - 1; t >= 0; t--) {
@@ -340,6 +339,35 @@ export function solveDDP(
         const wState = weights.qState[i] || 1.0;
         lx[i] = wState * err;
         lxx[i][i] = wState;
+      }
+
+      // Differentiable obstacle barrier stage derivatives:
+      // l_obs(x) = 0.5 * wObs * max(0, dSafe - d(p))^2
+      if (obstacles && weights.wObstacleBarrier && weights.dSafe) {
+        const wObs = weights.wObstacleBarrier;
+        const dSafe = weights.dSafe;
+        const p: [number, number, number] = [xt[0] || 0, nx > 1 ? xt[1] || 0 : 0, 0];
+        for (const obs of obstacles) {
+          const sdfEval = obs.evaluate(p);
+          if (sdfEval.distance < dSafe) {
+            const pen = dSafe - sdfEval.distance;
+            let [gx, gy] = sdfEval.gradient;
+            if (Math.hypot(gx, gy) < 1e-6) {
+              // Break symmetry if state sits on medial-axis singularity (e.g., exact sphere center)
+              const nudged = obs.evaluate([p[0] + 1e-3, p[1] + 1e-3, p[2]]);
+              gx = nudged.gradient[0];
+              gy = nudged.gradient[1];
+            }
+            lx[0] -= wObs * pen * gx;
+            lxx[0][0] += wObs * gx * gx;
+            if (nx > 1) {
+              lx[1] -= wObs * pen * gy;
+              lxx[1][1] += wObs * gy * gy;
+              lxx[0][1] += wObs * gx * gy;
+              lxx[1][0] += wObs * gy * gx;
+            }
+          }
+        }
       }
 
       const lu = new Array<number>(nu).fill(0);
@@ -407,9 +435,10 @@ export function solveDDP(
       }
 
       // Expected cost reduction: -k^T Q_u - 0.5 k^T Q_uu k
+      const Quu_k = matVecMul(Quu, kt);
       let dV = 0;
       for (let i = 0; i < nu; i++) {
-        dV += -kt[i] * Qu[i];
+        dV += -kt[i] * Qu[i] - 0.5 * kt[i] * Quu_k[i];
       }
       expectedCostReduction += dV;
     }

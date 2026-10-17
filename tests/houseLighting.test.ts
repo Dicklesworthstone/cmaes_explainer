@@ -22,6 +22,11 @@ describe("Image-Based Lighting (IBL) & Photometric Lighting Engine", () => {
       expect(r).toBeGreaterThan(0);
       expect(g).toBeGreaterThan(0);
       expect(b).toBeGreaterThan(0);
+
+      const scaled = evaluateSphericalHarmonics([n[0] * 3.5, n[1] * 3.5, n[2] * 3.5]);
+      expect(scaled[0]).toBeCloseTo(r, 6);
+      expect(scaled[1]).toBeCloseTo(g, 6);
+      expect(scaled[2]).toBeCloseTo(b, 6);
     }
   });
 

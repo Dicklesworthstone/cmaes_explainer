@@ -66,10 +66,12 @@ export function stepRollingSphere(
   // No contact (in air)
   if (penetration < -1e-4) {
     // Ballistic integration
-    body.velocity[1] -= GRAVITY * safeDt;
-    body.position[0] += (body.velocity[0] + (externalForce[0] / m) * safeDt) * safeDt;
-    body.position[1] += (body.velocity[1] + (externalForce[1] / m) * safeDt) * safeDt;
-    body.position[2] += (body.velocity[2] + (externalForce[2] / m) * safeDt) * safeDt;
+    body.velocity[0] += (externalForce[0] / m) * safeDt;
+    body.velocity[1] += (-GRAVITY + externalForce[1] / m) * safeDt;
+    body.velocity[2] += (externalForce[2] / m) * safeDt;
+    body.position[0] += body.velocity[0] * safeDt;
+    body.position[1] += body.velocity[1] * safeDt;
+    body.position[2] += body.velocity[2] * safeDt;
 
     return {
       hasContact: false,
@@ -94,9 +96,6 @@ export function stepRollingSphere(
 
   const Fn = m * GRAVITY + Math.max(0, -externalForce[1]);
   const contactPt: [number, number, number] = [body.position[0], groundY, body.position[2]];
-
-  // Vector from center of mass to contact point: r_c = [0, -R, 0]
-  const rcY = -R;
 
   // Contact velocity v_c = v + \omega x r_c
   // (\omega_x, \omega_y, \omega_z) x (0, -R, 0) = (\omega_z * R, 0, -\omega_x * R)
@@ -130,24 +129,13 @@ export function stepRollingSphere(
     Fz = -maxSlidingFriction * (vcz / (slipSpeed || 1));
   }
 
-  // Contensou spinning friction (opposing \omega_y around vertical normal)
+  // Contensou spinning friction (opposing \omega_y around vertical normal), clamped by stopping torque
   const spinSpeed = body.angularVelocity[1];
   const maxSpinTorque = body.muSpinning * R * Fn;
+  const stopSpinTorque = (Math.abs(spinSpeed) * I) / safeDt;
   let spinTorque = 0;
-  if (Math.abs(spinSpeed) > 1e-4) {
-    spinTorque = -maxSpinTorque * Math.sign(spinSpeed);
-  } else {
-    spinTorque = 0;
-  }
-
-  // Rolling resistance torque opposing rolling direction
-  const rollSpeed = Math.hypot(body.angularVelocity[0], body.angularVelocity[2]);
-  const maxRollTorque = body.muRolling * Fn;
-  let rollTx = 0;
-  let rollTz = 0;
-  if (rollSpeed > 1e-4) {
-    rollTx = -maxRollTorque * (body.angularVelocity[0] / rollSpeed);
-    rollTz = -maxRollTorque * (body.angularVelocity[2] / rollSpeed);
+  if (Math.abs(spinSpeed) > 1e-6) {
+    spinTorque = -Math.min(maxSpinTorque, stopSpinTorque) * Math.sign(spinSpeed);
   }
 
   // Goyal-Ruina limit surface projection: (Ft / (mu Fn))^2 + (Mn / (mu_s R Fn))^2 <= 1
@@ -163,6 +151,20 @@ export function stepRollingSphere(
   // Torques from contact friction: \tau = r_c x F = (0, -R, 0) x (Fx, 0, Fz) = (-R * Fz, 0, R * Fx)
   const tauFrictionX = -R * Fz;
   const tauFrictionZ = R * Fx;
+
+  // Rolling resistance torque opposing post-friction rolling angular velocity, clamped by stopping torque
+  const omegaPostX = body.angularVelocity[0] + (tauFrictionX / I) * safeDt;
+  const omegaPostZ = body.angularVelocity[2] + (tauFrictionZ / I) * safeDt;
+  const rollSpeed = Math.hypot(omegaPostX, omegaPostZ);
+  const maxRollTorque = body.muRolling * Fn;
+  const stopRollTorque = (rollSpeed * I) / safeDt;
+  const effRollTorque = Math.min(maxRollTorque, stopRollTorque);
+  let rollTx = 0;
+  let rollTz = 0;
+  if (rollSpeed > 1e-6) {
+    rollTx = -effRollTorque * (omegaPostX / rollSpeed);
+    rollTz = -effRollTorque * (omegaPostZ / rollSpeed);
+  }
 
   // Integrate linear velocity & position
   const ax = (Fx + externalForce[0]) / m;
@@ -223,7 +225,9 @@ export function stepRollingCylinder(
   const penetration = groundY - contactY;
 
   if (penetration < -1e-4) {
-    body.velocity[1] -= GRAVITY * safeDt;
+    body.velocity[0] += (externalForce[0] / m) * safeDt;
+    body.velocity[1] += (-GRAVITY + externalForce[1] / m) * safeDt;
+    body.velocity[2] += (externalForce[2] / m) * safeDt;
     body.position[0] += body.velocity[0] * safeDt;
     body.position[1] += body.velocity[1] * safeDt;
     body.position[2] += body.velocity[2] * safeDt;
@@ -269,22 +273,39 @@ export function stepRollingCylinder(
     Fx = -maxFriction * Math.sign(vcx);
   }
 
-  // Integrate linear and angular motions
-  const ax = (Fx + externalForce[0]) / m;
-  body.velocity[0] += ax * safeDt;
-  body.position[0] += body.velocity[0] * safeDt;
+  const spinSpeed = body.angularVelocity[1];
+  const maxSpinTorque = body.muSpinning * R * Fn;
+  const stopSpinTorque = (Math.abs(spinSpeed) * I) / safeDt;
+  const spinTorque =
+    Math.abs(spinSpeed) > 1e-6 ? -Math.min(maxSpinTorque, stopSpinTorque) * Math.sign(spinSpeed) : 0;
 
   const tauZ = R * Fx;
-  const alphaZ = tauZ / I;
-  body.angularVelocity[2] += alphaZ * safeDt;
+  const omegaPostZ = body.angularVelocity[2] + (tauZ / I) * safeDt;
+  const maxRollTorque = body.muRolling * Fn;
+  const stopRollTorque = (Math.abs(omegaPostZ) * I) / safeDt;
+  const rollTz =
+    Math.abs(omegaPostZ) > 1e-6
+      ? -Math.min(maxRollTorque, stopRollTorque) * Math.sign(omegaPostZ)
+      : 0;
+
+  // Integrate linear and angular motions
+  const ax = (Fx + externalForce[0]) / m;
+  const az = externalForce[2] / m;
+  body.velocity[0] += ax * safeDt;
+  body.velocity[2] += az * safeDt;
+  body.position[0] += body.velocity[0] * safeDt;
+  body.position[2] += body.velocity[2] * safeDt;
+
+  body.angularVelocity[1] += (spinTorque / I) * safeDt;
+  body.angularVelocity[2] += ((tauZ + rollTz) / I) * safeDt;
 
   return {
     hasContact: true,
     contactPoint: contactPt,
     normalForce: Fn,
     frictionForce: [Fx, 0, 0],
-    spinTorque: 0,
-    rollingTorque: [0, 0, 0],
+    spinTorque,
+    rollingTorque: [0, 0, rollTz],
     isPureRolling,
     slipSpeed,
   };

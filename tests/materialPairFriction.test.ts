@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   combineCustomMaterials,
+  evaluateAnisotropicWoodFriction,
+  evaluateStribeckFriction,
   getMaterialPairFriction,
   INTRINSIC_MATERIALS,
   type PhysicsMaterialId,
@@ -83,5 +85,22 @@ describe("Per-Material-Pair Friction & Restitution Engine", () => {
     expect(combined.kineticFriction).toBeCloseTo(0.35, 4);
     expect(combined.restitution).toBe(0.2);
     expect(combined.rollingFriction).toBe(0.01);
+  });
+
+  test("evaluates Stribeck velocity transition and anisotropic hardwood grain friction", () => {
+    const rubberWood = getMaterialPairFriction("rubber", "hardwood");
+    // At zero slip speed -> static friction; at high slip speed -> kinetic friction
+    expect(evaluateStribeckFriction(rubberWood, 0.0)).toBeCloseTo(rubberWood.staticFriction, 6);
+    expect(evaluateStribeckFriction(rubberWood, 1.0)).toBeCloseTo(rubberWood.kineticFriction, 4);
+    const midMu = evaluateStribeckFriction(rubberWood, 0.05, 0.05);
+    expect(midMu).toBeGreaterThan(rubberWood.kineticFriction);
+    expect(midMu).toBeLessThan(rubberWood.staticFriction);
+
+    // Along grain [1, 0] vs across grain [0, 1]
+    const alongGrain = evaluateAnisotropicWoodFriction(rubberWood, [1, 0], [1, 0], 1.3);
+    const acrossGrain = evaluateAnisotropicWoodFriction(rubberWood, [0, 1], [1, 0], 1.3);
+    expect(alongGrain.kineticFriction).toBeCloseTo(rubberWood.kineticFriction, 6);
+    expect(acrossGrain.kineticFriction).toBeCloseTo(rubberWood.kineticFriction * 1.3, 6);
+    expect(acrossGrain.rollingFriction).toBeGreaterThan(alongGrain.rollingFriction);
   });
 });

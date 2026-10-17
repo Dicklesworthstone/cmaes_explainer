@@ -76,7 +76,11 @@ export function limbPinRestPosition(
   heading: readonly [number, number],
   standoff: readonly [number, number, number],
 ): [number, number, number] {
-  const [fx, fz] = heading;
+  const rawFx = heading[0];
+  const rawFz = heading[1];
+  const hLen = Math.hypot(rawFx, rawFz);
+  const fx = hLen > 1e-9 ? rawFx / hLen : 1;
+  const fz = hLen > 1e-9 ? rawFz / hLen : 0;
   // Lateral-left of heading in a Y-up right-handed frame is (fz, -fx).
   const lx = fz;
   const lz = -fx;
@@ -207,8 +211,16 @@ export function solveTwoBoneIK(
   const maxReach = upperLength + lowerLength - 0.001;
   const minReach = Math.abs(upperLength - lowerLength) + 0.001;
 
-  if (dist > maxReach) {
-    const scale = maxReach / Math.max(0.0001, dist);
+  if (dist < 1e-6) {
+    dX = 0;
+    dY = -minReach;
+    dZ = 0;
+    tX = rX;
+    tY = rY - minReach;
+    tZ = rZ;
+    dist = minReach;
+  } else if (dist > maxReach) {
+    const scale = maxReach / dist;
     dX *= scale;
     dY *= scale;
     dZ *= scale;
@@ -217,7 +229,7 @@ export function solveTwoBoneIK(
     tZ = rZ + dZ;
     dist = maxReach;
   } else if (dist < minReach) {
-    const scale = minReach / Math.max(0.0001, dist);
+    const scale = minReach / dist;
     dX *= scale;
     dY *= scale;
     dZ *= scale;
@@ -256,9 +268,16 @@ export function solveTwoBoneIK(
     perpY /= perpLen;
     perpZ /= perpLen;
   } else {
-    perpX = 0;
-    perpY = 1;
-    perpZ = 0;
+    // Pole vector is collinear with dir (or zero); pick a guaranteed non-collinear axis
+    const [fbX, fbY, fbZ] = Math.abs(dirY) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const fbDot = fbX * dirX + fbY * dirY + fbZ * dirZ;
+    perpX = fbX - fbDot * dirX;
+    perpY = fbY - fbDot * dirY;
+    perpZ = fbZ - fbDot * dirZ;
+    const fbLen = Math.hypot(perpX, perpY, perpZ) || 1;
+    perpX /= fbLen;
+    perpY /= fbLen;
+    perpZ /= fbLen;
   }
 
   // Mid joint position (elbow/knee)
@@ -299,12 +318,12 @@ export function clampSphereAgainstHouse(
 
   let contact: G1CollisionContact | null = null;
 
-  // Floor contact check
-  if (cy - radius < floorY) {
+  // Floor contact check (evaluated against raw input pos[1] before cy clamping)
+  if (pos[1] - radius < floorY - 1e-6) {
     contact = {
       point: [cx, floorY, cz],
       normal: [0, 1, 0],
-      penetration: floorY - (cy - radius),
+      penetration: floorY - (pos[1] - radius),
       obstacleName: "Hardwood Floor",
     };
   }
@@ -320,27 +339,30 @@ export function clampSphereAgainstHouse(
     for (const obb of obstacles) {
       if (obb.exemptFromPenalty) continue;
       const dist = distanceToOBB([cx, cy, cz], obb);
-      if (dist < radius) {
+      if (dist < radius - 1e-9) {
         const projected = projectPointOutOfOBB([cx, cy, cz], obb, radius);
         if (projected.wasInside) {
           const pushOut = radius - dist;
-          // Normal of the OBB surface at the contact point: from the contact
-          // point toward the sphere center. For an EXTERIOR query the kernel
-          // pushes AWAY from the OBB, so (sphere - projected) points outward.
-          // For an INTERIOR query the kernel pushes TOWARD the nearest face, so
-          // (sphere - projected) also points outward (toward the face).
-          const nx = (cx - projected.point[0]) / Math.max(1e-9, pushOut);
-          const ny = (cy - projected.point[1]) / Math.max(1e-9, pushOut);
-          const nz = (cz - projected.point[2]) / Math.max(1e-9, pushOut);
+          // Outward unit normal of the OBB surface at the contact point:
+          // points from the penetrating sphere position toward projected.point.
+          const moveX = projected.point[0] - cx;
+          const moveY = projected.point[1] - cy;
+          const moveZ = projected.point[2] - cz;
+          const moveLen = Math.hypot(moveX, moveY, moveZ);
+          const nx = moveLen > 1e-12 ? moveX / moveLen : 0;
+          const ny = moveLen > 1e-12 ? moveY / moveLen : 1;
+          const nz = moveLen > 1e-12 ? moveZ / moveLen : 0;
           cx = projected.point[0];
           cy = projected.point[1];
           cz = projected.point[2];
-          contact = {
-            point: [cx - nx * radius, cy - ny * radius, cz - nz * radius],
-            normal: [nx, ny, nz],
-            penetration: pushOut,
-            obstacleName: obb.name,
-          };
+          if (!contact || pushOut >= contact.penetration) {
+            contact = {
+              point: [cx - nx * radius, cy - ny * radius, cz - nz * radius],
+              normal: [nx, ny, nz],
+              penetration: pushOut,
+              obstacleName: obb.name,
+            };
+          }
           passMoved = true;
         }
       }
@@ -363,7 +385,7 @@ export function solveFullBodyG1IK(
   obstacles: OrientedBoundingBox[],
 ): G1FullBodyIKResult {
   const contacts: G1CollisionContact[] = [];
-  let minClearance = 999.0;
+  let minClearance = Number.POSITIVE_INFINITY;
 
   // 1. Pelvis position clamping
   const rawPelvis = targets.pelvis ?? nominalPelvis;
@@ -380,7 +402,15 @@ export function solveFullBodyG1IK(
   const pZ = pelvisClamped[2];
 
   // 2. Torso and Head
-  const torsoPos: [number, number, number] = [pX, pY + G1_KINEMATICS.torsoHeight * 0.5, pZ];
+  const rawTorsoPos: [number, number, number] = [pX, pY + G1_KINEMATICS.torsoHeight * 0.5, pZ];
+  const { clamped: torsoPos, contact: torsoContact } = clampSphereAgainstHouse(
+    rawTorsoPos,
+    G1_KINEMATICS.bodyRadius,
+    obstacles,
+    0.35,
+  );
+  if (torsoContact) contacts.push(torsoContact);
+
   const rawHead: [number, number, number] = targets.head ?? [
     pX,
     pY + G1_KINEMATICS.torsoHeight + G1_KINEMATICS.neckHeight,
@@ -399,8 +429,9 @@ export function solveFullBodyG1IK(
   const rightHip: [number, number, number] = [pX, pY, pZ + G1_KINEMATICS.hipWidth * 0.5];
 
   // 4. Feet IK and collision
-  const nominalLeftFoot: [number, number, number] = [pX, G1_KINEMATICS.footHeight, pZ - 0.12];
-  const nominalRightFoot: [number, number, number] = [pX, G1_KINEMATICS.footHeight, pZ + 0.12];
+  const nominalFootY = Math.max(G1_KINEMATICS.footHeight, G1_KINEMATICS.footRadius);
+  const nominalLeftFoot: [number, number, number] = [pX, nominalFootY, pZ - 0.12];
+  const nominalRightFoot: [number, number, number] = [pX, nominalFootY, pZ + 0.12];
 
   const rawLeftFoot = targets.leftFoot ?? nominalLeftFoot;
   const rawRightFoot = targets.rightFoot ?? nominalRightFoot;
@@ -420,7 +451,7 @@ export function solveFullBodyG1IK(
   if (lFootContact) contacts.push(lFootContact);
   if (rFootContact) contacts.push(rFootContact);
 
-  // 5. Knee IK (Forward bending pole vector)
+  // 5. Knee IK (Forward bending pole vector) + collision projection
   const leftLegIK = solveTwoBoneIK(
     leftHip,
     leftFootClamped,
@@ -435,6 +466,20 @@ export function solveFullBodyG1IK(
     G1_KINEMATICS.shinLength,
     [1, 0, 0], // bend forward
   );
+  const { clamped: leftKneeClamped, contact: lKneeContact } = clampSphereAgainstHouse(
+    leftLegIK.midPosition,
+    G1_KINEMATICS.limbRadius,
+    obstacles,
+    0.05,
+  );
+  const { clamped: rightKneeClamped, contact: rKneeContact } = clampSphereAgainstHouse(
+    rightLegIK.midPosition,
+    G1_KINEMATICS.limbRadius,
+    obstacles,
+    0.05,
+  );
+  if (lKneeContact) contacts.push(lKneeContact);
+  if (rKneeContact) contacts.push(rKneeContact);
 
   // 6. Shoulders and Hands IK
   const shoulderY = pY + G1_KINEMATICS.torsoHeight;
@@ -470,7 +515,7 @@ export function solveFullBodyG1IK(
   if (lHandContact) contacts.push(lHandContact);
   if (rHandContact) contacts.push(rHandContact);
 
-  // 7. Elbow IK (Backward / outward pole vector)
+  // 7. Elbow IK (Backward / outward pole vector) + collision projection
   const leftArmIK = solveTwoBoneIK(
     leftShoulder,
     leftHandClamped,
@@ -485,24 +530,47 @@ export function solveFullBodyG1IK(
     G1_KINEMATICS.forearmLength,
     [-0.5, 0, 1], // outward/backward
   );
+  const { clamped: leftElbowClamped, contact: lElbowContact } = clampSphereAgainstHouse(
+    leftArmIK.midPosition,
+    G1_KINEMATICS.limbRadius,
+    obstacles,
+    0.05,
+  );
+  const { clamped: rightElbowClamped, contact: rElbowContact } = clampSphereAgainstHouse(
+    rightArmIK.midPosition,
+    G1_KINEMATICS.limbRadius,
+    obstacles,
+    0.05,
+  );
+  if (lElbowContact) contacts.push(lElbowContact);
+  if (rElbowContact) contacts.push(rElbowContact);
 
-  // Compute minimum clearance across all key body joints
-  const keyPoints = [
-    pelvisClamped,
-    headClamped,
-    leftFootClamped,
-    rightFootClamped,
-    leftLegIK.midPosition,
-    rightLegIK.midPosition,
-    leftHandClamped,
-    rightHandClamped,
+  // Compute raw signed surface-to-OBB clearance across all key body spheres
+  const keySpheres: Array<{ pt: [number, number, number]; radius: number }> = [
+    { pt: pelvisClamped, radius: G1_KINEMATICS.bodyRadius },
+    { pt: torsoPos, radius: G1_KINEMATICS.bodyRadius },
+    { pt: headClamped, radius: G1_KINEMATICS.headRadius },
+    { pt: leftFootClamped, radius: G1_KINEMATICS.footRadius },
+    { pt: rightFootClamped, radius: G1_KINEMATICS.footRadius },
+    { pt: leftKneeClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightKneeClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: leftHandClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightHandClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: leftElbowClamped, radius: G1_KINEMATICS.limbRadius },
+    { pt: rightElbowClamped, radius: G1_KINEMATICS.limbRadius },
   ];
 
-  for (const pt of keyPoints) {
+  for (const { pt, radius } of keySpheres) {
     for (const obb of obstacles) {
       if (obb.exemptFromPenalty) continue;
-      const d = distanceToOBB(pt, obb);
+      const d = distanceToOBB(pt, obb) - radius;
       if (d < minClearance) minClearance = d;
+    }
+  }
+  if (!Number.isFinite(minClearance)) {
+    for (const { pt, radius } of keySpheres) {
+      const floorDist = pt[1] - radius;
+      if (floorDist < minClearance) minClearance = floorDist;
     }
   }
 
@@ -510,17 +578,17 @@ export function solveFullBodyG1IK(
     pelvisPosition: pelvisClamped,
     leftFootPosition: leftLegIK.reachedTarget,
     rightFootPosition: rightLegIK.reachedTarget,
-    leftKneePosition: leftLegIK.midPosition,
-    rightKneePosition: rightLegIK.midPosition,
+    leftKneePosition: leftKneeClamped,
+    rightKneePosition: rightKneeClamped,
     leftHandPosition: leftArmIK.reachedTarget,
     rightHandPosition: rightArmIK.reachedTarget,
-    leftElbowPosition: leftArmIK.midPosition,
-    rightElbowPosition: rightArmIK.midPosition,
+    leftElbowPosition: leftElbowClamped,
+    rightElbowPosition: rightElbowClamped,
     headPosition: headClamped,
     torsoPosition: torsoPos,
     contacts,
     isColliding: contacts.length > 0,
-    minClearance: Math.max(0, minClearance),
+    minClearance,
   };
 }
 

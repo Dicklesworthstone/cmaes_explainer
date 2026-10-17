@@ -72,7 +72,9 @@ export function evaluateSphericalHarmonics(
   normal: [number, number, number],
   sh: SphericalHarmonicsL2 = CRAFTSMAN_BUNGALOW_SH,
 ): [number, number, number] {
-  const [x, y, z] = normal;
+  const nLen = Math.hypot(normal[0], normal[1], normal[2]);
+  const [x, y, z] =
+    nLen > 1e-8 ? [normal[0] / nLen, normal[1] / nLen, normal[2] / nLen] : [0, 1, 0];
   const c = sh.coefficients;
 
   const r =
@@ -111,6 +113,10 @@ export function evaluateSphericalHarmonics(
  */
 export function generateCraftsmanHdrEnvMap(width = 256, height = 128): THREE.DataTexture {
   const data = new Float32Array(width * height * 4);
+  const sunNorm = Math.hypot(0.5, 0.6, 0.62);
+  const sunDirX = 0.5 / sunNorm;
+  const sunDirY = 0.6 / sunNorm;
+  const sunDirZ = 0.62 / sunNorm;
 
   for (let y = 0; y < height; y++) {
     const v = y / height; // 0 = top, 1 = bottom
@@ -132,15 +138,11 @@ export function generateCraftsmanHdrEnvMap(width = 256, height = 128): THREE.Dat
       const [shR, shG, shB] = evaluateSphericalHarmonics([dirX, dirY, dirZ]);
 
       // Direct sun beam (simulating sunlight coming through south Craftsman windows)
-      const sunDirX = 0.5;
-      const sunDirY = 0.6;
-      const sunDirZ = 0.62;
       const dotSun = Math.max(0, dirX * sunDirX + dirY * sunDirY + dirZ * sunDirZ);
       const sunSpot = dotSun ** 64.0 * 12.0;
 
-      // Warm interior pendant highlights
-      const lampDirY = 0.9;
-      const dotLamp = Math.max(0, dirY * lampDirY);
+      // Warm interior pendant highlights around zenith (unit vector [0, 1, 0])
+      const dotLamp = Math.max(0, dirY);
       const lampGlow = dotLamp ** 16.0 * 2.5;
 
       data[idx + 0] = shR + sunSpot * 1.0 + lampGlow * 1.0;
@@ -227,6 +229,7 @@ export function setupCraftsmanLighting(
   }
 
   const dispose = () => {
+    sunLight.shadow.map?.dispose();
     scene.remove(sunLight);
     scene.remove(fillLight);
     scene.remove(bounceLight);

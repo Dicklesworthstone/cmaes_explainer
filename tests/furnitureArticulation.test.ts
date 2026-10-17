@@ -109,10 +109,82 @@ describe("ArticulationGraph core kinematics & dynamics", () => {
     expect(openPos).toBeGreaterThan(0);
 
     // Continue pushing until hitting max limit (2.1 rad)
+    let sawClampedReceipt = false;
     for (let i = 0; i < 50; i++) {
-      graph.stepDynamics(0.016, { upper_door_hinge: 20.0 });
+      const receipts = graph.stepDynamicsWithReceipts(0.016, { upper_door_hinge: 20.0 });
+      const r = receipts.get("upper_door_hinge")!;
+      if (r.clampedAtLimit) {
+        sawClampedReceipt = true;
+        expect(r.newPosition).toBeCloseTo(2.1, 6);
+        expect(r.newVelocity).toBe(0);
+        expect(r.reactionImpulse).toBeGreaterThan(0);
+      }
     }
-    expect(graph.getJointPosition("upper_door_hinge")).toBeLessThanOrEqual(2.1);
+    expect(sawClampedReceipt).toBe(true);
+    expect(graph.getJointPosition("upper_door_hinge")).toBeCloseTo(2.1, 6);
+  });
+
+  test("negative control: locked joint refuses external torque and manual position overrides until unlocked", () => {
+    const graph = createFridgeArticulation();
+    graph.setJointLocked("upper_door_hinge", true);
+    expect(graph.isJointLocked("upper_door_hinge")).toBe(true);
+
+    // Manual override refused while locked
+    graph.setJointPosition("upper_door_hinge", 1.2);
+    expect(graph.getJointPosition("upper_door_hinge")).toBe(0);
+
+    // Dynamic torque refused while locked, emitting lockedRefused receipt
+    const lockedReceipts = graph.stepDynamicsWithReceipts(0.016, { upper_door_hinge: 15.0 });
+    const lockedRec = lockedReceipts.get("upper_door_hinge")!;
+    expect(lockedRec.lockedRefused).toBe(true);
+    expect(lockedRec.newPosition).toBe(0);
+    expect(lockedRec.newVelocity).toBe(0);
+    expect(lockedRec.reactionImpulse).toBeCloseTo(15.0 * 0.016, 6);
+
+    // Unlocking restores normal motion under identical torque
+    graph.setJointLocked("upper_door_hinge", false);
+    const unlockedReceipts = graph.stepDynamicsWithReceipts(0.016, { upper_door_hinge: 15.0 });
+    const unlockedRec = unlockedReceipts.get("upper_door_hinge")!;
+    expect(unlockedRec.lockedRefused).toBe(false);
+    expect(unlockedRec.newPosition).toBeGreaterThan(0);
+  });
+
+  test("resting joint at limits.min with zero input reports clampedAtLimit=false while continuous joint rotates past limits", () => {
+    const fridge = createFridgeArticulation();
+    const restReceipts = fridge.stepDynamicsWithReceipts(0.016);
+    const upperReceipt = restReceipts.get("upper_door_hinge")!;
+    expect(upperReceipt.newPosition).toBe(0);
+    expect(upperReceipt.newVelocity).toBe(0);
+    expect(upperReceipt.clampedAtLimit).toBe(false);
+    expect(upperReceipt.reactionImpulse).toBe(0);
+
+    // Continuous joint can exceed nominal limits
+    const spinner = new ArticulationGraph("base", {
+      name: "base",
+      mass: 5,
+      inertia: { ixx: 1, iyy: 1, izz: 1 },
+      centerOfMass: [0, 0, 0],
+    });
+    spinner.addLink({
+      name: "wheel",
+      mass: 1,
+      inertia: { ixx: 0.5, iyy: 0.02, izz: 0.5 },
+      centerOfMass: [0, 0, 0],
+    });
+    spinner.addJoint({
+      name: "wheel_spin",
+      type: "continuous",
+      parentLink: "base",
+      childLink: "wheel",
+      origin: [0, 0, 0],
+      axis: [1, 0, 0],
+      limits: { min: -Math.PI, max: Math.PI },
+    });
+    spinner.setJointPosition("wheel_spin", 8.0);
+    expect(spinner.getJointPosition("wheel_spin")).toBeCloseTo(8.0, 6);
+    const spinRec = spinner.stepDynamicsWithReceipts(0.02, { wheel_spin: 2.0 }).get("wheel_spin")!;
+    expect(spinRec.clampedAtLimit).toBe(false);
+    expect(spinRec.newPosition).toBeGreaterThan(8.0);
   });
 });
 

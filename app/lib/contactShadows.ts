@@ -50,19 +50,27 @@ export function evaluateSdfSoftShadow(
   hardness = 32.0,
   maxSteps = 48,
 ): ShadowRayResult {
+  const lLen = Math.hypot(lightDir[0], lightDir[1], lightDir[2]) || 1.0;
+  const lx = lightDir[0] / lLen;
+  const ly = lightDir[1] / lLen;
+  const lz = lightDir[2] / lLen;
+
   let shadow = 1.0;
   let t = tMin;
   let minDistance = Infinity;
+  let blockerT = tMin;
+  const effectiveLightSize = 1.0 / Math.max(1.0, hardness);
 
   for (let i = 0; i < maxSteps && t < tMax; i++) {
-    const px = origin[0] + lightDir[0] * t;
-    const py = origin[1] + lightDir[1] * t;
-    const pz = origin[2] + lightDir[2] * t;
+    const px = origin[0] + lx * t;
+    const py = origin[1] + ly * t;
+    const pz = origin[2] + lz * t;
 
     const d = sdfEvaluator([px, py, pz]);
 
     if (d < minDistance) {
       minDistance = d;
+      blockerT = t;
     }
 
     // Inside geometry -> total shadow
@@ -70,7 +78,7 @@ export function evaluateSdfSoftShadow(
       return {
         shadowFactor: 0.0,
         closestDistance: 0.0,
-        penumbraWidth: 0.0,
+        penumbraWidth: computePcssPenumbra(tMax, Math.max(tMin, t), effectiveLightSize),
       };
     }
 
@@ -85,7 +93,9 @@ export function evaluateSdfSoftShadow(
   }
 
   const clampedShadow = Math.max(0.0, Math.min(1.0, shadow));
-  const penumbraWidth = minDistance > 0 ? 1.0 - clampedShadow : 1.0;
+  const pcssFactor = computePcssPenumbra(tMax, blockerT, effectiveLightSize);
+  const penumbraWidth =
+    clampedShadow < 1.0 ? (1.0 - clampedShadow) * (1.0 + pcssFactor) : 0.0;
 
   return {
     shadowFactor: clampedShadow,
@@ -118,23 +128,25 @@ export function evaluateFloorContactAO(
   casters: GroundContactCaster[],
   groundY = 0.0,
 ): number {
-  let totalOcclusion = 0.0;
+  let transmittance = 1.0;
 
   const px = floorPoint[0];
   const pz = floorPoint[2];
 
   for (let i = 0; i < casters.length; i++) {
     const caster = casters[i];
-    const strength = caster.occlusionStrength ?? 0.85;
-    const fadeHeight = caster.fadeHeight ?? 0.25;
+    const strength = Math.max(0.0, Math.min(1.0, caster.occlusionStrength ?? 0.85));
+    const fadeHeight = Math.max(1e-4, caster.fadeHeight ?? 0.25);
 
     const h = caster.position[1] - groundY;
-    if (h < 0 || h > fadeHeight) {
-      continue; // Caster is below floor or too high to cast contact AO
+    // Allow slight compliant footpad penetration (-caster.radius <= h < 0) without dropping shadow
+    if (h < -caster.radius || h > fadeHeight) {
+      continue;
     }
 
+    const effectiveH = Math.max(0.0, h);
     // Vertical height decay (quadratic falloff)
-    const heightFactor = (1.0 - h / fadeHeight) ** 2.0;
+    const heightFactor = (1.0 - effectiveH / fadeHeight) ** 2.0;
 
     // Horizontal radial Gaussian kernel
     const dx = px - caster.position[0];
@@ -144,10 +156,9 @@ export function evaluateFloorContactAO(
 
     const radialFactor = Math.exp(-distSq / (sigmaSq || 1e-4));
 
-    const casterOcclusion = strength * heightFactor * radialFactor;
-    totalOcclusion += casterOcclusion;
+    const casterOcclusion = Math.max(0.0, Math.min(1.0, strength * heightFactor * radialFactor));
+    transmittance *= 1.0 - casterOcclusion;
   }
 
-  // Composite floor illumination factor: clamp(1.0 - totalOcclusion, 0, 1)
-  return Math.max(0.0, Math.min(1.0, 1.0 - totalOcclusion));
+  return Math.max(0.0, Math.min(1.0, transmittance));
 }

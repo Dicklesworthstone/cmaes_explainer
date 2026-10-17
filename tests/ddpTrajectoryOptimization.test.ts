@@ -186,5 +186,69 @@ describe("Differential Dynamic Programming (DDP / iLQR / Crocoddyl)", () => {
 
       expect(costWithObs).toBeGreaterThan(costWithoutObs);
     });
+
+    it("steers solveDDP trajectory away from obstacle via backward Riccati barrier gradients", () => {
+      // Obstacle placed near the initial configuration (0.05, 0.05, 0) so the gradient pushes (q1, q2) away
+      const sphereObstacle = new DifferentiableSdfNode(
+        (p) => sdfSphere(p, [0.05, 0.05, 0], 0.25).distance,
+      );
+      const x0 = [0.0, 0.0, 0.0, 0.0];
+      const xGoal = [0.0, 0.0, 0.0, 0.0]; // Nominal goal is staying at x0, which is inside obstacle safety zone!
+      const T = 15;
+      const initialControls = Array.from({ length: T }, () => [0.0, 0.0]);
+
+      const baseWeights: DDPWeights = {
+        qState: [0.1, 0.1, 0.05, 0.05],
+        rControl: [0.01, 0.01],
+        qTerminal: [0.5, 0.5, 0.1, 0.1],
+        wObstacleBarrier: 250.0,
+        dSafe: 0.45,
+      };
+
+      const config: DDPConfig = {
+        horizonSteps: T,
+        dt: 0.02,
+        maxIterations: 12,
+        tolerance: 1e-4,
+        regularizationInit: 1e-3,
+        regularizationFactor: 2.0,
+        minRegularization: 1e-6,
+        maxRegularization: 1e6,
+      };
+
+      const withBarrier = solveDDP(
+        doublePendulum,
+        x0,
+        xGoal,
+        initialControls,
+        baseWeights,
+        config,
+        [sphereObstacle],
+      );
+      const withoutBarrier = solveDDP(
+        doublePendulum,
+        x0,
+        xGoal,
+        initialControls,
+        { ...baseWeights, wObstacleBarrier: 0 },
+        config,
+        [sphereObstacle],
+      );
+
+      // With barrier active, DDP must reduce total barrier+tracking cost and increase terminal distance from obstacle center
+      expect(withBarrier.finalCost).toBeLessThan(withBarrier.initialCost);
+      const distWithBarrier = sphereObstacle.evalDistance([
+        withBarrier.states[T][0],
+        withBarrier.states[T][1],
+        0,
+      ]);
+      const distWithoutBarrier = sphereObstacle.evalDistance([
+        withoutBarrier.states[T][0],
+        withoutBarrier.states[T][1],
+        0,
+      ]);
+      expect(distWithBarrier).toBeGreaterThan(distWithoutBarrier + 0.02);
+    });
   });
 });
+

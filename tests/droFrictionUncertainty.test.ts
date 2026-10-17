@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   CATALOG_VIEW,
+  cvarLower,
   cvarUpper,
   evaluateRobustPair,
   type FrictionSample,
   getFrictionDistribution,
   SYNTHETIC_BANNER_TEXT,
+  sampleInfimum,
   sampleSupremum,
   wassersteinBallRadius,
 } from "../app/lib/droFrictionUncertainty";
@@ -344,5 +346,28 @@ describe("droFrictionUncertainty", () => {
       expect(sample.e).toBeGreaterThanOrEqual(0.0);
       expect(sample.e).toBeLessThanOrEqual(1.0);
     }
+  });
+
+  test("cvarLower, sampleInfimum, forceRadiusKernel, and lower-tail friction/restitution options", () => {
+    const samples = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    expect(sampleInfimum(samples)).toBe(0.1);
+    expect(cvarLower(samples, 0.1)).toBeCloseTo(0.1, 12);
+    expect(cvarLower(samples, 0.5)).toBeCloseTo((0.1 + 0.2 + 0.3 + 0.4 + 0.5) / 5, 12);
+
+    const lower = evaluateRobustPair("rubber", "hardwood", {
+      robust: true,
+      alpha: 0.1,
+      forceRadiusKernel: 64,
+      frictionTail: "lower",
+      restitutionTail: "lower",
+    });
+    expect(lower).not.toBeNull();
+    if (lower === null) return;
+    expect(lower.kernelSize).toBe(64);
+    expect(lower.radius).toBeCloseTo(wassersteinBallRadius(64, 0.95), 12);
+    expect(lower.worstCase.kineticFriction).toBeLessThanOrEqual(
+      lower.pointEstimate.kineticFriction,
+    );
+    expect(lower.worstCase.restitution).toBeLessThanOrEqual(lower.pointEstimate.restitution);
   });
 });

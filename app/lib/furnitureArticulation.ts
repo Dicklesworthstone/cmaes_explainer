@@ -41,6 +41,17 @@ export interface ArticulationJointDef {
   limits: JointLimits;
   dynamics?: JointDynamicsParams;
   initialPosition?: number;
+  locked?: boolean;
+}
+
+export interface ArticulationStepReceipt {
+  jointName: string;
+  previousPosition: number;
+  newPosition: number;
+  newVelocity: number;
+  clampedAtLimit: boolean;
+  lockedRefused: boolean;
+  reactionImpulse: number;
 }
 
 export interface ArticulationLinkDef {
@@ -63,6 +74,7 @@ export class ArticulationGraph {
   public joints: Map<string, ArticulationJointDef> = new Map();
   public jointPositions: Map<string, number> = new Map();
   public jointVelocities: Map<string, number> = new Map();
+  public jointLocked: Map<string, boolean> = new Map();
 
   constructor(rootLinkName: string, rootLinkDef: ArticulationLinkDef) {
     this.rootLink = rootLinkName;
@@ -76,18 +88,35 @@ export class ArticulationGraph {
   public addJoint(joint: ArticulationJointDef): void {
     this.joints.set(joint.name, joint);
     const initialPos = joint.initialPosition ?? 0;
-    this.jointPositions.set(
-      joint.name,
-      Math.max(joint.limits.min, Math.min(joint.limits.max, initialPos)),
-    );
+    const clampedInitial =
+      joint.type === "continuous"
+        ? initialPos
+        : Math.max(joint.limits.min, Math.min(joint.limits.max, initialPos));
+    this.jointPositions.set(joint.name, clampedInitial);
     this.jointVelocities.set(joint.name, 0);
+    this.jointLocked.set(joint.name, Boolean(joint.locked));
+  }
+
+  public setJointLocked(jointName: string, locked: boolean): void {
+    if (!this.joints.has(jointName)) return;
+    this.jointLocked.set(jointName, locked);
+    if (locked) {
+      this.jointVelocities.set(jointName, 0);
+    }
+  }
+
+  public isJointLocked(jointName: string): boolean {
+    return this.jointLocked.get(jointName) ?? false;
   }
 
   public setJointPosition(jointName: string, position: number): void {
     const joint = this.joints.get(jointName);
-    if (!joint) return;
-    const clamped = Math.max(joint.limits.min, Math.min(joint.limits.max, position));
-    this.jointPositions.set(jointName, clamped);
+    if (!joint || this.isJointLocked(jointName)) return;
+    const nextPos =
+      joint.type === "continuous"
+        ? position
+        : Math.max(joint.limits.min, Math.min(joint.limits.max, position));
+    this.jointPositions.set(jointName, nextPos);
   }
 
   public getJointPosition(jointName: string): number {
@@ -99,17 +128,34 @@ export class ArticulationGraph {
   }
 
   /**
-   * Integrate 1-step joint dynamic simulation with damping, spring detents, and external torques/forces.
+   * Integrate 1-step joint dynamic simulation with damping, spring detents, lock refusal,
+   * hard limit projection, and structured per-joint receipts.
    */
-  public stepDynamics(dt: number, externalInputs?: Record<string, number>): void {
+  public stepDynamicsWithReceipts(
+    dt: number,
+    externalInputs?: Record<string, number>,
+  ): Map<string, ArticulationStepReceipt> {
     const safeDt = Math.max(0.0001, Math.min(0.05, dt));
+    const receipts = new Map<string, ArticulationStepReceipt>();
 
     for (const [jointName, joint] of this.joints.entries()) {
-      if (joint.type === "fixed") continue;
-
       const pos = this.jointPositions.get(jointName) ?? 0;
       const vel = this.jointVelocities.get(jointName) ?? 0;
       const ext = externalInputs?.[jointName] ?? 0;
+
+      if (joint.type === "fixed" || this.isJointLocked(jointName)) {
+        this.jointVelocities.set(jointName, 0);
+        receipts.set(jointName, {
+          jointName,
+          previousPosition: pos,
+          newPosition: pos,
+          newVelocity: 0,
+          clampedAtLimit: false,
+          lockedRefused: this.isJointLocked(jointName) && Math.abs(ext) > 0,
+          reactionImpulse: Math.abs(ext) * safeDt,
+        });
+        continue;
+      }
 
       const stiffness = joint.dynamics?.stiffness ?? 0;
       const damping = joint.dynamics?.damping ?? 0.15;
@@ -130,27 +176,62 @@ export class ArticulationGraph {
 
       const totalForce = ext + springForce + dampingForce + frictionForce;
       const childLink = this.links.get(joint.childLink);
+      const axLen = Math.hypot(joint.axis[0], joint.axis[1], joint.axis[2]) || 1.0;
+      const ux = joint.axis[0] / axLen;
+      const uy = joint.axis[1] / axLen;
+      const uz = joint.axis[2] / axLen;
+      const directionalInertia = childLink
+        ? ux * ux * childLink.inertia.ixx +
+          uy * uy * childLink.inertia.iyy +
+          uz * uz * childLink.inertia.izz
+        : 0.05;
       const effInertia =
         joint.type === "revolute" || joint.type === "continuous"
-          ? Math.max(0.005, childLink?.inertia.iyy ?? 0.05)
+          ? Math.max(0.005, directionalInertia)
           : Math.max(0.1, childLink?.mass ?? 1.0);
 
       const accel = totalForce / effInertia;
       let newVel = vel + accel * safeDt;
       let newPos = pos + newVel * safeDt;
+      let clampedAtLimit = false;
+      let reactionImpulse = 0;
 
-      // Limit enforcement with inelastic impact damping
-      if (newPos <= joint.limits.min) {
-        newPos = joint.limits.min;
-        newVel = Math.max(0, newVel * -0.1);
-      } else if (newPos >= joint.limits.max) {
-        newPos = joint.limits.max;
-        newVel = Math.min(0, newVel * -0.1);
+      // Hard limit enforcement with inelastic stop (zero bounce overshoot) for bounded joints
+      if (joint.type !== "continuous") {
+        if (newPos < joint.limits.min || (newPos <= joint.limits.min && newVel < 0)) {
+          clampedAtLimit = true;
+          reactionImpulse = Math.abs(newVel) * effInertia;
+          newPos = joint.limits.min;
+          newVel = Math.max(0, newVel);
+        } else if (newPos > joint.limits.max || (newPos >= joint.limits.max && newVel > 0)) {
+          clampedAtLimit = true;
+          reactionImpulse = Math.abs(newVel) * effInertia;
+          newPos = joint.limits.max;
+          newVel = Math.min(0, newVel);
+        }
       }
 
       this.jointPositions.set(jointName, newPos);
       this.jointVelocities.set(jointName, newVel);
+      receipts.set(jointName, {
+        jointName,
+        previousPosition: pos,
+        newPosition: newPos,
+        newVelocity: newVel,
+        clampedAtLimit,
+        lockedRefused: false,
+        reactionImpulse,
+      });
     }
+
+    return receipts;
+  }
+
+  /**
+   * Integrate 1-step joint dynamic simulation with damping, spring detents, and external torques/forces.
+   */
+  public stepDynamics(dt: number, externalInputs?: Record<string, number>): void {
+    this.stepDynamicsWithReceipts(dt, externalInputs);
   }
 
   /**
@@ -238,8 +319,13 @@ function computeJointTransformMatrix(joint: ArticulationJointDef, q: number): nu
     return mat;
   }
 
+  const [rawAx, rawAy, rawAz] = joint.axis;
+  const axisNorm = Math.hypot(rawAx, rawAy, rawAz) || 1.0;
+  const ax = rawAx / axisNorm;
+  const ay = rawAy / axisNorm;
+  const az = rawAz / axisNorm;
+
   if (joint.type === "prismatic") {
-    const [ax, ay, az] = joint.axis;
     mat[12] = ox + ax * q;
     mat[13] = oy + ay * q;
     mat[14] = oz + az * q;
@@ -247,7 +333,6 @@ function computeJointTransformMatrix(joint: ArticulationJointDef, q: number): nu
   }
 
   // Revolute / Continuous
-  const [ax, ay, az] = joint.axis;
   const c = Math.cos(q);
   const s = Math.sin(q);
   const t = 1 - c;

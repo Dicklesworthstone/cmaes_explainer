@@ -104,6 +104,84 @@ describe("clampSphereAgainstHouse — yawed OBB regression (cmaes-pvz followup)"
     // to push the sphere above the original Y).
     expect(clamped[1]).toBeGreaterThan(sphere[1]);
   });
+
+  test("detects Hardwood Floor contact when sphere penetrates below floorY + radius and remains contact-free when tangent", () => {
+    const sunken = clampSphereAgainstHouse([0, 0.02, 0], 0.08, [], 0.0);
+    expect(sunken.clamped[1]).toBeCloseTo(0.08, 6);
+    expect(sunken.contact).not.toBeNull();
+    expect(sunken.contact?.obstacleName).toBe("Hardwood Floor");
+    expect(sunken.contact?.penetration).toBeCloseTo(0.06, 6);
+
+    const tangent = clampSphereAgainstHouse([0, 0.08, 0], 0.08, [], 0.0);
+    expect(tangent.clamped[1]).toBeCloseTo(0.08, 6);
+    expect(tangent.contact).toBeNull();
+  });
+
+  test("solveFullBodyG1IK computes surface-to-OBB minClearance subtracting body sphere radii and remains collision-free in open space", () => {
+    const wallBox = {
+      id: "near-pillar",
+      name: "near-pillar",
+      center: [1.0, 0.75, 0] as [number, number, number],
+      halfExtents: [0.2, 0.75, 0.2] as [number, number, number],
+      rotationYawRad: 0,
+    };
+    const res = solveFullBodyG1IK({}, [0, 0.75, 0], [wallBox]);
+    expect(res.isColliding).toBe(false);
+    // Distance from pelvis center (x=0) to pillar surface (x=0.8) is 0.8m;
+    // with hands/elbows reaching forward and sphere radii subtracted, minClearance must be < 0.8 - limbRadius
+    expect(res.minClearance).toBeGreaterThan(0);
+    expect(res.minClearance).toBeLessThan(0.8 - G1_KINEMATICS.limbRadius);
+  });
+
+  test("clampSphereAgainstHouse reports an outward unit normal and contact point on the OBB face", () => {
+    const box = {
+      id: "test-box",
+      name: "test-box",
+      center: [0, 0.5, 0] as [number, number, number],
+      halfExtents: [0.5, 0.5, 0.5] as [number, number, number],
+      rotationYawRad: 0,
+    };
+    // Sphere of radius 0.1 at x=0.55 penetrates the +X face (x=0.5) by 0.05m
+    const { clamped, contact } = clampSphereAgainstHouse([0.55, 0.5, 0], 0.1, [box], 0.0);
+    expect(clamped[0]).toBeCloseTo(0.6, 6);
+    expect(contact).not.toBeNull();
+    // Normal must point OUTWARD (+X), not inward (-X)
+    expect(contact!.normal[0]).toBeCloseTo(1.0, 6);
+    expect(contact!.normal[1]).toBeCloseTo(0.0, 6);
+    expect(contact!.normal[2]).toBeCloseTo(0.0, 6);
+    // Contact point must sit on the +X face of the box (x=0.5)
+    expect(contact!.point[0]).toBeCloseTo(0.5, 6);
+    expect(contact!.point[1]).toBeCloseTo(0.5, 6);
+    expect(contact!.point[2]).toBeCloseTo(0.0, 6);
+  });
+
+  test("solveTwoBoneIK preserves bone lengths when poleVector is collinear with vertical target or root equals target", () => {
+    const upper = 0.32;
+    const lower = 0.3;
+    // Target straight down along -Y with poleVector also along +Y (collinear!)
+    const vertical = solveTwoBoneIK([0, 0.75, 0], [0, 0.25, 0], upper, lower, [0, 1, 0]);
+    const dUpper = Math.hypot(
+      vertical.midPosition[0],
+      vertical.midPosition[1] - 0.75,
+      vertical.midPosition[2],
+    );
+    const dLower = Math.hypot(
+      vertical.reachedTarget[0] - vertical.midPosition[0],
+      vertical.reachedTarget[1] - vertical.midPosition[1],
+      vertical.reachedTarget[2] - vertical.midPosition[2],
+    );
+    expect(dUpper).toBeCloseTo(upper, 5);
+    expect(dLower).toBeCloseTo(lower, 5);
+
+    // Coincident root and target
+    const coincident = solveTwoBoneIK([0, 0.75, 0], [0, 0.75, 0], upper, lower, [1, 0, 0]);
+    const cUpper = Math.hypot(
+      coincident.midPosition[0],
+      coincident.midPosition[1] - 0.75,
+      coincident.midPosition[2],
+    );
+    expect(cUpper).toBeCloseTo(upper, 5);
+  });
 });
 
 describe("interactive pins never overlap the humanoid (sphere-inside-robot regression)", () => {

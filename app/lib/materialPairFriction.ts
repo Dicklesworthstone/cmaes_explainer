@@ -343,3 +343,58 @@ export function combineCustomMaterials(
     damping,
   };
 }
+
+/**
+ * Evaluates velocity-dependent Stribeck friction coefficient:
+ *   \mu(v) = \mu_k + (\mu_s - \mu_k) \exp(-(v / v_s)^2)
+ */
+export function evaluateStribeckFriction(
+  pair: MaterialPairProperties,
+  slipSpeedMps: number,
+  stribeckVelocityMps = 0.05,
+): number {
+  const vs = Math.max(1e-5, stribeckVelocityMps);
+  const ratio = Math.abs(slipSpeedMps) / vs;
+  const decay = Math.exp(-Math.min(50, ratio * ratio));
+  return pair.kineticFriction + (pair.staticFriction - pair.kineticFriction) * decay;
+}
+
+/**
+ * Evaluates anisotropic friction on grained surfaces (e.g. oak/walnut hardwood floors)
+ * using the elliptic orthotropic friction tensor law:
+ *   \mu(\theta) = \mu_{\parallel} \sqrt{\cos^2\theta + (\gamma \sin\theta)^2}
+ * where \theta is the angle between the slip direction and the wood grain axis.
+ */
+export function evaluateAnisotropicWoodFriction(
+  pair: MaterialPairProperties,
+  slipDirectionXZ: [number, number],
+  grainDirectionXZ: [number, number] = [1, 0],
+  crossGrainMultiplier = 1.3,
+): {
+  staticFriction: number;
+  kineticFriction: number;
+  rollingFriction: number;
+} {
+  const sLen = Math.hypot(slipDirectionXZ[0], slipDirectionXZ[1]);
+  const gLen = Math.hypot(grainDirectionXZ[0], grainDirectionXZ[1]);
+  if (sLen < 1e-8 || gLen < 1e-8) {
+    return {
+      staticFriction: pair.staticFriction,
+      kineticFriction: pair.kineticFriction,
+      rollingFriction: pair.rollingFriction,
+    };
+  }
+  const cosTheta =
+    (slipDirectionXZ[0] * grainDirectionXZ[0] + slipDirectionXZ[1] * grainDirectionXZ[1]) /
+    (sLen * gLen);
+  const cosSq = Math.min(1.0, cosTheta * cosTheta);
+  const sinSq = Math.max(0.0, 1.0 - cosSq);
+  const gamma = Math.max(1.0, crossGrainMultiplier);
+  const scale = Math.sqrt(cosSq + gamma * gamma * sinSq);
+
+  return {
+    staticFriction: pair.staticFriction * scale,
+    kineticFriction: pair.kineticFriction * scale,
+    rollingFriction: pair.rollingFriction * scale,
+  };
+}

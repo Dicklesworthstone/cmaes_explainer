@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  computeHuntCrossleyContactForce,
   type RigidBodyContactState,
   stepContactRestitution,
 } from "../app/lib/contactRestitutionIntegrator";
@@ -82,8 +83,6 @@ describe("Contact Restitution & Damping Engine", () => {
       material: "rubber",
     };
 
-    const prevEnergy = Infinity;
-
     for (let frame = 0; frame < 150; frame++) {
       const res = stepContactRestitution(ball, "concrete", 0.0, 1 / 60);
       ball = res.state;
@@ -91,5 +90,33 @@ describe("Contact Restitution & Damping Engine", () => {
       // When resting or bouncing, mechanical energy should never exceed initial potential energy
       expect(res.mechanicalEnergyJoules).toBeLessThanOrEqual(1.0 * 9.81 * 0.95 + 1e-4);
     }
+  });
+
+  test("Hunt-Crossley viscoelastic contact force scales with stiffness and penetration rate", () => {
+    const fSoft = computeHuntCrossleyContactForce(0.01, 0.5, 10000, 0.3, 1.0);
+    const fStiff = computeHuntCrossleyContactForce(0.01, 0.5, 40000, 0.3, 1.0);
+    expect(fStiff).toBeCloseTo(fSoft * 4.0, 6);
+
+    const impactingBody: RigidBodyContactState = {
+      position: [0, 0.04, 0],
+      velocity: [0, -1.5, 0],
+      massKg: 1.0,
+      radius: 0.05,
+      material: "ceramic",
+    };
+    const resLowK = stepContactRestitution(impactingBody, "hardwood", 0.0, 1 / 60, 15000);
+    const resHighK = stepContactRestitution(impactingBody, "hardwood", 0.0, 1 / 60, 45000);
+    expect(resLowK.contactOccurred).toBe(true);
+    expect(resHighK.contactForceNewtons).toBeCloseTo(resLowK.contactForceNewtons * 3.0, 5);
+
+    // Verify DRO robust evaluation option modulates bounce velocity vs point estimate
+    const resNominal = stepContactRestitution(impactingBody, "hardwood", 0.0, 1 / 60, 25000, {
+      robust: false,
+    });
+    const resRobustUpper = stepContactRestitution(impactingBody, "hardwood", 0.0, 1 / 60, 25000, {
+      robust: true,
+      restitutionTail: "upper",
+    });
+    expect(resRobustUpper.state.velocity[1]).toBeGreaterThanOrEqual(resNominal.state.velocity[1]);
   });
 });

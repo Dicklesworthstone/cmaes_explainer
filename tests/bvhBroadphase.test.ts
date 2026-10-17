@@ -127,4 +127,36 @@ describe("BVH / SAH Broadphase Engine", () => {
     const rootNode = bvh.nodes[0];
     expect(rootNode.aabbMax[0]).toBeCloseTo(11.0);
   });
+
+  test("queryOBB and 15-axis SAT accurately handle 90-degree rotated elongated OBBs without false negatives", () => {
+    const primitives: BVHPrimitive[] = [
+      {
+        id: 201,
+        aabb: { min: [1.5, -0.2, -0.2], max: [1.9, 0.2, 0.2] },
+        center: [1.7, 0.0, 0.0],
+      },
+      {
+        id: 202,
+        aabb: { min: [0.0, -0.2, 1.5], max: [0.2, 0.2, 1.9] },
+        center: [0.1, 0.0, 1.7],
+      },
+    ];
+
+    const bvh = new BVH();
+    bvh.buildFromPrimitives(primitives);
+
+    // OBB elongated along local Z (halfExtents = [0.2, 0.2, 2.0]), rotated 90 deg around Y so local Z maps to world +X
+    const rotY90: [number, number, number, number, number, number, number, number, number] = [
+      0, 0, 1, 0, 1, 0, -1, 0, 0,
+    ];
+    const hits = bvh.queryOBB({
+      center: [0, 0, 0],
+      halfExtents: [0.2, 0.2, 2.0],
+      rotationMatrix: rotY90,
+    });
+
+    // After 90-deg Y rotation, the 2.0m half-extent lies along X (hitting 201 at x=1.7) and NOT along Z (missing 202 at z=1.7)
+    expect(hits).toContain(201);
+    expect(hits).not.toContain(202);
+  });
 });

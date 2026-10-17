@@ -43,6 +43,12 @@ export type SdfEvaluator3D = (pos: [number, number, number]) => {
   gradient: [number, number, number]; // Unit surface normal \nabla d
 };
 
+function normalizeGrad(g: [number, number, number]): [number, number, number] {
+  const len = Math.hypot(g[0], g[1], g[2]);
+  if (len < 1e-8) return [0, 1, 0];
+  return [g[0] / len, g[1] / len, g[2] / len];
+}
+
 /**
  * Continuous Collision Detection query against an analytical or neural 3D Signed Distance Field.
  */
@@ -61,6 +67,7 @@ export function queryContinuousCollisionSDF(
   // If body is stationary, evaluate static SDF
   if (sweptLength < 1e-6) {
     const staticRes = sdfEvaluator(query.startPosition);
+    const unitGrad = normalizeGrad(staticRes.gradient);
     const clearance = staticRes.distance - query.radius;
     if (clearance <= (query.tolerance ?? 1e-4)) {
       return {
@@ -68,11 +75,11 @@ export function queryContinuousCollisionSDF(
         timeOfImpact: 0.0,
         impactPosition: query.startPosition,
         contactPoint: [
-          x0 - staticRes.gradient[0] * query.radius,
-          y0 - staticRes.gradient[1] * query.radius,
-          z0 - staticRes.gradient[2] * query.radius,
+          x0 - unitGrad[0] * query.radius,
+          y0 - unitGrad[1] * query.radius,
+          z0 - unitGrad[2] * query.radius,
         ],
-        surfaceNormal: staticRes.gradient,
+        surfaceNormal: unitGrad,
         penetrationDepth: Math.max(0, -clearance),
         iterations: 1,
       };
@@ -101,6 +108,7 @@ export function queryContinuousCollisionSDF(
     const pz = z0 + t * dz;
 
     const { distance, gradient } = sdfEvaluator([px, py, pz]);
+    const unitGrad = normalizeGrad(gradient);
     const clearance = distance - query.radius;
 
     // Impact threshold reached
@@ -112,9 +120,9 @@ export function queryContinuousCollisionSDF(
         z0 + clampedT * dz,
       ];
       const contactPt: [number, number, number] = [
-        impactPos[0] - gradient[0] * query.radius,
-        impactPos[1] - gradient[1] * query.radius,
-        impactPos[2] - gradient[2] * query.radius,
+        impactPos[0] - unitGrad[0] * query.radius,
+        impactPos[1] - unitGrad[1] * query.radius,
+        impactPos[2] - unitGrad[2] * query.radius,
       ];
 
       return {
@@ -122,16 +130,20 @@ export function queryContinuousCollisionSDF(
         timeOfImpact: clampedT,
         impactPosition: impactPos,
         contactPoint: contactPt,
-        surfaceNormal: gradient,
+        surfaceNormal: unitGrad,
         penetrationDepth: Math.max(0, -clearance),
         iterations: iter,
       };
     }
 
+    if (t >= 1.0) {
+      break;
+    }
+
     // Conservative advancing step: dt = clearance / sweptLength
     const deltaT = clearance / sweptLength;
     const safeAdvance = Math.max(1e-4, deltaT * 0.95); // 0.95 safety factor
-    t += safeAdvance;
+    t = t + safeAdvance > 1.0 ? 1.0 : t + safeAdvance;
   }
 
   return {
