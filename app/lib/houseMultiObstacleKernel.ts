@@ -747,10 +747,16 @@ export function queryMultiObstacleScene(
       nearestId = obb.id;
       nearestName = obb.name;
 
-      // Approximate repulsive gradient away from OBB center
-      const dx = query.position[0] - obb.center[0];
-      const dz = query.position[2] - obb.center[2];
-      const norm = Math.hypot(dx, dz) || 1e-4;
+      // Exact horizontal surface-normal gradient pointing away from closest point on OBB
+      const surfacePt = closestPointOnOBB(query.position, obb);
+      let dx = query.position[0] - surfacePt[0];
+      let dz = query.position[2] - surfacePt[2];
+      let norm = Math.hypot(dx, dz);
+      if (norm < 1e-5) {
+        dx = query.position[0] - obb.center[0];
+        dz = query.position[2] - obb.center[2];
+        norm = Math.hypot(dx, dz) || 1e-4;
+      }
       gradX = dx / norm;
       gradZ = dz / norm;
     }
@@ -765,7 +771,7 @@ export function queryMultiObstacleScene(
     minimumClearanceMeters: minClearance,
     nearestObstacleId: nearestId,
     nearestObstacleName: nearestName,
-    penetrationOccurred: minClearance < -0.05,
+    penetrationOccurred: minClearance < 0.0,
     collisionPenalty: totalPenalty,
     gradientVector: [gradX, gradY, gradZ],
   };
@@ -1040,7 +1046,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-porch",
     name: "Porch Origin",
-    position: [1.5, -2.5] as [number, number],
+    position: [0.35, 4.82] as [number, number],
     acceptanceRadius: 0.4,
     targetSpeed: 0.6,
     room: "porch",
@@ -1049,7 +1055,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-parlor",
     name: "Parlor Living Area",
-    position: [1.5, 0.0] as [number, number],
+    position: [0.35, 2.5] as [number, number],
     acceptanceRadius: 0.4,
     targetSpeed: 0.65,
     room: "parlor",
@@ -1058,8 +1064,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-dining",
     name: "Dining Room Center",
-    position: [3.5, 1.2] as [number, number],
-    acceptanceRadius: 0.4,
+    position: [0.12, -0.08] as [number, number],
+    acceptanceRadius: 0.18,
     targetSpeed: 0.65,
     room: "dining",
     maxTimeSeconds: 20.0,
@@ -1067,8 +1073,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-kitchen",
     name: "Kitchen Island",
-    position: [4.5, 3.5] as [number, number],
-    acceptanceRadius: 0.4,
+    position: [1.16, -0.05] as [number, number],
+    acceptanceRadius: 0.35,
     targetSpeed: 0.6,
     room: "kitchen",
     maxTimeSeconds: 30.0,
@@ -1076,8 +1082,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-hallway",
     name: "Central Hallway",
-    position: [2.5, 4.0] as [number, number],
-    acceptanceRadius: 0.35,
+    position: [-2.45, -0.05] as [number, number],
+    acceptanceRadius: 0.4,
     targetSpeed: 0.55,
     room: "hallway",
     maxTimeSeconds: 40.0,
@@ -1085,7 +1091,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-bedroom",
     name: "Master Bedroom",
-    position: [1.0, 5.5] as [number, number],
+    position: [-1.55, -1.95] as [number, number],
     acceptanceRadius: 0.4,
     targetSpeed: 0.6,
     room: "bedroom",
@@ -1094,7 +1100,7 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
   {
     id: "g1-bathroom",
     name: "Ensuite Bathroom Goal",
-    position: [3.0, 6.5] as [number, number],
+    position: [1.0, -2.5] as [number, number],
     acceptanceRadius: 0.35,
     targetSpeed: 0.5,
     room: "bath",
@@ -1104,6 +1110,8 @@ export const CRAFTSMAN_G1_CHALLENGE_WAYPOINTS = [
 
 /**
  * Executes the G1 HouseNavigation challenge variant with timed waypoint reach gates.
+ * Preserves unmodified raw signed clearances at every step; any negative clearance
+ * fails the challenge with hardCollisionOccurred = true.
  */
 export function simulateG1HouseNavigationChallenge(
   scene: MultiObstacleSceneConfig = createSceneFromHouseFurniture(),
@@ -1120,7 +1128,14 @@ export function simulateG1HouseNavigationChallenge(
   let activeWpIdx = 0;
   let totalDistance = 0.0;
   let minClearance = Infinity;
-  let hardCollision = false;
+  let lastStepClearance = queryMultiObstacleScene(
+    { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
+    scene,
+  ).minimumClearanceMeters;
+  let hardCollision = lastStepClearance < 0.0;
+  if (lastStepClearance < minClearance) {
+    minClearance = lastStepClearance;
+  }
   let finalReached = false;
   let stepsTaken = 0;
 
@@ -1147,7 +1162,7 @@ export function simulateG1HouseNavigationChallenge(
           velocity: [0, 0],
           activeWaypointIndex: activeWpIdx,
           activeRoom: currentWp.room,
-          clearanceMeters: Math.max(0.01, minClearance),
+          clearanceMeters: lastStepClearance,
         });
         break;
       }
@@ -1181,24 +1196,17 @@ export function simulateG1HouseNavigationChallenge(
     let safeVx = filterRes.safeVelocity[0];
     let safeVz = filterRes.safeVelocity[1];
 
-    // Check OBB obstacle clearances
-    const queryPos: [number, number, number] = [currentPos[0], 0.5, currentPos[1]];
-    const obsQuery = queryMultiObstacleScene(
-      { position: queryPos, robotRadius, safetyMargin: 0.04 },
+    // Check OBB obstacle clearances before step
+    const preQuery = queryMultiObstacleScene(
+      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
       scene,
     );
 
-    if (obsQuery.minimumClearanceMeters < minClearance) {
-      minClearance = obsQuery.minimumClearanceMeters;
-    }
-    if (obsQuery.minimumClearanceMeters < -0.45 && !filterRes.isCorridorActive) {
-      hardCollision = true;
-    }
-
     // Repulsive steering away from furniture if near
-    if (obsQuery.minimumClearanceMeters < 0.3 && !filterRes.isCorridorActive) {
-      safeVx += obsQuery.gradientVector[0] * 0.65;
-      safeVz += obsQuery.gradientVector[2] * 0.65;
+    if (preQuery.minimumClearanceMeters < 0.22 && !filterRes.isCorridorActive) {
+      const proximity = Math.max(0.0, (0.22 - preQuery.minimumClearanceMeters) / 0.22);
+      safeVx += preQuery.gradientVector[0] * 0.25 * proximity;
+      safeVz += preQuery.gradientVector[2] * 0.25 * proximity;
     }
 
     const nextX = currentPos[0] + safeVx * dt;
@@ -1210,6 +1218,21 @@ export function simulateG1HouseNavigationChallenge(
     currentPos = [nextX, nextZ];
     currentVel = [safeVx, safeVz];
 
+    // Evaluate true signed post-step clearance against furniture OBBs
+    const obsQuery = queryMultiObstacleScene(
+      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
+      scene,
+    );
+    const stepClearance = obsQuery.minimumClearanceMeters;
+
+    if (stepClearance < minClearance) {
+      minClearance = stepClearance;
+    }
+    if (stepClearance < 0.0) {
+      hardCollision = true;
+    }
+    lastStepClearance = stepClearance;
+
     trajectory.push({
       step,
       timeSeconds,
@@ -1217,7 +1240,7 @@ export function simulateG1HouseNavigationChallenge(
       velocity: [currentVel[0], currentVel[1]],
       activeWaypointIndex: activeWpIdx,
       activeRoom: targetWp.room,
-      clearanceMeters: Math.max(0.01, obsQuery.minimumClearanceMeters),
+      clearanceMeters: stepClearance,
     });
   }
 

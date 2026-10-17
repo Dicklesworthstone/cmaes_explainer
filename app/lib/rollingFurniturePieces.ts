@@ -179,7 +179,6 @@ export function stepRollingPieceDynamics(
   const normalForce = m * GRAVITY;
 
   const [vx, vz] = state.velocity;
-  const speed = Math.hypot(vx, vz);
 
   // Decompose world velocity into body longitudinal and lateral components
   const cosYaw = Math.cos(state.headingYaw);
@@ -189,59 +188,63 @@ export function stepRollingPieceDynamics(
   const vLong = vx * cosYaw + vz * sinYaw;
   const vLat = -vx * sinYaw + vz * cosYaw;
 
-  // Longitudinal Rolling Resistance Force
-  let fRollLong = 0.0;
-  if (Math.abs(vLong) > 1e-4) {
-    const sgnLong = Math.sign(vLong);
-    const maxRollForce = config.caster.rollingFrictionCoeff * normalForce;
-    fRollLong = -sgnLong * maxRollForce;
-  } else {
-    // Static rolling resistance threshold
-    const extLong = externalPushForce[0] * cosYaw + externalPushForce[1] * sinYaw;
-    const maxStaticRoll = config.caster.rollingFrictionCoeff * normalForce;
-    if (Math.abs(extLong) <= maxStaticRoll) {
-      fRollLong = -extLong;
-    } else {
-      fRollLong = -Math.sign(extLong) * maxStaticRoll;
-    }
-  }
+  const extLong = externalPushForce[0] * cosYaw + externalPushForce[1] * sinYaw;
+  const extLat = -externalPushForce[0] * sinYaw + externalPushForce[1] * cosYaw;
 
-  // Lateral Tire Scrubbing Friction & Slip Angle
-  const slipAngle = Math.atan2(vLat, Math.max(0.05, Math.abs(vLong)));
+  // Candidate velocities in body frame from external forces alone
+  const candVLong = vLong + (extLong / m) * safeDt;
+  const candVLat = vLat + (extLat / m) * safeDt;
+
+  // Longitudinal Rolling Resistance Force (clamped by single-step stopping impulse)
+  const maxRollForce = config.caster.rollingFrictionCoeff * normalForce;
+  const maxStopForceLong = (m * Math.abs(candVLong)) / safeDt;
+  const fRollLong =
+    Math.abs(candVLong) > 1e-9 ? -Math.sign(candVLong) * Math.min(maxRollForce, maxStopForceLong) : 0.0;
+
+  // Lateral Tire Scrubbing Friction & Slip Angle (clamped by single-step stopping impulse)
+  const slipAngle = Math.atan2(candVLat, Math.max(0.05, Math.abs(candVLong)));
   const maxLateralFriction = config.caster.slidingFrictionCoeff * normalForce;
   const linearLateralFriction = -config.caster.corneringStiffness * slipAngle;
-  const fLatScrub = Math.max(
+  const rawLatScrub = Math.max(
     -maxLateralFriction,
     Math.min(maxLateralFriction, linearLateralFriction),
   );
+  const maxStopForceLat = (m * Math.abs(candVLat)) / safeDt;
+  const fLatScrub =
+    Math.abs(candVLat) > 1e-9
+      ? -Math.sign(candVLat) * Math.min(Math.abs(rawLatScrub), maxStopForceLat)
+      : 0.0;
 
-  // Caster Trail Restoring & Aligning Swivel Torque
-  const tauCasterAlign = -config.caster.trailOffset * fLatScrub;
-  const tauSwivelDamping = -config.caster.swivelDamping * state.yawRate;
-  const netTorque = externalPushTorque + tauCasterAlign + tauSwivelDamping;
+  // Caster Trail Restoring & Aligning Swivel Torque (driven by lateral tire reaction rawLatScrub)
+  const tauCasterAlign = -config.caster.trailOffset * rawLatScrub;
+  const candYawRate = state.yawRate + ((externalPushTorque + tauCasterAlign) / Izz) * safeDt;
+  const rawSwivelDamping = -config.caster.swivelDamping * candYawRate;
+  const maxStopTorque = (Izz * Math.abs(candYawRate)) / safeDt;
+  const tauSwivelDamping =
+    Math.abs(candYawRate) > 1e-9
+      ? -Math.sign(candYawRate) * Math.min(Math.abs(rawSwivelDamping), maxStopTorque)
+      : 0.0;
 
-  // Transform body forces back to world coordinate frame
-  const fxWorld = fRollLong * cosYaw - fLatScrub * sinYaw + externalPushForce[0];
-  const fzWorld = fRollLong * sinYaw + fLatScrub * cosYaw + externalPushForce[1];
-
-  // Accelerations
-  const ax = fxWorld / m;
-  const az = fzWorld / m;
-  const alphaYaw = netTorque / Izz;
-
-  // Semi-implicit Euler integration
-  let newVx = vx + ax * safeDt;
-  let newVz = vz + az * safeDt;
-  let newYawRate = state.yawRate + alphaYaw * safeDt;
+  // Updated body-frame velocities and yaw rate
+  let newVLong = candVLong + (fRollLong / m) * safeDt;
+  let newVLat = candVLat + (fLatScrub / m) * safeDt;
+  let newYawRate = candYawRate + (tauSwivelDamping / Izz) * safeDt;
 
   // Deceleration stop threshold (prevents micro-jittering around zero velocity)
-  if (speed < 0.01 && Math.hypot(externalPushForce[0], externalPushForce[1]) < 0.1) {
-    newVx = 0.0;
-    newVz = 0.0;
+  if (
+    Math.hypot(newVLong, newVLat) < 0.005 &&
+    Math.hypot(externalPushForce[0], externalPushForce[1]) < 0.1
+  ) {
+    newVLong = 0.0;
+    newVLat = 0.0;
   }
-  if (Math.abs(newYawRate) < 0.01 && Math.abs(externalPushTorque) < 0.05) {
+  if (Math.abs(newYawRate) < 0.005 && Math.abs(externalPushTorque) < 0.05) {
     newYawRate = 0.0;
   }
+
+  // Transform body velocities back to world coordinate frame
+  const newVx = newVLong * cosYaw - newVLat * sinYaw;
+  const newVz = newVLong * sinYaw + newVLat * cosYaw;
 
   const newPosX = state.position[0] + newVx * safeDt;
   const newPosZ = state.position[1] + newVz * safeDt;

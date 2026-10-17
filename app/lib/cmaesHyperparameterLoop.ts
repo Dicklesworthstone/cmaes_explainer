@@ -56,11 +56,27 @@ export interface HpoCandidateDecoded {
   valueLossCoef: number;
 }
 
+export interface InnerTrainingReceipt {
+  hyperparameters: HpoCandidateDecoded;
+  innerEpochs: number;
+  innerStepsPerEpoch: number;
+  innerUpdates: number;
+  innerPolicyWeightDeltaNorm: number;
+  innerValueWeightDeltaNorm: number;
+  meanGaeAdvantage: number;
+  innerShapedReturn: number;
+  heldOutCanonicalReturn: number;
+  heldOutDistanceMeters: number;
+  rollouts: number;
+  fitness: number;
+}
+
 export interface HpoSweepResult {
   generation: number;
   bestFitness: number;
   bestHyperparameters: HpoCandidateDecoded;
   evaluationsCount: number;
+  lastBestReceipt?: InnerTrainingReceipt;
 }
 
 /**
@@ -88,9 +104,6 @@ export interface HpoLoopOptions {
   /**
    * Independent rollout replications averaged per evaluated point, seeded via
    * `baseRolloutSeed` (replication r resets the env with baseRolloutSeed + r).
-   * The current kinematic stand-in env is deterministic, so replications are
-   * exact no-ops today — the plumbing activates the moment the env gains
-   * stochastic pushes/initial states.
    */
   replicationsPerCandidate?: number;
   /** Base seed for replication rollouts (see replicationsPerCandidate). */
@@ -226,94 +239,350 @@ export class CmaesHyperparameterOptimizer {
   public get searchMean(): number[] {
     return [...this.cmaOptimizer.state.mean];
   }
+
   /**
-   * One rollout under the given genotype. Replication r resets the env with
-   * baseRolloutSeed + r, shared across candidates at the same replication; the fitness
-   * is the mean total reward negated (minimization). Returns the rollout
-   * count so stepGeneration can report honest evaluation totals.
+   * Runs causal inner policy + GAE(gamma, lambda) value-baseline training under all 8
+   * decoded hyperparameters, then evaluates the trained policy on a held-out episode
+   * using the canonical, unmanipulated environment reward so outer ranking cannot be
+   * gamed by rescaling inner reward weights.
    */
-  private evaluatePoint(genotype: number[]): { fitness: number; rollouts: number } {
-    const hparams = this.decodeGenotype(genotype);
-    let aggregate = 0.0;
+  public evaluateCandidateWithReceipt(
+    genotype: number[],
+    overrideDecoded?: Partial<HpoCandidateDecoded>,
+  ): InnerTrainingReceipt {
+    const hparams: HpoCandidateDecoded = {
+      ...this.decodeGenotype(genotype),
+      ...overrideDecoded,
+    };
+
+    const innerEpochs = 3;
+    const innerStepsPerEpoch = 20;
+    const evalSteps = 80;
+    const gamma = 0.98;
+    const lr = Math.max(0.0, hparams.muonLearningRate);
+    const momentum = Math.max(0.0, Math.min(0.999, hparams.muonMomentum));
+    const entropyCoef = Math.max(0.0, hparams.ppoEntropyCoef);
+    const gaeLambda = Math.max(0.0, Math.min(1.0, hparams.gaeLambda));
+    const valueLossCoef = Math.max(0.0, hparams.valueLossCoef);
+
+    // Coordination prior direction per joint (left/right hip-knee phase opposition)
+    const coordDir = [
+      1.0, 0.2, 0.15, -0.75, 0.3, -0.2, -1.0, -0.2, -0.15, 0.75, -0.3, 0.2, 0.1, -0.1, 0.05,
+    ];
+
+    let totalHeldOutCanonical = 0.0;
+    let totalHeldOutDistance = 0.0;
+    let totalInnerShaped = 0.0;
+    let totalPolicyDeltaNorm = 0.0;
+    let totalValueDeltaNorm = 0.0;
+    let totalMeanGae = 0.0;
+    let totalInnerUpdates = 0;
 
     for (let rep = 0; rep < this.replicationsPerCandidate; rep++) {
-      this.env.reset(this.baseRolloutSeed + rep);
-      let totalReward = 0.0;
-      // Muon momentum: carry an exponential moving average of the
-      // previous action so consecutive actions smooth out. Stand-in
-      // for the optimizer's gradient-EMA; absent this, only the action
-      // amplitude (muonLearningRate) affects the env.
-      const momentum = Math.max(0.0, Math.min(0.99, hparams.muonMomentum));
-      let prevAction = new Array(15).fill(0.0);
-      // Deterministic per-rollout noise generator so fitness stays
-      // reproducible per seed. xorshift32 — same scheme as the
-      // LiveCmaesOptimizer PRNG. ppoEntropyCoef scales the noise
-      // amplitude: 0 ⇒ deterministic, large ⇒ exploration-heavy.
-      let noiseState = (0x9e3779b9 ^ (this.baseRolloutSeed + rep)) >>> 0;
-      const noiseStep = (mean: number, std: number) => {
+      // 15 joints x 3 basis features [sin(phase), cos(phase), pitch]
+      const initialPolicy = new Float64Array(45);
+      for (let j = 0; j < 15; j++) {
+        initialPolicy[j * 3 + 0] = coordDir[j] * 0.18;
+        initialPolicy[j * 3 + 1] = coordDir[j] * 0.06;
+        initialPolicy[j * 3 + 2] = -0.05;
+      }
+      const policyWeights = new Float64Array(initialPolicy);
+      const momentumBuf = new Float64Array(45);
+
+      // 4-D linear value baseline V_psi(o_t)
+      const initialValueWeights = new Float64Array([0.25, 0.35, 0.15, 0.08]);
+      const valueWeights = new Float64Array(initialValueWeights);
+
+      let noiseState = (0x9e3779b9 ^ ((this.baseRolloutSeed + rep * 997) >>> 0)) >>> 0;
+      const sampleNormal = (std: number): number => {
         noiseState ^= noiseState << 13;
-        noiseState ^= noiseState >> 17;
+        noiseState ^= noiseState >>> 17;
         noiseState ^= noiseState << 5;
         const u1 = Math.max(1e-7, (noiseState >>> 0) / 4294967296);
         noiseState ^= noiseState << 13;
-        noiseState ^= noiseState >> 17;
+        noiseState ^= noiseState >>> 17;
         noiseState ^= noiseState << 5;
         const u2 = (noiseState >>> 0) / 4294967296;
-        return mean + std * Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        return std * Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
       };
 
-      for (let s = 0; s < 120; s++) {
-        // Action amplitude scales with muonLearningRate (the most
-        // consequential hyperparameter on the linear-phase prior).
-        // Momentum EMA on the previous action smooths consecutive
-        // commands (Muon's "spectral whitening" stand-in). ppoEntropyCoef
-        // injects exploration noise — also clipped to a sane range.
-        const amp = hparams.muonLearningRate * 10.0;
-        const noise = hparams.ppoEntropyCoef * 20.0;
-        const baseAction = new Array(15).fill(0.0).map((_, idx) => Math.sin(s * 0.1 + idx) * amp);
-        const rawAction = baseAction.map((value, idx) => {
-          const perturbed = value + (noise > 0 ? noiseStep(0, noise) : 0);
-          return momentum * prevAction[idx] + (1 - momentum) * perturbed;
-        });
-        const action = rawAction;
+      const computeValueFeatures = (obs: ReturnType<G1TrainEnv["getObservation"]>): number[] => {
+        const [roll, pitch] = obs.baseOrientationRpy;
+        const upright = Math.cos(pitch) * Math.cos(roll);
+        let velSq = 0.0;
+        for (let j = 0; j < 12; j++) velSq += obs.jointVelocities[j] * obs.jointVelocities[j];
+        const velRms = Math.sqrt(velSq / 12.0);
+        return [1.0, upright, velRms, obs.phaseSin];
+      };
 
-        const res = this.env.step(action);
-        totalReward += res.reward;
-        if (res.done) break;
-        prevAction = action;
+      const predictValue = (vFeats: number[]): number =>
+        valueWeights[0] * vFeats[0] +
+        valueWeights[1] * vFeats[1] +
+        valueWeights[2] * vFeats[2] +
+        valueWeights[3] * vFeats[3];
+
+      let repShapedReturn = 0.0;
+      let repGaeAccum = 0.0;
+      let repGaeCount = 0;
+
+      // --- Inner Training Loop (3 epochs x 20 steps) ---
+      for (let epoch = 0; epoch < innerEpochs; epoch++) {
+        let obs = this.env.reset(this.baseRolloutSeed + rep * 31 + epoch);
+        const pFeatsList: [number, number, number][] = [];
+        const vFeatsList: number[][] = [];
+        const nextValues: number[] = [];
+        const dones: boolean[] = [];
+        const innerRewards: number[] = [];
+        const muActions: number[][] = [];
+        const execActions: number[][] = [];
+
+        const exploreStd = Math.sqrt(entropyCoef);
+
+        for (let s = 0; s < innerStepsPerEpoch; s++) {
+          const pFeats: [number, number, number] = [
+            obs.phaseSin,
+            obs.phaseCos,
+            obs.baseOrientationRpy[1],
+          ];
+          const vFeats = computeValueFeatures(obs);
+          const mu = new Array<number>(15);
+          const act = new Array<number>(15);
+
+          for (let j = 0; j < 15; j++) {
+            const z =
+              policyWeights[j * 3 + 0] * pFeats[0] +
+              policyWeights[j * 3 + 1] * pFeats[1] +
+              policyWeights[j * 3 + 2] * pFeats[2];
+            const m = Math.tanh(z);
+            mu[j] = m;
+            const eps = exploreStd > 0 ? sampleNormal(exploreStd) : 0.0;
+            act[j] = Math.max(-1.0, Math.min(1.0, m + eps));
+          }
+
+          const stepRes = this.env.step(act);
+          const [rollNext, pitchNext] = stepRes.observation.baseOrientationRpy;
+          const uprightVal = Math.cos(pitchNext) * Math.cos(rollNext);
+          const progVal = stepRes.info.forwardProgressMeters;
+          const workVal = stepRes.info.actuatorWorkJoules;
+          const fallPenalty = stepRes.info.fallOccurred ? -50.0 : 0.0;
+
+          // Candidate's decomposed inner training reward
+          const shapedReward =
+            hparams.weightProgress * progVal +
+            hparams.weightUpright * uprightVal -
+            hparams.weightEnergy * workVal +
+            fallPenalty;
+
+          repShapedReturn += shapedReward;
+          const nextVFeats = computeValueFeatures(stepRes.observation);
+
+          pFeatsList.push(pFeats);
+          vFeatsList.push(vFeats);
+          nextValues.push(stepRes.done ? 0.0 : predictValue(nextVFeats));
+          dones.push(stepRes.done);
+          innerRewards.push(shapedReward);
+          muActions.push(mu);
+          execActions.push(act);
+
+          obs = stepRes.observation;
+          if (stepRes.done) break;
+        }
+
+        const T = innerRewards.length;
+        if (T === 0) continue;
+
+        // Compute GAE(gamma, gaeLambda) advantages backward in time
+        const advantages = new Float64Array(T);
+        let gae = 0.0;
+        for (let t = T - 1; t >= 0; t--) {
+          const vCurr = predictValue(vFeatsList[t]);
+          const delta = innerRewards[t] + gamma * nextValues[t] * (dones[t] ? 0.0 : 1.0) - vCurr;
+          gae = delta + gamma * gaeLambda * (dones[t] ? 0.0 : 1.0) * gae;
+          advantages[t] = gae;
+          repGaeAccum += Math.abs(gae);
+          repGaeCount++;
+        }
+
+        // Normalize advantages with a stabilized scale so reward-weight proportions
+        // and critic baseline residuals drive the policy gradient without exploding
+        let advSqSum = 0.0;
+        for (let t = 0; t < T; t++) advSqSum += advantages[t] * advantages[t];
+        const advScale = Math.sqrt(advSqSum / T) + 1.0;
+
+        // 1. Update value baseline weights (scaled by valueLossCoef and lr)
+        if (lr > 0 && valueLossCoef > 0) {
+          for (let k = 0; k < 4; k++) {
+            let vGrad = 0.0;
+            for (let t = 0; t < T; t++) {
+              vGrad += (advantages[t] / advScale) * vFeatsList[t][k];
+            }
+            valueWeights[k] += lr * valueLossCoef * (vGrad / T);
+          }
+        }
+
+        // 2. Compute policy gradient and apply Muon-style RMS-normalized momentum update
+        if (lr > 0) {
+          const wTotal =
+            Math.abs(hparams.weightProgress) +
+            Math.abs(hparams.weightUpright) +
+            Math.abs(hparams.weightEnergy) * 100.0 +
+            1e-8;
+          const progRatio = hparams.weightProgress / wTotal;
+          const upRatio = hparams.weightUpright / wTotal;
+          const energyRatio = (hparams.weightEnergy * 100.0) / wTotal;
+
+          for (let j = 0; j < 15; j++) {
+            let rowNormSq = 0.0;
+            for (let k = 0; k < 3; k++) {
+              const idx = j * 3 + k;
+              let grad = 0.0;
+              for (let t = 0; t < T; t++) {
+                const normAdv = advantages[t] / advScale;
+                const m = muActions[t][j];
+                const dTanh = 1.0 - m * m;
+                const actionSignal =
+                  execActions[t][j] -
+                  m +
+                  coordDir[j] * (0.65 * progRatio + 0.25 * upRatio - 0.35 * energyRatio);
+                grad += normAdv * actionSignal * dTanh * pFeatsList[t][k];
+              }
+              grad = grad / T - entropyCoef * policyWeights[idx];
+              momentumBuf[idx] = momentum * momentumBuf[idx] + (1.0 - momentum) * grad;
+              rowNormSq += momentumBuf[idx] * momentumBuf[idx];
+            }
+            const rowNorm = Math.sqrt(rowNormSq);
+            const scale = rowNorm > 1e-12 ? Math.tanh(rowNorm) / rowNorm : 0.0;
+            for (let k = 0; k < 3; k++) {
+              const idx = j * 3 + k;
+              policyWeights[idx] += lr * scale * momentumBuf[idx];
+            }
+          }
+        }
+        totalInnerUpdates++;
       }
 
-      aggregate += totalReward;
+      // Compute parameter delta norms for causal verification receipts
+      let pDeltaSq = 0.0;
+      for (let i = 0; i < 45; i++) {
+        const d = policyWeights[i] - initialPolicy[i];
+        pDeltaSq += d * d;
+      }
+      let vDeltaSq = 0.0;
+      for (let k = 0; k < 4; k++) {
+        const d = valueWeights[k] - initialValueWeights[k];
+        vDeltaSq += d * d;
+      }
+      totalPolicyDeltaNorm += Math.sqrt(pDeltaSq);
+      totalValueDeltaNorm += Math.sqrt(vDeltaSq);
+      totalInnerShaped += repShapedReturn;
+      totalMeanGae += repGaeCount > 0 ? repGaeAccum / repGaeCount : 0.0;
+
+      // --- Held-Out Canonical Evaluation Rollout ---
+      // Scored strictly on the canonical environment reward (stepRes.reward)
+      // so candidate reward-weight scaling cannot inflate outer fitness.
+      let evalObs = this.env.reset(this.baseRolloutSeed + 1000 + rep);
+      let evalCanonicalReturn = 0.0;
+      let evalDist = 0.0;
+
+      for (let s = 0; s < evalSteps; s++) {
+        const pFeats: [number, number, number] = [
+          evalObs.phaseSin,
+          evalObs.phaseCos,
+          evalObs.baseOrientationRpy[1],
+        ];
+        const act = new Array<number>(15);
+        for (let j = 0; j < 15; j++) {
+          const z =
+            policyWeights[j * 3 + 0] * pFeats[0] +
+            policyWeights[j * 3 + 1] * pFeats[1] +
+            policyWeights[j * 3 + 2] * pFeats[2];
+          act[j] = Math.tanh(z);
+        }
+        const res = this.env.step(act);
+        evalCanonicalReturn += res.reward;
+        evalDist = res.info.cumulativeDistanceMeters;
+        evalObs = res.observation;
+        if (res.done) break;
+      }
+
+      totalHeldOutCanonical += evalCanonicalReturn;
+      totalHeldOutDistance += evalDist;
     }
 
-    // Objective minimization: negative mean total reward
+    const reps = this.replicationsPerCandidate;
+    const meanHeldOutCanonical = totalHeldOutCanonical / reps;
+
     return {
-      fitness: -aggregate / this.replicationsPerCandidate,
-      rollouts: this.replicationsPerCandidate,
+      hyperparameters: hparams,
+      innerEpochs,
+      innerStepsPerEpoch,
+      innerUpdates: totalInnerUpdates,
+      innerPolicyWeightDeltaNorm: totalPolicyDeltaNorm / reps,
+      innerValueWeightDeltaNorm: totalValueDeltaNorm / reps,
+      meanGaeAdvantage: totalMeanGae / reps,
+      innerShapedReturn: totalInnerShaped / reps,
+      heldOutCanonicalReturn: meanHeldOutCanonical,
+      heldOutDistanceMeters: totalHeldOutDistance / reps,
+      rollouts: reps,
+      fitness: -meanHeldOutCanonical,
+    };
+  }
+
+  private lastBestReceipt?: InnerTrainingReceipt;
+
+  /**
+   * One candidate evaluation under the given genotype. Replication r resets the env with
+   * baseRolloutSeed + r, shared across candidates at the same replication; the fitness
+   * is the mean held-out canonical reward negated (minimization). Returns the rollout
+   * count and full training receipt so stepGeneration can report honest evaluation totals.
+   */
+  private evaluatePoint(genotype: number[]): {
+    fitness: number;
+    rollouts: number;
+    receipt: InnerTrainingReceipt;
+  } {
+    const receipt = this.evaluateCandidateWithReceipt(genotype);
+    return {
+      fitness: receipt.fitness,
+      rollouts: receipt.rollouts,
+      receipt,
     };
   }
 
   public stepGeneration(): HpoSweepResult {
     const candidates = this.cmaOptimizer.samplePopulation(this.mirroredSampling);
     let rollouts = 0;
+    let genBestFitness = Number.POSITIVE_INFINITY;
+    let genBestReceipt: InnerTrainingReceipt | undefined;
 
     // Replications average only repeated evaluations of the same genotype.
     // A mirror is a distinct candidate and must retain its own fitness.
     const fitnesses = candidates.map((cand) => {
       const base = this.evaluatePoint(cand);
       rollouts += base.rollouts;
+      if (base.receipt && base.fitness < genBestFitness) {
+        genBestFitness = base.fitness;
+        genBestReceipt = base.receipt;
+      }
 
       return base.fitness;
     });
 
     const tellRes = this.cmaOptimizer.tellEvaluations(candidates, fitnesses);
     this.cumulativeEvaluations += rollouts;
+    if (
+      genBestReceipt &&
+      (this.lastBestReceipt === undefined || genBestFitness <= this.lastBestReceipt.fitness)
+    ) {
+      this.lastBestReceipt = genBestReceipt;
+    }
 
     return {
       generation: this.cmaOptimizer.state.generation,
       bestFitness: tellRes.bestEverFitness,
       bestHyperparameters: this.decodeGenotype(this.cmaOptimizer.state.bestParams),
       evaluationsCount: this.cumulativeEvaluations,
+      lastBestReceipt: this.lastBestReceipt,
     };
   }
 }

@@ -229,11 +229,39 @@ export function solveKukaIK(
   const bZ = basePos[2];
   const q0Nominal = Math.atan2(targetPos[0] - bX, targetPos[2] - bZ);
 
-  const angles =
-    initialAngles.length >= 7 ? [...initialAngles] : [q0Nominal, 0.5, 0, 1.0, 0, 0.5, 0];
-  angles[0] = q0Nominal;
-  if (angles[3] <= 0) angles[3] = 0.8;
-  if (angles[1] <= 0) angles[1] = 0.5;
+  const candidateSeed = [
+    q0Nominal,
+    initialAngles.length >= 7 && initialAngles[1] > 0 ? initialAngles[1] : 0.5,
+    0,
+    initialAngles.length >= 7 && initialAngles[3] > 0 ? initialAngles[3] : 0.8,
+    0,
+    initialAngles.length >= 7 ? initialAngles[5] : 0.5,
+    0,
+  ];
+  let angles = candidateSeed;
+  if (initialAngles.length >= 7 && initialAngles.every(Number.isFinite)) {
+    const warmAngles = [...initialAngles];
+    warmAngles[0] = q0Nominal;
+    const { endEffector: warmEe } = computeKukaFK(warmAngles, basePos);
+    const warmErr = Math.hypot(
+      targetPos[0] - warmEe[0],
+      targetPos[1] - warmEe[1],
+      targetPos[2] - warmEe[2],
+    );
+    if (warmErr < 0.002) {
+      angles = warmAngles;
+    } else if (warmAngles[1] > 0 && warmAngles[3] > 0) {
+      const { endEffector: seedEe } = computeKukaFK(candidateSeed, basePos);
+      const seedErr = Math.hypot(
+        targetPos[0] - seedEe[0],
+        targetPos[1] - seedEe[1],
+        targetPos[2] - seedEe[2],
+      );
+      if (warmErr < seedErr) {
+        angles = warmAngles;
+      }
+    }
+  }
 
   const activeJoints = [0, 1, 3, 5];
   const eps = 1e-5;
@@ -371,7 +399,6 @@ export function clampArmTargetPosition(
   // target upward. We take the maximum of the table floor and the
   let safeY = Math.max(tableHeight + margin, target[1]);
   let minClearance = 999.0;
-  let isColliding = false;
   for (let pass = 0; pass < 3; pass++) {
     let passMoved = false;
     for (const obb of obstacles) {
@@ -379,7 +406,6 @@ export function clampArmTargetPosition(
       const dist = distanceToOBB([safeX, safeY, safeZ], obb);
       if (dist < minClearance) minClearance = dist;
       if (dist < margin) {
-        isColliding = true;
         const projected = projectPointOutOfOBB([safeX, safeY, safeZ], obb, margin);
         if (projected.wasInside) {
           safeX = projected.point[0];
@@ -391,20 +417,22 @@ export function clampArmTargetPosition(
     }
     if (!passMoved) break;
   }
-  // After all passes, recompute isColliding based on the FINAL state so
-  // the caller learns whether the projection succeeded.
+  // After all passes, recompute isColliding and finalMinClearance based on the
+  // FINAL state so the caller learns whether projection succeeded and the realized clearance.
   let finalColliding = false;
+  let finalMinClearance = 999.0;
   for (const obb of obstacles) {
     if (obb.exemptFromPenalty) continue;
-    if (distanceToOBB([safeX, safeY, safeZ], obb) < margin) {
+    const d = distanceToOBB([safeX, safeY, safeZ], obb);
+    if (d < finalMinClearance) finalMinClearance = d;
+    if (d < margin) {
       finalColliding = true;
-      break;
     }
   }
   return {
     clampedTarget: [safeX, safeY, safeZ],
     isColliding: finalColliding,
-    minClearance: Math.max(0, minClearance),
+    minClearance: Math.max(0, finalMinClearance === 999.0 ? minClearance : finalMinClearance),
   };
 }
 

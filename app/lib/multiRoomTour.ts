@@ -18,6 +18,13 @@
 //   - Shoemake, "Animating Rotation with Quaternion Curves" (SIGGRAPH 1985)
 //   - Unreal Engine Sequencer & Cinematic Camera Architecture (2023)
 
+import {
+  CRAFTSMAN_DOORWAYS,
+  CRAFTSMAN_WAYPOINT_CHAIN,
+  type HouseNavSimulationResult,
+  simulateHouseNavigation,
+} from "./houseNavigationChain";
+
 export interface CameraKeyframe {
   room: string;
   position: [number, number, number]; // [x, y, z] camera eye
@@ -30,56 +37,56 @@ export interface CameraKeyframe {
 export const CRAFTSMAN_TOUR_KEYFRAMES: CameraKeyframe[] = [
   {
     room: "porch",
-    position: [0.0, 2.5, -4.5],
-    target: [1.5, 0.9, -2.5],
+    position: [0.35, 2.2, 5.3],
+    target: [0.35, 0.9, 3.8],
     fovDegrees: 55,
     exposure: 1.25,
     bloomThreshold: 1.4,
   },
   {
     room: "parlor",
-    position: [0.5, 1.8, -0.8],
-    target: [2.0, 0.8, 1.0],
+    position: [-0.8, 1.8, 3.2],
+    target: [0.35, 0.85, 2.2],
     fovDegrees: 50,
     exposure: 1.0,
     bloomThreshold: 1.2,
   },
   {
     room: "dining",
-    position: [2.0, 2.2, 0.5],
-    target: [3.5, 0.9, 1.8],
+    position: [-0.9, 2.0, 0.8],
+    target: [0.12, 0.9, -0.08],
     fovDegrees: 52,
     exposure: 1.05,
     bloomThreshold: 1.2,
   },
   {
     room: "kitchen",
-    position: [3.2, 1.7, 2.5],
-    target: [4.5, 0.9, 3.8],
+    position: [2.2, 1.7, 0.8],
+    target: [1.16, 0.9, -0.05],
     fovDegrees: 54,
     exposure: 1.15,
     bloomThreshold: 1.3,
   },
   {
     room: "hallway",
-    position: [3.5, 1.6, 3.5],
-    target: [2.2, 1.0, 4.5],
+    position: [-1.2, 1.6, 0.2],
+    target: [-2.45, 1.0, -0.05],
     fovDegrees: 48,
     exposure: 0.95,
     bloomThreshold: 1.1,
   },
   {
     room: "bedroom",
-    position: [2.2, 1.8, 4.8],
-    target: [1.0, 0.8, 5.8],
+    position: [-2.6, 1.8, -1.2],
+    target: [-1.55, 0.85, -1.95],
     fovDegrees: 50,
     exposure: 0.9,
     bloomThreshold: 1.1,
   },
   {
     room: "bath",
-    position: [1.8, 1.7, 5.8],
-    target: [3.0, 1.0, 6.6],
+    position: [0.2, 1.7, -1.8],
+    target: [1.0, 0.95, -2.5],
     fovDegrees: 52,
     exposure: 1.1,
     bloomThreshold: 1.3,
@@ -89,16 +96,41 @@ export const CRAFTSMAN_TOUR_KEYFRAMES: CameraKeyframe[] = [
 export interface TourFrameSnapshot {
   frameIndex: number;
   timeSeconds: number;
+  simulatedPhysicalSeconds: number;
+  playbackSpeedRatio: number;
   cameraPosition: [number, number, number];
   cameraTarget: [number, number, number];
   cameraFov: number;
   currentRoom: string;
   exposure: number;
   bloomThreshold: number;
+  robotPosition: [number, number, number];
+  robotVelocity: [number, number];
+  robotClearanceMeters: number;
+}
+
+export interface MultiRoomTourOptions {
+  navigationEpisode?: HouseNavSimulationResult;
+  robotTrackingBlend?: number; // beta in [0, 1], default 0.25
+}
+
+let cachedDefaultNavigationEpisode: HouseNavSimulationResult | null = null;
+
+function getDefaultTourNavigationEpisode(): HouseNavSimulationResult {
+  if (!cachedDefaultNavigationEpisode) {
+    cachedDefaultNavigationEpisode = simulateHouseNavigation(
+      CRAFTSMAN_WAYPOINT_CHAIN,
+      CRAFTSMAN_DOORWAYS,
+      2500,
+      1 / 60,
+    );
+  }
+  return cachedDefaultNavigationEpisode;
 }
 
 /**
- * Centripetal Catmull-Rom spline interpolation (alpha = 0.5) between 4 points P0, P1, P2, P3.
+ * Centripetal Catmull-Rom spline interpolation (Barry-Goldman pyramid, alpha = 0.5)
+ * between 4 points P0, P1, P2, P3 for local parameter t in [0, 1].
  */
 export function evaluateCatmullRom3D(
   p0: [number, number, number],
@@ -106,48 +138,72 @@ export function evaluateCatmullRom3D(
   p2: [number, number, number],
   p3: [number, number, number],
   t: number, // Parameter in [0, 1]
+  alpha = 0.5,
 ): [number, number, number] {
-  const t2 = t * t;
-  const t3 = t2 * t;
+  const dist12 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]);
+  if (dist12 < 1e-8) {
+    return [p1[0], p1[1], p1[2]];
+  }
+  const dt12 = Math.max(1e-4, dist12 ** alpha);
+  const dist01 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+  const dist23 = Math.hypot(p3[0] - p2[0], p3[1] - p2[1], p3[2] - p2[2]);
+  const dt01 = dist01 > 1e-6 ? dist01 ** alpha : dt12;
+  const dt23 = dist23 > 1e-6 ? dist23 ** alpha : dt12;
 
-  // Standard Catmull-Rom matrix coefficients
-  const x =
-    0.5 *
-    (2 * p1[0] +
-      (-p0[0] + p2[0]) * t +
-      (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-      (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+  const t0 = 0.0;
+  const t1 = t0 + dt01;
+  const t2 = t1 + dt12;
+  const t3 = t2 + dt23;
+  const tau = t1 + t * (t2 - t1);
 
-  const y =
-    0.5 *
-    (2 * p1[1] +
-      (-p0[1] + p2[1]) * t +
-      (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-      (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+  const wA1_0 = (t1 - tau) / (t1 - t0);
+  const wA1_1 = (tau - t0) / (t1 - t0);
+  const wA2_1 = (t2 - tau) / (t2 - t1);
+  const wA2_2 = (tau - t1) / (t2 - t1);
+  const wA3_2 = (t3 - tau) / (t3 - t2);
+  const wA3_3 = (tau - t2) / (t3 - t2);
 
-  const z =
-    0.5 *
-    (2 * p1[2] +
-      (-p0[2] + p2[2]) * t +
-      (2 * p0[2] - 5 * p1[2] + 4 * p2[2] - p3[2]) * t2 +
-      (-p0[2] + 3 * p1[2] - 3 * p2[2] + p3[2]) * t3);
+  const wB1_1 = (t2 - tau) / (t2 - t0);
+  const wB1_2 = (tau - t0) / (t2 - t0);
+  const wB2_2 = (t3 - tau) / (t3 - t1);
+  const wB2_3 = (tau - t1) / (t3 - t1);
 
-  return [x, y, z];
+  const out: [number, number, number] = [0, 0, 0];
+  for (let axis = 0; axis < 3; axis++) {
+    const a1 = wA1_0 * p0[axis] + wA1_1 * p1[axis];
+    const a2 = wA2_1 * p1[axis] + wA2_2 * p2[axis];
+    const a3 = wA3_2 * p2[axis] + wA3_3 * p3[axis];
+    const b1 = wB1_1 * a1 + wB1_2 * a2;
+    const b2 = wB2_2 * a2 + wB2_3 * a3;
+    out[axis] = wA2_1 * b1 + wA2_2 * b2;
+  }
+
+  return out;
 }
 
 /**
- * Generates an exact 720-step multi-room fly-through tour trajectory.
+ * Generates an exact multi-room fly-through tour trajectory coupled to a continuous
+ * physical navigation episode, disclosing presentation duration vs physical simulation duration.
  */
 export function generateMultiRoomTourRollout(
   keyframes: CameraKeyframe[] = CRAFTSMAN_TOUR_KEYFRAMES,
   totalFrames = 720,
   fps = 60,
+  options: MultiRoomTourOptions = {},
 ): TourFrameSnapshot[] {
   const snapshots: TourFrameSnapshot[] = [];
   const numSegments = keyframes.length - 1;
+  const episode = options.navigationEpisode ?? getDefaultTourNavigationEpisode();
+  const beta = Math.max(0.0, Math.min(1.0, options.robotTrackingBlend ?? 0.25));
+  const traj = episode.trajectory;
+  const maxTrajIdx = Math.max(0, traj.length - 1);
+  const presentationDurationSec = Math.max(1e-6, (totalFrames - 1) / fps);
+  const physicalDurationSec =
+    traj.length > 0 ? traj[maxTrajIdx].timeSeconds : episode.simulatedPhysicalSeconds;
+  const playbackSpeedRatio = physicalDurationSec / presentationDurationSec;
 
   for (let frame = 0; frame < totalFrames; frame++) {
-    const progress = frame / (totalFrames - 1); // 0.0 to 1.0
+    const progress = totalFrames > 1 ? frame / (totalFrames - 1) : 0.0; // 0.0 to 1.0
     const globalT = progress * numSegments;
     const segmentIdx = Math.min(numSegments - 1, Math.floor(globalT));
     const localT = globalT - segmentIdx;
@@ -167,7 +223,45 @@ export function generateMultiRoomTourRollout(
     const k3 = keyframes[i3];
 
     const camPos = evaluateCatmullRom3D(k0.position, k1.position, k2.position, k3.position, easedT);
-    const camTarget = evaluateCatmullRom3D(k0.target, k1.target, k2.target, k3.target, easedT);
+    const camPathTarget = evaluateCatmullRom3D(
+      k0.target,
+      k1.target,
+      k2.target,
+      k3.target,
+      easedT,
+    );
+
+    // Sample continuous physical navigation trajectory at progress
+    let robotPos: [number, number, number] = [0, 0.85, 0];
+    let robotVel: [number, number] = [0, 0];
+    let robotClearance = episode.minimumObstacleClearanceMeters;
+    let simulatedPhysicalSeconds = progress * physicalDurationSec;
+
+    if (traj.length > 0) {
+      const trajFloatIdx = progress * maxTrajIdx;
+      const idx0 = Math.min(maxTrajIdx, Math.floor(trajFloatIdx));
+      const idx1 = Math.min(maxTrajIdx, idx0 + 1);
+      const frac = trajFloatIdx - idx0;
+      const s0 = traj[idx0];
+      const s1 = traj[idx1];
+
+      const rx = s0.position[0] + (s1.position[0] - s0.position[0]) * frac;
+      const rz = s0.position[1] + (s1.position[1] - s0.position[1]) * frac;
+      robotPos = [rx, 0.85, rz];
+      robotVel = [
+        s0.velocity[0] + (s1.velocity[0] - s0.velocity[0]) * frac,
+        s0.velocity[1] + (s1.velocity[1] - s0.velocity[1]) * frac,
+      ];
+      robotClearance = s0.clearanceMeters + (s1.clearanceMeters - s0.clearanceMeters) * frac;
+      simulatedPhysicalSeconds = s0.timeSeconds + (s1.timeSeconds - s0.timeSeconds) * frac;
+    }
+
+    // Look-At Target Damping & Blending: T(u) = (1 - beta) * T_cam_path(u) + beta * X_robot(u)
+    const camTarget: [number, number, number] = [
+      (1.0 - beta) * camPathTarget[0] + beta * robotPos[0],
+      (1.0 - beta) * camPathTarget[1] + beta * robotPos[1],
+      (1.0 - beta) * camPathTarget[2] + beta * robotPos[2],
+    ];
 
     // Linear interpolation for scalars
     const fov = k1.fovDegrees + (k2.fovDegrees - k1.fovDegrees) * easedT;
@@ -179,12 +273,17 @@ export function generateMultiRoomTourRollout(
     snapshots.push({
       frameIndex: frame,
       timeSeconds: frame / fps,
+      simulatedPhysicalSeconds,
+      playbackSpeedRatio,
       cameraPosition: camPos,
       cameraTarget: camTarget,
       cameraFov: fov,
       currentRoom,
       exposure,
       bloomThreshold,
+      robotPosition: robotPos,
+      robotVelocity: robotVel,
+      robotClearanceMeters: robotClearance,
     });
   }
 

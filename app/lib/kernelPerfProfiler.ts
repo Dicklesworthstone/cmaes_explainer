@@ -54,16 +54,25 @@ export interface ProfilerSummaryStats {
 export class KernelPerfProfiler {
   private bufferSize: number;
   private budgetMicros: number;
-  private records: StepTelemetryRecord[] = [];
+  private ring: Array<StepTelemetryRecord | undefined>;
+  private head = 0;
+  private count = 0;
 
   constructor(bufferSize = 1000, targetFreqHz = 480) {
+    if (!Number.isSafeInteger(bufferSize) || bufferSize < 1) {
+      throw new RangeError("bufferSize must be a positive integer");
+    }
+    if (!Number.isFinite(targetFreqHz) || targetFreqHz <= 0) {
+      throw new RangeError("targetFreqHz must be finite and positive");
+    }
     this.bufferSize = bufferSize;
+    this.ring = new Array<StepTelemetryRecord | undefined>(bufferSize);
     // Budget in microseconds: (1 / freq) * 1e6
     this.budgetMicros = (1.0 / targetFreqHz) * 1e6;
   }
 
   /**
-   * Records execution timing breakdown for a completed simulation step.
+   * Records execution timing breakdown for a completed simulation step in O(1) time.
    */
   public recordStep(
     stepIndex: number,
@@ -91,9 +100,12 @@ export class KernelPerfProfiler {
       isBudgetOverrun: calculatedTotal > this.budgetMicros,
     };
 
-    this.records.push(record);
-    if (this.records.length > this.bufferSize) {
-      this.records.shift();
+    const writeIdx = (this.head + this.count) % this.bufferSize;
+    this.ring[writeIdx] = record;
+    if (this.count < this.bufferSize) {
+      this.count += 1;
+    } else {
+      this.head = (this.head + 1) % this.bufferSize;
     }
 
     return record;
@@ -142,10 +154,10 @@ export class KernelPerfProfiler {
   }
 
   /**
-   * Computes comprehensive statistics and rolling quantiles across recorded steps.
+   * Computes comprehensive statistics and Nearest-Rank rolling quantiles across recorded steps.
    */
   public getSummaryStats(): ProfilerSummaryStats {
-    if (this.records.length === 0) {
+    if (this.count === 0) {
       return {
         totalStepsRecorded: 0,
         meanTotalMicros: 0,
@@ -163,7 +175,7 @@ export class KernelPerfProfiler {
       };
     }
 
-    const n = this.records.length;
+    const n = this.count;
     let sumTotal = 0;
     let sumBroad = 0;
     let sumNarrow = 0;
@@ -173,7 +185,9 @@ export class KernelPerfProfiler {
 
     const totals: number[] = [];
 
-    for (const r of this.records) {
+    for (let i = 0; i < n; i++) {
+      const r = this.ring[(this.head + i) % this.bufferSize];
+      if (!r) continue;
       const t = r.timings;
       totals.push(t.total);
       sumTotal += t.total;
@@ -191,11 +205,13 @@ export class KernelPerfProfiler {
     }
     const stdDev = Math.sqrt(sumSqDiff / n);
 
-    // Compute sorted quantiles
+    // Compute sorted Nearest-Rank quantiles: p_k = X_{ceil((k/100) * N)}
     totals.sort((a, b) => a - b);
-    const p50 = totals[Math.floor(n * 0.5)];
-    const p95 = totals[Math.min(n - 1, Math.floor(n * 0.95))];
-    const p99 = totals[Math.min(n - 1, Math.floor(n * 0.99))];
+    const nearestRank = (q: number) =>
+      totals[Math.max(0, Math.min(n - 1, Math.ceil(q * n) - 1))];
+    const p50 = nearestRank(0.5);
+    const p95 = nearestRank(0.95);
+    const p99 = nearestRank(0.99);
     const maxTotal = totals[n - 1];
 
     return {
@@ -216,10 +232,19 @@ export class KernelPerfProfiler {
   }
 
   public getRecentRecords(count = 50): StepTelemetryRecord[] {
-    return this.records.slice(-count);
+    const take = Math.max(0, Math.min(count, this.count));
+    const startOffset = this.count - take;
+    const out: StepTelemetryRecord[] = [];
+    for (let i = 0; i < take; i++) {
+      const rec = this.ring[(this.head + startOffset + i) % this.bufferSize];
+      if (rec) out.push(rec);
+    }
+    return out;
   }
 
   public clear(): void {
-    this.records = [];
+    this.ring.fill(undefined);
+    this.head = 0;
+    this.count = 0;
   }
 }

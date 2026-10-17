@@ -16,6 +16,7 @@
  */
 
 import type { FurnitureKind } from "./furnitureTaxonomy";
+import { computeAdaptiveSafetyMargin } from "./riskAwareMargin";
 
 export interface Vector3D {
   x: number;
@@ -50,6 +51,7 @@ export interface CBFConfig {
   slackWeight: number; // Penalty weight for constraint relaxation (default: 1e4)
   maxIterations: number; // Maximum QP iterations (default: 30)
   tolerance: number; // Convergence tolerance (default: 1e-5)
+  useAdaptiveMargin?: boolean; // Whether to dynamically expand margin based on approach speed & fragility
 }
 
 export const DEFAULT_CBF_CONFIG: CBFConfig = {
@@ -263,6 +265,11 @@ export function solveCbfQp(
     if (lambda[k] > 1e-4) activeCount++;
   }
 
+  let minBarrierValue = Infinity;
+  for (let k = 0; k < b.length; k++) {
+    if (b[k] < minBarrierValue) minBarrierValue = b[k];
+  }
+
   return {
     safeAction,
     slack: delta,
@@ -270,7 +277,7 @@ export function solveCbfQp(
     iterations: iter,
     activeConstraintsCount: activeCount,
     cost,
-    minBarrierValue: -b.reduce((min, val) => Math.min(min, -val), 0),
+    minBarrierValue,
   };
 }
 
@@ -299,7 +306,24 @@ export function buildWholeBodyCbfConstraints(
     for (let oIdx = 0; oIdx < obstacles.length; oIdx++) {
       const obstacle = obstacles[oIdx];
       const { distance, normal } = computeObbSdf([lx, ly, lz], obstacle);
-      const effectiveDist = distance - link.radius - margin;
+      const effectiveMargin =
+        obstacle.fragility !== undefined ||
+        obstacle.kind !== undefined ||
+        config.useAdaptiveMargin === true
+          ? computeAdaptiveSafetyMargin(
+              [lx, ly, lz],
+              [lvx, lvy, lvz],
+              normal,
+              {
+                center: obstacle.center,
+                velocity: obstacle.velocity,
+                riskClass: obstacle.kind,
+                fragility: obstacle.fragility,
+              },
+              { baseMargin: margin },
+            ).margin
+          : margin;
+      const effectiveDist = distance - link.radius - effectiveMargin;
 
       if (effectiveDist < minClearance) {
         minClearance = effectiveDist;
@@ -321,7 +345,6 @@ export function buildWholeBodyCbfConstraints(
       // First-order barrier term: psi0 = h(x) = effectiveDist
       // psi1 = dot(n, v_rel) + gamma1 * psi0
       const dotNV = nx * rvx + ny * rvy + nz * rvz;
-      const psi1 = dotNV + gamma1 * effectiveDist;
 
       // HOCBF relative-degree 2 condition:
       // a_rel . n + (gamma1 + gamma2) * dot(n, v_rel) + gamma1 * gamma2 * h(x) >= 0

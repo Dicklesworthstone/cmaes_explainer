@@ -18,6 +18,12 @@ import {
   type ValuePolicy,
   type Vec2,
 } from "./dpValueIteration";
+import {
+  type BRTField,
+  isSafeStart,
+  sampleTimeAt,
+  solveBackwardReachableTube,
+} from "./hjiReachability";
 import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
 export interface WaypointPath {
@@ -32,6 +38,12 @@ export interface WaypointPlan {
   valueGrid: ValueGrid;
   policy: ValuePolicy;
   costmapResolutionMeters: number;
+}
+
+export interface KmrReachabilityCertificate {
+  reachable: boolean;
+  minTimeSeconds: number;
+  field: BRTField;
 }
 
 const DEFAULT_COSTMAP_PARAMS: ClearanceCostParams = {
@@ -400,4 +412,55 @@ export function pathIsCollisionFree(
   }
   const sdf = createKmrPlanarSdf(obstacles);
   return minimumClearanceAlongPath(path.points, sdf, clearanceRadiusMeters, 0.02) >= 0;
+}
+
+/**
+ * Certifies whether a KMR pose (x, y, theta) is inside the Hamilton-Jacobi
+ * Backward Reachable Tube (BRT) of the target pose under bounded planar velocity
+ * and yaw-rate dynamics (cmaes-ndl8).
+ */
+export function certifyKmrReachability(
+  kmrPose: { x: number; y: number; theta: number },
+  targetPose: { x: number; y: number },
+  obstacles: readonly OrientedBoundingBox[],
+  bounds: AABB2D = DEFAULT_BOUNDS,
+  options: {
+    nx?: number;
+    ny?: number;
+    nTheta?: number;
+    vMax?: number;
+    omegaMax?: number;
+    clearanceRadiusMeters?: number;
+    goalRadiusMeters?: number;
+  } = {},
+): KmrReachabilityCertificate {
+  assertFinitePoint("KMR start pose", [kmrPose.x, kmrPose.y]);
+  assertFinitePoint("KMR goal pose", [targetPose.x, targetPose.y]);
+  if (!Number.isFinite(kmrPose.theta)) {
+    throw new Error("KMR start heading must be finite");
+  }
+  const sdf = createKmrPlanarSdf(obstacles);
+  const field = solveBackwardReachableTube(
+    sdf,
+    {
+      center: [targetPose.x, targetPose.y],
+      radius: options.goalRadiusMeters ?? GOAL_RADIUS,
+    },
+    {
+      bounds,
+      nx: options.nx ?? 41,
+      ny: options.ny ?? 41,
+      nTheta: options.nTheta ?? 16,
+      vMax: options.vMax ?? 0.6,
+      omegaMax: options.omegaMax ?? 1.2,
+      bodyRadius: options.clearanceRadiusMeters ?? KMR_PLANAR_CLEARANCE_RADIUS_METERS,
+    },
+  );
+  const minTimeSeconds = sampleTimeAt(field, kmrPose.x, kmrPose.y, kmrPose.theta);
+  const reachable = isSafeStart(field, kmrPose.x, kmrPose.y, kmrPose.theta);
+  return {
+    reachable,
+    minTimeSeconds,
+    field,
+  };
 }

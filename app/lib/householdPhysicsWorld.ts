@@ -30,6 +30,23 @@ export interface HouseholdBodyMeta {
   boundingRadius: number;
   material: HouseholdMaterial;
   rolling?: boolean;
+  breakable?: boolean;
+  breakImpulseThresholdNs?: number;
+  fragmentCount?: number;
+  broken?: boolean;
+  parentBrokenId?: string;
+  fragmentIds?: string[];
+}
+
+export interface HouseholdBreakageEvent {
+  parentBodyId: string;
+  impactImpulseNs: number;
+  thresholdNs: number;
+  fragmentIds: string[];
+  parentMassKg: number;
+  fragmentMassSumKg: number;
+  parentMomentumAfterImpact: Vector3;
+  fragmentMomentumSum: Vector3;
 }
 
 export interface HouseholdWorld {
@@ -58,6 +75,7 @@ export interface HouseholdStepResult {
   sleepTransitions: SleepTransitionEvent[];
   ccdImpacts: Array<{ bodyId: string; result: CcdResult }>;
   restitution: Array<{ bodyId: string; settled: boolean }>;
+  breakageEvents: HouseholdBreakageEvent[];
   lcpIterations: number;
   lcpMaxResidual: number;
   lcpConverged: boolean;
@@ -143,16 +161,41 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     }
   }
 
+  const manifolds = world.contactGraph.updateContacts();
+  const connectedMap = new Map<string, Set<string>>();
+  for (const m of manifolds) {
+    if (m.contacts.length === 0) continue;
+    const bA = bodies.get(m.bodyAId);
+    const bB = bodies.get(m.bodyBId);
+    if (bA && !bA.isStatic && bB && !bB.isStatic) {
+      let setA = connectedMap.get(m.bodyAId);
+      if (!setA) {
+        setA = new Set<string>();
+        connectedMap.set(m.bodyAId, setA);
+      }
+      setA.add(m.bodyBId);
+
+      let setB = connectedMap.get(m.bodyBId);
+      if (!setB) {
+        setB = new Set<string>();
+        connectedMap.set(m.bodyBId, setB);
+      }
+      setB.add(m.bodyAId);
+    }
+  }
+
   // Sync the sleep manager's per-body snapshots from the LCP world's state.
   for (const [id, body] of bodies) {
     const sb = world.sleep.getBody(id);
     if (!sb) continue;
+    const dynamicNeighbors = connectedMap.get(id);
     world.sleep.registerBody({
       ...sb,
       position: [body.position[0], body.position[1], body.position[2]],
       velocity: [body.linearVelocity[0], body.linearVelocity[1], body.linearVelocity[2]],
       angularVelocity: [body.angularVelocity[0], body.angularVelocity[1], body.angularVelocity[2]],
       massKg: body.mass,
+      connectedBodyIds: dynamicNeighbors ? Array.from(dynamicNeighbors) : sb.connectedBodyIds,
     });
   }
   world.elapsedSeconds += world.dt;
@@ -161,7 +204,6 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
   const sleepTransitions: SleepTransitionEvent[] = allSleepEvents.slice(world.lastSleepEventCount);
   world.lastSleepEventCount = allSleepEvents.length;
 
-  const manifolds = world.contactGraph.updateContacts();
   const ccdImpacts: HouseholdStepResult["ccdImpacts"] = [];
   const ccdResolvedBodies = new Map<
     string,
@@ -366,10 +408,167 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     }
   }
 
+  const breakageEvents: HouseholdBreakageEvent[] = [];
+  if (!stepRefused) {
+    for (const body of bodies.values()) {
+      if (body.isStatic) continue;
+      const meta = world.meta.get(body.id);
+      if (!meta?.breakable || meta.broken || meta.parentBrokenId) continue;
+      const snap = preStepSnapshots.get(body.id);
+      if (!snap) continue;
+
+      const hadManifoldContact = manifolds.some(
+        (m) => m.bodyAId === body.id || m.bodyBId === body.id,
+      );
+      const hadCcdContact = ccdResolvedBodies.has(body.id);
+      const hadFloorContact = body.position[2] <= meta.boundingRadius + 0.01;
+      if (!hadManifoldContact && !hadCcdContact && !hadFloorContact) continue;
+
+      // Gravity-free contact velocity change: \Delta v_contact = v_post - (v_pre + g * dt)
+      const vExpectedFree: Vector3 = [
+        snap.linearVelocity[0] + world.gravity[0] * world.dt,
+        snap.linearVelocity[1] + world.gravity[1] * world.dt,
+        snap.linearVelocity[2] + world.gravity[2] * world.dt,
+      ];
+      const dvContact = Math.hypot(
+        body.linearVelocity[0] - vExpectedFree[0],
+        body.linearVelocity[1] - vExpectedFree[1],
+        body.linearVelocity[2] - vExpectedFree[2],
+      );
+      let manifoldImpulse = 0;
+      for (const m of manifolds) {
+        if (m.bodyAId === body.id || m.bodyBId === body.id) {
+          for (const cp of m.contacts) {
+            manifoldImpulse += Math.max(0, cp.normalImpulse);
+          }
+        }
+      }
+      const impactImpulseNs = Math.max(body.mass * dvContact, manifoldImpulse);
+      const thresholdNs = meta.breakImpulseThresholdNs ?? 4.0;
+
+      if (impactImpulseNs > thresholdNs) {
+        const K = Math.max(3, Math.floor(meta.fragmentCount ?? 3));
+        const parentMass = body.mass;
+        const parentMomentum: Vector3 = [
+          parentMass * body.linearVelocity[0],
+          parentMass * body.linearVelocity[1],
+          parentMass * body.linearVelocity[2],
+        ];
+        const fragRadius = meta.boundingRadius * Math.cbrt(1 / K);
+        const scatterSpeed = Math.min(
+          1.2,
+          0.12 * ((impactImpulseNs - thresholdNs) / Math.max(parentMass, 0.05)),
+        );
+
+        const fragmentIds: string[] = [];
+        let massAccum = 0;
+        const momentumAccum: Vector3 = [0, 0, 0];
+
+        // Remove parent active collider and sleep entry before registering fragments
+        meta.broken = true;
+        world.contactGraph.removeBody(body.id);
+        world.sleep.unregisterBody(body.id);
+
+        for (let k = 0; k < K; k++) {
+          const fragId = `${body.id}__frag_${k}`;
+          fragmentIds.push(fragId);
+          const fragMass = k < K - 1 ? parentMass / K : parentMass - massAccum;
+          massAccum += fragMass;
+
+          const angle = (2 * Math.PI * k) / K;
+          const offsetR = 1.25 * fragRadius;
+          const fragPos: Vector3 = [
+            body.position[0] + offsetR * Math.cos(angle),
+            body.position[1] + offsetR * Math.sin(angle),
+            Math.max(fragRadius, body.position[2]),
+          ];
+
+          let fragVel: Vector3;
+          if (k < K - 1) {
+            fragVel = [
+              body.linearVelocity[0] + scatterSpeed * Math.cos(angle),
+              body.linearVelocity[1] + scatterSpeed * Math.sin(angle),
+              body.linearVelocity[2],
+            ];
+            momentumAccum[0] += fragMass * fragVel[0];
+            momentumAccum[1] += fragMass * fragVel[1];
+            momentumAccum[2] += fragMass * fragVel[2];
+          } else {
+            // Exact momentum closure on final fragment so \sum m_k v_k == m_parent v_post
+            fragVel = [
+              (parentMomentum[0] - momentumAccum[0]) / fragMass,
+              (parentMomentum[1] - momentumAccum[1]) / fragMass,
+              (parentMomentum[2] - momentumAccum[2]) / fragMass,
+            ];
+            momentumAccum[0] += fragMass * fragVel[0];
+            momentumAccum[1] += fragMass * fragVel[1];
+            momentumAccum[2] += fragMass * fragVel[2];
+          }
+
+          const fragInertia = 0.4 * fragMass * fragRadius * fragRadius;
+          const invFragInertia = fragInertia > 1e-9 ? 1 / fragInertia : 0;
+          const fragBody: RigidBody = {
+            id: fragId,
+            isStatic: false,
+            shape: { type: "sphere", radius: fragRadius },
+            position: fragPos,
+            rotation: [body.rotation[0], body.rotation[1], body.rotation[2]],
+            linearVelocity: fragVel,
+            angularVelocity: [
+              body.angularVelocity[0],
+              body.angularVelocity[1],
+              body.angularVelocity[2],
+            ],
+            mass: fragMass,
+            invMass: 1 / fragMass,
+            inertiaLocal: [fragInertia, fragInertia, fragInertia],
+            invInertiaLocal: [invFragInertia, invFragInertia, invFragInertia],
+            friction: body.friction,
+            restitution: body.restitution * 0.5,
+          };
+
+          world.contactGraph.addBody(fragBody);
+          world.meta.set(fragId, {
+            boundingRadius: fragRadius,
+            material: meta.material,
+            rolling: false,
+            breakable: false,
+            broken: false,
+            parentBrokenId: body.id,
+          });
+          world.sleep.registerBody({
+            id: fragId,
+            massKg: fragMass,
+            momentOfInertia: fragInertia,
+            position: [...fragPos],
+            velocity: [...fragVel],
+            angularVelocity: [...fragBody.angularVelocity],
+            state: "AWAKE",
+            lowEnergyDwellSeconds: 0,
+            connectedBodyIds: [],
+          });
+        }
+
+        meta.fragmentIds = fragmentIds;
+        breakageEvents.push({
+          parentBodyId: body.id,
+          impactImpulseNs,
+          thresholdNs,
+          fragmentIds,
+          parentMassKg: parentMass,
+          fragmentMassSumKg: massAccum,
+          parentMomentumAfterImpact: parentMomentum,
+          fragmentMomentumSum: momentumAccum,
+        });
+      }
+    }
+  }
+
   return {
     manifolds: world.contactGraph.getActiveManifolds(),
     ccdImpacts,
     restitution,
+    breakageEvents,
     lcpIterations: lcp.iterationsTaken,
     lcpMaxResidual: lcp.maxResidual,
     lcpConverged: lcp.converged,

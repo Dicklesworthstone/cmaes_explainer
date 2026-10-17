@@ -19,6 +19,8 @@
 //   - Ames, Grizzle, & Tabuada, "Control Barrier Function Based Quadratic Programs with Application to Adaptive Cruise Control and Bipedal Walking" (IEEE TAC 2017)
 //   - Grandia et al., "Multi-Layered Safety for Legged Robots" (IEEE RA-L 2021)
 
+import { computeObbSdf, type Obstacle3D } from "./obstacleAvoidance";
+
 export type RecoveryState =
   | "nominal" // QP solved with zero slack
   | "relaxed-slack" // QP solved with minimal slack relaxation
@@ -55,6 +57,32 @@ export interface SafeWaypoint {
   position: [number, number, number];
   velocity: [number, number, number];
   minMargin: number;
+}
+
+/**
+ * Builds 3D CBF recovery constraints for a spherical robot link against a list of OBB obstacles.
+ */
+export function buildRecoveryConstraintsFromObb(
+  position: [number, number, number],
+  obstacles: readonly Obstacle3D[],
+  radius = 0.1,
+  safetyMargin = 0.04,
+  gamma = 5.0,
+): RecoveryConstraint[] {
+  const constraints: RecoveryConstraint[] = [];
+  for (const obs of obstacles) {
+    const { distance, normal } = computeObbSdf(position, obs);
+    const hValue = distance - radius - safetyMargin;
+    if (hValue <= 1.0) {
+      constraints.push({
+        id: obs.id,
+        hValue,
+        gradient: normal,
+        gamma,
+      });
+    }
+  }
+  return constraints;
 }
 
 export class SafetyFilterRecoveryManager {
@@ -115,7 +143,7 @@ export class SafetyFilterRecoveryManager {
     currentPosition: [number, number, number],
     currentVelocity: [number, number, number],
     constraints: RecoveryConstraint[],
-    dt = 1 / 60,
+    _dt = 1 / 60,
   ): {
     safeControl: [number, number, number];
     state: RecoveryState;
@@ -123,7 +151,6 @@ export class SafetyFilterRecoveryManager {
     activeConstraintCount: number;
   } {
     let maxViolation = 0.0;
-    let worstGradient: [number, number, number] = [0, 0, 0];
     let violatedCount = 0;
 
     for (const c of constraints) {
@@ -138,7 +165,6 @@ export class SafetyFilterRecoveryManager {
         violatedCount++;
         if (violation > maxViolation) {
           maxViolation = violation;
-          worstGradient = grad;
         }
       }
     }
@@ -155,40 +181,95 @@ export class SafetyFilterRecoveryManager {
       };
     }
 
-    // Check if we can satisfy with bounded Tier 1 slack relaxation
+    // Check if we can satisfy all constraints with bounded Tier 1 multi-constraint projection
     if (
       maxViolation <= this.config.maxSlack &&
       this.consecutiveRelaxedFrames < this.config.stallLimitFrames
     ) {
-      this.consecutiveRelaxedFrames++;
-      this.currentState = "relaxed-slack";
-
-      // Project minimally along worst gradient
-      const gradNormSq = worstGradient[0] ** 2 + worstGradient[1] ** 2 + worstGradient[2] ** 2;
-      const scale = gradNormSq > 1e-6 ? maxViolation / gradNormSq : 0.0;
-
-      const safeControl: [number, number, number] = [
-        nominalControl[0] + worstGradient[0] * scale,
-        nominalControl[1] + worstGradient[1] * scale,
-        nominalControl[2] + worstGradient[2] * scale,
+      const candidateControl: [number, number, number] = [
+        nominalControl[0],
+        nominalControl[1],
+        nominalControl[2],
       ];
 
-      return {
-        safeControl,
-        state: "relaxed-slack",
-        maxViolationSlack: maxViolation,
-        activeConstraintCount: violatedCount,
-      };
+      for (let pass = 0; pass < 8; pass++) {
+        let anyAdjusted = false;
+        for (const c of constraints) {
+          const gamma = c.gamma ?? 5.0;
+          const grad = c.gradient;
+          const lhs =
+            grad[0] * candidateControl[0] +
+            grad[1] * candidateControl[1] +
+            grad[2] * candidateControl[2] +
+            gamma * c.hValue;
+          if (lhs < -1e-7) {
+            const violation = -lhs;
+            const gradNormSq = grad[0] ** 2 + grad[1] ** 2 + grad[2] ** 2;
+            if (gradNormSq > 1e-6) {
+              const scale = violation / gradNormSq;
+              candidateControl[0] += grad[0] * scale;
+              candidateControl[1] += grad[1] * scale;
+              candidateControl[2] += grad[2] * scale;
+              anyAdjusted = true;
+            }
+          }
+        }
+        if (!anyAdjusted) break;
+      }
+
+      // Measure residual violation across all constraints (detects opposing-wall pinched corridors)
+      let postProjectionViolation = 0.0;
+      for (const c of constraints) {
+        const gamma = c.gamma ?? 5.0;
+        const grad = c.gradient;
+        const lhs =
+          grad[0] * candidateControl[0] +
+          grad[1] * candidateControl[1] +
+          grad[2] * candidateControl[2] +
+          gamma * c.hValue;
+        if (lhs < 0.0) {
+          postProjectionViolation = Math.max(postProjectionViolation, -lhs);
+        }
+      }
+
+      if (postProjectionViolation <= this.config.maxSlack) {
+        this.consecutiveRelaxedFrames++;
+        this.currentState = "relaxed-slack";
+        return {
+          safeControl: candidateControl,
+          state: "relaxed-slack",
+          maxViolationSlack: Math.max(maxViolation, postProjectionViolation),
+          activeConstraintCount: violatedCount,
+        };
+      }
+      maxViolation = Math.max(maxViolation, postProjectionViolation);
     }
 
-    // Case 2 or 3: Excessive violation or sustained stall -> Trigger Reflex or Retreat
+    // Case 2 or 3: Excessive violation, pinched-corridor infeasibility, or sustained stall
     if (
       this.safeHistory.length > 0 &&
       this.consecutiveRelaxedFrames >= this.config.stallLimitFrames
     ) {
-      // Tier 3: Retreat towards most recent verified safe waypoint
+      // Tier 3: Retreat towards optimal verified safe waypoint in history ring buffer
       this.currentState = "recent-safe-retreat";
-      const target = this.safeHistory[this.safeHistory.length - 1];
+      const latestTime = this.safeHistory[this.safeHistory.length - 1].timestampSeconds;
+      let target = this.safeHistory[this.safeHistory.length - 1];
+      let bestCost = Number.POSITIVE_INFINITY;
+
+      for (let i = this.safeHistory.length - 1; i >= 0; i--) {
+        const wp = this.safeHistory[i];
+        const d = Math.hypot(
+          wp.position[0] - currentPosition[0],
+          wp.position[1] - currentPosition[1],
+          wp.position[2] - currentPosition[2],
+        );
+        if (d < 1e-3 && this.safeHistory.length > 1) continue;
+        const cost = d - 0.5 * wp.minMargin + 0.1 * Math.max(0, latestTime - wp.timestampSeconds);
+        if (cost < bestCost) {
+          bestCost = cost;
+          target = wp;
+        }
+      }
 
       const dx = target.position[0] - currentPosition[0];
       const dy = target.position[1] - currentPosition[1];
@@ -219,17 +300,24 @@ export class SafetyFilterRecoveryManager {
     let sumGradZ = 0;
 
     for (const c of constraints) {
-      if (c.hValue < 0.05) {
-        sumGradX += c.gradient[0];
-        sumGradY += c.gradient[1];
-        sumGradZ += c.gradient[2];
+      const gamma = c.gamma ?? 5.0;
+      const lhs =
+        c.gradient[0] * nominalControl[0] +
+        c.gradient[1] * nominalControl[1] +
+        c.gradient[2] * nominalControl[2] +
+        gamma * c.hValue;
+      if (c.hValue < 0.05 || lhs < 0.0) {
+        const weight = lhs < 0.0 ? Math.max(1.0, -lhs) : 1.0;
+        sumGradX += c.gradient[0] * weight;
+        sumGradY += c.gradient[1] * weight;
+        sumGradZ += c.gradient[2] * weight;
       }
     }
 
-    const sumNorm = Math.hypot(sumGradX, sumGradY, sumGradZ) || 1e-4;
-    const repelUnitX = sumGradX / sumNorm;
-    const repelUnitY = sumGradY / sumNorm;
-    const repelUnitZ = sumGradZ / sumNorm;
+    const sumNorm = Math.hypot(sumGradX, sumGradY, sumGradZ);
+    const repelUnitX = sumNorm > 1e-6 ? sumGradX / sumNorm : 0.0;
+    const repelUnitY = sumNorm > 1e-6 ? sumGradY / sumNorm : 0.0;
+    const repelUnitZ = sumNorm > 1e-6 ? sumGradZ / sumNorm : 0.0;
 
     const safeControl: [number, number, number] = [
       -this.config.brakeGain * currentVelocity[0] + this.config.repelGain * repelUnitX,

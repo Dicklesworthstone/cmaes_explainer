@@ -173,66 +173,117 @@ export default function ReceiptsPage() {
               No scores yet. The template lives at scripts/perf/sota-rubric.template.md.
             </p>
           ) : (
-            <div
-              role="region"
-              aria-label="Rubric scores, horizontally scrollable"
-              tabIndex={0}
-              className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
-            >
-              <table className="w-full min-w-[850px] text-left text-sm">
-                <caption className="sr-only">
-                  Manually maintained rubric scores; not runtime certification
-                </caption>
-                <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Component</th>
-                    <th className="px-4 py-3 text-center">Parity</th>
-                    <th className="px-4 py-3 text-center">Oracle</th>
-                    <th className="px-4 py-3 text-center">Cited benchmark</th>
-                    <th className="px-4 py-3 text-center">Behavioral receipt</th>
-                    <th className="px-4 py-3">Citations</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {scores.map((row, index) => (
-                    <tr key={index} className="text-slate-200">
-                      <td className="px-4 py-3 font-mono text-xs min-w-48">{row.component}</td>
-                      <td className="px-4 py-3 text-center">
+            <>
+              <div className="space-y-3 md:hidden" aria-label="Rubric scores mobile cards">
+                {scores.map((row, index) => (
+                  <article
+                    key={index}
+                    className="rounded-2xl border border-white/10 bg-slate-900/40 p-4 space-y-3"
+                  >
+                    <div className="font-mono text-xs font-semibold text-white break-words">
+                      {row.component}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center justify-between rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="text-slate-400">Parity</span>
                         <span
-                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}
+                          className={`rounded border px-1.5 py-0.5 font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}
                         >
                           {row.parity}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="text-slate-400">Oracle</span>
                         <span
-                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.oracle)} ${scoreColor(row.oracle)}`}
+                          className={`rounded border px-1.5 py-0.5 font-bold ${scoreBg(row.oracle)} ${scoreColor(row.oracle)}`}
                         >
                           {row.oracle}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="text-slate-400">Benchmark</span>
                         <span
-                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.citedBenchmark)} ${scoreColor(row.citedBenchmark)}`}
+                          className={`rounded border px-1.5 py-0.5 font-bold ${scoreBg(row.citedBenchmark)} ${scoreColor(row.citedBenchmark)}`}
                         >
                           {row.citedBenchmark}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="text-slate-400">Receipt</span>
                         <span
-                          className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.behavioralReceipt)} ${scoreColor(row.behavioralReceipt)}`}
+                          className={`rounded border px-1.5 py-0.5 font-bold ${scoreBg(row.behavioralReceipt)} ${scoreColor(row.behavioralReceipt)}`}
                         >
                           {row.behavioralReceipt}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs leading-5 text-slate-400 min-w-64">
-                        {row.citations}
-                      </td>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-5 text-slate-400 break-words">{row.citations}</p>
+                  </article>
+                ))}
+              </div>
+              <div
+                role="region"
+                aria-label="Rubric scores, horizontally scrollable"
+                tabIndex={0}
+                className="hidden md:block overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
+              >
+                <table className="w-full min-w-[850px] text-left text-sm">
+                  <caption className="sr-only">
+                    Manually maintained rubric scores; not runtime certification
+                  </caption>
+                  <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="whitespace-nowrap px-4 py-3">Component</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">Parity</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">Oracle</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">Cited benchmark</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">
+                        Behavioral receipt
+                      </th>
+                      <th className="whitespace-nowrap px-4 py-3">Citations</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {scores.map((row, index) => (
+                      <tr key={index} className="text-slate-200">
+                        <td className="px-4 py-3 font-mono text-xs min-w-48">{row.component}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.parity)} ${scoreColor(row.parity)}`}
+                          >
+                            {row.parity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.oracle)} ${scoreColor(row.oracle)}`}
+                          >
+                            {row.oracle}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.citedBenchmark)} ${scoreColor(row.citedBenchmark)}`}
+                          >
+                            {row.citedBenchmark}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span
+                            className={`rounded-md border px-2 py-1 text-xs font-bold ${scoreBg(row.behavioralReceipt)} ${scoreColor(row.behavioralReceipt)}`}
+                          >
+                            {row.behavioralReceipt}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs leading-5 text-slate-400 min-w-64">
+                          {row.citations}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           <p className="text-xs text-slate-500">
             A score alone establishes neither parity nor successful behavior. Check the referenced
@@ -258,44 +309,81 @@ export default function ReceiptsPage() {
               No budgets yet. The doc lives at scripts/perf/phr-env-2026-budgets.md.
             </p>
           ) : (
-            <div
-              role="region"
-              aria-label="Performance targets, horizontally scrollable"
-              tabIndex={0}
-              className="overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
-            >
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <caption className="sr-only">
-                  Performance budget targets; not measured timings
-                </caption>
-                <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Epic</th>
-                    <th className="px-4 py-3 text-center">Owner-side p95</th>
-                    <th className="px-4 py-3 text-center">Explorer-side p95</th>
-                    <th className="px-4 py-3">Reference</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {budgets.map((row, index) => (
-                    <tr key={index} className="text-slate-200">
-                      <td className="px-4 py-3 font-mono text-xs min-w-48">{row.epic}</td>
-                      <td className="px-4 py-3 text-center font-mono text-xs break-all">
-                        {row.ownerSideP95Ms === null
-                          ? "n/a"
-                          : `${row.ownerSideP95Ms.toFixed(1)} ms`}
-                      </td>
-                      <td className="px-4 py-3 text-center font-mono text-xs break-all">
-                        {row.explorerSideP95Ms === null
-                          ? "n/a"
-                          : `${row.explorerSideP95Ms.toFixed(1)} ms`}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{row.reference}</td>
+            <>
+              <div className="space-y-3 md:hidden" aria-label="Performance targets mobile cards">
+                {budgets.map((row, index) => (
+                  <article
+                    key={index}
+                    className="rounded-2xl border border-white/10 bg-slate-900/40 p-4 space-y-2.5"
+                  >
+                    <div className="font-mono text-xs font-semibold text-white break-words">
+                      {row.epic}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div className="rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="block text-[0.65rem] uppercase text-slate-400">
+                          Owner p95
+                        </span>
+                        <span className="text-slate-200">
+                          {row.ownerSideP95Ms === null
+                            ? "n/a"
+                            : `${row.ownerSideP95Ms.toFixed(1)} ms`}
+                        </span>
+                      </div>
+                      <div className="rounded-lg bg-slate-950/60 px-2.5 py-1.5">
+                        <span className="block text-[0.65rem] uppercase text-slate-400">
+                          Explorer p95
+                        </span>
+                        <span className="text-slate-200">
+                          {row.explorerSideP95Ms === null
+                            ? "n/a"
+                            : `${row.explorerSideP95Ms.toFixed(1)} ms`}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-5 text-slate-400 break-words">{row.reference}</p>
+                  </article>
+                ))}
+              </div>
+              <div
+                role="region"
+                aria-label="Performance targets, horizontally scrollable"
+                tabIndex={0}
+                className="hidden md:block overflow-x-auto max-w-full rounded-2xl border border-white/10 bg-slate-900/40 min-w-0 focus-visible:outline-2 focus-visible:outline-cyan-300"
+              >
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <caption className="sr-only">
+                    Performance budget targets; not measured timings
+                  </caption>
+                  <thead className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    <tr>
+                      <th className="whitespace-nowrap px-4 py-3">Epic</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">Owner-side p95</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-center">Explorer-side p95</th>
+                      <th className="whitespace-nowrap px-4 py-3">Reference</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {budgets.map((row, index) => (
+                      <tr key={index} className="text-slate-200">
+                        <td className="px-4 py-3 font-mono text-xs min-w-48">{row.epic}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-mono text-xs">
+                          {row.ownerSideP95Ms === null
+                            ? "n/a"
+                            : `${row.ownerSideP95Ms.toFixed(1)} ms`}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-center font-mono text-xs">
+                          {row.explorerSideP95Ms === null
+                            ? "n/a"
+                            : `${row.explorerSideP95Ms.toFixed(1)} ms`}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400">{row.reference}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
           <p className="text-xs text-slate-500">
             A performance claim needs recorded workload, device, owner artifact and timing samples.

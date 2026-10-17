@@ -251,22 +251,53 @@ export class LearnedCostmapEngine {
   }
 
   /**
+   * Exports a copy of the Fourier frequency matrix B and MLP weights (W1, b1, W2, b2).
+   */
+  public exportWeights(): {
+    B: number[][];
+    W1: number[][];
+    b1: number[];
+    W2: number[];
+    b2: number;
+  } {
+    return {
+      B: this.B.map((row) => [...row]),
+      W1: this.W1.map((row) => [...row]),
+      b1: [...this.b1],
+      W2: [...this.W2],
+      b2: this.b2,
+    };
+  }
+
+  /**
    * Loads external MLP weights or falls back to the conservative analytic method if
    * weights are missing, non-finite, or mismatched in dimension.
    */
   public loadWeightsOrFallback(weights?: {
+    B?: number[][];
     W1: number[][];
     b1: number[];
     W2: number[];
     b2: number;
   }): boolean {
-    const inDim = 2 * this.config.fourierBands;
+    const bands = this.config.fourierBands;
+    const inDim = 2 * bands;
     const hidden = this.config.hiddenDim;
+    const bInvalid =
+      weights?.B !== undefined &&
+      (!Array.isArray(weights.B) ||
+        weights.B.length !== bands ||
+        weights.B.some(
+          (row) => !Array.isArray(row) || row.length !== 2 || !row.every(Number.isFinite),
+        ));
     if (
       !weights ||
+      bInvalid ||
       !Array.isArray(weights.W1) ||
       weights.W1.length !== hidden ||
-      weights.W1.some((row) => !Array.isArray(row) || row.length !== inDim || !row.every(Number.isFinite)) ||
+      weights.W1.some(
+        (row) => !Array.isArray(row) || row.length !== inDim || !row.every(Number.isFinite),
+      ) ||
       !Array.isArray(weights.b1) ||
       weights.b1.length !== hidden ||
       !weights.b1.every(Number.isFinite) ||
@@ -280,6 +311,9 @@ export class LearnedCostmapEngine {
       return false;
     }
 
+    if (weights.B !== undefined) {
+      this.B = weights.B.map((row) => [...row]);
+    }
     this.W1 = weights.W1.map((row) => [...row]);
     this.b1 = [...weights.b1];
     this.W2 = [...weights.W2];
@@ -484,7 +518,9 @@ export class LearnedCostmapEngine {
     for (let step = 0; step < numSteps; step++) {
       const distToGoal = Math.hypot(current[0] - goal[0], current[1] - goal[1]);
       if (distToGoal <= stepSize) {
-        trajectory.push([goal[0], goal[1]]);
+        if (distToGoal > 1e-9) {
+          trajectory.push([goal[0], goal[1]]);
+        }
         break;
       }
 

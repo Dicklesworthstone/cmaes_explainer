@@ -16,6 +16,7 @@
 //   - Karis, "Real Shading in Unreal Engine 4" (SIGGRAPH 2013 Course: Physically Based Shading)
 
 import * as THREE from "three";
+import { assertColorSpace } from "./pbrPipeline";
 
 export type MaterialKind =
   | "oak-hardwood"
@@ -40,6 +41,8 @@ export interface ProceduralTextureSet {
   normalMap: THREE.DataTexture;
   roughnessMap: THREE.DataTexture;
   albedoData: Uint8Array;
+  normalData: Uint8Array;
+  roughnessData: Uint8Array;
 }
 
 export interface MaterialParams {
@@ -145,6 +148,23 @@ export function fbm(x: number, y: number, octaves = 4, lacunarity = 2.0, gain = 
 // Texture Synthesizers
 // ---------------------------------------------------------------------------
 
+function encodeTangentNormal(
+  nx: number,
+  ny: number,
+  nz: number,
+  out: Uint8Array,
+  idx: number,
+): void {
+  const len = Math.hypot(nx, ny, nz) || 1.0;
+  const ux = nx / len;
+  const uy = ny / len;
+  const uz = nz / len;
+  out[idx + 0] = Math.max(0, Math.min(255, Math.round((ux * 0.5 + 0.5) * 255)));
+  out[idx + 1] = Math.max(0, Math.min(255, Math.round((uy * 0.5 + 0.5) * 255)));
+  out[idx + 2] = Math.max(0, Math.min(255, Math.round((uz * 0.5 + 0.5) * 255)));
+  out[idx + 3] = 255;
+}
+
 export function generateWoodTexture(
   width: number,
   height: number,
@@ -178,13 +198,10 @@ export function generateWoodTexture(
       albedo[idx + 2] = Math.floor(baseColor[2] * (1 - t) + grainColor[2] * t);
       albedo[idx + 3] = 255;
 
-      // Normal map perturbation
-      const dX = (fbm((nx + 0.01) * 32, ny * 128, 2) - fiber) * 50;
-      const dY = (fbm(nx * 32, (ny + 0.01) * 128, 2) - fiber) * 50;
-      normal[idx + 0] = Math.floor(128 + dX);
-      normal[idx + 1] = Math.floor(128 + dY);
-      normal[idx + 2] = 255;
-      normal[idx + 3] = 255;
+      // Unit-normalized tangent-space normal perturbation
+      const slopeX = (fbm((nx + 0.01) * 32, ny * 128, 2) - fiber) * 0.4;
+      const slopeY = (fbm(nx * 32, (ny + 0.01) * 128, 2) - fiber) * 0.4;
+      encodeTangentNormal(slopeX, slopeY, 1.0, normal, idx);
 
       // Roughness map (pores are rougher)
       const rVal = 0.35 + t * 0.25;
@@ -226,10 +243,7 @@ export function generateFabricTexture(
       albedo[idx + 2] = Math.floor(Math.min(255, baseColor[2] * shade));
       albedo[idx + 3] = 255;
 
-      normal[idx + 0] = Math.floor(128 + warp * 40);
-      normal[idx + 1] = Math.floor(128 + weft * 40);
-      normal[idx + 2] = 230;
-      normal[idx + 3] = 255;
+      encodeTangentNormal(warp * 0.32, weft * 0.32, 0.9, normal, idx);
 
       rough[idx + 0] = 220;
       rough[idx + 1] = 220;
@@ -271,10 +285,9 @@ export function generateTileTexture(
         albedo[idx + 2] = groutColor[2];
         albedo[idx + 3] = 255;
 
-        normal[idx + 0] = 128;
-        normal[idx + 1] = 128;
-        normal[idx + 2] = 200;
-        normal[idx + 3] = 255;
+        const bevelX = fx < groutWidth ? -0.25 : fx > 1 - groutWidth ? 0.25 : 0.0;
+        const bevelY = fy < groutWidth ? -0.25 : fy > 1 - groutWidth ? 0.25 : 0.0;
+        encodeTangentNormal(bevelX, bevelY, 0.95, normal, idx);
 
         rough[idx + 0] = 230; // Matte rough grout
         rough[idx + 1] = 230;
@@ -288,10 +301,7 @@ export function generateTileTexture(
         albedo[idx + 2] = Math.min(255, tileColor[2] + varGloss);
         albedo[idx + 3] = 255;
 
-        normal[idx + 0] = 128;
-        normal[idx + 1] = 128;
-        normal[idx + 2] = 255;
-        normal[idx + 3] = 255;
+        encodeTangentNormal(0.0, 0.0, 1.0, normal, idx);
 
         rough[idx + 0] = 45; // Glossy reflective porcelain
         rough[idx + 1] = 45;
@@ -332,10 +342,9 @@ export function generateMarbleTexture(
       albedo[idx + 2] = Math.floor(baseColor[2] * (1 - t) + veinColor[2] * t);
       albedo[idx + 3] = 255;
 
-      normal[idx + 0] = 128;
-      normal[idx + 1] = 128;
-      normal[idx + 2] = 255;
-      normal[idx + 3] = 255;
+      // Subtle mineral vein micro-relief normal
+      const vSlope = t * 0.12;
+      encodeTangentNormal(qx * vSlope, qy * vSlope, 1.0, normal, idx);
 
       rough[idx + 0] = 50; // Polished marble
       rough[idx + 1] = 50;
@@ -354,22 +363,37 @@ function createTextureSet(
   normal: Uint8Array,
   rough: Uint8Array,
 ): ProceduralTextureSet {
+  // Enforce glTF 2.0 color-space contract (sRGB for baseColor, linear for normal/metallicRoughness)
+  assertColorSpace("baseColor", "srgb");
+  assertColorSpace("normal", "linear");
+  assertColorSpace("metallicRoughness", "linear");
+
   const albedoMap = new THREE.DataTexture(albedo, w, h, THREE.RGBAFormat);
+  albedoMap.colorSpace = THREE.SRGBColorSpace;
   albedoMap.wrapS = THREE.RepeatWrapping;
   albedoMap.wrapT = THREE.RepeatWrapping;
   albedoMap.needsUpdate = true;
 
   const normalMap = new THREE.DataTexture(normal, w, h, THREE.RGBAFormat);
+  normalMap.colorSpace = THREE.LinearSRGBColorSpace;
   normalMap.wrapS = THREE.RepeatWrapping;
   normalMap.wrapT = THREE.RepeatWrapping;
   normalMap.needsUpdate = true;
 
   const roughnessMap = new THREE.DataTexture(rough, w, h, THREE.RGBAFormat);
+  roughnessMap.colorSpace = THREE.LinearSRGBColorSpace;
   roughnessMap.wrapS = THREE.RepeatWrapping;
   roughnessMap.wrapT = THREE.RepeatWrapping;
   roughnessMap.needsUpdate = true;
 
-  return { albedoMap, normalMap, roughnessMap, albedoData: albedo };
+  return {
+    albedoMap,
+    normalMap,
+    roughnessMap,
+    albedoData: albedo,
+    normalData: normal,
+    roughnessData: rough,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +401,22 @@ function createTextureSet(
 // ---------------------------------------------------------------------------
 
 const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+/**
+ * Disposes all cached procedural materials and their underlying DataTextures.
+ */
+export function disposeProceduralMaterials(): number {
+  let count = 0;
+  for (const mat of materialCache.values()) {
+    mat.map?.dispose();
+    mat.normalMap?.dispose();
+    mat.roughnessMap?.dispose();
+    mat.dispose();
+    count++;
+  }
+  materialCache.clear();
+  return count;
+}
 
 export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.MeshStandardMaterial {
   const cached = materialCache.get(`${kind}-${size}`);

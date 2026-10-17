@@ -33,7 +33,12 @@
 // golden-angle spiral (Vogel's method).
 
 import * as THREE from "three";
-import { CRAFTSMAN_BUNGALOW_SH, type SphericalHarmonicsL2 } from "./houseLighting";
+import { type EmissiveSurface, evaluateEmissiveIlluminance } from "./emissiveSurfaces";
+import {
+  CRAFTSMAN_BUNGALOW_SH,
+  evaluateSphericalHarmonics,
+  type SphericalHarmonicsL2,
+} from "./houseLighting";
 
 /** Per-probe octahedral direction. 8x8 = 64 octahedral cells, each with a
  *  fixed direction on the sphere. Generated once at module load from a
@@ -182,12 +187,13 @@ export function sampleProbeGrid(
   const tz = cz - iz0;
   // Find the octahedral cell index for this direction
   const cellIdx = octahedralCellIndex(worldDir);
-  // 8-corner sample + trilinear blend
+  // 8-corner sample + trilinear + Chebyshev visibility blend (Majercik et al. 2019)
   let r = 0;
   let g = 0;
   let b = 0;
   let vis = 0;
-  let w = 0;
+  let wIrr = 0;
+  let wVis = 0;
   for (let dz = 0; dz <= 1; dz++) {
     for (let dy = 0; dy <= 1; dy++) {
       for (let dx = 0; dx <= 1; dx++) {
@@ -198,28 +204,36 @@ export function sampleProbeGrid(
         const idx = ((iz0 + dz) * ny + (iy0 + dy)) * nx + (ix0 + dx);
         const probe = grid.probes[idx];
         const cellBase = cellIdx * 3;
-        r += probe.irradiance[cellBase + 0] * weight;
-        g += probe.irradiance[cellBase + 1] * weight;
-        b += probe.irradiance[cellBase + 2] * weight;
         const meanD = probe.meanDistance[cellIdx];
         const meanD2 = probe.meanDistanceSq[cellIdx];
-        // Chebyshev visibility: P(distance >= surfaceDistance) = clamp((meanD2 - meanD * surfaceDistance) / (meanD2 - meanD * meanD + eps), 0, 1)
+        // One-tailed Cantelli / Chebyshev visibility (Majercik et al. 2019 Eq. 3):
+        // Unoccluded (1.0) when surfaceDistance <= meanD; otherwise sigma^2 / (sigma^2 + (t - meanD)^2 + eps).
         const eps = 1e-4;
         const variance = Math.max(0, meanD2 - meanD * meanD);
-        const cheb = Math.max(
-          0,
-          Math.min(1, (meanD2 - meanD * surfaceDistance) / (variance + eps)),
-        );
+        let cheb = 1.0;
+        if (surfaceDistance > meanD) {
+          const diff = surfaceDistance - meanD;
+          cheb = Math.max(0, Math.min(1, variance / (variance + diff * diff + eps)));
+        }
+        // Weight probe irradiance by trilinear * crushed Chebyshev visibility to prevent light leaking through walls
+        const visWeight = Math.max(1e-4, cheb * cheb * cheb);
+        const probeIrrWeight = weight * visWeight;
+        r += probe.irradiance[cellBase + 0] * probeIrrWeight;
+        g += probe.irradiance[cellBase + 1] * probeIrrWeight;
+        b += probe.irradiance[cellBase + 2] * probeIrrWeight;
         vis += cheb * weight;
-        w += weight;
+        wIrr += probeIrrWeight;
+        wVis += weight;
       }
     }
   }
-  if (w > 0) {
-    r /= w;
-    g /= w;
-    b /= w;
-    vis /= w;
+  if (wIrr > 0) {
+    r /= wIrr;
+    g /= wIrr;
+    b /= wIrr;
+  }
+  if (wVis > 0) {
+    vis /= wVis;
   }
   return { rgb: [r, g, b], visibility: vis };
 }
@@ -250,6 +264,27 @@ export function octahedralCellIndex(dir: [number, number, number]): number {
   return iy * OCTAHEDRAL_RES + ix;
 }
 
+/** Inverse of `octahedralCellIndex`: maps an octahedral cell index (0..63)
+ *  to the unit direction at the center of that cell (Cigolle et al. 2014). */
+export function octahedralCellDirection(cellIdx: number): [number, number, number] {
+  const clamped = Math.max(0, Math.min(OCTAHEDRAL_CELLS - 1, Math.floor(cellIdx)));
+  const ix = clamped % OCTAHEDRAL_RES;
+  const iy = Math.floor(clamped / OCTAHEDRAL_RES);
+  const u = (ix + 0.5) / OCTAHEDRAL_RES;
+  const v = (iy + 0.5) / OCTAHEDRAL_RES;
+  let px = u * 2 - 1;
+  let py = v * 2 - 1;
+  const pz = 1 - Math.abs(px) - Math.abs(py);
+  if (pz < 0) {
+    const ox = (1 - Math.abs(py)) * (px >= 0 ? 1 : -1);
+    const oy = (1 - Math.abs(px)) * (py >= 0 ? 1 : -1);
+    px = ox;
+    py = oy;
+  }
+  const len = Math.hypot(px, py, pz) || 1;
+  return [px / len, py / len, pz / len];
+}
+
 /** Hysteresis update: blend the previous irradiance with the new sample.
  *  I_t = (1 - alpha) * I_{t-1} + alpha * I_sample. This is what the bead
  *  description calls out (Majercik 2019 Eq. 5). */
@@ -270,6 +305,112 @@ export function hysteresisUpdate(
     probe.meanDistanceSq[i] = (1 - alpha) * probe.meanDistanceSq[i] + alpha * newMeanDistanceSq[i];
   }
   probe.lastUpdate += 1;
+}
+
+export interface DDGIProbeSceneUpdateOptions {
+  /** Simulation time in seconds for dynamic emissive flicker. */
+  timeSeconds?: number;
+  /** Diffuse albedo [r, g, b] of hit scene surfaces (default warm wood/plaster [0.65, 0.58, 0.50]). */
+  surfaceAlbedo?: [number, number, number];
+  /** Ambient Spherical Harmonics fallback for rays that miss or for secondary bounce. */
+  ambientSh?: SphericalHarmonicsL2;
+  /** Maximum sphere-tracing steps per probe ray (default 24). */
+  maxMarchSteps?: number;
+  /** Optional subset of probe indices to update (defaults to all probes in grid). */
+  probeIndices?: number[];
+}
+
+/**
+ * Ray-casts the 64 octahedral cell directions from each probe against a scene SDF
+ * (`sceneSdf(x, y, z)`) and accumulates bounced direct illuminance from `emissiveSurfaces`
+ * plus Chebyshev visibility moments (`meanDistance`, `meanDistanceSq`) via `hysteresisUpdate`.
+ */
+export function updateProbeGridFromScene(
+  grid: DDGIProbeGrid,
+  sceneSdf: (x: number, y: number, z: number) => number,
+  emissiveSurfaces: EmissiveSurface[],
+  options: DDGIProbeSceneUpdateOptions = {},
+): void {
+  if (!grid.enabled) return;
+
+  const timeSeconds = options.timeSeconds ?? 0.0;
+  const albedo = options.surfaceAlbedo ?? [0.65, 0.58, 0.5];
+  const ambientSh = options.ambientSh ?? CRAFTSMAN_BUNGALOW_SH;
+  const maxSteps = options.maxMarchSteps ?? 24;
+
+  const sampleIrr = new Float32Array(OCTAHEDRAL_CELLS * 3);
+  const sampleDist = new Float32Array(OCTAHEDRAL_CELLS);
+  const sampleDistSq = new Float32Array(OCTAHEDRAL_CELLS);
+
+  const indices = options.probeIndices;
+  const probeCount = indices ? indices.length : grid.probes.length;
+
+  for (let p = 0; p < probeCount; p++) {
+    const probeIdx = indices ? indices[p] : p;
+    const probe = grid.probes[probeIdx];
+    if (!probe) continue;
+
+    const [px, py, pz] = probe.position;
+
+    for (let cellIdx = 0; cellIdx < OCTAHEDRAL_CELLS; cellIdx++) {
+      const [dx, dy, dz] = octahedralCellDirection(cellIdx);
+
+      // Sphere-trace ray p + t * d
+      let t = 0.05;
+      let hit = false;
+      for (let s = 0; s < maxSteps; s++) {
+        const dist = sceneSdf(px + dx * t, py + dy * t, pz + dz * t);
+        if (dist <= 1e-3) {
+          hit = true;
+          break;
+        }
+        t += Math.max(0.02, dist);
+        if (t >= grid.maxRayDistance) {
+          t = grid.maxRayDistance;
+          break;
+        }
+      }
+
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      if (hit) {
+        const hx = px + dx * t;
+        const hy = py + dy * t;
+        const hz = pz + dz * t;
+        const eps = 1e-3;
+        const gx = sceneSdf(hx + eps, hy, hz) - sceneSdf(hx - eps, hy, hz);
+        const gy = sceneSdf(hx, hy + eps, hz) - sceneSdf(hx, hy - eps, hz);
+        const gz = sceneSdf(hx, hy, hz + eps) - sceneSdf(hx, hy, hz - eps);
+        const gLen = Math.hypot(gx, gy, gz) || 1.0;
+        const hitNormal: [number, number, number] = [gx / gLen, gy / gLen, gz / gLen];
+
+        const directE = evaluateEmissiveIlluminance(
+          [hx, hy, hz],
+          hitNormal,
+          emissiveSurfaces,
+          timeSeconds,
+        );
+        const ambBounce = fallbackIrradiance(hitNormal, ambientSh);
+        r = (albedo[0] / Math.PI) * directE[0] + albedo[0] * 0.25 * ambBounce[0];
+        g = (albedo[1] / Math.PI) * directE[1] + albedo[1] * 0.25 * ambBounce[1];
+        b = (albedo[2] / Math.PI) * directE[2] + albedo[2] * 0.25 * ambBounce[2];
+      } else {
+        const sky = fallbackIrradiance([dx, dy, dz], ambientSh);
+        r = sky[0];
+        g = sky[1];
+        b = sky[2];
+      }
+
+      sampleIrr[cellIdx * 3 + 0] = r;
+      sampleIrr[cellIdx * 3 + 1] = g;
+      sampleIrr[cellIdx * 3 + 2] = b;
+      sampleDist[cellIdx] = t;
+      sampleDistSq[cellIdx] = t * t;
+    }
+
+    hysteresisUpdate(grid, probeIdx, sampleIrr, sampleDist, sampleDistSq);
+  }
 }
 
 /** Reset the grid to the ambient state (used when toggling, when the
@@ -381,50 +522,13 @@ export function fallbackIrradiance(
   return evaluateSphericalHarmonicsFromSh(normal, sh);
 }
 
-/** Internal: evaluate the 9-coefficient SH for a normal. Splits out from
- *  the houseLighting wrapper so the test can use a synthetic SH. */
+/** Internal: evaluate the 9-coefficient SH for a normal using the
+ *  Ramamoorthi-Hanrahan (2001) basis from houseLighting.ts, clamped to [0, 1]. */
 function evaluateSphericalHarmonicsFromSh(
   normal: [number, number, number],
   sh: SphericalHarmonicsL2,
 ): [number, number, number] {
-  const [x, y, z] = normal;
-  const c = sh.coefficients;
-  // L00
-  let r = c[0];
-  let g = c[1];
-  let b = c[2];
-  // L1-1
-  r += 2 * c[3] * y;
-  g += 2 * c[4] * y;
-  b += 2 * c[5] * y;
-  // L10
-  r += 2 * c[6] * z;
-  g += 2 * c[7] * z;
-  b += 2 * c[8] * z;
-  // L11
-  r += 2 * c[9] * x;
-  g += 2 * c[10] * x;
-  b += 2 * c[11] * x;
-  // L2-2
-  r += 2 * c[12] * (x * x - y * y);
-  g += 2 * c[13] * (x * x - y * y);
-  b += 2 * c[14] * (x * x - y * y);
-  // L2-1
-  r += 2 * c[15] * y * z;
-  g += 2 * c[16] * y * z;
-  b += 2 * c[17] * y * z;
-  // L21
-  r += 2 * c[18] * x * z;
-  g += 2 * c[19] * x * z;
-  b += 2 * c[20] * x * z;
-  // L20
-  r += c[21] * (3 * z * z - 1);
-  g += c[22] * (3 * z * z - 1);
-  b += c[23] * (3 * z * z - 1);
-  // L22
-  r += 2 * c[24] * x * y;
-  g += 2 * c[25] * x * y;
-  b += 2 * c[26] * x * y;
-  // Project to [0, 1] (the SH coefficients are scaled to ambient-color space).
+  const [r, g, b] = evaluateSphericalHarmonics(normal, sh);
   return [Math.max(0, Math.min(1, r)), Math.max(0, Math.min(1, g)), Math.max(0, Math.min(1, b))];
 }
+

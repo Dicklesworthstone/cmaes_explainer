@@ -274,12 +274,16 @@ export function sdfPlane(
   normal: [number, number, number],
   offset = 0,
 ): SDFEvaluation {
-  const dot = p[0] * normal[0] + p[1] * normal[1] + p[2] * normal[2];
-  const distance = dot + offset;
+  const nLen = Math.hypot(normal[0], normal[1], normal[2]) || 1;
+  const nx = normal[0] / nLen;
+  const ny = normal[1] / nLen;
+  const nz = normal[2] / nLen;
+  const dot = p[0] * nx + p[1] * ny + p[2] * nz;
+  const distance = dot + offset / nLen;
   return {
     distance,
-    normal: [normal[0], normal[1], normal[2]],
-    gradient: [normal[0], normal[1], normal[2]],
+    normal: [nx, ny, nz],
+    gradient: [nx, ny, nz],
   };
 }
 
@@ -292,19 +296,21 @@ export function sdfHeightfield(
 ): SDFEvaluation {
   const { minX, maxX, minZ, maxZ, rows, cols, heights } = terrain;
 
-  const u = Math.max(0, Math.min(1, (p[0] - minX) / (maxX - minX)));
-  const v = Math.max(0, Math.min(1, (p[2] - minZ) / (maxZ - minZ)));
+  const spanX = Math.max(1e-6, maxX - minX);
+  const spanZ = Math.max(1e-6, maxZ - minZ);
+  const u = Math.max(0, Math.min(1, (p[0] - minX) / spanX));
+  const v = Math.max(0, Math.min(1, (p[2] - minZ) / spanZ));
 
-  const colF = u * (cols - 1);
-  const rowF = v * (rows - 1);
+  const colF = u * Math.max(1, cols - 1);
+  const rowF = v * Math.max(1, rows - 1);
 
-  const c0 = Math.floor(colF);
+  const c0 = Math.max(0, Math.min(Math.max(0, cols - 2), Math.floor(colF)));
   const c1 = Math.min(cols - 1, c0 + 1);
-  const r0 = Math.floor(rowF);
+  const r0 = Math.max(0, Math.min(Math.max(0, rows - 2), Math.floor(rowF)));
   const r1 = Math.min(rows - 1, r0 + 1);
 
-  const tx = colF - c0;
-  const tz = rowF - r0;
+  const tx = Math.max(0, Math.min(1, colF - c0));
+  const tz = Math.max(0, Math.min(1, rowF - r0));
 
   const h00 = heights[r0 * cols + c0];
   const h10 = heights[r0 * cols + c1];
@@ -318,9 +324,11 @@ export function sdfHeightfield(
 
   const distance = p[1] - terrainHeight;
 
-  // Approximate terrain surface slope
-  const dhdx = (h10 - h00) / ((maxX - minX) / (cols - 1));
-  const dhdz = (h01 - h00) / ((maxZ - minZ) / (rows - 1));
+  // Full bilinear surface partial derivatives dh/dx and dh/dz
+  const cellW = spanX / Math.max(1, cols - 1);
+  const cellD = spanZ / Math.max(1, rows - 1);
+  const dhdx = ((1 - tz) * (h10 - h00) + tz * (h11 - h01)) / cellW;
+  const dhdz = ((1 - tx) * (h01 - h00) + tx * (h11 - h10)) / cellD;
 
   const nx = -dhdx;
   const ny = 1.0;

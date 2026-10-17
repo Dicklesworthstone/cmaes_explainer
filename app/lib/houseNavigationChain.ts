@@ -19,6 +19,7 @@
 //   - LaValle, "Planning Algorithms" (Cambridge University Press 2006)
 //   - Ames et al., "Control Barrier Functions: Theory and Applications" (ECC 2019)
 
+import { createSceneFromHouseFurniture, queryMultiObstacleScene } from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
 import { type CorridorSegment, filterCorridorVelocityQP } from "./segmentSafeCbf";
 
@@ -26,7 +27,7 @@ export interface HouseWaypoint {
   id: string;
   name: string;
   position: [number, number]; // [x, z] in world coordinates
-  acceptanceRadius: number; // meters (default 0.45m)
+  acceptanceRadius: number; // meters (default 0.40m)
   targetSpeed: number; // m/s (default 0.65m/s)
   room: string;
 }
@@ -35,39 +36,39 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
   {
     id: "wp-porch",
     name: "Front Porch Entry",
-    position: [1.5, -2.5],
-    acceptanceRadius: 0.45,
+    position: [0.35, 4.82],
+    acceptanceRadius: 0.4,
     targetSpeed: 0.6,
     room: "porch",
   },
   {
     id: "wp-parlor",
     name: "Parlor Living Area",
-    position: [1.5, 0.0],
-    acceptanceRadius: 0.45,
+    position: [0.35, 2.5],
+    acceptanceRadius: 0.4,
     targetSpeed: 0.65,
     room: "parlor",
   },
   {
     id: "wp-dining",
     name: "Dining Room Center",
-    position: [3.5, 1.2],
-    acceptanceRadius: 0.45,
+    position: [0.12, -0.08],
+    acceptanceRadius: 0.18,
     targetSpeed: 0.65,
     room: "dining",
   },
   {
     id: "wp-kitchen",
     name: "Kitchen Island",
-    position: [4.5, 3.5],
-    acceptanceRadius: 0.45,
+    position: [1.16, -0.05],
+    acceptanceRadius: 0.35,
     targetSpeed: 0.6,
     room: "kitchen",
   },
   {
     id: "wp-hallway",
     name: "Central Hallway",
-    position: [2.5, 4.0],
+    position: [-2.45, -0.05],
     acceptanceRadius: 0.4,
     targetSpeed: 0.55,
     room: "hallway",
@@ -75,15 +76,15 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
   {
     id: "wp-bedroom",
     name: "Master Bedroom",
-    position: [1.0, 5.5],
-    acceptanceRadius: 0.45,
+    position: [-1.55, -1.95],
+    acceptanceRadius: 0.4,
     targetSpeed: 0.6,
     room: "bedroom",
   },
   {
     id: "wp-bathroom",
     name: "Ensuite Bathroom",
-    position: [3.0, 6.5],
+    position: [1.0, -2.5],
     acceptanceRadius: 0.4,
     targetSpeed: 0.5,
     room: "bath",
@@ -93,47 +94,65 @@ export const CRAFTSMAN_WAYPOINT_CHAIN: HouseWaypoint[] = [
 export const CRAFTSMAN_DOORWAYS: CorridorSegment[] = [
   {
     id: "door-porch-parlor",
-    start: [1.5, -1.2],
-    end: [1.5, -0.2],
+    start: [0.35, 4.2],
+    end: [0.35, 3.2],
     halfWidth: 0.45,
     maxYawErrorRad: 0.35,
   },
   {
     id: "door-parlor-dining",
-    start: [2.5, 0.6],
-    end: [3.0, 0.9],
+    start: [0.27, 1.5],
+    end: [0.18, 0.5],
     halfWidth: 0.5,
     maxYawErrorRad: 0.4,
   },
   {
     id: "door-dining-kitchen",
-    start: [4.0, 2.2],
-    end: [4.2, 2.8],
+    start: [0.45, -0.06],
+    end: [0.8, -0.05],
     halfWidth: 0.45,
     maxYawErrorRad: 0.35,
   },
   {
     id: "door-kitchen-hallway",
-    start: [3.5, 3.8],
-    end: [3.0, 4.0],
+    start: [0.1, -0.05],
+    end: [-0.8, -0.05],
     halfWidth: 0.42,
     maxYawErrorRad: 0.3,
   },
   {
     id: "door-hallway-bedroom",
-    start: [1.8, 4.5],
-    end: [1.4, 5.0],
+    start: [-1.85, -0.81],
+    end: [-1.7, -1.38],
     halfWidth: 0.42,
     maxYawErrorRad: 0.3,
   },
   {
     id: "door-bedroom-bath",
-    start: [2.0, 6.0],
-    end: [2.5, 6.3],
+    start: [-0.5, -2.02],
+    end: [0.2, -2.24],
     halfWidth: 0.4,
     maxYawErrorRad: 0.3,
   },
 ];
+
+export interface HouseNavEpisodeCheckpoint {
+  schemaVersion: 1;
+  step: number;
+  simulatedPhysicalSeconds: number;
+  position: [number, number];
+  velocity: [number, number];
+  activeWaypointIndex: number;
+  totalPathDistanceMeters: number;
+  minimumObstacleClearanceMeters: number;
+  lastStepClearanceMeters: number;
+  allWaypointsReached: boolean;
+}
+
+export interface HouseNavSimulationOptions {
+  scene?: HouseSceneConfig;
+  resumeFrom?: HouseNavEpisodeCheckpoint;
+}
 
 export interface HouseNavSimulationResult {
   completedWaypoints: number;
@@ -141,6 +160,9 @@ export interface HouseNavSimulationResult {
   allWaypointsReached: boolean;
   totalPathDistanceMeters: number;
   minimumObstacleClearanceMeters: number;
+  simulatedPhysicalSeconds: number;
+  collisionOccurred: boolean;
+  checkpoint: HouseNavEpisodeCheckpoint;
   trajectory: Array<{
     step: number;
     timeSeconds: number;
@@ -154,6 +176,9 @@ export interface HouseNavSimulationResult {
 
 /**
  * Runs closed-loop whole-house navigation simulation across the Craftsman waypoint chain.
+ * Evaluates true signed clearances against the physical furniture OBB scene and doorway
+ * corridors (no positive clamping of negative clearances) and supports state-continuous
+ * episode checkpointing and continuation.
  */
 export function simulateHouseNavigation(
   waypoints: HouseWaypoint[] = CRAFTSMAN_WAYPOINT_CHAIN,
@@ -161,17 +186,40 @@ export function simulateHouseNavigation(
   maxSteps = 800,
   dt = 1 / 60,
   robotRadius = 0.25,
+  options: HouseNavSimulationOptions = {},
 ): HouseNavSimulationResult {
-  let currentPos: [number, number] = [waypoints[0].position[0], waypoints[0].position[1]];
-  let currentVel: [number, number] = [0.0, 0.0];
-  let activeWpIdx = 0;
-  let totalDistance = 0.0;
-  let minClearance = Infinity;
-  let lastStepClearance = 0.35; // initial value; updated each step
-  const trajectory: HouseNavSimulationResult["trajectory"] = [];
-  let finalReached = false;
+  const houseScene = options.scene ?? CRAFTSMAN_BUNGALOW_1928;
+  const obstacleScene = createSceneFromHouseFurniture(houseScene.furniture);
+  const resume = options.resumeFrom;
 
-  for (let step = 0; step < maxSteps; step++) {
+  let currentPos: [number, number] = resume
+    ? [resume.position[0], resume.position[1]]
+    : [waypoints[0].position[0], waypoints[0].position[1]];
+  let currentVel: [number, number] = resume ? [resume.velocity[0], resume.velocity[1]] : [0.0, 0.0];
+  let activeWpIdx = resume ? resume.activeWaypointIndex : 0;
+  let totalDistance = resume ? resume.totalPathDistanceMeters : 0.0;
+  let minClearance = resume ? resume.minimumObstacleClearanceMeters : Infinity;
+
+  const initialQuery = queryMultiObstacleScene(
+    { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
+    obstacleScene,
+  );
+  let lastStepClearance = resume
+    ? resume.lastStepClearanceMeters
+    : initialQuery.minimumClearanceMeters;
+  if (!resume && lastStepClearance < minClearance) {
+    minClearance = lastStepClearance;
+  }
+
+  const startStep = resume ? resume.step : 0;
+  const trajectory: HouseNavSimulationResult["trajectory"] = [];
+  let finalReached = resume ? resume.allWaypointsReached : false;
+  let nextStepIndex = startStep;
+
+  for (let localStep = 0; localStep < maxSteps; localStep++) {
+    if (finalReached) break;
+    const step = startStep + localStep;
+    nextStepIndex = step + 1;
     const timeSeconds = step * dt;
     const currentWp = waypoints[activeWpIdx];
 
@@ -192,8 +240,10 @@ export function simulateHouseNavigation(
           velocity: [0, 0],
           activeWaypointIndex: activeWpIdx,
           activeRoom: currentWp.room,
-          clearanceMeters: Math.max(0.1, lastStepClearance),
+          clearanceMeters: lastStepClearance,
         });
+        currentVel = [0, 0];
+        nextStepIndex = step;
         break;
       }
     }
@@ -223,8 +273,19 @@ export function simulateHouseNavigation(
       nominalSpeed,
     );
 
-    const safeVx = filterRes.safeVelocity[0];
-    const safeVz = filterRes.safeVelocity[1];
+    let safeVx = filterRes.safeVelocity[0];
+    let safeVz = filterRes.safeVelocity[1];
+
+    // Query pre-step furniture OBB clearance for repulsive steering
+    const preQuery = queryMultiObstacleScene(
+      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
+      obstacleScene,
+    );
+    if (preQuery.minimumClearanceMeters < 0.22 && !filterRes.isCorridorActive) {
+      const proximity = Math.max(0.0, (0.22 - preQuery.minimumClearanceMeters) / 0.22);
+      safeVx += preQuery.gradientVector[0] * 0.25 * proximity;
+      safeVz += preQuery.gradientVector[2] * 0.25 * proximity;
+    }
 
     // Integrate motion
     const nextPosX = currentPos[0] + safeVx * dt;
@@ -236,10 +297,15 @@ export function simulateHouseNavigation(
     currentPos = [nextPosX, nextPosZ];
     currentVel = [safeVx, safeVz];
 
-    // Physical obstacle clearance in meters (margin + robotRadius)
+    // True signed physical obstacle clearance in meters against furniture OBBs and doorway jambs
+    const postQuery = queryMultiObstacleScene(
+      { position: [currentPos[0], 0.5, currentPos[1]], robotRadius, safetyMargin: 0.04 },
+      obstacleScene,
+    );
     const stepClearance = filterRes.isCorridorActive
-      ? Math.max(0.01, filterRes.lateralMargin + robotRadius)
-      : 0.35;
+      ? Math.min(postQuery.minimumClearanceMeters, filterRes.lateralMargin)
+      : postQuery.minimumClearanceMeters;
+
     if (stepClearance < minClearance) {
       minClearance = stepClearance;
     }
@@ -256,12 +322,73 @@ export function simulateHouseNavigation(
     });
   }
 
+  const simulatedPhysicalSeconds = nextStepIndex * dt;
+  const checkpoint: HouseNavEpisodeCheckpoint = {
+    schemaVersion: 1,
+    step: nextStepIndex,
+    simulatedPhysicalSeconds,
+    position: [currentPos[0], currentPos[1]],
+    velocity: [currentVel[0], currentVel[1]],
+    activeWaypointIndex: activeWpIdx,
+    totalPathDistanceMeters: totalDistance,
+    minimumObstacleClearanceMeters: minClearance,
+    lastStepClearanceMeters: lastStepClearance,
+    allWaypointsReached: finalReached,
+  };
+
   return {
     completedWaypoints: finalReached ? waypoints.length : activeWpIdx,
     totalWaypoints: waypoints.length,
     allWaypointsReached: finalReached,
     totalPathDistanceMeters: totalDistance,
     minimumObstacleClearanceMeters: minClearance,
+    simulatedPhysicalSeconds,
+    collisionOccurred: minClearance < 0.0,
+    checkpoint,
     trajectory,
+  };
+}
+
+/**
+ * Executes a multi-segment house navigation episode by splitting execution into
+ * fixed `segmentSteps` chunks and resuming from the exact episode checkpoint at
+ * each boundary without resetting position, velocity, active waypoint, or clearance.
+ */
+export function runSegmentedHouseNavigation(
+  waypoints: HouseWaypoint[] = CRAFTSMAN_WAYPOINT_CHAIN,
+  doorways: CorridorSegment[] = CRAFTSMAN_DOORWAYS,
+  segmentSteps = 200,
+  totalMaxSteps = 2500,
+  dt = 1 / 60,
+  robotRadius = 0.25,
+  scene: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+): HouseNavSimulationResult {
+  const combinedTrajectory: HouseNavSimulationResult["trajectory"] = [];
+  let checkpoint: HouseNavEpisodeCheckpoint | undefined;
+  let lastResult: HouseNavSimulationResult | null = null;
+  let stepsRemaining = totalMaxSteps;
+
+  while (stepsRemaining > 0) {
+    const chunkSteps = Math.min(segmentSteps, stepsRemaining);
+    const res = simulateHouseNavigation(waypoints, doorways, chunkSteps, dt, robotRadius, {
+      scene,
+      resumeFrom: checkpoint,
+    });
+    combinedTrajectory.push(...res.trajectory);
+    checkpoint = res.checkpoint;
+    lastResult = res;
+    stepsRemaining -= chunkSteps;
+    if (res.allWaypointsReached) {
+      break;
+    }
+  }
+
+  if (!lastResult) {
+    return simulateHouseNavigation(waypoints, doorways, 0, dt, robotRadius, { scene });
+  }
+
+  return {
+    ...lastResult,
+    trajectory: combinedTrajectory,
   };
 }

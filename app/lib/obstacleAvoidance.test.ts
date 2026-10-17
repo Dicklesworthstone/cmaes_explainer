@@ -199,5 +199,24 @@ describe("SOTA Control Barrier Functions & Obstacle Avoidance", () => {
       expect(noObstacles.totalPenalty).toBe(0);
       expect(noObstacles.totalPenalty).toBeLessThan(withObstacles.totalPenalty);
     });
+
+    it("expands HOCBF safety margin for high-fragility obstacles under head-on approach", () => {
+      const link: RobotLinkState = {
+        id: "g1-hand",
+        name: "Hand",
+        position: [0.8, 2.0, 0.4],
+        velocity: [1.5, 0.0, 0.0],
+        radius: 0.08,
+      };
+      const ruggedObs: Obstacle3D = { ...sampleTable, fragility: 0.0 };
+      const fragileObs: Obstacle3D = { ...sampleTable, fragility: 1.0 };
+
+      const ruggedCbf = buildWholeBodyCbfConstraints([link], [ruggedObs]);
+      const fragileCbf = buildWholeBodyCbfConstraints([link], [fragileObs]);
+
+      // Higher fragility expands the adaptive safety margin, lowering effective clearance and tightening RHS b
+      expect(fragileCbf.minClearance).toBeLessThan(ruggedCbf.minClearance);
+      expect(fragileCbf.b[0]).toBeLessThan(ruggedCbf.b[0]);
+    });
   });
 });

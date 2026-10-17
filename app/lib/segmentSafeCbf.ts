@@ -110,8 +110,8 @@ export function evaluateSscbfBarrier(
   const dLat = nx * dx + nz * dz;
   const absDLat = Math.abs(dLat);
 
-  // Lateral barrier: h = (halfWidth - robotRadius) - |d_lat|
-  const allowedHalfWidth = Math.max(0.01, corridor.halfWidth - state.robotRadius);
+  // Lateral barrier: h = (halfWidth - robotRadius) - |d_lat| (unclamped so impassable narrow gaps report hLateral < 0)
+  const allowedHalfWidth = corridor.halfWidth - state.robotRadius;
   const hLateral = allowedHalfWidth - absDLat;
 
   // Gradient: \nabla h = -sign(d_lat) * n_hat
@@ -175,6 +175,7 @@ export function filterCorridorVelocityQP(
   }
 
   const { hLateral, gradLateral, hOrientation } = evaluateSscbfBarrier(state, activeCorridor);
+  const corridorImpassable = activeCorridor.halfWidth < state.robotRadius;
 
   // CBF safety condition: dot(gradLateral, u) + gamma * hLateral >= 0
   const cbfConstraint =
@@ -182,10 +183,10 @@ export function filterCorridorVelocityQP(
 
   let safeVx = nominalVelocity[0];
   let safeVz = nominalVelocity[1];
-  let slackActive = false;
+  let slackActive = corridorImpassable;
 
   if (cbfConstraint < 0.0) {
-    // Nominal velocity violates safety constraint; project minimally in direction of gradLateral:
+    // Project minimally in direction of gradLateral:
     // u* = u_nom - ( (dot(grad, u_nom) + gamma*h) / ||grad||^2 ) * grad
     const gradNormSq = gradLateral[0] * gradLateral[0] + gradLateral[1] * gradLateral[1];
     if (gradNormSq > 1e-6) {
@@ -197,11 +198,33 @@ export function filterCorridorVelocityQP(
     }
   }
 
-  // Enforce velocity limits
+  // Enforce velocity limits while prioritizing the lateral CBF recovery component
   const speed = Math.hypot(safeVx, safeVz);
   if (speed > maxSpeed && speed > 1e-5) {
-    safeVx = (safeVx / speed) * maxSpeed;
-    safeVz = (safeVz / speed) * maxSpeed;
+    const uLat = safeVx * gradLateral[0] + safeVz * gradLateral[1];
+    const tangX = safeVx - uLat * gradLateral[0];
+    const tangZ = safeVz - uLat * gradLateral[1];
+    const tangSpeed = Math.hypot(tangX, tangZ);
+
+    if (Math.abs(uLat) >= maxSpeed) {
+      // Required lateral recovery exceeds maxSpeed -> saturate lateral recovery and activate slack
+      const clampedLat = Math.sign(uLat) * maxSpeed;
+      safeVx = clampedLat * gradLateral[0];
+      safeVz = clampedLat * gradLateral[1];
+      slackActive = true;
+    } else if (tangSpeed > 1e-6) {
+      const maxTangSpeed = Math.sqrt(Math.max(0, maxSpeed * maxSpeed - uLat * uLat));
+      const scale = Math.min(1.0, maxTangSpeed / tangSpeed);
+      safeVx = uLat * gradLateral[0] + tangX * scale;
+      safeVz = uLat * gradLateral[1] + tangZ * scale;
+    }
+  }
+
+  // Verify whether final clamped velocity still requires positive slack delta > 0
+  const realizedConstraint =
+    gradLateral[0] * safeVx + gradLateral[1] * safeVz + gamma * hLateral;
+  if (realizedConstraint < -1e-5) {
+    slackActive = true;
   }
 
   return {
@@ -213,3 +236,4 @@ export function filterCorridorVelocityQP(
     solveTimeMs: performance.now() - t0,
   };
 }
+

@@ -30,8 +30,9 @@ import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "./houseScenes";
 const STRESS_TRIAL_ROBOT_RADIUS = 0.25;
 const REPULSION_RANGE_M = 0.8;
 const FURNITURE_REPULSION_GAIN = 0.6;
-const PENETRATION_THRESHOLD_M = -0.05;
+const PENETRATION_THRESHOLD_M = 0.0;
 
+import { CRAFTSMAN_DOORWAYS } from "./houseNavigationChain";
 import {
   createRollingPieceState,
   ROLLING_PIECE_DEFAULTS,
@@ -39,7 +40,7 @@ import {
   type RollingPieceState,
   stepRollingPieceDynamics,
 } from "./rollingFurniturePieces";
-import { filterCorridorVelocityQP } from "./segmentSafeCbf";
+import { type CorridorSegment, filterCorridorVelocityQP } from "./segmentSafeCbf";
 
 export interface ShuffledSceneConfig {
   seed: number;
@@ -61,6 +62,7 @@ export interface ShuffledScene {
 export interface StressTrialResult {
   trialSeed: number;
   success: boolean;
+  layoutFeasible: boolean;
   totalSteps: number;
   distanceTraveledMeters: number;
   minimumClearanceMeters: number;
@@ -68,6 +70,7 @@ export interface StressTrialResult {
   // (soft obstacles such as rugs/curtains/pillows are exempt by the kernel).
   // Collapses to +Infinity when the robot never entered the house envelope.
   minimumFurnitureClearanceMeters: number;
+  nearestObstacleName: string | null;
   collisionOccurred: boolean;
   rollingPieceFinalSpeed: number;
   rollingPieceDisplacement: number;
@@ -75,8 +78,12 @@ export interface StressTrialResult {
 
 export interface MultiTrialSummary {
   totalTrials: number;
+  validAttemptCount: number;
+  infeasibleLayoutCount: number;
   passedTrials: number;
+  failedTrials: number;
   passRatePercent: number;
+  passRateConfidenceInterval95: [number, number];
   meanClearanceMeters: number;
   worstClearanceMeters: number;
   trials: StressTrialResult[];
@@ -90,6 +97,28 @@ function seededRandom(seed: number): () => number {
     s ^= s << 5;
     return (s >>> 0) / 4294967296;
   };
+}
+
+/**
+ * Computes the Wilson score 95% confidence interval [lowPercent, highPercent] in [0, 100]
+ * for k successes out of n independent Bernoulli trials.
+ */
+export function computeWilsonConfidenceInterval95(
+  successes: number,
+  trials: number,
+): [number, number] {
+  if (trials <= 0) return [0, 0];
+  const z = 1.959963984540054;
+  const z2 = z * z;
+  const pHat = Math.max(0, Math.min(1, successes / trials));
+  const denom = 1 + z2 / trials;
+  const center = (pHat + z2 / (2 * trials)) / denom;
+  const halfWidth =
+    (z * Math.sqrt((pHat * (1 - pHat)) / trials + z2 / (4 * trials * trials))) / denom;
+  return [
+    Math.max(0, (center - halfWidth) * 100.0),
+    Math.min(100, (center + halfWidth) * 100.0),
+  ];
 }
 
 /**
@@ -144,6 +173,7 @@ export function generateShuffledScene(config: ShuffledSceneConfig): ShuffledScen
 
 /**
  * Executes a closed-loop stress trial across a shuffled room scene.
+ * Preserves raw signed clearances (no positive clamping of negative clearances).
  */
 export function runShuffledStressTrial(
   scene: ShuffledScene,
@@ -151,26 +181,58 @@ export function runShuffledStressTrial(
   goalPos: [number, number] = [-1.5, 2.5],
   maxSteps = 400,
   dt = 1 / 60,
+  corridors: CorridorSegment[] = CRAFTSMAN_DOORWAYS,
 ): StressTrialResult {
   let currentPos: [number, number] = [startPos[0], startPos[1]];
   let currentVel: [number, number] = [0.0, 0.0];
   let rollingState = { ...scene.rollingPiece.state };
   const rollingCfg = ROLLING_PIECE_DEFAULTS[scene.rollingPiece.kind];
-  // Build the furniture OBB scene from the (jittered) shuffled furniture list.
-  // The scene is static for the trial; queryMultiObstacleScene now drives both
-  // the collision flip and a repulsion force in the goal-seek loop.
   const furnitureScene = createSceneFromHouseFurniture(scene.furniture);
 
-  let minClearance = Infinity;
-  let furnitureMinClearance = Infinity;
+  const startFurnRes = queryMultiObstacleScene(
+    {
+      position: [startPos[0], 0.5, startPos[1]],
+      robotRadius: STRESS_TRIAL_ROBOT_RADIUS,
+      safetyMargin: 0.05,
+    },
+    furnitureScene,
+  );
+  const goalFurnRes = queryMultiObstacleScene(
+    {
+      position: [goalPos[0], 0.5, goalPos[1]],
+      robotRadius: STRESS_TRIAL_ROBOT_RADIUS,
+      safetyMargin: 0.05,
+    },
+    furnitureScene,
+  );
+  const startRollingDist =
+    Math.hypot(rollingState.position[0] - startPos[0], rollingState.position[1] - startPos[1]) -
+    STRESS_TRIAL_ROBOT_RADIUS -
+    rollingCfg.boundingRadius;
+  const GOAL_ACCEPTANCE_RADIUS_M = 0.4;
+  const layoutFeasible =
+    startFurnRes.minimumClearanceMeters >= 0.0 &&
+    goalFurnRes.minimumClearanceMeters + GOAL_ACCEPTANCE_RADIUS_M >= 0.0 &&
+    startRollingDist >= 0.0;
+
+  let minClearance = Math.min(startFurnRes.minimumClearanceMeters, startRollingDist);
+  let furnitureMinClearance = startFurnRes.minimumClearanceMeters;
+  let nearestObstacleName: string | null =
+    startRollingDist < startFurnRes.minimumClearanceMeters
+      ? scene.rollingPiece.kind
+      : startFurnRes.nearestObstacleName;
   let totalDist = 0.0;
-  let collisionOccurred = false;
+  let collisionOccurred = minClearance < PENETRATION_THRESHOLD_M;
   let success = false;
   let stepsTaken = 0;
 
   const initialRollingPos: [number, number] = [rollingState.position[0], rollingState.position[1]];
 
   for (let step = 0; step < maxSteps; step++) {
+    if (collisionOccurred) {
+      stepsTaken = step + 1;
+      break;
+    }
     stepsTaken = step + 1;
     const dxGoal = goalPos[0] - currentPos[0];
     const dzGoal = goalPos[1] - currentPos[1];
@@ -190,10 +252,11 @@ export function runShuffledStressTrial(
     const dxRoll = rollingState.position[0] - currentPos[0];
     const dzRoll = rollingState.position[1] - currentPos[1];
     const distToRolling = Math.hypot(dxRoll, dzRoll);
-    const rollingContactDist = distToRolling - 0.25 - rollingCfg.boundingRadius;
+    const rollingContactDist = distToRolling - STRESS_TRIAL_ROBOT_RADIUS - rollingCfg.boundingRadius;
 
     if (rollingContactDist < minClearance) {
       minClearance = rollingContactDist;
+      nearestObstacleName = scene.rollingPiece.kind;
     }
 
     // If robot contacts the rolling piece (push interaction)
@@ -210,7 +273,7 @@ export function runShuffledStressTrial(
     let safeVx = targetVx;
     let safeVz = targetVz;
 
-    if (distToRolling < 0.8) {
+    if (distToRolling < 0.8 && distToRolling > 1e-5) {
       // Repulsive steering away from rolling piece center
       const repelX = -(dxRoll / distToRolling) * 0.4;
       const repelZ = -(dzRoll / distToRolling) * 0.4;
@@ -218,12 +281,6 @@ export function runShuffledStressTrial(
       safeVz += repelZ;
     }
 
-    // Furniture OBB clearance check + repulsive steering. Mirrors the rolling
-    // repulsion: when the robot body comes within REPULSION_RANGE_M of any
-    // non-soft furniture piece, the kernel's gradient vector (unit vector
-    // away from the nearest OBB center, in the house plan) pushes the safe
-    // velocity away. The clearance also feeds minClearance so the existing
-    // < PENETRATION_THRESHOLD_M break guards against hard penetrations.
     const furnRes = queryMultiObstacleScene(
       {
         position: [currentPos[0], 0.5, currentPos[1]],
@@ -237,6 +294,7 @@ export function runShuffledStressTrial(
     }
     if (furnRes.minimumClearanceMeters < minClearance) {
       minClearance = furnRes.minimumClearanceMeters;
+      nearestObstacleName = furnRes.nearestObstacleName;
     }
     if (
       furnRes.minimumClearanceMeters < REPULSION_RANGE_M &&
@@ -248,6 +306,22 @@ export function runShuffledStressTrial(
       safeVz += furnRes.gradientVector[2] * push;
     }
 
+    // Apply Segment-Safe CBF doorway corridor velocity filter
+    if (corridors.length > 0) {
+      const sscbf = filterCorridorVelocityQP(
+        [safeVx, safeVz],
+        {
+          position: currentPos,
+          velocity: currentVel,
+          yaw: Math.atan2(safeVz, safeVx),
+          robotRadius: STRESS_TRIAL_ROBOT_RADIUS,
+        },
+        corridors,
+      );
+      safeVx = sscbf.safeVelocity[0];
+      safeVz = sscbf.safeVelocity[1];
+    }
+
     // Integrate motion
     const nextPosX = currentPos[0] + safeVx * dt;
     const nextPosZ = currentPos[1] + safeVz * dt;
@@ -255,6 +329,34 @@ export function runShuffledStressTrial(
     totalDist += Math.hypot(nextPosX - currentPos[0], nextPosZ - currentPos[1]);
     currentPos = [nextPosX, nextPosZ];
     currentVel = [safeVx, safeVz];
+
+    // Check post-step clearance at new position
+    const postFurnRes = queryMultiObstacleScene(
+      {
+        position: [currentPos[0], 0.5, currentPos[1]],
+        robotRadius: STRESS_TRIAL_ROBOT_RADIUS,
+        safetyMargin: 0.05,
+      },
+      furnitureScene,
+    );
+    const postRollDist =
+      Math.hypot(
+        rollingState.position[0] - currentPos[0],
+        rollingState.position[1] - currentPos[1],
+      ) -
+      STRESS_TRIAL_ROBOT_RADIUS -
+      rollingCfg.boundingRadius;
+    if (postFurnRes.minimumClearanceMeters < furnitureMinClearance) {
+      furnitureMinClearance = postFurnRes.minimumClearanceMeters;
+    }
+    if (postFurnRes.minimumClearanceMeters < minClearance) {
+      minClearance = postFurnRes.minimumClearanceMeters;
+      nearestObstacleName = postFurnRes.nearestObstacleName;
+    }
+    if (postRollDist < minClearance) {
+      minClearance = postRollDist;
+      nearestObstacleName = scene.rollingPiece.kind;
+    }
 
     if (minClearance < PENETRATION_THRESHOLD_M) {
       collisionOccurred = true;
@@ -270,12 +372,14 @@ export function runShuffledStressTrial(
 
   return {
     trialSeed: scene.seed,
-    success: success && !collisionOccurred,
+    success: layoutFeasible && success && !collisionOccurred,
+    layoutFeasible,
     totalSteps: stepsTaken,
     distanceTraveledMeters: totalDist,
-    minimumClearanceMeters: Math.max(0.01, minClearance),
+    minimumClearanceMeters: minClearance,
     minimumFurnitureClearanceMeters:
-      furnitureMinClearance === Infinity ? 0.0 : Math.max(0.01, furnitureMinClearance),
+      furnitureMinClearance === Infinity ? 0.0 : furnitureMinClearance,
+    nearestObstacleName,
     collisionOccurred,
     rollingPieceFinalSpeed: finalSpeed,
     rollingPieceDisplacement: rollingDisplacement,
@@ -284,12 +388,15 @@ export function runShuffledStressTrial(
 
 /**
  * Runs a multi-trial stress test across K randomized room configurations.
+ * Reports valid-attempt denominator, infeasible layout count, failures, and 95% Wilson CI.
  */
 export function runMultiTrialStressSuite(
   seeds: number[] = [101, 202, 303, 404, 505],
 ): MultiTrialSummary {
   const trialResults: StressTrialResult[] = [];
   let passedCount = 0;
+  let validAttemptCount = 0;
+  let infeasibleLayoutCount = 0;
   let sumClearance = 0;
   let worstClearance = Infinity;
 
@@ -298,6 +405,11 @@ export function runMultiTrialStressSuite(
     const res = runShuffledStressTrial(scene);
     trialResults.push(res);
 
+    if (res.layoutFeasible) {
+      validAttemptCount++;
+    } else {
+      infeasibleLayoutCount++;
+    }
     if (res.success) passedCount++;
     sumClearance += res.minimumClearanceMeters;
     if (res.minimumClearanceMeters < worstClearance) {
@@ -305,11 +417,18 @@ export function runMultiTrialStressSuite(
     }
   }
 
+  const totalTrials = seeds.length;
+  const failedTrials = totalTrials - passedCount;
+
   return {
-    totalTrials: seeds.length,
+    totalTrials,
+    validAttemptCount,
+    infeasibleLayoutCount,
     passedTrials: passedCount,
-    passRatePercent: (passedCount / seeds.length) * 100.0,
-    meanClearanceMeters: sumClearance / seeds.length,
+    failedTrials,
+    passRatePercent: totalTrials > 0 ? (passedCount / totalTrials) * 100.0 : 0.0,
+    passRateConfidenceInterval95: computeWilsonConfidenceInterval95(passedCount, totalTrials),
+    meanClearanceMeters: totalTrials > 0 ? sumClearance / totalTrials : 0.0,
     worstClearanceMeters: worstClearance,
     trials: trialResults,
   };

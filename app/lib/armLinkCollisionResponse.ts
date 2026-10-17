@@ -159,11 +159,51 @@ export function projectLinkOutOfOBB(
   const dz = sign * (linkPos[2] - closest[2]);
   const len = Math.hypot(dx, dy, dz);
   if (len < 1e-6) {
-    // Degenerate: link is exactly at the OBB's deepest interior point.
-    // Use the OBB's longest-axis outward direction as a safe escape.
-    const axisLen = obb.halfExtents[0];
+    // Degenerate: link origin lies directly on the OBB surface (sdfDist ≈ 0, closest ≈ linkPos).
+    // Compute the exact outward surface normal in the OBB local frame and rotate back to world.
+    const cosY = Math.cos(-obb.rotationYawRad);
+    const sinY = Math.sin(-obb.rotationYawRad);
+    const relX = linkPos[0] - obb.center[0];
+    const relY = linkPos[1] - obb.center[1];
+    const relZ = linkPos[2] - obb.center[2];
+    const localX = cosY * relX - sinY * relZ;
+    const localY = relY;
+    const localZ = sinY * relX + cosY * relZ;
+    const absX = Math.abs(localX) - obb.halfExtents[0];
+    const absY = Math.abs(localY) - obb.halfExtents[1];
+    const absZ = Math.abs(localZ) - obb.halfExtents[2];
+    const m = Math.max(absX, absY, absZ);
+    if (m === absX) {
+      const s = localX >= 0 ? 1 : -1;
+      const worldDx = cosY * s;
+      const worldDz = -sinY * s;
+      return {
+        newPos: [
+          linkPos[0] + worldDx * penetrationDepth,
+          linkPos[1],
+          linkPos[2] + worldDz * penetrationDepth,
+        ],
+        penetrating: true,
+        penetrationDepth,
+      };
+    }
+    if (m === absY) {
+      const s = localY >= 0 ? 1 : -1;
+      return {
+        newPos: [linkPos[0], linkPos[1] + s * penetrationDepth, linkPos[2]],
+        penetrating: true,
+        penetrationDepth,
+      };
+    }
+    const s = localZ >= 0 ? 1 : -1;
+    const worldDx = sinY * s;
+    const worldDz = cosY * s;
     return {
-      newPos: [linkPos[0] + axisLen, linkPos[1], linkPos[2]],
+      newPos: [
+        linkPos[0] + worldDx * penetrationDepth,
+        linkPos[1],
+        linkPos[2] + worldDz * penetrationDepth,
+      ],
       penetrating: true,
       penetrationDepth,
     };

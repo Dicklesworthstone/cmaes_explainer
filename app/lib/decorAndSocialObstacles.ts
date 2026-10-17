@@ -156,8 +156,9 @@ export function checkDecorTipping(
   impactForceN: number,
   impactHeightY: number,
 ): { willTip: boolean; appliedTorqueNm: number; tippingThresholdNm: number } {
-  const arm = Math.max(0.05, impactHeightY - decor.position[1]);
-  const appliedTorque = impactForceN * arm;
+  const rawArm = impactHeightY - decor.position[1];
+  const arm = Math.max(0.0, Math.min(decor.height, rawArm));
+  const appliedTorque = Math.abs(impactForceN) * arm;
   const threshold = decor.tippingTorqueThreshold;
 
   return {
@@ -222,21 +223,116 @@ export function evaluateSocialCbf(
 } {
   const dx = robotPos[0] - agent.position[0];
   const dz = robotPos[1] - agent.position[1];
-  const dist = Math.hypot(dx, dz) || 1e-4;
+  const rawDist = Math.hypot(dx, dz);
+  const gradSocial: [number, number] =
+    rawDist > 1e-6
+      ? [dx / rawDist, dz / rawDist]
+      : [Math.cos(agent.headingYaw), Math.sin(agent.headingYaw)];
 
   const relVx = robotVel[0] - agent.velocity[0];
   const relVz = robotVel[1] - agent.velocity[1];
 
-  // Closing speed: -dot(delta_pos / dist, delta_v)
-  const closingSpeed = Math.max(0.0, -((dx / dist) * relVx + (dz / dist) * relVz));
+  // Closing speed: -dot(gradSocial, delta_v)
+  const closingSpeed = Math.max(0.0, -(gradSocial[0] * relVx + gradSocial[1] * relVz));
   const dynamicBuffer = agent.comfortRadius + reactionTimeSeconds * closingSpeed;
 
-  const hSocial = dist - dynamicBuffer;
-  const gradSocial: [number, number] = [dx / dist, dz / dist];
+  const hSocial = rawDist - dynamicBuffer;
 
   return {
     hSocial,
     gradSocial,
     isSafe: hSocial >= 0.0,
+  };
+}
+
+/**
+ * Advances a dynamic pedestrian or pet silhouette agent by dt seconds, updating
+ * headingYaw to align with motion and reflecting cleanly off optional room bounds.
+ */
+export function stepSilhouetteAgent(
+  agent: SilhouetteAgent,
+  dt = 1 / 60,
+  bounds?: { minX: number; maxX: number; minZ: number; maxZ: number },
+): SilhouetteAgent {
+  const safeDt = Math.max(0.0, Math.min(0.1, dt));
+  let vx = agent.velocity[0];
+  let vz = agent.velocity[1];
+  let nx = agent.position[0] + vx * safeDt;
+  let nz = agent.position[1] + vz * safeDt;
+
+  if (bounds) {
+    if (nx < bounds.minX) {
+      nx = bounds.minX;
+      vx = Math.abs(vx);
+    } else if (nx > bounds.maxX) {
+      nx = bounds.maxX;
+      vx = -Math.abs(vx);
+    }
+    if (nz < bounds.minZ) {
+      nz = bounds.minZ;
+      vz = Math.abs(vz);
+    } else if (nz > bounds.maxZ) {
+      nz = bounds.maxZ;
+      vz = -Math.abs(vz);
+    }
+  }
+
+  const speed = Math.hypot(vx, vz);
+  const headingYaw = speed > 1e-4 ? Math.atan2(vz, vx) : agent.headingYaw;
+
+  return {
+    ...agent,
+    position: [nx, nz],
+    velocity: [vx, vz],
+    headingYaw,
+  };
+}
+
+/**
+ * Projects a nominal robot velocity [vx, vz] into the socially compliant half-space
+ * defined by the velocity-aware Control Barrier Function across all active agents:
+ *   \nabla h_i \cdot (\mathbf{u} - \mathbf{v}_i) + \gamma h_i \ge 0
+ */
+export function filterSocialVelocityCbf(
+  nominalVel: [number, number],
+  robotPos: [number, number],
+  agents: readonly SilhouetteAgent[],
+  gamma = 2.0,
+  reactionTimeSeconds = 0.5,
+  maxSpeed = 1.2,
+): {
+  safeVelocity: [number, number];
+  minHSocial: number;
+  interventionMagnitude: number;
+} {
+  let ux = nominalVel[0];
+  let uz = nominalVel[1];
+  let minHSocial = Infinity;
+
+  for (const agent of agents) {
+    const evalRes = evaluateSocialCbf(robotPos, [ux, uz], agent, reactionTimeSeconds);
+    if (evalRes.hSocial < minHSocial) {
+      minHSocial = evalRes.hSocial;
+    }
+    const [gx, gz] = evalRes.gradSocial;
+    const relDot = gx * (ux - agent.velocity[0]) + gz * (uz - agent.velocity[1]);
+    const cbfMargin = relDot + gamma * evalRes.hSocial;
+    if (cbfMargin < 0.0) {
+      ux += -cbfMargin * gx;
+      uz += -cbfMargin * gz;
+    }
+  }
+
+  const speed = Math.hypot(ux, uz);
+  if (speed > maxSpeed && speed > 1e-6) {
+    ux = (ux / speed) * maxSpeed;
+    uz = (uz / speed) * maxSpeed;
+  }
+
+  const interventionMagnitude = Math.hypot(ux - nominalVel[0], uz - nominalVel[1]);
+  return {
+    safeVelocity: [ux, uz],
+    minHSocial,
+    interventionMagnitude,
   };
 }

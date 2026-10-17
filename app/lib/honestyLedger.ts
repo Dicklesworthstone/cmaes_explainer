@@ -35,7 +35,7 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     mathFormula:
       "\\mathbf{I}^A_i = \\mathbf{I}_i + \\sum_{j \\in \\mu(i)} \\left( \\mathbf{I}^A_j - \\frac{\\mathbf{I}^A_j \\mathbf{s}_j \\mathbf{s}_j^T \\mathbf{I}^A_j}{\\mathbf{s}_j^T \\mathbf{I}^A_j \\mathbf{s}_j} \\right)",
     claim:
-      "TypeScript articulated-dynamics helper. Arbitrary-axis correctness and agreement with the deployed Rust owner are not established by this entry.",
+      "TypeScript articulated-dynamics helper with Rodrigues arbitrary-axis rotations, prismatic joint transforms, and world-frame potential energy. Cross-runtime parity with the deployed Rust owner is not established by this entry.",
     status: "implemented",
   },
   {
@@ -133,11 +133,12 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     category: "telemetry",
     sourceFile: "app/lib/kernelPerfProfiler.ts",
     testFile: "tests/kernelPerfProfiler.test.ts",
-    citation: "Jain & Chlamtac, The P2 Algorithm for Dynamic Quantile Estimation (CACM 1985)",
+    citation:
+      "Hyndman & Fan, Sample Quantiles in Statistical Packages (The American Statistician, 1996) — Type 1 Nearest-Rank Order Statistic over Sliding Ring Buffer",
     mathFormula:
-      "t_{\\text{total}} = t_{\\text{broad}} + t_{\\text{narrow}} + t_{\\text{lcp}} + t_{\\text{integ}}, \\quad \\text{Overrun} = t_{\\text{total}} > T_{\\text{budget}}",
+      "t_{\\text{total}} = t_{\\text{broad}} + t_{\\text{narrow}} + t_{\\text{lcp}} + t_{\\text{integ}}, \\quad Q_p = X_{(\\lceil p N \\rceil)}, \\quad \\text{Overrun} = t_{\\text{total}} > T_{\\text{budget}}",
     claim:
-      "Timing aggregation and rolling quantiles for supplied samples. Clock resolution and measured workload are properties of the recording environment.",
+      "Timing aggregation and exact nearest-rank rolling quantiles over a bounded circular ring buffer. Clock resolution and measured workload are properties of the recording environment.",
     status: "implemented",
   },
   {
@@ -181,7 +182,7 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     mathFormula:
       "\\gamma(\\mathbf{x}) = [\\cos(2\\pi \\mathbf{B} \\mathbf{x}), \\sin(2\\pi \\mathbf{B} \\mathbf{x})]^T, \\quad V(\\mathbf{x}) = w_g \\|\\mathbf{x} - \\mathbf{x}_g\\| + w_c \\hat{c}(\\gamma(\\mathbf{x}))",
     claim:
-      "Fourier-feature MLP prototype. No trained costmap artifact or held-out navigation improvement is supplied by this registry.",
+      "Fourier-feature MLP costmap with analytical chain-rule gradients and local SDF supervised fitting. A pre-baked household model artifact for the deployed Rust owner is not supplied by this registry.",
     status: "conceptual",
   },
   {
@@ -280,7 +281,7 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
     mathFormula:
       "d_{\\text{refined}}(\\mathbf{x}) = d_{\\text{base}}(\\mathbf{x}) + \\exp\\left(-\\frac{d_{\\text{base}}^2}{2\\sigma^2}\\right) \\text{MLP}_{\\le 20\\text{k}}(\\gamma(\\mathbf{x}))",
     claim:
-      "Neural residual-SDF prototype. A trained artifact, bounded geometric error and measured query allocations are not supplied by this registry.",
+      "Neural residual-SDF helper with supervised fitting, conservative error-envelope lower bounds, and allocation telemetry. A pre-baked production furniture SDF asset is not supplied by this registry.",
     status: "conceptual",
   },
   {

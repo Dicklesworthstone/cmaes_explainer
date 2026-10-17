@@ -375,7 +375,105 @@ export function collideSphereBox(bodyA: RigidBody, bodyB: RigidBody): ContactPoi
 }
 
 /**
- * Sphere / Box vs Plane Narrowphase.
+ * Box vs Box Narrowphase (Oriented SAT + 4-Point Contact Patch).
+ * Normal points from bodyA toward bodyB.
+ */
+export function collideBoxBox(bodyA: RigidBody, bodyB: RigidBody): ContactPoint[] {
+  const posA = bodyA.position;
+  const posB = bodyB.position;
+  const halfA = bodyA.shape.halfExtents || [0.5, 0.5, 0.5];
+  const halfB = bodyB.shape.halfExtents || [0.5, 0.5, 0.5];
+  const RA = eulerToMatrix(bodyA.rotation);
+  const RB = eulerToMatrix(bodyB.rotation);
+
+  const axesA: [Vector3, Vector3, Vector3] = [
+    [RA[0][0], RA[1][0], RA[2][0]],
+    [RA[0][1], RA[1][1], RA[2][1]],
+    [RA[0][2], RA[1][2], RA[2][2]],
+  ];
+  const axesB: [Vector3, Vector3, Vector3] = [
+    [RB[0][0], RB[1][0], RB[2][0]],
+    [RB[0][1], RB[1][1], RB[2][1]],
+    [RB[0][2], RB[1][2], RB[2][2]],
+  ];
+
+  const candidateAxes: Vector3[] = [...axesA, ...axesB];
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const c = vecCross(axesA[i], axesB[j]);
+      if (vecLength(c) > 1e-5) {
+        candidateAxes.push(vecNormalize(c));
+      }
+    }
+  }
+
+  const delta = vecSub(posB, posA);
+  const projectExtent = (axes: [Vector3, Vector3, Vector3], half: Vector3, u: Vector3): number =>
+    half[0] * Math.abs(vecDot(axes[0], u)) +
+    half[1] * Math.abs(vecDot(axes[1], u)) +
+    half[2] * Math.abs(vecDot(axes[2], u));
+
+  let minPen = Number.POSITIVE_INFINITY;
+  let bestNormal: Vector3 = [0, 0, 1];
+
+  for (const axis of candidateAxes) {
+    const rA = projectExtent(axesA, halfA, axis);
+    const rB = projectExtent(axesB, halfB, axis);
+    const sep = Math.abs(vecDot(delta, axis));
+    const pen = rA + rB - sep;
+    if (pen <= 0) {
+      return [];
+    }
+    if (pen < minPen) {
+      minPen = pen;
+      bestNormal = vecDot(delta, axis) >= 0 ? axis : vecScale(axis, -1.0);
+    }
+  }
+
+  const [t1, t2] = buildOrthonormalBasis(bestNormal);
+  const rAn = projectExtent(axesA, halfA, bestNormal);
+  const patch1 = Math.min(projectExtent(axesA, halfA, t1), projectExtent(axesB, halfB, t1)) * 0.8;
+  const patch2 = Math.min(projectExtent(axesA, halfA, t2), projectExtent(axesB, halfB, t2)) * 0.8;
+
+  const mid = vecScale(vecAdd(posA, posB), 0.5);
+  const normalOffsetFromMid =
+    vecDot(vecSub(posA, mid), bestNormal) + rAn - minPen * 0.5;
+  const patchCenter = vecAdd(mid, vecScale(bestNormal, normalOffsetFromMid));
+
+  const offsets: Array<[number, number]> = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+
+  const contacts: ContactPoint[] = [];
+  for (let i = 0; i < offsets.length; i++) {
+    const [ox, oy] = offsets[i];
+    const contactPos = vecAdd(
+      patchCenter,
+      vecAdd(vecScale(t1, ox * patch1), vecScale(t2, oy * patch2)),
+    );
+    contacts.push({
+      id: `${bodyA.id}_${bodyB.id}_bb_${i}`,
+      position: contactPos,
+      localPointA: vecSub(contactPos, posA),
+      localPointB: vecSub(contactPos, posB),
+      normal: bestNormal,
+      penetrationDepth: minPen,
+      tangent1: t1,
+      tangent2: t2,
+      normalImpulse: 0,
+      tangentImpulse1: 0,
+      tangentImpulse2: 0,
+    });
+  }
+
+  return contacts;
+}
+
+/**
+ * Sphere / Box / Capsule vs Plane Narrowphase.
  */
 export function collideBodyPlane(bodyA: RigidBody, planeBody: RigidBody): ContactPoint[] {
   const planeN = vecNormalize(planeBody.shape.planeNormal || [0, 0, 1]);
@@ -443,6 +541,38 @@ export function collideBodyPlane(bodyA: RigidBody, planeBody: RigidBody): Contac
         });
       }
     }
+  } else if (bodyA.shape.type === "capsule") {
+    const r = bodyA.shape.radius || 0.2;
+    const hh = bodyA.shape.halfHeight || 0.5;
+    const R = eulerToMatrix(bodyA.rotation);
+    const axis = rotateVector(R, [0, 0, 1]);
+    const endpoints: [Vector3, Vector3] = [
+      vecSub(bodyA.position, vecScale(axis, hh)),
+      vecAdd(bodyA.position, vecScale(axis, hh)),
+    ];
+    const [t1, t2] = buildOrthonormalBasis(planeN);
+
+    for (let k = 0; k < endpoints.length; k++) {
+      const endPt = endpoints[k];
+      const distToPlane = vecDot(endPt, planeN) - planeD;
+      if (distToPlane < r) {
+        const penetration = r - distToPlane;
+        const contactPos = vecSub(endPt, vecScale(planeN, r - penetration * 0.5));
+        contacts.push({
+          id: `${bodyA.id}_${planeBody.id}_plane_c${k}`,
+          position: contactPos,
+          localPointA: vecSub(contactPos, bodyA.position),
+          localPointB: vecSub(contactPos, planeBody.position),
+          normal: planeN,
+          penetrationDepth: penetration,
+          tangent1: t1,
+          tangent2: t2,
+          normalImpulse: 0,
+          tangentImpulse1: 0,
+          tangentImpulse2: 0,
+        });
+      }
+    }
   }
 
   return contacts;
@@ -458,6 +588,15 @@ export class ContactGraph {
 
   public addBody(body: RigidBody): void {
     this.bodies.set(body.id, body);
+  }
+
+  public removeBody(id: string): boolean {
+    for (const key of Array.from(this.manifolds.keys())) {
+      if (key.startsWith(`${id}_#_`) || key.endsWith(`_#_${id}`)) {
+        this.manifolds.delete(key);
+      }
+    }
+    return this.bodies.delete(id);
   }
 
   public getBody(id: string): RigidBody | undefined {
@@ -515,6 +654,8 @@ export class ContactGraph {
             c.localPointB = tmp;
             detectedContacts.push(c);
           }
+        } else if (bodyA.shape.type === "box" && bodyB.shape.type === "box") {
+          detectedContacts.push(...collideBoxBox(bodyA, bodyB));
         } else if (bodyB.shape.type === "plane") {
           const cList = collideBodyPlane(bodyA, bodyB);
           for (const c of cList) {

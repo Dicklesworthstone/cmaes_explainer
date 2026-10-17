@@ -21,7 +21,93 @@ export interface G1EnvConfig {
   targetSpeedMps?: number; // default 0.65 m/s
   fallHeightThreshold?: number; // default 0.40m
   fallTiltThresholdRad?: number; // default 0.85 rad (~48 deg)
+  perturbOnReset?: boolean; // default false (nominal deterministic start unless enabled)
+  perturbScale?: number; // default 0.02 rad
 }
+
+export interface G1ResetOptions {
+  perturbInitialState?: boolean;
+  perturbScale?: number;
+}
+
+/**
+ * Explicit 29-DoF physical joint taxonomy of the Unitree G1 humanoid:
+ * 12 lower-body leg joints (indices 0..11) + 3 waist joints (12..14) + 14 upper-body arm joints (15..28).
+ */
+export const G1_PHYSICAL_29_JOINT_NAMES = [
+  "left_hip_pitch",
+  "left_hip_roll",
+  "left_hip_yaw",
+  "left_knee",
+  "left_ankle_pitch",
+  "left_ankle_roll",
+  "right_hip_pitch",
+  "right_hip_roll",
+  "right_hip_yaw",
+  "right_knee",
+  "right_ankle_pitch",
+  "right_ankle_roll",
+  "waist_yaw",
+  "waist_roll",
+  "waist_pitch",
+  "left_shoulder_pitch",
+  "left_shoulder_roll",
+  "left_shoulder_yaw",
+  "left_elbow",
+  "left_wrist_roll",
+  "left_wrist_pitch",
+  "left_wrist_yaw",
+  "right_shoulder_pitch",
+  "right_shoulder_roll",
+  "right_shoulder_yaw",
+  "right_elbow",
+  "right_wrist_roll",
+  "right_wrist_pitch",
+  "right_wrist_yaw",
+] as const;
+
+/**
+ * The 15 learned locomotion policy actuators (12 lower-body leg joints + 3 waist joints).
+ * Upper-body arm joints (15..28) are PD-stabilized around nominal posture targets.
+ */
+export const G1_LEARNED_ACTUATOR_15_NAMES = [
+  "left_hip_pitch",
+  "left_hip_roll",
+  "left_hip_yaw",
+  "left_knee",
+  "left_ankle_pitch",
+  "left_ankle_roll",
+  "right_hip_pitch",
+  "right_hip_roll",
+  "right_hip_yaw",
+  "right_knee",
+  "right_ankle_pitch",
+  "right_ankle_roll",
+  "waist_yaw",
+  "waist_roll",
+  "waist_pitch",
+] as const;
+
+export const G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX: readonly number[] = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+] as const;
+
+/**
+ * Explicit 42-D observation layout partitioning [0..42) without gaps or overlaps.
+ */
+export const G1_OBSERVATION_42_SCHEMA = {
+  totalDimension: 42,
+  slices: {
+    jointPositions: { offset: 0, length: 15 },
+    jointVelocities: { offset: 15, length: 15 },
+    baseOrientationRpy: { offset: 30, length: 3 },
+    baseAngularVelocities: { offset: 33, length: 3 },
+    baseLinearAccelerations: { offset: 36, length: 3 },
+    phaseSin: { offset: 39, length: 1 },
+    phaseCos: { offset: 40, length: 1 },
+    targetSpeed: { offset: 41, length: 1 },
+  },
+} as const;
 
 /**
  * Increment when the transition/reward contract changes in a way that makes
@@ -60,10 +146,21 @@ export interface G1StepResult {
   };
 }
 
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export class G1TrainEnv {
   public readonly config: Required<G1EnvConfig>;
   private stepCount = 0;
   private terminated = false;
+  private lastSeed = 42;
   private currentPosX = 0.0;
   private currentPosZ = 0.0;
   private currentHeight = 0.75;
@@ -84,6 +181,8 @@ export class G1TrainEnv {
       targetSpeedMps: config.targetSpeedMps ?? 0.65,
       fallHeightThreshold: config.fallHeightThreshold ?? 0.4,
       fallTiltThresholdRad: config.fallTiltThresholdRad ?? 0.85,
+      perturbOnReset: config.perturbOnReset ?? false,
+      perturbScale: config.perturbScale ?? 0.02,
     };
     if (!Number.isSafeInteger(this.config.maxSteps) || this.config.maxSteps < 1) {
       throw new Error("G1TrainEnv maxSteps must be a positive safe integer");
@@ -105,10 +204,12 @@ export class G1TrainEnv {
     }
   }
 
-  public reset(seed = 42): G1Observation {
-    // The stand-in is deterministic today. Keep the Gym-compatible seed in
-    // the API without pretending it introduces stochasticity.
-    void seed;
+  public getSeed(): number {
+    return this.lastSeed;
+  }
+
+  public reset(seed = 42, options?: G1ResetOptions): G1Observation {
+    this.lastSeed = seed;
     this.stepCount = 0;
     this.terminated = false;
     this.currentPosX = 0.0;
@@ -123,6 +224,19 @@ export class G1TrainEnv {
     this.jointPos.fill(0.0);
     this.jointVel.fill(0.0);
     this.phase = 0.0;
+
+    const shouldPerturb = options?.perturbInitialState ?? this.config.perturbOnReset;
+    if (shouldPerturb) {
+      const scale = Math.max(0.0, options?.perturbScale ?? this.config.perturbScale);
+      const rng = mulberry32(seed);
+      for (let j = 0; j < 15; j++) {
+        this.jointPos[j] = (rng() * 2.0 - 1.0) * scale;
+        this.jointVel[j] = (rng() * 2.0 - 1.0) * (0.5 * scale);
+      }
+      this.currentRoll = (rng() * 2.0 - 1.0) * (0.25 * scale);
+      this.currentPitch = (rng() * 2.0 - 1.0) * (0.25 * scale);
+      this.phase = (rng() * 0.2) * Math.PI;
+    }
 
     return this.getObservation();
   }
@@ -263,4 +377,16 @@ export class G1TrainEnv {
       rawVector: raw,
     };
   }
+}
+
+/**
+ * Steps a batch of G1TrainEnv instances in lockstep with their corresponding 15-D action vectors.
+ */
+export function stepBatch(envs: G1TrainEnv[], actionsBatch: number[][]): G1StepResult[] {
+  if (envs.length !== actionsBatch.length) {
+    throw new Error(
+      `stepBatch length mismatch: ${envs.length} environments vs ${actionsBatch.length} action vectors`,
+    );
+  }
+  return envs.map((env, idx) => env.step(actionsBatch[idx]));
 }

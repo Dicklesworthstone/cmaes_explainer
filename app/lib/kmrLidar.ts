@@ -109,7 +109,7 @@ export function scanLidar(
   const rSelf = Math.max(config.minRangeMeters * 0.5, 0.05);
   const gauss = makeSeededGaussian(Math.floor(baseXMeters * 1e6) ^ Math.floor(baseYMeters * 1e6));
   for (let i = 0; i < config.numRays; i += 1) {
-    const t = i / Math.max(1, config.numRays - 1);
+    const t = config.numRays === 1 ? 0.5 : i / (config.numRays - 1);
     const angle = startAngle + t * fovRadians;
     const worldAngle = baseYawRadians + angle;
     const worldDirX = Math.cos(worldAngle);
@@ -178,6 +178,13 @@ export function scanLidar(
   return { rays, baseXMeters, baseYMeters };
 }
 
+function shortestAngularDistance(a: number, b: number): number {
+  let diff = a - b;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  return Math.abs(diff);
+}
+
 export interface LidarCostmap2D {
   widthMeters: number;
   heightMeters: number;
@@ -228,6 +235,11 @@ export function lidarToCostmap2D(
   for (let j = 0; j < heightCells; j += 1) {
     occupancy.push(new Array<number>(widthCells).fill(0));
   }
+  const fovRadians = (config.fovDegrees * Math.PI) / 180.0;
+  const rayAngularStep =
+    scan.rays.length > 1 ? fovRadians / (scan.rays.length - 1) : fovRadians;
+  const maxAngularAssociation = Math.max(rayAngularStep * 0.75, 0.05);
+
   for (let j = 0; j < heightCells; j += 1) {
     for (let i = 0; i < widthCells; i += 1) {
       const x = (i - widthCells / 2) * cellSizeMeters;
@@ -239,25 +251,30 @@ export function lidarToCostmap2D(
       }
       const angle = Math.atan2(y, x);
       let bestRay = scan.rays[0];
-      let bestDiff = Math.abs(angle - bestRay.angleRadians);
+      let bestDiff = shortestAngularDistance(angle, bestRay.angleRadians);
       for (const ray of scan.rays) {
-        const d = Math.abs(angle - ray.angleRadians);
+        const d = shortestAngularDistance(angle, ray.angleRadians);
         if (d < bestDiff) {
           bestDiff = d;
           bestRay = ray;
         }
       }
-      // Three-case occupancy: ray reached the cell (free), ray hit near
-      // the cell (occupied), or ray hit before reaching the cell (unknown).
-      // The original two-case ternary was inverted (had 0.5/1 swapped), and
-      // had no case for "ray hit at the cell."
+      // Cells outside the LiDAR field of view (e.g., rear 90° blind spot of a 270° scanner)
+      // are unobserved and must be marked 0.5 (unknown), not free or occupied.
+      if (config.fovDegrees < 360 && bestDiff > maxAngularAssociation) {
+        occupancy[j][i] = 0.5;
+        continue;
+      }
       const rangeMargin = bestRay.rangeMeters - dist;
-      if (rangeMargin > cellSizeMeters * 0.5) {
+      if (!bestRay.hit) {
+        // Ray reached max range without hitting any obstacle: free up to range, unknown beyond.
+        occupancy[j][i] = rangeMargin >= -cellSizeMeters * 0.5 ? 0 : 0.5;
+      } else if (rangeMargin > cellSizeMeters * 0.5) {
         occupancy[j][i] = 0; // ray passed through: free
       } else if (rangeMargin < -cellSizeMeters * 0.5) {
         occupancy[j][i] = 0.5; // ray stopped before reaching: unknown
       } else {
-        occupancy[j][i] = 1; // ray hit at this cell: occupied
+        occupancy[j][i] = 1; // ray hit an obstacle at this cell: occupied
       }
     }
   }

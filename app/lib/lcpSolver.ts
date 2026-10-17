@@ -263,7 +263,36 @@ export function solveLCP(
       const invIA = worldInvInertias.get(c.bodyA.id)!;
       const invIB = worldInvInertias.get(c.bodyB.id)!;
 
-      // Relative velocity at contact
+      // Relative velocity at contact before normal impulse
+      const vA_contactN = vecAdd(
+        c.bodyA.isStatic ? [0, 0, 0] : c.bodyA.linearVelocity,
+        c.bodyA.isStatic ? [0, 0, 0] : vecCross(c.bodyA.angularVelocity, c.rA),
+      );
+      const vB_contactN = vecAdd(
+        c.bodyB.isStatic ? [0, 0, 0] : c.bodyB.linearVelocity,
+        c.bodyB.isStatic ? [0, 0, 0] : vecCross(c.bodyB.angularVelocity, c.rB),
+      );
+      const vRelBeforeN = vecSub(vB_contactN, vA_contactN);
+
+      // --- Normal Impulse (solved first so normalImpulse is available for Coulomb cone on iter 0) ---
+      const vRelN = vecDot(vRelBeforeN, c.contact.normal);
+      // deltaLambda = normalMass * (-vRelN + bias)
+      const deltaLambdaN = c.normalMass * (-vRelN + c.normalBias);
+      const oldLambdaN = c.contact.normalImpulse;
+      c.contact.normalImpulse = Math.max(0.0, oldLambdaN + deltaLambdaN);
+      const appliedLambdaN = c.contact.normalImpulse - oldLambdaN;
+
+      applyImpulse(
+        c.bodyA,
+        c.bodyB,
+        invIA,
+        invIB,
+        c.rA,
+        c.rB,
+        vecScale(c.contact.normal, appliedLambdaN),
+      );
+
+      // Recompute relative velocity at contact after normal impulse
       const vA_contact = vecAdd(
         c.bodyA.isStatic ? [0, 0, 0] : c.bodyA.linearVelocity,
         c.bodyA.isStatic ? [0, 0, 0] : vecCross(c.bodyA.angularVelocity, c.rA),
@@ -273,11 +302,11 @@ export function solveLCP(
         c.bodyB.isStatic ? [0, 0, 0] : vecCross(c.bodyB.angularVelocity, c.rB),
       );
       const vRel = vecSub(vB_contact, vA_contact);
+      const maxFriction = c.friction * c.contact.normalImpulse;
 
       // --- Friction Tangent 1 ---
       const vRelT1 = vecDot(vRel, c.contact.tangent1);
       const deltaLambdaT1 = -vRelT1 * c.tangentMass1;
-      const maxFriction = c.friction * c.contact.normalImpulse;
       const oldLambdaT1 = c.contact.tangentImpulse1;
       c.contact.tangentImpulse1 = Math.max(
         -maxFriction,
@@ -311,24 +340,6 @@ export function solveLCP(
         c.rA,
         c.rB,
         vecScale(c.contact.tangent2, appliedLambdaT2),
-      );
-
-      // --- Normal Impulse ---
-      const vRelN = vecDot(vRel, c.contact.normal);
-      // deltaLambda = normalMass * (-vRelN + bias)
-      const deltaLambdaN = c.normalMass * (-vRelN + c.normalBias);
-      const oldLambdaN = c.contact.normalImpulse;
-      c.contact.normalImpulse = Math.max(0.0, oldLambdaN + deltaLambdaN);
-      const appliedLambdaN = c.contact.normalImpulse - oldLambdaN;
-
-      applyImpulse(
-        c.bodyA,
-        c.bodyB,
-        invIA,
-        invIB,
-        c.rA,
-        c.rB,
-        vecScale(c.contact.normal, appliedLambdaN),
       );
 
       const change =

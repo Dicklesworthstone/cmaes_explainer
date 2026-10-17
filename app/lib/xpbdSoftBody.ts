@@ -44,6 +44,7 @@ export interface XPBDBendingConstraint {
   restLength: number;
   compliance: number;
   lambda: number;
+  hingeLambda?: number;
 }
 
 export interface XPBDVolumeConstraint {
@@ -52,6 +53,12 @@ export interface XPBDVolumeConstraint {
   restHeight: number;
   compliance: number;
   lambda: number;
+}
+
+export interface XPBDRigidSphereCollider {
+  center: [number, number, number];
+  radius: number;
+  frictionCoeff?: number;
 }
 
 export interface SoftBodyMesh {
@@ -135,9 +142,11 @@ export function createRugLattice(
         });
       }
 
-      // Shear diagonals
+      // Symmetric shear diagonals (both main and anti-diagonal per quad cell)
       if (r + 1 < rows && c + 1 < cols) {
         const diagIdx = getIdx(r + 1, c + 1);
+        const antiDiagA = getIdx(r, c + 1);
+        const antiDiagB = getIdx(r + 1, c);
         const diagLen = Math.hypot(dx, dz);
         distanceConstraints.push({
           nodeA: idx,
@@ -146,9 +155,16 @@ export function createRugLattice(
           compliance: compliance * 2.0,
           lambda: 0,
         });
+        distanceConstraints.push({
+          nodeA: antiDiagA,
+          nodeB: antiDiagB,
+          restLength: diagLen,
+          compliance: compliance * 2.0,
+          lambda: 0,
+        });
       }
 
-      // 2-hop bending constraints (prevents creasing)
+      // 2-hop bending constraints (prevents creasing along columns and rows)
       if (c + 2 < cols) {
         bendingConstraints.push({
           nodeA: idx,
@@ -157,6 +173,18 @@ export function createRugLattice(
           restLength: 2.0 * dx,
           compliance: compliance * 10.0,
           lambda: 0,
+          hingeLambda: 0,
+        });
+      }
+      if (r + 2 < rows) {
+        bendingConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r + 1, c),
+          nodeC: getIdx(r + 2, c),
+          restLength: 2.0 * dz,
+          compliance: compliance * 10.0,
+          lambda: 0,
+          hingeLambda: 0,
         });
       }
     }
@@ -170,6 +198,117 @@ export function createRugLattice(
     volumeConstraints: [],
     frictionCoeff: 0.85, // High traction rug
     damping: 0.95,
+  };
+}
+
+/**
+ * Creates a hanging vertical curtain cloth lattice with top-edge nodes pinned (invMass = 0)
+ * within the <=100 nodes/piece budget (default 6x6 = 36 nodes).
+ */
+export function createCurtainLattice(
+  width = 1.2,
+  height = 1.8,
+  rows = 6,
+  cols = 6,
+  topCenter: [number, number, number] = [0, 2.0, 0],
+  massKg = 1.8,
+  compliance = 2e-5,
+): SoftBodyMesh {
+  const nodes: XPBDNode[] = [];
+  const nodeMass = massKg / (rows * cols);
+  const freeInvMass = 1.0 / nodeMass;
+
+  const halfW = width * 0.5;
+  const dx = width / (cols - 1);
+  const dy = height / (rows - 1);
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = topCenter[0] - halfW + c * dx;
+      const py = topCenter[1] - r * dy;
+      const pz = topCenter[2];
+      nodes.push({
+        position: [px, py, pz],
+        prevPosition: [px, py, pz],
+        velocity: [0, 0, 0],
+        invMass: r === 0 ? 0.0 : freeInvMass, // Top row pinned to curtain rod
+      });
+    }
+  }
+
+  const distanceConstraints: XPBDDistanceConstraint[] = [];
+  const bendingConstraints: XPBDBendingConstraint[] = [];
+  const getIdx = (r: number, c: number) => r * cols + c;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = getIdx(r, c);
+      if (c + 1 < cols) {
+        distanceConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r, c + 1),
+          restLength: dx,
+          compliance,
+          lambda: 0,
+        });
+      }
+      if (r + 1 < rows) {
+        distanceConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r + 1, c),
+          restLength: dy,
+          compliance,
+          lambda: 0,
+        });
+      }
+      if (r + 1 < rows && c + 1 < cols) {
+        const diagLen = Math.hypot(dx, dy);
+        distanceConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r + 1, c + 1),
+          restLength: diagLen,
+          compliance: compliance * 2.0,
+          lambda: 0,
+        });
+        distanceConstraints.push({
+          nodeA: getIdx(r, c + 1),
+          nodeB: getIdx(r + 1, c),
+          restLength: diagLen,
+          compliance: compliance * 2.0,
+          lambda: 0,
+        });
+      }
+      if (c + 2 < cols) {
+        bendingConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r, c + 1),
+          nodeC: getIdx(r, c + 2),
+          restLength: 2.0 * dx,
+          compliance: compliance * 8.0,
+          lambda: 0,
+        });
+      }
+      if (r + 2 < rows) {
+        bendingConstraints.push({
+          nodeA: idx,
+          nodeB: getIdx(r + 1, c),
+          nodeC: getIdx(r + 2, c),
+          restLength: 2.0 * dy,
+          compliance: compliance * 8.0,
+          lambda: 0,
+        });
+      }
+    }
+  }
+
+  return {
+    id: "curtain-lattice",
+    nodes,
+    distanceConstraints,
+    bendingConstraints,
+    volumeConstraints: [],
+    frictionCoeff: 0.4,
+    damping: 0.96,
   };
 }
 
@@ -250,7 +389,7 @@ export function createCushionLattice(
           });
         }
         if (iy + 1 < ny) {
-          // Vertical vertical column springs
+          // Vertical column springs
           distanceConstraints.push({
             nodeA: cur,
             nodeB: getIdx(ix, iy + 1, iz),
@@ -293,6 +432,7 @@ export function stepXPBDSoftBody(
   solverIterations = 4,
   groundY = 0.0,
   externalForcePerNode: [number, number, number] = [0, 0, 0],
+  rigidColliders: XPBDRigidSphereCollider[] = [],
 ): void {
   const safeDt = Math.max(0.001, Math.min(0.05, dt));
   const dtSq = safeDt * safeDt;
@@ -315,7 +455,10 @@ export function stepXPBDSoftBody(
 
   // Reset constraint multipliers for this frame
   for (const c of mesh.distanceConstraints) c.lambda = 0;
-  for (const c of mesh.bendingConstraints) c.lambda = 0;
+  for (const c of mesh.bendingConstraints) {
+    c.lambda = 0;
+    c.hingeLambda = 0;
+  }
   for (const c of mesh.volumeConstraints) c.lambda = 0;
 
   // Step 2: Solve Constraints via Gauss-Seidel iterations
@@ -354,28 +497,153 @@ export function stepXPBDSoftBody(
       nB.position[2] -= wB * corrZ;
     }
 
+    // Bending Constraints (2-hop chord + midpoint hinge resistance)
+    for (let b = 0; b < mesh.bendingConstraints.length; b++) {
+      const bend = mesh.bendingConstraints[b];
+      const nA = mesh.nodes[bend.nodeA];
+      const nB = mesh.nodes[bend.nodeB];
+      const nC = mesh.nodes[bend.nodeC];
+
+      const wA = nA.invMass;
+      const wB = nB.invMass;
+      const wC = nC.invMass;
+      const wChord = wA + wC;
+      if (wChord > 0) {
+        const dx = nA.position[0] - nC.position[0];
+        const dy = nA.position[1] - nC.position[1];
+        const dz = nA.position[2] - nC.position[2];
+        const len = Math.hypot(dx, dy, dz) || 1e-6;
+
+        const C = len - bend.restLength;
+        const alphaTilde = bend.compliance / dtSq;
+        const deltaLambda = (-C - alphaTilde * bend.lambda) / (wChord + alphaTilde);
+        bend.lambda += deltaLambda;
+
+        const corrX = (dx / len) * deltaLambda;
+        const corrY = (dy / len) * deltaLambda;
+        const corrZ = (dz / len) * deltaLambda;
+
+        nA.position[0] += wA * corrX;
+        nA.position[1] += wA * corrY;
+        nA.position[2] += wA * corrZ;
+
+        nC.position[0] -= wC * corrX;
+        nC.position[1] -= wC * corrY;
+        nC.position[2] -= wC * corrZ;
+      }
+
+      // Midpoint collinearity restoration (hinge smoothing between A-B-C)
+      const wHinge = 0.25 * wA + wB + 0.25 * wC;
+      if (wHinge > 0) {
+        const midX = 0.5 * (nA.position[0] + nC.position[0]);
+        const midY = 0.5 * (nA.position[1] + nC.position[1]);
+        const midZ = 0.5 * (nA.position[2] + nC.position[2]);
+        const hx = nB.position[0] - midX;
+        const hy = nB.position[1] - midY;
+        const hz = nB.position[2] - midZ;
+        const hLen = Math.hypot(hx, hy, hz);
+        if (hLen > 1e-6) {
+          const alphaTilde = bend.compliance / dtSq;
+          const prevHingeLambda = bend.hingeLambda ?? 0;
+          const dLambdaHinge = (-hLen - alphaTilde * prevHingeLambda) / (wHinge + alphaTilde);
+          bend.hingeLambda = prevHingeLambda + dLambdaHinge;
+          const ux = hx / hLen;
+          const uy = hy / hLen;
+          const uz = hz / hLen;
+          nB.position[0] += wB * ux * dLambdaHinge;
+          nB.position[1] += wB * uy * dLambdaHinge;
+          nB.position[2] += wB * uz * dLambdaHinge;
+          nA.position[0] -= 0.5 * wA * ux * dLambdaHinge;
+          nA.position[1] -= 0.5 * wA * uy * dLambdaHinge;
+          nA.position[2] -= 0.5 * wA * uz * dLambdaHinge;
+          nC.position[0] -= 0.5 * wC * ux * dLambdaHinge;
+          nC.position[1] -= 0.5 * wC * uy * dLambdaHinge;
+          nC.position[2] -= 0.5 * wC * uz * dLambdaHinge;
+        }
+      }
+    }
+
     // Volume / Height Constraints
     for (let v = 0; v < mesh.volumeConstraints.length; v++) {
       const vol = mesh.volumeConstraints[v];
       let avgTopY = 0;
       let avgBotY = 0;
-      for (const idx of vol.topNodes) avgTopY += mesh.nodes[idx].position[1];
-      for (const idx of vol.bottomNodes) avgBotY += mesh.nodes[idx].position[1];
+      let wTopAvg = 0;
+      let wBotAvg = 0;
+      for (const idx of vol.topNodes) {
+        avgTopY += mesh.nodes[idx].position[1];
+        wTopAvg += mesh.nodes[idx].invMass;
+      }
+      for (const idx of vol.bottomNodes) {
+        avgBotY += mesh.nodes[idx].position[1];
+        wBotAvg += mesh.nodes[idx].invMass;
+      }
       avgTopY /= vol.topNodes.length;
       avgBotY /= vol.bottomNodes.length;
+      wTopAvg /= vol.topNodes.length;
+      wBotAvg /= vol.bottomNodes.length;
+
+      const wEff = wTopAvg + wBotAvg;
+      if (wEff === 0) continue;
 
       const curHeight = avgTopY - avgBotY;
       const C = curHeight - vol.restHeight;
       const alphaTilde = vol.compliance / dtSq;
-      const deltaLambda = -C / (2.0 + alphaTilde);
+      const deltaLambda = (-C - alphaTilde * vol.lambda) / (wEff + alphaTilde);
+      vol.lambda += deltaLambda;
 
-      for (const idx of vol.topNodes) mesh.nodes[idx].position[1] += deltaLambda * 0.5;
-      for (const idx of vol.bottomNodes) mesh.nodes[idx].position[1] -= deltaLambda * 0.5;
+      for (const idx of vol.topNodes) {
+        mesh.nodes[idx].position[1] += mesh.nodes[idx].invMass * deltaLambda;
+      }
+      for (const idx of vol.bottomNodes) {
+        mesh.nodes[idx].position[1] -= mesh.nodes[idx].invMass * deltaLambda;
+      }
+    }
+
+    // Rigid Sphere Colliders (robot feet/hands or furniture legs)
+    for (let s = 0; s < rigidColliders.length; s++) {
+      const col = rigidColliders[s];
+      const muCol = col.frictionCoeff ?? mesh.frictionCoeff;
+      for (let i = 0; i < mesh.nodes.length; i++) {
+        const node = mesh.nodes[i];
+        if (node.invMass === 0) continue;
+        const dx = node.position[0] - col.center[0];
+        const dy = node.position[1] - col.center[1];
+        const dz = node.position[2] - col.center[2];
+        const dist = Math.hypot(dx, dy, dz);
+        if (dist < col.radius) {
+          const pen = col.radius - dist;
+          const nx = dist > 1e-6 ? dx / dist : 0;
+          const ny = dist > 1e-6 ? dy / dist : 1;
+          const nz = dist > 1e-6 ? dz / dist : 0;
+          node.position[0] += nx * pen;
+          node.position[1] += ny * pen;
+          node.position[2] += nz * pen;
+
+          // Tangential friction relative to node displacement
+          const dispX = node.position[0] - node.prevPosition[0];
+          const dispY = node.position[1] - node.prevPosition[1];
+          const dispZ = node.position[2] - node.prevPosition[2];
+          const vn = dispX * nx + dispY * ny + dispZ * nz;
+          const tx = dispX - vn * nx;
+          const ty = dispY - vn * ny;
+          const tz = dispZ - vn * nz;
+          const tLen = Math.hypot(tx, ty, tz);
+          if (tLen > 1e-6) {
+            const maxFric = muCol * pen;
+            const scale = Math.max(0, tLen - maxFric) / tLen;
+            node.position[0] = node.prevPosition[0] + vn * nx + tx * scale;
+            node.position[1] = node.prevPosition[1] + vn * ny + ty * scale;
+            node.position[2] = node.prevPosition[2] + vn * nz + tz * scale;
+          }
+        }
+      }
     }
 
     // Ground Plane Collision & Coulomb Friction
     for (let i = 0; i < mesh.nodes.length; i++) {
       const node = mesh.nodes[i];
+      if (node.invMass === 0) continue;
       if (node.position[1] < groundY) {
         const penetration = groundY - node.position[1];
         node.position[1] = groundY;

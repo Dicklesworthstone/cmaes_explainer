@@ -308,15 +308,31 @@ export function collideBoxBox(
   const normal: [number, number, number] = [nx, ny, nz];
   const { tangent1, tangent2 } = computeTangentBasis(normal);
 
-  // Generate 4-point contact patch on contact face
+  // Generate 4-point contact patch on contact face by projecting half-extents onto tangent1 & tangent2
   const contacts: ContactPoint[] = [];
   const midX = (posA[0] + posB[0]) * 0.5;
   const midY = (posA[1] + posB[1]) * 0.5;
   const midZ = (posA[2] + posB[2]) * 0.5;
 
-  const patchX = Math.min(halfA[0], halfB[0]) * 0.8;
-  const patchY = Math.min(halfA[1], halfB[1]) * 0.8;
-  const patchZ = Math.min(halfA[2], halfB[2]) * 0.8;
+  const extA1 =
+    Math.abs(tangent1[0]) * halfA[0] +
+    Math.abs(tangent1[1]) * halfA[1] +
+    Math.abs(tangent1[2]) * halfA[2];
+  const extB1 =
+    Math.abs(tangent1[0]) * halfB[0] +
+    Math.abs(tangent1[1]) * halfB[1] +
+    Math.abs(tangent1[2]) * halfB[2];
+  const extA2 =
+    Math.abs(tangent2[0]) * halfA[0] +
+    Math.abs(tangent2[1]) * halfA[1] +
+    Math.abs(tangent2[2]) * halfA[2];
+  const extB2 =
+    Math.abs(tangent2[0]) * halfB[0] +
+    Math.abs(tangent2[1]) * halfB[1] +
+    Math.abs(tangent2[2]) * halfB[2];
+
+  const patch1 = Math.min(extA1, extB1) * 0.8;
+  const patch2 = Math.min(extA2, extB2) * 0.8;
 
   const offsets: Array<[number, number]> = [
     [-1, -1],
@@ -327,9 +343,9 @@ export function collideBoxBox(
 
   for (const [ox, oy] of offsets) {
     const pA: [number, number, number] = [
-      midX + tangent1[0] * ox * patchX + tangent2[0] * oy * patchY,
-      midY + tangent1[1] * ox * patchX + tangent2[1] * oy * patchY,
-      midZ + tangent1[2] * ox * patchX + tangent2[2] * oy * patchY,
+      midX + tangent1[0] * ox * patch1 + tangent2[0] * oy * patch2,
+      midY + tangent1[1] * ox * patch1 + tangent2[1] * oy * patch2,
+      midZ + tangent1[2] * ox * patch1 + tangent2[2] * oy * patch2,
     ];
     const pB: [number, number, number] = [
       pA[0] - nx * minPen,
@@ -362,6 +378,39 @@ export function collideBoxBox(
 // Physical Contact Impulse & Friction Solver (Mirtich / Bridson)
 // ---------------------------------------------------------------------------
 
+function cross3(
+  a: [number, number, number],
+  b: [number, number, number],
+): [number, number, number] {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function mat3Vec3(
+  M: [[number, number, number], [number, number, number], [number, number, number]],
+  v: [number, number, number],
+): [number, number, number] {
+  return [
+    M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+    M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+    M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2],
+  ];
+}
+
+function angularInvMassAlongAxis(
+  invI: [[number, number, number], [number, number, number], [number, number, number]],
+  r: [number, number, number],
+  axis: [number, number, number],
+): number {
+  const rCrossU = cross3(r, axis);
+  const iInvRCrossU = mat3Vec3(invI, rCrossU);
+  const term = cross3(iInvRCrossU, r);
+  return Math.max(0, term[0] * axis[0] + term[1] * axis[1] + term[2] * axis[2]);
+}
+
 export function resolveContactImpulse(
   bodyA: RigidBodyState,
   bodyB: RigidBodyState,
@@ -373,10 +422,24 @@ export function resolveContactImpulse(
   const [t1x, t1y, t1z] = contact.tangent1;
   const [t2x, t2y, t2z] = contact.tangent2;
 
-  // Relative velocity at contact point
-  const vRelX = bodyA.velocity[0] - bodyB.velocity[0];
-  const vRelY = bodyA.velocity[1] - bodyB.velocity[1];
-  const vRelZ = bodyA.velocity[2] - bodyB.velocity[2];
+  const rA: [number, number, number] = [
+    contact.positionA[0] - bodyA.position[0],
+    contact.positionA[1] - bodyA.position[1],
+    contact.positionA[2] - bodyA.position[2],
+  ];
+  const rB: [number, number, number] = [
+    contact.positionB[0] - bodyB.position[0],
+    contact.positionB[1] - bodyB.position[1],
+    contact.positionB[2] - bodyB.position[2],
+  ];
+
+  const wCrossRa = cross3(bodyA.angularVelocity, rA);
+  const wCrossRb = cross3(bodyB.angularVelocity, rB);
+
+  // Relative velocity at contact point: (v_A + \omega_A \times r_A) - (v_B + \omega_B \times r_B)
+  const vRelX = bodyA.velocity[0] + wCrossRa[0] - (bodyB.velocity[0] + wCrossRb[0]);
+  const vRelY = bodyA.velocity[1] + wCrossRa[1] - (bodyB.velocity[1] + wCrossRb[1]);
+  const vRelZ = bodyA.velocity[2] + wCrossRa[2] - (bodyB.velocity[2] + wCrossRb[2]);
 
   const vn = vRelX * nx + vRelY * ny + vRelZ * nz;
 
@@ -385,15 +448,29 @@ export function resolveContactImpulse(
     return { normalImpulse: 0, tangentImpulse: [0, 0, 0] };
   }
 
-  const effMass = 1.0 / (bodyA.invMass + bodyB.invMass || 1.0);
-  const jn = -(1 + restitution) * vn * effMass;
+  const invMassLin = bodyA.invMass + bodyB.invMass;
+  const kNormal =
+    invMassLin +
+    angularInvMassAlongAxis(bodyA.invInertiaWorld, rA, contact.normal) +
+    angularInvMassAlongAxis(bodyB.invInertiaWorld, rB, contact.normal);
+  const effMassNormal = 1.0 / (kNormal || 1.0);
+  const jn = -(1 + restitution) * vn * effMassNormal;
 
-  // Tangential velocity
+  // Tangential velocity and rotational effective mass along tangent1 & tangent2
   const vt1 = vRelX * t1x + vRelY * t1y + vRelZ * t1z;
   const vt2 = vRelX * t2x + vRelY * t2y + vRelZ * t2z;
 
-  let jt1 = -vt1 * effMass;
-  let jt2 = -vt2 * effMass;
+  const kT1 =
+    invMassLin +
+    angularInvMassAlongAxis(bodyA.invInertiaWorld, rA, contact.tangent1) +
+    angularInvMassAlongAxis(bodyB.invInertiaWorld, rB, contact.tangent1);
+  const kT2 =
+    invMassLin +
+    angularInvMassAlongAxis(bodyA.invInertiaWorld, rA, contact.tangent2) +
+    angularInvMassAlongAxis(bodyB.invInertiaWorld, rB, contact.tangent2);
+
+  let jt1 = -vt1 / (kT1 || 1.0);
+  let jt2 = -vt2 / (kT2 || 1.0);
 
   const jtTotal = Math.hypot(jt1, jt2);
   const maxFriction = friction * jn;
