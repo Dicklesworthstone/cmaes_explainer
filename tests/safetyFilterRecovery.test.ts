@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildRecoveryConstraintsFromObb,
   type RecoveryConstraint,
   SafetyFilterRecoveryManager,
 } from "../app/lib/safetyFilterRecovery";
@@ -106,5 +107,37 @@ describe("Safety Filter Infeasibility Recovery Engine", () => {
     expect(retreatRes.state).toBe("recent-safe-retreat");
     // Direction towards [-2, 0, 0] from [0, 0, 0] is negative X
     expect(retreatRes.safeControl[0]).toBeLessThan(-0.2);
+  });
+
+  test("satisfies simultaneous 90-degree corner constraints in Tier 1 and escalates opposing pinched walls to Tier 2", () => {
+    const manager = new SafetyFilterRecoveryManager({ maxSlack: 0.2 });
+    const cornerConstraints: RecoveryConstraint[] = [
+      { id: "wall-x", hValue: 0.08, gradient: [-1, 0, 0], gamma: 5.0 },
+      { id: "wall-y", hValue: 0.08, gradient: [0, -1, 0], gamma: 5.0 },
+    ];
+    // Both X and Y components violate by 0.1 <= maxSlack (0.2)
+    const cornerRes = manager.filterOrRecover([0.5, 0.5, 0], [0, 0, 0], [0, 0, 0], cornerConstraints);
+    expect(cornerRes.state).toBe("relaxed-slack");
+    expect(cornerRes.safeControl[0]).toBeCloseTo(0.4, 4);
+    expect(cornerRes.safeControl[1]).toBeCloseTo(0.4, 4);
+
+    // Pinched corridor: opposing walls where no single control can satisfy both within maxSlack
+    const pinchedConstraints: RecoveryConstraint[] = [
+      { id: "left-pinch", hValue: -0.03, gradient: [1, 0, 0], gamma: 5.0 },
+      { id: "right-pinch", hValue: -0.03, gradient: [-1, 0, 0], gamma: 5.0 },
+    ];
+    // For uNom = [0, 0, 0], each violation is 0.15 <= maxSlack (0.2), but projecting onto one makes the other violate by 0.30 > maxSlack (0.2)
+    const pinchedRes = manager.filterOrRecover([0, 0, 0], [0, 0, 0], [0.5, 0, 0], pinchedConstraints);
+    expect(pinchedRes.state).toBe("reflex-braking");
+
+    // Verify OBB constraint builder
+    const obbConstraints = buildRecoveryConstraintsFromObb(
+      [0.8, 0, 0],
+      [{ id: "table", name: "Table", center: [1.2, 0, 0], halfExtents: [0.3, 0.5, 0.4] }],
+      0.08,
+      0.04,
+    );
+    expect(obbConstraints).toHaveLength(1);
+    expect(obbConstraints[0].gradient[0]).toBeCloseTo(-1, 4);
   });
 });

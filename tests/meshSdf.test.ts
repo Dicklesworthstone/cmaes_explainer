@@ -79,6 +79,28 @@ describe("MeshSdf Query and Voxel Grid Sampling", () => {
     // Sample normal should point along +X
     expect(sample.normal[0]).toBeGreaterThan(0.8);
 
+    // Outside bounding box along both X and Y by (3, 4, 0) -> Euclidean L2 extra distance = 5.0 (not L1 = 7.0)
+    const cornerAtMax = sampleVoxelSdf(grid, [grid.max[0], grid.max[1], grid.max[2]]);
+    const outsideXY = sampleVoxelSdf(grid, [grid.max[0] + 3.0, grid.max[1] + 4.0, grid.max[2]]);
+    expect(outsideXY.distance - cornerAtMax.distance).toBeCloseTo(5.0, 4);
+
     sphereGeo.dispose();
+  });
+
+  test("angle-weighted pseudonormals and AABB corner expansion keep exterior edge/corner queries positive", () => {
+    const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+    const meshSdf = new MeshSdf(boxGeo);
+
+    // Query outside the edge (x=1, y=1, z=0) at (1.2, 1.05, 0)
+    const edgeQuery = meshSdf.query([1.2, 1.05, 0.0]);
+    expect(edgeQuery.isInside).toBe(false);
+    expect(edgeQuery.distance).toBeCloseTo(Math.hypot(0.2, 0.05), 3);
+
+    // Query where initial R=0.5 box only touches corner [1,1,1] at Euclidean dist sqrt(3*0.48^2)=0.831 > 0.5
+    const cornerQuery = meshSdf.query([1.48, 1.48, 1.48]);
+    expect(cornerQuery.isInside).toBe(false);
+    expect(cornerQuery.distance).toBeCloseTo(Math.hypot(0.48, 0.48, 0.48), 3);
+
+    boxGeo.dispose();
   });
 });

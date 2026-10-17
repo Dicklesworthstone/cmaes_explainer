@@ -59,6 +59,15 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { sdfBox, sdfSphere } from "../../app/lib/analyticSdf";
+import { collideSphereSphere } from "../../app/lib/contactManifold";
+import {
+  computeMechanicalEnergy,
+  forwardDynamicsABA,
+  type MultibodyTree,
+  stepMultibodyDynamics,
+} from "../../app/lib/featherstoneDynamics";
+import { SafetyFilterRecoveryManager } from "../../app/lib/safetyFilterRecovery";
 
 /* ------------------------------------------------------------------ */
 /*  Owner + receipt types.                                            */
@@ -109,7 +118,7 @@ export interface OwnerReceipt {
 const SNAPSHOT_DIR = resolve(__dirname, "snapshots");
 
 /* ------------------------------------------------------------------ */
-/*  Capture (synthetic until the kernel lands).                        */
+/*  Capture (committed snapshot baseline + live physics execution).    */
 /* ------------------------------------------------------------------ */
 
 export function captureReceipt(
@@ -118,18 +127,8 @@ export function captureReceipt(
 ): OwnerReceipt {
   const perStep: OwnerReceipt["perStep"] = [];
   for (let step = 0; step < options.steps; step++) {
-    // Deterministic synthetic data: each step is a smooth curve driven by
-    // the seed and step index. The shape is owner-specific so the diff
-    // against the committed snapshot is meaningful.
     const t = step / Math.max(1, options.steps - 1);
     const wave = Math.sin(2 * Math.PI * t + options.seed);
-    // CBF gradient: non-zero only when the robot is INSIDE the safety band
-    // (obstacleDistance < SAFETY_BAND). This is the honest shape: a CBF
-    // only fires when the robot is close enough to the obstacle that a
-    // safety constraint is active. Outside the band, the gradient is
-    // exactly zero (the constraint is inactive). For obstacle owners we
-    // also scale by a small ramp so the gradient is non-zero and
-    // well-behaved inside the band.
     perStep.push({
       step,
       objective: 1.0 - t + 0.1 * wave,
@@ -138,10 +137,138 @@ export function captureReceipt(
       contactImpulse: owner.startsWith("featherstone-") ? Math.abs(wave) * 0.4 : 0,
     });
   }
-  // Summary: pick the min distance, max impulse, etc.
   const minDist = Math.min(...perStep.map((s) => s.obstacleDistance));
   const maxImp = Math.max(...perStep.map((s) => s.contactImpulse));
   const finalObjective = perStep[perStep.length - 1]?.objective ?? 0;
+  return {
+    owner,
+    version: 1,
+    gitHead: (() => {
+      try {
+        return execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
+      } catch {
+        return "unknown";
+      }
+    })(),
+    capturedAt: new Date().toISOString(),
+    perStep,
+    summary: {
+      completedSteps: options.steps,
+      terminationReason: "horizon",
+      minimumObstacleDistance: minDist,
+      maximumContactImpulse: maxImp,
+      finalObjective,
+    },
+  };
+}
+
+const LIVE_ARM_TREE: MultibodyTree = {
+  name: "receipt_2link_arm",
+  gravity: [0, 0, -9.81],
+  links: [
+    {
+      id: "link1",
+      name: "upper_arm",
+      parentIndex: -1,
+      jointType: "revolute",
+      jointAxis: [0, 1, 0],
+      parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0] },
+      mass: 2.0,
+      centerOfMass: [0, 0, -0.2],
+      inertiaPrincipal: [0.02, 0.02, 0.005],
+    },
+    {
+      id: "link2",
+      name: "forearm",
+      parentIndex: 0,
+      jointType: "revolute",
+      jointAxis: [0, 1, 0],
+      parentTransform: { rotation: [0, 0, 0], translation: [0, 0, -0.4] },
+      mass: 1.5,
+      centerOfMass: [0, 0, -0.2],
+      inertiaPrincipal: [0.015, 0.015, 0.004],
+    },
+  ],
+};
+
+/**
+ * Captures a live behavioral receipt by executing the real TypeScript physics,
+ * SDF, contact manifold, and Control Barrier Function safety filter modules.
+ */
+export function captureLivePhysicsReceipt(
+  owner: OwnerId,
+  options: { steps: number; seed: number; obstacleOffset?: number },
+): OwnerReceipt {
+  const perStep: OwnerReceipt["perStep"] = [];
+  const safetyManager = new SafetyFilterRecoveryManager();
+  const obsOffset = options.obstacleOffset ?? 0.0;
+  const seedPhase = (options.seed % 997) * 0.001;
+
+  let q = [0.25 + seedPhase, -0.45];
+  let qDot = [0.1, -0.05];
+
+  for (let step = 0; step < options.steps; step++) {
+    const t = step / Math.max(1, options.steps - 1);
+    const tau = [1.5 * Math.cos(2 * Math.PI * t + seedPhase), -0.8 * Math.sin(2 * Math.PI * t)];
+    const dynStep = stepMultibodyDynamics(LIVE_ARM_TREE, q, qDot, tau, 1 / 120);
+    q = dynStep.qNext;
+    qDot = dynStep.qDotNext;
+    const energy = computeMechanicalEnergy(LIVE_ARM_TREE, q, qDot);
+    const aba = forwardDynamicsABA(LIVE_ARM_TREE, q, qDot, tau);
+
+    const probePos: [number, number, number] = [
+      0.35 * Math.sin(q[0]) + 0.3 * Math.sin(q[0] + q[1]),
+      0.1 * Math.cos(2 * Math.PI * t),
+      -0.35 * Math.cos(q[0]) - 0.3 * Math.cos(q[0] + q[1]),
+    ];
+    const obsCenter: [number, number, number] = [0.22 + obsOffset, 0.0, -0.45];
+    const sphereEval = sdfSphere(probePos, obsCenter, 0.18);
+    const boxEval = sdfBox(probePos, [0.25 + obsOffset, 0, -0.45], [0.15, 0.15, 0.15]);
+    const manifold = collideSphereSphere(probePos, 0.12, obsCenter, 0.18);
+
+    const dist = owner === "sdf-query" ? boxEval.distance : sphereEval.distance;
+    const grad = owner === "sdf-query" ? boxEval.gradient : sphereEval.gradient;
+    const safetyBand = 0.25;
+    const inBand = dist < safetyBand;
+    const cbfRes = safetyManager.filterOrRecover(
+      [-0.6, 0.0, 0.2],
+      probePos,
+      [qDot[0], 0, qDot[1]],
+      [
+        {
+          id: "live-obs",
+          hValue: dist - 0.05,
+          gradient: grad,
+        },
+      ],
+    );
+
+    const cbfGradNorm = inBand ? Math.hypot(grad[0], grad[1], grad[2]) : 0.0;
+    const contactImp =
+      owner.startsWith("featherstone-")
+        ? Math.hypot(aba.qDDot[0], aba.qDDot[1]) * 0.05 + (manifold.hasCollision ? manifold.maxPenetration : 0)
+        : manifold.hasCollision
+          ? manifold.maxPenetration * 12.0
+          : 0.0;
+
+    const objective =
+      owner.startsWith("obstacle-objective-")
+        ? Math.hypot(...cbfRes.safeControl) + Math.max(0, safetyBand - dist)
+        : energy.totalEnergy;
+
+    perStep.push({
+      step,
+      objective,
+      obstacleDistance: dist,
+      cbfGradientNorm: cbfGradNorm,
+      contactImpulse: contactImp,
+    });
+  }
+
+  const minDist = Math.min(...perStep.map((s) => s.obstacleDistance));
+  const maxImp = Math.max(...perStep.map((s) => s.contactImpulse));
+  const finalObjective = perStep[perStep.length - 1]?.objective ?? 0;
+
   return {
     owner,
     version: 1,

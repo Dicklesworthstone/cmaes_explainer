@@ -129,6 +129,24 @@ describe("projectLinkOutOfOBB (SOTA single-link SDF projection)", () => {
     const newDist = distanceToOBB(res.newPos, mug);
     expect(newDist).toBeGreaterThanOrEqual(0.058 - 1e-6);
   });
+
+  test("pushes a link sitting directly on the -X or rotated OBB surface outward by linkRadius (not into center)", () => {
+    const { distanceToOBB } = require("../app/lib/houseMultiObstacleKernel");
+    const box = obb([0, 0, 0], [1.0, 1.0, 1.0], 0);
+    // Link origin sits directly on the -X face (sdfDist === 0, closest === linkPos)
+    const onNegX = projectLinkOutOfOBB([-1.0, 0, 0], 0.05, box);
+    expect(onNegX.penetrating).toBe(true);
+    expect(onNegX.penetrationDepth).toBeCloseTo(0.05, 6);
+    expect(onNegX.newPos[0]).toBeCloseTo(-1.05, 6);
+    expect(distanceToOBB(onNegX.newPos, box)).toBeCloseTo(0.05, 6);
+
+    // Rotated 90 deg about Y: local -X face sits at world -Z = [0, 0, -0.5]
+    const rotBox = obb([0, 0, 0], [0.5, 0.5, 0.5], Math.PI / 2);
+    const onRotFace = projectLinkOutOfOBB([0, 0, -0.5], 0.06, rotBox);
+    expect(onRotFace.penetrating).toBe(true);
+    expect(onRotFace.newPos[2]).toBeCloseTo(-0.56, 6);
+    expect(distanceToOBB(onRotFace.newPos, rotBox)).toBeCloseTo(0.06, 6);
+  });
 });
 
 describe("projectArmLinksOutOfObstacles (SOTA per-frame arm collision response)", () => {

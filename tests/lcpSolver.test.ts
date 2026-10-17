@@ -101,6 +101,33 @@ describe("Sequential Impulse / Projected Gauss-Seidel (PGS) LCP Solver", () => {
       const frictionImpulse = Math.abs(constraints[0].contact.tangentImpulse1);
       expect(frictionImpulse).toBeLessThanOrEqual(0.4 * normalImpulse + 1e-4);
     });
+
+    it("applies non-zero Coulomb friction on the very first PGS iteration of a cold-start contact", () => {
+      const graph = new ContactGraph();
+      const floor = createFloor("floor");
+      const sphere = createSphere("sphere", [0, 0, 0.45], [5.0, 0, -2.0]);
+      sphere.friction = 0.5;
+      floor.friction = 0.5;
+
+      graph.addBody(floor);
+      graph.addBody(sphere);
+
+      const manifolds = graph.updateContacts();
+      const bodiesMap = new Map<string, RigidBody>([
+        ["floor", floor],
+        ["sphere", sphere],
+      ]);
+
+      const constraints = buildContactConstraints(bodiesMap, manifolds, 0.01666);
+      const res = solveLCP(bodiesMap, constraints, {
+        ...DEFAULT_LCP_CONFIG,
+        iterations: 1,
+      });
+
+      expect(res.totalNormalImpulse).toBeGreaterThan(0);
+      expect(res.totalFrictionImpulse).toBeGreaterThan(0);
+      expect(sphere.linearVelocity[0]).toBeLessThan(5.0);
+    });
   });
 
   describe("Restitution & Elastic Bouncing", () => {

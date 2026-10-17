@@ -145,6 +145,6 @@ describe("clampArmTargetPosition — yawed OBB regression (cmaes-pvz followup)",
     // to push the target above the original Y).
     expect(clampedTarget[1]).toBeGreaterThan(target[1]);
     expect(clampedTarget[1]).toBeGreaterThanOrEqual(tableHeight + safeRadius);
-    expect(minClearance).toBeGreaterThanOrEqual(0);
+    expect(minClearance).toBeGreaterThanOrEqual(safeRadius - 1e-6);
   });
 });

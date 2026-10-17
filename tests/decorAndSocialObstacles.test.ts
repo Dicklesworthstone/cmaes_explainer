@@ -5,7 +5,9 @@ import {
   DEFAULT_SILHOUETTE_PROFILES,
   evaluateSocialCbf,
   evaluateSocialPotential,
+  filterSocialVelocityCbf,
   type SilhouetteAgent,
+  stepSilhouetteAgent,
 } from "../app/lib/decorAndSocialObstacles";
 
 describe("Household Decor & Social Silhouette Obstacle Engine", () => {
@@ -82,5 +84,37 @@ describe("Household Decor & Social Silhouette Obstacle Engine", () => {
     }
     const elapsed = performance.now() - t0;
     expect(elapsed).toBeLessThan(10.0); // <100µs per query
+  });
+
+  test("checkDecorTipping clamps lever arm at base and top, and filterSocialVelocityCbf enforces safety", () => {
+    const lamp = createDecorObject("lamp-2", "floor-lamp", [0, 0, 0]);
+    // Impact at base (y = 0) produces 0 torque
+    expect(checkDecorTipping(lamp, 100.0, 0.0).appliedTorqueNm).toBe(0.0);
+    // Impact above top (y = 10.0 > height 1.65) clamps lever arm to lamp.height
+    expect(checkDecorTipping(lamp, 10.0, 10.0).appliedTorqueNm).toBeCloseTo(10.0 * lamp.height, 5);
+
+    let walker: SilhouetteAgent = {
+      id: "ped-walk",
+      ...DEFAULT_SILHOUETTE_PROFILES["pedestrian-walking"],
+      position: [1.95, 0.0],
+      velocity: [1.0, 0.0],
+    };
+    walker = stepSilhouetteAgent(walker, 0.1, { minX: -2, maxX: 2, minZ: -2, maxZ: 2 });
+    expect(walker.position[0]).toBeCloseTo(2.0, 5);
+    expect(walker.velocity[0]).toBeLessThan(0.0); // Reflected off maxX wall
+
+    // Coincident query returns unit gradient norm
+    const coinc = evaluateSocialCbf(walker.position, [0, 0], walker);
+    expect(Math.hypot(coinc.gradSocial[0], coinc.gradSocial[1])).toBeCloseTo(1.0, 6);
+
+    // filterSocialVelocityCbf deflects robot moving directly toward pedestrian inside comfort zone
+    const standing: SilhouetteAgent = {
+      id: "ped-stand",
+      ...DEFAULT_SILHOUETTE_PROFILES["pedestrian-standing"],
+      position: [1.0, 0.0],
+    };
+    const filtered = filterSocialVelocityCbf([1.0, 0.0], [0.4, 0.0], [standing], 2.0, 0.5, 1.2);
+    expect(filtered.safeVelocity[0]).toBeLessThan(1.0);
+    expect(filtered.interventionMagnitude).toBeGreaterThan(0.0);
   });
 });

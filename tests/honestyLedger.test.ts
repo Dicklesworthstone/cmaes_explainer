@@ -49,4 +49,20 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     const ids = new Set(issues.map((issue) => issue.id));
     for (const chip of HONESTY_CHIP_REGISTRY) expect(ids.has(chip.beadId)).toBe(true);
   });
+
+  test("README.md references the active flagship WASM bundle version without stale version drift", () => {
+    const rootDir = process.cwd();
+    const readme = fs.readFileSync(path.join(rootDir, "README.md"), "utf8");
+    const frankensimLoader = fs.readFileSync(
+      path.join(rootDir, "app/lib/frankensimCmaes.ts"),
+      "utf8",
+    );
+
+    const wasmMatch = frankensimLoader.match(/\/wasm\/fs-cmaes\/(v\d+)\/fs_cmaes_viz_wasm\.js/);
+    expect(wasmMatch).not.toBeNull();
+    const activeVersion = wasmMatch![1];
+
+    expect(readme).toContain(activeVersion);
+    expect(readme).not.toContain("v0622");
+  });
 });

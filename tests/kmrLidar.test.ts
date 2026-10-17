@@ -151,4 +151,27 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
       expect(scan1.rays[i].rangeMeters).toBe(scan2.rays[i].rangeMeters);
     }
   });
+
+  test("lidarToCostmap2D marks rear blind-spot cells as unknown and never paints phantom occupied ring in empty scene", () => {
+    const emptyScan = scanLidar(0, 0, [], cfg);
+    const cm = lidarToCostmap2D(emptyScan, cfg, 20, 20, 0.2);
+    // In an empty scene (no obstacle hits), NO cell anywhere in the costmap may be marked 1 (occupied)
+    let occupiedCount = 0;
+    for (const row of cm.occupancy) {
+      for (const cell of row) {
+        if (cell === 1) occupiedCount++;
+      }
+    }
+    expect(occupiedCount).toBe(0);
+
+    // Cell directly behind sensor (x = -2.0m -> i = 50 - 10 = 40, y = 0 -> j = 50) lies in the 90° rear blind wedge of 270° FOV
+    expect(cm.occupancy[50][40]).toBe(0.5);
+    // Cell directly in front of sensor (x = +2.0m -> i = 50 + 10 = 60, y = 0 -> j = 50) is free (0)
+    expect(cm.occupancy[50][60]).toBe(0);
+
+    // Single-ray scan points straight ahead (angleRadians === 0)
+    const singleRayScan = scanLidar(0, 0, [], { ...cfg, numRays: 1 });
+    expect(singleRayScan.rays).toHaveLength(1);
+    expect(singleRayScan.rays[0].angleRadians).toBeCloseTo(0, 8);
+  });
 });

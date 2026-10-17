@@ -93,4 +93,24 @@ describe("Rolling Furniture Pieces & Caster Kinematics Engine", () => {
       expect(rot).toBeCloseTo(expectedDeltaTheta, 3);
     }
   });
+
+  test("passive lateral velocity decays monotonically without sign-reversal energy amplification", () => {
+    const cfg = ROLLING_PIECE_DEFAULTS["office-chair-casters"];
+    let state = createRollingPieceState("office-chair-casters", [0, 0], 0.0);
+    // Small lateral slip velocity (0.02 m/s) with small forward velocity (0.05 m/s)
+    state.velocity = [0.05, 0.02];
+
+    const initialKineticEnergy =
+      0.5 * cfg.massKg * (state.velocity[0] ** 2 + state.velocity[1] ** 2);
+
+    const nextState = stepRollingPieceDynamics(cfg, state, 1 / 60);
+    // Lateral velocity must be arrested without flipping sign to a larger negative velocity
+    expect(nextState.velocity[1]).toBeGreaterThanOrEqual(-1e-6);
+    expect(nextState.velocity[1]).toBeLessThanOrEqual(state.velocity[1]);
+
+    const nextKineticEnergy =
+      0.5 * cfg.massKg * (nextState.velocity[0] ** 2 + nextState.velocity[1] ** 2) +
+      0.5 * cfg.momentOfInertiaZz * nextState.yawRate ** 2;
+    expect(nextKineticEnergy).toBeLessThanOrEqual(initialKineticEnergy + 1e-6);
+  });
 });

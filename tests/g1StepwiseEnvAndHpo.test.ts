@@ -4,10 +4,17 @@ import {
   defaultGenotypeFromSpecs,
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
-import { G1TrainEnv } from "../app/lib/g1StepwiseEnv";
+import {
+  G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX,
+  G1_LEARNED_ACTUATOR_15_NAMES,
+  G1_OBSERVATION_42_SCHEMA,
+  G1_PHYSICAL_29_JOINT_NAMES,
+  G1TrainEnv,
+  stepBatch,
+} from "../app/lib/g1StepwiseEnv";
 
 describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", () => {
-  test("G1TrainEnv reset produces complete 42-D observation vector", () => {
+  test("G1TrainEnv reset produces complete 42-D observation vector and matches explicit 15/29 joint and 42-D observation schemas", () => {
     const env = new G1TrainEnv({ maxSteps: 100 });
     const obs = env.reset(42);
 
@@ -17,6 +24,45 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
     expect(obs.targetSpeed).toBe(0.65);
     expect(Number.isFinite(obs.phaseSin)).toBe(true);
     expect(Number.isFinite(obs.phaseCos)).toBe(true);
+
+    // Verify 15 learned actuators vs 29 physical G1 joints mapping
+    expect(G1_PHYSICAL_29_JOINT_NAMES.length).toBe(29);
+    expect(G1_LEARNED_ACTUATOR_15_NAMES.length).toBe(15);
+    expect(G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX.length).toBe(15);
+    G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX.forEach((physIdx, actIdx) => {
+      expect(G1_PHYSICAL_29_JOINT_NAMES[physIdx]).toBe(G1_LEARNED_ACTUATOR_15_NAMES[actIdx]);
+    });
+
+    // Verify 42-D observation schema slices partition [0..42) without gaps or overlaps
+    const slices = Object.values(G1_OBSERVATION_42_SCHEMA.slices);
+    let cursor = 0;
+    for (const s of slices) {
+      expect(Number(s.offset)).toBe(cursor);
+      cursor += s.length;
+    }
+    expect(cursor).toBe(G1_OBSERVATION_42_SCHEMA.totalDimension);
+  });
+
+  test("seeded reset with perturbInitialState is bit-identical per seed and causally distinct across seeds, while stepBatch matches sequential step", () => {
+    const envA1 = new G1TrainEnv({ maxSteps: 20 });
+    const envA2 = new G1TrainEnv({ maxSteps: 20 });
+    const envB = new G1TrainEnv({ maxSteps: 20 });
+
+    const obsA1 = envA1.reset(101, { perturbInitialState: true, perturbScale: 0.03 });
+    const obsA2 = envA2.reset(101, { perturbInitialState: true, perturbScale: 0.03 });
+    const obsB = envB.reset(202, { perturbInitialState: true, perturbScale: 0.03 });
+
+    expect(obsA1.rawVector).toEqual(obsA2.rawVector);
+    expect(obsA1.rawVector).not.toEqual(obsB.rawVector);
+
+    // Verify stepBatch matches sequential step bit-for-bit
+    const actionA = new Array(15).fill(0.2);
+    const actionB = new Array(15).fill(-0.15);
+    const batchResults = stepBatch([envA1, envB], [actionA, actionB]);
+    const seqResultA = envA2.step(actionA);
+    expect(batchResults[0].observation.rawVector).toEqual(seqResultA.observation.rawVector);
+    expect(batchResults[0].reward).toBe(seqResultA.reward);
+    expect(() => stepBatch([envA1], [actionA, actionB])).toThrow(/length mismatch/);
   });
 
   test("G1TrainEnv step computes dense rewards and tracks action-caused forward progress", () => {
@@ -130,6 +176,8 @@ describe("G1 Stepwise Environment & Outer CMA-ES Hyperparameter Optimization", (
       const res = hpo.stepGeneration();
       expect(res.generation).toBe(gen + 1);
       expect(res.evaluationsCount).toBe((gen + 1) * 8);
+      expect(res.lastBestReceipt).toBeDefined();
+      expect(res.lastBestReceipt?.fitness).toBeCloseTo(res.bestFitness, 12);
 
       if (gen === 0) firstFit = res.bestFitness;
       lastFit = res.bestFitness;
@@ -237,5 +285,67 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
       expect(res.bestFitness).toBeLessThanOrEqual(last);
       last = res.bestFitness;
     }
+  });
+
+  test("all 8 decoded hyperparameters causally intervene on inner training and held-out evaluation (cmaes-za0x.27 / cmaes-za0x.28)", () => {
+    const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 42);
+    const baseGenotype = defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS);
+    const baselineReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype);
+
+    expect(baselineReceipt.innerUpdates).toBe(3);
+    expect(baselineReceipt.innerPolicyWeightDeltaNorm).toBeGreaterThan(0);
+    expect(baselineReceipt.innerValueWeightDeltaNorm).toBeGreaterThan(0);
+    expect(baselineReceipt.heldOutDistanceMeters).toBeGreaterThan(0);
+
+    // Perturb each of the 8 genotype coordinates individually while holding the other 7 fixed
+    for (let dim = 0; dim < 8; dim++) {
+      const lowGenotype = [...baseGenotype];
+      const highGenotype = [...baseGenotype];
+      lowGenotype[dim] = -0.9;
+      highGenotype[dim] = 0.9;
+
+      const lowReceipt = hpo.evaluateCandidateWithReceipt(lowGenotype);
+      const highReceipt = hpo.evaluateCandidateWithReceipt(highGenotype);
+
+      // Every single hyperparameter must causally alter the inner policy update and held-out return
+      expect(lowReceipt.innerPolicyWeightDeltaNorm).not.toBe(
+        highReceipt.innerPolicyWeightDeltaNorm,
+      );
+      expect(lowReceipt.heldOutCanonicalReturn).not.toBe(highReceipt.heldOutCanonicalReturn);
+      expect(lowReceipt.fitness).not.toBe(highReceipt.fitness);
+    }
+  });
+
+  test("zero learning rate freezes policy and value updates; zero valueLossCoef freezes only value baseline", () => {
+    const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 42);
+    const baseGenotype = defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS);
+
+    const zeroLrReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+      muonLearningRate: 0.0,
+    });
+    expect(zeroLrReceipt.innerPolicyWeightDeltaNorm).toBe(0.0);
+    expect(zeroLrReceipt.innerValueWeightDeltaNorm).toBe(0.0);
+
+    const zeroValueCoefReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+      valueLossCoef: 0.0,
+    });
+    expect(zeroValueCoefReceipt.innerValueWeightDeltaNorm).toBe(0.0);
+    expect(zeroValueCoefReceipt.innerPolicyWeightDeltaNorm).toBeGreaterThan(0.0);
+  });
+
+  test("anti-reward-hacking: inflating candidate reward weights by 1000x cannot inflate held-out canonical fitness", () => {
+    const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, 42);
+    const baseGenotype = defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS);
+    const normalReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype);
+
+    const inflatedReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+      weightProgress: normalReceipt.hyperparameters.weightProgress * 1000,
+      weightUpright: normalReceipt.hyperparameters.weightUpright * 1000,
+      weightEnergy: normalReceipt.hyperparameters.weightEnergy * 1000,
+    });
+
+    // Inner shaped return scales by ~1000x, but held-out canonical return stays bounded by physical environment limits
+    expect(inflatedReceipt.innerShapedReturn).toBeGreaterThan(normalReceipt.innerShapedReturn * 500);
+    expect(Math.abs(inflatedReceipt.heldOutCanonicalReturn)).toBeLessThan(100.0);
   });
 });

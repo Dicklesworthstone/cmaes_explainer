@@ -53,6 +53,17 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { sdfBox, sdfSphere } from "../../app/lib/analyticSdf";
+import { collideSphereSphere } from "../../app/lib/contactManifold";
+import {
+  computeMechanicalEnergy,
+  forwardDynamicsABA,
+  inverseDynamicsRNEA,
+  type MultibodyTree,
+} from "../../app/lib/featherstoneDynamics";
+import { createFridgeArticulation } from "../../app/lib/furnitureArticulation";
+import { KernelPerfProfiler } from "../../app/lib/kernelPerfProfiler";
+import { SafetyFilterRecoveryManager } from "../../app/lib/safetyFilterRecovery";
 
 interface BudgetRow {
   epic: string;
@@ -127,17 +138,103 @@ function checkBudget(
   };
 }
 
-function runOwnerSideSynthetic(_epic: string): number {
-  let minElapsed = Infinity;
-  for (let r = 0; r < 5; r++) {
-    const t0 = performance.now();
-    let acc = 0;
-    for (let i = 0; i < 200; i++) acc += Math.sqrt(i);
-    void acc;
-    const elapsed = performance.now() - t0;
-    if (elapsed < minElapsed) minElapsed = elapsed;
+const armModel: MultibodyTree = {
+  name: "2link_arm",
+  gravity: [0, 0, -9.81],
+  links: [
+    {
+      id: "link1",
+      name: "upper_arm",
+      parentIndex: -1,
+      jointType: "revolute",
+      jointAxis: [0, 1, 0],
+      parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0] },
+      mass: 2.0,
+      centerOfMass: [0, 0, -0.2],
+      inertiaPrincipal: [0.02, 0.02, 0.005],
+    },
+    {
+      id: "link2",
+      name: "forearm",
+      parentIndex: 0,
+      jointType: "revolute",
+      jointAxis: [0, 1, 0],
+      parentTransform: { rotation: [0, 0, 0], translation: [0, 0, -0.4] },
+      mass: 1.5,
+      centerOfMass: [0, 0, -0.2],
+      inertiaPrincipal: [0.015, 0.015, 0.004],
+    },
+  ],
+};
+const fridgeGraph = createFridgeArticulation();
+const safetyFilter = new SafetyFilterRecoveryManager();
+
+function executeRealEpicWorkload(epic: string): void {
+  if (epic.startsWith("cmaes-phr5")) {
+    fridgeGraph.stepDynamics(1 / 60, { upper_door_hinge: 1.5, lower_door_hinge: 0.8 });
+    fridgeGraph.computeForwardKinematics();
+    return;
   }
-  return minElapsed;
+  if (epic.startsWith("cmaes-phr6")) {
+    const q = [0.35, -0.55];
+    const qd = [0.2, -0.15];
+    const tau = [1.2, -0.6];
+    const abaRes = forwardDynamicsABA(armModel, q, qd, tau);
+    inverseDynamicsRNEA(armModel, q, qd, abaRes.qDDot);
+    return;
+  }
+  if (epic.startsWith("cmaes-phr7")) {
+    sdfSphere([0.25, 0.4, -0.1], [0, 0.3, 0], 0.2);
+    sdfBox([0.35, 0.2, 0.15], [0, 0, 0], [0.3, 0.25, 0.2]);
+    collideSphereSphere([0, 0, 0], 0.2, [0.32, 0.02, 0], 0.2);
+    return;
+  }
+  if (epic.startsWith("cmaes-phr8")) {
+    safetyFilter.filterOrRecover(
+      [-0.8, 0.0, 0.0],
+      [0.45, 0.1, 0.6],
+      [-0.2, 0.0, 0.0],
+      [
+        {
+          id: "counter-edge",
+          hValue: 0.14,
+          gradient: [1, 0, 0],
+        },
+      ],
+    );
+    return;
+  }
+  // cmaes-phr3m-meas: per-case parity oracle comparison cost (module vs closed-form oracle)
+  const sdfRes = sdfSphere([0.25, 0.4, -0.1], [0, 0.3, 0], 0.2);
+  const analyticalDist = Math.hypot(0.25, 0.1, -0.1) - 0.2;
+  if (Math.abs(sdfRes.distance - analyticalDist) > 1e-12) {
+    throw new Error("Parity mismatch in cmaes-phr3m-meas");
+  }
+}
+
+function measureEpicP95Ms(epic: string, budgetMs: number): number {
+  const targetFreqHz = 1000.0 / Math.max(0.01, budgetMs);
+  const profiler = new KernelPerfProfiler(64, targetFreqHz);
+
+  // Warmup pass to prime JIT before recording p95 samples
+  for (let w = 0; w < 25; w++) {
+    executeRealEpicWorkload(epic);
+  }
+
+  for (let s = 0; s < 25; s++) {
+    profiler.profileStepExecution(
+      s,
+      () => {},
+      () => {},
+      () => executeRealEpicWorkload(epic),
+      () => {},
+      2,
+      1,
+    );
+  }
+
+  const stats = profiler.getSummaryStats();
+  return stats.p95Micros / 1000.0;
 }
 
 describe("phr-env-2026 performance budgets", () => {
@@ -160,33 +257,94 @@ describe("phr-env-2026 performance budgets", () => {
     }
   });
 
-  test("owner-side budgets are inside the p95 envelope (synthetic)", () => {
+  test("owner-side budgets are inside the empirical p95 envelope on real module workloads", () => {
     const rows = parseBudgets(readFileSync(BUDGETS_DOC, "utf-8"));
     const checks: BudgetCheck[] = [];
     for (const row of rows) {
       if (row.ownerSideP95Ms === null) continue;
-      const actualMs = runOwnerSideSynthetic(row.epic);
-      checks.push(checkBudget(row.epic, "owner", row.ownerSideP95Ms, actualMs));
+      const actualP95Ms = measureEpicP95Ms(row.epic, row.ownerSideP95Ms);
+      checks.push(checkBudget(row.epic, "owner", row.ownerSideP95Ms, actualP95Ms));
     }
     if (checks.some((c) => !c.within)) {
       writeReport(checks);
     }
     for (const check of checks) {
+      expect(check.actualMs).toBeGreaterThan(0);
       expect(check.actualMs).toBeLessThanOrEqual(check.budgetMs);
     }
   });
 
-  test("phr5 furniture articulation budget: per-piece solve time", () => {
+  test("phr5 furniture articulation budget: empirical p95 solve time across 5 articulated appliances", () => {
     const rows = parseBudgets(readFileSync(BUDGETS_DOC, "utf-8"));
     const phr5 = rows.find((r) => r.epic.startsWith("cmaes-phr5"));
     expect(phr5).toBeDefined();
     expect(phr5?.ownerSideP95Ms).not.toBeNull();
-    const t0 = performance.now();
-    for (let i = 0; i < 5; i++) {
-      for (let j = 0; j < 100; j++) Math.sqrt(j);
+
+    const appliances = Array.from({ length: 5 }, () => createFridgeArticulation());
+    const profiler = new KernelPerfProfiler(32, 1000.0 / phr5!.ownerSideP95Ms!);
+
+    // Warmup
+    for (let w = 0; w < 3; w++) {
+      for (const app of appliances) {
+        app.stepDynamics(1 / 60, { upper_door_hinge: 1.0 });
+        app.computeForwardKinematics();
+      }
     }
-    const actualMs = performance.now() - t0;
-    expect(actualMs).toBeLessThanOrEqual(phr5!.ownerSideP95Ms!);
+
+    for (let s = 0; s < 20; s++) {
+      profiler.profileStepExecution(
+        s,
+        () => {},
+        () => {},
+        () => {
+          for (const app of appliances) {
+            app.stepDynamics(1 / 60, { upper_door_hinge: 1.0 });
+            app.computeForwardKinematics();
+          }
+        },
+        () => {},
+        5,
+        10,
+      );
+    }
+
+    const actualP95Ms = profiler.getSummaryStats().p95Micros / 1000.0;
+    expect(actualP95Ms).toBeGreaterThan(0);
+    expect(actualP95Ms).toBeLessThanOrEqual(phr5!.ownerSideP95Ms!);
+  });
+
+  test("negative control: planted budget overrun is flagged by KernelPerfProfiler and checkBudget", () => {
+    const strictBudgetMs = 0.05; // 50 microseconds
+    const profiler = new KernelPerfProfiler(10, 1000.0 / strictBudgetMs);
+
+    // Record 10 steps where 8 are fast (10 µs) and 2 exceed the 50 µs budget (250 µs)
+    for (let s = 0; s < 8; s++) {
+      profiler.recordStep(s, {
+        broadphase: 2,
+        narrowphase: 3,
+        lcpSolver: 3,
+        integrator: 2,
+        total: 10,
+      });
+    }
+    for (let s = 8; s < 10; s++) {
+      profiler.recordStep(s, {
+        broadphase: 40,
+        narrowphase: 60,
+        lcpSolver: 120,
+        integrator: 30,
+        total: 250,
+      });
+    }
+
+    const stats = profiler.getSummaryStats();
+    expect(stats.budgetOverrunCount).toBe(2);
+    expect(stats.p50Micros).toBe(10);
+    expect(stats.p95Micros).toBe(250);
+
+    const check = checkBudget("cmaes-phr6", "owner", strictBudgetMs, stats.p95Micros / 1000.0);
+    expect(check.within).toBe(false);
+    expect(check.exceedancePct).toBeCloseTo(400.0, 4);
   });
 });
 

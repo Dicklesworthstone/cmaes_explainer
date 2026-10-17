@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { CMAESOptimizerND } from "../app/lib/cmaesEngineND";
-import { LiveCmaesOptimizer } from "../app/lib/liveCmaesHousehold";
+import {
+  evaluateHouseholdNavigationPolicy,
+  LiveCmaesOptimizer,
+  runEqualBudgetHouseholdCmaes,
+} from "../app/lib/liveCmaesHousehold";
 import { generateVisitorModeClip, VISITOR_CLIP_KEYFRAMES } from "../app/lib/visitorModeClip";
 
 describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
@@ -262,4 +266,80 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
     const elapsed = performance.now() - t0;
     expect(elapsed).toBeLessThan(100.0); // <100ms for 1800 frames under heavy parallel multi-core test load
   });
+
+  test("generateVisitorModeClip couples to certified physical rollout inside Craftsman bounds and honors reducedMotion / autoplay", () => {
+    const clip = generateVisitorModeClip(VISITOR_CLIP_KEYFRAMES, 180, 6);
+    expect(clip[0].episodeSuccess).toBe(true);
+    expect(clip[0].collisionOccurred).toBe(false);
+    expect(clip[0].autoplay).toBe(false);
+    expect(clip[0].reducedMotion).toBe(false);
+    expect(clip[0].playbackSpeedRatio).toBeGreaterThan(0);
+
+    for (const f of clip) {
+      // All camera and robot coordinates stay inside Craftsman Bungalow [-4, 4] x [-5.5, 5.5]
+      expect(Math.abs(f.cameraEye[0])).toBeLessThanOrEqual(4.0);
+      expect(Math.abs(f.cameraEye[2])).toBeLessThanOrEqual(5.5);
+      expect(Math.abs(f.cameraTarget[0])).toBeLessThanOrEqual(4.0);
+      expect(Math.abs(f.cameraTarget[2])).toBeLessThanOrEqual(5.5);
+      expect(Math.abs(f.robotPosition[0])).toBeLessThanOrEqual(4.0);
+      expect(Math.abs(f.robotPosition[1])).toBeLessThanOrEqual(5.5);
+      expect(f.robotClearanceMeters).toBeGreaterThan(0.0);
+    }
+
+    // Reduced-motion control snaps camera eyes to static room keyframe vantages
+    const reduced = generateVisitorModeClip(VISITOR_CLIP_KEYFRAMES, 180, 6, {
+      reducedMotion: true,
+      autoplay: true,
+    });
+    expect(reduced[0].reducedMotion).toBe(true);
+    expect(reduced[0].autoplay).toBe(true);
+    // Frame 0 through Frame 30 (0s..5s) remain at Front Porch keyframe cameraEye
+    expect(reduced[15].cameraEye).toEqual(VISITOR_CLIP_KEYFRAMES[0].cameraEye);
+    expect(reduced[15].cameraEye).not.toEqual(clip[15].cameraEye);
+  });
+
+  test("runEqualBudgetHouseholdCmaes improves household navigation policy in Craftsman scene and handles zero budget", () => {
+    const zeroBudget = runEqualBudgetHouseholdCmaes({ generations: 0 });
+    expect(zeroBudget.evaluationBudget).toBe(0);
+    expect(zeroBudget.cmaesEvaluationsUsed).toBe(0);
+    expect(zeroBudget.cmaesBestReceipt.loss).toBe(zeroBudget.initialPolicyReceipt.loss);
+
+    const bench = runEqualBudgetHouseholdCmaes({
+      seed: 42,
+      populationSize: 6,
+      generations: 5,
+    });
+    expect(bench.cmaesEvaluationsUsed).toBe(bench.evaluationBudget);
+    expect(bench.randomSearchEvaluationsUsed).toBe(bench.evaluationBudget);
+    expect(bench.cmaesBestReceipt.loss).toBeLessThan(bench.initialPolicyReceipt.loss);
+    expect(bench.cmaesBestReceipt.completedAllRooms).toBe(true);
+    expect(bench.cmaesBestReceipt.collisionOccurred).toBe(false);
+    expect(bench.cmaesBestReceipt.minimumClearanceMeters).toBeGreaterThan(0.0);
+
+    // Negative control: spawning on an obstacle reports collisionOccurred = true and high loss
+    const blockedReceipt = evaluateHouseholdNavigationPolicy([0, 0, 0, 0, 0], {
+      waypoints: [
+        {
+          id: "wp-blocked",
+          name: "Blocked",
+          position: [-1.8, 3.8],
+          acceptanceRadius: 0.25,
+          targetSpeed: 0.6,
+          room: "parlor",
+        },
+        {
+          id: "wp-target",
+          name: "Target",
+          position: [0.35, 2.5],
+          acceptanceRadius: 0.25,
+          targetSpeed: 0.6,
+          room: "parlor",
+        },
+      ],
+    });
+    expect(blockedReceipt.collisionOccurred).toBe(true);
+    expect(blockedReceipt.minimumClearanceMeters).toBeLessThan(0.0);
+    expect(blockedReceipt.loss).toBeGreaterThan(bench.cmaesBestReceipt.loss);
+  });
 });
+

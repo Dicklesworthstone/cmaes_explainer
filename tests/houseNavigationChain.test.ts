@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CRAFTSMAN_DOORWAYS,
   CRAFTSMAN_WAYPOINT_CHAIN,
+  runSegmentedHouseNavigation,
   simulateHouseNavigation,
 } from "../app/lib/houseNavigationChain";
 
@@ -61,5 +62,70 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     // clamped to it. The fix uses lastStepClearance.
     expect(last.clearanceMeters).toBeGreaterThanOrEqual(0.1);
     expect(last.clearanceMeters).toBeLessThanOrEqual(1.0);
+  });
+
+  test("runSegmentedHouseNavigation matches uninterrupted simulateHouseNavigation across checkpoint boundaries", () => {
+    const uninterrupted = simulateHouseNavigation(
+      CRAFTSMAN_WAYPOINT_CHAIN,
+      CRAFTSMAN_DOORWAYS,
+      2500,
+      1 / 60,
+    );
+    const segmented = runSegmentedHouseNavigation(
+      CRAFTSMAN_WAYPOINT_CHAIN,
+      CRAFTSMAN_DOORWAYS,
+      150,
+      2500,
+      1 / 60,
+    );
+
+    expect(segmented.allWaypointsReached).toBe(true);
+    expect(segmented.completedWaypoints).toBe(uninterrupted.completedWaypoints);
+    expect(segmented.trajectory.length).toBe(uninterrupted.trajectory.length);
+    expect(segmented.totalPathDistanceMeters).toBeCloseTo(uninterrupted.totalPathDistanceMeters, 8);
+    expect(segmented.minimumObstacleClearanceMeters).toBeCloseTo(
+      uninterrupted.minimumObstacleClearanceMeters,
+      8,
+    );
+    expect(segmented.simulatedPhysicalSeconds).toBeCloseTo(
+      uninterrupted.simulatedPhysicalSeconds,
+      8,
+    );
+
+    for (let i = 0; i < uninterrupted.trajectory.length; i++) {
+      expect(segmented.trajectory[i].step).toBe(uninterrupted.trajectory[i].step);
+      expect(segmented.trajectory[i].position[0]).toBeCloseTo(
+        uninterrupted.trajectory[i].position[0],
+        8,
+      );
+      expect(segmented.trajectory[i].position[1]).toBeCloseTo(
+        uninterrupted.trajectory[i].position[1],
+        8,
+      );
+      expect(segmented.trajectory[i].clearanceMeters).toBeCloseTo(
+        uninterrupted.trajectory[i].clearanceMeters,
+        8,
+      );
+    }
+  });
+
+  test("simulateHouseNavigation preserves raw negative clearances without positive clamping when starting inside furniture", () => {
+    // [-3.3, 2.6] is the center of the brick fireplace in CRAFTSMAN_BUNGALOW_1928
+    const blockedWaypoints = [
+      {
+        id: "wp-blocked",
+        name: "Inside Fireplace",
+        position: [-3.3, 2.6] as [number, number],
+        acceptanceRadius: 0.2,
+        targetSpeed: 0.5,
+        room: "parlor",
+      },
+      ...CRAFTSMAN_WAYPOINT_CHAIN.slice(1),
+    ];
+
+    const res = simulateHouseNavigation(blockedWaypoints, CRAFTSMAN_DOORWAYS, 20, 1 / 60);
+    expect(res.collisionOccurred).toBe(true);
+    expect(res.minimumObstacleClearanceMeters).toBeLessThan(0.0);
+    expect(res.trajectory.some((s) => s.clearanceMeters < 0.0)).toBe(true);
   });
 });

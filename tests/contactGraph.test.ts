@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   ContactGraph,
   collideBodyPlane,
+  collideBoxBox,
   collideSphereBox,
   collideSphereSphere,
   computeBodyAABB,
@@ -159,6 +160,35 @@ describe("Multibody Contact Graph & Narrowphase Collision Engine", () => {
 
       // Warm-start impulse should be seamlessly retained
       expect(floorContactFrame2?.normalImpulse).toBe(42.5);
+    });
+
+    it("detects Box vs Box 4-point patch in ContactGraph and Capsule vs Plane endpoints", () => {
+      const graph = new ContactGraph();
+      const box1 = createBox("box1", [0, 0, 0.5], [0.5, 0.5, 0.5]);
+      const box2 = createBox("box2", [0, 0, 1.4], [0.5, 0.5, 0.5]); // penetrates box1 by 0.1 along Z
+
+      const bbContacts = collideBoxBox(box1, box2);
+      expect(bbContacts.length).toBe(4);
+      expect(bbContacts[0].penetrationDepth).toBeCloseTo(0.1, 5);
+      expect(bbContacts[0].normal[2]).toBeCloseTo(1.0, 5); // from box1 to box2
+
+      graph.addBody(box1);
+      graph.addBody(box2);
+      const manifolds = graph.updateContacts();
+      expect(manifolds.length).toBe(1);
+      expect(manifolds[0].contacts.length).toBe(4);
+
+      // Horizontal capsule (rotated 90 deg around Y) penetrating floor at both ends
+      const floor = createFloor("floor");
+      const capsule: RigidBody = {
+        ...createSphere("cap1", [0, 0, 0.15], 0.2),
+        shape: { type: "capsule", radius: 0.2, halfHeight: 0.4 },
+        rotation: [0, Math.PI / 2, 0],
+      };
+      const capContacts = collideBodyPlane(capsule, floor);
+      expect(capContacts.length).toBe(2);
+      expect(capContacts[0].penetrationDepth).toBeCloseTo(0.05, 5);
+      expect(capContacts[1].penetrationDepth).toBeCloseTo(0.05, 5);
     });
   });
 });

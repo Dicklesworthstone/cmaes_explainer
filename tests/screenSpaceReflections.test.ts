@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  blendTemporalSsr,
   computeReflectionVector,
   computeScreenEdgeFade,
   evaluateSchlickFresnel,
@@ -16,6 +17,12 @@ describe("Screen-Space Reflections (SSR) Engine", () => {
     expect(r[0]).toBeCloseTo(-1.0, 4);
     expect(r[1]).toBeCloseTo(1.0, 4); // Y component is reflected
     expect(r[2]).toBeCloseTo(0.0, 4);
+
+    // Non-unit normal [0, 5, 0] produces the exact same reflection vector
+    const rUnnorm = computeReflectionVector(viewDir, [0, 5, 0]);
+    expect(rUnnorm[0]).toBeCloseTo(-1.0, 4);
+    expect(rUnnorm[1]).toBeCloseTo(1.0, 4);
+    expect(rUnnorm[2]).toBeCloseTo(0.0, 4);
   });
 
   test("evaluateSchlickFresnel scales from F0 at normal incidence to 1.0 at grazing angle", () => {
@@ -41,6 +48,9 @@ describe("Screen-Space Reflections (SSR) Engine", () => {
     const edge = computeScreenEdgeFade([0.95, 0.5], 0.8);
     expect(edge).toBeGreaterThan(0.0);
     expect(edge).toBeLessThan(1.0);
+
+    // Degenerate fadeStart = 1.0 at border [1.0, 0.5] must remain finite
+    expect(Number.isFinite(computeScreenEdgeFade([1.0, 0.5], 1.0))).toBe(true);
 
     // Out of screen [1.1, 0.5] -> 0.0
     expect(computeScreenEdgeFade([1.1, 0.5])).toBe(0.0);
@@ -90,4 +100,38 @@ describe("Screen-Space Reflections (SSR) Engine", () => {
     expect(res.hit).toBe(false);
     expect(res.reflectionWeight).toBe(0.0);
   });
+
+  test("blendTemporalSsr applies exponential moving average and clamps ghosting history to 3x3 neighborhood AABB", () => {
+    const neighborhood: Array<[number, number, number]> = [
+      [0.2, 0.2, 0.2],
+      [0.3, 0.3, 0.3],
+      [0.4, 0.4, 0.4],
+    ];
+    // History has a bright firefly [5.0, 5.0, 5.0] outside the neighborhood [0.2, 0.4] box
+    const res = blendTemporalSsr(
+      {
+        currentRadiance: [0.3, 0.3, 0.3],
+        historyRadiance: [5.0, 5.0, 5.0],
+        neighborhoodSamples: neighborhood,
+        motionVectorUv: [0.0, 0.0],
+        historyValid: true,
+      },
+      { temporalAlpha: 0.2 },
+    );
+
+    expect(res.clampedHistoryRadiance).toEqual([0.4, 0.4, 0.4]);
+    // 0.8 * 0.4 + 0.2 * 0.3 = 0.38
+    expect(res.blendedRadiance[0]).toBeCloseTo(0.38, 5);
+    expect(res.effectiveAlpha).toBeCloseTo(0.2, 5);
+
+    // Invalid history falls back immediately to current frame
+    const disoccluded = blendTemporalSsr({
+      currentRadiance: [0.3, 0.3, 0.3],
+      historyRadiance: [5.0, 5.0, 5.0],
+      historyValid: false,
+    });
+    expect(disoccluded.blendedRadiance).toEqual([0.3, 0.3, 0.3]);
+    expect(disoccluded.effectiveAlpha).toBe(1.0);
+  });
 });
+

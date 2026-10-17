@@ -208,4 +208,82 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
     // Downward penetrating velocity is clamped
     expect(updated.linearVelocity[2]).toBeGreaterThanOrEqual(0);
   });
+
+  test("negative control: sub-threshold impact on breakable ceramic plate leaves body intact without spawning fragments", () => {
+    const plane = PLANE("ground");
+    const plate: RigidBody = {
+      ...CHAIR("ceramic_plate", [0, 0, 0.12], 0.1),
+      shape: { type: "sphere", radius: 0.12 },
+      mass: 0.5,
+      invMass: 2.0,
+      linearVelocity: [0.1, 0, -0.4], // Low impact impulse: ~0.25 N*s << 4.0 N*s threshold
+    };
+    const meta = new Map<string, HouseholdBodyMeta>();
+    meta.set("ceramic_plate", {
+      boundingRadius: 0.12,
+      material: "ceramic",
+      breakable: true,
+      breakImpulseThresholdNs: 4.0,
+      fragmentCount: 4,
+    });
+    const world = createHouseholdWorld([plane, plate], meta, { dt: 1 / 60 });
+
+    const r = stepHouseholdPhysicsWorld(world);
+    expect(r.breakageEvents.length).toBe(0);
+    expect(world.meta.get("ceramic_plate")?.broken).not.toBe(true);
+    expect(world.contactGraph.getBody("ceramic_plate")).toBeDefined();
+  });
+
+  test("super-threshold impact shatters breakable body, conserves fragment mass and momentum, and is idempotent across steps", () => {
+    const plane = PLANE("ground");
+    const vase: RigidBody = {
+      ...CHAIR("glass_vase", [0, 0, 0.25], 1.2),
+      shape: { type: "sphere", radius: 0.15 },
+      mass: 1.2,
+      invMass: 1 / 1.2,
+      linearVelocity: [1.2, -0.4, -12.0], // High downward impact (> 14 N*s > 3.5 N*s threshold)
+    };
+    const meta = new Map<string, HouseholdBodyMeta>();
+    meta.set("glass_vase", {
+      boundingRadius: 0.15,
+      material: "glass",
+      breakable: true,
+      breakImpulseThresholdNs: 3.5,
+      fragmentCount: 4,
+    });
+    const world = createHouseholdWorld([plane, vase], meta, { dt: 1 / 60 });
+
+    const r1 = stepHouseholdPhysicsWorld(world);
+    expect(r1.breakageEvents.length).toBe(1);
+    const ev = r1.breakageEvents[0];
+    expect(ev.parentBodyId).toBe("glass_vase");
+    expect(ev.impactImpulseNs).toBeGreaterThan(ev.thresholdNs);
+    expect(ev.fragmentIds.length).toBe(4);
+
+    // Exact mass conservation: \sum m_k == m_parent
+    expect(Math.abs(ev.fragmentMassSumKg - ev.parentMassKg)).toBeLessThan(1e-12);
+
+    // Exact linear momentum conservation at fracture instant: \sum m_k v_k == m_parent v_post
+    expect(ev.fragmentMomentumSum[0]).toBeCloseTo(ev.parentMomentumAfterImpact[0], 9);
+    expect(ev.fragmentMomentumSum[1]).toBeCloseTo(ev.parentMomentumAfterImpact[1], 9);
+    expect(ev.fragmentMomentumSum[2]).toBeCloseTo(ev.parentMomentumAfterImpact[2], 9);
+
+    // Parent collider and sleep entry removed and replaced by 4 live fragments
+    expect(world.contactGraph.getBody("glass_vase")).toBeUndefined();
+    expect(world.sleep.getBody("glass_vase")).toBeUndefined();
+    let liveFragMass = 0;
+    for (const fid of ev.fragmentIds) {
+      const frag = world.contactGraph.getBody(fid);
+      expect(frag).toBeDefined();
+      expect(world.sleep.getBody(fid)).toBeDefined();
+      liveFragMass += frag!.mass;
+    }
+    expect(liveFragMass).toBeCloseTo(1.2, 12);
+
+    // Idempotency: stepping additional frames never re-shatters the parent or fragments
+    for (let t = 0; t < 15; t++) {
+      const rt = stepHouseholdPhysicsWorld(world);
+      expect(rt.breakageEvents.length).toBe(0);
+    }
+  });
 });

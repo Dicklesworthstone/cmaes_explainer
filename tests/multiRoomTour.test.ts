@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 import {
   CRAFTSMAN_TOUR_KEYFRAMES,
   evaluateCatmullRom3D,
@@ -27,6 +28,8 @@ describe("Multi-Room Cinematic 3D Fly-Through Tour Engine", () => {
 
   test("generateMultiRoomTourRollout creates exact 720-step replay trajectory", () => {
     const rollout = generateMultiRoomTourRollout(CRAFTSMAN_TOUR_KEYFRAMES, 720, 60);
+    const [minX, minZ] = CRAFTSMAN_BUNGALOW_1928.bounds.min;
+    const [maxX, maxZ] = CRAFTSMAN_BUNGALOW_1928.bounds.max;
 
     expect(rollout.length).toBe(720);
     expect(rollout[0].timeSeconds).toBe(0.0);
@@ -36,15 +39,23 @@ describe("Multi-Room Cinematic 3D Fly-Through Tour Engine", () => {
     expect(rollout[0].currentRoom).toBe("porch");
     expect(rollout[719].currentRoom).toBe("bath");
 
-    // Check all values are finite without jumps
+    // Check all values are finite, in-bounds, and without jumps
     for (let i = 0; i < rollout.length; i++) {
       const snap = rollout[i];
       expect(Number.isFinite(snap.cameraPosition[0])).toBe(true);
       expect(Number.isFinite(snap.cameraPosition[1])).toBe(true);
       expect(Number.isFinite(snap.cameraPosition[2])).toBe(true);
+      expect(snap.cameraPosition[0]).toBeGreaterThanOrEqual(minX);
+      expect(snap.cameraPosition[0]).toBeLessThanOrEqual(maxX);
+      expect(snap.cameraPosition[2]).toBeGreaterThanOrEqual(minZ);
+      expect(snap.cameraPosition[2]).toBeLessThanOrEqual(maxZ);
       expect(Number.isFinite(snap.cameraTarget[0])).toBe(true);
       expect(Number.isFinite(snap.cameraTarget[1])).toBe(true);
       expect(Number.isFinite(snap.cameraTarget[2])).toBe(true);
+      expect(snap.cameraTarget[0]).toBeGreaterThanOrEqual(minX);
+      expect(snap.cameraTarget[0]).toBeLessThanOrEqual(maxX);
+      expect(snap.cameraTarget[2]).toBeGreaterThanOrEqual(minZ);
+      expect(snap.cameraTarget[2]).toBeLessThanOrEqual(maxZ);
       expect(snap.cameraFov).toBeGreaterThanOrEqual(45);
       expect(snap.cameraFov).toBeLessThanOrEqual(60);
 
@@ -68,5 +79,31 @@ describe("Multi-Room Cinematic 3D Fly-Through Tour Engine", () => {
     }
     const avgMs = (performance.now() - t0) / 10;
     expect(avgMs).toBeLessThan(25.0); // <25ms per 720-frame trajectory generation under parallel test load
+  });
+
+  test("generateMultiRoomTourRollout couples to continuous physical navigation episode and discloses playback speed ratio independently", () => {
+    const rollout = generateMultiRoomTourRollout(CRAFTSMAN_TOUR_KEYFRAMES, 720, 60, {
+      robotTrackingBlend: 0.35,
+    });
+
+    expect(rollout[0].timeSeconds).toBe(0.0);
+    expect(rollout[0].simulatedPhysicalSeconds).toBe(0.0);
+    expect(rollout[719].simulatedPhysicalSeconds).toBeGreaterThan(rollout[719].timeSeconds);
+    expect(rollout[0].playbackSpeedRatio).toBeGreaterThan(1.0);
+    expect(rollout[719].playbackSpeedRatio).toBeCloseTo(
+      rollout[719].simulatedPhysicalSeconds / rollout[719].timeSeconds,
+      4,
+    );
+
+    for (let i = 0; i < rollout.length; i++) {
+      expect(rollout[i].robotClearanceMeters).toBeGreaterThan(0.0);
+      expect(Number.isFinite(rollout[i].robotPosition[0])).toBe(true);
+      expect(Number.isFinite(rollout[i].robotPosition[2])).toBe(true);
+      if (i > 0) {
+        expect(rollout[i].simulatedPhysicalSeconds).toBeGreaterThanOrEqual(
+          rollout[i - 1].simulatedPhysicalSeconds,
+        );
+      }
+    }
   });
 });

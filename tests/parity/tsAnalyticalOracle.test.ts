@@ -9,6 +9,13 @@
 
 import { describe, expect, test } from "bun:test";
 import { queryContinuousCollisionSDF } from "../../app/lib/continuousCollisionDetection";
+import {
+  computeMechanicalEnergy,
+  forwardDynamicsABA,
+  inverseDynamicsRNEA,
+  type MultibodyTree,
+} from "../../app/lib/featherstoneDynamics";
+import { SafetyFilterRecoveryManager } from "../../app/lib/safetyFilterRecovery";
 import { assertDeterministic, flattenNumeric, maxAbsDiff, parityHarness } from "./parityHarness";
 
 describe("parity comparison integrity", () => {
@@ -209,5 +216,219 @@ describe("TS CCD-on-SDF: sphere-sphere analytical oracle", () => {
     );
     expect(result.hasImpact).toBe(true);
     expect(result.timeOfImpact).toBeLessThan(0.05);
+  });
+});
+
+describe("TS Featherstone ABA/RNEA: closed-form analytical oracle", () => {
+  test("matches closed-form Euler-Lagrange equations for revolute (standard & diagonal axis) and prismatic joints", () => {
+    const m = 2.4;
+    const L = 0.65;
+    const Irot = 0.12;
+    const b = 0.15;
+    const g = 9.81;
+
+    // 1. Planar revolute pendulum around +Y
+    const revTree: MultibodyTree = {
+      name: "oracle-revolute-y",
+      gravity: [0, 0, -g],
+      links: [
+        {
+          id: "rev_y",
+          name: "Revolute Y",
+          parentIndex: -1,
+          jointType: "revolute",
+          jointAxis: [0, 1, 0],
+          parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0] },
+          mass: m,
+          centerOfMass: [0, 0, -L],
+          inertiaPrincipal: [Irot, Irot, Irot],
+          damping: b,
+        },
+      ],
+    };
+
+    // 2. Diagonal-axis revolute pendulum around u = [1/sqrt(2), 1/sqrt(2), 0]
+    const invSqrt2 = 1 / Math.SQRT2;
+    const diagTree: MultibodyTree = {
+      name: "oracle-revolute-diagonal",
+      gravity: [0, 0, -g],
+      links: [
+        {
+          id: "rev_diag",
+          name: "Revolute Diagonal",
+          parentIndex: -1,
+          jointType: "revolute",
+          jointAxis: [invSqrt2, invSqrt2, 0],
+          parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0] },
+          mass: m,
+          centerOfMass: [0, 0, -L],
+          inertiaPrincipal: [Irot, Irot, Irot],
+          damping: b,
+        },
+      ],
+    };
+
+    // 3. Vertical prismatic mass along +Z
+    const prisTree: MultibodyTree = {
+      name: "oracle-prismatic-z",
+      gravity: [0, 0, -g],
+      links: [
+        {
+          id: "pris_z",
+          name: "Prismatic Z",
+          parentIndex: -1,
+          jointType: "prismatic",
+          jointAxis: [0, 0, 1],
+          parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0.2] },
+          mass: m,
+          centerOfMass: [0, 0, 0.1],
+          inertiaPrincipal: [Irot, Irot, Irot],
+          damping: b,
+        },
+      ],
+    };
+
+    const q = 0.55;
+    const qDot = -0.8;
+    const tau = 1.75;
+    const IO = Irot + m * L * L;
+    const qDDotRevOracle = (tau - b * qDot - m * g * L * Math.sin(q)) / IO;
+    const energyRevOracle = {
+      kineticEnergy: 0.5 * IO * qDot * qDot,
+      potentialEnergy: m * g * (-L * Math.cos(q)),
+      totalEnergy: 0.5 * IO * qDot * qDot + m * g * (-L * Math.cos(q)),
+    };
+
+    const qDDotPrisOracle = (tau - b * qDot - m * g) / m;
+    const energyPrisOracle = {
+      kineticEnergy: 0.5 * m * qDot * qDot,
+      potentialEnergy: m * g * (0.2 + q + 0.1),
+      totalEnergy: 0.5 * m * qDot * qDot + m * g * (0.2 + q + 0.1),
+    };
+
+    const abaRev = forwardDynamicsABA(revTree, [q], [qDot], [tau]);
+    const rneaRev = inverseDynamicsRNEA(revTree, [q], [qDot], [qDDotRevOracle]);
+    const energyRev = computeMechanicalEnergy(revTree, [q], [qDot]);
+
+    const abaDiag = forwardDynamicsABA(diagTree, [q], [qDot], [tau]);
+    const rneaDiag = inverseDynamicsRNEA(diagTree, [q], [qDot], [qDDotRevOracle]);
+    const energyDiag = computeMechanicalEnergy(diagTree, [q], [qDot]);
+
+    const abaPris = forwardDynamicsABA(prisTree, [q], [qDot], [tau]);
+    const rneaPris = inverseDynamicsRNEA(prisTree, [q], [qDot], [qDDotPrisOracle]);
+    const energyPris = computeMechanicalEnergy(prisTree, [q], [qDot]);
+
+    const report = parityHarness("featherstone-analytical-oracle", [
+      {
+        id: "revolute-y-aba-rnea-energy",
+        input: { q, qDot, tau },
+        ts: { qDDot: abaRev.qDDot[0], tau: rneaRev[0], energy: energyRev },
+        kernel: { qDDot: qDDotRevOracle, tau, energy: energyRevOracle },
+        oracle: { qDDot: qDDotRevOracle, tau, energy: energyRevOracle },
+        tolerance: 1e-9,
+      },
+      {
+        id: "revolute-diagonal-aba-rnea-energy",
+        input: { q, qDot, tau },
+        ts: { qDDot: abaDiag.qDDot[0], tau: rneaDiag[0], energy: energyDiag },
+        kernel: { qDDot: qDDotRevOracle, tau, energy: energyRevOracle },
+        oracle: { qDDot: qDDotRevOracle, tau, energy: energyRevOracle },
+        tolerance: 1e-9,
+      },
+      {
+        id: "prismatic-z-aba-rnea-energy",
+        input: { q, qDot, tau },
+        ts: { qDDot: abaPris.qDDot[0], tau: rneaPris[0], energy: energyPris },
+        kernel: { qDDot: qDDotPrisOracle, tau, energy: energyPrisOracle },
+        oracle: { qDDot: qDDotPrisOracle, tau, energy: energyPrisOracle },
+        tolerance: 1e-9,
+      },
+    ]);
+
+    expect(report.passed).toBe(3);
+    assertDeterministic(
+      "featherstone-aba",
+      (inp) => forwardDynamicsABA(diagTree, inp.q, inp.qDot, inp.tau),
+      { q: [q], qDot: [qDot], tau: [tau] },
+    );
+  });
+});
+
+describe("TS CBF SafetyFilterRecoveryManager: closed-form KKT & reflex oracle", () => {
+  test("matches closed-form half-space KKT projection and Tier-2 emergency reflex repulsion", () => {
+    const manager = new SafetyFilterRecoveryManager({
+      maxSlack: 0.25,
+      brakeGain: 2.5,
+      repelGain: 1.2,
+      stallLimitFrames: 3,
+    });
+
+    // 1. Tier 1: Single active barrier grad(h) . u + gamma * h >= 0
+    // With grad = [3/5, 0, 4/5], h = 0.02, gamma = 5.0, u_nom = [-0.4, 0.1, 0.0]:
+    // inner = -0.24, lhs = -0.24 + 0.10 = -0.14 < 0 -> violation = 0.14 <= maxSlack (0.25)
+    const grad: [number, number, number] = [0.6, 0.0, 0.8];
+    const hVal = 0.02;
+    const gamma = 5.0;
+    const uNom: [number, number, number] = [-0.4, 0.1, 0.0];
+    const pos: [number, number, number] = [1.0, 0.0, 1.0];
+    const vel: [number, number, number] = [0.2, -0.1, 0.05];
+
+    const tier1Ts = manager.filterOrRecover(uNom, pos, vel, [
+      { id: "wall-1", hValue: hVal, gradient: grad, gamma },
+    ]);
+    const violationOracle = -(grad[0] * uNom[0] + grad[1] * uNom[1] + grad[2] * uNom[2] + gamma * hVal);
+    const tier1Oracle = {
+      safeControl: [
+        uNom[0] + violationOracle * grad[0],
+        uNom[1] + violationOracle * grad[1],
+        uNom[2] + violationOracle * grad[2],
+      ] as [number, number, number],
+      state: "relaxed-slack" as const,
+      maxViolationSlack: violationOracle,
+      activeConstraintCount: 1,
+    };
+
+    // 2. Tier 2: Severe violation > maxSlack triggers emergency braking + unit-gradient repulsion
+    const uSevere: [number, number, number] = [-1.0, 0.0, -1.0];
+    const tier2Ts = manager.filterOrRecover(uSevere, pos, vel, [
+      { id: "wall-1", hValue: hVal, gradient: grad, gamma },
+    ]);
+    const severeViolationOracle = -(
+      grad[0] * uSevere[0] +
+      grad[1] * uSevere[1] +
+      grad[2] * uSevere[2] +
+      gamma * hVal
+    );
+    const tier2Oracle = {
+      safeControl: [
+        -2.5 * vel[0] + 1.2 * grad[0],
+        -2.5 * vel[1] + 1.2 * grad[1],
+        -2.5 * vel[2] + 1.2 * grad[2],
+      ] as [number, number, number],
+      state: "reflex-braking" as const,
+      maxViolationSlack: severeViolationOracle,
+      activeConstraintCount: 1,
+    };
+
+    const report = parityHarness("cbf-safety-filter-oracle", [
+      {
+        id: "tier1-kkt-halfspace-projection",
+        input: { uNom, hVal },
+        ts: tier1Ts,
+        kernel: tier1Oracle,
+        oracle: tier1Oracle,
+        tolerance: 1e-9,
+      },
+      {
+        id: "tier2-reflex-braking-repulsion",
+        input: { uSevere, hVal },
+        ts: tier2Ts,
+        kernel: tier2Oracle,
+        oracle: tier2Oracle,
+        tolerance: 1e-9,
+      },
+    ]);
+
+    expect(report.passed).toBe(2);
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { computeKukaFK } from "../app/lib/armInverseKinematics";
 import {
+  buildArmCapsulesFromLinkPositions,
   checkArmSelfCollision,
   checkG1SelfCollision,
   type LinkCapsule,
@@ -16,6 +18,20 @@ describe("Robot Self-Collision Detection Engine", () => {
 
     const res1 = segmentSegmentClosestPoints(p1, q1, p2, q2);
     expect(res1.distance).toBeCloseTo(1.0, 4);
+
+    // Rotated parallel segments in 3D with partial overlap along direction (1, 1, 0)/sqrt(2)
+    // Segment 1: from (0,0,0) to (2,2,0); Segment 2: from (1,1,0.5) to (3,3,0.5)
+    // Overlap interval on Segment 1 is s in [0.5, 1.0], midpoint s = 0.75 -> (1.5, 1.5, 0)
+    const rotP1: [number, number, number] = [0, 0, 0];
+    const rotQ1: [number, number, number] = [2, 2, 0];
+    const rotP2: [number, number, number] = [1, 1, 0.5];
+    const rotQ2: [number, number, number] = [3, 3, 0.5];
+    const resRotParallel = segmentSegmentClosestPoints(rotP1, rotQ1, rotP2, rotQ2);
+    expect(resRotParallel.distance).toBeCloseTo(0.5, 5);
+    expect(resRotParallel.closest1[0]).toBeCloseTo(1.5, 5);
+    expect(resRotParallel.closest1[1]).toBeCloseTo(1.5, 5);
+    expect(resRotParallel.closest2[0]).toBeCloseTo(1.5, 5);
+    expect(resRotParallel.closest2[1]).toBeCloseTo(1.5, 5);
 
     // Intersecting segments at (1, 1, 0)
     const p3: [number, number, number] = [0, 1, 0];
@@ -80,7 +96,7 @@ describe("Robot Self-Collision Detection Engine", () => {
     expect(res.collidingPairs[0].linkB).toBe("right_knee");
   });
 
-  test("detects arm gripper collision with base on folded 7-DOF arm", () => {
+  test("detects arm gripper collision with base on folded 7-DOF arm and builds capsules from FK", () => {
     // Folded arm where gripper is brought right against base
     const arm: LinkCapsule[] = [
       { name: "link0_base", start: [0, 0, 0], end: [0, 0.1, 0], radius: 0.08 },
@@ -100,5 +116,14 @@ describe("Robot Self-Collision Detection Engine", () => {
         (p.linkA === "link6_gripper" && p.linkB === "link0_base"),
     );
     expect(collidingWithBase).toBe(true);
+
+    // Verify buildArmCapsulesFromLinkPositions with computeKukaFK upright home pose (6 origins -> 5 link segments)
+    const fkUpright = computeKukaFK([0, 0.3, 0, -0.8, 0, 0.5, 0]);
+    const fkCapsules = buildArmCapsulesFromLinkPositions(fkUpright.linkPositions);
+    expect(fkCapsules.length).toBe(5);
+    const uprightCheck = checkArmSelfCollision(fkCapsules);
+    expect(uprightCheck.hasCollision).toBe(false);
+    expect(uprightCheck.minClearance).toBeGreaterThan(0);
   });
 });
+

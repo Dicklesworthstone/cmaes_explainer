@@ -22,6 +22,8 @@ import {
   createCraftsmanEmissives,
   createEmissiveSurface,
   EMISSIVE_PALETTE,
+  evaluateEmissiveIlluminance,
+  evaluateEmissiveSurface,
   liveEmissiveColor,
   liveEmissiveIntensity,
 } from "../app/lib/emissiveSurfaces";
@@ -166,4 +168,31 @@ describe("emissiveSurfaces", () => {
       expect(sum).toBeGreaterThan(0);
     }
   });
+
+  test("evaluateEmissiveSurface and evaluateEmissiveIlluminance return zero radiance when surface.on is false", () => {
+    const lampOn = createEmissiveSurface("bedside-lamp", [0, 2.0, 0], 0, true);
+    const lampOff = createEmissiveSurface("bedside-lamp", [0, 2.0, 0], 0, false);
+
+    const radOn = evaluateEmissiveSurface(lampOn, 1.0);
+    const radOff = evaluateEmissiveSurface(lampOff, 1.0);
+
+    expect(radOn.intensity).toBeGreaterThan(0);
+    expect(radOn.totalRadiance[0]).toBeGreaterThan(0);
+    expect(radOff.intensity).toBe(0);
+    expect(radOff.totalRadiance).toEqual([0, 0, 0]);
+    expect(radOff.bloomContribution).toBe(false);
+
+    const illumOn = evaluateEmissiveIlluminance([0, 0, 0], [0, 1, 0], [lampOn], 1.0);
+    const illumOff = evaluateEmissiveIlluminance([0, 0, 0], [0, 1, 0], [lampOff], 1.0);
+    expect(illumOn[0] + illumOn[1] + illumOn[2]).toBeGreaterThan(0);
+    expect(illumOff).toEqual([0, 0, 0]);
+
+    // Isotropic candle at y=0.9 illuminates receivers at the same height (y=0.9) and above (y=1.3)
+    const candle = createEmissiveSurface("candle", [3.0, 0.9, 3.0], 0, true);
+    const sideIllum = evaluateEmissiveIlluminance([3.5, 0.9, 3.0], [-1, 0, 0], [candle], 0.5);
+    const aboveIllum = evaluateEmissiveIlluminance([3.0, 1.3, 3.0], [0, -1, 0], [candle], 0.5);
+    expect(sideIllum[0] + sideIllum[1] + sideIllum[2]).toBeGreaterThan(0);
+    expect(aboveIllum[0] + aboveIllum[1] + aboveIllum[2]).toBeGreaterThan(0);
+  });
 });
+

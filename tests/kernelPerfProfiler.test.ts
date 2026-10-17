@@ -103,4 +103,27 @@ describe("Kernel Micro-Performance Profiler & Telemetry Engine", () => {
     const avgPerStepMicros = (elapsed / 1000) * 1000;
     expect(avgPerStepMicros).toBeLessThan(100.0); // <100µs per step record under full multi-core test parallelization
   });
+
+  test("O(1) ring buffer wraparound preserves chronological order in getRecentRecords and Nearest-Rank quantiles", () => {
+    expect(() => new KernelPerfProfiler(0, 480)).toThrow(/bufferSize/);
+    expect(() => new KernelPerfProfiler(10, 0)).toThrow(/targetFreqHz/);
+
+    const profiler = new KernelPerfProfiler(4, 480);
+    for (let i = 1; i <= 6; i++) {
+      profiler.recordStep(i, {
+        broadphase: i * 10,
+        narrowphase: 0,
+        lcpSolver: 0,
+        integrator: 0,
+      });
+    }
+    // Ring of size 4 after 6 pushes holds steps 3, 4, 5, 6 (totals 30, 40, 50, 60)
+    const recent = profiler.getRecentRecords(3);
+    expect(recent.map((r) => r.stepIndex)).toEqual([4, 5, 6]);
+    const stats = profiler.getSummaryStats();
+    expect(stats.totalStepsRecorded).toBe(4);
+    // Nearest-rank p50 on [30, 40, 50, 60]: ceil(0.5 * 4) - 1 = index 1 -> 40
+    expect(stats.p50Micros).toBe(40);
+    expect(stats.maxTotalMicros).toBe(60);
+  });
 });

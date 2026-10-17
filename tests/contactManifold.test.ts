@@ -114,4 +114,51 @@ describe("Contact Manifold & Penetration Depth", () => {
     const tanLen = Math.hypot(...impulse.tangentImpulse);
     expect(tanLen).toBeLessThanOrEqual(maxFriction + 1e-5);
   });
+
+  test("accounts for rotational lever-arm inertia and angular velocity in resolveContactImpulse", () => {
+    const baseBodyA: RigidBodyState = {
+      position: [0, 1, 0],
+      velocity: [0, -2.0, 0],
+      angularVelocity: [0, 0, 0],
+      mass: 2.0,
+      invMass: 0.5,
+      invInertiaWorld: [
+        [2.0, 0, 0],
+        [0, 2.0, 0],
+        [0, 0, 2.0],
+      ],
+    };
+    const staticGround: RigidBodyState = {
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      angularVelocity: [0, 0, 0],
+      mass: 0,
+      invMass: 0,
+      invInertiaWorld: [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ],
+    };
+
+    const centerContact: ContactPoint = {
+      positionA: [0, 0, 0], // rA = [0, -1, 0], colinear with normal [0, 1, 0] -> rA x n = 0
+      positionB: [0, 0, 0],
+      normal: [0, 1, 0],
+      penetrationDepth: 0.02,
+      tangent1: [1, 0, 0],
+      tangent2: [0, 0, 1],
+    };
+    const offCenterContact: ContactPoint = {
+      ...centerContact,
+      positionA: [0.5, 0, 0], // rA = [0.5, -1, 0] -> rA x n = [0, 0, 0.5] != 0
+    };
+
+    const centerImp = resolveContactImpulse(baseBodyA, staticGround, centerContact, 0.5, 0.3);
+    const offCenterImp = resolveContactImpulse(baseBodyA, staticGround, offCenterContact, 0.5, 0.3);
+
+    // Off-center lever arm increases rotational compliance (kNormal = 0.5 + 2.0 * 0.25 = 1.0 > 0.5),
+    // reducing normal impulse by half compared to a purely central impact.
+    expect(offCenterImp.normalImpulse).toBeCloseTo(centerImp.normalImpulse * 0.5, 5);
+  });
 });

@@ -114,14 +114,19 @@ describe("Analytic Signed Distance Functions (SDF)", () => {
     expect(endRes.distance).toBeCloseTo(1.0);
   });
 
-  test("sdfPlane computes planar distance", () => {
+  test("sdfPlane computes planar distance and normalizes non-unit normals", () => {
     const normal: [number, number, number] = [0, 1, 0];
     const res = sdfPlane([0, 5, 0], normal, -2);
     // y - 2 = 3
     expect(res.distance).toBeCloseTo(3.0);
+
+    // Non-unit normal [0, 2, 0] with scaled offset -4 represents the same plane y = 2
+    const unnormRes = sdfPlane([0, 5, 0], [0, 2, 0], -4);
+    expect(unnormRes.distance).toBeCloseTo(3.0);
+    expect(Math.hypot(...unnormRes.normal)).toBeCloseTo(1.0, 6);
   });
 
-  test("sdfHeightfield performs bilinear interpolation", () => {
+  test("sdfHeightfield performs bilinear interpolation and preserves slope at upper boundary", () => {
     const terrain: HeightfieldData = {
       minX: 0,
       maxX: 10,
@@ -140,6 +145,12 @@ describe("Analytic Signed Distance Functions (SDF)", () => {
     // Point at center (5, 5) should have terrain height = 1.0
     const res = sdfHeightfield([5, 4, 5], terrain);
     expect(res.distance).toBeCloseTo(3.0); // 4 - 1 = 3
+    expect(res.normal[0]).toBeLessThan(-0.15);
+
+    // Upper boundary x = maxX (10), z = maxZ (10) must preserve the ramp slope dh/dx = 0.2 instead of collapsing c1 == c0
+    const boundaryRes = sdfHeightfield([10, 4, 10], terrain);
+    expect(boundaryRes.distance).toBeCloseTo(2.0); // 4 - 2 = 2
+    expect(boundaryRes.normal[0]).toBeCloseTo(res.normal[0], 5);
   });
 
   test("smin smoothly blends values within radius k", () => {

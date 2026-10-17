@@ -237,5 +237,20 @@ describe("Learned Clearance Costmap & Potential Field Engine", () => {
     const freeSdf = () => ({ distance: 5.0, gradient: [1, 0] as [number, number] });
     const res = engine.evaluatePotential([1.0, 2.0], [3.0, 2.0], freeSdf);
     expect(res.learnedClearance).toBe(0.0);
+
+    // Round-trip exportWeights -> loadWeightsOrFallback preserves exact predictions
+    const srcEngine = new LearnedCostmapEngine({ fourierBands: 4, hiddenDim: 8, seed: 99 });
+    const exported = srcEngine.exportWeights();
+    expect(engine.loadWeightsOrFallback(exported)).toBe(true);
+    expect(engine.isTrained).toBe(true);
+    expect(engine.evaluateNeuralClearance(1.2, -0.7)).toBeCloseTo(
+      srcEngine.evaluateNeuralClearance(1.2, -0.7),
+      8,
+    );
+
+    // When start === goal, generateWarmStartTrajectory returns a single point without duplication
+    const trivialTraj = engine.generateWarmStartTrajectory([2.0, 2.0], [2.0, 2.0], freeSdf);
+    expect(trivialTraj.length).toBe(1);
+    expect(trivialTraj[0]).toEqual([2.0, 2.0]);
   });
 });

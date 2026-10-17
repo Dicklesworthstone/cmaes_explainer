@@ -121,4 +121,28 @@ describe("Segment-Safe Control Barrier Functions (SSCBF) Engine", () => {
     const elapsed = performance.now() - t0;
     expect(elapsed).toBeLessThan(10.0); // <100µs per solve
   });
+
+  test("impassable corridor narrower than robotRadius reports negative hLateral and activates slack without clamping", () => {
+    const narrowGap: CorridorSegment = {
+      id: "narrow-service-gap",
+      start: [0.0, 0.0],
+      end: [0.0, 2.0],
+      halfWidth: 0.18, // 0.36m gap < 0.50m robot diameter (robotRadius = 0.25m)
+    };
+    const state: SscbfState = {
+      position: [0.0, 1.0],
+      velocity: [0.0, 0.5],
+      yaw: Math.PI / 2,
+      robotRadius: 0.25,
+    };
+
+    const barrier = evaluateSscbfBarrier(state, narrowGap);
+    expect(barrier.hLateral).toBeCloseTo(0.18 - 0.25, 5);
+    expect(barrier.hLateral).toBeLessThan(0.0);
+
+    const qpRes = filterCorridorVelocityQP([0.0, 0.5], state, [narrowGap]);
+    expect(qpRes.lateralMargin).toBeLessThan(0.0);
+    expect(qpRes.slackActive).toBe(true);
+  });
 });
+

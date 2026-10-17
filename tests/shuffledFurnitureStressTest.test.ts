@@ -48,14 +48,33 @@ describe("Shuffled Furniture Stress Test & Domain Randomization Engine", () => {
     const summary = runMultiTrialStressSuite([101, 202, 303, 404, 505]);
 
     expect(summary.totalTrials).toBe(5);
+    expect(summary.validAttemptCount).toBe(5);
+    expect(summary.infeasibleLayoutCount).toBe(0);
     expect(summary.passedTrials).toBe(5);
+    expect(summary.failedTrials).toBe(0);
     expect(summary.passRatePercent).toBe(100.0);
+    expect(summary.passRateConfidenceInterval95[0]).toBeGreaterThan(50.0);
+    expect(summary.passRateConfidenceInterval95[1]).toBeCloseTo(100.0, 5);
     expect(summary.worstClearanceMeters).toBeGreaterThan(0.0);
     expect(summary.meanClearanceMeters).toBeGreaterThan(0.1);
 
     for (const trial of summary.trials) {
       expect(trial.success).toBe(true);
+      expect(trial.layoutFeasible).toBe(true);
       expect(trial.collisionOccurred).toBe(false);
     }
+  });
+
+  test("runShuffledStressTrial preserves raw negative clearances without clamping when starting inside an anchor obstacle", () => {
+    const scene = generateShuffledScene({ seed: 42 });
+    // [-3.3, 2.6] is the anchor fireplace center
+    const res = runShuffledStressTrial(scene, [-3.3, 2.6], [-1.5, 2.5], 50);
+
+    expect(res.layoutFeasible).toBe(false);
+    expect(res.collisionOccurred).toBe(true);
+    expect(res.success).toBe(false);
+    expect(res.minimumClearanceMeters).toBeLessThan(0.0);
+    expect(res.minimumFurnitureClearanceMeters).toBeLessThan(0.0);
+    expect(res.nearestObstacleName).toContain("fireplace");
   });
 });

@@ -303,11 +303,42 @@ describe("Multi-Obstacle Household Scene & Furniture Collision Kernel", () => {
     expect(result.completedWaypoints).toBe(7);
     expect(result.totalWaypoints).toBe(7);
     expect(result.hardCollisionOccurred).toBe(false);
+    expect(result.minimumClearanceMeters).toBeGreaterThan(0.0);
     expect(result.success).toBe(true);
     expect(result.totalDistanceMeters).toBeGreaterThan(8.0);
     expect(result.totalTimeSeconds).toBeLessThan(90.0);
     expect(result.finalObjectiveScore).toBeGreaterThan(300.0);
     expect(result.trajectory.length).toBeGreaterThan(100);
+    expect(result.trajectory.every((s) => s.clearanceMeters > 0.0)).toBe(true);
+
+    // Negative control: starting inside fireplace [-3.3, 2.6] must record raw negative clearance and fail
+    const blockedRes = simulateG1HouseNavigationChallenge(scene, {
+      waypoints: [
+        {
+          id: "g1-blocked",
+          name: "Inside Fireplace",
+          position: [-3.3, 2.6],
+          acceptanceRadius: 0.2,
+          targetSpeed: 0.5,
+          room: "parlor",
+          maxTimeSeconds: 5.0,
+        },
+        {
+          id: "g1-goal",
+          name: "Parlor Goal",
+          position: [0.35, 2.5],
+          acceptanceRadius: 0.3,
+          targetSpeed: 0.5,
+          room: "parlor",
+          maxTimeSeconds: 10.0,
+        },
+      ],
+      maxDurationSeconds: 1.0,
+    });
+    expect(blockedRes.hardCollisionOccurred).toBe(true);
+    expect(blockedRes.success).toBe(false);
+    expect(blockedRes.minimumClearanceMeters).toBeLessThan(0.0);
+    expect(blockedRes.trajectory.some((s) => s.clearanceMeters < 0.0)).toBe(true);
   });
 });
 

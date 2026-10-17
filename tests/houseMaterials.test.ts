@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import {
+  disposeProceduralMaterials,
   fbm,
   generateFabricTexture,
   generateMarbleTexture,
@@ -49,9 +50,20 @@ describe("Procedural PBR Materials", () => {
     texB.albedoMap.dispose();
   });
 
-  test("generateFabricTexture, TileTexture, and MarbleTexture produce valid maps", () => {
+  test("generateFabricTexture, TileTexture, and MarbleTexture produce valid maps with glTF 2.0 colorSpaces and unit normals", () => {
     const fab = generateFabricTexture(32, 32, [200, 200, 200]);
     expect(fab.albedoMap).toBeInstanceOf(THREE.DataTexture);
+    expect(fab.albedoMap.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(fab.normalMap.colorSpace).toBe(THREE.LinearSRGBColorSpace);
+    expect(fab.roughnessMap.colorSpace).toBe(THREE.LinearSRGBColorSpace);
+
+    // Verify decoded tangent-space normals have unit length
+    for (let i = 0; i < fab.normalData.length; i += 4) {
+      const nx = (fab.normalData[i + 0] / 255) * 2 - 1;
+      const ny = (fab.normalData[i + 1] / 255) * 2 - 1;
+      const nz = (fab.normalData[i + 2] / 255) * 2 - 1;
+      expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1.0, 1);
+    }
     fab.albedoMap.dispose();
 
     const tile = generateTileTexture(32, 32, [240, 240, 240], [50, 50, 50]);
@@ -63,7 +75,7 @@ describe("Procedural PBR Materials", () => {
     marble.albedoMap.dispose();
   });
 
-  test("getProceduralMaterial instantiates all MaterialKind presets", () => {
+  test("getProceduralMaterial instantiates all MaterialKind presets and disposeProceduralMaterials cleans cache", () => {
     const kinds: MaterialKind[] = [
       "oak-hardwood",
       "walnut-dark",
@@ -88,5 +100,9 @@ describe("Procedural PBR Materials", () => {
       expect(mat).toBeInstanceOf(THREE.Material);
       expect(mat.roughness).toBeDefined();
     }
+
+    const disposed = disposeProceduralMaterials();
+    expect(disposed).toBeGreaterThanOrEqual(kinds.length);
+    expect(disposeProceduralMaterials()).toBe(0);
   });
 });

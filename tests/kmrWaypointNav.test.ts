@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { OrientedBoundingBox } from "../app/lib/houseMultiObstacleKernel";
 import {
+  certifyKmrReachability,
   createKmrPlanarSdf,
   pathIsCollisionFree,
   planWaypointPath,
@@ -102,5 +103,17 @@ describe("KMR waypoint navigation (cmaes-kmr-waypoint)", () => {
         [],
       ),
     ).toBe(false);
+  });
+
+  test("certifyKmrReachability solves HJI BRT and distinguishes reachable vs blocked starts", () => {
+    const openCert = certifyKmrReachability({ x: 0, y: 0, theta: 0 }, { x: 2, y: 0 }, [wall3D]);
+    expect(openCert.reachable).toBe(true);
+    expect(Number.isFinite(openCert.minTimeSeconds)).toBe(true);
+    expect(openCert.minTimeSeconds).toBeGreaterThan(2.0);
+
+    // Start inside the wall obstacle is certified unreachable (+Infinity time)
+    const blockedCert = certifyKmrReachability({ x: 1, y: 0, theta: 0 }, { x: 2, y: 0 }, [wall3D]);
+    expect(blockedCert.reachable).toBe(false);
+    expect(blockedCert.minTimeSeconds).toBe(Number.POSITIVE_INFINITY);
   });
 });
