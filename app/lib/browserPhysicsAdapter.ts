@@ -50,6 +50,7 @@ export interface AdapterError {
     | "ERR_V068_MANIFEST_CORRUPT"
     | "ERR_UNSUPPORTED_CAPABILITY"
     | "ERR_CAPACITY_EXCEEDED"
+    | "ERR_INVALID_WORKLOAD"
     | "ERR_ADAPTER_LOCKED";
   message: string;
   detail?: unknown;
@@ -172,14 +173,47 @@ export class BrowserPhysicsAdapter {
       };
     }
 
-    // Invariant 1: v067 refuses multi-body scenes
+    if (!Number.isSafeInteger(config.numBodies) || config.numBodies < 1) {
+      return {
+        success: false,
+        error: {
+          code: "ERR_INVALID_WORKLOAD",
+          message: `numBodies must be a positive safe integer (got ${config.numBodies})`,
+        },
+      };
+    }
+
+    if (
+      config.numJoints !== undefined &&
+      (!Number.isSafeInteger(config.numJoints) || config.numJoints < 0)
+    ) {
+      return {
+        success: false,
+        error: {
+          code: "ERR_INVALID_WORKLOAD",
+          message: `numJoints must be a non-negative safe integer (got ${config.numJoints})`,
+        },
+      };
+    }
+
+    if (config.dt !== undefined && (!Number.isFinite(config.dt) || config.dt <= 0)) {
+      return {
+        success: false,
+        error: {
+          code: "ERR_INVALID_WORKLOAD",
+          message: `dt must be a positive finite number (got ${config.dt})`,
+        },
+      };
+    }
+
+    // Invariant 1: v067 refuses multi-body scenes or articulated joints
     if (this.activeVersion === "v067") {
-      if (config.numBodies > 1) {
+      if (config.numBodies > 1 || (config.numJoints ?? 0) > 0) {
         return {
           success: false,
           error: {
             code: "ERR_V067_MULTI_BODY_UNSUPPORTED",
-            message: `v067 kernel only supports single-body scenes (requested ${config.numBodies} bodies). Upgrade to v068 manifest.`,
+            message: `v067 kernel only supports unarticulated single-body scenes (requested ${config.numBodies} bodies, ${config.numJoints ?? 0} joints). Upgrade to v068 manifest.`,
           },
         };
       }
@@ -260,7 +294,12 @@ export class BrowserPhysicsAdapter {
       };
     }
 
-    if (m.maxBodiesSupported <= 0 || m.maxJointsSupported < 0) {
+    if (
+      !Number.isSafeInteger(m.maxBodiesSupported) ||
+      m.maxBodiesSupported <= 0 ||
+      !Number.isSafeInteger(m.maxJointsSupported) ||
+      m.maxJointsSupported < 0
+    ) {
       return {
         success: false,
         error: {
