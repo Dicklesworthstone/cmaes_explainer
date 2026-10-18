@@ -257,7 +257,9 @@ export function viewSchema8Packet(buffer: Float64Array): Schema8ZeroCopyView {
     jointData,
     contactData,
     getBody(index: number) {
-      if (index < 0 || index >= numBodies) throw new RangeError("Body index out of range");
+      if (!Number.isSafeInteger(index) || index < 0 || index >= numBodies) {
+        throw new RangeError("Body index out of range");
+      }
       const base = index * BODY_STRIDE;
       return {
         position: bodyData.subarray(base + 0, base + 3),
@@ -267,7 +269,9 @@ export function viewSchema8Packet(buffer: Float64Array): Schema8ZeroCopyView {
       };
     },
     getJoint(index: number) {
-      if (index < 0 || index >= numJoints) throw new RangeError("Joint index out of range");
+      if (!Number.isSafeInteger(index) || index < 0 || index >= numJoints) {
+        throw new RangeError("Joint index out of range");
+      }
       const base = index * JOINT_STRIDE;
       return {
         position: jointData[base + 0],
@@ -277,7 +281,9 @@ export function viewSchema8Packet(buffer: Float64Array): Schema8ZeroCopyView {
       };
     },
     getContact(index: number) {
-      if (index < 0 || index >= numContacts) throw new RangeError("Contact index out of range");
+      if (!Number.isSafeInteger(index) || index < 0 || index >= numContacts) {
+        throw new RangeError("Contact index out of range");
+      }
       const base = index * CONTACT_STRIDE;
       return {
         position: contactData.subarray(base + 0, base + 3),
@@ -303,6 +309,13 @@ function validateSchema8Buffer(buffer: Float64Array): void {
       `malformed Schema-8 packet: version mismatch (expected ${SCHEMA_8_VERSION}, got ${buffer[1]})`,
     );
   }
+  const status = buffer[2];
+  const sequenceIndex = buffer[3];
+  if (!Number.isSafeInteger(status) || !Number.isSafeInteger(sequenceIndex) || sequenceIndex < 0) {
+    throw new Error(
+      `malformed Schema-8 packet: invalid header status/sequenceIndex (status=${status}, seq=${sequenceIndex})`,
+    );
+  }
   const totalWords = buffer[4];
   if (totalWords !== buffer.length) {
     throw new Error(
@@ -312,6 +325,18 @@ function validateSchema8Buffer(buffer: Float64Array): void {
   const numBodies = buffer[5];
   const numJoints = buffer[6];
   const numContacts = buffer[7];
+  if (
+    !Number.isSafeInteger(numBodies) ||
+    numBodies < 0 ||
+    !Number.isSafeInteger(numJoints) ||
+    numJoints < 0 ||
+    !Number.isSafeInteger(numContacts) ||
+    numContacts < 0
+  ) {
+    throw new Error(
+      `malformed Schema-8 packet: counts must be non-negative safe integers (bodies=${numBodies}, joints=${numJoints}, contacts=${numContacts})`,
+    );
+  }
   const expectedTotal =
     HEADER_WORDS +
     numBodies * BODY_STRIDE +

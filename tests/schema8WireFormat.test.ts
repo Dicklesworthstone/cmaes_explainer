@@ -90,16 +90,19 @@ describe("Schema-8 (v068) Packed Wire Format Engine", () => {
     expect(c0.normal[1]).toBeCloseTo(1.0, 8);
   });
 
-  test("rejects out-of-bounds indices in zero-copy view", () => {
+  test("rejects out-of-bounds and non-integer indices in zero-copy view", () => {
     const encoded = encodeSchema8Packet(sampleFrame);
     const view = viewSchema8Packet(encoded);
 
     expect(() => view.getBody(5)).toThrow();
+    expect(() => view.getBody(0.5)).toThrow();
+    expect(() => view.getBody(Number.NaN)).toThrow();
     expect(() => view.getJoint(-1)).toThrow();
+    expect(() => view.getJoint(1.25)).toThrow();
     expect(() => view.getContact(2)).toThrow();
   });
 
-  test("rejects malformed packets with invalid magic or corrupted lengths", () => {
+  test("rejects malformed packets with invalid magic, corrupted lengths, or negative compensating counts", () => {
     const encoded = encodeSchema8Packet(sampleFrame);
 
     // Corrupt magic
@@ -111,6 +114,20 @@ describe("Schema-8 (v068) Packed Wire Format Engine", () => {
     const badLen = new Float64Array(encoded);
     badLen[4] = encoded.length + 5;
     expect(() => decodeSchema8Packet(badLen)).toThrow(/length mismatch/);
+
+    // Negative count that algebraically satisfies expectedTotal === totalWords:
+    // HEADER_WORDS(8) + (-1)*13 + 3*4 + 1*8 = 15 words
+    const negCounts = new Float64Array(15);
+    negCounts[0] = encoded[0];
+    negCounts[1] = encoded[1];
+    negCounts[2] = 0;
+    negCounts[3] = 1;
+    negCounts[4] = 15;
+    negCounts[5] = -1;
+    negCounts[6] = 3;
+    negCounts[7] = 1;
+    expect(() => decodeSchema8Packet(negCounts)).toThrow(/non-negative safe integers/);
+    expect(() => viewSchema8Packet(negCounts)).toThrow(/non-negative safe integers/);
   });
 
   test("high-throughput benchmark: >10,000 zero-copy frame reads in <5ms", () => {
