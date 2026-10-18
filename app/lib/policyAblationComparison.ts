@@ -285,7 +285,7 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
   const theoreticalMaxDistanceMeters = TARGET_SPEED_MPS * FINAL_STEPS * DT_SECONDS;
   const tfRun = rolloutTransformerPolicy(policy, FINAL_STEPS);
   const tfDistance = tfRun.distance;
-  const tfSpeed = tfDistance / (tfRun.completed * DT_SECONDS);
+  const tfSpeed = tfRun.completed > 0 ? tfDistance / (tfRun.completed * DT_SECONDS) : 0;
   const tfCoT = tfDistance > 1e-9 ? tfRun.work / (ROBOT_MASS_KG * 9.81 * tfDistance) : 0;
 
   const transformerReceipt: PolicyAblationReceipt = {

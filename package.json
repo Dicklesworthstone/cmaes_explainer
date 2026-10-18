@@ -12,7 +12,9 @@
     "test": "bun test",
     "bench:cmaes": "bun tests/perf/cmaesEngine.bench.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "format": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit",
+    "quality:web": "bun run typecheck && bun run lint && bun test"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

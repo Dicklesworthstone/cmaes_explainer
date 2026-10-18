@@ -2,6 +2,10 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
+if [[ "${SKIP_WEB_QUALITY_GATE:-0}" != "1" ]]; then
+  command -v bun >/dev/null
+  (cd "$repo_root" && bun run quality:web)
+fi
 cd "$repo_root/ios"
 
 build_root="${FRANKEN_APPLE_BUILD_ROOT:-${DSR_QUALITY_RUN_DIR:-$repo_root/ios/build/dsr-apple-quality}}"
