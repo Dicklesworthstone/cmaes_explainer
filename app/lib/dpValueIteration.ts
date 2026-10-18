@@ -351,19 +351,35 @@ export function setGoalCells(
   radius: number,
   sdf: SDF2D,
 ): void {
+  let markedAny = false;
   for (let iy = 0; iy < grid.height; iy++) {
     for (let ix = 0; ix < grid.width; ix++) {
       const wx = grid.origin[0] + (ix + 0.5) * grid.resolution;
       const wy = grid.origin[1] + (iy + 0.5) * grid.resolution;
-      // Goal: a cell is a goal if (a) it is inside a goal disc, OR
-      // (b) its SDF is < radius (i.e. it is "close enough" to the goal
-      // region). We use (a) to keep the goal set explicit.
+      if (sdf(wx, wy) <= 0) continue;
       for (const c of centers) {
         const dx = wx - c[0];
         const dy = wy - c[1];
         if (dx * dx + dy * dy <= radius * radius) {
           grid.goal[iy * grid.width + ix] = 1;
           grid.values[iy * grid.width + ix] = 0;
+          markedAny = true;
+        }
+      }
+    }
+  }
+  if (!markedAny) {
+    for (let iy = 0; iy < grid.height; iy++) {
+      for (let ix = 0; ix < grid.width; ix++) {
+        const wx = grid.origin[0] + (ix + 0.5) * grid.resolution;
+        const wy = grid.origin[1] + (iy + 0.5) * grid.resolution;
+        for (const c of centers) {
+          const dx = wx - c[0];
+          const dy = wy - c[1];
+          if (dx * dx + dy * dy <= radius * radius) {
+            grid.goal[iy * grid.width + ix] = 1;
+            grid.values[iy * grid.width + ix] = 0;
+          }
         }
       }
     }
@@ -518,8 +534,9 @@ export function runValueIteration(
 // ---------------------------------------------------------------------------
 
 /** Extract a guidance policy from the value function via central
- *  differences. Returns null for goal cells and cells inside
- *  obstacles.
+ *  differences (with finite one-sided differences adjacent to blocked
+ *  obstacle cells). Returns zero guidance for goal cells and cells
+ *  inside obstacles.
  */
 export function extractPolicy(grid: ValueGrid, sdf: SDF2D): ValuePolicy {
   const { width, height, resolution, values, goal } = grid;
@@ -543,21 +560,67 @@ export function extractPolicy(grid: ValueGrid, sdf: SDF2D): ValuePolicy {
         gy[idx] = 0;
         continue;
       }
-      // Central differences (clamped at the grid boundary).
+      const vc = values[idx];
+      if (!Number.isFinite(vc)) {
+        gx[idx] = 0;
+        gy[idx] = 0;
+        continue;
+      }
+      // Central differences where both neighbors are finite; one-sided
+      // finite differences when a neighbor is blocked (+Infinity) or at grid boundary.
       const ixp = Math.min(ix + 1, width - 1);
       const ixm = Math.max(ix - 1, 0);
       const iyp = Math.min(iy + 1, height - 1);
       const iym = Math.max(iy - 1, 0);
-      const dVx = (values[iy * width + ixp] - values[iy * width + ixm]) / (2.0 * resolution);
-      const dVy = (values[iyp * width + ix] - values[iym * width + ix]) / (2.0 * resolution);
-      const mag = Math.sqrt(dVx * dVx + dVy * dVy);
-      if (mag < 1e-12) {
-        gx[idx] = 0;
-        gy[idx] = 0;
-      } else {
+      const vp = values[iy * width + ixp];
+      const vm = values[iy * width + ixm];
+      const vyp = values[iyp * width + ix];
+      const vym = values[iym * width + ix];
+
+      let dVx = 0;
+      if (Number.isFinite(vp) && Number.isFinite(vm) && ixp > ixm) {
+        dVx = (vp - vm) / ((ixp - ixm) * resolution);
+      } else if (Number.isFinite(vp) && ixp > ix) {
+        dVx = (vp - vc) / ((ixp - ix) * resolution);
+      } else if (Number.isFinite(vm) && ix > ixm) {
+        dVx = (vc - vm) / ((ix - ixm) * resolution);
+      }
+
+      let dVy = 0;
+      if (Number.isFinite(vyp) && Number.isFinite(vym) && iyp > iym) {
+        dVy = (vyp - vym) / ((iyp - iym) * resolution);
+      } else if (Number.isFinite(vyp) && iyp > iy) {
+        dVy = (vyp - vc) / ((iyp - iy) * resolution);
+      } else if (Number.isFinite(vym) && iy > iym) {
+        dVy = (vc - vym) / ((iy - iym) * resolution);
+      }
+
+      const mag = Math.hypot(dVx, dVy);
+      if (mag >= 1e-12) {
         // pi*(s) = -grad V*(s) (move away from obstacles toward lower cost).
         gx[idx] = -dVx / mag;
         gy[idx] = -dVy / mag;
+      } else {
+        // Fallback for 1-cell narrow corridors between obstacles: steepest finite neighbor
+        let bestRate = 0;
+        let bestDx = 0;
+        let bestDy = 0;
+        for (const [ax, ay] of ACTIONS_8) {
+          const nix = ix + ax;
+          const niy = iy + ay;
+          if (nix < 0 || nix >= width || niy < 0 || niy >= height) continue;
+          const nv = values[niy * width + nix];
+          if (!Number.isFinite(nv)) continue;
+          const stepDist = Math.hypot(ax, ay);
+          const dropRate = (vc - nv) / stepDist;
+          if (dropRate > bestRate) {
+            bestRate = dropRate;
+            bestDx = ax / stepDist;
+            bestDy = ay / stepDist;
+          }
+        }
+        gx[idx] = bestDx;
+        gy[idx] = bestDy;
       }
     }
   }
