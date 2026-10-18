@@ -211,14 +211,12 @@ export function runCmaesPolicySearch(options: CmaesSearchOptions = {}): CmaesPol
   const final = rollout(finalSteps, bestGenotype, searchFeatures, searchAction, finalFeatureBank);
 
   const dt = new G1TrainEnv({ maxSteps: finalSteps }).config.dt;
-  const seconds = finalSteps * dt;
+  const seconds = final.completedSteps * dt;
   const averageSpeedMps = seconds > 0 ? final.distanceMeters / seconds : 0.0;
   const cotDenominator = ROBOT_MASS_KG * GRAVITY_MPS2 * final.distanceMeters;
   const costOfTransportCoT =
     cotDenominator > 1e-9 ? final.actuatorWorkJoules / cotDenominator : 0.0;
-  const survivalRatePercent = final.fallOccurred
-    ? (final.completedSteps / finalSteps) * 100.0
-    : 100.0;
+  const survivalRatePercent = (final.completedSteps / finalSteps) * 100.0;
 
   // Inference latency: tight loop (>=10k applications) of policy math only —
   // no env.step — cycling real feature vectors captured during the final

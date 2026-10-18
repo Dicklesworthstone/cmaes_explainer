@@ -463,6 +463,7 @@ export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.Mes
       mat = new THREE.MeshStandardMaterial({
         map: tex.albedoMap,
         normalMap: tex.normalMap,
+        roughnessMap: tex.roughnessMap,
         roughness: 0.85,
         metalness: 0.0,
       });
@@ -473,6 +474,7 @@ export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.Mes
       mat = new THREE.MeshStandardMaterial({
         map: tex.albedoMap,
         normalMap: tex.normalMap,
+        roughnessMap: tex.roughnessMap,
         roughness: 0.4,
         metalness: 0.05,
       });
@@ -483,6 +485,7 @@ export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.Mes
       mat = new THREE.MeshStandardMaterial({
         map: tex.albedoMap,
         normalMap: tex.normalMap,
+        roughnessMap: tex.roughnessMap,
         roughness: 0.95,
         metalness: 0.0,
       });
@@ -514,6 +517,8 @@ export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.Mes
       const tex = generateMarbleTexture(size, size);
       mat = new THREE.MeshStandardMaterial({
         map: tex.albedoMap,
+        normalMap: tex.normalMap,
+        roughnessMap: tex.roughnessMap,
         roughness: 0.2,
         metalness: 0.05,
       });
@@ -523,6 +528,8 @@ export function getProceduralMaterial(kind: MaterialKind, size = 128): THREE.Mes
       const tex = generateMarbleTexture(size, size, [45, 48, 52], [140, 145, 150]);
       mat = new THREE.MeshStandardMaterial({
         map: tex.albedoMap,
+        normalMap: tex.normalMap,
+        roughnessMap: tex.roughnessMap,
         roughness: 0.25,
         metalness: 0.1,
       });

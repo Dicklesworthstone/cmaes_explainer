@@ -40,7 +40,7 @@ async function loadWasmModule(jsPath: string, wasmPath: string): Promise<any> {
   if (typeof window === "undefined") return null;
 
   try {
-    const jsResp = await fetch(jsPath);
+    const jsResp = await fetch(jsPath, { signal: AbortSignal.timeout(10_000) });
     if (!jsResp.ok) throw new Error(`Failed to fetch ${jsPath}: ${jsResp.statusText}`);
     const jsText = await jsResp.text();
 
@@ -174,7 +174,7 @@ export function decodeParameter(
   displayValue: string;
   categoryIndex?: number;
 } {
-  const clampZ = Math.max(0, Math.min(1, z));
+  const clampZ = Number.isFinite(z) ? Math.max(0, Math.min(1, z)) : 0.5;
 
   switch (spec.type) {
     case "continuous": {
@@ -191,7 +191,7 @@ export function decodeParameter(
 
     case "log": {
       const logMin = Math.log(Math.max(1e-8, spec.min));
-      const logMax = Math.log(spec.max);
+      const logMax = Math.log(Math.max(1e-8, spec.max));
       const val = Math.exp(logMin + clampZ * (logMax - logMin));
       return {
         normalized: clampZ,
@@ -201,10 +201,11 @@ export function decodeParameter(
     }
 
     case "discrete": {
-      const range = spec.max - spec.min;
-      const count = Math.floor(range / (spec.step || 1)) + 1;
+      const step = spec.step && spec.step > 0 ? spec.step : 1;
+      const range = Math.max(0, spec.max - spec.min);
+      const count = Math.floor(range / step) + 1;
       const index = Math.min(count - 1, Math.floor(clampZ * count));
-      const val = spec.min + index * (spec.step || 1);
+      const val = spec.min + index * step;
       return {
         normalized: clampZ,
         value: val,
@@ -213,7 +214,7 @@ export function decodeParameter(
     }
 
     case "categorical": {
-      const cats = spec.categories || ["A", "B", "C"];
+      const cats = spec.categories && spec.categories.length > 0 ? spec.categories : ["A", "B", "C"];
       const K = cats.length;
       const index = Math.min(K - 1, Math.floor(clampZ * K));
       const cat = cats[index];
@@ -233,18 +234,25 @@ export function decodeParameter(
 export function encodeParameter(value: any, spec: ParameterSpec): number {
   switch (spec.type) {
     case "continuous":
-      return Math.max(0, Math.min(1, (Number(value) - spec.min) / (spec.max - spec.min)));
-    case "log": {
-      const logMin = Math.log(Math.max(1e-8, spec.min));
-      const logMax = Math.log(spec.max);
-      return Math.max(0, Math.min(1, (Math.log(Number(value)) - logMin) / (logMax - logMin)));
+    case "discrete": {
+      const num = Number(value);
+      const span = spec.max - spec.min;
+      if (!Number.isFinite(num) || !Number.isFinite(span) || Math.abs(span) <= 1e-12) return 0.5;
+      return Math.max(0, Math.min(1, (num - spec.min) / span));
     }
-    case "discrete":
-      return Math.max(0, Math.min(1, (Number(value) - spec.min) / (spec.max - spec.min)));
+    case "log": {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 0.5;
+      const logMin = Math.log(Math.max(1e-8, spec.min));
+      const logMax = Math.log(Math.max(1e-8, spec.max));
+      const logSpan = logMax - logMin;
+      if (!Number.isFinite(logSpan) || Math.abs(logSpan) <= 1e-12) return 0.5;
+      return Math.max(0, Math.min(1, (Math.log(Math.max(1e-8, num)) - logMin) / logSpan));
+    }
     case "categorical": {
       const cats = spec.categories || [];
       const idx = cats.indexOf(String(value));
-      if (idx < 0) return 0.5;
+      if (idx < 0 || cats.length === 0) return 0.5;
       return (idx + 0.5) / cats.length;
     }
   }
@@ -409,9 +417,10 @@ export function evaluateBridgePhysics(
   // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
   // numbers. The TS model below is the honest fallback; the two are ports of
   // the same formulas, so results agree either way.
-  if (fsDemoPhysicsModule && typeof fsDemoPhysicsModule.bridge_eval === "function") {
+  const bridgeEvalFn = fsDemoPhysicsModule?.bridge_eval;
+  if (typeof bridgeEvalFn === "function") {
     try {
-      const raw = fsDemoPhysicsModule.bridge_eval(
+      const raw = bridgeEvalFn(
         spanLength,
         cableSag,
         deckStiffness,
@@ -754,9 +763,10 @@ export function evaluateWingPhysics(
   // FrankenSim demo-physics kernel: when loaded, THIS computes the displayed
   // numbers. The TS model below is the honest fallback; the two are ports of
   // the same formulas, so results agree either way.
-  if (fsDemoPhysicsModule && typeof fsDemoPhysicsModule.wing_eval === "function") {
+  const wingEvalFn = fsDemoPhysicsModule?.wing_eval;
+  if (typeof wingEvalFn === "function") {
     try {
-      const raw = fsDemoPhysicsModule.wing_eval(
+      const raw = wingEvalFn(
         aspectRatio,
         sweepAngle,
         thicknessRatio,
