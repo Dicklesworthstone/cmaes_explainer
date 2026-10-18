@@ -95,10 +95,28 @@ describe("Procedural PBR Materials", () => {
       "plaster-wall",
     ];
 
+    const texturedKinds = new Set<MaterialKind>([
+      "oak-hardwood",
+      "walnut-dark",
+      "pine-craftsman",
+      "linen-fabric",
+      "leather-warm",
+      "wool-carpet",
+      "ceramic-tile",
+      "subway-tile",
+      "marble-carrara",
+      "granite-counter",
+    ]);
+
     for (const kind of kinds) {
       const mat = getProceduralMaterial(kind, 32);
       expect(mat).toBeInstanceOf(THREE.Material);
       expect(mat.roughness).toBeDefined();
+      if (texturedKinds.has(kind)) {
+        expect(mat.map).toBeInstanceOf(THREE.DataTexture);
+        expect(mat.normalMap).toBeInstanceOf(THREE.DataTexture);
+        expect(mat.roughnessMap).toBeInstanceOf(THREE.DataTexture);
+      }
     }
 
     const disposed = disposeProceduralMaterials();
