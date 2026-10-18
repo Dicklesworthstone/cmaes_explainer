@@ -132,7 +132,7 @@ export function scanLidar(
       const localDirY = worldDirX * s + worldDirY * c;
       const hx = obb.halfExtents[0];
       const hy = obb.halfExtents[2];
-      let tMin = 0.0;
+      let tMin = rSelf;
       let tMax = config.maxRangeMeters;
       let hitLocal = true;
       if (Math.abs(localDirX) < 1e-9) {
@@ -159,7 +159,7 @@ export function scanLidar(
           if (tMin > tMax) hitLocal = false;
         }
       }
-      if (hitLocal) {
+      if (hitLocal && tMax >= rSelf) {
         const tHit = Math.max(tMin, rSelf);
         if (tHit < range) {
           range = tHit;

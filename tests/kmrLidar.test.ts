@@ -174,4 +174,33 @@ describe("KUKA KMR iiwa 2D LiDAR (cmaes-kmr-lidar)", () => {
     expect(singleRayScan.rays).toHaveLength(1);
     expect(singleRayScan.rays[0].angleRadians).toBeCloseTo(0, 8);
   });
+
+  test("scanLidar ignores obstacles behind the ray or wholly inside the self-exclusion radius rSelf", () => {
+    const testCfg: LidarConfig = {
+      numRays: 1,
+      minRangeMeters: 0.4, // rSelf = max(0.4 * 0.5, 0.05) = 0.2m
+      maxRangeMeters: 8.0,
+      fovDegrees: 90,
+      noiseStdDevMeters: 0,
+    };
+    const behindWall: OrientedBoundingBox = {
+      id: "behind-wall",
+      name: "behind-wall",
+      center: [-2.0, 0.5, 0],
+      halfExtents: [0.2, 1.0, 1.0],
+      rotationYawRad: 0,
+    };
+    const insideSelfRadiusBox: OrientedBoundingBox = {
+      id: "inside-self",
+      name: "inside-self",
+      // Spans x in [0.05, 0.15], wholly < rSelf (0.20m)
+      center: [0.1, 0.5, 0],
+      halfExtents: [0.05, 1.0, 0.5],
+      rotationYawRad: 0,
+    };
+    const scan = scanLidar(0, 0, [behindWall, insideSelfRadiusBox], testCfg, 0);
+    expect(scan.rays).toHaveLength(1);
+    expect(scan.rays[0].hit).toBe(false);
+    expect(scan.rays[0].rangeMeters).toBe(testCfg.maxRangeMeters);
+  });
 });

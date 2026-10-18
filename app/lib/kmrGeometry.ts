@@ -179,43 +179,43 @@ function buildMecanumWheel(
 
   // The wheel hub (main cylinder).
   const hubGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelWidth, 24, 1, false);
-  // Cylinder default is along Y axis; rotate to X axis (wheel rolls
-  // forward when rotating around the X axis).
-  hubGeo.rotateZ(Math.PI / 2);
+  // Cylinder default is along Y axis; rotate around X so the wheel axle lies
+  // along lateral Z and the wheel rolls forward along +X on the y = 0 floor.
+  hubGeo.rotateX(Math.PI / 2);
   const hub = new THREE.Mesh(hubGeo, materials.wheelHub);
   hub.castShadow = true;
   hub.receiveShadow = true;
-  hub.position.set(positionX, 0, positionY);
+  hub.position.set(positionX, wheelRadius, positionY);
   group.add(hub);
 
   // The 8 diagonal rollers. Each is a small cylinder lying on the
-  // wheel rim, oriented at 45 degrees to the wheel's rolling direction.
+  // wheel rim in the X-Y rolling plane, oriented at 45 degrees to the
+  // wheel's rolling direction.
   const numRollers = 8;
   const rollerRadius = wheelRadius * 0.18;
   const rollerLength = wheelWidth * 0.85;
   for (let i = 0; i < numRollers; i += 1) {
     const angle = (i / numRollers) * Math.PI * 2.0;
     const rollerGeo = new THREE.CylinderGeometry(rollerRadius, rollerRadius, rollerLength, 8);
-    // Orient the roller tangent to the wheel circumference, then rotate
-    // 45 degrees around the wheel's spin axis to get the diagonal
-    // pattern (mecanum signature).
-    rollerGeo.rotateX(Math.PI / 2);
-    rollerGeo.rotateZ(Math.PI / 2);
-    rollerGeo.rotateY(Math.PI / 4);
+    // At angle = 0 on the rim, the tangent is +Y and the axle is +Z.
+    // Tilt 45 degrees in the tangent-axle (Y-Z) plane around radial X,
+    // then rotate around the wheel's Z axle by `angle`.
+    rollerGeo.rotateX(Math.PI / 4);
+    rollerGeo.rotateZ(angle);
     const roller = new THREE.Mesh(rollerGeo, materials.wheelRoller);
     roller.position.set(
-      positionX + 0,
-      Math.cos(angle) * (wheelRadius - rollerRadius),
-      positionY + Math.sin(angle) * (wheelRadius - rollerRadius),
+      positionX + Math.cos(angle) * (wheelRadius - rollerRadius),
+      wheelRadius + Math.sin(angle) * (wheelRadius - rollerRadius),
+      positionY,
     );
     group.add(roller);
   }
 
-  // The 4 side caps (decorative).
+  // The 2 side caps (decorative, normal along ±Z wheel axle).
   for (const sign of [-1, 1]) {
     const capGeo = new THREE.CircleGeometry(wheelRadius * 0.9, 24);
     const cap = new THREE.Mesh(capGeo, materials.wheelHub);
-    cap.position.set(positionX + sign * (wheelWidth / 2 + 0.001), 0, positionY);
+    cap.position.set(positionX, wheelRadius, positionY + sign * (wheelWidth / 2 + 0.001));
     cap.rotation.y = sign > 0 ? 0 : Math.PI;
     group.add(cap);
   }

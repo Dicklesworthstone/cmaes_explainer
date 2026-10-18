@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as THREE from "three";
 import {
   buildKmrBaseMesh,
   computeDimensions,
@@ -68,14 +69,23 @@ describe("KUKA KMR iiwa geometry (cmaes-kmr-base)", () => {
     expect(mesh.children.length).toBeGreaterThanOrEqual(7);
   });
 
-  test("buildKmrBaseMesh adds exactly 4 named wheels at the four corners", () => {
+  test("buildKmrBaseMesh adds exactly 4 named wheels at the four corners resting on y = 0 with lateral Z axles", () => {
     const mesh = buildKmrBaseMesh();
-    // Each wheel is now a named Group (kmr_wheel_FL, FR, RL, RR)
-    // so the KMR scene can find them and apply IK-derived spin.
+    const wheelDiameter = KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS.wheelDiameterMeters;
     const wheelNames = ["kmr_wheel_FL", "kmr_wheel_FR", "kmr_wheel_RL", "kmr_wheel_RR"];
     for (const name of wheelNames) {
       const found = mesh.children.find((c) => c.name === name);
       expect(found, "expected to find wheel named " + name).toBeDefined();
+      const box = new THREE.Box3().setFromObject(found!);
+      // Bottom of wheel rests tangent to the y = 0 floor (never half-buried at y = -wheelRadius)
+      expect(box.min.y).toBeGreaterThanOrEqual(-1e-3);
+      expect(box.min.y).toBeLessThanOrEqual(1e-2);
+      expect(box.max.y).toBeCloseTo(wheelDiameter, 2);
+      // Wheel rolls in the X-Y plane (longitudinal X span ~ wheelDiameter, lateral Z span < wheelDiameter)
+      const spanX = box.max.x - box.min.x;
+      const spanZ = box.max.z - box.min.z;
+      expect(spanX).toBeCloseTo(wheelDiameter, 2);
+      expect(spanZ).toBeLessThan(wheelDiameter * 0.6);
     }
   });
 });
