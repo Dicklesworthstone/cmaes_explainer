@@ -96,6 +96,19 @@ describe("arm learning ledger", () => {
     );
     expect(armRefusalReason(touching)).toBe("collision envelope · envelopes in contact");
 
+    // Negative clearance (penetration) is preserved without clamping to 0 and reported explicitly.
+    const penetrating = armLedgerPoint(
+      receipt({
+        placed: false,
+        ownerReportedPlaced: true,
+        possibleCollisionTimeSeconds: 0.2,
+        minimumCertifiedClearanceMeters: -0.0045,
+      }),
+      512,
+    );
+    expect(penetrating.minimumClearanceMeters).toBeCloseTo(-0.0045, 8);
+    expect(armRefusalReason(penetrating)).toBe("collision envelope · 4.5 mm penetration");
+
     const noGrasp = armLedgerPoint(receipt({ placed: false, everGrasped: false }), 8);
     expect(armRefusalReason(noGrasp)).toBe("never grasped the object");
 

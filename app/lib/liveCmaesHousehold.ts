@@ -59,7 +59,7 @@ export class LiveCmaesOptimizer {
       generation: this.engine.generation,
       mean: [...this.engine.mean],
       sigma: this.engine.sigma,
-      covariance: this.engine.C,
+      covariance: this.engine.C.map((row) => [...row]),
       evolutionPathC: [...this.engine.pC],
       evolutionPathSigma: [...this.engine.pSigma],
       bestFitness: this.engine.bestFitness,
@@ -325,6 +325,7 @@ export function runEqualBudgetHouseholdCmaes(
   });
 
   let cmaesBestReceipt = initialPolicyReceipt;
+  let cmaesBestParams = [...initialMean];
   let cmaesEvals = 0;
 
   for (let g = 0; g < generations; g++) {
@@ -336,6 +337,7 @@ export function runEqualBudgetHouseholdCmaes(
       cmaesEvals++;
       if (rec.loss < cmaesBestReceipt.loss) {
         cmaesBestReceipt = rec;
+        cmaesBestParams = [...pop[i]];
       }
     }
     optimizer.tellEvaluations(pop, losses);
@@ -362,7 +364,7 @@ export function runEqualBudgetHouseholdCmaes(
     initialPolicyReceipt,
     cmaesBestReceipt,
     randomSearchBestReceipt,
-    cmaesBestParams: optimizer.state.bestParams,
+    cmaesBestParams,
     cmaesFitnessHistory: optimizer.state.fitnessHistory,
   };
 }

@@ -52,6 +52,9 @@ export function armRefusalReason(point: ArmLedgerPoint): string | null {
   if (point.placed) return null;
   if (!point.everGrasped) return "never grasped the object";
   if (point.unprovenSeparationSeconds > 0) {
+    if (point.minimumClearanceMeters < -1e-4) {
+      return `collision envelope · ${(Math.abs(point.minimumClearanceMeters) * 1000).toFixed(1)} mm penetration`;
+    }
     // Below a tenth of a millimetre the number is noise and "0 mm clearance"
     // reads as a missing value rather than as the finding, which is that two
     // envelopes are touching.
@@ -93,7 +96,7 @@ export function armLedgerPoint(receipt: ArmLedgerSource, generation: number): Ar
     graspSeconds: Math.max(0, finite(receipt.graspDurationSeconds)),
     everGrasped: receipt.everGrasped === true,
     ownerReportedPlaced: receipt.ownerReportedPlaced === true,
-    minimumClearanceMeters: Math.max(0, finite(receipt.minimumCertifiedClearanceMeters ?? 0)),
+    minimumClearanceMeters: finite(receipt.minimumCertifiedClearanceMeters ?? 0),
     unprovenSeparationSeconds: Math.max(0, finite(receipt.possibleCollisionTimeSeconds ?? 0)),
   };
 }

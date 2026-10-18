@@ -128,10 +128,11 @@ describe("furnitureTaxonomy", () => {
     }
   });
 
-  test("generic-box fallback is well-formed", () => {
+  test("generic-box fallback is well-formed and returned for unknown kinds", () => {
     expect(GENERIC_BOX_FALLBACK.defaultSize[0]).toBeGreaterThan(0);
     expect(GENERIC_BOX_FALLBACK.defaultMass).toBeGreaterThan(0);
     expect(GENERIC_BOX_FALLBACK.frictionClass in ALLOWED_FRICTION).toBe(true);
+    expect(furnitureKindDefaults("unknown-custom-kind" as FurnitureKind)).toBe(GENERIC_BOX_FALLBACK);
   });
 
   test("at least one rolling kind exists (cmaes-feat-fg5-rolling)", () => {

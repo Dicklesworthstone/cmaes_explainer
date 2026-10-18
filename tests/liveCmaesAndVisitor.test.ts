@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { CMAESOptimizerND } from "../app/lib/cmaesEngineND";
 import {
+  decodeHouseholdNavigationPolicy,
   evaluateHouseholdNavigationPolicy,
   LiveCmaesOptimizer,
   runEqualBudgetHouseholdCmaes,
@@ -46,6 +47,11 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
     }
     expect(Math.abs(live.state.covariance[0][1])).toBeGreaterThan(1e-5);
     expect(live.state.bestFitness).toBeLessThan(live.state.fitnessHistory[0] / 100);
+    // Mutating returned state.covariance does not corrupt internal engine covariance
+    const snapshotCov00 = live.state.covariance[0][0];
+    const mutatedState = live.state;
+    mutatedState.covariance[0][0] = 999999;
+    expect(live.state.covariance[0][0]).toBe(snapshotCov00);
   });
 
   test("invalid and reordered tells leave the pending generation available for a correct retry", () => {
@@ -315,6 +321,9 @@ describe("Live CMA-ES Policy Optimizer & Visitor Mode Showcase Engine", () => {
     expect(bench.cmaesBestReceipt.completedAllRooms).toBe(true);
     expect(bench.cmaesBestReceipt.collisionOccurred).toBe(false);
     expect(bench.cmaesBestReceipt.minimumClearanceMeters).toBeGreaterThan(0.0);
+    expect(decodeHouseholdNavigationPolicy(bench.cmaesBestParams)).toEqual(
+      bench.cmaesBestReceipt.decodedPolicy,
+    );
 
     // Negative control: spawning on an obstacle reports collisionOccurred = true and high loss
     const blockedReceipt = evaluateHouseholdNavigationPolicy([0, 0, 0, 0, 0], {

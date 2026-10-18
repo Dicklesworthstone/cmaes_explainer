@@ -1148,7 +1148,7 @@ export const FURNITURE_KIND_DEFAULTS: Record<FurnitureKind, FurnitureKindDefault
 
 /** Look up defaults for a kind, with a safe fallback. */
 export function furnitureKindDefaults(kind: FurnitureKind): FurnitureKindDefaults {
-  return FURNITURE_KIND_DEFAULTS[kind];
+  return FURNITURE_KIND_DEFAULTS[kind] ?? GENERIC_BOX_FALLBACK;
 }
 
 /** All kinds, in declaration order. */
