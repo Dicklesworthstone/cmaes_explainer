@@ -284,7 +284,7 @@ describe("computeMultiFactorObjective (cmaes-0m3)", () => {
         impactIntegral: Infinity,
         postureIntegral: -Infinity,
       }),
-      DEFAULT_CONFIG,
+      { ...DEFAULT_CONFIG, targetSpeed: Number.NaN },
     );
     expect(Number.isFinite(r.weighted)).toBe(true);
     for (const c of r.channels) {

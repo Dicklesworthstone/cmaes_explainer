@@ -51,6 +51,13 @@ describe("procedural shape generation primitives", () => {
     expect(Number.isFinite(pMid[1])).toBe(true);
     expect(Number.isFinite(p1[0])).toBe(true);
     expect(Number.isFinite(p1[1])).toBe(true);
+
+    // Degenerate point arrays and out-of-range/NaN t values are safely clamped
+    expect(evaluateCubicBSpline([], 0.5)).toEqual([0, 0]);
+    expect(evaluateCubicBSpline([[3, 4]], 0.5)).toEqual([3, 4]);
+    expect(evaluateCubicBSpline(pts, -1.0)).toEqual(p0);
+    expect(evaluateCubicBSpline(pts, 2.0)).toEqual(p1);
+    expect(evaluateCubicBSpline(pts, Number.NaN)).toEqual(p0);
   });
 
   test("bsplineExtrude generates 3D geometry from spline profile", () => {

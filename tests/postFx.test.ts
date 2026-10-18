@@ -153,5 +153,20 @@ describe("postFx", () => {
     const cornerOut = applyPostFXSoftware(brightSun, porch, [0.0, 0.0]);
     expect(cornerOut[0]).toBeLessThan(withBloom[0]);
   });
+
+  test("acesFilmic and linearToSRGB clamp negative linear inputs to 0 without rational curve inversion", () => {
+    expect(acesFilmic([-0.05, -0.5, -2.0])).toEqual([0, 0, 0]);
+    expect(linearToSRGB(-0.1)).toBe(0);
+    expect(linearToSRGB(0)).toBe(0);
+  });
+
+  test("flickerFireplace varies across consecutive frames even when frame * 0.37 shares the same integer floor", () => {
+    // Frames 0, 1, 2 all have Math.floor(frame * 0.37) === 0, so hash01 must distinguish fractional inputs
+    const f0 = flickerFireplace(0);
+    const f1 = flickerFireplace(1);
+    const f2 = flickerFireplace(2);
+    expect(f0).not.toBe(f1);
+    expect(f1).not.toBe(f2);
+  });
 });
 

@@ -175,7 +175,7 @@ export function computeMultiFactorObjective(
   const distanceSafe = Math.max(safe(receipt.distanceMeters, 0), 0.05);
   const workPerMeter = work / distanceSafe;
   // Target speed (m/s). A good policy is at or above target.
-  const targetSpeed = config.targetSpeed;
+  const targetSpeed = safe(config.targetSpeed, 0);
   // Channels: each has a label, the raw value, the weight, and the
   // contribution (value * weight, with sign-flip on the speed gap).
   const channels: MultiFactorChannel[] = [

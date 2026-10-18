@@ -251,7 +251,7 @@ export function stepRollingPieceDynamics(
   const newYaw = state.headingYaw + newYawRate * safeDt;
 
   // Update wheel rolling rotations based on forward progress
-  const wheelDeltaRot = (vLong * safeDt) / config.caster.wheelRadius;
+  const wheelDeltaRot = (newVLong * safeDt) / config.caster.wheelRadius;
   const newWheelRots = state.wheelRotations.map((r) => r + wheelDeltaRot);
 
   return {

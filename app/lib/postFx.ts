@@ -41,7 +41,9 @@ export const ACES_FILMIC = {
 /** Apply the ACES Filmic curve to a linear RGB triplet. Returns sRGB-ready
  *  values in [0, 1]. */
 export function acesFilmic(rgb: [number, number, number]): [number, number, number] {
-  const [r, g, b] = rgb;
+  const r = Math.max(0, rgb[0]);
+  const g = Math.max(0, rgb[1]);
+  const b = Math.max(0, rgb[2]);
   return [
     clamp01(
       (r * (ACES_FILMIC.a * r + ACES_FILMIC.b)) /
@@ -174,7 +176,10 @@ export function flickerFireplace(frame: number, baseIntensity = 1.0): number {
  *  precision drift and Math.random. */
 export function hash01(n: number): number {
   // Splitmix32 finalizer (Steele, Lea & Flood 2014).
-  let x = (n | 0) >>> 0;
+  // Scale fractional inputs by 2^20 before integer conversion so sub-integer
+  // arguments (e.g. frame * 0.37) produce distinct hashes per frame.
+  const seed = Number.isInteger(n) ? n | 0 : Math.round(n * 1048576) | 0;
+  let x = seed >>> 0;
   x = (x ^ (x >>> 16)) >>> 0;
   x = Math.imul(x, 0x85ebca6b) >>> 0;
   x = (x ^ (x >>> 13)) >>> 0;
@@ -187,6 +192,7 @@ export function hash01(n: number): number {
  *  space does this conversion automatically in the renderer; this
  *  helper is for software tests and offline baking. */
 export function linearToSRGB(linear: number): number {
+  if (linear <= 0) return 0;
   if (linear <= 0.0031308) return linear * 12.92;
   return 1.055 * linear ** (1.0 / 2.4) - 0.055;
 }

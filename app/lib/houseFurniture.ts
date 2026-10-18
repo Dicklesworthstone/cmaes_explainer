@@ -114,16 +114,19 @@ export function latheProfile(points: Array<[number, number]>, segments = 16): TH
 /** Cubic B-spline interpolation point evaluator. */
 export function evaluateCubicBSpline(points: Array<[number, number]>, t: number): [number, number] {
   const n = points.length;
+  if (n === 0) return [0, 0];
+  if (n === 1) return [points[0][0], points[0][1]];
+  const clampedT = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
   if (n < 4) {
-    const idx = Math.min(Math.floor(t * (n - 1)), n - 2);
-    const localT = t * (n - 1) - idx;
+    const idx = Math.max(0, Math.min(Math.floor(clampedT * (n - 1)), n - 2));
+    const localT = clampedT * (n - 1) - idx;
     const p0 = points[idx];
     const p1 = points[idx + 1];
     return [p0[0] + (p1[0] - p0[0]) * localT, p0[1] + (p1[1] - p0[1]) * localT];
   }
   const span = 1 / (n - 3);
-  const i = Math.min(Math.floor(t / span), n - 4);
-  const u = (t - i * span) / span;
+  const i = Math.max(0, Math.min(Math.floor(clampedT / span), n - 4));
+  const u = (clampedT - i * span) / span;
 
   const u2 = u * u;
   const u3 = u2 * u;

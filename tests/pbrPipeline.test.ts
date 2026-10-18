@@ -188,4 +188,10 @@ describe("pbrPipeline", () => {
     const oak = PBR_MATERIAL_SLOTS["oak-wood"];
     expect(oak.transparent).toBe(false);
   });
+
+  test("materialSlotsForKind falls back gracefully for unknown runtime furniture kinds", () => {
+    const fallbackSlots = materialSlotsForKind("unknown-furniture-kind" as never);
+    expect(fallbackSlots.length).toBeGreaterThan(0);
+    expect(fallbackSlots[0]).toBeDefined();
+  });
 });

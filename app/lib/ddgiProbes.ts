@@ -176,9 +176,9 @@ export function sampleProbeGrid(
   const fy = (worldPos[1] - oy) / sy + (ny - 1) / 2;
   const fz = (worldPos[2] - oz) / sz + (nz - 1) / 2;
   // Clamp to grid bounds
-  const cx = Math.max(0, Math.min(nx - 1.001, fx));
-  const cy = Math.max(0, Math.min(ny - 1.001, fy));
-  const cz = Math.max(0, Math.min(nz - 1.001, fz));
+  const cx = Math.max(0, Math.min(Math.max(0, nx - 1.001), fx));
+  const cy = Math.max(0, Math.min(Math.max(0, ny - 1.001), fy));
+  const cz = Math.max(0, Math.min(Math.max(0, nz - 1.001), fz));
   const ix0 = Math.floor(cx);
   const iy0 = Math.floor(cy);
   const iz0 = Math.floor(cz);
@@ -201,7 +201,10 @@ export function sampleProbeGrid(
         const wy = dy === 0 ? 1 - ty : ty;
         const wz = dz === 0 ? 1 - tz : tz;
         const weight = wx * wy * wz;
-        const idx = ((iz0 + dz) * ny + (iy0 + dy)) * nx + (ix0 + dx);
+        const ix = Math.min(nx - 1, ix0 + dx);
+        const iy = Math.min(ny - 1, iy0 + dy);
+        const iz = Math.min(nz - 1, iz0 + dz);
+        const idx = (iz * ny + iy) * nx + ix;
         const probe = grid.probes[idx];
         const cellBase = cellIdx * 3;
         const meanD = probe.meanDistance[cellIdx];

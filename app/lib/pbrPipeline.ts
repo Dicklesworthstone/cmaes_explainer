@@ -738,7 +738,7 @@ export const FURNITURE_KIND_TO_PBR_CLASSES: Record<FurnitureKind, PBRMaterialCla
 
 /** Resolve the PBR material slot list for a given furniture kind. */
 export function materialSlotsForKind(kind: FurnitureKind): PBRMaterialSlot[] {
-  const classes = FURNITURE_KIND_TO_PBR_CLASSES[kind];
+  const classes = FURNITURE_KIND_TO_PBR_CLASSES[kind] ?? FURNITURE_KIND_TO_PBR_CLASSES.cabinet;
   return classes.map((c) => PBR_MATERIAL_SLOTS[c]);
 }
 

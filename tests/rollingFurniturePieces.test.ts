@@ -80,7 +80,7 @@ describe("Rolling Furniture Pieces & Caster Kinematics Engine", () => {
     expect(Number.isFinite(state.headingYaw)).toBe(true);
   });
 
-  test("wheel rotations advance proportionally to rolling distance", () => {
+  test("wheel rotations advance proportionally to semi-implicit Euler rolling distance including step 1 from rest", () => {
     const cfg = ROLLING_PIECE_DEFAULTS["mop-bucket"];
     let state = createRollingPieceState("mop-bucket", [0, 0], 0.0);
     state.velocity = [0.6, 0.0];
@@ -88,10 +88,23 @@ describe("Rolling Furniture Pieces & Caster Kinematics Engine", () => {
     const dt = 1 / 60;
     state = stepRollingPieceDynamics(cfg, state, dt);
 
-    const expectedDeltaTheta = (0.6 * dt) / cfg.caster.wheelRadius;
+    const expectedDeltaTheta = (state.velocity[0] * dt) / cfg.caster.wheelRadius;
     for (const rot of state.wheelRotations) {
-      expect(rot).toBeCloseTo(expectedDeltaTheta, 3);
+      expect(rot).toBeCloseTo(expectedDeltaTheta, 5);
     }
+
+    // Pushing from rest on step 1 immediately advances both position and wheel rotation
+    const fromRest = stepRollingPieceDynamics(
+      cfg,
+      createRollingPieceState("mop-bucket", [0, 0], 0.0),
+      dt,
+      [25.0, 0.0],
+    );
+    expect(fromRest.position[0]).toBeGreaterThan(0);
+    expect(fromRest.wheelRotations[0]).toBeCloseTo(
+      fromRest.position[0] / cfg.caster.wheelRadius,
+      5,
+    );
   });
 
   test("passive lateral velocity decays monotonically without sign-reversal energy amplification", () => {

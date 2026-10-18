@@ -222,5 +222,13 @@ describe("ddgiProbes", () => {
     expect(distOccluded).toBeLessThan(distOpen);
     expect(irrOff).toBeLessThan(irrOn);
   });
+
+  test("sampleProbeGrid safely samples a 1x1x1 single-probe grid without out-of-bounds probe lookup", () => {
+    const singleGrid = createProbeGrid([0, 0, 0], [2, 2, 2], [1, 1, 1]);
+    expect(singleGrid.probes.length).toBe(1);
+    const sampled = sampleProbeGrid(singleGrid, [0, 0, 0], [0, 0, 1], 1.0);
+    expect(sampled.rgb[0]).toBeGreaterThan(0.5);
+    expect(sampled.visibility).toBeGreaterThan(0.9);
+  });
 });
 
