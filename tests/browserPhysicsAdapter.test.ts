@@ -92,4 +92,27 @@ describe("Browser Fail-Closed Physics Kernel Adapter", () => {
     expect(res.error.code).toBe("ERR_V068_MANIFEST_CORRUPT");
     expect(adapter.getStatus()).toBe("fail-closed");
   });
+
+  test("rejects malformed workload configs (zero/negative/NaN bodies, negative joints, non-positive dt)", () => {
+    const adapter = new BrowserPhysicsAdapter();
+    adapter.initialize("v068", validV068Manifest);
+
+    for (const badBodies of [0, -2, 1.5, Number.NaN]) {
+      const res = adapter.validateWorkload({ numBodies: badBodies });
+      expect(res.success).toBe(false);
+      if (!res.success) expect(res.error.code).toBe("ERR_INVALID_WORKLOAD");
+    }
+
+    for (const badJoints of [-1, 2.5, Number.NaN]) {
+      const res = adapter.validateWorkload({ numBodies: 1, numJoints: badJoints });
+      expect(res.success).toBe(false);
+      if (!res.success) expect(res.error.code).toBe("ERR_INVALID_WORKLOAD");
+    }
+
+    for (const badDt of [0, -0.01, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const res = adapter.validateWorkload({ numBodies: 1, dt: badDt });
+      expect(res.success).toBe(false);
+      if (!res.success) expect(res.error.code).toBe("ERR_INVALID_WORKLOAD");
+    }
+  });
 });
