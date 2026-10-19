@@ -7,6 +7,11 @@ import {
   type OrientedBoundingBox,
   projectPointOutOfOBB,
 } from "./houseMultiObstacleKernel";
+import {
+  checkG1SelfCollision,
+  type LinkCapsule,
+  type SelfCollisionResult,
+} from "./robotSelfCollision";
 
 export type InteractiveLimbPinId =
   | "head"
@@ -165,6 +170,7 @@ export interface G1FullBodyIKResult {
   contacts: G1CollisionContact[];
   isColliding: boolean;
   minClearance: number;
+  selfCollision: SelfCollisionResult;
 }
 
 // Unitree G1 Standard Physical Kinematic Lengths (meters)
@@ -574,6 +580,21 @@ export function solveFullBodyG1IK(
     }
   }
 
+  const g1Capsules = buildG1CapsulesFromIK({
+    pelvisPosition: pelvisClamped,
+    torsoPosition: torsoPos,
+    headPosition: headClamped,
+    leftKneePosition: leftKneeClamped,
+    rightKneePosition: rightKneeClamped,
+    leftFootPosition: leftLegIK.reachedTarget,
+    rightFootPosition: rightLegIK.reachedTarget,
+    leftElbowPosition: leftElbowClamped,
+    rightElbowPosition: rightElbowClamped,
+    leftHandPosition: leftArmIK.reachedTarget,
+    rightHandPosition: rightArmIK.reachedTarget,
+  });
+  const selfCollision = checkG1SelfCollision(g1Capsules, 0.005);
+
   return {
     pelvisPosition: pelvisClamped,
     leftFootPosition: leftLegIK.reachedTarget,
@@ -589,7 +610,81 @@ export function solveFullBodyG1IK(
     contacts,
     isColliding: contacts.length > 0,
     minClearance,
+    selfCollision,
   };
+}
+
+/**
+ * Constructs G1 link segment capsules from whole-body IK joint positions
+ * for exact segment-to-segment self-collision verification.
+ */
+export function buildG1CapsulesFromIK(state: {
+  pelvisPosition: [number, number, number];
+  torsoPosition: [number, number, number];
+  headPosition: [number, number, number];
+  leftKneePosition: [number, number, number];
+  rightKneePosition: [number, number, number];
+  leftFootPosition: [number, number, number];
+  rightFootPosition: [number, number, number];
+  leftElbowPosition: [number, number, number];
+  rightElbowPosition: [number, number, number];
+  leftHandPosition: [number, number, number];
+  rightHandPosition: [number, number, number];
+}): LinkCapsule[] {
+  const [pX, pY, pZ] = state.pelvisPosition;
+  const shoulderY = pY + G1_KINEMATICS.torsoHeight;
+  const leftHip: [number, number, number] = [pX, pY, pZ - G1_KINEMATICS.hipWidth * 0.5];
+  const rightHip: [number, number, number] = [pX, pY, pZ + G1_KINEMATICS.hipWidth * 0.5];
+  const leftShoulder: [number, number, number] = [
+    pX,
+    shoulderY,
+    pZ - G1_KINEMATICS.shoulderWidth * 0.5,
+  ];
+  const rightShoulder: [number, number, number] = [
+    pX,
+    shoulderY,
+    pZ + G1_KINEMATICS.shoulderWidth * 0.5,
+  ];
+  const upperTorso: [number, number, number] = [pX, shoulderY, pZ];
+
+  return [
+    { name: "pelvis", start: state.pelvisPosition, end: state.torsoPosition, radius: 0.065 },
+    { name: "torso", start: state.torsoPosition, end: upperTorso, radius: 0.075 },
+    { name: "head", start: upperTorso, end: state.headPosition, radius: 0.075 },
+    { name: "left_hip_pitch", start: leftHip, end: state.leftKneePosition, radius: 0.042 },
+    { name: "left_knee", start: state.leftKneePosition, end: state.leftFootPosition, radius: 0.04 },
+    { name: "right_hip_pitch", start: rightHip, end: state.rightKneePosition, radius: 0.042 },
+    {
+      name: "right_knee",
+      start: state.rightKneePosition,
+      end: state.rightFootPosition,
+      radius: 0.04,
+    },
+    {
+      name: "left_shoulder_pitch",
+      start: leftShoulder,
+      end: state.leftElbowPosition,
+      radius: 0.038,
+    },
+    {
+      name: "left_elbow",
+      start: state.leftElbowPosition,
+      end: state.leftHandPosition,
+      radius: 0.035,
+    },
+    {
+      name: "right_shoulder_pitch",
+      start: rightShoulder,
+      end: state.rightElbowPosition,
+      radius: 0.038,
+    },
+    {
+      name: "right_elbow",
+      start: state.rightElbowPosition,
+      end: state.rightHandPosition,
+      radius: 0.035,
+    },
+  ];
 }
 
 /**

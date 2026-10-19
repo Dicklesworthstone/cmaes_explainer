@@ -1,8 +1,24 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import {
+  evaluateFloorContactAO,
+  evaluateSdfSoftShadow,
+  type ShadowRayResult,
+} from "../lib/contactShadows";
+import { createProbeGrid, sampleProbeGrid } from "../lib/ddgiProbes";
 import { EMISSIVE_PALETTE, kelvinToRgb } from "../lib/emissiveSurfaces";
+import { evaluateSphericalHarmonics } from "../lib/houseLighting";
+import { getProceduralMaterial, type MaterialKind } from "../lib/houseMaterials";
 import { getMaterialPairFriction, type HouseholdMaterial } from "../lib/materialPairFriction";
+import {
+  PBR_MATERIAL_SLOTS,
+  type PBRMaterialClass,
+  type PBRMaterialSlot,
+  totalTextureBudgetMB,
+} from "../lib/pbrPipeline";
+import { applyPostFXSoftware, flickerFireplace, POSTFX_PROFILES } from "../lib/postFx";
+import { DEFAULT_POST_FX_CONFIG, processPixelPostFx } from "../lib/postProcessingPipeline";
 
 export interface PbrMaterialSpec {
   id: string;
@@ -126,10 +142,122 @@ export const CRAFTSMAN_MATERIAL_DATABASE: PbrMaterialSpec[] = [
   },
 ];
 
+const CATEGORY_TO_PBR_CLASS: Record<PbrMaterialSpec["category"], PBRMaterialClass> = {
+  wood: "oak-wood",
+  metal: "brass",
+  stone: "stone-granite",
+  ceramic: "ceramic-tile",
+  glass: "glass-clear",
+  fabric: "fabric-cotton",
+  leather: "fabric-leather",
+};
+
+const CATEGORY_TO_PROCEDURAL_KIND: Record<PbrMaterialSpec["category"], MaterialKind> = {
+  wood: "oak-hardwood",
+  metal: "metal-bronze-brushed",
+  stone: "granite-counter",
+  ceramic: "subway-tile",
+  glass: "glass-clear",
+  fabric: "linen-fabric",
+  leather: "leather-warm",
+};
+
+const SHARED_DDGI_GRID = createProbeGrid([0, 0, 1.25], [2.0, 1.4, 1.25], [4, 8, 3]);
+
+function hexToLinearRgb(hex: string): [number, number, number] {
+  const clean = hex.replace(/^#/, "");
+  const num = Number.parseInt(clean, 16);
+  if (!Number.isFinite(num)) return [0.5, 0.5, 0.5];
+  const r = ((num >> 16) & 255) / 255;
+  const g = ((num >> 8) & 255) / 255;
+  const b = (num & 255) / 255;
+  return [r ** 2.2, g ** 2.2, b ** 2.2];
+}
+
+export interface MaterialRenderingPipelineEvaluation {
+  pbrSlot: PBRMaterialSlot;
+  textureBudgetMb: number;
+  proceduralMaps: {
+    hasAlbedoMap: boolean;
+    hasNormalMap: boolean;
+    hasRoughnessMap: boolean;
+  };
+  shIrradiance: [number, number, number];
+  ddgiIrradiance: { rgb: [number, number, number]; visibility: number };
+  contactShadowAo: number;
+  softShadowRay: ShadowRayResult;
+  fireplaceFlickerMultiplier: number;
+  stageTonemappedRgb: [number, number, number];
+  compositePostFxRgb: [number, number, number];
+}
+
+export function evaluateMaterialRenderingPipeline(
+  mat: PbrMaterialSpec,
+  stageProfileKey = "parlor-calm",
+  frame = 12,
+): MaterialRenderingPipelineEvaluation {
+  const pbrClass = CATEGORY_TO_PBR_CLASS[mat.category] ?? "oak-wood";
+  const pbrSlot = PBR_MATERIAL_SLOTS[pbrClass];
+  const textureBudgetMb = totalTextureBudgetMB();
+
+  const procKind = CATEGORY_TO_PROCEDURAL_KIND[mat.category] ?? "oak-hardwood";
+  const procMat = getProceduralMaterial(procKind, 32);
+  const proceduralMaps = {
+    hasAlbedoMap: Boolean(procMat.map),
+    hasNormalMap: Boolean(procMat.normalMap),
+    hasRoughnessMap: Boolean(procMat.roughnessMap),
+  };
+
+  const shIrradiance = evaluateSphericalHarmonics([0, 1, 0]);
+  const ddgiIrradiance = sampleProbeGrid(SHARED_DDGI_GRID, [0, 0.5, 1.0], [0, 1, 0], 1.2);
+  const contactShadowAo = evaluateFloorContactAO(
+    [0, 0, 0],
+    [{ id: "furniture-leg", position: [0.04, 0.02, 0.04], radius: 0.08, occlusionStrength: 0.85 }],
+    0.0,
+  );
+  const softShadowRay = evaluateSdfSoftShadow(
+    [0, 0, 0],
+    [0.45, 0.82, 0.35],
+    (p) => Math.hypot(p[0] - 0.3, p[1] - 0.55, p[2] - 0.25) - 0.16,
+  );
+  const fireplaceFlickerMultiplier = flickerFireplace(frame, 1.0);
+
+  const baseLinear = hexToLinearRgb(mat.baseColorHex);
+  const emissiveBoost = mat.kelvinTemp
+    ? kelvinToRgb(mat.kelvinTemp)
+    : EMISSIVE_PALETTE.fireplace1500K;
+  const hdrRadiance: [number, number, number] = [
+    baseLinear[0] * (shIrradiance[0] + ddgiIrradiance.rgb[0] * 0.5) * contactShadowAo +
+      emissiveBoost[0] * 0.08 * fireplaceFlickerMultiplier,
+    baseLinear[1] * (shIrradiance[1] + ddgiIrradiance.rgb[1] * 0.5) * contactShadowAo +
+      emissiveBoost[1] * 0.08 * fireplaceFlickerMultiplier,
+    baseLinear[2] * (shIrradiance[2] + ddgiIrradiance.rgb[2] * 0.5) * contactShadowAo +
+      emissiveBoost[2] * 0.08 * fireplaceFlickerMultiplier,
+  ];
+
+  const profile = POSTFX_PROFILES[stageProfileKey] ?? POSTFX_PROFILES["parlor-calm"];
+  const stageTonemappedRgb = applyPostFXSoftware(hdrRadiance, profile, [0.5, 0.5]);
+  const compositePostFxRgb = processPixelPostFx(hdrRadiance, [0.5, 0.5], DEFAULT_POST_FX_CONFIG);
+
+  return {
+    pbrSlot,
+    textureBudgetMb,
+    proceduralMaps,
+    shIrradiance,
+    ddgiIrradiance,
+    contactShadowAo,
+    softShadowRay,
+    fireplaceFlickerMultiplier,
+    stageTonemappedRgb,
+    compositePostFxRgb,
+  };
+}
+
 export function MaterialDatabaseInspector() {
   const [selectedMatId, setSelectedMatId] = useState<string>("quarter-sawn-oak");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [matingMaterial, setMatingMaterial] = useState<HouseholdMaterial>("hardwood");
+  const [stageProfileKey, setStageProfileKey] = useState<string>("parlor-calm");
 
   const filteredMaterials = useMemo(() => {
     if (filterCategory === "all") return CRAFTSMAN_MATERIAL_DATABASE;
@@ -147,9 +275,13 @@ export function MaterialDatabaseInspector() {
     return getMaterialPairFriction(activeMat.frictionClass, matingMaterial);
   }, [activeMat, matingMaterial]);
 
+  const pipelineEval = useMemo(() => {
+    return evaluateMaterialRenderingPipeline(activeMat, stageProfileKey, 12);
+  }, [activeMat, stageProfileKey]);
+
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-neutral-800 pb-3 mb-4">
+    <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-neutral-800 pb-3">
         <div>
           <h2 className="text-base font-bold text-amber-400">
             PBR Material Database & Physical Matrix
@@ -259,6 +391,12 @@ export function MaterialDatabaseInspector() {
               <span>Bulk Density:</span>
               <span className="text-neutral-200 font-semibold">{activeMat.densityKgM3} kg/m³</span>
             </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>glTF Slot / KTX2 Budget:</span>
+              <span className="text-cyan-300 font-semibold">
+                {pipelineEval.pbrSlot.class} ({pipelineEval.textureBudgetMb.toFixed(1)} MB)
+              </span>
+            </div>
           </div>
         </div>
 
@@ -323,6 +461,82 @@ export function MaterialDatabaseInspector() {
               <span className="text-purple-400 font-semibold">
                 {frictionProps.restitution.toFixed(2)}
               </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Row: Photoreal Lighting, DDGI, Contact Shadow & ACES Post-FX Pipeline */}
+      <div className="bg-neutral-950/80 border border-neutral-800 rounded-lg p-4 space-y-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span className="font-semibold text-amber-300">
+              Photoreal Lighting, DDGI Irradiance & ACES Post-FX Pipeline
+            </span>
+            <p className="text-[11px] text-neutral-400">
+              Live L2 Spherical Harmonics + 4×8×3 DDGI Probe Grid + Contact AO + Narkowicz ACES
+              Filmic Tonemap
+            </p>
+          </div>
+          <select
+            aria-label="Post-FX Stage Profile"
+            className="bg-neutral-800 text-xs px-2 py-1 rounded border border-neutral-700 text-amber-200"
+            value={stageProfileKey}
+            onChange={(e) => setStageProfileKey(e.target.value)}
+          >
+            {Object.keys(POSTFX_PROFILES).map((k) => (
+              <option key={k} value={k}>
+                Profile: {k}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
+          <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800">
+            <div className="text-neutral-400">SH + DDGI Irradiance</div>
+            <div className="text-neutral-100 font-semibold mt-0.5">
+              RGB [{pipelineEval.ddgiIrradiance.rgb.map((v) => v.toFixed(2)).join(", ")}]
+            </div>
+            <div className="text-[10px] text-emerald-400">
+              Vis: {(pipelineEval.ddgiIrradiance.visibility * 100).toFixed(0)}% • IBL:{" "}
+              {pipelineEval.pbrSlot.iblContribution}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800">
+            <div className="text-neutral-400">Contact & Soft Shadows</div>
+            <div className="text-neutral-100 font-semibold mt-0.5">
+              AO: {(pipelineEval.contactShadowAo * 100).toFixed(1)}%
+            </div>
+            <div className="text-[10px] text-cyan-400">
+              PCSS Penumbra: {pipelineEval.softShadowRay.penumbraWidth.toFixed(3)}m
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800">
+            <div className="text-neutral-400">Procedural Maps</div>
+            <div className="text-neutral-100 font-semibold mt-0.5">
+              {[
+                pipelineEval.proceduralMaps.hasAlbedoMap ? "Albedo" : null,
+                pipelineEval.proceduralMaps.hasNormalMap ? "Normal" : null,
+                pipelineEval.proceduralMaps.hasRoughnessMap ? "Roughness" : null,
+              ]
+                .filter(Boolean)
+                .join(" + ") || "Analytic BRDF"}
+            </div>
+            <div className="text-[10px] text-amber-400">
+              Hearth Flicker: {pipelineEval.fireplaceFlickerMultiplier.toFixed(3)}×
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800">
+            <div className="text-neutral-400">ACES Filmic Tonemap</div>
+            <div className="text-neutral-100 font-semibold mt-0.5">
+              [{pipelineEval.stageTonemappedRgb.map((c) => c.toFixed(2)).join(", ")}]
+            </div>
+            <div className="text-[10px] text-purple-300">
+              Composite: [{pipelineEval.compositePostFxRgb.map((c) => c.toFixed(2)).join(", ")}]
             </div>
           </div>
         </div>

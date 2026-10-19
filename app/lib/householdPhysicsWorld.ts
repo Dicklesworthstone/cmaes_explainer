@@ -8,7 +8,15 @@
 //   6. stepRollingSphere per flag    (rollingContactDynamics)
 // Bead: cmaes-vpib. Related: cmaes-epic-dyn-physics-qrq, cmaes-phr6-qij.
 
-import { ContactGraph, type ContactManifold, type RigidBody, type Vector3 } from "./contactGraph";
+import {
+  computeWorldInvInertia,
+  ContactGraph,
+  type ContactManifold,
+  eulerToMatrix,
+  type RigidBody,
+  type Vector3,
+} from "./contactGraph";
+import { resolveContactImpulse } from "./contactManifold";
 import { stepContactRestitution } from "./contactRestitutionIntegrator";
 import {
   type CcdResult,
@@ -16,6 +24,13 @@ import {
   resolveContinuousCollision,
   type SdfEvaluator3D,
 } from "./continuousCollisionDetection";
+import {
+  type ArticulationGraph,
+  type ArticulationStepReceipt,
+  createFurnitureArticulation,
+  type LinkPose,
+} from "./furnitureArticulation";
+import type { FurnitureKind } from "./furnitureTaxonomy";
 import { DEFAULT_LCP_CONFIG, type LCPSolverConfig, stepPhysicsWorld } from "./lcpSolver";
 import type { HouseholdMaterial } from "./materialPairFriction";
 import {
@@ -36,6 +51,8 @@ export interface HouseholdBodyMeta {
   broken?: boolean;
   parentBrokenId?: string;
   fragmentIds?: string[];
+  articulationKind?: FurnitureKind | string;
+  articulationDimensions?: [number, number, number];
 }
 
 export interface HouseholdBreakageEvent {
@@ -53,6 +70,8 @@ export interface HouseholdWorld {
   contactGraph: ContactGraph;
   sleep: MultiBodySleepManager;
   meta: Map<string, HouseholdBodyMeta>;
+  articulations: Map<string, ArticulationGraph>;
+  articulationInputs: Map<string, Record<string, number>>;
   gravity: Vector3;
   ccdSpeedThreshold: number;
   dt: number;
@@ -76,6 +95,8 @@ export interface HouseholdStepResult {
   ccdImpacts: Array<{ bodyId: string; result: CcdResult }>;
   restitution: Array<{ bodyId: string; settled: boolean }>;
   breakageEvents: HouseholdBreakageEvent[];
+  articulationReceipts: Map<string, Map<string, ArticulationStepReceipt>>;
+  articulationLinkPoses: Map<string, Map<string, LinkPose>>;
   lcpIterations: number;
   lcpMaxResidual: number;
   lcpConverged: boolean;
@@ -100,6 +121,8 @@ export function createHouseholdWorld(
     ccdSpeedThreshold?: number;
     sdf?: SdfEvaluator3D;
     lcpConfig?: LCPSolverConfig;
+    articulations?: Map<string, ArticulationGraph>;
+    articulationInputs?: Map<string, Record<string, number>>;
   } = {},
 ): HouseholdWorld {
   const cg = new ContactGraph();
@@ -120,10 +143,30 @@ export function createHouseholdWorld(
     };
     sleep.registerBody(sleepable);
   }
+  const articulations = new Map<string, ArticulationGraph>(options.articulations ?? []);
+  for (const [bodyId, meta] of metaById.entries()) {
+    if (!articulations.has(bodyId) && meta.articulationKind) {
+      const dims = meta.articulationDimensions;
+      const graph = createFurnitureArticulation(
+        meta.articulationKind,
+        dims?.[0],
+        dims?.[1],
+        dims?.[2],
+      );
+      if (graph) {
+        articulations.set(bodyId, graph);
+      }
+    }
+  }
+  const articulationInputs = new Map<string, Record<string, number>>(
+    options.articulationInputs ?? [],
+  );
   return {
     contactGraph: cg,
     sleep,
     meta: metaById,
+    articulations,
+    articulationInputs,
     gravity: options.gravity ?? DEFAULT_GRAVITY,
     ccdSpeedThreshold: options.ccdSpeedThreshold ?? 5.0,
     dt: options.dt ?? 1 / 60,
@@ -438,8 +481,63 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
       let manifoldImpulse = 0;
       for (const m of manifolds) {
         if (m.bodyAId === body.id || m.bodyBId === body.id) {
+          const otherId = m.bodyAId === body.id ? m.bodyBId : m.bodyAId;
+          const otherBody = bodies.get(otherId);
+          const otherSnap = preStepSnapshots.get(otherId);
           for (const cp of m.contacts) {
-            manifoldImpulse += Math.max(0, cp.normalImpulse);
+            let cpImpulse = Math.max(0, cp.normalImpulse);
+            if (otherBody) {
+              const rA = eulerToMatrix(snap.rotation);
+              const rB = eulerToMatrix(otherSnap ? otherSnap.rotation : otherBody.rotation);
+              const invIA = computeWorldInvInertia(rA, body.invInertiaLocal);
+              const invIB = otherBody.isStatic
+                ? ([
+                    [0, 0, 0],
+                    [0, 0, 0],
+                    [0, 0, 0],
+                  ] as [
+                    [number, number, number],
+                    [number, number, number],
+                    [number, number, number],
+                  ])
+                : computeWorldInvInertia(rB, otherBody.invInertiaLocal);
+              const normalBtoA: Vector3 =
+                m.bodyAId === body.id
+                  ? [-cp.normal[0], -cp.normal[1], -cp.normal[2]]
+                  : [cp.normal[0], cp.normal[1], cp.normal[2]];
+              const analytical = resolveContactImpulse(
+                {
+                  position: snap.position,
+                  velocity: snap.linearVelocity,
+                  angularVelocity: snap.angularVelocity,
+                  mass: body.mass,
+                  invMass: body.invMass,
+                  invInertiaWorld: invIA,
+                },
+                {
+                  position: otherSnap ? otherSnap.position : otherBody.position,
+                  velocity: otherSnap ? otherSnap.linearVelocity : otherBody.linearVelocity,
+                  angularVelocity: otherSnap
+                    ? otherSnap.angularVelocity
+                    : otherBody.angularVelocity,
+                  mass: otherBody.mass,
+                  invMass: otherBody.invMass,
+                  invInertiaWorld: invIB,
+                },
+                {
+                  positionA: cp.position,
+                  positionB: cp.position,
+                  normal: normalBtoA,
+                  penetrationDepth: cp.penetrationDepth,
+                  tangent1: cp.tangent1,
+                  tangent2: cp.tangent2,
+                },
+                Math.min(body.restitution, otherBody.restitution),
+                Math.sqrt(body.friction * otherBody.friction),
+              );
+              cpImpulse = Math.max(cpImpulse, analytical.normalImpulse);
+            }
+            manifoldImpulse += cpImpulse;
           }
         }
       }
@@ -564,11 +662,24 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     }
   }
 
+  const articulationReceipts = new Map<string, Map<string, ArticulationStepReceipt>>();
+  const articulationLinkPoses = new Map<string, Map<string, LinkPose>>();
+  if (!stepRefused) {
+    for (const [bodyId, graph] of world.articulations.entries()) {
+      const extInputs = world.articulationInputs.get(bodyId);
+      const receipts = graph.stepDynamicsWithReceipts(world.dt, extInputs);
+      articulationReceipts.set(bodyId, receipts);
+      articulationLinkPoses.set(bodyId, graph.computeForwardKinematics());
+    }
+  }
+
   return {
     manifolds: world.contactGraph.getActiveManifolds(),
     ccdImpacts,
     restitution,
     breakageEvents,
+    articulationReceipts,
+    articulationLinkPoses,
     lcpIterations: lcp.iterationsTaken,
     lcpMaxResidual: lcp.maxResidual,
     lcpConverged: lcp.converged,

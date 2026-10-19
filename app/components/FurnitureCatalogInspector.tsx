@@ -1,14 +1,114 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import * as THREE from "three";
+import { type ContactManifold, collideSphereBox } from "../lib/contactManifold";
+import {
+  type ArticulationStepReceipt,
+  createFurnitureArticulation,
+  type LinkPose,
+} from "../lib/furnitureArticulation";
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../lib/furnitureTaxonomy";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
+import { MeshSdf, type MeshSdfQuery } from "../lib/meshSdf";
+
+export interface CatalogPiecePhysicsInspection {
+  pieceKind: FurnitureKind;
+  sdfCenterQuery: MeshSdfQuery;
+  sdfSurfaceQuery: MeshSdfQuery;
+  probeManifold: ContactManifold;
+  articulation: {
+    rootLink: string;
+    jointReceipts: ArticulationStepReceipt[];
+    linkPoses: LinkPose[];
+  } | null;
+}
+
+/**
+ * Evaluates live MeshSdf signed distance, narrowphase sphere-box contact manifold,
+ * and multi-step articulated joint dynamics + forward kinematics for a catalog furniture piece.
+ */
+export function inspectCatalogPiecePhysics(
+  piece: HouseFurniture,
+  externalInput = 1.5,
+  lockFirstJoint = false,
+  steps = 10,
+): CatalogPiecePhysicsInspection {
+  const pieceKind =
+    piece.kind && (piece.kind as FurnitureKind) in FURNITURE_KIND_DEFAULTS
+      ? (piece.kind as FurnitureKind)
+      : "dining-chair";
+  const w = Math.max(0.1, piece.size[0]);
+  const d = Math.max(0.1, piece.size[1]);
+  const h = Math.max(0.1, piece.height);
+
+  // 1. Exact Triangle-Mesh SDF check on the piece bounding hull
+  const boxGeo = new THREE.BoxGeometry(w, h, d);
+  const meshSdf = new MeshSdf(boxGeo);
+  const sdfCenterQuery = meshSdf.query([0, 0, 0]);
+  const sdfSurfaceQuery = meshSdf.query([0, h * 0.5, 0]);
+  boxGeo.dispose();
+
+  // 2. Narrowphase Sphere-Box Contact Manifold probe at top surface with 4cm sphere
+  const probeRadius = 0.04;
+  const probeManifold = collideSphereBox(
+    [0, h * 0.5 + probeRadius * 0.5, 0],
+    probeRadius,
+    [0, 0, 0],
+    [w * 0.5, h * 0.5, d * 0.5],
+  );
+
+  // 3. Articulated Joint Graph Dynamics & Forward Kinematics
+  const graph = createFurnitureArticulation(pieceKind, w, d, h);
+  if (!graph) {
+    return {
+      pieceKind,
+      sdfCenterQuery,
+      sdfSurfaceQuery,
+      probeManifold,
+      articulation: null,
+    };
+  }
+
+  const jointNames = Array.from(graph.joints.keys());
+  if (jointNames.length > 0 && lockFirstJoint) {
+    graph.setJointLocked(jointNames[0], true);
+  }
+
+  const inputs: Record<string, number> = {};
+  for (const jName of jointNames) {
+    const jDef = graph.joints.get(jName);
+    const dir = jDef && jDef.limits.min < 0 && jDef.limits.max <= 0 ? -1 : 1;
+    inputs[jName] = externalInput * dir;
+  }
+
+  let lastReceipts = new Map<string, ArticulationStepReceipt>();
+  const nSteps = Math.max(1, Math.min(60, Math.floor(steps)));
+  for (let s = 0; s < nSteps; s++) {
+    lastReceipts = graph.stepDynamicsWithReceipts(1 / 60, inputs);
+  }
+  const poses = graph.computeForwardKinematics();
+
+  return {
+    pieceKind,
+    sdfCenterQuery,
+    sdfSurfaceQuery,
+    probeManifold,
+    articulation: {
+      rootLink: graph.rootLink,
+      jointReceipts: Array.from(lastReceipts.values()),
+      linkPoses: Array.from(poses.values()),
+    },
+  };
+}
 
 export function FurnitureCatalogInspector() {
   const [selectedRoom, setSelectedRoom] = useState<string>("all");
   const [selectedPieceName, setSelectedPieceName] = useState<string>(
     CRAFTSMAN_BUNGALOW_1928.furniture[0]?.name ?? "front-porch-swing",
   );
+  const [jointDriveInput, setJointDriveInput] = useState<number>(1.5);
+  const [lockFirstJoint, setLockFirstJoint] = useState<boolean>(false);
 
   const rooms = useMemo(() => {
     const set = new Set<string>();
@@ -30,11 +130,14 @@ export function FurnitureCatalogInspector() {
     );
   }, [selectedPieceName]);
 
-  const pieceKind = (activePiece?.kind as FurnitureKind) ?? "dining-chair";
   const kindDefaults =
     activePiece?.kind && (activePiece.kind as FurnitureKind) in FURNITURE_KIND_DEFAULTS
       ? FURNITURE_KIND_DEFAULTS[activePiece.kind as FurnitureKind]
       : FURNITURE_KIND_DEFAULTS["dining-chair"];
+
+  const physicsInspection = useMemo(() => {
+    return inspectCatalogPiecePhysics(activePiece, jointDriveInput, lockFirstJoint, 12);
+  }, [activePiece, jointDriveInput, lockFirstJoint]);
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl">
@@ -136,6 +239,23 @@ export function FurnitureCatalogInspector() {
             </div>
           </div>
 
+          <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800 text-[10px] text-neutral-300 space-y-1">
+            <div className="text-cyan-300 font-bold">MeshSDF & Narrowphase Manifold:</div>
+            <div className="flex justify-between text-neutral-400">
+              <span>MeshSDF Core / Surface:</span>
+              <span className="text-neutral-200">
+                {physicsInspection.sdfCenterQuery.distance.toFixed(3)}m /{" "}
+                {physicsInspection.sdfSurfaceQuery.distance.toFixed(3)}m
+              </span>
+            </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>Top Probe Penetration:</span>
+              <span className="text-emerald-400">
+                {(physicsInspection.probeManifold.maxPenetration * 1000).toFixed(1)} mm (MTV +Y)
+              </span>
+            </div>
+          </div>
+
           <div className="p-2.5 rounded bg-neutral-900/80 border border-neutral-800 text-[11px] text-neutral-400 italic">
             &ldquo;{activePiece.note}&rdquo;
           </div>
@@ -189,8 +309,21 @@ export function FurnitureCatalogInspector() {
           </div>
 
           {kindDefaults.articulation && (
-            <div className="p-2 rounded bg-neutral-900/90 border border-neutral-800 text-[10px] text-neutral-300 space-y-1">
-              <div className="text-purple-300 font-bold">Joint Graph:</div>
+            <div className="p-2 rounded bg-neutral-900/90 border border-neutral-800 text-[10px] text-neutral-300 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-purple-300 font-bold">Joint Graph & FK Sim:</span>
+                <button
+                  type="button"
+                  onClick={() => setLockFirstJoint((v) => !v)}
+                  className={`px-1.5 py-0.5 rounded border text-[9px] ${
+                    lockFirstJoint
+                      ? "bg-rose-950/60 border-rose-500/50 text-rose-300"
+                      : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                  }`}
+                >
+                  {lockFirstJoint ? "Locked" : "Unlocked"}
+                </button>
+              </div>
               {kindDefaults.articulation.joints.map((j) => (
                 <div key={j.name} className="flex justify-between">
                   <span>
@@ -201,6 +334,38 @@ export function FurnitureCatalogInspector() {
                   </span>
                 </div>
               ))}
+              {physicsInspection.articulation && (
+                <div className="pt-1 border-t border-neutral-800 space-y-1">
+                  <div className="flex items-center justify-between text-neutral-400">
+                    <span>Drive Input:</span>
+                    <div className="flex gap-1">
+                      {[0, 1.5, 4.0].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setJointDriveInput(val)}
+                          className={`px-1.5 py-0.5 rounded text-[9px] ${
+                            jointDriveInput === val
+                              ? "bg-purple-900/60 text-purple-200 border border-purple-500/40"
+                              : "bg-neutral-800 text-neutral-400"
+                          }`}
+                        >
+                          {val}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {physicsInspection.articulation.jointReceipts.map((r) => (
+                    <div key={r.jointName} className="flex justify-between text-neutral-300">
+                      <span className="truncate max-w-[110px]">{r.jointName}:</span>
+                      <span className="text-cyan-300">
+                        q={r.newPosition.toFixed(3)}{" "}
+                        {r.lockedRefused ? "(LOCK)" : r.clampedAtLimit ? "(LIM)" : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

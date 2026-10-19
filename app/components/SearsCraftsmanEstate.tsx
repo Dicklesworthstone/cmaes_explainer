@@ -4,8 +4,10 @@ import { useFrame } from "@react-three/fiber";
 
 import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { evaluateFloorContactAO } from "../lib/contactShadows";
 import { CRAFTSMAN_WALKING_ROUTES, type CraftsmanWalkingRoute } from "../lib/craftsmanCatalogData";
 import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
+import { flickerFireplace, POSTFX_PROFILES } from "../lib/postFx";
 
 // ---------------------------------------------------------------------------
 // High-Resolution Procedural Texture Generators (Three.js Skill Doctrine)
@@ -296,8 +298,34 @@ export function SearsCraftsmanEstate({
   timeOfDay = "afternoon-sun",
 }: SearsCraftsmanEstateProps) {
   const ceilingRef = useRef<THREE.Group>(null);
+  const fireplaceLightRef = useRef<THREE.PointLight>(null);
   const cameraWorldPosition = useMemo(() => new THREE.Vector3(), []);
-  useFrame(({ camera }) => {
+  const postFxProfile = useMemo(() => {
+    const profileKey =
+      timeOfDay === "evening-glow"
+        ? "bedroom-moody"
+        : timeOfDay === "golden-hour"
+          ? "kitchen-warm"
+          : "parlor-calm";
+    return POSTFX_PROFILES[profileKey] ?? POSTFX_PROFILES["parlor-calm"];
+  }, [timeOfDay]);
+  const hearthContactAO = useMemo(
+    () =>
+      evaluateFloorContactAO(
+        [0, 0, 0],
+        [{ id: "hearth-base", position: [0.1, 0.12, 0.1], radius: 0.45, occlusionStrength: 0.85 }],
+        0.0,
+      ),
+    [],
+  );
+  useFrame(({ camera, clock }) => {
+    if (fireplaceLightRef.current) {
+      const baseIntensity = timeOfDay === "evening-glow" ? 9 : 4;
+      fireplaceLightRef.current.intensity = flickerFireplace(
+        clock.getElapsedTime(),
+        baseIntensity * (1 + postFxProfile.bloomStrength * 0.25),
+      );
+    }
     if (!ceilingRef.current) return;
     camera.getWorldPosition(cameraWorldPosition);
     // Open-roof inspection also cuts away beams above the robot. Keep the
@@ -745,6 +773,7 @@ export function SearsCraftsmanEstate({
             />
           </mesh>
           <pointLight
+            ref={fireplaceLightRef}
             position={[0, 0.45, 0.45]}
             color="#ff7a33"
             intensity={timeOfDay === "evening-glow" ? 9 : 4}
@@ -1087,7 +1116,11 @@ export function SearsCraftsmanEstate({
       />
 
       {/* Warm Wood Surface Bounce Fill Light */}
-      <directionalLight position={[3.5, 3.2, 2.0]} intensity={0.7} color="#fed7aa" />
+      <directionalLight
+        position={[3.5, 3.2, 2.0]}
+        intensity={0.7 * hearthContactAO * postFxProfile.exposure}
+        color="#fed7aa"
+      />
 
       {/* ----------------------------------------------------------------- */}
       {/* 10. Whole-House Obstacle Traversal Waypoints & Gate Rings         */}

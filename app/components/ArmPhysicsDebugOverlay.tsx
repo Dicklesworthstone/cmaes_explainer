@@ -37,6 +37,11 @@ import type {
   HouseholdManipulationTraceSample,
 } from "../lib/frankensimCmaes";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
+import {
+  ARM_LINK_NAMES,
+  buildArmCapsulesFromLinkPositions,
+  checkArmSelfCollision,
+} from "../lib/robotSelfCollision";
 
 // Module-level cache of the reachable workspace point cloud. Computing
 // it on every render would be wasteful; the joint limits are constants
@@ -199,24 +204,42 @@ export function ArmPhysicsDebugOverlay({
       ] as [number, number, number, number])
     : null;
 
+  const armLinkPositions: [number, number, number][] = sample
+    ? sample.linkPoses.map((pose, idx) => {
+        const rendered = renderedLinkPositions?.[idx];
+        return rendered ? [rendered[0], rendered[1], rendered[2]] : ownerToThree(pose.position);
+      })
+    : [];
+  const collidingArmLinks = new Set<string>();
+  if (armLinkPositions.length >= 2) {
+    const capsules = buildArmCapsulesFromLinkPositions(armLinkPositions, ARM_LINK_RADII);
+    const armSelfCol = checkArmSelfCollision(capsules, 0.003);
+    for (const pair of armSelfCol.collidingPairs) {
+      collidingArmLinks.add(pair.linkA);
+      collidingArmLinks.add(pair.linkB);
+    }
+  }
+
   return (
     <group>
-      {/* 1. 8 KUKA link wireframe spheres — cyan */}
-      {sample
-        ? sample.linkPoses.map((pose, idx) => {
-            const r = ARM_LINK_RADII[idx] ?? LINK_RADIUS[idx] ?? 0.05;
-            const rendered = renderedLinkPositions?.[idx];
-            const pos: [number, number, number] = rendered
-              ? [rendered[0], rendered[1], rendered[2]]
-              : ownerToThree(pose.position);
-            return (
-              <mesh key={`col-${idx}`} position={pos}>
-                <sphereGeometry args={[r, 8, 6]} />
-                <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.45} />
-              </mesh>
-            );
-          })
-        : null}
+      {/* 1. 8 KUKA link wireframe spheres — cyan (amber when self-colliding) */}
+      {armLinkPositions.map((pos, idx) => {
+        const r = ARM_LINK_RADII[idx] ?? LINK_RADIUS[idx] ?? 0.05;
+        const segName =
+          ARM_LINK_NAMES[Math.min(idx, ARM_LINK_NAMES.length - 1)] ?? `link_${idx}`;
+        const isSelfColliding = collidingArmLinks.has(segName);
+        return (
+          <mesh key={`col-${idx}`} position={pos}>
+            <sphereGeometry args={[r, 8, 6]} />
+            <meshBasicMaterial
+              color={isSelfColliding ? "#f97316" : "#22d3ee"}
+              wireframe
+              transparent
+              opacity={isSelfColliding ? 0.85 : 0.45}
+            />
+          </mesh>
+        );
+      })}
 
       {/* 2. Reachable workspace — translucent green point cloud */}
       <points geometry={workspaceGeometry}>

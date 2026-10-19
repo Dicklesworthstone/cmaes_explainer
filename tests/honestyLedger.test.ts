@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fs from "fs";
 import path from "path";
+import { evaluateFrontierKernelAndStressDiagnostics } from "../app/components/FrankenRobotsResearchAnnex";
 import { HONESTY_CHIP_REGISTRY } from "../app/lib/honestyLedger";
 
 describe("Project Honesty Ledger & Traceability Registry", () => {
   test("source index retains the existing implementation categories", () => {
-    expect(HONESTY_CHIP_REGISTRY.length).toBeGreaterThanOrEqual(15);
+    expect(HONESTY_CHIP_REGISTRY.length).toBeGreaterThanOrEqual(25);
 
     const categories = new Set(HONESTY_CHIP_REGISTRY.map((c) => c.category));
     expect(categories.has("physics")).toBe(true);
@@ -64,5 +65,25 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
 
     expect(readme).toContain(activeVersion);
     expect(readme).not.toContain("v0622");
+  });
+
+  test("evaluateFrontierKernelAndStressDiagnostics verifies fail-closed adapter, Schema-8 ABI, shuffled stress trial, and visitor clip", () => {
+    const diag = evaluateFrontierKernelAndStressDiagnostics(101);
+
+    expect(diag.v067MultiBodyRefusalCode).toBe("ERR_V067_MULTI_BODY_UNSUPPORTED");
+    expect(diag.v068ReadyCapabilitiesCount).toBe(6);
+    expect(diag.v068WorkloadValid).toBe(true);
+    expect(diag.schema8WordCount).toBe(8 + 2 * 13 + 1 * 4 + 1 * 8);
+    expect(diag.schema8ByteLength).toBe(diag.schema8WordCount * 8);
+    expect(diag.schema8ZeroCopyBodyCount).toBe(2);
+    expect(diag.schema8ZeroCopyJointCount).toBe(1);
+    expect(diag.schema8ZeroCopyContactCount).toBe(1);
+    expect(diag.stressTrial.trialSeed).toBe(101);
+    expect(diag.stressTrial.totalSteps).toBeGreaterThan(0);
+    expect(Number.isFinite(diag.stressTrial.minimumClearanceMeters)).toBe(true);
+    expect(diag.wilson95CiPercent[0]).toBeGreaterThanOrEqual(0);
+    expect(diag.wilson95CiPercent[1]).toBeLessThanOrEqual(100);
+    expect(diag.visitorClipFrameCount).toBe(60);
+    expect(diag.visitorClipPlaybackRatio).toBeGreaterThan(0);
   });
 });

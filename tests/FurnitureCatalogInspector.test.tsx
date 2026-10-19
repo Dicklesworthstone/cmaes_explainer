@@ -45,4 +45,36 @@ describe("FurnitureCatalogInspector surface area (cmaes-feat-fg4-catalog)", () =
     expect(rooms.size).toBeGreaterThanOrEqual(2);
     expect(rooms.size).toBeLessThan(CRAFTSMAN_BUNGALOW_1928.furniture.length);
   });
+
+  test("inspectCatalogPiecePhysics evaluates live MeshSdf, contactManifold, and articulated joint FK", async () => {
+    const { inspectCatalogPiecePhysics } = await import(
+      "../app/components/FurnitureCatalogInspector"
+    );
+    const fridgePiece =
+      CRAFTSMAN_BUNGALOW_1928.furniture.find((f) => f.kind === "fridge") ??
+      ({
+        name: "test-fridge",
+        room: "kitchen",
+        kind: "fridge",
+        center: [0, 0],
+        size: [0.9, 0.8],
+        height: 1.8,
+        rotation: 0,
+        note: "Test refrigerator",
+      } as const);
+
+    const unlocked = inspectCatalogPiecePhysics(fridgePiece, 2.0, false, 15);
+    expect(unlocked.sdfCenterQuery.isInside).toBe(true);
+    expect(unlocked.sdfCenterQuery.distance).toBeLessThan(0);
+    expect(Math.abs(unlocked.sdfSurfaceQuery.distance)).toBeLessThan(1e-3);
+    expect(unlocked.probeManifold.hasCollision).toBe(true);
+    expect(unlocked.probeManifold.maxPenetration).toBeCloseTo(0.02, 4);
+    expect(unlocked.articulation).not.toBeNull();
+    expect(unlocked.articulation!.jointReceipts.length).toBeGreaterThan(0);
+    expect(unlocked.articulation!.jointReceipts[0].newPosition).toBeGreaterThan(0);
+
+    const locked = inspectCatalogPiecePhysics(fridgePiece, 2.0, true, 15);
+    expect(locked.articulation!.jointReceipts[0].newPosition).toBe(0);
+    expect(locked.articulation!.jointReceipts[0].lockedRefused).toBe(true);
+  });
 });

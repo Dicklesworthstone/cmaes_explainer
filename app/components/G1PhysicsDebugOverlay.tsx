@@ -22,6 +22,7 @@ import React from "react";
 import * as THREE from "three";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
+import { checkG1SelfCollision, type LinkCapsule } from "../lib/robotSelfCollision";
 
 // 30-link body pose-envelope radii, sized to the RobotPose rendering. These
 // are visual aids only; the drag guard uses the separate pelvis safety proxy.
@@ -119,8 +120,64 @@ export function G1PhysicsDebugOverlay({
     pelvisPosition[2] - samplePelvis[2],
   ];
 
+  const worldLinkPoses = sample
+    ? sample.linkPoses.map((pose, idx) => {
+        const p = ownerToThree(pose.position);
+        const linkName = G1_LINK_NAMES[idx] ?? `link_${idx}`;
+        const canonicalName = linkName.replace(/\s+/g, "_");
+        return {
+          idx,
+          linkName,
+          canonicalName,
+          radius: LINK_RADIUS[linkName] ?? 0.042,
+          pos: [p[0] + bodyOffset[0], p[1] + bodyOffset[1], p[2] + bodyOffset[2]] as [
+            number,
+            number,
+            number,
+          ],
+        };
+      })
+    : [];
+
+  const collidingLinkNames = new Set<string>();
+  if (worldLinkPoses.length > 1) {
+    const capsules: LinkCapsule[] = [];
+    for (let i = 0; i < worldLinkPoses.length - 1; i++) {
+      const curr = worldLinkPoses[i];
+      const next = worldLinkPoses[i + 1];
+      capsules.push({
+        name: curr.canonicalName,
+        start: curr.pos,
+        end: next.pos,
+        radius: curr.radius * 0.5,
+      });
+    }
+    const selfCol = checkG1SelfCollision(capsules, 0.002);
+    for (const pair of selfCol.collidingPairs) {
+      collidingLinkNames.add(pair.linkA);
+      collidingLinkNames.add(pair.linkB);
+    }
+  }
+
   return (
     <group>
+      {/* 1. 30 G1 body-link pose envelopes (cyan when clear, amber on self-collision) */}
+      {worldLinkPoses.map((link) => {
+        const isSelfColliding = collidingLinkNames.has(link.canonicalName);
+        return (
+          <mesh key={`g1-link-${link.idx}`} position={link.pos}>
+            <sphereGeometry args={[link.radius, 8, 6]} />
+            <meshBasicMaterial
+              color={isSelfColliding ? "#f97316" : "#22d3ee"}
+              wireframe
+              transparent
+              opacity={isSelfColliding ? 0.8 : 0.35}
+              depthWrite={false}
+            />
+          </mesh>
+        );
+      })}
+
       {/* 2. House OBB obstacles — red wireframe boxes with yaw */}
       {obstacleEdges.map(({ edges, obb }, idx) => (
         <lineSegments

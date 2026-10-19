@@ -313,4 +313,183 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
       "Smoothed-complementarity trajectory prototype. Solver convergence, physical contact feasibility and deployed whole-body avoidance remain unproven by this entry.",
     status: "implemented",
   },
+  {
+    id: "chip-furniture-articulation",
+    beadId: "cmaes-feat-fg3-articulation-set",
+    title: "Articulated Furniture Revolute & Prismatic Joint Graph",
+    category: "physics",
+    sourceFile: "app/lib/furnitureArticulation.ts",
+    testFile: "tests/furnitureArticulation.test.ts",
+    citation:
+      "Featherstone, Rigid Body Dynamics Algorithms (Springer 2008); Denavit & Hartenberg (ASME J. Appl. Mech. 1955).",
+    mathFormula:
+      "I \\ddot{q} + b \\dot{q} + k(q - q_{\\text{rest}}) = \\tau_{\\text{user}} + \\tau_{\\text{grav}}, \\quad q \\in [q_{\\min}, q_{\\max}]",
+    claim:
+      "Semi-implicit Euler joint dynamics and forward-kinematics pose tree for household doors, drawers, and lids, wired into householdPhysicsWorld and FurnitureCatalogInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-contact-manifold",
+    beadId: "cmaes-za0x.12",
+    title: "3D Contact Manifold & Mirtich-Bridson Impulse Resolution",
+    category: "physics",
+    sourceFile: "app/lib/contactManifold.ts",
+    testFile: "tests/contactManifold.test.ts",
+    citation:
+      "Mirtich, Impulse-Based Dynamic Simulation of Rigid Body Systems (PhD Thesis, UC Berkeley 1996); Bridson, Fedkiw, Anderson (ACM TOG 2002).",
+    mathFormula:
+      "j_n = \\frac{-(1 + e) v_{\\text{rel}, n}}{m_A^{-1} + m_B^{-1} + \\mathbf{n} \\cdot [(\\mathbf{I}_A^{-1}(\\mathbf{r}_A \\times \\mathbf{n})) \\times \\mathbf{r}_A + (\\mathbf{I}_B^{-1}(\\mathbf{r}_B \\times \\mathbf{n})) \\times \\mathbf{r}_B]}",
+    claim:
+      "Sphere-sphere, sphere-box, and capsule-plane contact manifold generation with Coulomb friction cone impulse resolution, wired into householdPhysicsWorld and FurnitureCatalogInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-robot-self-collision",
+    beadId: "cmaes-za0x.14",
+    title: "G1 23-DOF & 7-DOF Arm Capsule Self-Collision Filter",
+    category: "clipping",
+    sourceFile: "app/lib/robotSelfCollision.ts",
+    testFile: "tests/robotSelfCollision.test.ts",
+    citation:
+      "Ericson, Real-Time Collision Detection (Morgan Kaufmann 2004); Pan, Chitta, Manocha, FCL (ICRA 2012).",
+    mathFormula:
+      "d_{\\text{cap}}(A, B) = \\min_{s, t \\in [0, 1]} \\|\\mathbf{p}_A(s) - \\mathbf{p}_B(t)\\| - (r_A + r_B)",
+    claim:
+      "Capsule-pair minimum distance and penetration depth checker with kinematic adjacency filtering, wired into solveFullBodyG1IK and the G1/Arm physics debug overlays.",
+    status: "implemented",
+  },
+  {
+    id: "chip-mesh-sdf",
+    beadId: "cmaes-za0x.17",
+    title: "Voxelized 3D Triangle Mesh Signed Distance Field",
+    category: "clipping",
+    sourceFile: "app/lib/meshSdf.ts",
+    testFile: "tests/meshSdf.test.ts",
+    citation:
+      "Barentzen & Aanaes, Signed Distance Computation Using the Angle Weighted Pseudonormal (IEEE TVCG 2005).",
+    mathFormula:
+      "\\phi(\\mathbf{x}) = \\text{sign}\\left((\\mathbf{x} - \\mathbf{p}^*) \\cdot \\mathbf{n}_{\\alpha}\\right) \\min_{\\triangle_k} \\|\\mathbf{x} - \\Pi_{\\triangle_k}(\\mathbf{x})\\|",
+    claim:
+      "Trilinearly interpolated 3D grid SDF baked from closed triangle meshes with central-difference surface normals, wired into FurnitureCatalogInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-pbr-pipeline",
+    beadId: "cmaes-feat-pr1-pbr-pipeline-2pm",
+    title: "Cook-Torrance GGX Microfacet PBR Material Slot Pipeline",
+    category: "graphics",
+    sourceFile: "app/lib/pbrPipeline.ts",
+    testFile: "tests/pbrPipeline.test.ts",
+    citation:
+      "Walter et al., Microfacet Models for Refraction through Rough Surfaces (EGSR 2007); Karis, Real Shading in Unreal Engine 4 (SIGGRAPH 2013).",
+    mathFormula:
+      "f_{\\text{spec}}(\\mathbf{l}, \\mathbf{v}) = \\frac{D_{\\text{GGX}}(\\mathbf{h}, \\alpha) F_{\\text{Schlick}}(\\mathbf{v}, \\mathbf{h}, F_0) G_{\\text{Smith}}(\\mathbf{l}, \\mathbf{v}, \\alpha)}{4 (\\mathbf{n} \\cdot \\mathbf{l})(\\mathbf{n} \\cdot \\mathbf{v})}",
+    claim:
+      "PBR material slot registry, texture memory budget accounting, and color-space validation helpers wired into MaterialDatabaseInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-ddgi-probes",
+    beadId: "cmaes-feat-pr4-ddgi-g8e",
+    title: "Dynamic Diffuse Global Illumination (DDGI) Probe Volume",
+    category: "graphics",
+    sourceFile: "app/lib/ddgiProbes.ts",
+    testFile: "tests/ddgiProbes.test.ts",
+    citation:
+      "Majercik et al., Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields (JCGT 2019).",
+    mathFormula:
+      "E(\\mathbf{x}, \\mathbf{n}) = \\sum_{p \\in \\mathcal{N}_8(\\mathbf{x})} w_{\\text{tri}}(p) \\cdot w_{\\text{vis}}(p, \\mathbf{x}) \\cdot \\max(0, \\mathbf{n} \\cdot \\mathbf{d}_p) E_p(\\mathbf{n})",
+    claim:
+      "Trilinear SH probe grid with Chebyshev visibility moment weighting to reduce light leaking across walls, wired into MaterialDatabaseInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-contact-shadows",
+    beadId: "cmaes-feat-pr5-contact-shadows-win",
+    title: "Analytical SDF Cone-Traced Soft Shadows & Ground Contact AO",
+    category: "graphics",
+    sourceFile: "app/lib/contactShadows.ts",
+    testFile: "tests/contactShadows.test.ts",
+    citation:
+      "Fernando, Percentage-Closer Soft Shadows (SIGGRAPH 2005); Evans, Fast Approximations for Global Illumination on Dynamic Scenes (SIGGRAPH 2006).",
+    mathFormula:
+      "S(\\mathbf{x}, \\mathbf{l}, k) = \\text{clamp}\\left(\\min_{t \\in [t_{\\min}, t_{\\max}]} \\frac{k \\, \\phi(\\mathbf{x} + t\\mathbf{l})}{t}, 0, 1\\right)",
+    claim:
+      "SDF sphere-traced soft shadow factor, PCSS penumbra estimation, and ground-contact ambient occlusion kernel wired into MaterialDatabaseInspector and SearsCraftsmanEstate.",
+    status: "implemented",
+  },
+  {
+    id: "chip-postfx-pipeline",
+    beadId: "cmaes-feat-pr7-postfx-x3f",
+    title: "ACES Filmic Tonemapping, Threshold Bloom & Chromatic Aberration",
+    category: "graphics",
+    sourceFile: "app/lib/postProcessingPipeline.ts",
+    testFile: "tests/postProcessingPipeline.test.ts",
+    citation:
+      "Narkowicz, ACES Filmic Tone Mapping Curve (2015); Jimenez et al., Practical Post-Process Anti-Aliasing (SIGGRAPH 2011).",
+    mathFormula:
+      "f_{\\text{ACES}}(x) = \\text{clamp}\\left(\\frac{x(2.51 x + 0.03)}{x(2.43 x + 0.59) + 0.14}, 0, 1\\right)",
+    claim:
+      "Software reference evaluator for ACES filmic tonemapping, soft-knee bloom extraction, radial vignette, and chromatic aberration UV offsets, wired into MaterialDatabaseInspector.",
+    status: "implemented",
+  },
+  {
+    id: "chip-shuffled-stress-test",
+    beadId: "cmaes-feat-fs10-shuffle-dwu",
+    title: "Shuffled Furniture Placement & Wilson 95% CI Stress Harness",
+    category: "navigation",
+    sourceFile: "app/lib/shuffledFurnitureStressTest.ts",
+    testFile: "tests/shuffledFurnitureStressTest.test.ts",
+    citation:
+      "Wilson, Probable Inference, the Law of Succession, and Statistical Inference (JASA 1927); Kavraki et al., Probabilistic Roadmaps (IEEE TRA 1996).",
+    mathFormula:
+      "\\text{CI}_{95\\%} = \\frac{\\hat{p} + \\frac{z^2}{2n} \\pm z \\sqrt{\\frac{\\hat{p}(1 - \\hat{p})}{n} + \\frac{z^2}{4n^2}}}{1 + \\frac{z^2}{n}}",
+    claim:
+      "Deterministic Mulberry32 furniture perturbation generator and planar navigation stress-test harness with exact Wilson confidence intervals, wired into FrankenRobotsResearchAnnex.",
+    status: "implemented",
+  },
+  {
+    id: "chip-visitor-mode-clip",
+    beadId: "cmaes-feat-fs12-visitor-b5e",
+    title: "Deterministic 60-Second Visitor Mode Trajectory & Camera Clip",
+    category: "telemetry",
+    sourceFile: "app/lib/visitorModeClip.ts",
+    testFile: "tests/liveCmaesAndVisitor.test.ts",
+    citation: "Yuksel, Schaefer, Keyser, On the Parameterization of Catmull-Rom Curves (CGF 2011).",
+    mathFormula:
+      "\\mathbf{p}_{\\text{cam}}(t) = (1 - \\alpha) \\mathbf{p}_{\\text{cam}}(t - \\Delta t) + \\alpha (\\mathbf{p}_{\\text{robot}}(t) + \\Delta \\mathbf{p}_{\\text{chase}})",
+    claim:
+      "Deterministic 3600-frame multi-room visitor playback generator with chase-camera keyframes and doorway-clearance telemetry, wired into FrankenRobotsResearchAnnex.",
+    status: "display-only",
+  },
+  {
+    id: "chip-browser-physics-adapter",
+    beadId: "cmaes-phr3m-bench-8cv",
+    title: "Browser Physics Adapter & Sub-Frame Benchmark Harness",
+    category: "physics",
+    sourceFile: "app/lib/browserPhysicsAdapter.ts",
+    testFile: "tests/browserPhysicsAdapter.test.ts",
+    citation:
+      "Coumans & Bai, Bullet Physics Simulation (ACM SIGGRAPH Courses 2016); Rapier 3D Rigid-Body Physics Engine (Dimforge 2024).",
+    mathFormula:
+      "T_{\\text{step}} = T_{\\text{broadphase}} + T_{\\text{narrowphase}} + T_{\\text{solver}} \\le 16.67\\,\\text{ms}",
+    claim:
+      "Unified rigid-body physics adapter interface and deterministic benchmark workload runner with p50/p95/p99 frame-budget receipts, wired into FrankenRobotsResearchAnnex.",
+    status: "implemented",
+  },
+  {
+    id: "chip-schema8-wire-format",
+    beadId: "cmaes-za0x.29",
+    title: "Schema v8 Zero-Copy Binary Wire Format (544-Byte Packet)",
+    category: "telemetry",
+    sourceFile: "app/lib/schema8WireFormat.ts",
+    testFile: "tests/schema8WireFormat.test.ts",
+    citation:
+      "IEEE 754-2019 Floating-Point Standard; Cap'n Proto / FlatBuffers Zero-Copy Binary Serialization.",
+    mathFormula:
+      "\\text{sizeof}(\\text{Packet}_{v8}) = 136 \\times 4\\,\\text{bytes} = 544\\,\\text{bytes}",
+    claim:
+      "Fixed-layout 544-byte Float32Array binary wire encoder and zero-copy view decoder for worker-to-main-thread physics telemetry, wired into FrankenRobotsResearchAnnex.",
+    status: "implemented",
+  },
 ];
