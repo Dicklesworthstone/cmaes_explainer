@@ -240,4 +240,20 @@ describe("interactive pins never overlap the humanoid (sphere-inside-robot regre
     // Lateral-left of +X heading in a Y-up right-handed frame is -Z.
     expect(left[2]).toBeCloseTo(-0.2, 6);
   });
+
+  test("solveFullBodyG1IK reports selfCollision free in nominal pose and detects self-collision when limbs cross into torso", () => {
+    const nominal = solveFullBodyG1IK({}, [0, 0.75, 0], []);
+    expect(nominal.selfCollision.hasCollision).toBe(false);
+    expect(nominal.selfCollision.minClearance).toBeGreaterThan(0.005);
+
+    const crossed = solveFullBodyG1IK(
+      {
+        leftHand: [0.0, 0.92, 0.0], // Pushed directly inside torso centerline
+      },
+      [0, 0.75, 0],
+      [],
+    );
+    expect(crossed.selfCollision.hasCollision).toBe(true);
+    expect(crossed.selfCollision.collidingPairs.length).toBeGreaterThan(0);
+  });
 });

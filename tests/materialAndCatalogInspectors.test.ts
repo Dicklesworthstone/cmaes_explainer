@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { CRAFTSMAN_MATERIAL_DATABASE } from "../app/components/MaterialDatabaseInspector";
+import {
+  CRAFTSMAN_MATERIAL_DATABASE,
+  evaluateMaterialRenderingPipeline,
+} from "../app/components/MaterialDatabaseInspector";
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../app/lib/furnitureTaxonomy";
 import { CRAFTSMAN_BUNGALOW_1928 } from "../app/lib/houseScenes";
 
@@ -22,6 +25,34 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
       expect(mat.metalness).toBeLessThanOrEqual(1.0);
       expect(mat.densityKgM3).toBeGreaterThan(0);
       expect(mat.baseColorHex.startsWith("#")).toBe(true);
+    }
+  });
+
+  test("evaluateMaterialRenderingPipeline computes PBR, DDGI, Contact Shadow, and ACES Post-FX telemetry across materials and profiles", () => {
+    const profiles = ["parlor-calm", "kitchen-warm", "porch-bright", "bedroom-moody"] as const;
+
+    for (const mat of CRAFTSMAN_MATERIAL_DATABASE) {
+      for (const profile of profiles) {
+        const snap = evaluateMaterialRenderingPipeline(mat, profile, 12);
+
+        expect(snap.pbrSlot.class.length).toBeGreaterThan(0);
+        expect(snap.textureBudgetMb).toBeGreaterThan(0);
+        const expectsTextureMaps = mat.category !== "metal" && mat.category !== "glass";
+        expect(snap.proceduralMaps.hasAlbedoMap).toBe(expectsTextureMaps);
+        expect(snap.proceduralMaps.hasNormalMap).toBe(expectsTextureMaps);
+        expect(snap.proceduralMaps.hasRoughnessMap).toBe(expectsTextureMaps);
+        expect(snap.shIrradiance.length).toBe(3);
+        expect(snap.shIrradiance.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
+        expect(snap.ddgiIrradiance.rgb.length).toBe(3);
+        expect(snap.ddgiIrradiance.rgb.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
+        expect(snap.contactShadowAo).toBeGreaterThan(0);
+        expect(snap.contactShadowAo).toBeLessThanOrEqual(1);
+        expect(snap.softShadowRay.shadowFactor).toBeGreaterThanOrEqual(0);
+        expect(snap.softShadowRay.shadowFactor).toBeLessThanOrEqual(1);
+        expect(snap.fireplaceFlickerMultiplier).toBeGreaterThan(0);
+        expect(snap.stageTonemappedRgb.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
+        expect(snap.compositePostFxRgb.every((c) => c >= 0 && c <= 1)).toBe(true);
+      }
     }
   });
 

@@ -286,4 +286,39 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
       expect(rt.breakageEvents.length).toBe(0);
     }
   });
+
+  test("articulated furniture integration steps joint dynamics with receipts and forward kinematics", () => {
+    const plane = PLANE("ground");
+    const fridge: RigidBody = {
+      ...CHAIR("kitchen_fridge", [1.0, 0, 0.9], 0),
+      isStatic: true,
+      mass: 0,
+      invMass: 0,
+    };
+    const meta = new Map<string, HouseholdBodyMeta>();
+    meta.set("kitchen_fridge", {
+      boundingRadius: 0.6,
+      material: "steel",
+      articulationKind: "fridge",
+      articulationDimensions: [0.9, 0.8, 1.8],
+    });
+    const articulationInputs = new Map<string, Record<string, number>>();
+    articulationInputs.set("kitchen_fridge", {
+      upper_door_hinge: 2.5,
+      lower_door_hinge: 1.5,
+    });
+    const world = createHouseholdWorld([plane, fridge], meta, {
+      dt: 1 / 60,
+      articulationInputs,
+    });
+
+    const stepRes = stepHouseholdPhysicsWorld(world);
+    const fridgeReceipts = stepRes.articulationReceipts.get("kitchen_fridge");
+    const fridgePoses = stepRes.articulationLinkPoses.get("kitchen_fridge");
+    expect(fridgeReceipts).toBeDefined();
+    expect(fridgePoses).toBeDefined();
+    expect(fridgeReceipts!.get("upper_door_hinge")?.newPosition).toBeGreaterThan(0);
+    expect(fridgePoses!.has("door_upper")).toBe(true);
+    expect(fridgePoses!.has("door_lower")).toBe(true);
+  });
 });
