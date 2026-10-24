@@ -34,7 +34,8 @@ type G1BrowserObservation = {
   comparisons: number;
 };
 
-const USER_AGENT = "OpenAI File Downloader, XaiImageApiFetch/1.0";
+const USER_AGENT =
+  "cmaes_explainer-diagnose (+https://github.com/Dicklesworthstone/cmaes_explainer)";
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const log = (event: string, details: Record<string, unknown>) =>
   process.stdout.write(`${JSON.stringify({ event, ...details })}\n`);

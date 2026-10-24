@@ -322,6 +322,24 @@ export function getFrictionDistribution(
  * of size N at confidence level `confidence` in (0, 1):
  *
  *   r(N, confidence) = sqrt(2 * ln(1 / (1 - confidence))) / sqrt(N)
+ *
+ * For confidence = 0.95 and N = 16, r ≈ 0.343. The radius is
+ * dimensionless in the 1-Wasserstein metric on the (muK, e) space.
+ *
+ * HONEST PROVENANCE: this is a **heuristic design rule**, not the
+ * Mohajerin-Esfahani-Kuhn theorem constant. The MEK finite-sample
+ * bounds (Esfahani-Kuhn 2018, Thm 3.4 + Eq. 5) are dimension- and
+ * support-dependent — for a d-dimensional coefficient space they
+ * scale like C(d, diameter, tails) * N^(-1/d), and the constants
+ * are not universal. We use this simpler monotone rule (r shrinks
+ * like 1/sqrt(N), grows with confidence) to SIZE the ball; the
+ * actual robustness weight comes from the CVaR inner max, not from
+ * a distributional guarantee over this radius. Callers must not
+ * cite r as a formal MEK guarantee.
+ *
+ * @param sampleCount  N, the number of samples.
+ * @param confidence  The confidence level, in (0, 1). Default 0.95.
+ * @returns  The heuristic Wasserstein-1 ball radius.
  */
 export function wassersteinBallRadius(sampleCount: number, confidence: number = 0.95): number {
   if (!Number.isFinite(sampleCount) || sampleCount < 1) {
@@ -343,7 +361,25 @@ export function wassersteinBallRadius(sampleCount: number, confidence: number = 
  * Compute the upper CVaR (Conditional Value-at-Risk) of a numeric
  * objective over an empirical sample set, at tail probability alpha,
  * per Rockafellar-Uryasev 2000: CVaR_alpha is the mean of the WORST
- * (largest) alpha fraction of the samples.
+ * (largest) alpha fraction of the samples (alpha -> 0 approaches the supremum,
+ * alpha -> 1 approaches the plain mean):
+ *
+ *   CVaR_alpha(O) = (1 / ceil(alpha * N)) * sum of the largest
+ *                   ceil(alpha * N) sample values
+ *
+ * For a monotone higher-is-worse objective (foot-slip penalty, push
+ * failure), this is the tractable sample-based inner maximizer used
+ * by Wasserstein-DRO close to the supremum (Rockafellar-Uryasev 2000;
+ * the Wasserstein connection per Mohajerin-Esfahani-Kuhn 2018).
+ *
+ * For a non-monotone objective, the inner max is the
+ * sample-supremum; we expose that as `sampleSupremum` so callers
+ * can pick the right inner max.
+ *
+ * @param samples  The empirical sample values.
+ * @param alpha  Tail probability, in (0, 1). Default 0.10 (mean of
+ *               the worst 10% of samples).
+ * @returns  The CVaR value.
  */
 export function cvarUpper(samples: ReadonlyArray<number>, alpha: number = 0.1): number {
   if (samples.length === 0) {

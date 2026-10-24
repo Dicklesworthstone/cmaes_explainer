@@ -551,7 +551,9 @@ export function solveFullBodyG1IK(
   if (lElbowContact) contacts.push(lElbowContact);
   if (rElbowContact) contacts.push(rElbowContact);
 
-  // Compute raw signed surface-to-OBB clearance across all key body spheres
+  // Signed surface-to-OBB clearance of the resolved pose (post clamp).
+  // Knees and elbows use the projected centers; pre-clamp penetrations are
+  // already recorded on `contacts`. Floor hits are detected on the raw input.
   const keySpheres: Array<{ pt: [number, number, number]; radius: number }> = [
     { pt: pelvisClamped, radius: G1_KINEMATICS.bodyRadius },
     { pt: torsoPos, radius: G1_KINEMATICS.bodyRadius },
