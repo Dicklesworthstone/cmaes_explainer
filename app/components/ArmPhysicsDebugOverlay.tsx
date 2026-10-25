@@ -31,6 +31,7 @@ import {
   computeKukaFK,
   KUKA_AUXILIARY_JOINT_LIMITS,
   KUKA_LINK_LENGTHS,
+  resolveArmChainCollisions,
 } from "../lib/armInverseKinematics";
 import type {
   HouseholdManipulationAdmission,
@@ -211,6 +212,13 @@ export function ArmPhysicsDebugOverlay({
       })
     : [];
   const collidingArmLinks = new Set<string>();
+  const obbCollisionResponse =
+    armLinkPositions.length >= 2
+      ? resolveArmChainCollisions(armLinkPositions, obstacles, ARM_LINK_RADII, {
+          iterations: 3,
+          safetyMargin: 0.002,
+        })
+      : null;
   if (armLinkPositions.length >= 2) {
     const capsules = buildArmCapsulesFromLinkPositions(armLinkPositions, ARM_LINK_RADII);
     const armSelfCol = checkArmSelfCollision(capsules, 0.003);
@@ -222,20 +230,23 @@ export function ArmPhysicsDebugOverlay({
 
   return (
     <group>
-      {/* 1. 8 KUKA link wireframe spheres — cyan (amber when self-colliding) */}
+      {/* 1. 8 KUKA link wireframe spheres — cyan (amber when self-colliding or OBB-pushed) */}
       {armLinkPositions.map((pos, idx) => {
         const r = ARM_LINK_RADII[idx] ?? LINK_RADIUS[idx] ?? 0.05;
         const segName =
           ARM_LINK_NAMES[Math.min(idx, ARM_LINK_NAMES.length - 1)] ?? `link_${idx}`;
         const isSelfColliding = collidingArmLinks.has(segName);
+        const obbPenetration = obbCollisionResponse?.resolvedPenetrationMeters[idx] ?? 0;
+        const isInContact = isSelfColliding || obbPenetration > 0;
+        const resolvedPos = obbCollisionResponse?.resolvedLinkPositions[idx] ?? pos;
         return (
-          <mesh key={`col-${idx}`} position={pos}>
+          <mesh key={`col-${idx}`} position={resolvedPos}>
             <sphereGeometry args={[r, 8, 6]} />
             <meshBasicMaterial
-              color={isSelfColliding ? "#f97316" : "#22d3ee"}
+              color={isInContact ? "#f97316" : "#22d3ee"}
               wireframe
               transparent
-              opacity={isSelfColliding ? 0.85 : 0.45}
+              opacity={isInContact ? 0.85 : 0.45}
             />
           </mesh>
         );

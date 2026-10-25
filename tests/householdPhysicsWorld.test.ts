@@ -321,4 +321,56 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
     expect(fridgePoses!.has("door_upper")).toBe(true);
     expect(fridgePoses!.has("door_lower")).toBe(true);
   });
+
+  test("stepHouseholdPhysicsWorld steps XPBD soft-body lattices (rug, cushion, curtain) and emits softBodyReceipts", () => {
+    const plane = PLANE("ground");
+    const rugBody: RigidBody = {
+      ...CHAIR("parlor_rug", [0, 0, 0.05], 0),
+      isStatic: true,
+      mass: 0,
+      invMass: 0,
+    };
+    const cushionBody: RigidBody = {
+      ...CHAIR("sofa_cushion", [1.0, 0, 0.45], 0),
+      mass: 2.0,
+      invMass: 0.5,
+    };
+    const meta = new Map<string, HouseholdBodyMeta>([
+      ["ground", { boundingRadius: 100, material: "hardwood" }],
+      [
+        "parlor_rug",
+        {
+          boundingRadius: 1.0,
+          material: "fabric",
+          softBodyKind: "rug",
+          softBodyDimensions: [2.0, 1.5, 0.02],
+        },
+      ],
+      [
+        "sofa_cushion",
+        {
+          boundingRadius: 0.4,
+          material: "fabric",
+          softBodyKind: "cushion",
+          softBodyDimensions: [0.6, 0.6, 0.15],
+        },
+      ],
+    ]);
+
+    const world = createHouseholdWorld([plane, rugBody, cushionBody], meta, {
+      dt: 1 / 60,
+    });
+    expect(world.softBodies.has("parlor_rug")).toBe(true);
+    expect(world.softBodies.has("sofa_cushion")).toBe(true);
+
+    const stepRes = stepHouseholdPhysicsWorld(world);
+    const rugReceipt = stepRes.softBodyReceipts.get("parlor_rug");
+    const cushionReceipt = stepRes.softBodyReceipts.get("sofa_cushion");
+    expect(rugReceipt).toBeDefined();
+    expect(cushionReceipt).toBeDefined();
+    expect(rugReceipt!.nodeCount).toBe(36);
+    expect(cushionReceipt!.nodeCount).toBe(18);
+    expect(rugReceipt!.minY).toBeGreaterThanOrEqual(0);
+    expect(cushionReceipt!.meanSpeed).toBeGreaterThan(0);
+  });
 });

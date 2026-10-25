@@ -67,6 +67,20 @@ describe("FurnitureCatalogInspector surface area (cmaes-feat-fg4-catalog)", () =
     expect(unlocked.sdfCenterQuery.isInside).toBe(true);
     expect(unlocked.sdfCenterQuery.distance).toBeLessThan(0);
     expect(Math.abs(unlocked.sdfSurfaceQuery.distance)).toBeLessThan(1e-3);
+    expect(unlocked.neuralSdfRefinement.parameterCount).toBeGreaterThan(0);
+    expect(unlocked.neuralSdfRefinement.parameterCount).toBeLessThanOrEqual(20_000);
+    expect(Number.isFinite(unlocked.neuralSdfRefinement.refinedSurfaceDistance)).toBe(true);
+    expect(unlocked.neuralSdfRefinement.certifiedConservativeDistance).toBeLessThanOrEqual(
+      unlocked.sdfSurfaceQuery.distance + 1e-6,
+    );
+    expect(unlocked.neuralSdfRefinement.weightsHash).toHaveLength(8);
+    expect(
+      unlocked.neuralSdfRefinement.queryTelemetry.some(
+        (t) => t.kind === "sdf-gradient" && t.queryCount === 1 && t.bytesAllocated === 0,
+      ),
+    ).toBe(true);
+    expect(unlocked.softBodyLattice.nodeCount).toBeGreaterThan(0);
+    expect(unlocked.softBodyLattice.distanceConstraintCount).toBeGreaterThan(0);
     expect(unlocked.probeManifold.hasCollision).toBe(true);
     expect(unlocked.probeManifold.maxPenetration).toBeCloseTo(0.02, 4);
     expect(unlocked.articulation).not.toBeNull();

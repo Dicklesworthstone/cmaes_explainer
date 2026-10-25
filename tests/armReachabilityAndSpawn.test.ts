@@ -7,7 +7,11 @@
 //   3. spawn-safe (findClearSpawnPosition) — the arm target cannot
 //      spawn inside the table on the first trace load.
 import { describe, expect, test } from "bun:test";
-import { clampArmTargetPosition, isTargetKukaReachable } from "../app/lib/armInverseKinematics";
+import {
+  clampArmTargetPosition,
+  isTargetKukaReachable,
+  resolveArmChainCollisions,
+} from "../app/lib/armInverseKinematics";
 import {
   createSceneFromHouseFurniture,
   distanceToOBB,
@@ -146,5 +150,34 @@ describe("clampArmTargetPosition — yawed OBB regression (cmaes-pvz followup)",
     expect(clampedTarget[1]).toBeGreaterThan(target[1]);
     expect(clampedTarget[1]).toBeGreaterThanOrEqual(tableHeight + safeRadius);
     expect(minClearance).toBeGreaterThanOrEqual(safeRadius - 1e-6);
+  });
+
+  test("resolveArmChainCollisions projects penetrating KUKA links out of non-exempt OBB obstacles", () => {
+    const tableObb = {
+      id: "table-obb",
+      name: "table-obb",
+      center: [0.4, 0.5, 0.0] as [number, number, number],
+      halfExtents: [0.25, 0.25, 0.25] as [number, number, number],
+      rotationYawRad: 0,
+    };
+    const linkPositions: [number, number, number][] = [
+      [0, 0.78, 0], // base (never projected)
+      [0.2, 0.75, 0],
+      [0.4, 0.65, 0], // inside tableObb!
+      [0.45, 0.55, 0], // inside tableObb!
+    ];
+    const res = resolveArmChainCollisions(linkPositions, [tableObb], [0.1, 0.08, 0.07, 0.06], {
+      iterations: 3,
+      safetyMargin: 0.01,
+    });
+    expect(res.anyLinkWasPushed).toBe(true);
+    expect(res.resolvedPenetrationMeters[2]).toBeGreaterThan(0);
+    expect(res.resolvedPenetrationMeters[3]).toBeGreaterThan(0);
+    expect(distanceToOBB(res.resolvedLinkPositions[2], tableObb)).toBeGreaterThanOrEqual(
+      0.08 - 1e-6,
+    );
+    expect(distanceToOBB(res.resolvedLinkPositions[3], tableObb)).toBeGreaterThanOrEqual(
+      0.07 - 1e-6,
+    );
   });
 });

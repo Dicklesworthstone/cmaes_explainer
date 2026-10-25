@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CRAFTSMAN_DOORWAYS,
   CRAFTSMAN_WAYPOINT_CHAIN,
+  evaluateHouseNavigationSafetyAndCostmap,
   runSegmentedHouseNavigation,
   simulateHouseNavigation,
 } from "../app/lib/houseNavigationChain";
@@ -127,5 +128,20 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     expect(res.collisionOccurred).toBe(true);
     expect(res.minimumObstacleClearanceMeters).toBeLessThan(0.0);
     expect(res.trajectory.some((s) => s.clearanceMeters < 0.0)).toBe(true);
+  });
+
+  test("evaluateHouseNavigationSafetyAndCostmap computes 3-tier CBF recovery, Helbing-Molnar social force, decor tipping, and Fourier-feature costmap", () => {
+    const diag = evaluateHouseNavigationSafetyAndCostmap([0.35, 2.5], [0.4, -0.5], [0.5, -0.5]);
+    expect(["nominal", "relaxed-slack", "reflex-braking", "recent-safe-retreat"]).toContain(
+      diag.recoveryState,
+    );
+    expect(diag.safeVelocity.length).toBe(2);
+    expect(Number.isFinite(diag.safeVelocity[0])).toBe(true);
+    expect(Number.isFinite(diag.safeVelocity[1])).toBe(true);
+    expect(diag.socialPotential).toBeGreaterThan(0);
+    expect(diag.decorTippingCheck.tippingThresholdNm).toBeGreaterThan(0);
+    expect(diag.learnedCostmap.parameterCount).toBeGreaterThan(0);
+    expect(Number.isFinite(diag.learnedCostmap.neuralClearanceValue)).toBe(true);
+    expect(diag.learnedCostmap.neuralGradient.length).toBe(2);
   });
 });

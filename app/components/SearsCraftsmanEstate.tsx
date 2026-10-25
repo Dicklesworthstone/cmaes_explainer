@@ -8,6 +8,8 @@ import { evaluateFloorContactAO } from "../lib/contactShadows";
 import { CRAFTSMAN_WALKING_ROUTES, type CraftsmanWalkingRoute } from "../lib/craftsmanCatalogData";
 import { CRAFTSMAN_FOUNDATION_SLAB } from "../lib/houseScenes";
 import { flickerFireplace, POSTFX_PROFILES } from "../lib/postFx";
+import { evaluateSchlickFresnel } from "../lib/screenSpaceReflections";
+import { computeAnalyticalFogOpticalDepth, henyeyGreensteinPhase } from "../lib/volumetricLighting";
 
 // ---------------------------------------------------------------------------
 // High-Resolution Procedural Texture Generators (Three.js Skill Doctrine)
@@ -318,6 +320,12 @@ export function SearsCraftsmanEstate({
       ),
     [],
   );
+  const volumetricBounceGain = useMemo(() => {
+    const fresnel = evaluateSchlickFresnel(0.55, 0.045);
+    const tauFog = computeAnalyticalFogOpticalDepth([0, 1.8, 3.5], [0, 0.2, 0], 0.015, 0.45, 0.0);
+    const phase = henyeyGreensteinPhase(0.72, 0.65);
+    return (1 + fresnel * 0.6) * Math.exp(-tauFog) * (0.85 + Math.min(0.3, phase * 0.2));
+  }, []);
   useFrame(({ camera, clock }) => {
     if (fireplaceLightRef.current) {
       const baseIntensity = timeOfDay === "evening-glow" ? 9 : 4;
@@ -1118,7 +1126,7 @@ export function SearsCraftsmanEstate({
       {/* Warm Wood Surface Bounce Fill Light */}
       <directionalLight
         position={[3.5, 3.2, 2.0]}
-        intensity={0.7 * hearthContactAO * postFxProfile.exposure}
+        intensity={0.7 * hearthContactAO * postFxProfile.exposure * volumetricBounceGain}
         color="#fed7aa"
       />
 

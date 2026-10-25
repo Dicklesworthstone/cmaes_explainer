@@ -1,4 +1,9 @@
 import { Euler, Quaternion } from "three";
+import {
+  type ArmCollisionResponseResult,
+  type ArmLinkSpec,
+  projectArmLinksOutOfObstacles,
+} from "./armLinkCollisionResponse";
 import type { HouseholdRobotPose } from "./frankensimCmaes";
 import {
   distanceToOBB,
@@ -467,4 +472,25 @@ export function computeFerrariCannyGWS(
     maxFrictionForceN: maxFriction,
     isStableGrasp: normalForce > 6.0 && diamError < 0.02,
   };
+}
+
+const DEFAULT_ARM_LINK_RADII: readonly number[] = [
+  0.1, 0.1, 0.07, 0.07, 0.06, 0.06, 0.05, 0.04,
+];
+
+/**
+ * Projects an 8-link KUKA arm chain out of all non-exempt OBB obstacles using
+ * sequential Gauss-Seidel relaxation (`projectArmLinksOutOfObstacles`).
+ */
+export function resolveArmChainCollisions(
+  linkPositions: readonly (readonly [number, number, number])[],
+  obstacles: readonly OrientedBoundingBox[],
+  radii: readonly number[] = DEFAULT_ARM_LINK_RADII,
+  options: { iterations?: number; safetyMargin?: number } = {},
+): ArmCollisionResponseResult {
+  const specs: ArmLinkSpec[] = linkPositions.map((pos, idx) => ({
+    position: [pos[0], pos[1], pos[2]],
+    radius: radii[idx] ?? 0.05,
+  }));
+  return projectArmLinksOutOfObstacles(specs, obstacles, options);
 }

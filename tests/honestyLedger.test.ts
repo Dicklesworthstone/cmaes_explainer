@@ -85,5 +85,60 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     expect(diag.wilson95CiPercent[1]).toBeLessThanOrEqual(100);
     expect(diag.visitorClipFrameCount).toBe(60);
     expect(diag.visitorClipPlaybackRatio).toBeGreaterThan(0);
+    expect(diag.ddpTrajectory.finalCost).toBeLessThan(diag.ddpTrajectory.initialCost);
+    expect(diag.ddpTrajectory.iterationsTaken).toBeGreaterThan(0);
+    expect(Number.isFinite(diag.citoTrajectory.maxComplementarityGap)).toBe(true);
+    expect(Number.isFinite(diag.citoTrajectory.maxFischerBurmeisterResidual)).toBe(true);
+    expect(diag.perfProfiler.totalStepsRecorded).toBe(12);
+    expect(diag.perfProfiler.p50Micros).toBeGreaterThan(0);
+    expect(diag.perfProfiler.p95Micros).toBeGreaterThanOrEqual(diag.perfProfiler.p50Micros);
+  });
+
+  test("every app/lib/*.ts module is imported by at least one live file in app/", () => {
+    const rootDir = process.cwd();
+    const libDir = path.join(rootDir, "app/lib");
+    const libFiles = fs
+      .readdirSync(libDir)
+      .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
+      .map((f) => path.basename(f, ".ts"));
+
+    // Collect all source contents across app/
+    const collectTsFiles = (dir: string): string[] => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const out: string[] = [];
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          out.push(...collectTsFiles(full));
+        } else if (e.name.endsWith(".ts") || e.name.endsWith(".tsx")) {
+          out.push(full);
+        }
+      }
+      return out;
+    };
+
+    const allAppFiles = collectTsFiles(path.join(rootDir, "app"));
+    const fileContents = new Map<string, string>();
+    for (const f of allAppFiles) {
+      fileContents.set(f, fs.readFileSync(f, "utf8"));
+    }
+
+    const unwiredLibs: string[] = [];
+    for (const base of libFiles) {
+      const selfPath = path.join(libDir, `${base}.ts`);
+      let importedInApp = false;
+      for (const [fPath, content] of fileContents.entries()) {
+        if (fPath === selfPath) continue;
+        if (content.includes(`/${base}"`) || content.includes(`/${base}'`)) {
+          importedInApp = true;
+          break;
+        }
+      }
+      if (!importedInApp) {
+        unwiredLibs.push(`${base}.ts`);
+      }
+    }
+
+    expect(unwiredLibs).toEqual([]);
   });
 });

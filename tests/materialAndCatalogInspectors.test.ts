@@ -50,6 +50,16 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(snap.softShadowRay.shadowFactor).toBeGreaterThanOrEqual(0);
         expect(snap.softShadowRay.shadowFactor).toBeLessThanOrEqual(1);
         expect(snap.fireplaceFlickerMultiplier).toBeGreaterThan(0);
+        expect(snap.ssrReflection.schlickFresnel).toBeGreaterThan(0);
+        expect(snap.ssrReflection.schlickFresnel).toBeLessThanOrEqual(1);
+        expect(
+          snap.ssrReflection.temporallyBlendedRadiance.every((c) => Number.isFinite(c) && c >= 0),
+        ).toBe(true);
+        expect(snap.volumetricAtmosphere.fogOpticalDepth).toBeGreaterThan(0);
+        expect(snap.volumetricAtmosphere.hgPhase).toBeGreaterThan(0);
+        expect(
+          snap.volumetricAtmosphere.sunbeamInscatter.every((c) => Number.isFinite(c) && c >= 0),
+        ).toBe(true);
         expect(snap.stageTonemappedRgb.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
         expect(snap.compositePostFxRgb.every((c) => c >= 0 && c <= 1)).toBe(true);
       }

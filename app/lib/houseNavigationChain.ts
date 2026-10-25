@@ -19,8 +19,17 @@
 //   - LaValle, "Planning Algorithms" (Cambridge University Press 2006)
 //   - Ames et al., "Control Barrier Functions: Theory and Applications" (ECC 2019)
 
+import {
+  checkDecorTipping,
+  createDecorObject,
+  DEFAULT_SILHOUETTE_PROFILES,
+  evaluateSocialPotential,
+  type SilhouetteAgent,
+} from "./decorAndSocialObstacles";
 import { createSceneFromHouseFurniture, queryMultiObstacleScene } from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
+import { LearnedCostmapEngine } from "./learnedCostmap";
+import { type RecoveryState, SafetyFilterRecoveryManager } from "./safetyFilterRecovery";
 import { type CorridorSegment, filterCorridorVelocityQP } from "./segmentSafeCbf";
 
 export interface HouseWaypoint {
@@ -390,5 +399,97 @@ export function runSegmentedHouseNavigation(
   return {
     ...lastResult,
     trajectory: combinedTrajectory,
+  };
+}
+
+export interface HouseNavigationSafetyAndCostmapDiagnostic {
+  recoveryState: RecoveryState;
+  safeVelocity: [number, number];
+  maxViolationSlack: number;
+  socialPotential: number;
+  socialGradient: [number, number];
+  decorTippingCheck: {
+    willTip: boolean;
+    appliedTorqueNm: number;
+    tippingThresholdNm: number;
+  };
+  learnedCostmap: {
+    parameterCount: number;
+    neuralClearanceValue: number;
+    neuralGradient: [number, number];
+  };
+}
+
+const SHARED_HOUSE_COSTMAP = new LearnedCostmapEngine({
+  fourierBands: 4,
+  hiddenDim: 32,
+  seed: 1928,
+});
+
+/**
+ * Evaluates 3-tier CBF safety filter recovery, Helbing-Molnar anisotropic social force potential,
+ * decor tipping torque stability, and Fourier-feature learned clearance costmap surrogate for
+ * a robot pose in the Craftsman house.
+ */
+export function evaluateHouseNavigationSafetyAndCostmap(
+  position: [number, number] = [0.35, 2.5],
+  velocity: [number, number] = [0.4, -0.5],
+  nominalControl: [number, number] = [0.5, -0.5],
+  scene: HouseSceneConfig = CRAFTSMAN_BUNGALOW_1928,
+): HouseNavigationSafetyAndCostmapDiagnostic {
+  const obstacleScene = createSceneFromHouseFurniture(scene.furniture);
+  const query = queryMultiObstacleScene(
+    { position: [position[0], 0.5, position[1]], robotRadius: 0.25, safetyMargin: 0.04 },
+    obstacleScene,
+  );
+
+  const recoveryMgr = new SafetyFilterRecoveryManager();
+  recoveryMgr.recordSafeState(
+    [position[0], 0.5, position[1]],
+    [velocity[0], 0, velocity[1]],
+    Math.max(0.08, query.minimumClearanceMeters),
+    0.0,
+  );
+  const recoveryRes = recoveryMgr.filterOrRecover(
+    [nominalControl[0], 0, nominalControl[1]],
+    [position[0], 0.5, position[1]],
+    [velocity[0], 0, velocity[1]],
+    [
+      {
+        id: "nearest-furniture-obb",
+        hValue: query.minimumClearanceMeters,
+        gradient: query.gradientVector,
+        gamma: 5.0,
+      },
+    ],
+  );
+
+  const parlorPedestrian: SilhouetteAgent = {
+    id: "parlor-occupant",
+    position: [0.85, 2.1],
+    ...DEFAULT_SILHOUETTE_PROFILES["pedestrian-standing"],
+  };
+  const social = evaluateSocialPotential(position, parlorPedestrian);
+
+  const parlorLamp = createDecorObject("parlor-floor-lamp", "floor-lamp", [1.2, 0.0, 2.4]);
+  const decorTippingCheck = checkDecorTipping(parlorLamp, 6.5, 1.1);
+
+  const costmapEval = SHARED_HOUSE_COSTMAP.evaluateNeuralClearanceWithGradient(
+    position[0],
+    position[1],
+  );
+
+  return {
+    recoveryState: recoveryRes.state,
+    safeVelocity: [recoveryRes.safeControl[0], recoveryRes.safeControl[2]],
+    maxViolationSlack: recoveryRes.maxViolationSlack,
+    socialPotential: social.potential,
+    socialGradient: social.gradient,
+    decorTippingCheck,
+    learnedCostmap: {
+      parameterCount: SHARED_HOUSE_COSTMAP.parameterCount,
+      neuralClearanceValue: costmapEval.value,
+      neuralGradient: costmapEval.gradient,
+    },
   };
 }

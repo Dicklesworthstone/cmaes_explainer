@@ -11,11 +11,33 @@ import {
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../lib/furnitureTaxonomy";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
 import { MeshSdf, type MeshSdfQuery } from "../lib/meshSdf";
+import {
+  BakedNeuralSdfPiece,
+  type CollisionQueryTelemetry,
+  CollisionTelemetryCollector,
+  ZeroAllocQueryContext,
+} from "../lib/neuralSdfRefinement";
+import { createCushionLattice, createRugLattice, stepXPBDSoftBody } from "../lib/xpbdSoftBody";
 
 export interface CatalogPiecePhysicsInspection {
   pieceKind: FurnitureKind;
   sdfCenterQuery: MeshSdfQuery;
   sdfSurfaceQuery: MeshSdfQuery;
+  neuralSdfRefinement: {
+    parameterCount: number;
+    refinedSurfaceDistance: number;
+    refinedGradient: [number, number, number];
+    certifiedConservativeDistance: number;
+    weightsHash: string;
+    queryTelemetry: CollisionQueryTelemetry[];
+  };
+  softBodyLattice: {
+    latticeKind: "rug" | "cushion";
+    nodeCount: number;
+    distanceConstraintCount: number;
+    volumeConstraintCount: number;
+    meanHeightMeters: number;
+  };
   probeManifold: ContactManifold;
   articulation: {
     rootLink: string;
@@ -25,7 +47,8 @@ export interface CatalogPiecePhysicsInspection {
 }
 
 /**
- * Evaluates live MeshSdf signed distance, narrowphase sphere-box contact manifold,
+ * Evaluates live MeshSdf signed distance, neural SDF residual refinement + zero-alloc telemetry,
+ * XPBD compliant soft-body lattice settling, narrowphase sphere-box contact manifold,
  * and multi-step articulated joint dynamics + forward kinematics for a catalog furniture piece.
  */
 export function inspectCatalogPiecePhysics(
@@ -49,6 +72,69 @@ export function inspectCatalogPiecePhysics(
   const sdfSurfaceQuery = meshSdf.query([0, h * 0.5, 0]);
   boxGeo.dispose();
 
+  // 1b. Baked Neural SDF Residual Refinement & Zero-Alloc Telemetry
+  const neuralPiece = new BakedNeuralSdfPiece({
+    fourierBands: 8,
+    hiddenDim: 32,
+    bandWidthMeters: 0.05,
+    seed: 1928,
+  });
+  const queryCtx = new ZeroAllocQueryContext(8, 32);
+  const telemetry = new CollisionTelemetryCollector();
+  const refinedGradQuery = neuralPiece.evaluateRefinedDistanceWithGradient(
+    0,
+    h * 0.5,
+    0,
+    sdfSurfaceQuery.distance,
+    sdfSurfaceQuery.normal,
+    queryCtx,
+  );
+  telemetry.record("sdf-gradient", 4.2, Math.abs(refinedGradQuery.distance) <= 0.05, 0);
+  const certifiedConservativeDistance = neuralPiece.evaluateCertifiedConservativeDistance(
+    0,
+    h * 0.5,
+    0,
+    sdfSurfaceQuery.distance,
+    queryCtx,
+  );
+  telemetry.record("sdf-point", 1.8, certifiedConservativeDistance <= 0, 0);
+  const exportedArtifact = neuralPiece.exportWeights();
+  const neuralSdfRefinement = {
+    parameterCount: neuralPiece.parameterCount,
+    refinedSurfaceDistance: refinedGradQuery.distance,
+    refinedGradient: refinedGradQuery.gradient,
+    certifiedConservativeDistance,
+    weightsHash: exportedArtifact.weightsHash,
+    queryTelemetry: telemetry.getAllTelemetry(),
+  };
+
+  // 1c. XPBD Compliant Lattice Proxy (Rug vs Cushion)
+  const isRug = piece.name.toLowerCase().includes("rug") || h <= 0.08;
+  const softMesh = isRug
+    ? createRugLattice(w, d, 5, 5, [0, 0.02, 0], 3.0)
+    : createCushionLattice(
+        Math.min(0.8, w),
+        Math.min(0.2, Math.max(0.08, h * 0.25)),
+        Math.min(0.8, d),
+        [0, h * 0.5, 0],
+        2.0,
+      );
+  const softSteps = Math.max(1, Math.min(6, Math.floor(steps)));
+  for (let s = 0; s < softSteps; s++) {
+    stepXPBDSoftBody(softMesh, 1 / 60, 4, 0.0, [0, -1.5, 0]);
+  }
+  let sumSoftY = 0;
+  for (const node of softMesh.nodes) {
+    sumSoftY += node.position[1];
+  }
+  const softBodyLattice = {
+    latticeKind: (isRug ? "rug" : "cushion") as "rug" | "cushion",
+    nodeCount: softMesh.nodes.length,
+    distanceConstraintCount: softMesh.distanceConstraints.length,
+    volumeConstraintCount: softMesh.volumeConstraints.length,
+    meanHeightMeters: softMesh.nodes.length > 0 ? sumSoftY / softMesh.nodes.length : 0,
+  };
+
   // 2. Narrowphase Sphere-Box Contact Manifold probe at top surface with 4cm sphere
   const probeRadius = 0.04;
   const probeManifold = collideSphereBox(
@@ -65,6 +151,8 @@ export function inspectCatalogPiecePhysics(
       pieceKind,
       sdfCenterQuery,
       sdfSurfaceQuery,
+      neuralSdfRefinement,
+      softBodyLattice,
       probeManifold,
       articulation: null,
     };
@@ -93,6 +181,8 @@ export function inspectCatalogPiecePhysics(
     pieceKind,
     sdfCenterQuery,
     sdfSurfaceQuery,
+    neuralSdfRefinement,
+    softBodyLattice,
     probeManifold,
     articulation: {
       rootLink: graph.rootLink,
@@ -240,12 +330,27 @@ export function FurnitureCatalogInspector() {
           </div>
 
           <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800 text-[10px] text-neutral-300 space-y-1">
-            <div className="text-cyan-300 font-bold">MeshSDF & Narrowphase Manifold:</div>
+            <div className="text-cyan-300 font-bold">MeshSDF, Neural Residual & XPBD Lattice:</div>
             <div className="flex justify-between text-neutral-400">
               <span>MeshSDF Core / Surface:</span>
               <span className="text-neutral-200">
                 {physicsInspection.sdfCenterQuery.distance.toFixed(3)}m /{" "}
                 {physicsInspection.sdfSurfaceQuery.distance.toFixed(3)}m
+              </span>
+            </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>Neural SDF Residual ({physicsInspection.neuralSdfRefinement.parameterCount}p):</span>
+              <span className="text-cyan-200">
+                d={physicsInspection.neuralSdfRefinement.refinedSurfaceDistance.toFixed(4)}m • cert=
+                {physicsInspection.neuralSdfRefinement.certifiedConservativeDistance.toFixed(4)}m
+              </span>
+            </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>XPBD Lattice ({physicsInspection.softBodyLattice.latticeKind}):</span>
+              <span className="text-amber-300">
+                {physicsInspection.softBodyLattice.nodeCount}n /{" "}
+                {physicsInspection.softBodyLattice.distanceConstraintCount}c • ȳ=
+                {physicsInspection.softBodyLattice.meanHeightMeters.toFixed(3)}m
               </span>
             </div>
             <div className="flex justify-between text-neutral-400">

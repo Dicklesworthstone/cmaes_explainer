@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { BrowserPhysicsAdapter, type KernelManifest } from "../lib/browserPhysicsAdapter";
+import { solveContactImplicitCollocation } from "../lib/contactImplicitTrajectoryOpt";
+import { DEFAULT_DDP_CONFIG, solveDDP } from "../lib/ddpTrajectoryOptimization";
+import type { MultibodyTree } from "../lib/featherstoneDynamics";
+import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerfProfiler";
 import { encodeSchema8Packet, viewSchema8Packet } from "../lib/schema8WireFormat";
 import {
   computeWilsonConfidenceInterval95,
@@ -37,7 +41,39 @@ export interface FrontierKernelAndStressDiagnostics {
   visitorClipFrameCount: number;
   visitorClipPlaybackRatio: number;
   visitorClipEpisodeSuccess: boolean;
+  ddpTrajectory: {
+    converged: boolean;
+    iterationsTaken: number;
+    initialCost: number;
+    finalCost: number;
+  };
+  citoTrajectory: {
+    converged: boolean;
+    finalEpsilon: number;
+    maxComplementarityGap: number;
+    maxFischerBurmeisterResidual: number;
+  };
+  perfProfiler: ProfilerSummaryStats;
 }
+
+const SINGLE_PENDULUM_TREE: MultibodyTree = {
+  name: "frontier-1dof-pendulum",
+  gravity: [0, 0, -9.81],
+  links: [
+    {
+      id: "link1",
+      name: "Link 1",
+      parentIndex: -1,
+      jointType: "revolute",
+      jointAxis: [0, 1, 0],
+      parentTransform: { rotation: [0, 0, 0], translation: [0, 0, 0] },
+      mass: 1.0,
+      centerOfMass: [0, 0, -0.5],
+      inertiaPrincipal: [0.0833, 0.0833, 0.01],
+      damping: 0.1,
+    },
+  ],
+};
 
 export function evaluateFrontierKernelAndStressDiagnostics(
   seed = 101,
@@ -109,6 +145,50 @@ export function evaluateFrontierKernelAndStressDiagnostics(
 
   const visitorFrames = generateVisitorModeClip(undefined, 60, 2);
 
+  // DDP / iLQR Trajectory Optimization (Crocoddyl / Mayne / Tassa)
+  const ddpHorizon = 12;
+  const ddpRes = solveDDP(
+    SINGLE_PENDULUM_TREE,
+    [0.45, 0.0],
+    [0.0, 0.0],
+    Array.from({ length: ddpHorizon }, () => [0.0]),
+    {
+      qState: [4.0, 0.5],
+      rControl: [0.05],
+      qTerminal: [20.0, 4.0],
+    },
+    { ...DEFAULT_DDP_CONFIG, horizonSteps: ddpHorizon, maxIterations: 8 },
+  );
+
+  // Contact-Implicit Trajectory Optimization (Posa-Cantu-Tedrake Fischer-Burmeister NCP)
+  const citoRes = solveContactImplicitCollocation({
+    horizonSteps: 10,
+    dt: 0.05,
+    initialQ: [0.0, 0.72, 0.0],
+    targetQ: [1.2, 0.72, 0.4],
+    mass: 35.0,
+    obstacles: [{ center: [0.6, 0.35, 0.2], size: [0.3, 0.7, 0.3] }],
+    maxIterations: 8,
+  });
+
+  // Kernel Micro-Performance Profiler (480 Hz / 2083.3 us budget)
+  const profiler = new KernelPerfProfiler(64, 480);
+  for (let k = 0; k < 12; k++) {
+    profiler.recordStep(
+      k,
+      {
+        broadphase: 110 + (k % 3) * 8,
+        narrowphase: 245 + (k % 4) * 12,
+        lcpSolver: 520 + (k % 5) * 18,
+        integrator: 95 + (k % 2) * 5,
+      },
+      14,
+      6,
+      k / 480,
+    );
+  }
+  const perfProfiler = profiler.getSummaryStats();
+
   return {
     v067MultiBodyRefusalCode,
     v068ReadyCapabilitiesCount: v068Init.success ? v068Init.value.capabilities.length : 0,
@@ -123,6 +203,19 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     visitorClipFrameCount: visitorFrames.length,
     visitorClipPlaybackRatio: visitorFrames[0]?.playbackSpeedRatio ?? 1.0,
     visitorClipEpisodeSuccess: visitorFrames[0]?.episodeSuccess ?? false,
+    ddpTrajectory: {
+      converged: ddpRes.converged,
+      iterationsTaken: ddpRes.iterationsTaken,
+      initialCost: ddpRes.initialCost,
+      finalCost: ddpRes.finalCost,
+    },
+    citoTrajectory: {
+      converged: citoRes.converged,
+      finalEpsilon: citoRes.finalEpsilon,
+      maxComplementarityGap: citoRes.maxComplementarityGap,
+      maxFischerBurmeisterResidual: citoRes.maxFischerBurmeisterResidual,
+    },
+    perfProfiler,
   };
 }
 
@@ -352,16 +445,27 @@ export function FrankenRobotsResearchAnnex() {
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                Visitor Mode Trajectory Orchestrator
+                DDP, C-ITO &amp; Kernel Perf Telemetry
               </p>
               <div className="mt-2 space-y-1 font-mono text-xs text-slate-300">
-                <div>Sampled Keyframe Clip: {frontierDiag.visitorClipFrameCount} frames</div>
                 <div>
-                  Playback Speed Ratio: {frontierDiag.visitorClipPlaybackRatio.toFixed(2)}x
+                  DDP / iLQR Cost: {frontierDiag.ddpTrajectory.initialCost.toFixed(2)} →{" "}
+                  {frontierDiag.ddpTrajectory.finalCost.toFixed(2)} (
+                  {frontierDiag.ddpTrajectory.iterationsTaken} iters)
                 </div>
                 <div>
-                  Physical Rollout Backing:{" "}
-                  {frontierDiag.visitorClipEpisodeSuccess ? "All rooms reached" : "Partial"}
+                  C-ITO NCP Gap: {frontierDiag.citoTrajectory.maxComplementarityGap.toExponential(2)}{" "}
+                  • FB: {frontierDiag.citoTrajectory.maxFischerBurmeisterResidual.toExponential(2)}
+                </div>
+                <div>
+                  480Hz Step p50 / p95: {frontierDiag.perfProfiler.p50Micros.toFixed(0)}µs /{" "}
+                  {frontierDiag.perfProfiler.p95Micros.toFixed(0)}µs (overruns:{" "}
+                  {frontierDiag.perfProfiler.budgetOverrunCount})
+                </div>
+                <div>
+                  Visitor Clip: {frontierDiag.visitorClipFrameCount}f @{" "}
+                  {frontierDiag.visitorClipPlaybackRatio.toFixed(2)}x (
+                  {frontierDiag.visitorClipEpisodeSuccess ? "All rooms" : "Partial"})
                 </div>
               </div>
             </div>

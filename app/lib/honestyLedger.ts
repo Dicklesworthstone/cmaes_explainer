@@ -492,4 +492,19 @@ export const HONESTY_CHIP_REGISTRY: HonestyChip[] = [
       "Fixed-layout 544-byte Float32Array binary wire encoder and zero-copy view decoder for worker-to-main-thread physics telemetry, wired into FrankenRobotsResearchAnnex.",
     status: "implemented",
   },
+  {
+    id: "chip-arm-link-collision-response",
+    beadId: "cmaes-pvz",
+    title: "KUKA iiwa 7 Per-Link OBB Signed Distance Projection",
+    category: "clipping",
+    sourceFile: "app/lib/armLinkCollisionResponse.ts",
+    testFile: "tests/armLinkCollisionResponse.test.ts",
+    citation:
+      "Ericson, Real-Time Collision Detection (Morgan Kaufmann 2005), §5.5.6 ClosestPtPointOBB & §6.5 Projection; Gottschalk, Lin, Manocha, OBBTree (SIGGRAPH 1996).",
+    mathFormula:
+      "\\mathbf{p}_{\\text{closest}} = \\mathbf{R}\\,\\text{clamp}(\\mathbf{R}^T(\\mathbf{p} - \\mathbf{c}), -\\mathbf{h}, \\mathbf{h}) + \\mathbf{c}, \\quad \\mathbf{p} \\leftarrow \\mathbf{p} + (r - d_{\\text{OBB}}) \\hat{\\mathbf{n}}",
+    claim:
+      "Sequential Gauss-Seidel per-link OBB surface projection and penetration depth accounting for the 8-link KUKA chain, wired into armInverseKinematics and ArmPhysicsDebugOverlay.",
+    status: "implemented",
+  },
 ];

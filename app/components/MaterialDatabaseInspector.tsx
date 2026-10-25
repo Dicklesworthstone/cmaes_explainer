@@ -19,6 +19,18 @@ import {
 } from "../lib/pbrPipeline";
 import { applyPostFXSoftware, flickerFireplace, POSTFX_PROFILES } from "../lib/postFx";
 import { DEFAULT_POST_FX_CONFIG, processPixelPostFx } from "../lib/postProcessingPipeline";
+import {
+  blendTemporalSsr,
+  evaluateSchlickFresnel,
+  type SsrHitResult,
+  traceScreenSpaceRay,
+} from "../lib/screenSpaceReflections";
+import {
+  applyExponentialHeightFog,
+  computeAnalyticalFogOpticalDepth,
+  henyeyGreensteinPhase,
+  raymarchVolumetricSunbeams,
+} from "../lib/volumetricLighting";
 
 export interface PbrMaterialSpec {
   id: string;
@@ -187,6 +199,17 @@ export interface MaterialRenderingPipelineEvaluation {
   contactShadowAo: number;
   softShadowRay: ShadowRayResult;
   fireplaceFlickerMultiplier: number;
+  ssrReflection: {
+    hitResult: SsrHitResult;
+    schlickFresnel: number;
+    temporallyBlendedRadiance: [number, number, number];
+  };
+  volumetricAtmosphere: {
+    fogOpticalDepth: number;
+    hgPhase: number;
+    sunbeamInscatter: [number, number, number];
+    foggedSurfaceRgb: [number, number, number];
+  };
   stageTonemappedRgb: [number, number, number];
   compositePostFxRgb: [number, number, number];
 }
@@ -222,18 +245,64 @@ export function evaluateMaterialRenderingPipeline(
   );
   const fireplaceFlickerMultiplier = flickerFireplace(frame, 1.0);
 
+  // Screen-Space Reflection (SSR) & Temporal AABB Variance Clamping
+  const f0 = mat.metalness > 0.5 ? 0.75 : (((mat.ior ?? 1.5) - 1) / ((mat.ior ?? 1.5) + 1)) ** 2;
+  const schlickFresnel = evaluateSchlickFresnel(0.65, f0);
+  const ssrHit = traceScreenSpaceRay(
+    [0.5, 0.5],
+    2.2,
+    [0.12, -0.35],
+    1.5,
+    (uv) => 2.35 - uv[1] * 0.2,
+    [0, 1, 0],
+    [0, 0.65, 0.76],
+    mat.roughness,
+  );
   const baseLinear = hexToLinearRgb(mat.baseColorHex);
+  const ssrTemporal = blendTemporalSsr({
+    currentRadiance: [
+      baseLinear[0] * (1 + ssrHit.reflectionWeight),
+      baseLinear[1] * (1 + ssrHit.reflectionWeight),
+      baseLinear[2] * (1 + ssrHit.reflectionWeight),
+    ],
+    historyRadiance: [baseLinear[0] * 0.95, baseLinear[1] * 0.95, baseLinear[2] * 0.95],
+    neighborhoodSamples: [
+      baseLinear,
+      [baseLinear[0] * 1.15, baseLinear[1] * 1.15, baseLinear[2] * 1.15],
+    ],
+    motionVectorUv: [0.002, -0.001],
+    historyValid: true,
+  });
+
+  // Volumetric Lighting (Henyey-Greenstein Sunbeams & Exponential Height Fog)
+  const cameraPos: [number, number, number] = [0, 1.65, 3.8];
+  const surfacePos: [number, number, number] = [0, 0.4, 0];
+  const fogOpticalDepth = computeAnalyticalFogOpticalDepth(cameraPos, surfacePos, 0.02, 0.5, 0.0);
+  const hgPhase = henyeyGreensteinPhase(0.78, 0.7);
+  const sunbeamInscatter = raymarchVolumetricSunbeams(
+    cameraPos,
+    [0, -0.31, -0.95],
+    3.9,
+    [0.35, 0.75, -0.56],
+    (pos) => (pos[1] > 0.3 && pos[1] < 2.2 ? 1.0 : 0.0),
+    16,
+  );
+
   const emissiveBoost = mat.kelvinTemp
     ? kelvinToRgb(mat.kelvinTemp)
     : EMISSIVE_PALETTE.fireplace1500K;
-  const hdrRadiance: [number, number, number] = [
-    baseLinear[0] * (shIrradiance[0] + ddgiIrradiance.rgb[0] * 0.5) * contactShadowAo +
-      emissiveBoost[0] * 0.08 * fireplaceFlickerMultiplier,
-    baseLinear[1] * (shIrradiance[1] + ddgiIrradiance.rgb[1] * 0.5) * contactShadowAo +
-      emissiveBoost[1] * 0.08 * fireplaceFlickerMultiplier,
-    baseLinear[2] * (shIrradiance[2] + ddgiIrradiance.rgb[2] * 0.5) * contactShadowAo +
-      emissiveBoost[2] * 0.08 * fireplaceFlickerMultiplier,
+  const rawSurfaceHdr: [number, number, number] = [
+    ssrTemporal.blendedRadiance[0] * (shIrradiance[0] + ddgiIrradiance.rgb[0] * 0.5) * contactShadowAo +
+      emissiveBoost[0] * 0.08 * fireplaceFlickerMultiplier +
+      sunbeamInscatter[0] * 0.15,
+    ssrTemporal.blendedRadiance[1] * (shIrradiance[1] + ddgiIrradiance.rgb[1] * 0.5) * contactShadowAo +
+      emissiveBoost[1] * 0.08 * fireplaceFlickerMultiplier +
+      sunbeamInscatter[1] * 0.15,
+    ssrTemporal.blendedRadiance[2] * (shIrradiance[2] + ddgiIrradiance.rgb[2] * 0.5) * contactShadowAo +
+      emissiveBoost[2] * 0.08 * fireplaceFlickerMultiplier +
+      sunbeamInscatter[2] * 0.15,
   ];
+  const hdrRadiance = applyExponentialHeightFog(rawSurfaceHdr, cameraPos, surfacePos);
 
   const profile = POSTFX_PROFILES[stageProfileKey] ?? POSTFX_PROFILES["parlor-calm"];
   const stageTonemappedRgb = applyPostFXSoftware(hdrRadiance, profile, [0.5, 0.5]);
@@ -248,6 +317,17 @@ export function evaluateMaterialRenderingPipeline(
     contactShadowAo,
     softShadowRay,
     fireplaceFlickerMultiplier,
+    ssrReflection: {
+      hitResult: ssrHit,
+      schlickFresnel,
+      temporallyBlendedRadiance: ssrTemporal.blendedRadiance,
+    },
+    volumetricAtmosphere: {
+      fogOpticalDepth,
+      hgPhase,
+      sunbeamInscatter,
+      foggedSurfaceRgb: hdrRadiance,
+    },
     stageTonemappedRgb,
     compositePostFxRgb,
   };
@@ -531,12 +611,13 @@ export function MaterialDatabaseInspector() {
           </div>
 
           <div className="p-2.5 rounded bg-neutral-900/90 border border-neutral-800">
-            <div className="text-neutral-400">ACES Filmic Tonemap</div>
+            <div className="text-neutral-400">SSR, Volumetrics & ACES</div>
             <div className="text-neutral-100 font-semibold mt-0.5">
-              [{pipelineEval.stageTonemappedRgb.map((c) => c.toFixed(2)).join(", ")}]
+              ACES [{pipelineEval.stageTonemappedRgb.map((c) => c.toFixed(2)).join(", ")}]
             </div>
             <div className="text-[10px] text-purple-300">
-              Composite: [{pipelineEval.compositePostFxRgb.map((c) => c.toFixed(2)).join(", ")}]
+              SSR F={pipelineEval.ssrReflection.schlickFresnel.toFixed(2)} • τ_fog=
+              {pipelineEval.volumetricAtmosphere.fogOpticalDepth.toFixed(3)}
             </div>
           </div>
         </div>

@@ -725,7 +725,7 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
 
     if (world.softBodies.size > 0) {
       const rigidColliders: XPBDRigidSphereCollider[] = [];
-      for (const b of world.contactGraph.bodies.values()) {
+      for (const b of bodies.values()) {
         if (b.isStatic || world.softBodies.has(b.id)) continue;
         const bMeta = world.meta.get(b.id);
         rigidColliders.push({
