@@ -34,12 +34,27 @@ import type { FurnitureKind } from "./furnitureTaxonomy";
 import { DEFAULT_LCP_CONFIG, type LCPSolverConfig, stepPhysicsWorld } from "./lcpSolver";
 import type { HouseholdMaterial } from "./materialPairFriction";
 import {
-  DEFAULT_SLEEP_CONFIG,
+   DEFAULT_SLEEP_CONFIG,
   MultiBodySleepManager,
   type SleepableBody,
   type SleepTransitionEvent,
 } from "./multiBodySleepState";
 import { type RollingBody, stepRollingSphere } from "./rollingContactDynamics";
+import {
+  createCurtainLattice,
+  createCushionLattice,
+  createRugLattice,
+  type SoftBodyMesh,
+  stepXPBDSoftBody,
+  type XPBDRigidSphereCollider,
+} from "./xpbdSoftBody";
+
+export interface HouseholdSoftBodyReceipt {
+  nodeCount: number;
+  minY: number;
+  maxY: number;
+  meanSpeed: number;
+}
 
 export interface HouseholdBodyMeta {
   boundingRadius: number;
@@ -53,6 +68,8 @@ export interface HouseholdBodyMeta {
   fragmentIds?: string[];
   articulationKind?: FurnitureKind | string;
   articulationDimensions?: [number, number, number];
+  softBodyKind?: "rug" | "cushion" | "curtain";
+  softBodyDimensions?: [number, number, number];
 }
 
 export interface HouseholdBreakageEvent {
@@ -72,6 +89,7 @@ export interface HouseholdWorld {
   meta: Map<string, HouseholdBodyMeta>;
   articulations: Map<string, ArticulationGraph>;
   articulationInputs: Map<string, Record<string, number>>;
+  softBodies: Map<string, SoftBodyMesh>;
   gravity: Vector3;
   ccdSpeedThreshold: number;
   dt: number;
@@ -97,6 +115,7 @@ export interface HouseholdStepResult {
   breakageEvents: HouseholdBreakageEvent[];
   articulationReceipts: Map<string, Map<string, ArticulationStepReceipt>>;
   articulationLinkPoses: Map<string, Map<string, LinkPose>>;
+  softBodyReceipts: Map<string, HouseholdSoftBodyReceipt>;
   lcpIterations: number;
   lcpMaxResidual: number;
   lcpConverged: boolean;
@@ -123,6 +142,7 @@ export function createHouseholdWorld(
     lcpConfig?: LCPSolverConfig;
     articulations?: Map<string, ArticulationGraph>;
     articulationInputs?: Map<string, Record<string, number>>;
+    softBodies?: Map<string, SoftBodyMesh>;
   } = {},
 ): HouseholdWorld {
   const cg = new ContactGraph();
@@ -144,6 +164,7 @@ export function createHouseholdWorld(
     sleep.registerBody(sleepable);
   }
   const articulations = new Map<string, ArticulationGraph>(options.articulations ?? []);
+  const softBodies = new Map<string, SoftBodyMesh>(options.softBodies ?? []);
   for (const [bodyId, meta] of metaById.entries()) {
     if (!articulations.has(bodyId) && meta.articulationKind) {
       const dims = meta.articulationDimensions;
@@ -157,6 +178,34 @@ export function createHouseholdWorld(
         articulations.set(bodyId, graph);
       }
     }
+    if (!softBodies.has(bodyId) && meta.softBodyKind) {
+      const dims = meta.softBodyDimensions;
+      const body = cg.getBody(bodyId);
+      const center: [number, number, number] = body
+        ? [body.position[0], body.position[2], body.position[1]]
+        : [0, 0.25, 0];
+      if (meta.softBodyKind === "rug") {
+        softBodies.set(
+          bodyId,
+          createRugLattice(dims?.[0] ?? 2.0, dims?.[1] ?? 1.5, 6, 6, center),
+        );
+      } else if (meta.softBodyKind === "curtain") {
+        softBodies.set(
+          bodyId,
+          createCurtainLattice(dims?.[0] ?? 1.2, dims?.[2] ?? 1.8, 6, 6, center),
+        );
+      } else {
+        softBodies.set(
+          bodyId,
+          createCushionLattice(
+            dims?.[0] ?? 0.6,
+            dims?.[2] ?? 0.15,
+            dims?.[1] ?? 0.6,
+            center,
+          ),
+        );
+      }
+    }
   }
   const articulationInputs = new Map<string, Record<string, number>>(
     options.articulationInputs ?? [],
@@ -167,6 +216,7 @@ export function createHouseholdWorld(
     meta: metaById,
     articulations,
     articulationInputs,
+    softBodies,
     gravity: options.gravity ?? DEFAULT_GRAVITY,
     ccdSpeedThreshold: options.ccdSpeedThreshold ?? 5.0,
     dt: options.dt ?? 1 / 60,
@@ -664,12 +714,45 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
 
   const articulationReceipts = new Map<string, Map<string, ArticulationStepReceipt>>();
   const articulationLinkPoses = new Map<string, Map<string, LinkPose>>();
+  const softBodyReceipts = new Map<string, HouseholdSoftBodyReceipt>();
   if (!stepRefused) {
     for (const [bodyId, graph] of world.articulations.entries()) {
       const extInputs = world.articulationInputs.get(bodyId);
       const receipts = graph.stepDynamicsWithReceipts(world.dt, extInputs);
       articulationReceipts.set(bodyId, receipts);
       articulationLinkPoses.set(bodyId, graph.computeForwardKinematics());
+    }
+
+    if (world.softBodies.size > 0) {
+      const rigidColliders: XPBDRigidSphereCollider[] = [];
+      for (const b of world.contactGraph.bodies.values()) {
+        if (b.isStatic || world.softBodies.has(b.id)) continue;
+        const bMeta = world.meta.get(b.id);
+        rigidColliders.push({
+          // Map household z-vertical to XPBD y-vertical
+          center: [b.position[0], b.position[2], b.position[1]],
+          radius: bMeta?.boundingRadius ?? 0.15,
+          frictionCoeff: b.friction,
+        });
+      }
+
+      for (const [bodyId, mesh] of world.softBodies.entries()) {
+        stepXPBDSoftBody(mesh, world.dt, 4, 0.0, [0, 0, 0], rigidColliders);
+        let minY = Number.POSITIVE_INFINITY;
+        let maxY = Number.NEGATIVE_INFINITY;
+        let speedSum = 0;
+        for (const node of mesh.nodes) {
+          if (node.position[1] < minY) minY = node.position[1];
+          if (node.position[1] > maxY) maxY = node.position[1];
+          speedSum += Math.hypot(node.velocity[0], node.velocity[1], node.velocity[2]);
+        }
+        softBodyReceipts.set(bodyId, {
+          nodeCount: mesh.nodes.length,
+          minY: Number.isFinite(minY) ? minY : 0,
+          maxY: Number.isFinite(maxY) ? maxY : 0,
+          meanSpeed: mesh.nodes.length > 0 ? speedSum / mesh.nodes.length : 0,
+        });
+      }
     }
   }
 
@@ -680,6 +763,7 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     breakageEvents,
     articulationReceipts,
     articulationLinkPoses,
+    softBodyReceipts,
     lcpIterations: lcp.iterationsTaken,
     lcpMaxResidual: lcp.maxResidual,
     lcpConverged: lcp.converged,
