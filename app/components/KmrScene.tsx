@@ -24,9 +24,13 @@ import {
   KUKA_KMR_IIWA_OFFICIAL_WHOLE_VEHICLE,
 } from "../lib/kmrGeometry";
 import {
+  composeKmrMountedArmKinematics,
   createKmrHouseholdPhysicsCoupling,
+  evaluateKmrSevenPhaseManipulationSuite,
+  KMR_SEVEN_MANIPULATION_PHASES,
   type KmrHouseholdPhysicsCoupling,
   type KmrHouseholdPhysicsReceipt,
+  KmrSevenPhaseMobileManipulator,
   stepKmrHouseholdPhysics,
 } from "../lib/kmrHouseholdPhysics";
 import { KUKA_KMR_IIWA_LIDAR_DEFAULT, scanLidar } from "../lib/kmrLidar";
@@ -76,6 +80,17 @@ function KmrThreeScene({
     () => scanLidar(pose.x, pose.y, obstacles, KUKA_KMR_IIWA_LIDAR_DEFAULT, pose.theta),
     [pose.x, pose.y, pose.theta, obstacles],
   );
+  const mountedArm = useMemo(
+    () =>
+      composeKmrMountedArmKinematics(
+        pose,
+        [0, 0.35, 0, -1.15, 0, 0.75, 0],
+        undefined,
+        0.45,
+        0,
+      ),
+    [pose],
+  );
   const pathLine = useMemo(() => {
     if (!path || path.points.length < 2) return null;
     const geometry = new THREE.BufferGeometry().setFromPoints(
@@ -105,6 +120,16 @@ function KmrThreeScene({
   return (
     <group>
       <primitive object={baseGroup} position={[pose.x, 0, pose.y]} rotation={[0, -pose.theta, 0]} />
+      {mountedArm.worldLinkPositionsMeters.map((pt, idx) => (
+        <mesh key={`kmr-arm-link-${idx}`} position={[pt[0], pt[2], pt[1]]}>
+          <sphereGeometry args={[idx === mountedArm.worldLinkPositionsMeters.length - 1 ? 0.032 : 0.024, 8, 8]} />
+          <meshStandardMaterial
+            color={idx === mountedArm.worldLinkPositionsMeters.length - 1 ? "#38bdf8" : "#f97316"}
+            metalness={0.5}
+            roughness={0.35}
+          />
+        </mesh>
+      ))}
       {scan.rays.map((r, i) => {
         if (!r.hit) return null;
         const cosA = Math.cos(r.angleRadians + pose.theta);
@@ -204,6 +229,21 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
     useState<KmrPosePerceptionAndReachability | null>(null);
   const [planningError, setPlanningError] = useState<string | null>(null);
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
+  const sevenPhaseSummary = useMemo(() => {
+    const suite = evaluateKmrSevenPhaseManipulationSuite();
+    const probeMachine = new KmrSevenPhaseMobileManipulator({
+      startPose: pose,
+    });
+    const firstStep = probeMachine.step();
+    return {
+      phaseCount: KMR_SEVEN_MANIPULATION_PHASES.length,
+      initialPhase: firstStep.phase,
+      suiteCompleted: suite.nominalRun.completed,
+      allSevenInOrder: suite.nominalRun.allSevenPhasesVisitedInOrder,
+      peakTorqueNm: suite.nominalRun.peakMountingPlateTorqueNm,
+      finalPlaceErrMm: suite.nominalRun.finalPlaceErrorMeters * 1000,
+    };
+  }, [pose]);
   const animRef = useRef<number | null>(null);
   const ownerRef = useRef<KmrNavigationOwner | null>(null);
   const householdCouplingRef = useRef<KmrHouseholdPhysicsCoupling | null>(null);
@@ -567,6 +607,19 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
           </span>
         </div>
       ) : null}
+      <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-orange-500/20 bg-orange-950/10 p-3 font-mono text-[11px] text-orange-100 sm:grid-cols-4">
+        <span>
+          7-phase FSM: {sevenPhaseSummary.phaseCount} phases ({sevenPhaseSummary.initialPhase})
+        </span>
+        <span>
+          sequence:{" "}
+          {sevenPhaseSummary.suiteCompleted && sevenPhaseSummary.allSevenInOrder
+            ? "7/7 verified"
+            : "pending"}
+        </span>
+        <span>plate torque: {sevenPhaseSummary.peakTorqueNm.toFixed(2)} N·m</span>
+        <span>place err: {sevenPhaseSummary.finalPlaceErrMm.toFixed(2)} mm</span>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  composeKmrMountedArmKinematics,
   createKmrHouseholdPhysicsCoupling,
+  evaluateKmrSevenPhaseManipulationSuite,
+  KMR_SEVEN_MANIPULATION_PHASES,
+  KmrSevenPhaseMobileManipulator,
   stepKmrHouseholdPhysics,
 } from "../app/lib/kmrHouseholdPhysics";
 import type { KmrNavigationReceipt } from "../app/lib/kmrNavigationOwner";
@@ -64,5 +68,60 @@ describe("live KMR → household contact/LCP coupling", () => {
 
     expect(receipt.baseAngularVelocityRadPerSecond).toBeCloseTo(1.2, 9);
     expect(Math.abs(receipt.baseAngularVelocityRadPerSecond)).toBeLessThan(2);
+  });
+
+  test("composes moving KMR mounting-plate pose with 7-DoF arm FK/IK and carried-object reaction wrench (cmaes-ss8z, cmaes-za0x.57)", () => {
+    const pose = { x: 0.4, y: -0.2, theta: Math.PI / 6 };
+    const targetWorld: [number, number, number] = [0.95, 0.12, 0.78];
+    const comp = composeKmrMountedArmKinematics(
+      pose,
+      [0, 0.4, 0, -1.2, 0, 0.8, 0],
+      targetWorld,
+      0.5,
+      0.2,
+    );
+
+    expect(comp.mountingPlateWorldPose.xMeters).toBeCloseTo(0.4, 9);
+    expect(comp.mountingPlateWorldPose.yMeters).toBeCloseTo(-0.2, 9);
+    expect(comp.mountingPlateWorldPose.zMeters).toBeCloseTo(0.38, 9);
+    expect(comp.worldLinkPositionsMeters.length).toBe(6);
+
+    const eeErr = Math.hypot(
+      comp.worldEndEffectorMeters[0] - targetWorld[0],
+      comp.worldEndEffectorMeters[1] - targetWorld[1],
+      comp.worldEndEffectorMeters[2] - targetWorld[2],
+    );
+    expect(eeErr).toBeLessThan(0.01);
+    expect(comp.mountingPlateReactionForceN[2]).toBeLessThan(-4.9);
+    expect(Math.hypot(...comp.mountingPlateReactionTorqueNm)).toBeGreaterThan(0.1);
+  });
+
+  test("executes complete 7-phase mobile manipulation sequence, rigid composition, seed determinism, and causal negative controls (cmaes-ss8z, cmaes-za0x.57)", () => {
+    const suite = evaluateKmrSevenPhaseManipulationSuite();
+
+    expect(suite.nominalRun.completed).toBe(true);
+    expect(suite.nominalRun.visitedPhases.slice(0, 7)).toEqual([...KMR_SEVEN_MANIPULATION_PHASES]);
+    expect(suite.nominalRun.allSevenPhasesVisitedInOrder).toBe(true);
+    expect(suite.nominalRun.peakGraspGwsRadius).toBeGreaterThan(0.5);
+    expect(suite.nominalRun.peakMountingPlateTorqueNm).toBeGreaterThan(0.1);
+    expect(suite.nominalRun.maxObjectStepDisplacementMeters).toBeLessThan(0.08);
+    expect(suite.nominalRun.finalPlaceErrorMeters).toBeLessThan(0.01);
+    expect(suite.rigidCompositionTransformExact).toBe(true);
+    expect(suite.seedDeterminismExact).toBe(true);
+
+    // Causal negative controls
+    expect(suite.negativeControls.blockedGoalRefused).toBe(true);
+    expect(suite.negativeControls.blockedGoalRefusalReason).toBe("GOAL_BLOCKED_BY_OBSTACLE");
+    expect(suite.negativeControls.dynamicObstacleEmergencyStopped).toBe(true);
+    expect(suite.negativeControls.dynamicObstacleZeroedWheels).toBe(true);
+    expect(suite.negativeControls.midSequenceCancelledAndRecovered).toBe(true);
+
+    // Also verify out-of-bounds goal refusal directly
+    const outOfBounds = new KmrSevenPhaseMobileManipulator({
+      pickObjectWorldPos: [12.0, 0.0, 0.72],
+    });
+    const outReceipt = outOfBounds.step();
+    expect(outReceipt.phase).toBe("refused");
+    expect(outReceipt.refusalReason).toBe("GOAL_OUT_OF_BOUNDS");
   });
 });

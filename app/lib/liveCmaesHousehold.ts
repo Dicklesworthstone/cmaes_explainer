@@ -369,3 +369,72 @@ export function runEqualBudgetHouseholdCmaes(
   };
 }
 
+export interface HouseholdCmaesCampaignDiagnostic {
+  seeds: readonly number[];
+  runs: EqualBudgetHouseholdCmaesResult[];
+  allEqualBudgetsVerified: boolean;
+  allSeedsImprovedOverInitial: boolean;
+  cmaesMeanBestLoss: number;
+  randomMeanBestLoss: number;
+  impassableObstacleIntervention: {
+    blockedCompletedAllRooms: boolean;
+    blockedLoss: number;
+    impassableRefusedCompletion: boolean;
+  };
+}
+
+/**
+ * Evaluates a multi-seed equal-budget household CMA-ES campaign (`[42, 43, 44]`) and
+ * an impassable-corridor causal intervention (`cmaes-feat-fs9-live-cma-5jb`).
+ */
+export function evaluateHouseholdCmaesCampaign(
+  seeds: readonly number[] = [42, 43, 44],
+): HouseholdCmaesCampaignDiagnostic {
+  const runs = seeds.map((seed) =>
+    runEqualBudgetHouseholdCmaes({
+      seed,
+      populationSize: 4,
+      generations: 3,
+    }),
+  );
+
+  const allEqualBudgetsVerified = runs.every(
+    (r) =>
+      r.cmaesEvaluationsUsed === r.evaluationBudget &&
+      r.randomSearchEvaluationsUsed === r.evaluationBudget,
+  );
+  const allSeedsImprovedOverInitial = runs.every(
+    (r) => r.cmaesBestReceipt.loss <= r.initialPolicyReceipt.loss,
+  );
+  const cmaesMeanBestLoss =
+    runs.reduce((acc, r) => acc + r.cmaesBestReceipt.loss, 0) / Math.max(1, runs.length);
+  const randomMeanBestLoss =
+    runs.reduce((acc, r) => acc + r.randomSearchBestReceipt.loss, 0) / Math.max(1, runs.length);
+
+  // Causal intervention: seal the first doorway aperture narrower than robot diameter (2 * 0.20m = 0.40m)
+  const sealedCorridors: CorridorSegment[] = CRAFTSMAN_DOORWAYS.map((c, idx) =>
+    idx === 0 ? { ...c, width: 0.08 } : c,
+  );
+  const bestCandidate = runs[0]?.cmaesBestParams ?? [0, 0, 0, 0, 0];
+  const blockedEval = evaluateHouseholdNavigationPolicy(bestCandidate, {
+    corridors: sealedCorridors,
+    maxSteps: 160,
+  });
+
+  return {
+    seeds,
+    runs,
+    allEqualBudgetsVerified,
+    allSeedsImprovedOverInitial,
+    cmaesMeanBestLoss,
+    randomMeanBestLoss,
+    impassableObstacleIntervention: {
+      blockedCompletedAllRooms: blockedEval.completedAllRooms,
+      blockedLoss: blockedEval.loss,
+      impassableRefusedCompletion:
+        !blockedEval.completedAllRooms &&
+        blockedEval.loss > (runs[0]?.cmaesBestReceipt.loss ?? 0) + 50,
+    },
+  };
+}
+

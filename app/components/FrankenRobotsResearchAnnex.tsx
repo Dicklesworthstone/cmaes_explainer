@@ -83,11 +83,17 @@ import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerf
 import {
   decodeHouseholdNavigationPolicy,
   type EqualBudgetHouseholdCmaesResult,
+  evaluateHouseholdCmaesCampaign,
   evaluateHouseholdNavigationPolicy,
+  type HouseholdCmaesCampaignDiagnostic,
   runEqualBudgetHouseholdCmaes,
 } from "../lib/liveCmaesHousehold";
 import { CRAFTSMAN_TOUR_KEYFRAMES, generateMultiRoomTourRollout } from "../lib/multiRoomTour";
-import { parseTrainReceipt } from "../lib/policyAblationComparison";
+import {
+  type AblationCausalInterventionDiagnostic,
+  evaluateAblationCausalInterventions,
+  parseTrainReceipt,
+} from "../lib/policyAblationComparison";
 import {
   BODY_STRIDE,
   CONTACT_STRIDE,
@@ -102,13 +108,20 @@ import {
 } from "../lib/schema8WireFormat";
 import {
   computeWilsonConfidenceInterval95,
+  evaluateShuffledStressHeldOutAndInfeasibleControls,
   generateShuffledScene,
   type MultiTrialSummary,
   runMultiTrialStressSuite,
   runShuffledStressTrial,
+  type ShuffledStressHeldOutDiagnostic,
   type StressTrialResult,
 } from "../lib/shuffledFurnitureStressTest";
-import { generateVisitorModeClip, VISITOR_CLIP_KEYFRAMES } from "../lib/visitorModeClip";
+import {
+  evaluateTourAndVisitorContinuitySuite,
+  generateVisitorModeClip,
+  type TourAndVisitorContinuityDiagnostic,
+  VISITOR_CLIP_KEYFRAMES,
+} from "../lib/visitorModeClip";
 import { evaluateArmObjectContactDiagnostics } from "./ArmPhysicsDebugOverlay";
 import { CMAESMiniRadar } from "./CMAESPhaseSpaceViewer";
 import { inspectCatalogPiecePhysics } from "./FurnitureCatalogInspector";
@@ -169,6 +182,10 @@ export interface FrontierKernelAndStressDiagnostics {
   visitorClipEpisodeSuccess: boolean;
   multiRoomTourFrameCount: number;
   houseNavSafetyAndCostmap: HouseNavigationSafetyAndCostmapDiagnostic;
+  ablationCausalInterventions: AblationCausalInterventionDiagnostic;
+  householdCmaesCampaign: HouseholdCmaesCampaignDiagnostic;
+  shuffledStressHeldOutControls: ShuffledStressHeldOutDiagnostic;
+  tourAndVisitorContinuity: TourAndVisitorContinuityDiagnostic;
   releaseQualityGates: {
     fastPrGate: ReleaseQualityGateAggregation;
     fullReleaseGateMissingAppleDsr: ReleaseQualityGateAggregation;
@@ -336,6 +353,13 @@ export function evaluateFrontierKernelAndStressDiagnostics(
   const visitorFrames = generateVisitorModeClip(undefined, 60, 2);
   const multiRoomTourFrames = generateMultiRoomTourRollout(undefined, 36, 12);
   const houseNavSafetyAndCostmap = evaluateHouseNavigationSafetyAndCostmap();
+  const ablationCausalInterventions = evaluateAblationCausalInterventions([42, 43, 44]);
+  const householdCmaesCampaign = evaluateHouseholdCmaesCampaign([42, 43, 44]);
+  const shuffledStressHeldOutControls = evaluateShuffledStressHeldOutAndInfeasibleControls(
+    [42, 43, 44],
+    [101, 202, 303],
+  );
+  const tourAndVisitorContinuity = evaluateTourAndVisitorContinuitySuite();
 
   const expectedCommit = "b69bf3f";
   const expectedWasmSha = "sha256:frankensim-v068-schema8-verified";
@@ -528,6 +552,10 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     visitorClipEpisodeSuccess: visitorFrames[0]?.episodeSuccess ?? false,
     multiRoomTourFrameCount: multiRoomTourFrames.length,
     houseNavSafetyAndCostmap,
+    ablationCausalInterventions,
+    householdCmaesCampaign,
+    shuffledStressHeldOutControls,
+    tourAndVisitorContinuity,
     releaseQualityGates: {
       fastPrGate,
       fullReleaseGateMissingAppleDsr,

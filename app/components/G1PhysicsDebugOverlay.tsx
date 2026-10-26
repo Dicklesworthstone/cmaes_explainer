@@ -39,6 +39,8 @@ import {
 import {
   decodeSharedPolicy,
   encodeSharedPolicy,
+  policyFileContents,
+  policyFromFileContents,
   RESIDUAL_HEAD_LENGTH,
 } from "../lib/g1PolicyShare";
 import {
@@ -49,7 +51,11 @@ import {
   G1TrainEnv,
   stepBatch,
 } from "../lib/g1StepwiseEnv";
-import { decodeTrainingSession, encodeTrainingSession } from "../lib/g1TrainingSession";
+import {
+  decodeTrainingSession,
+  encodeTrainingSession,
+  isResumable,
+} from "../lib/g1TrainingSession";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
 import {
   buildG1CapsulesFromIK,
@@ -91,6 +97,9 @@ export interface G1DifferentiableSdfAndImpulseDiagnostic {
     configuredTask: string;
     trainingSessionRoundtripValid: boolean;
     policyShareRoundtripValid: boolean;
+    bitExactSubnormalAndNegZeroPreserved: boolean;
+    wrongLengthRefusedAtomically: boolean;
+    wrongOwnerSessionRefused: boolean;
   };
   analyticAndMeshSdf: {
     roundedBoxDistance: number;
@@ -191,6 +200,12 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
   const optCfg = g1OptimizationConfig("walking", "flat", seatObstacles);
 
   const testPolicy = new Float64Array(RESIDUAL_HEAD_LENGTH).fill(0.05);
+  testPolicy[0] = -0;
+  testPolicy[1] = 0;
+  testPolicy[2] = Number.MIN_VALUE;
+  testPolicy[3] = -Number.MIN_VALUE;
+  testPolicy[4] = 1 + Number.EPSILON;
+  testPolicy[5] = Number.MAX_VALUE * 0.5;
   const meta = {
     kernelVersion: "fs-cmaes-viz-wasm 0.6.19",
     task: "walking",
@@ -211,6 +226,26 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
   );
   const encodedPolicy = encodeSharedPolicy(testPolicy, meta);
   const decodedPolicy = decodeSharedPolicy(encodedPolicy, RESIDUAL_HEAD_LENGTH);
+  const fileJson = JSON.stringify(policyFileContents(testPolicy, meta));
+  const decodedFilePolicy = policyFromFileContents(fileJson, RESIDUAL_HEAD_LENGTH);
+  const bitExactSubnormalAndNegZeroPreserved =
+    testPolicy.every(
+      (val, idx) =>
+        Object.is(decodedPolicy.policy[idx], val) &&
+        Object.is(decodedFilePolicy.policy[idx], val) &&
+        Object.is(decodedSession?.policy[idx], val),
+    );
+  let wrongLengthRefusedAtomically = false;
+  try {
+    decodeSharedPolicy(encodedPolicy, RESIDUAL_HEAD_LENGTH + 1);
+  } catch {
+    wrongLengthRefusedAtomically = true;
+  }
+  const wrongOwnerSessionRefused =
+    decodedSession !== null &&
+    isResumable(decodedSession, meta.kernelVersion, meta.task, meta.challenge) &&
+    !isResumable(decodedSession, "fs-cmaes-viz-wasm 0.6.18", meta.task, meta.challenge) &&
+    !isResumable(decodedSession, meta.kernelVersion, "balance", meta.challenge);
 
   const roundedBoxeval = sdfRoundedBox(
     pelvisPosition,
@@ -257,6 +292,9 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
       configuredTask: optCfg.task,
       trainingSessionRoundtripValid: decodedSession?.generation === 3,
       policyShareRoundtripValid: decodedPolicy?.generation === 3,
+      bitExactSubnormalAndNegZeroPreserved,
+      wrongLengthRefusedAtomically,
+      wrongOwnerSessionRefused,
     },
     analyticAndMeshSdf: {
       roundedBoxDistance: roundedBoxeval.distance,

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { evaluateFrontierKernelAndStressDiagnostics } from "../app/components/FrankenRobotsResearchAnnex";
+import { evaluateG1DifferentiableSdfAndImpulseDiagnostics } from "../app/components/G1PhysicsDebugOverlay";
 import {
   CRAFTSMAN_MATERIAL_DATABASE,
   evaluateMaterialRenderingPipeline,
@@ -138,5 +140,54 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(d.defaultMass).toBeGreaterThan(0);
       }
     }
+  });
+
+  test("evaluateFrontierKernelAndStressDiagnostics verifies ablation action-causality, multi-seed household CMA-ES, held-out stress seeds, and tour/visitor continuity (cmaes-feat-fs8..fs12, cmaes-jhv, cmaes-19t)", () => {
+    const diag = evaluateFrontierKernelAndStressDiagnostics(101);
+
+    // Ablation action-causality & multi-seed CMA-ES
+    expect(diag.ablationCausalInterventions.zeroActionControl.actionCausalVerified).toBe(true);
+    expect(diag.ablationCausalInterventions.zeroActionControl.distanceMeters).toBe(0);
+    expect(diag.ablationCausalInterventions.cmaesBudgetProgression.searchImprovedObjective).toBe(
+      true,
+    );
+    expect(
+      diag.ablationCausalInterventions.multiSeedConsistency.allSeedsImprovedOverZeroAction,
+    ).toBe(true);
+    expect(diag.ablationCausalInterventions.multiSeedConsistency.seedReplayDeterministic).toBe(
+      true,
+    );
+
+    // Multi-seed equal-budget household CMA-ES campaign + impassable obstacle intervention
+    expect(diag.householdCmaesCampaign.allEqualBudgetsVerified).toBe(true);
+    expect(diag.householdCmaesCampaign.allSeedsImprovedOverInitial).toBe(true);
+    expect(
+      diag.householdCmaesCampaign.impassableObstacleIntervention.impassableRefusedCompletion,
+    ).toBe(true);
+
+    // Shuffled stress held-out seed separation + infeasible layout recording
+    expect(diag.shuffledStressHeldOutControls.seedsDisjoint).toBe(true);
+    expect(diag.shuffledStressHeldOutControls.seedReplayDeterministic).toBe(true);
+    expect(
+      diag.shuffledStressHeldOutControls.infeasibleStartControl.explicitlyRecordedNotRedrawn,
+    ).toBe(true);
+
+    // Tour & visitor continuity + reduced-motion + blocked-doorway failure exposure
+    expect(diag.tourAndVisitorContinuity.tour.continuousWithoutTeleport).toBe(true);
+    expect(diag.tourAndVisitorContinuity.visitor.episodeSuccess).toBe(true);
+    expect(diag.tourAndVisitorContinuity.visitor.collisionOccurred).toBe(false);
+    expect(diag.tourAndVisitorContinuity.visitor.defaultAutoplay).toBe(false);
+    expect(diag.tourAndVisitorContinuity.visitor.standardCameraTravelMeters).toBeGreaterThan(1.0);
+    expect(diag.tourAndVisitorContinuity.visitor.reducedMotionFirstSegmentJitterMeters).toBe(0);
+    expect(diag.tourAndVisitorContinuity.visitor.blockedDoorwayFailureExposed).toBe(true);
+  });
+
+  test("evaluateG1DifferentiableSdfAndImpulseDiagnostics verifies bit-exact subnormal/-0 policy exchange and atomic wrong-owner/wrong-length refusal (cmaes-za0x.6, cmaes-za0x.7)", () => {
+    const g1Diag = evaluateG1DifferentiableSdfAndImpulseDiagnostics();
+    expect(g1Diag.stepwiseSchema.trainingSessionRoundtripValid).toBe(true);
+    expect(g1Diag.stepwiseSchema.policyShareRoundtripValid).toBe(true);
+    expect(g1Diag.stepwiseSchema.bitExactSubnormalAndNegZeroPreserved).toBe(true);
+    expect(g1Diag.stepwiseSchema.wrongLengthRefusedAtomically).toBe(true);
+    expect(g1Diag.stepwiseSchema.wrongOwnerSessionRefused).toBe(true);
   });
 });

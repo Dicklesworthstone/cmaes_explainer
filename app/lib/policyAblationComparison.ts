@@ -346,3 +346,113 @@ export function runMeasuredAblation(inputs: AblationInputs, seed = 42): Ablation
     theoreticalMaxDistanceMeters,
   };
 }
+
+export interface AblationCausalInterventionDiagnostic {
+  environmentContract: string;
+  zeroActionControl: {
+    distanceMeters: number;
+    actuatorWorkJoules: number;
+    completedSteps: number;
+    actionCausalVerified: boolean;
+  };
+  cmaesBudgetProgression: {
+    singleSampleDistanceMeters: number;
+    singleSampleObjectiveScore: number;
+    searchedDistanceMeters: number;
+    searchedObjectiveScore: number;
+    searchImprovedObjective: boolean;
+  };
+  multiSeedConsistency: {
+    seeds: readonly number[];
+    distancesMeters: number[];
+    objectiveScores: number[];
+    allSeedsImprovedOverZeroAction: boolean;
+    seedReplayDeterministic: boolean;
+  };
+}
+
+/**
+ * Evaluates action-causality and multi-seed CMA-ES improvement on the disclosed
+ * `g1-stepwise-phase-basis-standin-v2` environment (`cmaes-jhv`, `cmaes-19t`, `cmaes-feat-fs11-ablation-3zv`).
+ */
+export function evaluateAblationCausalInterventions(
+  seeds: readonly number[] = [42, 43, 44],
+): AblationCausalInterventionDiagnostic {
+  const zeroEnv = new G1TrainEnv({ maxSteps: 120 });
+  zeroEnv.reset(42);
+  const zeroAct = new Array<number>(15).fill(0);
+  let zeroDist = 0;
+  let zeroWork = 0;
+  let zeroSteps = 0;
+  for (let t = 0; t < 120; t++) {
+    const res = zeroEnv.step(zeroAct);
+    zeroDist = res.info.cumulativeDistanceMeters;
+    zeroWork += res.info.actuatorWorkJoules;
+    zeroSteps = t + 1;
+    if (res.done) break;
+  }
+
+  const singleSample = runCmaesPolicySearch({
+    seed: seeds[0] ?? 42,
+    populationSize: 4,
+    budgetEvaluations: 1,
+    episodeSteps: 60,
+    finalSteps: 120,
+  });
+  const searched = runCmaesPolicySearch({
+    seed: seeds[0] ?? 42,
+    populationSize: 6,
+    budgetEvaluations: 24,
+    episodeSteps: 60,
+    finalSteps: 120,
+  });
+  const searchedReplay = runCmaesPolicySearch({
+    seed: seeds[0] ?? 42,
+    populationSize: 6,
+    budgetEvaluations: 24,
+    episodeSteps: 60,
+    finalSteps: 120,
+  });
+
+  const distancesMeters: number[] = [];
+  const objectiveScores: number[] = [];
+  for (const s of seeds) {
+    const run = runCmaesPolicySearch({
+      seed: s,
+      populationSize: 6,
+      budgetEvaluations: 18,
+      episodeSteps: 60,
+      finalSteps: 120,
+    });
+    distancesMeters.push(run.finalMetrics.distanceTraveledMeters);
+    objectiveScores.push(run.finalMetrics.objectiveScore);
+  }
+
+  return {
+    environmentContract: G1_TRAIN_ENV_CONTRACT,
+    zeroActionControl: {
+      distanceMeters: zeroDist,
+      actuatorWorkJoules: zeroWork,
+      completedSteps: zeroSteps,
+      actionCausalVerified: zeroDist === 0 && zeroWork === 0,
+    },
+    cmaesBudgetProgression: {
+      singleSampleDistanceMeters: singleSample.finalMetrics.distanceTraveledMeters,
+      singleSampleObjectiveScore: singleSample.finalMetrics.objectiveScore,
+      searchedDistanceMeters: searched.finalMetrics.distanceTraveledMeters,
+      searchedObjectiveScore: searched.finalMetrics.objectiveScore,
+      searchImprovedObjective:
+        searched.finalMetrics.objectiveScore > singleSample.finalMetrics.objectiveScore,
+    },
+    multiSeedConsistency: {
+      seeds,
+      distancesMeters,
+      objectiveScores,
+      allSeedsImprovedOverZeroAction: distancesMeters.every((d) => d > zeroDist + 0.1),
+      seedReplayDeterministic:
+        searched.finalMetrics.distanceTraveledMeters ===
+          searchedReplay.finalMetrics.distanceTraveledMeters &&
+        searched.finalMetrics.objectiveScore === searchedReplay.finalMetrics.objectiveScore,
+    },
+  };
+}

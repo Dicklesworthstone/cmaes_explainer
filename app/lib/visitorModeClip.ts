@@ -11,10 +11,17 @@
 //   - 26.0s - 30.0s: Master bedroom & bath climax with full Honesty Chip Stack telemetry.
 
 import {
+  CRAFTSMAN_DOORWAYS,
+  CRAFTSMAN_WAYPOINT_CHAIN,
   type HouseNavSimulationResult,
   runSegmentedHouseNavigation,
+  simulateHouseNavigation,
 } from "./houseNavigationChain";
-import { evaluateCatmullRom3D } from "./multiRoomTour";
+import {
+  CRAFTSMAN_TOUR_KEYFRAMES,
+  evaluateCatmullRom3D,
+  generateMultiRoomTourRollout,
+} from "./multiRoomTour";
 
 export interface VisitorClipKeyframe {
   timeSeconds: number;
@@ -274,5 +281,110 @@ export function generateVisitorModeClip(
   }
 
   return frames;
+}
+
+export interface TourAndVisitorContinuityDiagnostic {
+  tour: {
+    frameCount: number;
+    maxRobotStepMeters: number;
+    minClearanceMeters: number;
+    playbackSpeedRatio: number;
+    continuousWithoutTeleport: boolean;
+  };
+  visitor: {
+    frameCount: number;
+    episodeSuccess: boolean;
+    collisionOccurred: boolean;
+    defaultAutoplay: boolean;
+    standardCameraTravelMeters: number;
+    reducedMotionFirstSegmentJitterMeters: number;
+    blockedDoorwayFailureExposed: boolean;
+  };
+}
+
+/**
+ * Verifies multi-room tour and 30-second visitor showcase continuity, physical-vs-presentation
+ * duration disclosure, reduced-motion static camera locking, and blocked-doorway failure exposure
+ * (`cmaes-feat-fs8-tour-sja`, `cmaes-feat-fs12-visitor-b5e`).
+ */
+export function evaluateTourAndVisitorContinuitySuite(): TourAndVisitorContinuityDiagnostic {
+  const tourFrames = generateMultiRoomTourRollout(CRAFTSMAN_TOUR_KEYFRAMES, 120, 20);
+  let maxRobotStepMeters = 0;
+  let minClearanceMeters = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < tourFrames.length; i++) {
+    const f = tourFrames[i];
+    if (f.robotClearanceMeters < minClearanceMeters) {
+      minClearanceMeters = f.robotClearanceMeters;
+    }
+    if (i > 0) {
+      const prev = tourFrames[i - 1];
+      const stepDist = Math.hypot(
+        f.robotPosition[0] - prev.robotPosition[0],
+        f.robotPosition[2] - prev.robotPosition[2],
+      );
+      if (stepDist > maxRobotStepMeters) maxRobotStepMeters = stepDist;
+    }
+  }
+
+  const stdVisitor = generateVisitorModeClip(VISITOR_CLIP_KEYFRAMES, 120, 4);
+  let standardCameraTravelMeters = 0;
+  for (let i = 1; i < stdVisitor.length; i++) {
+    const prev = stdVisitor[i - 1];
+    const curr = stdVisitor[i];
+    standardCameraTravelMeters += Math.hypot(
+      curr.cameraEye[0] - prev.cameraEye[0],
+      curr.cameraEye[1] - prev.cameraEye[1],
+      curr.cameraEye[2] - prev.cameraEye[2],
+    );
+  }
+
+  const reducedVisitor = generateVisitorModeClip(VISITOR_CLIP_KEYFRAMES, 120, 4, {
+    reducedMotion: true,
+  });
+  let reducedMotionFirstSegmentJitterMeters = 0;
+  const firstEye = reducedVisitor[0]?.cameraEye ?? [0, 0, 0];
+  for (let i = 1; i < 15; i++) {
+    const f = reducedVisitor[i];
+    if (!f) break;
+    reducedMotionFirstSegmentJitterMeters += Math.hypot(
+      f.cameraEye[0] - firstEye[0],
+      f.cameraEye[1] - firstEye[1],
+      f.cameraEye[2] - firstEye[2],
+    );
+  }
+
+  // Causal negative control: blocked doorway rollout passed into visitor clip
+  const blockedDoorways = CRAFTSMAN_DOORWAYS.map((d, idx) =>
+    idx === 0 ? { ...d, width: 0.05 } : d,
+  );
+  const blockedNav = simulateHouseNavigation(
+    CRAFTSMAN_WAYPOINT_CHAIN,
+    blockedDoorways,
+    240,
+    1 / 60,
+  );
+  const blockedVisitor = generateVisitorModeClip(VISITOR_CLIP_KEYFRAMES, 30, 1, {
+    navigationRollout: blockedNav,
+  });
+  const blockedDoorwayFailureExposed = blockedVisitor.every((f) => !f.episodeSuccess);
+
+  return {
+    tour: {
+      frameCount: tourFrames.length,
+      maxRobotStepMeters,
+      minClearanceMeters,
+      playbackSpeedRatio: tourFrames[0]?.playbackSpeedRatio ?? 1.0,
+      continuousWithoutTeleport: maxRobotStepMeters < 0.45 && minClearanceMeters > 0,
+    },
+    visitor: {
+      frameCount: stdVisitor.length,
+      episodeSuccess: stdVisitor[0]?.episodeSuccess ?? false,
+      collisionOccurred: stdVisitor[0]?.collisionOccurred ?? true,
+      defaultAutoplay: stdVisitor[0]?.autoplay ?? true,
+      standardCameraTravelMeters,
+      reducedMotionFirstSegmentJitterMeters,
+      blockedDoorwayFailureExposed,
+    },
+  };
 }
 

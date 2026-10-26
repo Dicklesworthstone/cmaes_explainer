@@ -433,3 +433,63 @@ export function runMultiTrialStressSuite(
     trials: trialResults,
   };
 }
+
+export interface ShuffledStressHeldOutDiagnostic {
+  optimizationSeeds: readonly number[];
+  heldOutStressSeeds: readonly number[];
+  seedsDisjoint: boolean;
+  heldOutSummary: MultiTrialSummary;
+  seedReplayDeterministic: boolean;
+  infeasibleStartControl: {
+    layoutFeasible: boolean;
+    success: boolean;
+    collisionOccurred: boolean;
+    minimumClearanceMeters: number;
+    explicitlyRecordedNotRedrawn: boolean;
+  };
+}
+
+/**
+ * Verifies held-out stress-seed separation from optimization seeds, deterministic layout
+ * generation, and explicit infeasible-layout recording without silent redraws (`cmaes-feat-fs10-shuffle-dwu`).
+ */
+export function evaluateShuffledStressHeldOutAndInfeasibleControls(
+  optimizationSeeds: readonly number[] = [42, 43, 44],
+  heldOutStressSeeds: readonly number[] = [101, 202, 303, 404, 505],
+): ShuffledStressHeldOutDiagnostic {
+  const optSet = new Set(optimizationSeeds);
+  const seedsDisjoint = heldOutStressSeeds.every((s) => !optSet.has(s));
+  const heldOutSummary = runMultiTrialStressSuite([...heldOutStressSeeds]);
+  const replayFirst = runShuffledStressTrial(
+    generateShuffledScene({ seed: heldOutStressSeeds[0] ?? 101 }),
+  );
+  const seedReplayDeterministic =
+    heldOutSummary.trials[0]?.minimumClearanceMeters === replayFirst.minimumClearanceMeters &&
+    heldOutSummary.trials[0]?.distanceTraveledMeters === replayFirst.distanceTraveledMeters;
+
+  // Causal negative control: spawn rolling piece directly on startPos [0.5, 4.5]
+  const infeasibleScene = generateShuffledScene({
+    seed: 909,
+    rollingPieceInitialPos: [0.5, 4.5],
+  });
+  const infeasibleTrial = runShuffledStressTrial(infeasibleScene, [0.5, 4.5], [-1.5, 2.5], 60);
+
+  return {
+    optimizationSeeds,
+    heldOutStressSeeds,
+    seedsDisjoint,
+    heldOutSummary,
+    seedReplayDeterministic,
+    infeasibleStartControl: {
+      layoutFeasible: infeasibleTrial.layoutFeasible,
+      success: infeasibleTrial.success,
+      collisionOccurred: infeasibleTrial.collisionOccurred,
+      minimumClearanceMeters: infeasibleTrial.minimumClearanceMeters,
+      explicitlyRecordedNotRedrawn:
+        !infeasibleTrial.layoutFeasible &&
+        !infeasibleTrial.success &&
+        infeasibleTrial.collisionOccurred &&
+        infeasibleTrial.minimumClearanceMeters < 0,
+    },
+  };
+}
