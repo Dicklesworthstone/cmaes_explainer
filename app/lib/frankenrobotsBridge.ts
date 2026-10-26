@@ -523,3 +523,161 @@ export function reportFrankenRobotsTraceState(
     overlays: state.overlays,
   });
 }
+
+export interface FrankenRobotsBridgeDiagnosticsReport {
+  schemaVersion: number;
+  humanoidValidCommandCount: number;
+  armValidCommandCount: number;
+  allFifteenCommandKindsVerified: boolean;
+  crossLabRefusalsVerified: boolean;
+  extraArgumentRefusalVerified: boolean;
+  outOfRangeRefusalsVerified: boolean;
+}
+
+/**
+ * Evaluates deterministic schema, cross-lab isolation, allowlist, and range-guard
+ * invariants across all 15 FrankenRobots native bridge command kinds
+ * (cmaes-za0x.36..43, cmaes-za0x.58).
+ */
+export function evaluateFrankenRobotsBridgeDiagnostics(): FrankenRobotsBridgeDiagnosticsReport {
+  const baseHumanoid = {
+    type: "engine.command",
+    schemaVersion: FRANKENROBOTS_BRIDGE_SCHEMA_VERSION,
+    lab: "humanoid" as const,
+  };
+  const baseArm = {
+    type: "engine.command",
+    schemaVersion: FRANKENROBOTS_BRIDGE_SCHEMA_VERSION,
+    lab: "arm" as const,
+  };
+
+  const humanoidPayloads: Array<Record<string, unknown>> = [
+    { ...baseHumanoid, commandId: "h-opt", command: "optimize" },
+    { ...baseHumanoid, commandId: "h-stop", command: "stop" },
+    { ...baseHumanoid, commandId: "h-task", command: "select-task", task: "walking" },
+    {
+      ...baseHumanoid,
+      commandId: "h-chal",
+      command: "select-challenge",
+      challenge: "terrain-and-push",
+    },
+    { ...baseHumanoid, commandId: "h-fam", command: "select-family", family: "lm-cma" },
+    { ...baseHumanoid, commandId: "h-rep", command: "replay" },
+    { ...baseHumanoid, commandId: "h-play", command: "play" },
+    { ...baseHumanoid, commandId: "h-pause", command: "pause" },
+    { ...baseHumanoid, commandId: "h-seek", command: "seek", sampleIndex: 120 },
+    { ...baseHumanoid, commandId: "h-spd", command: "set-speed", speed: 0.5 },
+    { ...baseHumanoid, commandId: "h-cam", command: "set-camera", camera: "follow" },
+    {
+      ...baseHumanoid,
+      commandId: "h-lens",
+      command: "select-receipt-lens",
+      receiptLens: "owner-receipt",
+    },
+    {
+      ...baseHumanoid,
+      commandId: "h-ovl",
+      command: "set-overlay",
+      overlay: "physics-debug",
+      enabled: true,
+    },
+    { ...baseHumanoid, commandId: "h-seed", command: "set-seed", seedIndex: 1 },
+    { ...baseHumanoid, commandId: "h-sig", command: "set-sigma", sigma: 0.002 },
+  ];
+
+  const armPayloads: Array<Record<string, unknown>> = [
+    { ...baseArm, commandId: "a-opt", command: "optimize" },
+    { ...baseArm, commandId: "a-stop", command: "stop" },
+    { ...baseArm, commandId: "a-task", command: "select-task", task: "kitchen-mug" },
+    { ...baseArm, commandId: "a-fam", command: "select-family", family: "full" },
+    { ...baseArm, commandId: "a-rep", command: "replay" },
+    { ...baseArm, commandId: "a-play", command: "play" },
+    { ...baseArm, commandId: "a-pause", command: "pause" },
+    { ...baseArm, commandId: "a-seek", command: "seek", sampleIndex: 24 },
+    { ...baseArm, commandId: "a-spd", command: "set-speed", speed: 2 },
+    { ...baseArm, commandId: "a-cam", command: "set-camera", camera: "microscope" },
+    {
+      ...baseArm,
+      commandId: "a-ovl",
+      command: "set-overlay",
+      overlay: "friction-cones",
+      enabled: false,
+    },
+    { ...baseArm, commandId: "a-seed", command: "set-seed", seedIndex: 2 },
+  ];
+
+  const decodedHumanoid = humanoidPayloads
+    .map((p) => decodeFrankenRobotsNativeCommand(p, "humanoid"))
+    .filter((c): c is FrankenRobotsNativeCommand => c !== null);
+  const decodedArm = armPayloads
+    .map((p) => decodeFrankenRobotsNativeCommand(p, "arm"))
+    .filter((c): c is FrankenRobotsNativeCommand => c !== null);
+
+  const crossLabRefusalsVerified =
+    decodeFrankenRobotsNativeCommand(humanoidPayloads[0], "arm") === null &&
+    decodeFrankenRobotsNativeCommand(armPayloads[0], "humanoid") === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-bad-task", command: "select-task", task: "kitchen-mug" },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-bad-fam", command: "select-family", family: "full" },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseArm, commandId: "a-bad-sig", command: "set-sigma", sigma: 0.002 },
+      "arm",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      {
+        ...baseArm,
+        commandId: "a-bad-lens",
+        command: "select-receipt-lens",
+        receiptLens: "owner-receipt",
+      },
+      "arm",
+    ) === null;
+
+  const extraArgumentRefusalVerified =
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-extra", command: "play", sampleIndex: 0 },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-unknown", command: "play", injectedField: true },
+      "humanoid",
+    ) === null;
+
+  const outOfRangeRefusalsVerified =
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-sig-low", command: "set-sigma", sigma: 0.0001 },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-sig-high", command: "set-sigma", sigma: 0.05 },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-seed-bad", command: "set-seed", seedIndex: 3 },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-seek-neg", command: "seek", sampleIndex: -1 },
+      "humanoid",
+    ) === null &&
+    decodeFrankenRobotsNativeCommand(
+      { ...baseHumanoid, commandId: "h-spd-bad", command: "set-speed", speed: 3 },
+      "humanoid",
+    ) === null;
+
+  return {
+    schemaVersion: FRANKENROBOTS_BRIDGE_SCHEMA_VERSION,
+    humanoidValidCommandCount: decodedHumanoid.length,
+    armValidCommandCount: decodedArm.length,
+    allFifteenCommandKindsVerified: decodedHumanoid.length === 15 && decodedArm.length === 12,
+    crossLabRefusalsVerified,
+    extraArgumentRefusalVerified,
+    outOfRangeRefusalsVerified,
+  };
+}
+
