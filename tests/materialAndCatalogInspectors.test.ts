@@ -103,6 +103,15 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(snap.postFxDiagnostics.cornerVignetteFactor).toBeLessThan(1.0);
         expect(snap.postFxDiagnostics.chromaticAberrationDeltaU).toBeGreaterThan(0);
         expect(snap.postFxDiagnostics.srgbMidgray).toBeGreaterThan(0.4);
+        expect(snap.qualityTierAndCausalControls.ssrMissResultHit).toBe(false);
+        expect(snap.qualityTierAndCausalControls.ssrMissFallbackIblLuma).toBeGreaterThan(0);
+        expect(snap.qualityTierAndCausalControls.daylitSunbeamLuma).toBeGreaterThan(
+          snap.qualityTierAndCausalControls.eveningSunbeamLuma,
+        );
+        expect(snap.qualityTierAndCausalControls.windowOccludedSunbeamLuma).toBe(0);
+        expect(snap.qualityTierAndCausalControls.highTierStepBudget).toBeGreaterThan(
+          snap.qualityTierAndCausalControls.reducedMotionStepBudget,
+        );
         expect(snap.stageTonemappedRgb.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
         expect(snap.compositePostFxRgb.every((c) => c >= 0 && c <= 1)).toBe(true);
       }

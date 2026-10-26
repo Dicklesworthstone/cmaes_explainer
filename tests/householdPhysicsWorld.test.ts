@@ -14,6 +14,7 @@ import type { RigidBody } from "../app/lib/contactGraph";
 import {
   createHouseholdWorld,
   evaluateHouseholdLcpAndRollingDiagnostics,
+  evaluateMultiStageHouseholdManipulationSuite,
   type HouseholdBodyMeta,
   type HouseholdWorld,
   stepHouseholdPhysicsWorld,
@@ -407,5 +408,57 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
     expect(stepRes.lcpConstraintCount).toBeGreaterThanOrEqual(0);
     expect(stepRes.restitution.length).toBe(1);
     expect(Number.isFinite(stepRes.restitution[0].contactForceNewtons)).toBe(true);
+  });
+
+  test("evaluateMultiStageHouseholdManipulationSuite verifies kitchen, parlor, porch, soft-body, and breakage causal interventions (cmaes-feat-fs3-kitchen-arm-oad, cmaes-feat-fs4-parlor-arm-44h, cmaes-feat-fs5-porch-arm-e3t, cmaes-feat-ph6-breakage-ouq, cmaes-feat-ph9-soft-sim-lk1)", () => {
+    const suite = evaluateMultiStageHouseholdManipulationSuite();
+
+    expect(suite.assetClassifications.length).toBe(6);
+    const classes = new Set(suite.assetClassifications.map((c) => c.classification));
+    expect(classes.has("display-only")).toBe(true);
+    expect(classes.has("static-conservative")).toBe(true);
+    expect(classes.has("articulated")).toBe(true);
+    expect(classes.has("rolling")).toBe(true);
+    expect(classes.has("compliant")).toBe(true);
+    expect(classes.has("fragmented")).toBe(true);
+
+    // Kitchen sequence + door-lock & friction causal interventions
+    expect(suite.kitchenSequence.doorOpenedAngleRad).toBeGreaterThan(0.1);
+    expect(suite.kitchenSequence.lockedInterventionAngleRad).toBe(0);
+    expect(suite.kitchenSequence.lockedInterventionRefused).toBe(true);
+    expect(suite.kitchenSequence.nominalPlateGraspStable).toBe(true);
+    expect(suite.kitchenSequence.nominalPlateGwsRadius).toBeGreaterThan(
+      suite.kitchenSequence.reducedFrictionGwsRadius * 3,
+    );
+    expect(suite.kitchenSequence.counterPlacementReachable).toBe(true);
+    expect(suite.kitchenSequence.simulatedPhysicalSeconds).toBeLessThanOrEqual(60);
+
+    // Parlor sequence + secondary furniture impulse & unreachable layout intervention
+    expect(suite.parlorSequence.tablePlacementReachable).toBe(true);
+    expect(suite.parlorSequence.secondaryFurnitureSpeedMps).toBeGreaterThan(0);
+    expect(suite.parlorSequence.secondaryImpulseRecorded).toBe(true);
+    expect(suite.parlorSequence.unreachableInterventionRejected).toBe(true);
+    expect(suite.parlorSequence.simulatedPhysicalSeconds).toBeLessThanOrEqual(30);
+
+    // Porch cleanup + broom tool envelope & XPBD soft-body contact coupling
+    expect(suite.porchSequence.broomExpandedClearanceM).toBeLessThan(
+      suite.porchSequence.emptyGripperClearanceM,
+    );
+    expect(suite.porchSequence.rugNodeCount).toBeLessThanOrEqual(100);
+    expect(suite.porchSequence.curtainNodeCount).toBeLessThanOrEqual(100);
+    expect(suite.porchSequence.cushionNodeCount).toBeLessThanOrEqual(100);
+    expect(suite.porchSequence.rugContactDisplacementM).toBeGreaterThan(0);
+    expect(suite.porchSequence.curtainTopEdgePinnedValid).toBe(true);
+    expect(suite.porchSequence.cushionRecoveryBounded).toBe(true);
+    expect(suite.porchSequence.leafContainedInBucket).toBe(true);
+    expect(suite.porchSequence.simulatedPhysicalSeconds).toBeLessThanOrEqual(45);
+
+    // Breakage conservation + threshold & idempotent replay control
+    expect(suite.breakageSequence.belowThresholdShattered).toBe(false);
+    expect(suite.breakageSequence.aboveThresholdShattered).toBe(true);
+    expect(suite.breakageSequence.fragmentCount).toBe(4);
+    expect(suite.breakageSequence.massConservationErrorKg).toBeLessThan(1e-12);
+    expect(suite.breakageSequence.momentumConservationErrorNs).toBeLessThan(1e-9);
+    expect(suite.breakageSequence.replayedSecondShatterCount).toBe(0);
   });
 });

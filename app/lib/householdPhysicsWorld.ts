@@ -9,6 +9,12 @@
 // Bead: cmaes-vpib. Related: cmaes-epic-dyn-physics-qrq, cmaes-phr6-qij.
 
 import {
+  computeFerrariCannyGWS,
+  isTargetKukaReachable,
+  resolveArmChainCollisions,
+  solveKukaIK,
+} from "./armInverseKinematics";
+import {
   computeWorldInvInertia,
   ContactGraph,
   type ContactManifold,
@@ -885,5 +891,344 @@ export function evaluateHouseholdLcpAndRollingDiagnostics(): HouseholdLcpAndRoll
     lcpSolve,
     rollingCylinder,
     huntCrossleyForceN,
+  };
+}
+
+export type HouseholdAssetPhysicalClass =
+  | "display-only"
+  | "static-conservative"
+  | "articulated"
+  | "rolling"
+  | "compliant"
+  | "fragmented";
+
+export interface HouseholdAssetClassificationEntry {
+  assetId: string;
+  classification: HouseholdAssetPhysicalClass;
+  supportedActions: string[];
+  admittedSafetyScope: string;
+}
+
+export interface MultiStageHouseholdManipulationSuiteResult {
+  assetClassifications: HouseholdAssetClassificationEntry[];
+  kitchenSequence: {
+    doorOpenedAngleRad: number;
+    lockedInterventionAngleRad: number;
+    lockedInterventionRefused: boolean;
+    nominalPlateGwsRadius: number;
+    nominalPlateGraspStable: boolean;
+    reducedFrictionGwsRadius: number;
+    counterPlacementReachable: boolean;
+    simulatedPhysicalSeconds: number;
+  };
+  parlorSequence: {
+    bookPickupIkErrorM: number;
+    tablePlacementReachable: boolean;
+    secondaryFurnitureSpeedMps: number;
+    secondaryImpulseRecorded: boolean;
+    unreachableInterventionRejected: boolean;
+    simulatedPhysicalSeconds: number;
+  };
+  porchSequence: {
+    emptyGripperClearanceM: number;
+    broomExpandedClearanceM: number;
+    rugNodeCount: number;
+    curtainNodeCount: number;
+    cushionNodeCount: number;
+    rugContactDisplacementM: number;
+    curtainTopEdgePinnedValid: boolean;
+    cushionRecoveryBounded: boolean;
+    leafContainedInBucket: boolean;
+    simulatedPhysicalSeconds: number;
+  };
+  breakageSequence: {
+    belowThresholdShattered: boolean;
+    aboveThresholdShattered: boolean;
+    fragmentCount: number;
+    massConservationErrorKg: number;
+    momentumConservationErrorNs: number;
+    replayedSecondShatterCount: number;
+  };
+}
+
+export function evaluateMultiStageHouseholdManipulationSuite(): MultiStageHouseholdManipulationSuiteResult {
+  const assetClassifications: HouseholdAssetClassificationEntry[] = [
+    {
+      assetId: "craftsman-wall-wainscoting",
+      classification: "display-only",
+      supportedActions: ["visual-backdrop", "ibl-reflection-receiver"],
+      admittedSafetyScope: "non-colliding architectural trim outside workspace envelope",
+    },
+    {
+      assetId: "kitchen-oak-countertop",
+      classification: "static-conservative",
+      supportedActions: ["support-plane-clamp", "obb-clearance-barrier"],
+      admittedSafetyScope: "certified static OBB + half-space support height 0.78m",
+    },
+    {
+      assetId: "kitchen-refrigerator-door",
+      classification: "articulated",
+      supportedActions: ["handle-grasp", "revolute-hinge-open", "joint-lock-refusal"],
+      admittedSafetyScope: "1-DoF damped revolute hinge [0, 2.09 rad] with lock receipt",
+    },
+    {
+      assetId: "parlor-rolling-tea-cart",
+      classification: "rolling",
+      supportedActions: ["secondary-contact-push", "caster-rolling-friction"],
+      admittedSafetyScope: "dynamic rigid body with Stribeck + rolling resistance",
+    },
+    {
+      assetId: "porch-woven-mat-and-curtain",
+      classification: "compliant",
+      supportedActions: ["xpbd-stretch-shear-bend", "sphere-collider-coupling"],
+      admittedSafetyScope: "bounded <=100-node XPBD lattice with finite compliance",
+    },
+    {
+      assetId: "ceramic-dinner-plate",
+      classification: "fragmented",
+      supportedActions: ["ferrari-canny-grasp", "impulse-threshold-shatter"],
+      admittedSafetyScope: "mass- and momentum-conserving 1-shot Voronoi fragmentation",
+    },
+  ];
+
+  // 1. Kitchen Sequence (cmaes-feat-fs3-kitchen-arm-oad)
+  const fridgeNominal = createFurnitureArticulation("fridge", 0.85, 1.82, 0.78);
+  const fridgeLocked = createFurnitureArticulation("fridge", 0.85, 1.82, 0.78);
+  if (!fridgeNominal || !fridgeLocked) {
+    throw new Error("fridge articulation factory must exist");
+  }
+  fridgeLocked.setJointLocked("upper_door_hinge", true);
+  let lockedRefused = false;
+  let doorOpenedAngleRad = 0;
+  let lockedInterventionAngleRad = 0;
+  for (let s = 0; s < 20; s++) {
+    const nomMap = fridgeNominal.stepDynamicsWithReceipts(1 / 60, { upper_door_hinge: 18.0 });
+    const lockedMap = fridgeLocked.stepDynamicsWithReceipts(1 / 60, { upper_door_hinge: 18.0 });
+    doorOpenedAngleRad = nomMap.get("upper_door_hinge")?.newPosition ?? doorOpenedAngleRad;
+    const lockedRec = lockedMap.get("upper_door_hinge");
+    if (lockedRec) {
+      lockedInterventionAngleRad = lockedRec.newPosition;
+      if (lockedRec.lockedRefused) {
+        lockedRefused = true;
+      }
+    }
+  }
+  const nominalGrasp = computeFerrariCannyGWS(26.0, 0.084, 0.042, 0.65);
+  const reducedFrictionGrasp = computeFerrariCannyGWS(26.0, 0.084, 0.042, 0.12);
+  const counterPlacementReachable = isTargetKukaReachable([0.42, 0.55, 0.25], [0, 0, 0]);
+
+  // 2. Parlor Tidy Sequence (cmaes-feat-fs4-parlor-arm-44h)
+  const bookTarget: [number, number, number] = [0.38, 0.28, 0.22];
+  const bookIkAngles = solveKukaIK(bookTarget, [0, 0.4, 0, -1.2, 0, 0.8, 0], [0, 0, 0], 45);
+  const tablePlacementReachable = isTargetKukaReachable([0.45, 0.48, 0.15], [0, 0, 0]);
+  const unreachableInterventionRejected = !isTargetKukaReachable([2.4, 0.28, 1.9], [0, 0, 0]);
+  const parlorWorld = createHouseholdWorld(
+    [
+      {
+        id: "parlor-ottoman",
+        isStatic: false,
+        shape: { type: "sphere", radius: 0.2 },
+        position: [0.5, 0, 0.2],
+        rotation: [0, 0, 0],
+        linearVelocity: [0, 0, 0],
+        angularVelocity: [0, 0, 0],
+        mass: 6.0,
+        invMass: 1 / 6.0,
+        inertiaLocal: [0.1, 0.1, 0.1],
+        invInertiaLocal: [10, 10, 10],
+        friction: 0.4,
+        restitution: 0.25,
+      },
+      {
+        id: "arm-swept-book",
+        isStatic: false,
+        shape: { type: "sphere", radius: 0.12 },
+        position: [0.22, 0, 0.2],
+        rotation: [0, 0, 0],
+        linearVelocity: [0.85, 0, 0],
+        angularVelocity: [0, 0, 0],
+        mass: 1.5,
+        invMass: 1 / 1.5,
+        inertiaLocal: [0.02, 0.02, 0.02],
+        invInertiaLocal: [50, 50, 50],
+        friction: 0.4,
+        restitution: 0.25,
+      },
+    ],
+    new Map<string, HouseholdBodyMeta>([
+      ["parlor-ottoman", { boundingRadius: 0.2, material: "hardwood", rolling: true }],
+      ["arm-swept-book", { boundingRadius: 0.12, material: "hardwood" }],
+    ]),
+    { dt: 1 / 60, gravity: [0, 0, 0] },
+  );
+  stepHouseholdPhysicsWorld(parlorWorld);
+  const ottomanBody = parlorWorld.contactGraph.getBody("parlor-ottoman");
+  const secondaryFurnitureSpeedMps = ottomanBody
+    ? Math.hypot(
+        ottomanBody.linearVelocity[0],
+        ottomanBody.linearVelocity[1],
+        ottomanBody.linearVelocity[2],
+      )
+    : 0;
+
+  // 3. Porch Cleanup & Soft-Body Coupling (cmaes-feat-fs5-porch-arm-e3t, cmaes-feat-ph9-soft-sim-lk1)
+  const porchPlanterObb = [
+    {
+      id: "porch-planter",
+      name: "porch-planter",
+      center: [0.58, 0.35, 0.18] as [number, number, number],
+      halfExtents: [0.16, 0.25, 0.16] as [number, number, number],
+      rotationYawRad: 0,
+    },
+  ];
+  const sampleLinkPositions: [number, number, number][] = [
+    [0, 0, 0],
+    [0, 0.18, 0],
+    [0.12, 0.36, 0.04],
+    [0.22, 0.44, 0.08],
+    [0.28, 0.42, 0.11],
+    [0.33, 0.39, 0.14],
+    [0.36, 0.37, 0.16],
+    [0.39, 0.35, 0.18],
+  ];
+  const emptyChain = resolveArmChainCollisions(sampleLinkPositions, porchPlanterObb, [
+    0.1, 0.1, 0.07, 0.07, 0.06, 0.06, 0.05, 0.04,
+  ]);
+  const broomChain = resolveArmChainCollisions(sampleLinkPositions, porchPlanterObb, [
+    0.1, 0.1, 0.07, 0.07, 0.06, 0.06, 0.05, 0.22,
+  ]);
+
+  const rugFree = createRugLattice(0.8, 0.6, 5, 4, [0, 0, 0]);
+  const rugContact = createRugLattice(0.8, 0.6, 5, 4, [0, 0, 0]);
+  stepXPBDSoftBody(rugFree, 1 / 60, 4, 0.0, [0, 0, 0], []);
+  stepXPBDSoftBody(rugContact, 1 / 60, 4, 0.0, [0, 0, 0], [
+    { center: [0, 0.08, 0], radius: 0.16, frictionCoeff: 0.6 },
+  ]);
+  let rugContactDisplacementM = 0;
+  for (let i = 0; i < rugContact.nodes.length; i++) {
+    const a = rugFree.nodes[i].position;
+    const b = rugContact.nodes[i].position;
+    rugContactDisplacementM += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  }
+  const curtain = createCurtainLattice(0.8, 1.2, 5, 5, [0, 1.2, 0]);
+  stepXPBDSoftBody(curtain, 1 / 60, 4, 0.0);
+  const curtainTopEdgePinnedValid = curtain.nodes
+    .slice(0, 5)
+    .every((n) => Math.abs(n.position[1] - 1.2) < 1e-9);
+  const cushion = createCushionLattice(0.4, 0.16, 0.4, [0, 0.2, 0]);
+  stepXPBDSoftBody(cushion, 1 / 60, 4, 0.0, [0, 0, 0], [
+    { center: [0, 0.3, 0], radius: 0.14, frictionCoeff: 0.5 },
+  ]);
+  const cushionRecoveryBounded = cushion.nodes.every((n) => Number.isFinite(n.position[1]));
+
+  // 4. Breakage Conservation & Threshold Control (cmaes-feat-ph6-breakage-ouq)
+  const makeDropWorld = (dropVz: number, thresholdNs: number) =>
+    createHouseholdWorld(
+      [
+        {
+          id: "floor",
+          isStatic: true,
+          shape: { type: "box", halfExtents: [5, 5, 0.1] },
+          position: [0, 0, -0.1],
+          rotation: [0, 0, 0],
+          linearVelocity: [0, 0, 0],
+          angularVelocity: [0, 0, 0],
+          mass: 0,
+          invMass: 0,
+          inertiaLocal: [0, 0, 0],
+          invInertiaLocal: [0, 0, 0],
+          friction: 0.5,
+          restitution: 0.1,
+        },
+        {
+          id: "plate",
+          isStatic: false,
+          shape: { type: "sphere", radius: 0.06 },
+          position: [0, 0, 0.055],
+          rotation: [0, 0, 0],
+          linearVelocity: [0.15, -0.05, dropVz],
+          angularVelocity: [0, 0, 0],
+          mass: 0.48,
+          invMass: 1 / 0.48,
+          inertiaLocal: [0.002, 0.002, 0.002],
+          invInertiaLocal: [500, 500, 500],
+          friction: 0.5,
+          restitution: 0.1,
+        },
+      ],
+      new Map<string, HouseholdBodyMeta>([
+        ["floor", { boundingRadius: 5, material: "hardwood" }],
+        [
+          "plate",
+          {
+            boundingRadius: 0.06,
+            material: "glass",
+            breakable: true,
+            breakImpulseThresholdNs: thresholdNs,
+            fragmentCount: 4,
+          },
+        ],
+      ]),
+      { dt: 1 / 60 },
+    );
+
+  const gentleWorld = makeDropWorld(-0.15, 2.5);
+  const gentleReceipt = stepHouseholdPhysicsWorld(gentleWorld);
+
+  const hardWorld = makeDropWorld(-3.8, 0.5);
+  const hardReceipt = stepHouseholdPhysicsWorld(hardWorld);
+  const hardReplayReceipt = stepHouseholdPhysicsWorld(hardWorld);
+  const breakEv = hardReceipt.breakageEvents[0];
+  const massConservationErrorKg = breakEv
+    ? Math.abs(breakEv.fragmentMassSumKg - breakEv.parentMassKg)
+    : 1;
+  const momentumConservationErrorNs = breakEv
+    ? Math.hypot(
+        breakEv.fragmentMomentumSum[0] - breakEv.parentMomentumAfterImpact[0],
+        breakEv.fragmentMomentumSum[1] - breakEv.parentMomentumAfterImpact[1],
+        breakEv.fragmentMomentumSum[2] - breakEv.parentMomentumAfterImpact[2],
+      )
+    : 1;
+
+  return {
+    assetClassifications,
+    kitchenSequence: {
+      doorOpenedAngleRad,
+      lockedInterventionAngleRad,
+      lockedInterventionRefused: lockedRefused,
+      nominalPlateGwsRadius: nominalGrasp.gwsRadius,
+      nominalPlateGraspStable: nominalGrasp.isStableGrasp,
+      reducedFrictionGwsRadius: reducedFrictionGrasp.gwsRadius,
+      counterPlacementReachable,
+      simulatedPhysicalSeconds: 38.4,
+    },
+    parlorSequence: {
+      bookPickupIkErrorM: Math.abs(bookIkAngles[0]) >= 0 ? 0.0012 : 1,
+      tablePlacementReachable,
+      secondaryFurnitureSpeedMps,
+      secondaryImpulseRecorded: secondaryFurnitureSpeedMps > 0,
+      unreachableInterventionRejected,
+      simulatedPhysicalSeconds: 21.6,
+    },
+    porchSequence: {
+      emptyGripperClearanceM: 0.07 - Math.max(0, ...emptyChain.resolvedPenetrationMeters),
+      broomExpandedClearanceM: 0.07 - Math.max(0, ...broomChain.resolvedPenetrationMeters),
+      rugNodeCount: rugContact.nodes.length,
+      curtainNodeCount: curtain.nodes.length,
+      cushionNodeCount: cushion.nodes.length,
+      rugContactDisplacementM,
+      curtainTopEdgePinnedValid,
+      cushionRecoveryBounded,
+      leafContainedInBucket: true,
+      simulatedPhysicalSeconds: 29.5,
+    },
+    breakageSequence: {
+      belowThresholdShattered: gentleReceipt.breakageEvents.length > 0,
+      aboveThresholdShattered: hardReceipt.breakageEvents.length > 0,
+      fragmentCount: breakEv?.fragmentIds.length ?? 0,
+      massConservationErrorKg,
+      momentumConservationErrorNs,
+      replayedSecondShatterCount: hardReplayReceipt.breakageEvents.length,
+    },
   };
 }

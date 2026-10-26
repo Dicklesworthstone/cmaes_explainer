@@ -413,6 +413,15 @@ export interface MaterialRenderingPipelineEvaluation {
     hashSample: number;
     srgbMidgray: number;
   };
+  qualityTierAndCausalControls: {
+    ssrMissResultHit: boolean;
+    ssrMissFallbackIblLuma: number;
+    daylitSunbeamLuma: number;
+    eveningSunbeamLuma: number;
+    windowOccludedSunbeamLuma: number;
+    highTierStepBudget: number;
+    reducedMotionStepBudget: number;
+  };
   stageTonemappedRgb: [number, number, number];
   compositePostFxRgb: [number, number, number];
 }
@@ -624,6 +633,48 @@ export function evaluateMaterialRenderingPipeline(
     srgbMidgray: linearToSRGB(0.18),
   };
 
+  // Quality Tiers & Causal Interventions (cmaes-feat-pr6-ssr-owf, cmaes-feat-pr9-volumetric-tns)
+  const ssrMiss = traceScreenSpaceRay(
+    [0.5, 0.5],
+    2.2,
+    [0.12, -0.35],
+    1.5,
+    () => 100.0,
+    [0, 1, 0],
+    [0, 0.65, 0.76],
+    mat.roughness,
+  );
+  const ssrMissFallbackIblLuma = ssrMiss.hit
+    ? 0
+    : (shIrradiance[0] + shIrradiance[1] + shIrradiance[2]) / 3;
+  const eveningSunbeam = raymarchVolumetricSunbeams(
+    cameraPos,
+    [0, -0.31, -0.95],
+    3.9,
+    [0.35, 0.75, -0.56],
+    (pos) => (pos[1] > 0.3 && pos[1] < 2.2 ? 1.0 : 0.0),
+    16,
+    { ...DEFAULT_FOG_CONFIG, sunIntensity: 0.6 },
+  );
+  const windowOccludedSunbeam = raymarchVolumetricSunbeams(
+    cameraPos,
+    [0, -0.31, -0.95],
+    3.9,
+    [0.35, 0.75, -0.56],
+    () => 0.0,
+    16,
+  );
+  const qualityTierAndCausalControls = {
+    ssrMissResultHit: ssrMiss.hit,
+    ssrMissFallbackIblLuma,
+    daylitSunbeamLuma: sunbeamInscatter[0] + sunbeamInscatter[1] + sunbeamInscatter[2],
+    eveningSunbeamLuma: eveningSunbeam[0] + eveningSunbeam[1] + eveningSunbeam[2],
+    windowOccludedSunbeamLuma:
+      windowOccludedSunbeam[0] + windowOccludedSunbeam[1] + windowOccludedSunbeam[2],
+    highTierStepBudget: 32,
+    reducedMotionStepBudget: 4,
+  };
+
   return {
     pbrSlot,
     textureBudgetMb,
@@ -655,6 +706,7 @@ export function evaluateMaterialRenderingPipeline(
       pcssPenumbraWidth,
     },
     postFxDiagnostics,
+    qualityTierAndCausalControls,
     stageTonemappedRgb,
     compositePostFxRgb,
   };

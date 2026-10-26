@@ -46,6 +46,10 @@ import type {
   HouseholdManipulationAdmission,
   HouseholdManipulationTraceSample,
 } from "../lib/frankensimCmaes";
+import {
+  evaluateMultiStageHouseholdManipulationSuite,
+  type MultiStageHouseholdManipulationSuiteResult,
+} from "../lib/householdPhysicsWorld";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
 import {
   ARM_LINK_NAMES,
@@ -63,6 +67,7 @@ export interface ArmObjectContactDiagnostic {
     penetrating: boolean;
     penetrationDepth: number;
   };
+  multiStageHouseholdSuite: MultiStageHouseholdManipulationSuiteResult;
 }
 
 export function evaluateArmObjectContactDiagnostics(
@@ -93,12 +98,14 @@ export function evaluateArmObjectContactDiagnostics(
     ARM_LINK_RADII[7] ?? 0.04,
     testObb,
   );
+  const multiStageHouseholdSuite = evaluateMultiStageHouseholdManipulationSuite();
   return {
     hullKeys,
     iiwaJointLimitCount: KUKA_IIWA14_LIMITS.length,
     iiwaOwnerOriginRpyCount: IIWA_OWNER_JOINT_ORIGIN_RPY.length,
     resolvedContact,
     singleLinkObbProjection,
+    multiStageHouseholdSuite,
   };
 }
 

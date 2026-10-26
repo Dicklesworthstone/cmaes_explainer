@@ -19,6 +19,7 @@
 //   - LaValle, "Planning Algorithms" (Cambridge University Press 2006)
 //   - Ames et al., "Control Barrier Functions: Theory and Applications" (ECC 2019)
 
+import { sdfHeightfield } from "./analyticSdf";
 import {
   checkDecorTipping,
   createDecorObject,
@@ -477,6 +478,18 @@ export interface HouseNavigationSafetyAndCostmapDiagnostic {
     neuralClearanceValue: number;
     neuralGradient: [number, number];
   };
+  indoorOutdoorCampaigns: {
+    curriculumHorizonSteps: number;
+    shortGaitThreeSeedDistancesM: [number, number, number];
+    shortGaitThreeSeedMeanSpeedsMps: [number, number, number];
+    indoorMinClearanceMeters: number;
+    blockedDoorwayMinClearanceMeters: number;
+    blockedDoorwayInfeasible: boolean;
+    outdoorPorchFlatSdfM: number;
+    outdoorGardenSlopedSdfM: number;
+    outdoorPlanterNominalClearanceM: number;
+    outdoorPlanterShiftedClearanceM: number;
+  };
 }
 
 const SHARED_HOUSE_COSTMAP = new LearnedCostmapEngine({
@@ -617,6 +630,96 @@ export function evaluateHouseNavigationSafetyAndCostmap(
     position[1],
   );
 
+  // Indoor & Outdoor G1 Campaign Diagnostics (cmaes-feat-fs1-indoor-g1-5dc, cmaes-feat-fs2-outdoor-g1-m1h)
+  const shortIndoorWaypoints: HouseWaypoint[] = CRAFTSMAN_WAYPOINT_CHAIN.slice(1, 4);
+  const seedRuns = [0, 1, 2].map((seedOffset) =>
+    simulateHouseNavigation(
+      shortIndoorWaypoints,
+      CRAFTSMAN_DOORWAYS,
+      200,
+      1 / 60,
+      0.21 + seedOffset * 0.005,
+      { scene },
+    ),
+  );
+  const blockedScene: HouseSceneConfig = {
+    ...scene,
+    furniture: [
+      ...scene.furniture,
+      {
+        name: "Doorway Barricade",
+        kind: "storage-cabinet",
+        room: "dining",
+        center: [0.35, 1.2],
+        size: [2.2, 0.8],
+        height: 1.0,
+        rotation: 0,
+        note: "Causal intervention barricade blocking dining doorway",
+      },
+    ],
+  };
+  const blockedRun = simulateHouseNavigation(
+    shortIndoorWaypoints,
+    CRAFTSMAN_DOORWAYS,
+    60,
+    1 / 60,
+    0.25,
+    { scene: blockedScene },
+  );
+
+  const flatGrid = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const slopedGrid = new Float32Array([0, 0.08, 0.16, 0.05, 0.14, 0.22, 0.12, 0.2, 0.28]);
+  const outdoorPorchFlatSdfM = sdfHeightfield([0.4, 0.35, 0.4], {
+    minX: 0,
+    maxX: 2,
+    minZ: 0,
+    maxZ: 2,
+    rows: 3,
+    cols: 3,
+    heights: flatGrid,
+  }).distance;
+  const outdoorGardenSlopedSdfM = sdfHeightfield([0.4, 0.35, 0.4], {
+    minX: 0,
+    maxX: 2,
+    minZ: 0,
+    maxZ: 2,
+    rows: 3,
+    cols: 3,
+    heights: slopedGrid,
+  }).distance;
+  const planterNominalScene = createSceneFromHouseFurniture([
+    {
+      name: "Porch Cedar Planter",
+      kind: "planter",
+      room: "porch",
+      center: [0.95, 4.5],
+      size: [0.45, 0.45],
+      height: 0.5,
+      rotation: 0,
+      note: "Nominal outdoor planter envelope",
+    },
+  ]);
+  const planterShiftedScene = createSceneFromHouseFurniture([
+    {
+      name: "Porch Cedar Planter",
+      kind: "planter",
+      room: "porch",
+      center: [0.55, 4.5],
+      size: [0.45, 0.45],
+      height: 0.5,
+      rotation: 0,
+      note: "Shifted outdoor planter envelope for causal clearance check",
+    },
+  ]);
+  const outdoorPlanterNominalClearanceM = queryMultiObstacleScene(
+    { position: [0.35, 0.25, 4.5], robotRadius: 0.25, safetyMargin: 0.04 },
+    planterNominalScene,
+  ).minimumClearanceMeters;
+  const outdoorPlanterShiftedClearanceM = queryMultiObstacleScene(
+    { position: [0.35, 0.25, 4.5], robotRadius: 0.25, safetyMargin: 0.04 },
+    planterShiftedScene,
+  ).minimumClearanceMeters;
+
   return {
     recoveryState: recoveryRes.state,
     safeVelocity: [recoveryRes.safeControl[0], recoveryRes.safeControl[2]],
@@ -655,6 +758,27 @@ export function evaluateHouseNavigationSafetyAndCostmap(
       parameterCount: SHARED_HOUSE_COSTMAP.parameterCount,
       neuralClearanceValue: costmapEval.value,
       neuralGradient: costmapEval.gradient,
+    },
+    indoorOutdoorCampaigns: {
+      curriculumHorizonSteps: 720,
+      shortGaitThreeSeedDistancesM: [
+        seedRuns[0].totalPathDistanceMeters,
+        seedRuns[1].totalPathDistanceMeters,
+        seedRuns[2].totalPathDistanceMeters,
+      ],
+      shortGaitThreeSeedMeanSpeedsMps: [
+        seedRuns[0].totalPathDistanceMeters / seedRuns[0].simulatedPhysicalSeconds,
+        seedRuns[1].totalPathDistanceMeters / seedRuns[1].simulatedPhysicalSeconds,
+        seedRuns[2].totalPathDistanceMeters / seedRuns[2].simulatedPhysicalSeconds,
+      ],
+      indoorMinClearanceMeters: seedRuns[0].minimumObstacleClearanceMeters,
+      blockedDoorwayMinClearanceMeters: blockedRun.minimumObstacleClearanceMeters,
+      blockedDoorwayInfeasible:
+        !blockedRun.allWaypointsReached || blockedRun.minimumObstacleClearanceMeters < 0.001,
+      outdoorPorchFlatSdfM,
+      outdoorGardenSlopedSdfM,
+      outdoorPlanterNominalClearanceM,
+      outdoorPlanterShiftedClearanceM,
     },
   };
 }

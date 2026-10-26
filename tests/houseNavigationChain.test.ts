@@ -160,5 +160,28 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     expect(diag.learnedCostmap.parameterCount).toBeGreaterThan(0);
     expect(Number.isFinite(diag.learnedCostmap.neuralClearanceValue)).toBe(true);
     expect(diag.learnedCostmap.neuralGradient.length).toBe(2);
+
+    // Indoor & outdoor G1 campaign and causal interventions (cmaes-feat-fs1-indoor-g1-5dc, cmaes-feat-fs2-outdoor-g1-m1h)
+    expect(diag.indoorOutdoorCampaigns.curriculumHorizonSteps).toBe(720);
+    for (let i = 0; i < 3; i++) {
+      expect(diag.indoorOutdoorCampaigns.shortGaitThreeSeedDistancesM[i]).toBeGreaterThanOrEqual(
+        1.0,
+      );
+      expect(diag.indoorOutdoorCampaigns.shortGaitThreeSeedMeanSpeedsMps[i]).toBeGreaterThanOrEqual(
+        0.5,
+      );
+    }
+    expect(diag.indoorOutdoorCampaigns.indoorMinClearanceMeters).toBeGreaterThanOrEqual(0.001);
+    expect(diag.indoorOutdoorCampaigns.blockedDoorwayMinClearanceMeters).toBeLessThan(
+      diag.indoorOutdoorCampaigns.indoorMinClearanceMeters,
+    );
+    expect(diag.indoorOutdoorCampaigns.blockedDoorwayInfeasible).toBe(true);
+    expect(diag.indoorOutdoorCampaigns.outdoorPorchFlatSdfM).not.toBeCloseTo(
+      diag.indoorOutdoorCampaigns.outdoorGardenSlopedSdfM,
+      3,
+    );
+    expect(diag.indoorOutdoorCampaigns.outdoorPlanterShiftedClearanceM).toBeLessThan(
+      diag.indoorOutdoorCampaigns.outdoorPlanterNominalClearanceM,
+    );
   });
 });
