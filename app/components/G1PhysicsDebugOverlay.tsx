@@ -20,9 +20,112 @@
 
 import React from "react";
 import * as THREE from "three";
+import {
+  DifferentiableSceneSDF,
+  DifferentiableSdfNode,
+  evalGradientAndHessian,
+  raymarchDifferentiableSdf,
+  smaxPoly,
+  sminLse,
+  sminPoly,
+} from "../lib/differentiableSdf";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
+import {
+  buildG1CapsulesFromIK,
+  computeImpulseResponse,
+  G1_KINEMATICS,
+  solveTwoBoneIK,
+} from "../lib/humanoidRagdollIk";
 import { checkG1SelfCollision, type LinkCapsule } from "../lib/robotSelfCollision";
+
+export interface G1DifferentiableSdfAndImpulseDiagnostic {
+  impulseDeltaV: [number, number, number];
+  capturePointRecoveryStepOffset: [number, number, number];
+  recoveryKneePosition: [number, number, number];
+  capsuleCount: number;
+  diffSceneDistance: number;
+  diffSceneGradient: [number, number, number];
+  hessianTrace: number;
+  raymarchHit: boolean;
+  raymarchDistance: number;
+  smoothOpsCheck: {
+    sminPolyVal: number;
+    sminLseVal: number;
+    smaxPolyVal: number;
+  };
+}
+
+/**
+ * Evaluates capture-point push-recovery stepping reflex (`computeImpulseResponse` + `solveTwoBoneIK`),
+ * `buildG1CapsulesFromIK`, and differentiable scene SDF gradients, Hessians, and sphere-traced raymarching
+ * for a G1 pelvis pose (`cmaes-za0x.16`, `cmaes-feat-cl10-neural-gbn`).
+ */
+export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
+  pelvisPosition: [number, number, number] = [0, 0.75, 0],
+  obstacles: readonly OrientedBoundingBox[] = [],
+  impulseNs = 15.0,
+  impulseAngleRad = 0.0,
+): G1DifferentiableSdfAndImpulseDiagnostic {
+  const impulse = computeImpulseResponse(impulseNs, impulseAngleRad);
+  const stepTarget: [number, number, number] = [
+    pelvisPosition[0] + impulse.recoveryStepOffset[0],
+    0.04,
+    pelvisPosition[2] - G1_KINEMATICS.hipWidth * 0.5 + impulse.recoveryStepOffset[2],
+  ];
+  const leftLegIk = solveTwoBoneIK(
+    pelvisPosition,
+    stepTarget,
+    G1_KINEMATICS.thighLength,
+    G1_KINEMATICS.shinLength,
+    [1, 0, 0],
+  );
+  const capsules = buildG1CapsulesFromIK({
+    pelvisPosition,
+    torsoPosition: [pelvisPosition[0], pelvisPosition[1] + 0.2, pelvisPosition[2]],
+    headPosition: [pelvisPosition[0], pelvisPosition[1] + 0.5, pelvisPosition[2]],
+    leftKneePosition: leftLegIk.midPosition,
+    rightKneePosition: [pelvisPosition[0], pelvisPosition[1] - 0.35, pelvisPosition[2] + 0.11],
+    leftFootPosition: leftLegIk.reachedTarget,
+    rightFootPosition: [pelvisPosition[0], 0.04, pelvisPosition[2] + 0.11],
+    leftElbowPosition: [pelvisPosition[0], pelvisPosition[1] + 0.1, pelvisPosition[2] - 0.2],
+    rightElbowPosition: [pelvisPosition[0], pelvisPosition[1] + 0.1, pelvisPosition[2] + 0.2],
+    leftHandPosition: [pelvisPosition[0] + 0.15, pelvisPosition[1], pelvisPosition[2] - 0.22],
+    rightHandPosition: [pelvisPosition[0] + 0.15, pelvisPosition[1], pelvisPosition[2] + 0.22],
+  });
+
+  const diffScene = new DifferentiableSceneSDF();
+  diffScene.addPlane([0, 1, 0], 0);
+  for (let i = 0; i < Math.min(4, obstacles.length); i++) {
+    const obb = obstacles[i];
+    diffScene.addBox(obb.center, obb.halfExtents);
+  }
+  const sceneEval = diffScene.evaluate(pelvisPosition);
+  const node = new DifferentiableSdfNode((p) => diffScene.evaluate(p).distance, "g1_scene_sdf");
+  const gradHess = evalGradientAndHessian(node.evalDistance, pelvisPosition);
+  const hessianTrace =
+    gradHess.hessian[0][0] + gradHess.hessian[1][1] + gradHess.hessian[2][2];
+  const rayRes = raymarchDifferentiableSdf(node, pelvisPosition, [0, -1, 0], 5.0);
+
+  const smoothOpsCheck = {
+    sminPolyVal: sminPoly(0.25, 0.3, 0.1).val,
+    sminLseVal: sminLse(0.25, 0.3, 0.1).val,
+    smaxPolyVal: smaxPoly(0.25, 0.3, 0.1).val,
+  };
+
+  return {
+    impulseDeltaV: impulse.deltaV,
+    capturePointRecoveryStepOffset: impulse.recoveryStepOffset,
+    recoveryKneePosition: leftLegIk.midPosition,
+    capsuleCount: capsules.length,
+    diffSceneDistance: sceneEval.distance,
+    diffSceneGradient: sceneEval.gradient,
+    hessianTrace,
+    raymarchHit: rayRes.hit,
+    raymarchDistance: rayRes.distance,
+    smoothOpsCheck,
+  };
+}
 
 // 30-link body pose-envelope radii, sized to the RobotPose rendering. These
 // are visual aids only; the drag guard uses the separate pelvis safety proxy.
@@ -210,6 +313,30 @@ export function G1PhysicsDebugOverlay({
           polygonOffsetUnits={-2}
         />
       </mesh>
+
+      {/* 5. Capture-point recovery step preview ring (12 N·s forward impulse) */}
+      {(() => {
+        const impulse = computeImpulseResponse(12.0, 0.0);
+        return (
+          <mesh
+            position={[
+              pelvisPosition[0] + impulse.recoveryStepOffset[0],
+              groundProjectionY,
+              pelvisPosition[2] + impulse.recoveryStepOffset[2],
+            ]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <ringGeometry args={[0.04, 0.06, 16]} />
+            <meshBasicMaterial
+              color="#34d399"
+              transparent
+              opacity={0.5}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+        );
+      })()}
     </group>
   );
 }

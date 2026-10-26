@@ -139,6 +139,11 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     expect(Number.isFinite(diag.safeVelocity[0])).toBe(true);
     expect(Number.isFinite(diag.safeVelocity[1])).toBe(true);
     expect(diag.socialPotential).toBeGreaterThan(0);
+    expect(Number.isFinite(diag.socialCbf.hSocial)).toBe(true);
+    expect(diag.socialCbf.filteredVelocity.length).toBe(2);
+    expect(diag.g1ChallengePreview.waypointCount).toBeGreaterThanOrEqual(7);
+    expect(diag.g1ChallengePreview.clearSpawnPosition.length).toBe(3);
+    expect(diag.g1ChallengePreview.shortRolloutDistanceMeters).toBeGreaterThan(0);
     expect(diag.decorTippingCheck.tippingThresholdNm).toBeGreaterThan(0);
     expect(diag.learnedCostmap.parameterCount).toBeGreaterThan(0);
     expect(Number.isFinite(diag.learnedCostmap.neuralClearanceValue)).toBe(true);

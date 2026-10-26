@@ -23,10 +23,20 @@ import {
   checkDecorTipping,
   createDecorObject,
   DEFAULT_SILHOUETTE_PROFILES,
+  evaluateSocialCbf,
   evaluateSocialPotential,
+  filterSocialVelocityCbf,
   type SilhouetteAgent,
+  stepSilhouetteAgent,
 } from "./decorAndSocialObstacles";
-import { createSceneFromHouseFurniture, queryMultiObstacleScene } from "./houseMultiObstacleKernel";
+import {
+  CRAFTSMAN_G1_CHALLENGE_WAYPOINTS,
+  createSceneFromHouseFurniture,
+  findClearSpawnPosition,
+  queryMultiObstacleScene,
+  simulateG1HouseNavigationChallenge,
+  sweptSphereOBBEntryPoint,
+} from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
 import { LearnedCostmapEngine } from "./learnedCostmap";
 import { type RecoveryState, SafetyFilterRecoveryManager } from "./safetyFilterRecovery";
@@ -408,6 +418,19 @@ export interface HouseNavigationSafetyAndCostmapDiagnostic {
   maxViolationSlack: number;
   socialPotential: number;
   socialGradient: [number, number];
+  socialCbf: {
+    hSocial: number;
+    isSafe: boolean;
+    filteredVelocity: [number, number];
+    interventionMagnitude: number;
+  };
+  g1ChallengePreview: {
+    waypointCount: number;
+    clearSpawnPosition: [number, number, number];
+    sweptCcdWasHit: boolean;
+    shortRolloutDistanceMeters: number;
+    shortRolloutMinClearanceMeters: number;
+  };
   decorTippingCheck: {
     willTip: boolean;
     appliedTorqueNm: number;
@@ -464,12 +487,31 @@ export function evaluateHouseNavigationSafetyAndCostmap(
     ],
   );
 
-  const parlorPedestrian: SilhouetteAgent = {
+  const parlorPedestrianRaw: SilhouetteAgent = {
     id: "parlor-occupant",
     position: [0.85, 2.1],
     ...DEFAULT_SILHOUETTE_PROFILES["pedestrian-standing"],
   };
+  const parlorPedestrian = stepSilhouetteAgent(parlorPedestrianRaw, 1 / 60);
   const social = evaluateSocialPotential(position, parlorPedestrian);
+  const socialCbfEval = evaluateSocialCbf(position, velocity, parlorPedestrian);
+  const socialFilterRes = filterSocialVelocityCbf(velocity, position, [parlorPedestrian]);
+
+  const clearSpawnPosition = findClearSpawnPosition(obstacleScene.obstacles, 0.28);
+  const firstObb = obstacleScene.obstacles[0];
+  const sweptCcd = firstObb
+    ? sweptSphereOBBEntryPoint(
+        [position[0], 0.5, position[1]],
+        [position[0] + velocity[0] * 0.2, 0.5, position[1] + velocity[1] * 0.2],
+        0.25,
+        firstObb,
+      )
+    : { wasHit: false };
+  const g1ChallengeShort = simulateG1HouseNavigationChallenge(obstacleScene, {
+    waypoints: CRAFTSMAN_G1_CHALLENGE_WAYPOINTS,
+    maxDurationSeconds: 1.5,
+    dt: 1 / 30,
+  });
 
   const parlorLamp = createDecorObject("parlor-floor-lamp", "floor-lamp", [1.2, 0.0, 2.4]);
   const decorTippingCheck = checkDecorTipping(parlorLamp, 6.5, 1.1);
@@ -485,6 +527,19 @@ export function evaluateHouseNavigationSafetyAndCostmap(
     maxViolationSlack: recoveryRes.maxViolationSlack,
     socialPotential: social.potential,
     socialGradient: social.gradient,
+    socialCbf: {
+      hSocial: socialCbfEval.hSocial,
+      isSafe: socialCbfEval.isSafe,
+      filteredVelocity: socialFilterRes.safeVelocity,
+      interventionMagnitude: socialFilterRes.interventionMagnitude,
+    },
+    g1ChallengePreview: {
+      waypointCount: CRAFTSMAN_G1_CHALLENGE_WAYPOINTS.length,
+      clearSpawnPosition,
+      sweptCcdWasHit: sweptCcd.wasHit,
+      shortRolloutDistanceMeters: g1ChallengeShort.totalDistanceMeters,
+      shortRolloutMinClearanceMeters: g1ChallengeShort.minimumClearanceMeters,
+    },
     decorTippingCheck,
     learnedCostmap: {
       parameterCount: SHARED_HOUSE_COSTMAP.parameterCount,

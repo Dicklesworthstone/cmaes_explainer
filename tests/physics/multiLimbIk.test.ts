@@ -256,4 +256,21 @@ describe("interactive pins never overlap the humanoid (sphere-inside-robot regre
     expect(crossed.selfCollision.hasCollision).toBe(true);
     expect(crossed.selfCollision.collidingPairs.length).toBeGreaterThan(0);
   });
+
+  test("evaluateG1DifferentiableSdfAndImpulseDiagnostics evaluates capture-point stepping, G1 capsules, differentiable scene SDF Hessian, and sphere-traced raymarching", async () => {
+    const { evaluateG1DifferentiableSdfAndImpulseDiagnostics } = await import(
+      "../../app/components/G1PhysicsDebugOverlay"
+    );
+    const diag = evaluateG1DifferentiableSdfAndImpulseDiagnostics([0, 0.75, 0], [], 18.0, 0.0);
+
+    expect(diag.impulseDeltaV[0]).toBeGreaterThan(0);
+    expect(diag.capturePointRecoveryStepOffset[0]).toBeGreaterThan(0);
+    expect(diag.capsuleCount).toBe(11);
+    expect(diag.diffSceneDistance).toBeCloseTo(0.75, 4);
+    expect(Number.isFinite(diag.hessianTrace)).toBe(true);
+    expect(diag.raymarchHit).toBe(true);
+    expect(diag.raymarchDistance).toBeCloseTo(0.75, 3);
+    expect(diag.smoothOpsCheck.sminPolyVal).toBeLessThanOrEqual(0.25);
+    expect(diag.smoothOpsCheck.smaxPolyVal).toBeGreaterThanOrEqual(0.3);
+  });
 });
