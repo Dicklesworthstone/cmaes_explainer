@@ -35,7 +35,9 @@ import {
 } from "../lib/armContactPhysics";
 import {
   computeKukaFK,
+  IIWA_OWNER_JOINT_ORIGIN_RPY,
   KUKA_AUXILIARY_JOINT_LIMITS,
+  KUKA_IIWA14_LIMITS,
   KUKA_LINK_LENGTHS,
   resolveArmChainCollisions,
 } from "../lib/armInverseKinematics";
@@ -53,6 +55,8 @@ import {
 
 export interface ArmObjectContactDiagnostic {
   hullKeys: string[];
+  iiwaJointLimitCount: number;
+  iiwaOwnerOriginRpyCount: number;
   resolvedContact: ResolvedArmObjectContact;
   singleLinkObbProjection: {
     newPos: [number, number, number];
@@ -91,6 +95,8 @@ export function evaluateArmObjectContactDiagnostics(
   );
   return {
     hullKeys,
+    iiwaJointLimitCount: KUKA_IIWA14_LIMITS.length,
+    iiwaOwnerOriginRpyCount: IIWA_OWNER_JOINT_ORIGIN_RPY.length,
     resolvedContact,
     singleLinkObbProjection,
   };

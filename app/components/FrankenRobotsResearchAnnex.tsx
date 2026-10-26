@@ -18,6 +18,13 @@ import {
   REQUIRED_FAST_PR_LANES,
   REQUIRED_RELEASE_CAMPAIGN_LANES,
 } from "../lib/browserPhysicsAdapter";
+import { createMulberry32, outerProduct, sampleGaussianVector } from "../lib/cmaesEngine";
+import {
+  computeCovariancePowers,
+  jacobiEigenSymmetric,
+  matMult,
+  sampleGaussianVectorND,
+} from "../lib/cmaesEngineND";
 import {
   fischerBurmeister,
   fischerBurmeisterGrad,
@@ -56,15 +63,22 @@ import {
   transformSpatialMotion,
   transposeMat3,
 } from "../lib/featherstoneDynamics";
+import { FRANKENROBOTS_BRIDGE_SCHEMA_VERSION } from "../lib/frankenrobotsBridge";
 import {
   ARM_MAX_EXTRA_OBSTACLES,
+  decodeHouseholdManipulationPopulation,
   G1_MAX_OBSTACLES,
+  initFrankenSimOwnerKernel,
   kernelSourceNow,
 } from "../lib/frankensimCmaes";
+import { heatmapKernelLive, renderHeatmapJs } from "../lib/frankensimHeatmap";
+import { clearTrainingSession } from "../lib/g1TrainingSession";
+import { fetchDefaultTransformerWeights } from "../lib/gaitTransformer";
 import {
   evaluateHouseNavigationSafetyAndCostmap,
   type HouseNavigationSafetyAndCostmapDiagnostic,
 } from "../lib/houseNavigationChain";
+import { CRAFTSMAN_BUNGALOW_1928 } from "../lib/houseScenes";
 import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerfProfiler";
 import {
   decodeHouseholdNavigationPolicy,
@@ -72,7 +86,8 @@ import {
   evaluateHouseholdNavigationPolicy,
   runEqualBudgetHouseholdCmaes,
 } from "../lib/liveCmaesHousehold";
-import { generateMultiRoomTourRollout } from "../lib/multiRoomTour";
+import { CRAFTSMAN_TOUR_KEYFRAMES, generateMultiRoomTourRollout } from "../lib/multiRoomTour";
+import { parseTrainReceipt } from "../lib/policyAblationComparison";
 import {
   BODY_STRIDE,
   CONTACT_STRIDE,
@@ -93,11 +108,21 @@ import {
   runShuffledStressTrial,
   type StressTrialResult,
 } from "../lib/shuffledFurnitureStressTest";
-import { generateVisitorModeClip } from "../lib/visitorModeClip";
+import { generateVisitorModeClip, VISITOR_CLIP_KEYFRAMES } from "../lib/visitorModeClip";
+import { evaluateArmObjectContactDiagnostics } from "./ArmPhysicsDebugOverlay";
+import { CMAESMiniRadar } from "./CMAESPhaseSpaceViewer";
+import { inspectCatalogPiecePhysics } from "./FurnitureCatalogInspector";
+import { evaluateG1DifferentiableSdfAndImpulseDiagnostics } from "./G1PhysicsDebugOverlay";
 import { G1ResidualTrainer } from "./G1ResidualTrainer";
-import { HpoTrainer } from "./HpoTrainer";
+import { HpoBestParameters, HpoTrainer } from "./HpoTrainer";
+import { KMR_ROOM_DESTINATIONS } from "./KmrScene";
+import {
+  CRAFTSMAN_MATERIAL_DATABASE,
+  evaluateMaterialRenderingPipeline,
+} from "./MaterialDatabaseInspector";
 import { PolicyAblationComparison } from "./PolicyAblationComparison";
 import { RealPhysicsResidual } from "./RealPhysicsResidual";
+import { RobotGraphicsRecoveryNotice, watchRobotGraphics } from "./RobotStageRecovery";
 
 export interface FrontierKernelAndStressDiagnostics {
   v067MultiBodyRefusalCode: string;
@@ -163,6 +188,24 @@ export interface FrontierKernelAndStressDiagnostics {
     maxFischerBurmeisterResidual: number;
     fbZeroResidual: number;
     fbGradNorm: number;
+  };
+  crossDomainAudit: {
+    cmaes2DOuterProductTrace: number;
+    cmaesNDJacobiEigen0: number;
+    cmaesNDCovSqrtProductTrace: number;
+    heatmapLive: boolean;
+    bridgeSchemaVersion: number;
+    armPopulationDecodedCount: number;
+    tourKeyframeCount: number;
+    visitorKeyframeCount: number;
+    kmrDestinationCount: number;
+    parsedReceiptSamples: number;
+    armContactHullCount: number;
+    g1CapsuleCount: number;
+    catalogPartCount: number;
+    materialDatabaseCount: number;
+    materialPipelineAcesCoeffA: number;
+    componentHooksWired: boolean;
   };
   perfProfiler: ProfilerSummaryStats;
 }
@@ -391,6 +434,55 @@ export function evaluateFrontierKernelAndStressDiagnostics(
   }
   const perfProfiler = profiler.getSummaryStats();
 
+  // Cross-domain linear algebra, kernel packet, and component inspector audit
+  const rng = createMulberry32(seed);
+  const z2d = sampleGaussianVector(2, rng);
+  const op2d = outerProduct(z2d, z2d);
+  const cmaes2DOuterProductTrace = (op2d[0]?.[0] ?? 0) + (op2d[1]?.[1] ?? 0);
+  const zNd = sampleGaussianVectorND(3, rng);
+  const symMat = [
+    [2.0 + zNd[0] * 0.01, 0.2, 0.0],
+    [0.2, 1.5, 0.1],
+    [0.0, 0.1, 1.0],
+  ];
+  const jacobi = jacobiEigenSymmetric(symMat);
+  const covPowers = computeCovariancePowers(jacobi.eigenvalues, jacobi.eigenvectors);
+  const covIdent = matMult(covPowers.sqrtC, covPowers.invSqrtC);
+  const cmaesNDCovSqrtProductTrace =
+    (covIdent[0]?.[0] ?? 0) + (covIdent[1]?.[1] ?? 0) + (covIdent[2]?.[2] ?? 0);
+
+  renderHeatmapJs({
+    field: "sphere",
+    width: 2,
+    height: 2,
+    xmin: -1,
+    xmax: 1,
+    ymin: -1,
+    ymax: 1,
+    norm: { mode: "linear", k: 1 },
+    ramp: { r0: 0, rk: 255, g0: 0, gk: 255, b0: 0, bk: 255 },
+    fallbackField: (x, y) => x * x + y * y,
+  });
+  const armPopDecoded = decodeHouseholdManipulationPopulation(
+    new Float64Array([0x41524d31, 4, 0, 4, 8, 2, -12.4, -9.8]),
+  );
+  const parsedReceipt = parseTrainReceipt({
+    architecture: { parameterCount: 31136 },
+    training: { samplesConsumed: 128000, wallclockSeconds: 180, environment: "g1-stepwise" },
+  });
+  const armDiag = evaluateArmObjectContactDiagnostics();
+  const g1Diag = evaluateG1DifferentiableSdfAndImpulseDiagnostics();
+  const catalogDiag = inspectCatalogPiecePhysics(CRAFTSMAN_BUNGALOW_1928.furniture[0], 0.5, false, 2);
+  const matDiag = evaluateMaterialRenderingPipeline(CRAFTSMAN_MATERIAL_DATABASE[0]);
+  const componentHooksWired =
+    typeof initFrankenSimOwnerKernel === "function" &&
+    typeof clearTrainingSession === "function" &&
+    typeof fetchDefaultTransformerWeights === "function" &&
+    typeof CMAESMiniRadar === "function" &&
+    typeof HpoBestParameters === "function" &&
+    typeof RobotGraphicsRecoveryNotice === "function" &&
+    typeof watchRobotGraphics === "function";
+
   return {
     v067MultiBodyRefusalCode,
     v068ReadyCapabilitiesCount: v068Init.success ? v068Init.value.capabilities.length : 0,
@@ -455,6 +547,24 @@ export function evaluateFrontierKernelAndStressDiagnostics(
       maxFischerBurmeisterResidual: citoRes.maxFischerBurmeisterResidual,
       fbZeroResidual,
       fbGradNorm,
+    },
+    crossDomainAudit: {
+      cmaes2DOuterProductTrace,
+      cmaesNDJacobiEigen0: jacobi.eigenvalues[0] ?? 0,
+      cmaesNDCovSqrtProductTrace,
+      heatmapLive: heatmapKernelLive(),
+      bridgeSchemaVersion: FRANKENROBOTS_BRIDGE_SCHEMA_VERSION,
+      armPopulationDecodedCount: "ok" in armPopDecoded ? armPopDecoded.ok.length : 0,
+      tourKeyframeCount: CRAFTSMAN_TOUR_KEYFRAMES.length,
+      visitorKeyframeCount: VISITOR_CLIP_KEYFRAMES.length,
+      kmrDestinationCount: KMR_ROOM_DESTINATIONS.length,
+      parsedReceiptSamples: parsedReceipt.samplesConsumed,
+      armContactHullCount: armDiag.hullKeys.length,
+      g1CapsuleCount: g1Diag.capsuleCount,
+      catalogPartCount: catalogDiag.proceduralGeometry.partCount,
+      materialDatabaseCount: CRAFTSMAN_MATERIAL_DATABASE.length,
+      materialPipelineAcesCoeffA: matDiag.postFxDiagnostics.acesCoeffA,
+      componentHooksWired,
     },
     perfProfiler,
   };

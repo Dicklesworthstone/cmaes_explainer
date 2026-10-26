@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import * as THREE from "three";
 import {
+  computePcssPenumbra,
   evaluateFloorContactAO,
   evaluateSdfSoftShadow,
   type ShadowRayResult,
@@ -107,6 +108,7 @@ import {
 import {
   applyExponentialHeightFog,
   computeAnalyticalFogOpticalDepth,
+  DEFAULT_FOG_CONFIG,
   henyeyGreensteinPhase,
   raymarchVolumetricSunbeams,
 } from "../lib/volumetricLighting";
@@ -396,6 +398,7 @@ export interface MaterialRenderingPipelineEvaluation {
     hgPhase: number;
     sunbeamInscatter: [number, number, number];
     foggedSurfaceRgb: [number, number, number];
+    pcssPenumbraWidth: number;
   };
   postFxDiagnostics: {
     acesCoeffA: number;
@@ -563,8 +566,15 @@ export function evaluateMaterialRenderingPipeline(
   // Volumetric Lighting (Henyey-Greenstein Sunbeams & Exponential Height Fog)
   const cameraPos: [number, number, number] = [0, 1.65, 3.8];
   const surfacePos: [number, number, number] = [0, 0.4, 0];
-  const fogOpticalDepth = computeAnalyticalFogOpticalDepth(cameraPos, surfacePos, 0.02, 0.5, 0.0);
-  const hgPhase = henyeyGreensteinPhase(0.78, 0.7);
+  const fogOpticalDepth = computeAnalyticalFogOpticalDepth(
+    cameraPos,
+    surfacePos,
+    DEFAULT_FOG_CONFIG.density0,
+    DEFAULT_FOG_CONFIG.heightFalloff,
+    DEFAULT_FOG_CONFIG.groundY,
+  );
+  const hgPhase = henyeyGreensteinPhase(0.78, DEFAULT_FOG_CONFIG.anisotropyG);
+  const pcssPenumbraWidth = computePcssPenumbra(4.5, 1.8, 0.45);
   const sunbeamInscatter = raymarchVolumetricSunbeams(
     cameraPos,
     [0, -0.31, -0.95],
@@ -642,6 +652,7 @@ export function evaluateMaterialRenderingPipeline(
       hgPhase,
       sunbeamInscatter,
       foggedSurfaceRgb: hdrRadiance,
+      pcssPenumbraWidth,
     },
     postFxDiagnostics,
     stageTonemappedRgb,

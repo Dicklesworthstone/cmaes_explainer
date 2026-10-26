@@ -45,7 +45,7 @@ import {
   sweptSphereOBBEntryPoint,
 } from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
-import { LearnedCostmapEngine } from "./learnedCostmap";
+import { DEFAULT_COSTMAP_CONFIG, LearnedCostmapEngine } from "./learnedCostmap";
 import {
   computeAdaptiveSafetyMargin,
   DEFAULT_MARGIN_CONFIG,
@@ -480,6 +480,7 @@ export interface HouseNavigationSafetyAndCostmapDiagnostic {
 }
 
 const SHARED_HOUSE_COSTMAP = new LearnedCostmapEngine({
+  ...DEFAULT_COSTMAP_CONFIG,
   fourierBands: 4,
   hiddenDim: 32,
   seed: 1928,

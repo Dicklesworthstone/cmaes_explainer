@@ -37,6 +37,7 @@ import {
   type KmrPosePerceptionAndReachability,
 } from "../lib/kmrNavigationOwner";
 import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
+import { KmrBase3D } from "./KmrBase3D";
 
 interface KmrPose {
   x: number;
@@ -57,11 +58,13 @@ function KmrThreeScene({
   path,
   dynamicReceipt,
   onSetWaypoint,
+  showZUpScanPreview = false,
 }: {
   pose: KmrPose;
   path: WaypointPath | null;
   dynamicReceipt: KmrHouseholdPhysicsReceipt | null;
   onSetWaypoint: (world: { x: number; y: number }) => void;
+  showZUpScanPreview?: boolean;
 }) {
   const materials = useMemo(() => defaultKmrMaterialSet(), []);
   const baseGroup = useMemo(
@@ -157,6 +160,15 @@ function KmrThreeScene({
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
       <gridHelper args={[20, 20, "#1e293b", "#334155"]} position={[0, 0.005, 0]} />
+      {showZUpScanPreview ? (
+        <KmrBase3D
+          xMeters={pose.x}
+          yMeters={pose.y}
+          yawRadians={pose.theta}
+          obstacles={obstacles}
+          plannedPath={path ?? undefined}
+        />
+      ) : null}
     </group>
   );
 }

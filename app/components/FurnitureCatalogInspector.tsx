@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import * as THREE from "three";
+import { testOBBvsAABB } from "../lib/bvhBroadphase";
 import {
   buildOrthonormalBasis,
   collideBodyPlane,
@@ -13,7 +14,11 @@ import {
   vecLength,
   vecNormalize,
 } from "../lib/contactGraph";
-import { type ContactManifold, collideSphereBox } from "../lib/contactManifold";
+import {
+  type ContactManifold,
+  collideSphereBox,
+  computeTangentBasis,
+} from "../lib/contactManifold";
 import {
   type ArticulationStepReceipt,
   createCabinetArticulation,
@@ -62,12 +67,17 @@ import {
   defaultGroundPlaneSdf,
   evaluateHouseholdLcpAndRollingDiagnostics,
 } from "../lib/householdPhysicsWorld";
-import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
+import {
+  CRAFTSMAN_BUNGALOW_1928,
+  CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR,
+  type HouseFurniture,
+} from "../lib/houseScenes";
 import { MeshSdf, type MeshSdfQuery } from "../lib/meshSdf";
 import {
   BakedNeuralSdfPiece,
   type CollisionQueryTelemetry,
   CollisionTelemetryCollector,
+  DEFAULT_NEURAL_SDF_CONFIG,
   ZeroAllocQueryContext,
 } from "../lib/neuralSdfRefinement";
 import {
@@ -183,9 +193,12 @@ export interface CatalogPiecePhysicsInspection {
   };
   contactAndWorldDiagnostics: {
     aabbOverlapsFloor: boolean;
+    obbOverlapsFloorAabb: boolean;
     planeContactCount: number;
     groundPlaneSdfAtCenter: number;
+    foundationDepthMeters: number;
     orthonormalTangentNorm: number;
+    manifoldTangentOrthogonality: number;
     localUpVectorZ: number;
     lcpConstraintRows: number;
     rollingCylinderOmega: number;
@@ -302,16 +315,32 @@ export function inspectCatalogPiecePhysics(
   const pieceAabb = computeBodyAABB(pieceBody);
   const floorAabb = computeBodyAABB(floorPlaneBody);
   const aabbOverlapsFloor = testAABBOverlap(pieceAabb, floorAabb);
+  const rotMat = eulerToMatrix(pieceBody.rotation);
+  const obbOverlapsFloorAabb = testOBBvsAABB(
+    {
+      center: pieceBody.position,
+      halfExtents: [w * 0.5, d * 0.5, h * 0.5],
+      rotationMatrix: [...rotMat[0], ...rotMat[1], ...rotMat[2]],
+    },
+    floorAabb,
+  );
   const planeContacts = collideBodyPlane(pieceBody, floorPlaneBody);
   const [tangent1] = buildOrthonormalBasis(vecNormalize([0, 0, 1]));
-  const rotMat = eulerToMatrix(pieceBody.rotation);
+  const manifoldBasis = computeTangentBasis([0, 0, 1]);
+  const manifoldTangentOrthogonality =
+    manifoldBasis.tangent1[0] * manifoldBasis.tangent2[0] +
+    manifoldBasis.tangent1[1] * manifoldBasis.tangent2[1] +
+    manifoldBasis.tangent1[2] * manifoldBasis.tangent2[2];
   const localUp = rotateVectorTranspose(rotMat, [0, 0, 1]);
   const groundSdf = defaultGroundPlaneSdf([piece.center[0], piece.center[1], h * 0.5]);
   const contactAndWorldDiagnostics = {
     aabbOverlapsFloor,
+    obbOverlapsFloorAabb,
     planeContactCount: planeContacts.length,
     groundPlaneSdfAtCenter: groundSdf.distance,
+    foundationDepthMeters: CRAFTSMAN_FOUNDATION_DEPTH_BELOW_FLOOR,
     orthonormalTangentNorm: vecLength(tangent1),
+    manifoldTangentOrthogonality,
     localUpVectorZ: localUp[2],
     lcpConstraintRows: PRIMITIVE_DIAGNOSTICS.lcpRollingDiag.constraintCount,
     rollingCylinderOmega: PRIMITIVE_DIAGNOSTICS.lcpRollingDiag.huntCrossleyForceN,
@@ -326,12 +355,13 @@ export function inspectCatalogPiecePhysics(
 
   // 1b. Baked Neural SDF Residual Refinement & Zero-Alloc Telemetry
   const neuralPiece = new BakedNeuralSdfPiece({
-    fourierBands: 8,
-    hiddenDim: 32,
-    bandWidthMeters: 0.05,
+    ...DEFAULT_NEURAL_SDF_CONFIG,
     seed: 1928,
   });
-  const queryCtx = new ZeroAllocQueryContext(8, 32);
+  const queryCtx = new ZeroAllocQueryContext(
+    DEFAULT_NEURAL_SDF_CONFIG.fourierBands,
+    DEFAULT_NEURAL_SDF_CONFIG.hiddenDim,
+  );
   const telemetry = new CollisionTelemetryCollector();
   const refinedGradQuery = neuralPiece.evaluateRefinedDistanceWithGradient(
     0,

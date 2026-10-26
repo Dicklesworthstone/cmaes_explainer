@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import {
   CmaesHyperparameterOptimizer,
   defaultGenotypeFromSpecs,
+  encodeGenotype,
   G1_TRAINING_HYPERPARAMETERS,
   type HpoCandidateDecoded,
   type HpoParameterSpec,
@@ -66,20 +67,24 @@ export function HpoTrainer() {
 
   const ensureOptimizer = useCallback((): CmaesHyperparameterOptimizer => {
     if (optimizerRef.current === null) {
+      const priorBest = result?.bestHyperparameters;
+      const warmGenotype = warmStart
+        ? priorBest
+          ? encodeGenotype(priorBest, G1_TRAINING_HYPERPARAMETERS)
+          : defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS)
+        : undefined;
       optimizerRef.current = new CmaesHyperparameterOptimizer(
         G1_TRAINING_HYPERPARAMETERS,
         0x47315040,
         {
-          warmStartGenotype: warmStart
-            ? defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS)
-            : undefined,
+          warmStartGenotype: warmGenotype,
           warmStartSigma: 0.2,
           mirroredSampling: mirrored,
         },
       );
     }
     return optimizerRef.current;
-  }, [warmStart, mirrored]);
+  }, [warmStart, mirrored, result?.bestHyperparameters]);
 
   const runBatch = useCallback(
     async (gens: number) => {

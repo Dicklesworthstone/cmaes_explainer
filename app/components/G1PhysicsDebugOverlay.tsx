@@ -72,6 +72,7 @@ import {
   type SelfCollisionResult,
   segmentSegmentClosestPoints,
 } from "../lib/robotSelfCollision";
+import { G1HouseBackdrop } from "./G1HouseBackdrop";
 
 export interface G1DifferentiableSdfAndImpulseDiagnostic {
   impulseDeltaV: [number, number, number];
@@ -332,6 +333,7 @@ export interface G1PhysicsDebugOverlayProps {
    * caller passes a height that clears whatever surface is actually there.
    */
   groundProjectionY?: number;
+  showHouseBackdrop?: boolean;
 }
 
 export function G1PhysicsDebugOverlay({
@@ -341,6 +343,7 @@ export function G1PhysicsDebugOverlay({
   pelvisPosition,
   safeRadius = 0.32,
   groundProjectionY = 0.03,
+  showHouseBackdrop = false,
 }: G1PhysicsDebugOverlayProps) {
   // Hooks remain unconditional so toggling the overlay cannot change hook
   // order. Disabled renders allocate no Three.js edge geometry.
@@ -416,6 +419,7 @@ export function G1PhysicsDebugOverlay({
 
   return (
     <group>
+      {showHouseBackdrop ? <G1HouseBackdrop showFurniture showWalls showGoals /> : null}
       {/* 1. 30 G1 body-link pose envelopes (cyan when clear, amber on self-collision) */}
       {worldLinkPoses.map((link) => {
         const isSelfColliding = collidingLinkNames.has(link.canonicalName);

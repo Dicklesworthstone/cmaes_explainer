@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { evaluateFrontierKernelAndStressDiagnostics } from "../app/components/FrankenRobotsResearchAnnex";
@@ -121,6 +122,22 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     expect(Number.isFinite(diag.citoTrajectory.maxFischerBurmeisterResidual)).toBe(true);
     expect(diag.citoTrajectory.fbZeroResidual).toBeLessThan(1e-3);
     expect(diag.citoTrajectory.fbGradNorm).toBeGreaterThan(0.5);
+    expect(diag.crossDomainAudit.cmaes2DOuterProductTrace).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.cmaesNDJacobiEigen0).toBeGreaterThan(1.5);
+    expect(diag.crossDomainAudit.cmaesNDCovSqrtProductTrace).toBeCloseTo(3.0, 6);
+    expect(typeof diag.crossDomainAudit.heatmapLive).toBe("boolean");
+    expect(diag.crossDomainAudit.bridgeSchemaVersion).toBeGreaterThanOrEqual(1);
+    expect(diag.crossDomainAudit.armPopulationDecodedCount).toBe(2);
+    expect(diag.crossDomainAudit.tourKeyframeCount).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.visitorKeyframeCount).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.kmrDestinationCount).toBeGreaterThanOrEqual(5);
+    expect(diag.crossDomainAudit.parsedReceiptSamples).toBe(128000);
+    expect(diag.crossDomainAudit.armContactHullCount).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.g1CapsuleCount).toBe(11);
+    expect(diag.crossDomainAudit.catalogPartCount).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.materialDatabaseCount).toBeGreaterThan(0);
+    expect(diag.crossDomainAudit.materialPipelineAcesCoeffA).toBeCloseTo(2.51, 2);
+    expect(diag.crossDomainAudit.componentHooksWired).toBe(true);
     expect(diag.perfProfiler.totalStepsRecorded).toBe(12);
     expect(diag.perfProfiler.p50Micros).toBeGreaterThan(0);
     expect(diag.perfProfiler.p95Micros).toBeGreaterThanOrEqual(diag.perfProfiler.p50Micros);
@@ -172,5 +189,123 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     }
 
     expect(unwiredLibs).toEqual([]);
+  });
+
+  test("every exported runtime function, class, and constant in app/lib/*.ts and every component module in app/components/*.tsx has a cross-file consumer in app/", () => {
+    const rootDir = process.cwd();
+    const collectTsFiles = (dir: string): string[] => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const out: string[] = [];
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          out.push(...collectTsFiles(full));
+        } else if (e.name.endsWith(".ts") || e.name.endsWith(".tsx")) {
+          out.push(full);
+        }
+      }
+      return out;
+    };
+
+    const allAppFiles = collectTsFiles(path.join(rootDir, "app"));
+    const fileContents = new Map<string, string>();
+    for (const f of allAppFiles) {
+      fileContents.set(f, fs.readFileSync(f, "utf8"));
+    }
+
+    const libDir = path.join(rootDir, "app/lib");
+    const libFiles = fs
+      .readdirSync(libDir)
+      .filter((f) => (f.endsWith(".ts") || f.endsWith(".tsx")) && !f.endsWith(".test.ts"));
+    const unwiredLibExports: string[] = [];
+
+    for (const lf of libFiles) {
+      const fullPath = path.join(libDir, lf);
+      const src = fileContents.get(fullPath) ?? "";
+      const regex = /export\s+(?:async\s+)?(?:function|const|class)\s+([A-Za-z0-9_]+)/g;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(src)) !== null) {
+        const sym = match[1];
+        let usedElsewhere = false;
+        const symRegex = new RegExp(`\\b${sym}\\b`);
+        for (const [af, asrc] of fileContents.entries()) {
+          if (af === fullPath) continue;
+          if (symRegex.test(asrc)) {
+            usedElsewhere = true;
+            break;
+          }
+        }
+        if (!usedElsewhere) {
+          unwiredLibExports.push(`${lf}:${sym}`);
+        }
+      }
+    }
+
+    expect(unwiredLibExports).toEqual([]);
+
+    const compDir = path.join(rootDir, "app/components");
+    const compFiles = fs
+      .readdirSync(compDir)
+      .filter((f) => (f.endsWith(".ts") || f.endsWith(".tsx")) && !f.endsWith(".test.tsx"))
+      .map((f) => path.basename(f, path.extname(f)));
+    const unwiredComponents: string[] = [];
+
+    for (const base of compFiles) {
+      const selfPathTsx = path.join(compDir, `${base}.tsx`);
+      const selfPathTs = path.join(compDir, `${base}.ts`);
+      let importedInApp = false;
+      for (const [fPath, content] of fileContents.entries()) {
+        if (fPath === selfPathTsx || fPath === selfPathTs) continue;
+        if (content.includes(`/${base}"`) || content.includes(`/${base}'`)) {
+          importedInApp = true;
+          break;
+        }
+      }
+      if (!importedInApp) {
+        unwiredComponents.push(`${base}`);
+      }
+    }
+
+    expect(unwiredComponents).toEqual([]);
+  });
+
+  test("v0622 and v0623 WASM and JS loader bytes match their manifest SHA-256 digests (cmaes-km5f.2)", () => {
+    const rootDir = process.cwd();
+    for (const version of ["v0622", "v0623"] as const) {
+      const dir = path.join(rootDir, "public/wasm/fs-cmaes", version);
+      const manifestRaw = fs.readFileSync(path.join(dir, "manifest.json"), "utf8");
+      const manifest = JSON.parse(manifestRaw) as {
+        assets: { javascriptSha256: string; wasmSha256: string };
+      };
+      const jsBytes = fs.readFileSync(path.join(dir, "fs_cmaes_viz_wasm.js"));
+      const wasmBytes = fs.readFileSync(path.join(dir, "fs_cmaes_viz_wasm_bg.wasm"));
+      const jsSha256 = crypto.createHash("sha256").update(jsBytes).digest("hex");
+      const wasmSha256 = crypto.createHash("sha256").update(wasmBytes).digest("hex");
+
+      expect(jsSha256).toBe(manifest.assets.javascriptSha256);
+      expect(wasmSha256).toBe(manifest.assets.wasmSha256);
+    }
+  });
+
+  test("HouseholdArmFlagship and G1WalkingFlagship expose aria-pressed on all camera selector modes (cmaes-km5f.4)", () => {
+    const rootDir = process.cwd();
+    const armSrc = fs.readFileSync(
+      path.join(rootDir, "app/components/HouseholdArmFlagship.tsx"),
+      "utf8",
+    );
+    const g1Src = fs.readFileSync(
+      path.join(rootDir, "app/components/G1WalkingFlagship.tsx"),
+      "utf8",
+    );
+
+    expect(armSrc).toContain("aria-pressed={isSelected}");
+    for (const mode of ["studio", "microscope", "overhead", "side", "front", "fly"]) {
+      expect(armSrc).toContain(`id: "${mode}"`);
+    }
+
+    expect(g1Src).toContain("aria-pressed={isSelected}");
+    for (const view of ["orbit", "follow", "pov", "blueprint", "fly"]) {
+      expect(g1Src).toContain(`id: "${view}"`);
+    }
   });
 });
