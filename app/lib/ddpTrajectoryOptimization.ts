@@ -14,12 +14,14 @@
  * - Carlos Mastalli et al., "Crocoddyl: An Efficient and Versatile Framework for Multi-Contact Optimal Control", ICRA 2020.
  */
 
+import { solveContactImplicitCollocation } from "./contactImplicitTrajectoryOpt";
 import type { DifferentiableSdfNode } from "./differentiableSdf";
 import {
   forwardDynamicsABA,
   type MultibodyTree,
   stepMultibodyDynamics,
 } from "./featherstoneDynamics";
+import { isSafeStart, sampleTimeAt, solveBackwardReachableTube } from "./hjiReachability";
 
 export interface DDPConfig {
   horizonSteps: number; // T (e.g. 50 timesteps)
@@ -516,3 +518,129 @@ export function solveDDP(
     expectedCostReduction,
   };
 }
+
+export interface AdvancedPlanningReferenceSuiteReport {
+  ddpJacobianMaxAbsDiff: number;
+  ddpNominalFinalCost: number;
+  ddpDeadline1IterFinite: boolean;
+  ddpDeadline1IterIterations: number;
+  citoObstacleStepOverPeakZ: number;
+  citoFlatFloorPeakZ: number;
+  citoStepOverExceedsFlatFloor: boolean;
+  citoMaxFischerBurmeisterResidual: number;
+  hjiTargetDiscZeroTime: number;
+  hjiMonotonicArrivalTimes: [number, number, number];
+  hjiStrictlyMonotonicWithDistance: boolean;
+  hjiObstacleCellRefused: boolean;
+}
+
+/**
+ * Evaluates the advanced reference trajectory planning and verification suite:
+ * - DDP central finite-difference Jacobian consistency across step sizes & 1-iteration deadline fallback (cmaes-za0x.29)
+ * - C-ITO Fischer-Burmeister contact-implicit step-over vs flat-floor negative control (cmaes-za0x.30)
+ * - HJI BRT conservative inscribed-diamond monotonicity & obstacle-cell refusal (cmaes-za0x.18 / cmaes-feat-oa7-costmap-s8p)
+ */
+export function evaluateAdvancedPlanningReferenceSuite(
+  tree: MultibodyTree,
+): AdvancedPlanningReferenceSuiteReport {
+  const n = tree.joints.length;
+  const xTest = new Array<number>(2 * n).fill(0.15);
+  const uTest = new Array<number>(n).fill(0.25);
+  const dt = 0.01;
+
+  const linCoarse = linearizeDynamics(tree, xTest, uTest, dt, 1e-4);
+  const linFine = linearizeDynamics(tree, xTest, uTest, dt, 1e-6);
+  let ddpJacobianMaxAbsDiff = 0;
+  for (let r = 0; r < 2 * n; r++) {
+    for (let c = 0; c < 2 * n; c++) {
+      ddpJacobianMaxAbsDiff = Math.max(
+        ddpJacobianMaxAbsDiff,
+        Math.abs(linCoarse.A[r][c] - linFine.A[r][c]),
+      );
+    }
+    for (let c = 0; c < n; c++) {
+      ddpJacobianMaxAbsDiff = Math.max(
+        ddpJacobianMaxAbsDiff,
+        Math.abs(linCoarse.B[r][c] - linFine.B[r][c]),
+      );
+    }
+  }
+
+  const x0 = new Array<number>(2 * n).fill(0);
+  const xTarget = new Array<number>(2 * n).fill(0);
+  xTarget[0] = 0.4;
+  if (n > 1) xTarget[1] = -0.3;
+  const weights: DDPWeights = {
+    qState: new Array<number>(2 * n).fill(1.0),
+    rControl: new Array<number>(n).fill(0.01),
+    qTerminal: new Array<number>(2 * n).fill(20.0),
+  };
+
+  const ddpNominal = solveDDPTrajectory(tree, x0, xTarget, weights, {
+    ...DEFAULT_DDP_CONFIG,
+    horizonSteps: 12,
+    maxIterations: 8,
+  });
+  const ddpDeadline = solveDDPTrajectory(tree, x0, xTarget, weights, {
+    ...DEFAULT_DDP_CONFIG,
+    horizonSteps: 12,
+    maxIterations: 1,
+  });
+  const ddpDeadline1IterFinite =
+    Number.isFinite(ddpDeadline.finalCost) &&
+    ddpDeadline.states.every((s) => s.every((v) => Number.isFinite(v))) &&
+    ddpDeadline.controls.every((u) => u.every((v) => Number.isFinite(v)));
+
+  const citoObstacle = solveContactImplicitCollocation(
+    [0, 0.0],
+    [0.5, 0.0],
+    { xMin: 0.2, xMax: 0.3, height: 0.12 },
+    { numKnots: 12, maxIterations: 30 },
+  );
+  const citoFlat = solveContactImplicitCollocation([0, 0.0], [0.5, 0.0], undefined, {
+    numKnots: 12,
+    maxIterations: 30,
+  });
+  const citoObstacleStepOverPeakZ = Math.max(...citoObstacle.knots.map((k) => k.pz));
+  const citoFlatFloorPeakZ = Math.max(...citoFlat.knots.map((k) => k.pz));
+
+  const gridSize = 21;
+  const blocked = new Uint8Array(gridSize * gridSize);
+  // Block cell (15, 10)
+  blocked[10 * gridSize + 15] = 1;
+  const brt = solveBackwardReachableTube({
+    width: gridSize,
+    height: gridSize,
+    cellSizeMeters: 0.2,
+    originX: -2.0,
+    originZ: -2.0,
+    blocked,
+    targetX: 0.0,
+    targetZ: 0.0,
+    targetRadiusMeters: 0.25,
+    maxSpeedMps: 0.5,
+  });
+
+  const tTarget = sampleTimeAt(brt, 0.0, 0.0);
+  const tNear = sampleTimeAt(brt, -0.6, 0.0);
+  const tMid = sampleTimeAt(brt, -1.0, 0.0);
+  const tFar = sampleTimeAt(brt, -1.6, 0.0);
+  // Cell (15, 10) center: x = -2.0 + (15 + 0.5)*0.2 = 1.1, z = -2.0 + (10 + 0.5)*0.2 = 0.1
+  const hjiObstacleCellRefused = !isSafeStart(brt, 1.1, 0.1, 100.0);
+
+  return {
+    ddpJacobianMaxAbsDiff,
+    ddpNominalFinalCost: ddpNominal.finalCost,
+    ddpDeadline1IterFinite,
+    ddpDeadline1IterIterations: ddpDeadline.iterationsTaken,
+    citoObstacleStepOverPeakZ,
+    citoFlatFloorPeakZ,
+    citoStepOverExceedsFlatFloor: citoObstacleStepOverPeakZ > citoFlatFloorPeakZ + 0.05,
+    citoMaxFischerBurmeisterResidual: citoObstacle.maxFischerBurmeisterResidual,
+    hjiTargetDiscZeroTime: tTarget,
+    hjiMonotonicArrivalTimes: [tNear, tMid, tFar],
+    hjiStrictlyMonotonicWithDistance: tTarget === 0 && tNear > 0 && tMid > tNear && tFar > tMid,
+    hjiObstacleCellRefused,
+  };
+}
+
