@@ -64,6 +64,9 @@ describe("FurnitureCatalogInspector surface area (cmaes-feat-fg4-catalog)", () =
       } as const);
 
     const unlocked = inspectCatalogPiecePhysics(fridgePiece, 2.0, false, 15);
+    expect(unlocked.proceduralGeometry.partCount).toBeGreaterThanOrEqual(4);
+    expect(unlocked.proceduralGeometry.assignedPbrSlots.length).toBeGreaterThan(0);
+    expect(unlocked.proceduralGeometry.obbHalfExtents.every((v) => v > 0)).toBe(true);
     expect(unlocked.sdfCenterQuery.isInside).toBe(true);
     expect(unlocked.sdfCenterQuery.distance).toBeLessThan(0);
     expect(Math.abs(unlocked.sdfSurfaceQuery.distance)).toBeLessThan(1e-3);

@@ -3,7 +3,10 @@ import {
   createHouseNavigationScene,
   type OrientedBoundingBox,
 } from "../app/lib/houseMultiObstacleKernel";
-import { KmrNavigationOwner } from "../app/lib/kmrNavigationOwner";
+import {
+  evaluateKmrPosePerceptionAndReachability,
+  KmrNavigationOwner,
+} from "../app/lib/kmrNavigationOwner";
 import { planWaypointPath, type WaypointPath } from "../app/lib/kmrWaypointNav";
 
 const wall: OrientedBoundingBox = {
@@ -111,5 +114,22 @@ describe("KMR deterministic mecanum navigation owner", () => {
     expect(receipt.collisionRefusals).toBe(0);
     expect(receipt.minimumClearanceMeters).toBeGreaterThan(0);
     expect(receipt.distanceTraveledMeters).toBeGreaterThan(2.5);
+    expect(owner.dimensions().wheelRadiusMeters).toBeCloseTo(0.075, 4);
+    expect(owner.mountingPlatePose().zMeters).toBeCloseTo(0.38, 4);
+  });
+
+  test("evaluateKmrPosePerceptionAndReachability computes LiDAR 2D costmap occupancy, HJI BRT reachability, and mounting plate pose", () => {
+    const initial = { x: 0, y: 0, theta: 0 };
+    const target = { x: 2, y: 0 };
+    const diag = evaluateKmrPosePerceptionAndReachability(initial, target, [wall]);
+
+    expect(diag.dimensions.wheelRadiusMeters).toBeCloseTo(0.075, 4);
+    expect(diag.mountingPlatePose.zMeters).toBeCloseTo(0.38, 4);
+    expect(diag.lidarCostmapSummary.widthCells).toBe(24);
+    expect(diag.lidarCostmapSummary.heightCells).toBe(24);
+    expect(diag.lidarCostmapSummary.occupiedCells).toBeGreaterThan(0);
+    expect(diag.lidarCostmapSummary.freeCells).toBeGreaterThan(0);
+    expect(diag.reachability.reachable).toBe(true);
+    expect(Number.isFinite(diag.reachability.minTimeSeconds)).toBe(true);
   });
 });

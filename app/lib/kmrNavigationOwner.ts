@@ -7,10 +7,26 @@
 
 import type { SDF2D, Vec2 } from "./dpValueIteration";
 import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
-import { KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS, type KmrGeometryConfig } from "./kmrGeometry";
 import {
+  computeDimensions,
+  computeMountingPlatePose,
+  KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
+  type KmrDimensions,
+  type KmrGeometryConfig,
+  type KmrMountingPlatePose,
+  KUKA_KMR_IIWA_PUBLIC_SPEC,
+} from "./kmrGeometry";
+import {
+  KUKA_KMR_IIWA_LIDAR_DEFAULT,
+  type LidarCostmap2D,
+  lidarToCostmap2D,
+  scanLidar,
+} from "./kmrLidar";
+import {
+  certifyKmrReachability,
   createKmrPlanarSdf,
   KMR_PLANAR_CLEARANCE_RADIUS_METERS,
+  type KmrReachabilityCertificate,
   pathIsCollisionFree,
   type WaypointPath,
 } from "./kmrWaypointNav";
@@ -256,4 +272,74 @@ export class KmrNavigationOwner {
       wheelSpeeds: { speeds: [...this.wheelSpeeds.speeds] },
     };
   }
+
+  dimensions(): KmrDimensions {
+    return computeDimensions(this.config.geometry);
+  }
+
+  mountingPlatePose(): KmrMountingPlatePose {
+    return computeMountingPlatePose(this.config.geometry, this.pose.x, this.pose.y, 0);
+  }
+}
+
+export interface KmrPosePerceptionAndReachability {
+  dimensions: KmrDimensions;
+  mountingPlatePose: KmrMountingPlatePose;
+  lidarCostmap: LidarCostmap2D;
+  lidarCostmapSummary: {
+    widthCells: number;
+    heightCells: number;
+    occupiedCells: number;
+    freeCells: number;
+    unknownCells: number;
+  };
+  reachability: KmrReachabilityCertificate;
+}
+
+/**
+ * Evaluates KMR wheelbase dimensions, arm mounting-plate pose, 2D LiDAR occupancy costmap,
+ * and Hamilton-Jacobi Backward Reachable Tube (BRT) reachability certificate for a given
+ * mobile-base pose and goal (cmaes-za0x.57, cmaes-ndl8).
+ */
+export function evaluateKmrPosePerceptionAndReachability(
+  pose: KmrPose2D,
+  targetPose: { x: number; y: number },
+  obstacles: readonly OrientedBoundingBox[],
+  geometry: KmrGeometryConfig = KUKA_KMR_IIWA_PUBLIC_SPEC,
+): KmrPosePerceptionAndReachability {
+  const dimensions = computeDimensions(geometry);
+  const mountingPlatePose = computeMountingPlatePose(geometry, pose.x, pose.y, 0);
+  const scan = scanLidar(pose.x, pose.y, [...obstacles], KUKA_KMR_IIWA_LIDAR_DEFAULT, pose.theta);
+  const lidarCostmap = lidarToCostmap2D(scan, KUKA_KMR_IIWA_LIDAR_DEFAULT, 6, 6, 0.25);
+
+  let occupiedCells = 0;
+  let freeCells = 0;
+  let unknownCells = 0;
+  for (const row of lidarCostmap.occupancy) {
+    for (const cell of row) {
+      if (cell >= 0.99) occupiedCells += 1;
+      else if (cell <= 0.01) freeCells += 1;
+      else unknownCells += 1;
+    }
+  }
+
+  const reachability = certifyKmrReachability(pose, targetPose, obstacles, undefined, {
+    nx: 25,
+    ny: 25,
+    nTheta: 8,
+  });
+
+  return {
+    dimensions,
+    mountingPlatePose,
+    lidarCostmap,
+    lidarCostmapSummary: {
+      widthCells: lidarCostmap.widthCells,
+      heightCells: lidarCostmap.heightCells,
+      occupiedCells,
+      freeCells,
+      unknownCells,
+    },
+    reachability,
+  };
 }

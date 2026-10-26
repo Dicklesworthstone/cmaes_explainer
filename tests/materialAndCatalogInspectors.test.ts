@@ -37,6 +37,21 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
 
         expect(snap.pbrSlot.class.length).toBeGreaterThan(0);
         expect(snap.textureBudgetMb).toBeGreaterThan(0);
+        expect(snap.stribeckAndAnisotropy.stribeckFrictionAt005Mps).toBeGreaterThan(0);
+        expect(snap.stribeckAndAnisotropy.anisotropicAcrossGrainStatic).toBeGreaterThan(
+          snap.stribeckAndAnisotropy.anisotropicAcrossGrainKinetic,
+        );
+        expect(snap.droUncertainty.catalogPairCount).toBeGreaterThanOrEqual(36);
+        expect(snap.droUncertainty.ballRadius).toBeGreaterThan(0);
+        expect(snap.droUncertainty.worstCaseUpperKinetic).toBeGreaterThanOrEqual(
+          snap.droUncertainty.worstCaseLowerKinetic,
+        );
+        expect(snap.droUncertainty.sampleMaxKinetic).toBeGreaterThanOrEqual(
+          snap.droUncertainty.sampleMinKinetic,
+        );
+        expect(snap.droUncertainty.syntheticBannerLength).toBeGreaterThan(50);
+        expect(snap.craftsmanEmissiveCount).toBeGreaterThanOrEqual(4);
+        expect(snap.hearthEmissiveEvaluation.intensity).toBeGreaterThan(0);
         const expectsTextureMaps = mat.category !== "metal" && mat.category !== "glass";
         expect(snap.proceduralMaps.hasAlbedoMap).toBe(expectsTextureMaps);
         expect(snap.proceduralMaps.hasNormalMap).toBe(expectsTextureMaps);

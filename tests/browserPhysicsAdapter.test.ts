@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { BrowserPhysicsAdapter, type KernelManifest } from "../app/lib/browserPhysicsAdapter";
+import {
+  aggregateReleaseQualityGates,
+  BrowserPhysicsAdapter,
+  type KernelManifest,
+  type QualityGateLaneReceipt,
+  REQUIRED_FAST_PR_LANES,
+  REQUIRED_RELEASE_CAMPAIGN_LANES,
+} from "../app/lib/browserPhysicsAdapter";
 
 describe("Browser Fail-Closed Physics Kernel Adapter", () => {
   const validV068Manifest: KernelManifest = {
@@ -114,5 +121,88 @@ describe("Browser Fail-Closed Physics Kernel Adapter", () => {
       expect(res.success).toBe(false);
       if (!res.success) expect(res.error.code).toBe("ERR_INVALID_WORKLOAD");
     }
+  });
+
+  test("aggregateReleaseQualityGates separates fast PR checks from required release campaigns and fails closed on missing, skipped, synthetic, or hash-mismatched lanes", () => {
+    const commit = "b69bf3f1234";
+    const wasmSha = "sha256:frankensim-v068-schema8-verified";
+
+    const prReceipts: QualityGateLaneReceipt[] = REQUIRED_FAST_PR_LANES.map((laneId, i) => ({
+      laneId,
+      tier: "fast-pr",
+      status: "passed",
+      sourceCommitHash: commit,
+      ownerWasmSha256: wasmSha,
+      durationMs: 100 + i * 20,
+    }));
+
+    const prEval = aggregateReleaseQualityGates(prReceipts, commit, wasmSha, "pr");
+    expect(prEval.passed).toBe(true);
+    expect(prEval.verifiedLaneCount).toBe(REQUIRED_FAST_PR_LANES.length);
+    expect(prEval.missingLanes).toEqual([]);
+
+    // Release mode fails closed when required release campaigns are missing
+    const missingReleaseEval = aggregateReleaseQualityGates(prReceipts, commit, wasmSha, "release");
+    expect(missingReleaseEval.passed).toBe(false);
+    expect(missingReleaseEval.missingLanes).toEqual([...REQUIRED_RELEASE_CAMPAIGN_LANES]);
+
+    // Release mode fails closed when a campaign lane is synthetic or skipped
+    const syntheticReleaseEval = aggregateReleaseQualityGates(
+      [
+        ...prReceipts,
+        {
+          laneId: "owner-wasm-parity",
+          tier: "release-campaign",
+          status: "passed",
+          sourceCommitHash: commit,
+          ownerWasmSha256: wasmSha,
+          durationMs: 500,
+        },
+        {
+          laneId: "browser-e2e-smoke",
+          tier: "release-campaign",
+          status: "synthetic",
+          sourceCommitHash: commit,
+          ownerWasmSha256: wasmSha,
+          durationMs: 500,
+        },
+        {
+          laneId: "apple-dsr-gate",
+          tier: "release-campaign",
+          status: "skipped",
+          sourceCommitHash: commit,
+          ownerWasmSha256: wasmSha,
+          durationMs: 500,
+        },
+      ],
+      commit,
+      wasmSha,
+      "release",
+    );
+    expect(syntheticReleaseEval.passed).toBe(false);
+    expect(syntheticReleaseEval.syntheticLanes).toEqual(["browser-e2e-smoke"]);
+    expect(syntheticReleaseEval.skippedLanes).toEqual(["apple-dsr-gate"]);
+
+    // Full release passes only when every PR + release campaign lane is real, passed, and hash-bound
+    const fullReleaseEval = aggregateReleaseQualityGates(
+      [
+        ...prReceipts,
+        ...REQUIRED_RELEASE_CAMPAIGN_LANES.map((laneId) => ({
+          laneId,
+          tier: "release-campaign" as const,
+          status: "passed" as const,
+          sourceCommitHash: commit,
+          ownerWasmSha256: wasmSha,
+          durationMs: 650,
+        })),
+      ],
+      commit,
+      wasmSha,
+      "release",
+    );
+    expect(fullReleaseEval.passed).toBe(true);
+    expect(fullReleaseEval.verifiedLaneCount).toBe(
+      REQUIRED_FAST_PR_LANES.length + REQUIRED_RELEASE_CAMPAIGN_LANES.length,
+    );
   });
 });

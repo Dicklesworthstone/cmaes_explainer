@@ -319,3 +319,142 @@ export class BrowserPhysicsAdapter {
     this.verifiedManifest = null;
   }
 }
+
+export const REQUIRED_FAST_PR_LANES = [
+  "bun-lint",
+  "bun-typecheck",
+  "bun-format-check",
+  "bun-unit-tests",
+  "bun-build",
+] as const;
+
+export const REQUIRED_RELEASE_CAMPAIGN_LANES = [
+  "owner-wasm-parity",
+  "browser-e2e-smoke",
+  "apple-dsr-gate",
+] as const;
+
+export type QualityGateLaneId =
+  | (typeof REQUIRED_FAST_PR_LANES)[number]
+  | (typeof REQUIRED_RELEASE_CAMPAIGN_LANES)[number];
+
+export interface QualityGateLaneReceipt {
+  laneId: QualityGateLaneId;
+  tier: "fast-pr" | "release-campaign";
+  status: "passed" | "failed" | "skipped" | "synthetic";
+  sourceCommitHash: string;
+  ownerWasmSha256: string;
+  durationMs: number;
+}
+
+export interface ReleaseQualityGateAggregation {
+  mode: "pr" | "release";
+  passed: boolean;
+  requiredLaneCount: number;
+  verifiedLaneCount: number;
+  missingLanes: QualityGateLaneId[];
+  failedLanes: QualityGateLaneId[];
+  skippedLanes: QualityGateLaneId[];
+  syntheticLanes: QualityGateLaneId[];
+  hashMismatchLanes: QualityGateLaneId[];
+  refusalReasons: string[];
+}
+
+/**
+ * Aggregates reproducible Bun PR checks and required device/owner/browser release campaigns
+ * under a strict fail-closed contract (`cmaes-za0x.44`, `cmaes-za0x.66`).
+ * Missing, skipped, synthetic, failed, or hash-mismatched required lanes fail closed.
+ */
+export function aggregateReleaseQualityGates(
+  receipts: readonly QualityGateLaneReceipt[],
+  expectedSourceCommitHash: string,
+  expectedOwnerWasmSha256: string,
+  mode: "pr" | "release" = "release",
+): ReleaseQualityGateAggregation {
+  const requiredLanes: readonly QualityGateLaneId[] =
+    mode === "pr"
+      ? REQUIRED_FAST_PR_LANES
+      : [...REQUIRED_FAST_PR_LANES, ...REQUIRED_RELEASE_CAMPAIGN_LANES];
+
+  const byLane = new Map<QualityGateLaneId, QualityGateLaneReceipt>();
+  for (const r of receipts) {
+    byLane.set(r.laneId, r);
+  }
+
+  const missingLanes: QualityGateLaneId[] = [];
+  const failedLanes: QualityGateLaneId[] = [];
+  const skippedLanes: QualityGateLaneId[] = [];
+  const syntheticLanes: QualityGateLaneId[] = [];
+  const hashMismatchLanes: QualityGateLaneId[] = [];
+  const refusalReasons: string[] = [];
+  let verifiedLaneCount = 0;
+
+  if (!expectedSourceCommitHash || expectedSourceCommitHash.trim().length < 7) {
+    refusalReasons.push("Expected source commit hash must be at least 7 characters.");
+  }
+  if (!expectedOwnerWasmSha256 || expectedOwnerWasmSha256.trim().length < 16) {
+    refusalReasons.push("Expected owner WASM SHA-256 digest must be at least 16 characters.");
+  }
+
+  for (const laneId of requiredLanes) {
+    const receipt = byLane.get(laneId);
+    if (!receipt) {
+      missingLanes.push(laneId);
+      refusalReasons.push(`Missing required ${mode} quality gate lane: ${laneId}`);
+      continue;
+    }
+
+    if (receipt.status === "failed") {
+      failedLanes.push(laneId);
+      refusalReasons.push(`Required quality gate lane failed: ${laneId}`);
+      continue;
+    }
+    if (receipt.status === "skipped") {
+      skippedLanes.push(laneId);
+      refusalReasons.push(`Required quality gate lane was skipped: ${laneId}`);
+      continue;
+    }
+    if (receipt.status === "synthetic") {
+      syntheticLanes.push(laneId);
+      refusalReasons.push(`Synthetic/mock receipt refused for required lane: ${laneId}`);
+      continue;
+    }
+
+    if (
+      receipt.sourceCommitHash !== expectedSourceCommitHash ||
+      receipt.ownerWasmSha256 !== expectedOwnerWasmSha256 ||
+      !Number.isFinite(receipt.durationMs) ||
+      receipt.durationMs <= 0
+    ) {
+      hashMismatchLanes.push(laneId);
+      refusalReasons.push(
+        `Provenance or timing mismatch on lane ${laneId} (commit=${receipt.sourceCommitHash}, wasm=${receipt.ownerWasmSha256})`,
+      );
+      continue;
+    }
+
+    verifiedLaneCount += 1;
+  }
+
+  const passed =
+    refusalReasons.length === 0 &&
+    missingLanes.length === 0 &&
+    failedLanes.length === 0 &&
+    skippedLanes.length === 0 &&
+    syntheticLanes.length === 0 &&
+    hashMismatchLanes.length === 0 &&
+    verifiedLaneCount === requiredLanes.length;
+
+  return {
+    mode,
+    passed,
+    requiredLaneCount: requiredLanes.length,
+    verifiedLaneCount,
+    missingLanes,
+    failedLanes,
+    skippedLanes,
+    syntheticLanes,
+    hashMismatchLanes,
+    refusalReasons,
+  };
+}

@@ -6,11 +6,33 @@ import {
   evaluateSdfSoftShadow,
   type ShadowRayResult,
 } from "../lib/contactShadows";
-import { createProbeGrid, sampleProbeGrid } from "../lib/ddgiProbes";
-import { EMISSIVE_PALETTE, kelvinToRgb } from "../lib/emissiveSurfaces";
+import { createProbeGrid, sampleProbeGrid, updateProbeGridFromScene } from "../lib/ddgiProbes";
+import {
+  CATALOG_VIEW,
+  cvarLower,
+  cvarUpper,
+  evaluateRobustPair,
+  getFrictionDistribution,
+  sampleInfimum,
+  sampleSupremum,
+  SYNTHETIC_BANNER_TEXT,
+  wassersteinBallRadius,
+} from "../lib/droFrictionUncertainty";
+import {
+  createCraftsmanEmissives,
+  EMISSIVE_PALETTE,
+  type EmissiveRadianceResult,
+  evaluateEmissiveSurface,
+  kelvinToRgb,
+} from "../lib/emissiveSurfaces";
 import { evaluateSphericalHarmonics } from "../lib/houseLighting";
 import { getProceduralMaterial, type MaterialKind } from "../lib/houseMaterials";
-import { getMaterialPairFriction, type HouseholdMaterial } from "../lib/materialPairFriction";
+import {
+  evaluateAnisotropicWoodFriction,
+  evaluateStribeckFriction,
+  getMaterialPairFriction,
+  type HouseholdMaterial,
+} from "../lib/materialPairFriction";
 import {
   PBR_MATERIAL_SLOTS,
   type PBRMaterialClass,
@@ -174,7 +196,14 @@ const CATEGORY_TO_PROCEDURAL_KIND: Record<PbrMaterialSpec["category"], MaterialK
   leather: "leather-warm",
 };
 
+const CRAFTSMAN_EMISSIVES = createCraftsmanEmissives();
 const SHARED_DDGI_GRID = createProbeGrid([0, 0, 1.25], [2.0, 1.4, 1.25], [4, 8, 3]);
+updateProbeGridFromScene(
+  SHARED_DDGI_GRID,
+  (x, y, z) => Math.min(z, 2.5 - z, 2.0 - Math.abs(x), 1.4 - Math.abs(y)),
+  CRAFTSMAN_EMISSIVES,
+  { maxMarchSteps: 8, timeSeconds: 0.25 },
+);
 
 function hexToLinearRgb(hex: string): [number, number, number] {
   const clean = hex.replace(/^#/, "");
@@ -194,6 +223,23 @@ export interface MaterialRenderingPipelineEvaluation {
     hasNormalMap: boolean;
     hasRoughnessMap: boolean;
   };
+  stribeckAndAnisotropy: {
+    stribeckFrictionAt005Mps: number;
+    anisotropicAcrossGrainStatic: number;
+    anisotropicAcrossGrainKinetic: number;
+  };
+  droUncertainty: {
+    catalogPairCount: number;
+    ballRadius: number;
+    worstCaseUpperKinetic: number;
+    worstCaseLowerKinetic: number;
+    sampleMinKinetic: number;
+    sampleMaxKinetic: number;
+    provenance: string;
+    syntheticBannerLength: number;
+  };
+  craftsmanEmissiveCount: number;
+  hearthEmissiveEvaluation: EmissiveRadianceResult;
   shIrradiance: [number, number, number];
   ddgiIrradiance: { rgb: [number, number, number]; visibility: number };
   contactShadowAo: number;
@@ -218,10 +264,43 @@ export function evaluateMaterialRenderingPipeline(
   mat: PbrMaterialSpec,
   stageProfileKey = "parlor-calm",
   frame = 12,
+  matingMaterial: HouseholdMaterial = "hardwood",
 ): MaterialRenderingPipelineEvaluation {
   const pbrClass = CATEGORY_TO_PBR_CLASS[mat.category] ?? "oak-wood";
   const pbrSlot = PBR_MATERIAL_SLOTS[pbrClass];
   const textureBudgetMb = totalTextureBudgetMB();
+
+  const pairFriction = getMaterialPairFriction(mat.frictionClass, matingMaterial);
+  const stribeckFrictionAt005Mps = evaluateStribeckFriction(pairFriction, 0.05);
+  const anisoWood = evaluateAnisotropicWoodFriction(pairFriction, [0, 1], [1, 0]);
+  const stribeckAndAnisotropy = {
+    stribeckFrictionAt005Mps,
+    anisotropicAcrossGrainStatic: anisoWood.staticFriction,
+    anisotropicAcrossGrainKinetic: anisoWood.kineticFriction,
+  };
+
+  const dist = getFrictionDistribution(mat.frictionClass, matingMaterial);
+  const robustEval = evaluateRobustPair(mat.frictionClass, matingMaterial, {
+    robust: true,
+    alpha: 0.1,
+    confidence: 0.95,
+  });
+  const muSamples = dist ? dist.samples.map((s) => s.muK) : [pairFriction.kineticFriction];
+  const droUncertainty = {
+    catalogPairCount: CATALOG_VIEW.length,
+    ballRadius: robustEval ? robustEval.radius : wassersteinBallRadius(muSamples.length, 0.95),
+    worstCaseUpperKinetic: robustEval
+      ? robustEval.worstCase.kineticFriction
+      : cvarUpper(muSamples, 0.1),
+    worstCaseLowerKinetic: cvarLower(muSamples, 0.1),
+    sampleMinKinetic: sampleInfimum(muSamples),
+    sampleMaxKinetic: sampleSupremum(muSamples),
+    provenance: robustEval?.provenance ?? "SYNTHETIC",
+    syntheticBannerLength: SYNTHETIC_BANNER_TEXT.length,
+  };
+
+  const hearthFixture = CRAFTSMAN_EMISSIVES[0];
+  const hearthEmissiveEvaluation = evaluateEmissiveSurface(hearthFixture, frame / 60);
 
   const procKind = CATEGORY_TO_PROCEDURAL_KIND[mat.category] ?? "oak-hardwood";
   const procMat = getProceduralMaterial(procKind, 32);
@@ -312,6 +391,10 @@ export function evaluateMaterialRenderingPipeline(
     pbrSlot,
     textureBudgetMb,
     proceduralMaps,
+    stribeckAndAnisotropy,
+    droUncertainty,
+    craftsmanEmissiveCount: CRAFTSMAN_EMISSIVES.length,
+    hearthEmissiveEvaluation,
     shIrradiance,
     ddgiIrradiance,
     contactShadowAo,
@@ -356,8 +439,8 @@ export function MaterialDatabaseInspector() {
   }, [activeMat, matingMaterial]);
 
   const pipelineEval = useMemo(() => {
-    return evaluateMaterialRenderingPipeline(activeMat, stageProfileKey, 12);
-  }, [activeMat, stageProfileKey]);
+    return evaluateMaterialRenderingPipeline(activeMat, stageProfileKey, 12, matingMaterial);
+  }, [activeMat, stageProfileKey, matingMaterial]);
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 text-neutral-100 font-mono text-sm max-w-4xl mx-auto shadow-2xl space-y-5">
@@ -540,6 +623,23 @@ export function MaterialDatabaseInspector() {
               <span>Restitution (e):</span>
               <span className="text-purple-400 font-semibold">
                 {frictionProps.restitution.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex justify-between text-neutral-400 text-xs px-1">
+              <span>Stribeck (0.05 m/s) / Cross-Grain:</span>
+              <span className="text-cyan-300 font-semibold">
+                {pipelineEval.stribeckAndAnisotropy.stribeckFrictionAt005Mps.toFixed(2)} /{" "}
+                {pipelineEval.stribeckAndAnisotropy.anisotropicAcrossGrainStatic.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex justify-between text-neutral-400 text-xs px-1">
+              <span>DRO CVaR [low, high] (r={pipelineEval.droUncertainty.ballRadius.toFixed(2)}):</span>
+              <span className="text-amber-300 font-semibold">
+                [{pipelineEval.droUncertainty.worstCaseLowerKinetic.toFixed(2)},{" "}
+                {pipelineEval.droUncertainty.worstCaseUpperKinetic.toFixed(2)}] (
+                {pipelineEval.droUncertainty.provenance})
               </span>
             </div>
           </div>

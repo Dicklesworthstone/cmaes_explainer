@@ -10,7 +10,10 @@
 //   - 19.0s - 26.0s: Kitchen island approach & G1 arm pick-and-place reaching.
 //   - 26.0s - 30.0s: Master bedroom & bath climax with full Honesty Chip Stack telemetry.
 
-import { type HouseNavSimulationResult, simulateHouseNavigation } from "./houseNavigationChain";
+import {
+  type HouseNavSimulationResult,
+  runSegmentedHouseNavigation,
+} from "./houseNavigationChain";
 import { evaluateCatmullRom3D } from "./multiRoomTour";
 
 export interface VisitorClipKeyframe {
@@ -133,7 +136,13 @@ export interface VisitorFramePacket {
 let cachedDefaultVisitorRollout: HouseNavSimulationResult | null = null;
 function getDefaultVisitorRollout(): HouseNavSimulationResult {
   if (!cachedDefaultVisitorRollout) {
-    cachedDefaultVisitorRollout = simulateHouseNavigation(undefined, undefined, 2500, 1 / 60);
+    cachedDefaultVisitorRollout = runSegmentedHouseNavigation(
+      undefined,
+      undefined,
+      250,
+      2500,
+      1 / 60,
+    );
   }
   return cachedDefaultVisitorRollout;
 }

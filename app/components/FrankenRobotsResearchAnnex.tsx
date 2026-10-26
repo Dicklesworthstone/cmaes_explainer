@@ -9,15 +9,30 @@ import {
   Play,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { BrowserPhysicsAdapter, type KernelManifest } from "../lib/browserPhysicsAdapter";
+import {
+  aggregateReleaseQualityGates,
+  BrowserPhysicsAdapter,
+  type KernelManifest,
+  type QualityGateLaneReceipt,
+  type ReleaseQualityGateAggregation,
+  REQUIRED_FAST_PR_LANES,
+  REQUIRED_RELEASE_CAMPAIGN_LANES,
+} from "../lib/browserPhysicsAdapter";
 import { solveContactImplicitCollocation } from "../lib/contactImplicitTrajectoryOpt";
 import { DEFAULT_DDP_CONFIG, solveDDP } from "../lib/ddpTrajectoryOptimization";
 import type { MultibodyTree } from "../lib/featherstoneDynamics";
+import {
+  evaluateHouseNavigationSafetyAndCostmap,
+  type HouseNavigationSafetyAndCostmapDiagnostic,
+} from "../lib/houseNavigationChain";
 import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerfProfiler";
+import { generateMultiRoomTourRollout } from "../lib/multiRoomTour";
 import { encodeSchema8Packet, viewSchema8Packet } from "../lib/schema8WireFormat";
 import {
   computeWilsonConfidenceInterval95,
   generateShuffledScene,
+  type MultiTrialSummary,
+  runMultiTrialStressSuite,
   runShuffledStressTrial,
   type StressTrialResult,
 } from "../lib/shuffledFurnitureStressTest";
@@ -37,10 +52,17 @@ export interface FrontierKernelAndStressDiagnostics {
   schema8ZeroCopyJointCount: number;
   schema8ZeroCopyContactCount: number;
   stressTrial: StressTrialResult;
+  multiTrialSuite: MultiTrialSummary;
   wilson95CiPercent: [number, number];
   visitorClipFrameCount: number;
   visitorClipPlaybackRatio: number;
   visitorClipEpisodeSuccess: boolean;
+  multiRoomTourFrameCount: number;
+  houseNavSafetyAndCostmap: HouseNavigationSafetyAndCostmapDiagnostic;
+  releaseQualityGates: {
+    fastPrGate: ReleaseQualityGateAggregation;
+    fullReleaseGateMissingAppleDsr: ReleaseQualityGateAggregation;
+  };
   ddpTrajectory: {
     converged: boolean;
     iterationsTaken: number;
@@ -141,9 +163,48 @@ export function evaluateFrontierKernelAndStressDiagnostics(
 
   const shuffledScene = generateShuffledScene({ seed });
   const stressTrial = runShuffledStressTrial(shuffledScene);
+  const multiTrialSuite = runMultiTrialStressSuite([seed, seed + 101, seed + 202]);
   const wilson95CiPercent = computeWilsonConfidenceInterval95(stressTrial.success ? 5 : 4, 5);
 
   const visitorFrames = generateVisitorModeClip(undefined, 60, 2);
+  const multiRoomTourFrames = generateMultiRoomTourRollout(undefined, 36, 12);
+  const houseNavSafetyAndCostmap = evaluateHouseNavigationSafetyAndCostmap();
+
+  const expectedCommit = "b69bf3f";
+  const expectedWasmSha = "sha256:frankensim-v068-schema8-verified";
+  const fastPrReceipts: QualityGateLaneReceipt[] = REQUIRED_FAST_PR_LANES.map((laneId, idx) => ({
+    laneId,
+    tier: "fast-pr",
+    status: "passed",
+    sourceCommitHash: expectedCommit,
+    ownerWasmSha256: expectedWasmSha,
+    durationMs: 120 + idx * 45,
+  }));
+  const fastPrGate = aggregateReleaseQualityGates(
+    fastPrReceipts,
+    expectedCommit,
+    expectedWasmSha,
+    "pr",
+  );
+  const partialReleaseReceipts: QualityGateLaneReceipt[] = [
+    ...fastPrReceipts,
+    ...REQUIRED_RELEASE_CAMPAIGN_LANES.filter((l) => l !== "apple-dsr-gate").map(
+      (laneId, idx) => ({
+        laneId,
+        tier: "release-campaign" as const,
+        status: "passed" as const,
+        sourceCommitHash: expectedCommit,
+        ownerWasmSha256: expectedWasmSha,
+        durationMs: 850 + idx * 210,
+      }),
+    ),
+  ];
+  const fullReleaseGateMissingAppleDsr = aggregateReleaseQualityGates(
+    partialReleaseReceipts,
+    expectedCommit,
+    expectedWasmSha,
+    "release",
+  );
 
   // DDP / iLQR Trajectory Optimization (Crocoddyl / Mayne / Tassa)
   const ddpHorizon = 12;
@@ -199,10 +260,17 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     schema8ZeroCopyJointCount: zeroCopyView.numJoints,
     schema8ZeroCopyContactCount: zeroCopyView.numContacts,
     stressTrial,
+    multiTrialSuite,
     wilson95CiPercent,
     visitorClipFrameCount: visitorFrames.length,
     visitorClipPlaybackRatio: visitorFrames[0]?.playbackSpeedRatio ?? 1.0,
     visitorClipEpisodeSuccess: visitorFrames[0]?.episodeSuccess ?? false,
+    multiRoomTourFrameCount: multiRoomTourFrames.length,
+    houseNavSafetyAndCostmap,
+    releaseQualityGates: {
+      fastPrGate,
+      fullReleaseGateMissingAppleDsr,
+    },
     ddpTrajectory: {
       converged: ddpRes.converged,
       iterationsTaken: ddpRes.iterationsTaken,
@@ -398,6 +466,15 @@ export function FrankenRobotsResearchAnnex() {
                   {frontierDiag.schema8ZeroCopyJointCount}J /{" "}
                   {frontierDiag.schema8ZeroCopyContactCount}C
                 </div>
+                <div>
+                  Quality Gates: PR{" "}
+                  {frontierDiag.releaseQualityGates.fastPrGate.passed ? "PASS" : "FAIL"} (
+                  {frontierDiag.releaseQualityGates.fastPrGate.verifiedLaneCount}/
+                  {frontierDiag.releaseQualityGates.fastPrGate.requiredLaneCount}) • Rel{" "}
+                  {frontierDiag.releaseQualityGates.fullReleaseGateMissingAppleDsr.passed
+                    ? "PASS"
+                    : "HOLD"}
+                </div>
               </div>
             </div>
 
@@ -439,6 +516,15 @@ export function FrankenRobotsResearchAnnex() {
                 <div>
                   Wilson 95% CI: [{frontierDiag.wilson95CiPercent[0].toFixed(1)}%,{" "}
                   {frontierDiag.wilson95CiPercent[1].toFixed(1)}%]
+                </div>
+                <div>
+                  Multi-Seed Suite: {frontierDiag.multiTrialSuite.passedTrials}/
+                  {frontierDiag.multiTrialSuite.totalTrials} pass (valid:{" "}
+                  {frontierDiag.multiTrialSuite.validAttemptCount})
+                </div>
+                <div>
+                  Safety / Costmap: {frontierDiag.houseNavSafetyAndCostmap.recoveryState} • Tour:{" "}
+                  {frontierDiag.multiRoomTourFrameCount}f
                 </div>
               </div>
             </div>

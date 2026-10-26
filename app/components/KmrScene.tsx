@@ -30,7 +30,12 @@ import {
   stepKmrHouseholdPhysics,
 } from "../lib/kmrHouseholdPhysics";
 import { KUKA_KMR_IIWA_LIDAR_DEFAULT, scanLidar } from "../lib/kmrLidar";
-import { KmrNavigationOwner, type KmrNavigationReceipt } from "../lib/kmrNavigationOwner";
+import {
+  evaluateKmrPosePerceptionAndReachability,
+  KmrNavigationOwner,
+  type KmrNavigationReceipt,
+  type KmrPosePerceptionAndReachability,
+} from "../lib/kmrNavigationOwner";
 import { planWaypointPath, type WaypointPath } from "../lib/kmrWaypointNav";
 
 interface KmrPose {
@@ -183,6 +188,8 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
   const [path, setPath] = useState<WaypointPath | null>(null);
   const [receipt, setReceipt] = useState<KmrNavigationReceipt | null>(null);
   const [dynamicReceipt, setDynamicReceipt] = useState<KmrHouseholdPhysicsReceipt | null>(null);
+  const [perceptionAndReachability, setPerceptionAndReachability] =
+    useState<KmrPosePerceptionAndReachability | null>(null);
   const [planningError, setPlanningError] = useState<string | null>(null);
   const obstacles = useMemo(() => obstaclesFromCatalog(), []);
   const animRef = useRef<number | null>(null);
@@ -295,11 +302,15 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
       setPath(newPath.path);
       setReceipt(owner.receipt());
       setDynamicReceipt(null);
+      setPerceptionAndReachability(
+        evaluateKmrPosePerceptionAndReachability(pose, target, obstacles),
+      );
     } catch (error) {
       ownerRef.current = null;
       setPath(null);
       setReceipt(null);
       setDynamicReceipt(null);
+      setPerceptionAndReachability(null);
       householdCouplingRef.current = null;
       setPlanningError(error instanceof Error ? error.message : String(error));
       return;
@@ -520,6 +531,28 @@ export function KmrScene({ initialPose }: KmrSceneProps) {
           <span>base-chair contacts: {dynamicReceipt.cumulativeBaseChairContacts}</span>
           <span>chair speed: {Math.hypot(...dynamicReceipt.chairVelocityMps).toFixed(3)} m/s</span>
           <span>LCP residual: {dynamicReceipt.lcpMaxResidual.toExponential(2)}</span>
+        </div>
+      ) : null}
+      {perceptionAndReachability ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 font-mono text-[11px] text-emerald-100 sm:grid-cols-4">
+          <span>
+            HJI BRT:{" "}
+            {perceptionAndReachability.reachability.reachable
+              ? `safe (${perceptionAndReachability.reachability.minTimeSeconds.toFixed(1)}s)`
+              : "outside BRT"}
+          </span>
+          <span>
+            LiDAR costmap: {perceptionAndReachability.lidarCostmapSummary.occupiedCells} occ /{" "}
+            {perceptionAndReachability.lidarCostmapSummary.freeCells} free
+          </span>
+          <span>
+            mount plate Z: {perceptionAndReachability.mountingPlatePose.zMeters.toFixed(2)} m
+          </span>
+          <span>
+            wheel R / half-WB:{" "}
+            {perceptionAndReachability.dimensions.wheelRadiusMeters.toFixed(3)}m /{" "}
+            {perceptionAndReachability.dimensions.halfWheelbaseX.toFixed(2)}m
+          </span>
         </div>
       ) : null}
     </div>

@@ -9,6 +9,7 @@ import {
   type LinkPose,
 } from "../lib/furnitureArticulation";
 import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../lib/furnitureTaxonomy";
+import { generateFurnitureGeometry } from "../lib/houseFurniture";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
 import { MeshSdf, type MeshSdfQuery } from "../lib/meshSdf";
 import {
@@ -17,10 +18,17 @@ import {
   CollisionTelemetryCollector,
   ZeroAllocQueryContext,
 } from "../lib/neuralSdfRefinement";
+import { materialSlotsForKind, type PBRMaterialClass } from "../lib/pbrPipeline";
 import { createCushionLattice, createRugLattice, stepXPBDSoftBody } from "../lib/xpbdSoftBody";
 
 export interface CatalogPiecePhysicsInspection {
   pieceKind: FurnitureKind;
+  proceduralGeometry: {
+    partCount: number;
+    partNames: string[];
+    obbHalfExtents: [number, number, number];
+    assignedPbrSlots: PBRMaterialClass[];
+  };
   sdfCenterQuery: MeshSdfQuery;
   sdfSurfaceQuery: MeshSdfQuery;
   neuralSdfRefinement: {
@@ -64,6 +72,16 @@ export function inspectCatalogPiecePhysics(
   const w = Math.max(0.1, piece.size[0]);
   const d = Math.max(0.1, piece.size[1]);
   const h = Math.max(0.1, piece.height);
+
+  // 0. Procedural multi-part geometry decomposition & PBR slot mapping
+  const procGeo = generateFurnitureGeometry(pieceKind, w, d, h);
+  const proceduralGeometry = {
+    partCount: procGeo.parts.length,
+    partNames: procGeo.parts.map((p) => p.name),
+    obbHalfExtents: procGeo.obb.halfExtents,
+    assignedPbrSlots: materialSlotsForKind(pieceKind).map((s) => s.class),
+  };
+  procGeo.dispose();
 
   // 1. Exact Triangle-Mesh SDF check on the piece bounding hull
   const boxGeo = new THREE.BoxGeometry(w, h, d);
@@ -149,6 +167,7 @@ export function inspectCatalogPiecePhysics(
   if (!graph) {
     return {
       pieceKind,
+      proceduralGeometry,
       sdfCenterQuery,
       sdfSurfaceQuery,
       neuralSdfRefinement,
@@ -179,6 +198,7 @@ export function inspectCatalogPiecePhysics(
 
   return {
     pieceKind,
+    proceduralGeometry,
     sdfCenterQuery,
     sdfSurfaceQuery,
     neuralSdfRefinement,
@@ -325,6 +345,13 @@ export function FurnitureCatalogInspector() {
               <span>Material Binding:</span>
               <span className="text-amber-400 font-semibold">
                 {activePiece.materialId ?? "quarter-sawn-oak"}
+              </span>
+            </div>
+            <div className="flex justify-between text-neutral-400">
+              <span>Procedural Parts / PBR Slots:</span>
+              <span className="text-cyan-300 font-semibold">
+                {physicsInspection.proceduralGeometry.partCount} parts •{" "}
+                {physicsInspection.proceduralGeometry.assignedPbrSlots.join(" + ")}
               </span>
             </div>
           </div>

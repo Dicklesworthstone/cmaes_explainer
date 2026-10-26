@@ -85,6 +85,14 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     expect(diag.wilson95CiPercent[1]).toBeLessThanOrEqual(100);
     expect(diag.visitorClipFrameCount).toBe(60);
     expect(diag.visitorClipPlaybackRatio).toBeGreaterThan(0);
+    expect(diag.multiTrialSuite.totalTrials).toBe(3);
+    expect(diag.multiRoomTourFrameCount).toBe(36);
+    expect(diag.houseNavSafetyAndCostmap.learnedCostmap.parameterCount).toBeGreaterThan(0);
+    expect(diag.releaseQualityGates.fastPrGate.passed).toBe(true);
+    expect(diag.releaseQualityGates.fullReleaseGateMissingAppleDsr.passed).toBe(false);
+    expect(diag.releaseQualityGates.fullReleaseGateMissingAppleDsr.missingLanes).toContain(
+      "apple-dsr-gate",
+    );
     expect(diag.ddpTrajectory.finalCost).toBeLessThan(diag.ddpTrajectory.initialCost);
     expect(diag.ddpTrajectory.iterationsTaken).toBeGreaterThan(0);
     expect(Number.isFinite(diag.citoTrajectory.maxComplementarityGap)).toBe(true);
