@@ -7,6 +7,7 @@
 //   3. spawn-safe (findClearSpawnPosition) — the arm target cannot
 //      spawn inside the table on the first trace load.
 import { describe, expect, test } from "bun:test";
+import { evaluateArmObjectContactDiagnostics } from "../app/components/ArmPhysicsDebugOverlay";
 import {
   clampArmTargetPosition,
   isTargetKukaReachable,
@@ -179,5 +180,20 @@ describe("clampArmTargetPosition — yawed OBB regression (cmaes-pvz followup)",
     expect(distanceToOBB(res.resolvedLinkPositions[3], tableObb)).toBeGreaterThanOrEqual(
       0.07 - 1e-6,
     );
+  });
+
+  test("evaluateArmObjectContactDiagnostics exercises OBJECT_CONTACT_HULLS, resolveArmObjectContact, and projectLinkOutOfOBB", () => {
+    const diag = evaluateArmObjectContactDiagnostics(
+      [0.42, 0.82, 0.12],
+      [0.42, 0.83, 0.12],
+      0.05,
+      "kitchen-mug",
+    );
+    expect(diag.hullKeys).toContain("kitchen-mug");
+    expect(diag.hullKeys).toContain("glass-pitcher");
+    expect(diag.resolvedContact.isGrasped).toBe(true);
+    expect(diag.resolvedContact.normalForceN).toBeGreaterThan(0);
+    expect(diag.resolvedContact.effectiveGripperWidthM).toBeGreaterThan(0.08);
+    expect(Number.isFinite(diag.singleLinkObbProjection.penetrationDepth)).toBe(true);
   });
 });

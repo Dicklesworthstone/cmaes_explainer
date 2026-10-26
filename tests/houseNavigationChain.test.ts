@@ -144,6 +144,15 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     expect(diag.g1ChallengePreview.waypointCount).toBeGreaterThanOrEqual(7);
     expect(diag.g1ChallengePreview.clearSpawnPosition.length).toBe(3);
     expect(diag.g1ChallengePreview.shortRolloutDistanceMeters).toBeGreaterThan(0);
+    expect(diag.householdMultiObstacle.wallObstacleCount).toBeGreaterThan(0);
+    expect(diag.householdMultiObstacle.enclosingRadiusMeters).toBeGreaterThan(0.5);
+    expect(diag.householdMultiObstacle.spawnIsClear).toBe(true);
+    expect(diag.householdMultiObstacle.armStageRoomCount).toBe(2);
+    expect(diag.householdMultiObstacle.kernelObstacleRole).toBe("keep-out");
+    expect(Number.isFinite(diag.householdMultiObstacle.objectiveScore)).toBe(true);
+    expect(diag.householdMultiObstacle.recoveryConstraintCount).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(diag.householdMultiObstacle.sscbfH)).toBe(true);
+    expect(diag.householdMultiObstacle.segmentProjectionT).toBeGreaterThanOrEqual(0);
     expect(diag.decorTippingCheck.tippingThresholdNm).toBeGreaterThan(0);
     expect(diag.learnedCostmap.parameterCount).toBeGreaterThan(0);
     expect(Number.isFinite(diag.learnedCostmap.neuralClearanceValue)).toBe(true);

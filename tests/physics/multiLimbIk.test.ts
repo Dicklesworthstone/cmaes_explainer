@@ -266,6 +266,15 @@ describe("interactive pins never overlap the humanoid (sphere-inside-robot regre
     expect(diag.impulseDeltaV[0]).toBeGreaterThan(0);
     expect(diag.capturePointRecoveryStepOffset[0]).toBeGreaterThan(0);
     expect(diag.capsuleCount).toBe(11);
+    expect(diag.legSegmentDistanceMeters).toBeGreaterThan(0);
+    expect(Number.isFinite(diag.selfCollision.minClearance)).toBe(true);
+    expect(diag.stepwiseSchema.physicalJointCount).toBe(29);
+    expect(diag.stepwiseSchema.learnedActuatorCount).toBe(15);
+    expect(diag.stepwiseSchema.observationDimension).toBe(42);
+    expect(diag.stepwiseSchema.batchStepRewards.length).toBe(2);
+    expect(diag.stepwiseSchema.kernelObstacleCount).toBeGreaterThan(0);
+    expect(diag.stepwiseSchema.seatObstacleCount).toBeGreaterThan(0);
+    expect(diag.stepwiseSchema.configuredTask).toBe("walking");
     expect(diag.diffSceneDistance).toBeCloseTo(0.75, 4);
     expect(Number.isFinite(diag.hessianTrace)).toBe(true);
     expect(diag.raymarchHit).toBe(true);

@@ -30,17 +30,34 @@ import {
   stepSilhouetteAgent,
 } from "./decorAndSocialObstacles";
 import {
+  ARM_STAGE_ROOMS,
   CRAFTSMAN_G1_CHALLENGE_WAYPOINTS,
+  createHouseWallObstacles,
   createSceneFromHouseFurniture,
+  enclosingSpawnRadius,
+  evaluateHouseholdObjectiveWithFurniture,
   findClearSpawnPosition,
+  isSphereClearOfRigidObstacles,
+  nominalG1WalkFootprint,
   queryMultiObstacleScene,
   simulateG1HouseNavigationChallenge,
+  stageObbToKernelObstacle,
   sweptSphereOBBEntryPoint,
 } from "./houseMultiObstacleKernel";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
 import { LearnedCostmapEngine } from "./learnedCostmap";
-import { type RecoveryState, SafetyFilterRecoveryManager } from "./safetyFilterRecovery";
-import { type CorridorSegment, filterCorridorVelocityQP } from "./segmentSafeCbf";
+import {
+  buildRecoveryConstraintsFromObb,
+  DEFAULT_RECOVERY_CONFIG,
+  type RecoveryState,
+  SafetyFilterRecoveryManager,
+} from "./safetyFilterRecovery";
+import {
+  type CorridorSegment,
+  evaluateSscbfBarrier,
+  filterCorridorVelocityQP,
+  projectPointOntoSegment,
+} from "./segmentSafeCbf";
 
 export interface HouseWaypoint {
   id: string;
@@ -431,6 +448,17 @@ export interface HouseNavigationSafetyAndCostmapDiagnostic {
     shortRolloutDistanceMeters: number;
     shortRolloutMinClearanceMeters: number;
   };
+  householdMultiObstacle: {
+    wallObstacleCount: number;
+    enclosingRadiusMeters: number;
+    spawnIsClear: boolean;
+    armStageRoomCount: number;
+    kernelObstacleRole: string;
+    objectiveScore: number;
+    recoveryConstraintCount: number;
+    sscbfH: number;
+    segmentProjectionT: number;
+  };
   decorTippingCheck: {
     willTip: boolean;
     appliedTorqueNm: number;
@@ -513,6 +541,53 @@ export function evaluateHouseNavigationSafetyAndCostmap(
     dt: 1 / 30,
   });
 
+  const wallObstacles = createHouseWallObstacles(scene.walls);
+  const g1Footprint = nominalG1WalkFootprint();
+  const enclosingRadiusMeters = enclosingSpawnRadius([0, 0.5, 0], g1Footprint, 0.02, 0.25);
+  const spawnIsClear = isSphereClearOfRigidObstacles(
+    clearSpawnPosition,
+    0.25,
+    obstacleScene.obstacles,
+  );
+  const kernelObs = firstObb
+    ? stageObbToKernelObstacle(firstObb, "keep-out")
+    : { role: "keep-out" };
+  const objRes = evaluateHouseholdObjectiveWithFurniture(
+    [
+      [position[0], 0.5, position[1]],
+      [position[0] + velocity[0] * 0.2, 0.5, position[1] + velocity[1] * 0.2],
+    ],
+    [
+      [velocity[0], 0, velocity[1]],
+      [velocity[0], 0, velocity[1]],
+    ],
+    [0.35, 0.5, 1.0],
+    obstacleScene,
+  );
+  const recoveryConstraints = buildRecoveryConstraintsFromObb(
+    [position[0], 0.5, position[1]],
+    obstacleScene.obstacles.slice(0, 8).map((o) => ({
+      id: o.id,
+      name: o.name,
+      center: o.center,
+      halfExtents: o.halfExtents,
+      rotationYaw: o.rotationYawRad,
+    })),
+    0.25,
+    DEFAULT_RECOVERY_CONFIG.safeMarginThreshold,
+  );
+  const firstDoorway = CRAFTSMAN_DOORWAYS[0];
+  const sscbfEval = evaluateSscbfBarrier(
+    {
+      position,
+      velocity,
+      yaw: Math.atan2(velocity[1], velocity[0]),
+      robotRadius: 0.25,
+    },
+    firstDoorway,
+  );
+  const segProj = projectPointOntoSegment(position, firstDoorway.start, firstDoorway.end);
+
   const parlorLamp = createDecorObject("parlor-floor-lamp", "floor-lamp", [1.2, 0.0, 2.4]);
   const decorTippingCheck = checkDecorTipping(parlorLamp, 6.5, 1.1);
 
@@ -539,6 +614,17 @@ export function evaluateHouseNavigationSafetyAndCostmap(
       sweptCcdWasHit: sweptCcd.wasHit,
       shortRolloutDistanceMeters: g1ChallengeShort.totalDistanceMeters,
       shortRolloutMinClearanceMeters: g1ChallengeShort.minimumClearanceMeters,
+    },
+    householdMultiObstacle: {
+      wallObstacleCount: wallObstacles.length,
+      enclosingRadiusMeters,
+      spawnIsClear,
+      armStageRoomCount: ARM_STAGE_ROOMS.length,
+      kernelObstacleRole: kernelObs.role,
+      objectiveScore: objRes.totalObjective,
+      recoveryConstraintCount: recoveryConstraints.length,
+      sscbfH: sscbfEval.hLateral,
+      segmentProjectionT: segProj.t,
     },
     decorTippingCheck,
     learnedCostmap: {

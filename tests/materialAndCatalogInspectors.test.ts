@@ -41,6 +41,8 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(snap.stribeckAndAnisotropy.anisotropicAcrossGrainStatic).toBeGreaterThan(
           snap.stribeckAndAnisotropy.anisotropicAcrossGrainKinetic,
         );
+        expect(snap.stribeckAndAnisotropy.combinedCustomKinetic).toBeGreaterThan(0);
+        expect(snap.stribeckAndAnisotropy.combinedCustomRestitution).toBeGreaterThanOrEqual(0);
         expect(snap.droUncertainty.catalogPairCount).toBeGreaterThanOrEqual(36);
         expect(snap.droUncertainty.ballRadius).toBeGreaterThan(0);
         expect(snap.droUncertainty.worstCaseUpperKinetic).toBeGreaterThanOrEqual(
@@ -52,10 +54,28 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(snap.droUncertainty.syntheticBannerLength).toBeGreaterThan(50);
         expect(snap.craftsmanEmissiveCount).toBeGreaterThanOrEqual(4);
         expect(snap.hearthEmissiveEvaluation.intensity).toBeGreaterThan(0);
+        expect(snap.emissiveDiagnostics.supportedKindCount).toBe(8);
+        expect(snap.emissiveDiagnostics.customEmissiveIntensity).toBeGreaterThan(0);
+        expect(snap.emissiveDiagnostics.customEmissiveColorRgb.length).toBe(3);
+        expect(snap.emissiveDiagnostics.blackbody2700KRgb[0]).toBeGreaterThan(0);
+        expect(snap.emissiveDiagnostics.fireplaceFlickerFactor).toBeGreaterThan(0);
+        expect(snap.emissiveDiagnostics.appliedMaterialEmissiveIntensity).toBeGreaterThan(0);
+        expect(snap.ddgiDiagnostics.octahedralDirCount).toBe(64);
+        expect(snap.ddgiDiagnostics.zenithCellIndex).toBeGreaterThanOrEqual(0);
+        expect(snap.ddgiDiagnostics.zenithCellRoundtripDot).toBeGreaterThan(0.5);
+        expect(snap.ddgiDiagnostics.fallbackUpIrradianceLuma).toBeGreaterThan(0);
+        expect(snap.ddgiDiagnostics.hysteresisBlendedValue).toBeCloseTo(1.1, 5);
+        expect(snap.ddgiDiagnostics.scratchProbeResetZeroed).toBe(true);
+        expect(typeof snap.ddgiDiagnostics.texture3DAvailable).toBe("boolean");
         const expectsTextureMaps = mat.category !== "metal" && mat.category !== "glass";
         expect(snap.proceduralMaps.hasAlbedoMap).toBe(expectsTextureMaps);
         expect(snap.proceduralMaps.hasNormalMap).toBe(expectsTextureMaps);
         expect(snap.proceduralMaps.hasRoughnessMap).toBe(expectsTextureMaps);
+        expect(snap.proceduralMaps.synthesizedTexelTotal).toBe(256);
+        expect(snap.proceduralMaps.disposedCacheEntries).toBeGreaterThanOrEqual(1);
+        expect(snap.proceduralMaps.hdrEnvTexelCount).toBe(128);
+        expect(snap.proceduralMaps.rigPointLightCount).toBeGreaterThanOrEqual(2);
+        expect(snap.proceduralMaps.rigSunIntensity).toBeGreaterThan(0);
         expect(snap.shIrradiance.length).toBe(3);
         expect(snap.shIrradiance.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
         expect(snap.ddgiIrradiance.rgb.length).toBe(3);
@@ -67,6 +87,9 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(snap.fireplaceFlickerMultiplier).toBeGreaterThan(0);
         expect(snap.ssrReflection.schlickFresnel).toBeGreaterThan(0);
         expect(snap.ssrReflection.schlickFresnel).toBeLessThanOrEqual(1);
+        expect(snap.ssrReflection.reflectionVector[1]).toBeGreaterThan(0);
+        expect(snap.ssrReflection.screenEdgeFade).toBeGreaterThanOrEqual(0);
+        expect(snap.ssrReflection.maxSteps).toBe(64);
         expect(
           snap.ssrReflection.temporallyBlendedRadiance.every((c) => Number.isFinite(c) && c >= 0),
         ).toBe(true);
@@ -75,6 +98,11 @@ describe("Material Database & Furniture Catalog Inspector Modules", () => {
         expect(
           snap.volumetricAtmosphere.sunbeamInscatter.every((c) => Number.isFinite(c) && c >= 0),
         ).toBe(true);
+        expect(snap.postFxDiagnostics.acesCoeffA).toBeCloseTo(2.51, 2);
+        expect(snap.postFxDiagnostics.scalarAcesMidgray).toBeGreaterThan(0);
+        expect(snap.postFxDiagnostics.cornerVignetteFactor).toBeLessThan(1.0);
+        expect(snap.postFxDiagnostics.chromaticAberrationDeltaU).toBeGreaterThan(0);
+        expect(snap.postFxDiagnostics.srgbMidgray).toBeGreaterThan(0.4);
         expect(snap.stageTonemappedRgb.every((c) => Number.isFinite(c) && c >= 0)).toBe(true);
         expect(snap.compositePostFxRgb.every((c) => c >= 0 && c <= 1)).toBe(true);
       }

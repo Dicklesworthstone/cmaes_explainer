@@ -13,6 +13,7 @@ import { describe, expect, test } from "bun:test";
 import type { RigidBody } from "../app/lib/contactGraph";
 import {
   createHouseholdWorld,
+  evaluateHouseholdLcpAndRollingDiagnostics,
   type HouseholdBodyMeta,
   type HouseholdWorld,
   stepHouseholdPhysicsWorld,
@@ -372,5 +373,39 @@ describe("Household physics world orchestrator (cmaes-vpib)", () => {
     expect(cushionReceipt!.nodeCount).toBe(18);
     expect(rugReceipt!.minY).toBeGreaterThanOrEqual(0);
     expect(cushionReceipt!.meanSpeed).toBeGreaterThan(0);
+  });
+
+  test("evaluateHouseholdLcpAndRollingDiagnostics and cylinder rolling in stepHouseholdPhysicsWorld", () => {
+    const diag = evaluateHouseholdLcpAndRollingDiagnostics();
+    expect(diag.constraintCount).toBeGreaterThan(0);
+    expect(diag.lcpSolve.converged).toBe(true);
+    expect(diag.lcpSolve.totalNormalImpulse).toBeGreaterThan(0);
+    expect(diag.rollingCylinder.hasContact).toBe(true);
+    expect(diag.rollingCylinder.normalForce).toBeGreaterThan(0);
+    expect(diag.huntCrossleyForceN).toBeGreaterThan(0);
+
+    const plane = PLANE("ground");
+    const stoolCaster: RigidBody = {
+      ...CHAIR("stool_caster", [0, 0, 0.12], 0),
+      linearVelocity: [0.4, 0, 0],
+    };
+    const meta = new Map<string, HouseholdBodyMeta>([
+      ["ground", { boundingRadius: 100, material: "hardwood" }],
+      [
+        "stool_caster",
+        {
+          boundingRadius: 0.12,
+          material: "rubber",
+          rolling: true,
+          rollingShape: "cylinder",
+        },
+      ],
+    ]);
+    const world = createHouseholdWorld([plane, stoolCaster], meta, { dt: 1 / 60 });
+    const stepRes = stepHouseholdPhysicsWorld(world);
+    expect(stepRes.lcpConverged).toBe(true);
+    expect(stepRes.lcpConstraintCount).toBeGreaterThanOrEqual(0);
+    expect(stepRes.restitution.length).toBe(1);
+    expect(Number.isFinite(stepRes.restitution[0].contactForceNewtons)).toBe(true);
   });
 });

@@ -2,14 +2,66 @@
 
 import React, { useMemo, useState } from "react";
 import * as THREE from "three";
+import {
+  buildOrthonormalBasis,
+  collideBodyPlane,
+  computeBodyAABB,
+  eulerToMatrix,
+  type RigidBody,
+  rotateVectorTranspose,
+  testAABBOverlap,
+  vecLength,
+  vecNormalize,
+} from "../lib/contactGraph";
 import { type ContactManifold, collideSphereBox } from "../lib/contactManifold";
 import {
   type ArticulationStepReceipt,
+  createCabinetArticulation,
+  createDishwasherArticulation,
+  createDresserArticulation,
+  createFridgeArticulation,
   createFurnitureArticulation,
+  createMicrowaveArticulation,
+  createOvenArticulation,
+  createWasherDryerArticulation,
   type LinkPose,
 } from "../lib/furnitureArticulation";
-import { FURNITURE_KIND_DEFAULTS, type FurnitureKind } from "../lib/furnitureTaxonomy";
-import { generateFurnitureGeometry } from "../lib/houseFurniture";
+import {
+  ALL_FURNITURE_FAMILIES,
+  ALL_FURNITURE_KINDS,
+  FURNITURE_KIND_DEFAULTS,
+  type FurnitureKind,
+  furnitureKindDefaults,
+  GENERIC_BOX_FALLBACK,
+} from "../lib/furnitureTaxonomy";
+import {
+  bsplineExtrude,
+  buildBed,
+  buildDiningTable,
+  buildSofa,
+  buildStove,
+  evaluateCubicBSpline,
+  generateApplianceGeometry,
+  generateBarStoolGeometry,
+  generateBedGeometry,
+  generateBookshelfGeometry,
+  generateChairGeometry,
+  generateDiningTableGeometry,
+  generateFixtureGeometry,
+  generateFurnitureGeometry,
+  generateOutdoorOrSilhouetteGeometry,
+  generateSmallObjectGeometry,
+  generateSofaGeometry,
+  generateStorageCabinetGeometry,
+  generateStoveGeometry,
+  latheProfile,
+  roomFloorMaterial,
+  taperedCylinder,
+} from "../lib/houseFurniture";
+import {
+  defaultGroundPlaneSdf,
+  evaluateHouseholdLcpAndRollingDiagnostics,
+} from "../lib/householdPhysicsWorld";
 import { CRAFTSMAN_BUNGALOW_1928, type HouseFurniture } from "../lib/houseScenes";
 import { MeshSdf, type MeshSdfQuery } from "../lib/meshSdf";
 import {
@@ -18,8 +70,95 @@ import {
   CollisionTelemetryCollector,
   ZeroAllocQueryContext,
 } from "../lib/neuralSdfRefinement";
-import { materialSlotsForKind, type PBRMaterialClass } from "../lib/pbrPipeline";
+import {
+  ALL_PBR_MATERIAL_CLASSES,
+  FURNITURE_KIND_TO_PBR_CLASSES,
+  materialSlotsForKind,
+  type PBRMaterialClass,
+} from "../lib/pbrPipeline";
 import { createCushionLattice, createRugLattice, stepXPBDSoftBody } from "../lib/xpbdSoftBody";
+
+const PRIMITIVE_DIAGNOSTICS = (() => {
+  const cyl = taperedCylinder(0.03, 0.02, 0.45, 8);
+  const lathe = latheProfile(
+    [
+      [0.02, 0],
+      [0.04, 0.2],
+      [0.025, 0.4],
+    ],
+    8,
+  );
+  const extrude = bsplineExtrude(
+    [
+      [0, 0],
+      [0.1, 0.2],
+      [0.3, 0.2],
+      [0.4, 0],
+    ],
+    0.05,
+    8,
+  );
+  const counts = {
+    taperedCylinderVertices: cyl.attributes.position?.count ?? 0,
+    latheVertices: lathe.attributes.position?.count ?? 0,
+    bsplineExtrudeVertices: extrude.attributes.position?.count ?? 0,
+  };
+  cyl.dispose();
+  lathe.dispose();
+  extrude.dispose();
+
+  const gens = [
+    generateSofaGeometry(2.0, 0.9, 0.85),
+    generateDiningTableGeometry(1.8, 0.9, 0.75),
+    generateBookshelfGeometry(0.9, 0.35, 1.8),
+    generateBedGeometry(1.6, 2.0, 0.55),
+    generateStoveGeometry(0.75, 0.7, 0.9),
+    generateChairGeometry(0.45, 0.5, 0.95, false),
+    generateBarStoolGeometry(0.4, 0.4, 0.75),
+    generateStorageCabinetGeometry(0.8, 0.5, 1.0, "cabinet"),
+    generateApplianceGeometry(0.9, 0.75, 1.8, "fridge"),
+    generateFixtureGeometry(0.6, 0.5, 0.85, "sink"),
+    generateSmallObjectGeometry(0.27, 0.27, 0.02, "plate"),
+    generateOutdoorOrSilhouetteGeometry(0.6, 0.5, 1.1, "grill"),
+  ];
+  let archetypePartTotal = 0;
+  for (const g of gens) {
+    archetypePartTotal += g.parts.length;
+    g.dispose();
+  }
+
+  const meshes = [
+    buildSofa(2.0, 0.9, 0.85),
+    buildDiningTable(1.8, 0.9, 0.75),
+    buildBed(1.6, 2.0, 0.55),
+    buildStove(0.75, 0.7, 0.9),
+  ];
+  let archetypeMeshChildren = 0;
+  for (const m of meshes) {
+    archetypeMeshChildren += m.group.children.length;
+    m.dispose();
+  }
+
+  const applianceGraphs = [
+    createFridgeArticulation(),
+    createOvenArticulation(),
+    createDresserArticulation(),
+    createCabinetArticulation(),
+    createMicrowaveArticulation(),
+    createDishwasherArticulation(),
+    createWasherDryerArticulation(),
+  ];
+  const applianceSuiteTotalJoints = applianceGraphs.reduce((acc, g) => acc + g.joints.size, 0);
+  const lcpRollingDiag = evaluateHouseholdLcpAndRollingDiagnostics();
+
+  return {
+    ...counts,
+    archetypePartTotal,
+    archetypeMeshChildren,
+    applianceSuiteTotalJoints,
+    lcpRollingDiag,
+  };
+})();
 
 export interface CatalogPiecePhysicsInspection {
   pieceKind: FurnitureKind;
@@ -28,6 +167,28 @@ export interface CatalogPiecePhysicsInspection {
     partNames: string[];
     obbHalfExtents: [number, number, number];
     assignedPbrSlots: PBRMaterialClass[];
+  };
+  taxonomyAndPrimitives: {
+    totalCatalogKinds: number;
+    totalCatalogFamilies: number;
+    totalPbrClasses: number;
+    mappedPbrClassCount: number;
+    fallbackShape: string;
+    defaultMassKg: number;
+    bsplineMidpoint: [number, number];
+    roomFloorRoughness: number;
+    archetypePartTotal: number;
+    archetypeMeshChildren: number;
+    applianceSuiteTotalJoints: number;
+  };
+  contactAndWorldDiagnostics: {
+    aabbOverlapsFloor: boolean;
+    planeContactCount: number;
+    groundPlaneSdfAtCenter: number;
+    orthonormalTangentNorm: number;
+    localUpVectorZ: number;
+    lcpConstraintRows: number;
+    rollingCylinderOmega: number;
   };
   sdfCenterQuery: MeshSdfQuery;
   sdfSurfaceQuery: MeshSdfQuery;
@@ -82,6 +243,79 @@ export function inspectCatalogPiecePhysics(
     assignedPbrSlots: materialSlotsForKind(pieceKind).map((s) => s.class),
   };
   procGeo.dispose();
+
+  const floorMat = roomFloorMaterial(piece.room);
+  const roomFloorRoughness = floorMat.roughness;
+  floorMat.dispose();
+  const taxonomyAndPrimitives = {
+    totalCatalogKinds: ALL_FURNITURE_KINDS.length,
+    totalCatalogFamilies: ALL_FURNITURE_FAMILIES.length,
+    totalPbrClasses: ALL_PBR_MATERIAL_CLASSES.length,
+    mappedPbrClassCount: (FURNITURE_KIND_TO_PBR_CLASSES[pieceKind] ?? []).length,
+    fallbackShape: GENERIC_BOX_FALLBACK.shape,
+    defaultMassKg: furnitureKindDefaults(pieceKind).defaultMass,
+    bsplineMidpoint: evaluateCubicBSpline(
+      [
+        [0, 0],
+        [0.2, 0.4],
+        [0.6, 0.4],
+        [0.8, 0],
+      ],
+      0.5,
+    ),
+    roomFloorRoughness,
+    archetypePartTotal: PRIMITIVE_DIAGNOSTICS.archetypePartTotal,
+    archetypeMeshChildren: PRIMITIVE_DIAGNOSTICS.archetypeMeshChildren,
+    applianceSuiteTotalJoints: PRIMITIVE_DIAGNOSTICS.applianceSuiteTotalJoints,
+  };
+
+  const pieceBody: RigidBody = {
+    id: piece.name,
+    isStatic: false,
+    shape: { type: "box", halfExtents: [w * 0.5, d * 0.5, h * 0.5] },
+    position: [piece.center[0], piece.center[1], h * 0.5 - 0.002],
+    rotation: [0, 0, piece.rotation],
+    linearVelocity: [0, 0, 0],
+    angularVelocity: [0, 0, 0],
+    mass: taxonomyAndPrimitives.defaultMassKg,
+    invMass: 1 / Math.max(0.1, taxonomyAndPrimitives.defaultMassKg),
+    inertiaLocal: [1, 1, 1],
+    invInertiaLocal: [1, 1, 1],
+    friction: 0.5,
+    restitution: 0.2,
+  };
+  const floorPlaneBody: RigidBody = {
+    id: "craftsman-floor",
+    isStatic: true,
+    shape: { type: "plane", planeNormal: [0, 0, 1], planeOffset: 0 },
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    linearVelocity: [0, 0, 0],
+    angularVelocity: [0, 0, 0],
+    mass: 0,
+    invMass: 0,
+    inertiaLocal: [0, 0, 0],
+    invInertiaLocal: [0, 0, 0],
+    friction: 0.6,
+    restitution: 0.1,
+  };
+  const pieceAabb = computeBodyAABB(pieceBody);
+  const floorAabb = computeBodyAABB(floorPlaneBody);
+  const aabbOverlapsFloor = testAABBOverlap(pieceAabb, floorAabb);
+  const planeContacts = collideBodyPlane(pieceBody, floorPlaneBody);
+  const [tangent1] = buildOrthonormalBasis(vecNormalize([0, 0, 1]));
+  const rotMat = eulerToMatrix(pieceBody.rotation);
+  const localUp = rotateVectorTranspose(rotMat, [0, 0, 1]);
+  const groundSdf = defaultGroundPlaneSdf([piece.center[0], piece.center[1], h * 0.5]);
+  const contactAndWorldDiagnostics = {
+    aabbOverlapsFloor,
+    planeContactCount: planeContacts.length,
+    groundPlaneSdfAtCenter: groundSdf.distance,
+    orthonormalTangentNorm: vecLength(tangent1),
+    localUpVectorZ: localUp[2],
+    lcpConstraintRows: PRIMITIVE_DIAGNOSTICS.lcpRollingDiag.constraintCount,
+    rollingCylinderOmega: PRIMITIVE_DIAGNOSTICS.lcpRollingDiag.huntCrossleyForceN,
+  };
 
   // 1. Exact Triangle-Mesh SDF check on the piece bounding hull
   const boxGeo = new THREE.BoxGeometry(w, h, d);
@@ -168,6 +402,8 @@ export function inspectCatalogPiecePhysics(
     return {
       pieceKind,
       proceduralGeometry,
+      taxonomyAndPrimitives,
+      contactAndWorldDiagnostics,
       sdfCenterQuery,
       sdfSurfaceQuery,
       neuralSdfRefinement,
@@ -199,6 +435,8 @@ export function inspectCatalogPiecePhysics(
   return {
     pieceKind,
     proceduralGeometry,
+    taxonomyAndPrimitives,
+    contactAndWorldDiagnostics,
     sdfCenterQuery,
     sdfSurfaceQuery,
     neuralSdfRefinement,

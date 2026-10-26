@@ -1,12 +1,26 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import * as THREE from "three";
 import {
   evaluateFloorContactAO,
   evaluateSdfSoftShadow,
   type ShadowRayResult,
 } from "../lib/contactShadows";
-import { createProbeGrid, sampleProbeGrid, updateProbeGridFromScene } from "../lib/ddgiProbes";
+import {
+  createProbe,
+  createProbeGrid,
+  fallbackIrradiance,
+  generateOctahedralDirections,
+  hysteresisUpdate,
+  octahedralCellDirection,
+  octahedralCellIndex,
+  probeGridBounds,
+  probeGridToTexture3D,
+  resetProbeGrid,
+  sampleProbeGrid,
+  updateProbeGridFromScene,
+} from "../lib/ddgiProbes";
 import {
   CATALOG_VIEW,
   cvarLower,
@@ -19,15 +33,37 @@ import {
   wassersteinBallRadius,
 } from "../lib/droFrictionUncertainty";
 import {
+  ALL_EMISSIVE_KINDS,
+  applyEmissiveToMaterial,
+  blackbodyToRGB,
+  computeFireplaceFlicker,
   createCraftsmanEmissives,
+  createEmissiveSurface,
   EMISSIVE_PALETTE,
   type EmissiveRadianceResult,
   evaluateEmissiveSurface,
   kelvinToRgb,
+  liveEmissiveColor,
+  liveEmissiveIntensity,
 } from "../lib/emissiveSurfaces";
-import { evaluateSphericalHarmonics } from "../lib/houseLighting";
-import { getProceduralMaterial, type MaterialKind } from "../lib/houseMaterials";
 import {
+  evaluateSphericalHarmonics,
+  generateCraftsmanHdrEnvMap,
+  setupCraftsmanLighting,
+} from "../lib/houseLighting";
+import {
+  disposeProceduralMaterials,
+  fbm,
+  generateFabricTexture,
+  generateMarbleTexture,
+  generateTileTexture,
+  generateWoodTexture,
+  getProceduralMaterial,
+  type MaterialKind,
+  SeededRNG,
+} from "../lib/houseMaterials";
+import {
+  combineCustomMaterials,
   evaluateAnisotropicWoodFriction,
   evaluateStribeckFriction,
   getMaterialPairFriction,
@@ -39,10 +75,31 @@ import {
   type PBRMaterialSlot,
   totalTextureBudgetMB,
 } from "../lib/pbrPipeline";
-import { applyPostFXSoftware, flickerFireplace, POSTFX_PROFILES } from "../lib/postFx";
-import { DEFAULT_POST_FX_CONFIG, processPixelPostFx } from "../lib/postProcessingPipeline";
+import {
+  ACES_FILMIC,
+  acesFilmic,
+  acesFilmicWithExposure,
+  applyPostFXSoftware,
+  DEFAULT_POSTFX_PROFILE,
+  flickerFireplace,
+  hash01,
+  linearToSRGB,
+  POSTFX_PROFILES,
+} from "../lib/postFx";
+import {
+  acesFilmicToneMapping,
+  computeChromaticAberrationUvs,
+  DEFAULT_POST_FX_CONFIG,
+  evaluateVignette,
+  extractBloomLuminance,
+  processPixelPostFx,
+  tonemapColor,
+} from "../lib/postProcessingPipeline";
 import {
   blendTemporalSsr,
+  computeReflectionVector,
+  computeScreenEdgeFade,
+  DEFAULT_SSR_CONFIG,
   evaluateSchlickFresnel,
   type SsrHitResult,
   traceScreenSpaceRay,
@@ -205,6 +262,59 @@ updateProbeGridFromScene(
   { maxMarchSteps: 8, timeSeconds: 0.25 },
 );
 
+const PROCEDURAL_SYNTHESIS_AND_IBL_DIAG = (() => {
+  const rng = new SeededRNG(1928);
+  const firstSeedSample = rng.next();
+  const fbmSample = fbm(0.25, 0.75, 4);
+
+  const woodTex = generateWoodTexture(8, 8, [175, 120, 75], [95, 60, 35], 12.0);
+  const fabricTex = generateFabricTexture(8, 8, [195, 185, 170], 16.0);
+  const tileTex = generateTileTexture(8, 8, [240, 238, 230], [120, 115, 110], 4);
+  const marbleTex = generateMarbleTexture(8, 8);
+  const synthesizedTexelTotal =
+    (woodTex.albedoData.length +
+      fabricTex.albedoData.length +
+      tileTex.albedoData.length +
+      marbleTex.albedoData.length) /
+    4;
+  woodTex.albedoMap.dispose();
+  woodTex.normalMap.dispose();
+  woodTex.roughnessMap.dispose();
+  fabricTex.albedoMap.dispose();
+  fabricTex.normalMap.dispose();
+  fabricTex.roughnessMap.dispose();
+  tileTex.albedoMap.dispose();
+  tileTex.normalMap.dispose();
+  tileTex.roughnessMap.dispose();
+  marbleTex.albedoMap.dispose();
+  marbleTex.normalMap.dispose();
+  marbleTex.roughnessMap.dispose();
+
+  // Warm and dispose procedural cache once to verify disposeProceduralMaterials lifecycle
+  getProceduralMaterial("oak-hardwood", 8);
+  const disposedCacheEntries = disposeProceduralMaterials();
+
+  const hdrEnv = generateCraftsmanHdrEnvMap(16, 8);
+  const hdrEnvTexelCount = (hdrEnv.image.data?.length ?? 0) / 4;
+  hdrEnv.dispose();
+
+  const probeScene = new THREE.Scene();
+  const rig = setupCraftsmanLighting(probeScene, { enableShadows: false, useHdrEnv: true });
+  const pointLightCount = rig.roomPointLights.length;
+  const sunIntensity = rig.sunLight.intensity;
+  rig.dispose();
+
+  return {
+    firstSeedSample,
+    fbmSample,
+    synthesizedTexelTotal,
+    disposedCacheEntries,
+    hdrEnvTexelCount,
+    pointLightCount,
+    sunIntensity,
+  };
+})();
+
 function hexToLinearRgb(hex: string): [number, number, number] {
   const clean = hex.replace(/^#/, "");
   const num = Number.parseInt(clean, 16);
@@ -222,11 +332,20 @@ export interface MaterialRenderingPipelineEvaluation {
     hasAlbedoMap: boolean;
     hasNormalMap: boolean;
     hasRoughnessMap: boolean;
+    synthesizedTexelTotal: number;
+    disposedCacheEntries: number;
+    firstSeedSample: number;
+    fbmSample: number;
+    hdrEnvTexelCount: number;
+    rigPointLightCount: number;
+    rigSunIntensity: number;
   };
   stribeckAndAnisotropy: {
     stribeckFrictionAt005Mps: number;
     anisotropicAcrossGrainStatic: number;
     anisotropicAcrossGrainKinetic: number;
+    combinedCustomKinetic: number;
+    combinedCustomRestitution: number;
   };
   droUncertainty: {
     catalogPairCount: number;
@@ -240,8 +359,27 @@ export interface MaterialRenderingPipelineEvaluation {
   };
   craftsmanEmissiveCount: number;
   hearthEmissiveEvaluation: EmissiveRadianceResult;
+  emissiveDiagnostics: {
+    supportedKindCount: number;
+    customEmissiveIntensity: number;
+    customEmissiveColorRgb: [number, number, number];
+    blackbody2700KRgb: [number, number, number];
+    fireplaceFlickerFactor: number;
+    appliedMaterialEmissiveIntensity: number;
+  };
   shIrradiance: [number, number, number];
   ddgiIrradiance: { rgb: [number, number, number]; visibility: number };
+  ddgiDiagnostics: {
+    boundsMin: [number, number, number];
+    boundsMax: [number, number, number];
+    octahedralDirCount: number;
+    zenithCellIndex: number;
+    zenithCellRoundtripDot: number;
+    fallbackUpIrradianceLuma: number;
+    hysteresisBlendedValue: number;
+    scratchProbeResetZeroed: boolean;
+    texture3DAvailable: boolean;
+  };
   contactShadowAo: number;
   softShadowRay: ShadowRayResult;
   fireplaceFlickerMultiplier: number;
@@ -249,12 +387,28 @@ export interface MaterialRenderingPipelineEvaluation {
     hitResult: SsrHitResult;
     schlickFresnel: number;
     temporallyBlendedRadiance: [number, number, number];
+    reflectionVector: [number, number, number];
+    screenEdgeFade: number;
+    maxSteps: number;
   };
   volumetricAtmosphere: {
     fogOpticalDepth: number;
     hgPhase: number;
     sunbeamInscatter: [number, number, number];
     foggedSurfaceRgb: [number, number, number];
+  };
+  postFxDiagnostics: {
+    acesCoeffA: number;
+    defaultExposure: number;
+    acesDirectRgb: [number, number, number];
+    acesExposedRgb: [number, number, number];
+    scalarAcesMidgray: number;
+    tonemappedColorRgb: [number, number, number];
+    extractedBloomRgb: [number, number, number];
+    cornerVignetteFactor: number;
+    chromaticAberrationDeltaU: number;
+    hashSample: number;
+    srgbMidgray: number;
   };
   stageTonemappedRgb: [number, number, number];
   compositePostFxRgb: [number, number, number];
@@ -271,12 +425,19 @@ export function evaluateMaterialRenderingPipeline(
   const textureBudgetMb = totalTextureBudgetMB();
 
   const pairFriction = getMaterialPairFriction(mat.frictionClass, matingMaterial);
+  const matingSelfFriction = getMaterialPairFriction(matingMaterial, "hardwood");
+  const combinedCustom = combineCustomMaterials(
+    { id: mat.id, ...pairFriction },
+    { id: matingMaterial, ...matingSelfFriction },
+  );
   const stribeckFrictionAt005Mps = evaluateStribeckFriction(pairFriction, 0.05);
   const anisoWood = evaluateAnisotropicWoodFriction(pairFriction, [0, 1], [1, 0]);
   const stribeckAndAnisotropy = {
     stribeckFrictionAt005Mps,
     anisotropicAcrossGrainStatic: anisoWood.staticFriction,
     anisotropicAcrossGrainKinetic: anisoWood.kineticFriction,
+    combinedCustomKinetic: combinedCustom.kineticFriction,
+    combinedCustomRestitution: combinedCustom.restitution,
   };
 
   const dist = getFrictionDistribution(mat.frictionClass, matingMaterial);
@@ -299,19 +460,65 @@ export function evaluateMaterialRenderingPipeline(
     syntheticBannerLength: SYNTHETIC_BANNER_TEXT.length,
   };
 
+  const timeSeconds = frame / 60;
   const hearthFixture = CRAFTSMAN_EMISSIVES[0];
-  const hearthEmissiveEvaluation = evaluateEmissiveSurface(hearthFixture, frame / 60);
+  const hearthEmissiveEvaluation = evaluateEmissiveSurface(hearthFixture, timeSeconds);
 
+  const customSurface = createEmissiveSurface(ALL_EMISSIVE_KINDS[0], [0, 1.2, 0], 0.25, true);
   const procKind = CATEGORY_TO_PROCEDURAL_KIND[mat.category] ?? "oak-hardwood";
   const procMat = getProceduralMaterial(procKind, 32);
+  applyEmissiveToMaterial(customSurface, frame, procMat);
+  const emissiveDiagnostics = {
+    supportedKindCount: ALL_EMISSIVE_KINDS.length,
+    customEmissiveIntensity: liveEmissiveIntensity(customSurface, frame),
+    customEmissiveColorRgb: liveEmissiveColor(customSurface, frame),
+    blackbody2700KRgb: blackbodyToRGB(mat.kelvinTemp ?? 2700),
+    fireplaceFlickerFactor: computeFireplaceFlicker(timeSeconds, 0.25),
+    appliedMaterialEmissiveIntensity: procMat.emissiveIntensity,
+  };
+
   const proceduralMaps = {
     hasAlbedoMap: Boolean(procMat.map),
     hasNormalMap: Boolean(procMat.normalMap),
     hasRoughnessMap: Boolean(procMat.roughnessMap),
+    synthesizedTexelTotal: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.synthesizedTexelTotal,
+    disposedCacheEntries: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.disposedCacheEntries,
+    firstSeedSample: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.firstSeedSample,
+    fbmSample: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.fbmSample,
+    hdrEnvTexelCount: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.hdrEnvTexelCount,
+    rigPointLightCount: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.pointLightCount,
+    rigSunIntensity: PROCEDURAL_SYNTHESIS_AND_IBL_DIAG.sunIntensity,
   };
 
   const shIrradiance = evaluateSphericalHarmonics([0, 1, 0]);
   const ddgiIrradiance = sampleProbeGrid(SHARED_DDGI_GRID, [0, 0.5, 1.0], [0, 1, 0], 1.2);
+  const gridBounds = probeGridBounds(SHARED_DDGI_GRID);
+  const octDirs = generateOctahedralDirections();
+  const zenithIdx = octahedralCellIndex([0, 0, 1]);
+  const zenithDir = octahedralCellDirection(zenithIdx);
+  const fallbackUp = fallbackIrradiance([0, 0, 1]);
+  const scratchGrid = createProbeGrid([0, 0, 0], [1, 1, 1], [1, 1, 1], 0.1);
+  scratchGrid.probes[0] = createProbe([0, 0, 0]);
+  scratchGrid.probes[0].irradiance.fill(1.0);
+  const newIrr = new Float32Array(64 * 3).fill(2.0);
+  const newDist = new Float32Array(64).fill(1.5);
+  const newDistSq = new Float32Array(64).fill(2.25);
+  hysteresisUpdate(scratchGrid, 0, newIrr, newDist, newDistSq);
+  const hysteresisBlendedValue = scratchGrid.probes[0].irradiance[0];
+  resetProbeGrid(scratchGrid);
+  const tex3d = probeGridToTexture3D(SHARED_DDGI_GRID);
+  const ddgiDiagnostics = {
+    boundsMin: gridBounds.min,
+    boundsMax: gridBounds.max,
+    octahedralDirCount: octDirs.directions.length / 3,
+    zenithCellIndex: zenithIdx,
+    zenithCellRoundtripDot: zenithDir[2],
+    fallbackUpIrradianceLuma:
+      0.2126 * fallbackUp[0] + 0.7152 * fallbackUp[1] + 0.0722 * fallbackUp[2],
+    hysteresisBlendedValue,
+    scratchProbeResetZeroed: scratchGrid.probes[0].lastUpdate === 0,
+    texture3DAvailable: tex3d !== null,
+  };
   const contactShadowAo = evaluateFloorContactAO(
     [0, 0, 0],
     [{ id: "furniture-leg", position: [0.04, 0.02, 0.04], radius: 0.08, occlusionStrength: 0.85 }],
@@ -383,9 +590,29 @@ export function evaluateMaterialRenderingPipeline(
   ];
   const hdrRadiance = applyExponentialHeightFog(rawSurfaceHdr, cameraPos, surfacePos);
 
-  const profile = POSTFX_PROFILES[stageProfileKey] ?? POSTFX_PROFILES["parlor-calm"];
+  const profile = POSTFX_PROFILES[stageProfileKey] ?? DEFAULT_POSTFX_PROFILE;
   const stageTonemappedRgb = applyPostFXSoftware(hdrRadiance, profile, [0.5, 0.5]);
   const compositePostFxRgb = processPixelPostFx(hdrRadiance, [0.5, 0.5], DEFAULT_POST_FX_CONFIG);
+
+  const reflectionVector = computeReflectionVector([0, -0.65, -0.76], [0, 1, 0]);
+  const screenEdgeFade = computeScreenEdgeFade(ssrHit.hitUv, DEFAULT_SSR_CONFIG.edgeFadeStart);
+  const caUvs = computeChromaticAberrationUvs(
+    [0.85, 0.5],
+    DEFAULT_POST_FX_CONFIG.chromaticAberrationOffset,
+  );
+  const postFxDiagnostics = {
+    acesCoeffA: ACES_FILMIC.a,
+    defaultExposure: DEFAULT_POSTFX_PROFILE.exposure,
+    acesDirectRgb: acesFilmic(hdrRadiance),
+    acesExposedRgb: acesFilmicWithExposure(hdrRadiance, profile.exposure),
+    scalarAcesMidgray: acesFilmicToneMapping(0.5),
+    tonemappedColorRgb: tonemapColor(hdrRadiance, profile.exposure),
+    extractedBloomRgb: extractBloomLuminance(hdrRadiance, 0.2),
+    cornerVignetteFactor: evaluateVignette([0.9, 0.9]),
+    chromaticAberrationDeltaU: Math.abs(caUvs.uvR[0] - caUvs.uvB[0]),
+    hashSample: hash01(frame),
+    srgbMidgray: linearToSRGB(0.18),
+  };
 
   return {
     pbrSlot,
@@ -395,8 +622,10 @@ export function evaluateMaterialRenderingPipeline(
     droUncertainty,
     craftsmanEmissiveCount: CRAFTSMAN_EMISSIVES.length,
     hearthEmissiveEvaluation,
+    emissiveDiagnostics,
     shIrradiance,
     ddgiIrradiance,
+    ddgiDiagnostics,
     contactShadowAo,
     softShadowRay,
     fireplaceFlickerMultiplier,
@@ -404,6 +633,9 @@ export function evaluateMaterialRenderingPipeline(
       hitResult: ssrHit,
       schlickFresnel,
       temporallyBlendedRadiance: ssrTemporal.blendedRadiance,
+      reflectionVector,
+      screenEdgeFade,
+      maxSteps: DEFAULT_SSR_CONFIG.maxSteps,
     },
     volumetricAtmosphere: {
       fogOpticalDepth,
@@ -411,6 +643,7 @@ export function evaluateMaterialRenderingPipeline(
       sunbeamInscatter,
       foggedSurfaceRgb: hdrRadiance,
     },
+    postFxDiagnostics,
     stageTonemappedRgb,
     compositePostFxRgb,
   };
@@ -679,7 +912,8 @@ export function MaterialDatabaseInspector() {
               RGB [{pipelineEval.ddgiIrradiance.rgb.map((v) => v.toFixed(2)).join(", ")}]
             </div>
             <div className="text-[10px] text-emerald-400">
-              Vis: {(pipelineEval.ddgiIrradiance.visibility * 100).toFixed(0)}% • IBL:{" "}
+              Vis: {(pipelineEval.ddgiIrradiance.visibility * 100).toFixed(0)}% • Oct:{" "}
+              {pipelineEval.ddgiDiagnostics.octahedralDirCount}d • IBL:{" "}
               {pipelineEval.pbrSlot.iblContribution}
             </div>
           </div>
@@ -706,7 +940,8 @@ export function MaterialDatabaseInspector() {
                 .join(" + ") || "Analytic BRDF"}
             </div>
             <div className="text-[10px] text-amber-400">
-              Hearth Flicker: {pipelineEval.fireplaceFlickerMultiplier.toFixed(3)}×
+              Hearth Flicker: {pipelineEval.fireplaceFlickerMultiplier.toFixed(3)}× •{" "}
+              {pipelineEval.emissiveDiagnostics.supportedKindCount} Emissives
             </div>
           </div>
 

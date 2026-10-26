@@ -67,6 +67,18 @@ describe("FurnitureCatalogInspector surface area (cmaes-feat-fg4-catalog)", () =
     expect(unlocked.proceduralGeometry.partCount).toBeGreaterThanOrEqual(4);
     expect(unlocked.proceduralGeometry.assignedPbrSlots.length).toBeGreaterThan(0);
     expect(unlocked.proceduralGeometry.obbHalfExtents.every((v) => v > 0)).toBe(true);
+    expect(unlocked.taxonomyAndPrimitives.totalCatalogKinds).toBeGreaterThanOrEqual(40);
+    expect(unlocked.taxonomyAndPrimitives.totalCatalogFamilies).toBe(9);
+    expect(unlocked.taxonomyAndPrimitives.totalPbrClasses).toBeGreaterThanOrEqual(8);
+    expect(unlocked.taxonomyAndPrimitives.mappedPbrClassCount).toBeGreaterThan(0);
+    expect(unlocked.taxonomyAndPrimitives.archetypePartTotal).toBeGreaterThan(20);
+    expect(unlocked.taxonomyAndPrimitives.archetypeMeshChildren).toBeGreaterThan(10);
+    expect(unlocked.taxonomyAndPrimitives.applianceSuiteTotalJoints).toBeGreaterThanOrEqual(10);
+    expect(unlocked.contactAndWorldDiagnostics.aabbOverlapsFloor).toBe(true);
+    expect(unlocked.contactAndWorldDiagnostics.planeContactCount).toBeGreaterThan(0);
+    expect(unlocked.contactAndWorldDiagnostics.orthonormalTangentNorm).toBeCloseTo(1.0, 5);
+    expect(unlocked.contactAndWorldDiagnostics.lcpConstraintRows).toBeGreaterThanOrEqual(1);
+    expect(unlocked.contactAndWorldDiagnostics.rollingCylinderOmega).toBeGreaterThan(0);
     expect(unlocked.sdfCenterQuery.isInside).toBe(true);
     expect(unlocked.sdfCenterQuery.distance).toBeLessThan(0);
     expect(Math.abs(unlocked.sdfSurfaceQuery.distance)).toBeLessThan(1e-3);

@@ -30,6 +30,19 @@ import {
   sminPoly,
 } from "../lib/differentiableSdf";
 import type { G1TraceSample } from "../lib/frankensimCmaes";
+import {
+  G1_KERNEL_OBSTACLES,
+  g1ObstaclesForSeat,
+  g1OptimizationConfig,
+} from "../lib/g1OptimizationProtocol";
+import {
+  G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX,
+  G1_LEARNED_ACTUATOR_15_NAMES,
+  G1_OBSERVATION_42_SCHEMA,
+  G1_PHYSICAL_29_JOINT_NAMES,
+  G1TrainEnv,
+  stepBatch,
+} from "../lib/g1StepwiseEnv";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
 import {
   buildG1CapsulesFromIK,
@@ -37,13 +50,30 @@ import {
   G1_KINEMATICS,
   solveTwoBoneIK,
 } from "../lib/humanoidRagdollIk";
-import { checkG1SelfCollision, type LinkCapsule } from "../lib/robotSelfCollision";
+import {
+  checkG1SelfCollision,
+  checkRobotSelfCollision,
+  type LinkCapsule,
+  type SelfCollisionResult,
+  segmentSegmentClosestPoints,
+} from "../lib/robotSelfCollision";
 
 export interface G1DifferentiableSdfAndImpulseDiagnostic {
   impulseDeltaV: [number, number, number];
   capturePointRecoveryStepOffset: [number, number, number];
   recoveryKneePosition: [number, number, number];
   capsuleCount: number;
+  selfCollision: SelfCollisionResult;
+  legSegmentDistanceMeters: number;
+  stepwiseSchema: {
+    physicalJointCount: number;
+    learnedActuatorCount: number;
+    observationDimension: number;
+    batchStepRewards: number[];
+    kernelObstacleCount: number;
+    seatObstacleCount: number;
+    configuredTask: string;
+  };
   diffSceneDistance: number;
   diffSceneGradient: [number, number, number];
   hessianTrace: number;
@@ -113,11 +143,42 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
     smaxPolyVal: smaxPoly(0.25, 0.3, 0.1).val,
   };
 
+  const selfCollision = checkRobotSelfCollision(capsules, new Set(["pelvis:torso", "torso:head"]));
+  const segPts = segmentSegmentClosestPoints(
+    leftLegIk.midPosition,
+    leftLegIk.reachedTarget,
+    [pelvisPosition[0], pelvisPosition[1] - 0.35, pelvisPosition[2] + 0.11],
+    [pelvisPosition[0], 0.04, pelvisPosition[2] + 0.11],
+  );
+
+  const envA = new G1TrainEnv({ maxSteps: 10 });
+  const envB = new G1TrainEnv({ maxSteps: 10 });
+  envA.reset(42);
+  envB.reset(43);
+  const actSize = G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX.length;
+  const batchRes = stepBatch(
+    [envA, envB],
+    [new Array(actSize).fill(0.25), new Array(actSize).fill(-0.25)],
+  );
+  const seatObstacles = g1ObstaclesForSeat([pelvisPosition[0], 0, pelvisPosition[2]]);
+  const optCfg = g1OptimizationConfig("walking", "flat", seatObstacles);
+
   return {
     impulseDeltaV: impulse.deltaV,
     capturePointRecoveryStepOffset: impulse.recoveryStepOffset,
     recoveryKneePosition: leftLegIk.midPosition,
     capsuleCount: capsules.length,
+    selfCollision,
+    legSegmentDistanceMeters: segPts.distance,
+    stepwiseSchema: {
+      physicalJointCount: G1_PHYSICAL_29_JOINT_NAMES.length,
+      learnedActuatorCount: G1_LEARNED_ACTUATOR_15_NAMES.length,
+      observationDimension: G1_OBSERVATION_42_SCHEMA.totalDimension,
+      batchStepRewards: batchRes.map((r) => r.reward),
+      kernelObstacleCount: G1_KERNEL_OBSTACLES.length,
+      seatObstacleCount: seatObstacles.length,
+      configuredTask: optCfg.task,
+    },
     diffSceneDistance: sceneEval.distance,
     diffSceneGradient: sceneEval.gradient,
     hessianTrace,
