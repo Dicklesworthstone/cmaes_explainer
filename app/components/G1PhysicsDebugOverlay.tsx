@@ -20,6 +20,7 @@
 
 import React from "react";
 import * as THREE from "three";
+import { sdfHeightfield, sdfPlane, sdfRoundedBox } from "../lib/analyticSdf";
 import {
   DifferentiableSceneSDF,
   DifferentiableSdfNode,
@@ -36,6 +37,11 @@ import {
   g1OptimizationConfig,
 } from "../lib/g1OptimizationProtocol";
 import {
+  decodeSharedPolicy,
+  encodeSharedPolicy,
+  RESIDUAL_HEAD_LENGTH,
+} from "../lib/g1PolicyShare";
+import {
   G1_ACTUATOR_TO_PHYSICAL_JOINT_INDEX,
   G1_LEARNED_ACTUATOR_15_NAMES,
   G1_OBSERVATION_42_SCHEMA,
@@ -43,6 +49,7 @@ import {
   G1TrainEnv,
   stepBatch,
 } from "../lib/g1StepwiseEnv";
+import { decodeTrainingSession, encodeTrainingSession } from "../lib/g1TrainingSession";
 import { type OrientedBoundingBox, stageBoxRenderTransform } from "../lib/houseMultiObstacleKernel";
 import {
   buildG1CapsulesFromIK,
@@ -50,6 +57,14 @@ import {
   G1_KINEMATICS,
   solveTwoBoneIK,
 } from "../lib/humanoidRagdollIk";
+import {
+  closestPointOnTriangle,
+  closestPointOnTriangleWithFeature,
+  MeshSdf,
+  rayIntersectTriangle,
+  sampleVoxelSdf,
+  type TriangleVoronoiFeature,
+} from "../lib/meshSdf";
 import {
   checkG1SelfCollision,
   checkRobotSelfCollision,
@@ -73,6 +88,17 @@ export interface G1DifferentiableSdfAndImpulseDiagnostic {
     kernelObstacleCount: number;
     seatObstacleCount: number;
     configuredTask: string;
+    trainingSessionRoundtripValid: boolean;
+    policyShareRoundtripValid: boolean;
+  };
+  analyticAndMeshSdf: {
+    roundedBoxDistance: number;
+    planeDistance: number;
+    heightfieldDistance: number;
+    triangleRayHitT: number | null;
+    triangleClosestDistance: number;
+    triangleFeatureType: TriangleVoronoiFeature;
+    voxelSampleDistance: number;
   };
   diffSceneDistance: number;
   diffSceneGradient: [number, number, number];
@@ -163,6 +189,56 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
   const seatObstacles = g1ObstaclesForSeat([pelvisPosition[0], 0, pelvisPosition[2]]);
   const optCfg = g1OptimizationConfig("walking", "flat", seatObstacles);
 
+  const testPolicy = new Float64Array(RESIDUAL_HEAD_LENGTH).fill(0.05);
+  const meta = {
+    kernelVersion: "fs-cmaes-viz-wasm 0.6.19",
+    task: "walking",
+    challenge: "flat",
+    family: "cma",
+    generation: 3,
+    sigma: 0.25,
+  };
+  const encodedSession = encodeTrainingSession({
+    ...meta,
+    trainingSeconds: 12.5,
+    policy: testPolicy,
+    ledger: [],
+  });
+  const decodedSession = decodeTrainingSession(
+    JSON.stringify(encodedSession),
+    RESIDUAL_HEAD_LENGTH,
+  );
+  const encodedPolicy = encodeSharedPolicy(testPolicy, meta);
+  const decodedPolicy = decodeSharedPolicy(encodedPolicy, RESIDUAL_HEAD_LENGTH);
+
+  const roundedBoxeval = sdfRoundedBox(
+    pelvisPosition,
+    [0, 0.3, 0],
+    [0.2, 0.3, 0.2],
+    0.04,
+  );
+  const planeEval = sdfPlane(pelvisPosition, [0, 1, 0], 0);
+  const hfEval = sdfHeightfield(pelvisPosition, {
+    heights: new Float32Array([0, 0.02, 0.01, 0.03]),
+    rows: 2,
+    cols: 2,
+    minX: -1,
+    maxX: 1,
+    minZ: -1,
+    maxZ: 1,
+  });
+  const triA: [number, number, number] = [-0.5, 0, -0.5];
+  const triB: [number, number, number] = [0.5, 0, -0.5];
+  const triC: [number, number, number] = [0, 0, 0.5];
+  const triRayHitT = rayIntersectTriangle(pelvisPosition, [0, -1, 0], triA, triB, triC);
+  const triClosest = closestPointOnTriangle(pelvisPosition, triA, triB, triC);
+  const triClosestFeat = closestPointOnTriangleWithFeature(pelvisPosition, triA, triB, triC);
+  const boxGeom = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+  const meshSdf = new MeshSdf(boxGeom);
+  const voxelGrid = meshSdf.generateVoxelGrid([4, 4, 4], 0.1);
+  boxGeom.dispose();
+  const voxelSample = sampleVoxelSdf(voxelGrid, pelvisPosition);
+
   return {
     impulseDeltaV: impulse.deltaV,
     capturePointRecoveryStepOffset: impulse.recoveryStepOffset,
@@ -178,6 +254,21 @@ export function evaluateG1DifferentiableSdfAndImpulseDiagnostics(
       kernelObstacleCount: G1_KERNEL_OBSTACLES.length,
       seatObstacleCount: seatObstacles.length,
       configuredTask: optCfg.task,
+      trainingSessionRoundtripValid: decodedSession?.generation === 3,
+      policyShareRoundtripValid: decodedPolicy?.generation === 3,
+    },
+    analyticAndMeshSdf: {
+      roundedBoxDistance: roundedBoxeval.distance,
+      planeDistance: planeEval.distance,
+      heightfieldDistance: hfEval.distance,
+      triangleRayHitT: triRayHitT,
+      triangleClosestDistance: Math.hypot(
+        pelvisPosition[0] - triClosest[0],
+        pelvisPosition[1] - triClosest[1],
+        pelvisPosition[2] - triClosest[2],
+      ),
+      triangleFeatureType: triClosestFeat.feature,
+      voxelSampleDistance: voxelSample.distance,
     },
     diffSceneDistance: sceneEval.distance,
     diffSceneGradient: sceneEval.gradient,

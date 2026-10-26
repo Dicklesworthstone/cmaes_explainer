@@ -18,28 +18,70 @@ import {
   REQUIRED_FAST_PR_LANES,
   REQUIRED_RELEASE_CAMPAIGN_LANES,
 } from "../lib/browserPhysicsAdapter";
-import { solveContactImplicitCollocation } from "../lib/contactImplicitTrajectoryOpt";
-import { DEFAULT_DDP_CONFIG, solveDDP } from "../lib/ddpTrajectoryOptimization";
 import {
+  fischerBurmeister,
+  fischerBurmeisterGrad,
+  solveContactImplicitCollocation,
+} from "../lib/contactImplicitTrajectoryOpt";
+import {
+  DEFAULT_DDP_CONFIG,
+  evalDynamics,
+  evaluateTrajectoryCost,
+  linearizeDynamics,
+  solveDDP,
+} from "../lib/ddpTrajectoryOptimization";
+import {
+  axisAngleToRotationMatrix,
+  buildSpatialInertia,
+  computeLinkRelativeTransform,
   computeMechanicalEnergy,
+  createZeroSpatial,
+  eulerToRotationMatrix,
   forwardDynamicsABA,
   inverseDynamicsRNEA,
   type MultibodyTree,
+  multiplyInertiaVector,
+  multiplyMat3,
+  multiplyMat3Vec3,
+  normalizeAxis3,
+  spatialAdd,
+  spatialCrossForce,
+  spatialCrossMotion,
+  spatialDot,
+  spatialScale,
+  spatialSub,
   stepMultibodyDynamics,
+  transformSpatialForce,
+  transformSpatialInertia,
+  transformSpatialMotion,
+  transposeMat3,
 } from "../lib/featherstoneDynamics";
+import {
+  ARM_MAX_EXTRA_OBSTACLES,
+  G1_MAX_OBSTACLES,
+  kernelSourceNow,
+} from "../lib/frankensimCmaes";
 import {
   evaluateHouseNavigationSafetyAndCostmap,
   type HouseNavigationSafetyAndCostmapDiagnostic,
 } from "../lib/houseNavigationChain";
 import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerfProfiler";
 import {
+  decodeHouseholdNavigationPolicy,
   type EqualBudgetHouseholdCmaesResult,
+  evaluateHouseholdNavigationPolicy,
   runEqualBudgetHouseholdCmaes,
 } from "../lib/liveCmaesHousehold";
 import { generateMultiRoomTourRollout } from "../lib/multiRoomTour";
 import {
+  BODY_STRIDE,
+  CONTACT_STRIDE,
   decodeSchema8Packet,
   encodeSchema8Packet,
+  HEADER_WORDS,
+  JOINT_STRIDE,
+  SCHEMA_8_MAGIC,
+  SCHEMA_8_VERSION,
   type Schema8Frame,
   viewSchema8Packet,
 } from "../lib/schema8WireFormat";
@@ -67,6 +109,17 @@ export interface FrontierKernelAndStressDiagnostics {
   schema8ZeroCopyJointCount: number;
   schema8ZeroCopyContactCount: number;
   schema8DecodedFrame: Schema8Frame;
+  schema8Spec: {
+    magic: number;
+    version: number;
+    headerWords: number;
+    bodyStride: number;
+    jointStride: number;
+    contactStride: number;
+    g1MaxObstacles: number;
+    armMaxExtraObstacles: number;
+    kernelSource: string;
+  };
   featherstoneDynamics: {
     qDDotAba: number;
     tauRneaRoundtrip: number;
@@ -75,8 +128,14 @@ export interface FrontierKernelAndStressDiagnostics {
     potentialEnergy: number;
     totalEnergy: number;
     stepQNext: number;
+    spatialKineticPowerCheck: number;
+    spatialCrossPowerZero: number;
   };
   equalBudgetHouseholdCmaes: EqualBudgetHouseholdCmaesResult;
+  directHouseholdPolicyProbe: {
+    decodedMaxSpeedMps: number;
+    probeLoss: number;
+  };
   stressTrial: StressTrialResult;
   multiTrialSuite: MultiTrialSummary;
   wilson95CiPercent: [number, number];
@@ -94,12 +153,16 @@ export interface FrontierKernelAndStressDiagnostics {
     iterationsTaken: number;
     initialCost: number;
     finalCost: number;
+    linearizedB0: number;
+    recomputedFinalCost: number;
   };
   citoTrajectory: {
     converged: boolean;
     finalEpsilon: number;
     maxComplementarityGap: number;
     maxFischerBurmeisterResidual: number;
+    fbZeroResidual: number;
+    fbGradNorm: number;
   };
   perfProfiler: ProfilerSummaryStats;
 }
@@ -188,12 +251,30 @@ export function evaluateFrontierKernelAndStressDiagnostics(
   const zeroCopyView = viewSchema8Packet(packet);
   const schema8DecodedFrame = decodeSchema8Packet(packet);
 
-  // Featherstone ABA / RNEA inverse-forward roundtrip + total mechanical energy
+  // Featherstone ABA / RNEA inverse-forward roundtrip + total mechanical energy + spatial algebra
   const appliedTau = 1.25;
   const abaRes = forwardDynamicsABA(SINGLE_PENDULUM_TREE, [0.45], [0.2], [appliedTau]);
   const rneaTau = inverseDynamicsRNEA(SINGLE_PENDULUM_TREE, [0.45], [0.2], abaRes.qDDot);
   const mechEnergy = computeMechanicalEnergy(SINGLE_PENDULUM_TREE, [0.45], [0.2]);
   const stepDyn = stepMultibodyDynamics(SINGLE_PENDULUM_TREE, [0.45], [0.2], [appliedTau], 0.002);
+
+  const link0 = SINGLE_PENDULUM_TREE.links[0];
+  const relTf = computeLinkRelativeTransform(link0, 0.45);
+  const rotIdent = multiplyMat3(
+    eulerToRotationMatrix([0, 0, 0]),
+    transposeMat3(axisAngleToRotationMatrix(normalizeAxis3(link0.jointAxis), 0)),
+  );
+  const comRot = multiplyMat3Vec3(rotIdent, link0.centerOfMass);
+  const spatialI = buildSpatialInertia(link0.mass, comRot, link0.inertiaPrincipal);
+  const parentI = transformSpatialInertia(relTf.R_rel, relTf.r_rel, spatialI);
+  const vJoint = spatialAdd(createZeroSpatial(), spatialScale(relTf.S, 0.2));
+  const vMotion = transformSpatialMotion(relTf.R_rel, relTf.r_rel, vJoint);
+  const hMomentum = multiplyInertiaVector(parentI, vMotion);
+  const fBias = spatialCrossForce(vMotion, hMomentum);
+  const vCrossZero = spatialSub(spatialCrossMotion(vMotion, vMotion), createZeroSpatial());
+  const fParent = transformSpatialForce(relTf.R_rel, relTf.r_rel, fBias);
+  const spatialKineticPowerCheck = 0.5 * spatialDot(vMotion, hMomentum) + spatialDot(vCrossZero, fParent);
+  const spatialCrossPowerZero = Math.abs(spatialDot(vMotion, fBias));
 
   // Equal-budget CMA-ES vs Random Search on Craftsman Household Navigation Policy
   const equalBudgetHouseholdCmaes = runEqualBudgetHouseholdCmaes({
@@ -201,6 +282,8 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     populationSize: 4,
     generations: 2,
   });
+  const directDecoded = decodeHouseholdNavigationPolicy([0, 0, 0, 0, 0]);
+  const directEval = evaluateHouseholdNavigationPolicy([0, 0, 0, 0, 0], { maxSteps: 20 });
 
   const shuffledScene = generateShuffledScene({ seed });
   const stressTrial = runShuffledStressTrial(shuffledScene);
@@ -249,17 +332,31 @@ export function evaluateFrontierKernelAndStressDiagnostics(
 
   // DDP / iLQR Trajectory Optimization (Crocoddyl / Mayne / Tassa)
   const ddpHorizon = 12;
+  const ddpWeights = {
+    qState: [4.0, 0.5],
+    rControl: [0.05],
+    qTerminal: [20.0, 4.0],
+  };
   const ddpRes = solveDDP(
     SINGLE_PENDULUM_TREE,
     [0.45, 0.0],
     [0.0, 0.0],
     Array.from({ length: ddpHorizon }, () => [0.0]),
-    {
-      qState: [4.0, 0.5],
-      rControl: [0.05],
-      qTerminal: [20.0, 4.0],
-    },
+    ddpWeights,
     { ...DEFAULT_DDP_CONFIG, horizonSteps: ddpHorizon, maxIterations: 8 },
+  );
+  const ddpNextState = evalDynamics(SINGLE_PENDULUM_TREE, [0.45, 0.0], [0.0], DEFAULT_DDP_CONFIG.dt);
+  const ddpLin = linearizeDynamics(
+    SINGLE_PENDULUM_TREE,
+    ddpNextState,
+    [0.0],
+    DEFAULT_DDP_CONFIG.dt,
+  );
+  const recomputedFinalCost = evaluateTrajectoryCost(
+    ddpRes.states,
+    ddpRes.controls,
+    [0.0, 0.0],
+    ddpWeights,
   );
 
   // Contact-Implicit Trajectory Optimization (Posa-Cantu-Tedrake Fischer-Burmeister NCP)
@@ -272,6 +369,9 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     obstacles: [{ center: [0.6, 0.35, 0.2], size: [0.3, 0.7, 0.3] }],
     maxIterations: 8,
   });
+  const fbZeroResidual = Math.abs(fischerBurmeister(0.0, 12.0, 1e-4));
+  const fbGrad = fischerBurmeisterGrad(0.0, 12.0, 1e-4);
+  const fbGradNorm = Math.hypot(fbGrad.da, fbGrad.db);
 
   // Kernel Micro-Performance Profiler (480 Hz / 2083.3 us budget)
   const profiler = new KernelPerfProfiler(64, 480);
@@ -301,6 +401,17 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     schema8ZeroCopyJointCount: zeroCopyView.numJoints,
     schema8ZeroCopyContactCount: zeroCopyView.numContacts,
     schema8DecodedFrame,
+    schema8Spec: {
+      magic: SCHEMA_8_MAGIC,
+      version: SCHEMA_8_VERSION,
+      headerWords: HEADER_WORDS,
+      bodyStride: BODY_STRIDE,
+      jointStride: JOINT_STRIDE,
+      contactStride: CONTACT_STRIDE,
+      g1MaxObstacles: G1_MAX_OBSTACLES,
+      armMaxExtraObstacles: ARM_MAX_EXTRA_OBSTACLES,
+      kernelSource: kernelSourceNow(),
+    },
     featherstoneDynamics: {
       qDDotAba: abaRes.qDDot[0] ?? 0,
       tauRneaRoundtrip: rneaTau[0] ?? 0,
@@ -309,8 +420,14 @@ export function evaluateFrontierKernelAndStressDiagnostics(
       potentialEnergy: mechEnergy.potentialEnergy,
       totalEnergy: mechEnergy.totalEnergy,
       stepQNext: stepDyn.qNext[0] ?? 0,
+      spatialKineticPowerCheck,
+      spatialCrossPowerZero,
     },
     equalBudgetHouseholdCmaes,
+    directHouseholdPolicyProbe: {
+      decodedMaxSpeedMps: directDecoded.maxSpeedMps,
+      probeLoss: directEval.loss,
+    },
     stressTrial,
     multiTrialSuite,
     wilson95CiPercent,
@@ -328,12 +445,16 @@ export function evaluateFrontierKernelAndStressDiagnostics(
       iterationsTaken: ddpRes.iterationsTaken,
       initialCost: ddpRes.initialCost,
       finalCost: ddpRes.finalCost,
+      linearizedB0: ddpLin.B[1]?.[0] ?? 0,
+      recomputedFinalCost,
     },
     citoTrajectory: {
       converged: citoRes.converged,
       finalEpsilon: citoRes.finalEpsilon,
       maxComplementarityGap: citoRes.maxComplementarityGap,
       maxFischerBurmeisterResidual: citoRes.maxFischerBurmeisterResidual,
+      fbZeroResidual,
+      fbGradNorm,
     },
     perfProfiler,
   };

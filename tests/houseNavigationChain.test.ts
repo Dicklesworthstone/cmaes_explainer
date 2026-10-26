@@ -153,6 +153,9 @@ describe("simulateHouseNavigation final-sample clearance (regression)", () => {
     expect(diag.householdMultiObstacle.recoveryConstraintCount).toBeGreaterThanOrEqual(0);
     expect(Number.isFinite(diag.householdMultiObstacle.sscbfH)).toBe(true);
     expect(diag.householdMultiObstacle.segmentProjectionT).toBeGreaterThanOrEqual(0);
+    expect(diag.householdMultiObstacle.riskAwareMarginMeters).toBeGreaterThan(0);
+    expect(diag.householdMultiObstacle.fragilityMultiplier).toBeGreaterThan(1.0);
+    expect(diag.householdMultiObstacle.fragilityRiskScore).toBeGreaterThanOrEqual(0);
     expect(diag.decorTippingCheck.tippingThresholdNm).toBeGreaterThan(0);
     expect(diag.learnedCostmap.parameterCount).toBeGreaterThan(0);
     expect(Number.isFinite(diag.learnedCostmap.neuralClearanceValue)).toBe(true);

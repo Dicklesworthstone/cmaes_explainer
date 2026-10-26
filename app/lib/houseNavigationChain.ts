@@ -47,6 +47,11 @@ import {
 import { CRAFTSMAN_BUNGALOW_1928, type HouseSceneConfig } from "./houseScenes";
 import { LearnedCostmapEngine } from "./learnedCostmap";
 import {
+  computeAdaptiveSafetyMargin,
+  DEFAULT_MARGIN_CONFIG,
+  getFragilityMultiplier,
+} from "./riskAwareMargin";
+import {
   buildRecoveryConstraintsFromObb,
   DEFAULT_RECOVERY_CONFIG,
   type RecoveryState,
@@ -458,6 +463,9 @@ export interface HouseNavigationSafetyAndCostmapDiagnostic {
     recoveryConstraintCount: number;
     sscbfH: number;
     segmentProjectionT: number;
+    riskAwareMarginMeters: number;
+    fragilityMultiplier: number;
+    fragilityRiskScore: number;
   };
   decorTippingCheck: {
     willTip: boolean;
@@ -587,6 +595,18 @@ export function evaluateHouseNavigationSafetyAndCostmap(
     firstDoorway,
   );
   const segProj = projectPointOntoSegment(position, firstDoorway.start, firstDoorway.end);
+  const fragilityMultiplier = getFragilityMultiplier("glass");
+  const riskMargin = computeAdaptiveSafetyMargin(
+    [position[0], 0.5, position[1]],
+    [velocity[0], 0, velocity[1]],
+    query.gradientVector,
+    {
+      center: firstObb?.center ?? [0, 0.5, 0],
+      riskClass: "glass",
+      fragility: 0.9,
+    },
+    DEFAULT_MARGIN_CONFIG,
+  );
 
   const parlorLamp = createDecorObject("parlor-floor-lamp", "floor-lamp", [1.2, 0.0, 2.4]);
   const decorTippingCheck = checkDecorTipping(parlorLamp, 6.5, 1.1);
@@ -625,6 +645,9 @@ export function evaluateHouseNavigationSafetyAndCostmap(
       recoveryConstraintCount: recoveryConstraints.length,
       sscbfH: sscbfEval.hLateral,
       segmentProjectionT: segProj.t,
+      riskAwareMarginMeters: riskMargin.margin,
+      fragilityMultiplier,
+      fragilityRiskScore: riskMargin.brakingDist * riskMargin.riskFactor,
     },
     decorTippingCheck,
     learnedCostmap: {
