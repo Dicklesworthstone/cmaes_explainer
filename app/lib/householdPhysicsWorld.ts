@@ -17,7 +17,10 @@ import {
   type Vector3,
 } from "./contactGraph";
 import { resolveContactImpulse } from "./contactManifold";
-import { stepContactRestitution } from "./contactRestitutionIntegrator";
+import {
+  computeHuntCrossleyContactForce,
+  stepContactRestitution,
+} from "./contactRestitutionIntegrator";
 import {
   type CcdResult,
   queryContinuousCollisionSDF,
@@ -31,15 +34,27 @@ import {
   type LinkPose,
 } from "./furnitureArticulation";
 import type { FurnitureKind } from "./furnitureTaxonomy";
-import { DEFAULT_LCP_CONFIG, type LCPSolverConfig, stepPhysicsWorld } from "./lcpSolver";
+import {
+  buildContactConstraints,
+  DEFAULT_LCP_CONFIG,
+  type LCPSolveResult,
+  type LCPSolverConfig,
+  solveLCP,
+  stepPhysicsWorld,
+} from "./lcpSolver";
 import type { HouseholdMaterial } from "./materialPairFriction";
 import {
-   DEFAULT_SLEEP_CONFIG,
+  DEFAULT_SLEEP_CONFIG,
   MultiBodySleepManager,
   type SleepableBody,
   type SleepTransitionEvent,
 } from "./multiBodySleepState";
-import { type RollingBody, stepRollingSphere } from "./rollingContactDynamics";
+import {
+  type RollingBody,
+  type RollingContactResult,
+  stepRollingCylinder,
+  stepRollingSphere,
+} from "./rollingContactDynamics";
 import {
   createCurtainLattice,
   createCushionLattice,
@@ -60,6 +75,7 @@ export interface HouseholdBodyMeta {
   boundingRadius: number;
   material: HouseholdMaterial;
   rolling?: boolean;
+  rollingShape?: "sphere" | "cylinder";
   breakable?: boolean;
   breakImpulseThresholdNs?: number;
   fragmentCount?: number;
@@ -111,7 +127,7 @@ export interface HouseholdStepResult {
   manifolds: ContactManifold[];
   sleepTransitions: SleepTransitionEvent[];
   ccdImpacts: Array<{ bodyId: string; result: CcdResult }>;
-  restitution: Array<{ bodyId: string; settled: boolean }>;
+  restitution: Array<{ bodyId: string; settled: boolean; contactForceNewtons?: number }>;
   breakageEvents: HouseholdBreakageEvent[];
   articulationReceipts: Map<string, Map<string, ArticulationStepReceipt>>;
   articulationLinkPoses: Map<string, Map<string, LinkPose>>;
@@ -119,6 +135,7 @@ export interface HouseholdStepResult {
   lcpIterations: number;
   lcpMaxResidual: number;
   lcpConverged: boolean;
+  lcpConstraintCount?: number;
   stepRefused?: boolean;
 }
 
@@ -450,7 +467,19 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
         r.settled ? 0 : body.linearVelocity[2],
       ];
     }
-    restitution.push({ bodyId: body.id, settled: r.settled });
+    const hcForce =
+      r.contactForceNewtons > 0
+        ? r.contactForceNewtons
+        : inFloorContact
+          ? computeHuntCrossleyContactForce(
+              Math.max(0, meta.boundingRadius - body.position[2]),
+              Math.max(0, -body.linearVelocity[2]),
+              25000.0,
+              body.restitution,
+              Math.max(0.15, Math.abs(body.linearVelocity[2])),
+            )
+          : 0;
+    restitution.push({ bodyId: body.id, settled: r.settled, contactForceNewtons: hcForce });
   }
 
   if (!stepRefused) {
@@ -459,12 +488,13 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
       const meta = world.meta.get(body.id);
       if (!meta?.rolling) continue;
       const snap = preStepSnapshots.get(body.id);
-      // stepRollingSphere is a 2D planar integrator whose vertical axis is
+      const rollingShape = meta.rollingShape ?? "sphere";
+      // stepRollingSphere / stepRollingCylinder is a 2D planar integrator whose vertical axis is
       // index [1] (Y-down). The Frankensim contact/LCP world is Z-up, so swap
       // Y and Z when crossing the boundary: their [0,1,2] ↔ our [0,2,1].
       const rollingBody: RollingBody = {
         id: body.id,
-        type: "sphere",
+        type: rollingShape,
         position: [body.position[0], body.position[2], body.position[1]],
         velocity: [body.linearVelocity[0], body.linearVelocity[2], body.linearVelocity[1]],
         angularVelocity: [
@@ -479,7 +509,10 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
         muRolling: 0.005,
         restitution: body.restitution,
       };
-      const rollRes = stepRollingSphere(rollingBody, 0.0, world.dt);
+      const rollRes =
+        rollingShape === "cylinder"
+          ? stepRollingCylinder(rollingBody, 0.0, world.dt)
+          : stepRollingSphere(rollingBody, 0.0, world.dt);
       if (rollRes.hasContact && snap) {
         body.linearVelocity = [
           rollingBody.velocity[0],
@@ -756,8 +789,16 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     }
   }
 
+  const activeManifolds = world.contactGraph.getActiveManifolds();
+  const lcpConstraintCount = buildContactConstraints(
+    bodies,
+    activeManifolds,
+    world.dt,
+    world.lcpConfig ?? DEFAULT_LCP_CONFIG,
+  ).length;
+
   return {
-    manifolds: world.contactGraph.getActiveManifolds(),
+    manifolds: activeManifolds,
     ccdImpacts,
     restitution,
     breakageEvents,
@@ -767,7 +808,82 @@ export function stepHouseholdPhysicsWorld(world: HouseholdWorld): HouseholdStepR
     lcpIterations: lcp.iterationsTaken,
     lcpMaxResidual: lcp.maxResidual,
     lcpConverged: lcp.converged,
+    lcpConstraintCount,
     stepRefused,
     sleepTransitions,
+  };
+}
+
+export interface HouseholdLcpAndRollingDiagnostic {
+  constraintCount: number;
+  lcpSolve: LCPSolveResult;
+  rollingCylinder: RollingContactResult;
+  huntCrossleyForceN: number;
+}
+
+export function evaluateHouseholdLcpAndRollingDiagnostics(): HouseholdLcpAndRollingDiagnostic {
+  const cg = new ContactGraph();
+  const floor: RigidBody = {
+    id: "floor",
+    isStatic: true,
+    shape: { type: "box", halfExtents: [5, 5, 0.1] },
+    position: [0, 0, -0.1],
+    rotation: [0, 0, 0],
+    linearVelocity: [0, 0, 0],
+    angularVelocity: [0, 0, 0],
+    mass: 0,
+    invMass: 0,
+    inertiaLocal: [0, 0, 0],
+    invInertiaLocal: [0, 0, 0],
+    friction: 0.5,
+    restitution: 0.2,
+  };
+  const mug: RigidBody = {
+    id: "mug",
+    isStatic: false,
+    shape: { type: "sphere", radius: 0.05 },
+    position: [0, 0, 0.045],
+    rotation: [0, 0, 0],
+    linearVelocity: [0.1, 0, -0.35],
+    angularVelocity: [0, 0, 0],
+    mass: 0.35,
+    invMass: 1 / 0.35,
+    inertiaLocal: [0.001, 0.001, 0.001],
+    invInertiaLocal: [1000, 1000, 1000],
+    friction: 0.45,
+    restitution: 0.2,
+  };
+  cg.addBody(floor);
+  cg.addBody(mug);
+  const manifolds = cg.updateContacts();
+  const bodyMap = new Map<string, RigidBody>([
+    ["floor", floor],
+    ["mug", mug],
+  ]);
+  const constraints = buildContactConstraints(bodyMap, manifolds, 1 / 60, DEFAULT_LCP_CONFIG);
+  const lcpSolve = solveLCP(bodyMap, constraints, DEFAULT_LCP_CONFIG);
+
+  const cylinderBody: RollingBody = {
+    id: "bar-stool-caster",
+    type: "cylinder",
+    position: [0, 0.12, 0],
+    velocity: [0.45, 0, 0],
+    angularVelocity: [0, 0.2, -1.5],
+    mass: 4.5,
+    radius: 0.12,
+    height: 0.65,
+    muSliding: 0.4,
+    muSpinning: 0.08,
+    muRolling: 0.006,
+    restitution: 0.15,
+  };
+  const rollingCylinder = stepRollingCylinder(cylinderBody, 0.0, 0.016);
+  const huntCrossleyForceN = computeHuntCrossleyContactForce(0.003, 0.45, 25000, 0.2, 0.5);
+
+  return {
+    constraintCount: constraints.length,
+    lcpSolve,
+    rollingCylinder,
+    huntCrossleyForceN,
   };
 }

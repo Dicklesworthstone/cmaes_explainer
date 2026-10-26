@@ -26,13 +26,20 @@
 
 import React, { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { ARM_LINK_RADII, resolveRenderedGripperContactGeometry } from "../lib/armContactPhysics";
+import {
+  ARM_LINK_RADII,
+  OBJECT_CONTACT_HULLS,
+  type ResolvedArmObjectContact,
+  resolveArmObjectContact,
+  resolveRenderedGripperContactGeometry,
+} from "../lib/armContactPhysics";
 import {
   computeKukaFK,
   KUKA_AUXILIARY_JOINT_LIMITS,
   KUKA_LINK_LENGTHS,
   resolveArmChainCollisions,
 } from "../lib/armInverseKinematics";
+import { projectLinkOutOfOBB } from "../lib/armLinkCollisionResponse";
 import type {
   HouseholdManipulationAdmission,
   HouseholdManipulationTraceSample,
@@ -43,6 +50,51 @@ import {
   buildArmCapsulesFromLinkPositions,
   checkArmSelfCollision,
 } from "../lib/robotSelfCollision";
+
+export interface ArmObjectContactDiagnostic {
+  hullKeys: string[];
+  resolvedContact: ResolvedArmObjectContact;
+  singleLinkObbProjection: {
+    newPos: [number, number, number];
+    penetrating: boolean;
+    penetrationDepth: number;
+  };
+}
+
+export function evaluateArmObjectContactDiagnostics(
+  rawEndEffectorPos: [number, number, number] = [0.42, 0.84, 0.12],
+  rawObjectPos: [number, number, number] = [0.42, 0.83, 0.12],
+  commandedGripperWidthM = 0.06,
+  taskOrObjectId = "kitchen-mug",
+  obstacles: OrientedBoundingBox[] = [],
+): ArmObjectContactDiagnostic {
+  const hullKeys = Object.keys(OBJECT_CONTACT_HULLS);
+  const safeId = OBJECT_CONTACT_HULLS[taskOrObjectId] ? taskOrObjectId : "kitchen-mug";
+  const resolvedContact = resolveArmObjectContact({
+    rawEndEffectorPos,
+    rawObjectPos,
+    commandedGripperWidthM,
+    taskOrObjectId: safeId,
+    isGraspedIntent: commandedGripperWidthM < 0.08,
+    obstacles,
+  });
+  const testObb: OrientedBoundingBox = obstacles[0] ?? {
+    name: "tabletop-obb",
+    center: [0.42, 0.39, 0.12],
+    halfExtents: [0.6, 0.39, 0.4],
+    rotationYawRad: 0,
+  };
+  const singleLinkObbProjection = projectLinkOutOfOBB(
+    rawEndEffectorPos,
+    ARM_LINK_RADII[7] ?? 0.04,
+    testObb,
+  );
+  return {
+    hullKeys,
+    resolvedContact,
+    singleLinkObbProjection,
+  };
+}
 
 // Module-level cache of the reachable workspace point cloud. Computing
 // it on every render would be wasteful; the joint limits are constants
@@ -227,6 +279,16 @@ export function ArmPhysicsDebugOverlay({
       collidingArmLinks.add(pair.linkB);
     }
   }
+  const objectContactDiag =
+    gripperPosition && objectPosition
+      ? evaluateArmObjectContactDiagnostics(
+          gripperPosition,
+          objectPosition,
+          sample?.gripperWidthMeters ?? 0.06,
+          "kitchen-mug",
+          obstacles,
+        )
+      : null;
 
   return (
     <group>
@@ -319,6 +381,19 @@ export function ArmPhysicsDebugOverlay({
             wireframe
             transparent
             opacity={0.9}
+            depthWrite={false}
+          />
+        </mesh>
+      ) : null}
+
+      {objectContactDiag ? (
+        <mesh position={objectContactDiag.resolvedContact.resolvedObjectPos}>
+          <sphereGeometry args={[0.045, 10, 8]} />
+          <meshBasicMaterial
+            color={objectContactDiag.resolvedContact.isGrasped ? "#38bdf8" : "#94a3b8"}
+            wireframe
+            transparent
+            opacity={0.55}
             depthWrite={false}
           />
         </mesh>
