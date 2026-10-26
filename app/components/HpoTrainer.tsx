@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   CmaesHyperparameterOptimizer,
   defaultGenotypeFromSpecs,
   encodeGenotype,
+  evaluateHpoEightKnobCausalInterventions,
   G1_TRAINING_HYPERPARAMETERS,
   type HpoCandidateDecoded,
   type HpoParameterSpec,
@@ -60,6 +61,7 @@ export function HpoTrainer() {
   const [warmStart, setWarmStart] = useState(false);
   const [mirrored, setMirrored] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const causalAudit = useMemo(() => evaluateHpoEightKnobCausalInterventions(0x47315040), []);
   const optimizerRef = useRef<CmaesHyperparameterOptimizer | null>(null);
   // Ref (not state) so React 19 strict mode running the updater twice
   // does NOT trigger a duplicate setLastDelta side-effect.
@@ -130,6 +132,13 @@ export function HpoTrainer() {
       mirrored,
       generations: history.length,
       result,
+      causalAudit: {
+        allEightKnobsCausallyActive: causalAudit.allEightKnobsCausallyActive,
+        rewardRescalingHeldOutInvariantUnderFrozenPolicy:
+          causalAudit.rewardRescalingHeldOutInvariantUnderFrozenPolicy,
+        antiRewardHackingVerifiedUnderActiveTraining:
+          causalAudit.antiRewardHackingVerifiedUnderActiveTraining,
+      },
       csv: [
         "generation,best_fitness",
         ...history.map((v, i) => `${i + 1},${v.toExponential(6)}`),
@@ -143,15 +152,19 @@ export function HpoTrainer() {
     }
   };
 
+  const activeReceipt = result?.lastBestReceipt ?? causalAudit.baselineReceipt;
+
   return (
     <Section id="hpo-trainer" title="Exploring hyperparameter search with CMA-ES">
       <div className="space-y-4">
         <p className="max-w-3xl text-sm leading-7 text-slate-400">
-          This eight-dimensional CMA-ES search evaluates a kinematic stand-in for G1 motion.
-          Learning rate, momentum and entropy currently control action amplitude, smoothing and
-          noise; the three reward weights, GAE lambda and value-loss coefficient do not yet affect
-          evaluation. No PPO or Muon training runs here. Each generation evaluates eight candidates,
-          or sixteen with mirrored sampling, for up to 120 steps per rollout.
+          This eight-dimensional CMA-ES search evaluates a 3-epoch inner policy and value-baseline
+          training loop on the kinematic stand-in for G1 motion (not the full 3D v068 multi-body
+          kernel). All eight hyperparameters—learning rate, momentum, entropy penalty, three inner
+          reward weights, GAE lambda, and value-loss coefficient—causally participate in inner GAE
+          advantage estimation and RMS-normalized momentum policy updates, while outer fitness is
+          scored strictly on held-out canonical rollouts (up to 120 steps) so candidate reward-weight
+          scaling cannot inflate outer fitness.
         </p>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -278,6 +291,27 @@ export function HpoTrainer() {
               The cold start uses the centre of each range (in log space where specified); warm
               start uses the defaults.
             </p>
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800/80 pt-3 font-mono text-[11px] text-slate-300 sm:grid-cols-4">
+              <div>
+                <div className="text-[10px] uppercase text-slate-500">Δθ Policy</div>
+                <div>{activeReceipt.innerPolicyWeightDeltaNorm.toFixed(4)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-slate-500">Δw Value</div>
+                <div>{activeReceipt.innerValueWeightDeltaNorm.toFixed(4)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-slate-500">Mean |GAE|</div>
+                <div>{activeReceipt.meanGaeAdvantage.toFixed(3)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase text-slate-500">Held-Out Dist</div>
+                <div>
+                  {activeReceipt.heldOutDistanceMeters.toFixed(2)} m ·{" "}
+                  {causalAudit.allEightKnobsCausallyActive ? "8/8 Causal" : "Drift"}
+                </div>
+              </div>
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">

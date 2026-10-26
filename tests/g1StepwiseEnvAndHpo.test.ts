@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CmaesHyperparameterOptimizer,
   defaultGenotypeFromSpecs,
+  evaluateHpoEightKnobCausalInterventions,
   G1_TRAINING_HYPERPARAMETERS,
 } from "../app/lib/cmaesHyperparameterLoop";
 import {
@@ -347,5 +348,23 @@ describe("Outer HPO loop upgrades (cmaes-89eg: WS-CMA-ES warm start, mirrored es
     // Inner shaped return scales by ~1000x, but held-out canonical return stays bounded by physical environment limits
     expect(inflatedReceipt.innerShapedReturn).toBeGreaterThan(normalReceipt.innerShapedReturn * 500);
     expect(Math.abs(inflatedReceipt.heldOutCanonicalReturn)).toBeLessThan(100.0);
+  });
+
+  test("evaluateHpoEightKnobCausalInterventions verifies 8-knob causal deltas, frozen-policy held-out invariance, and mirrored rollout accounting", () => {
+    const report = evaluateHpoEightKnobCausalInterventions(42);
+    expect(report.allEightKnobsCausallyActive).toBe(true);
+    expect(report.perKnobReceiptDeltas.length).toBe(8);
+    for (const delta of report.perKnobReceiptDeltas) {
+      expect(delta.policyDeltaDiff).toBeGreaterThan(0);
+      expect(delta.heldOutReturnDiff).toBeGreaterThan(0);
+    }
+    expect(report.zeroLrPolicyDeltaNorm).toBe(0);
+    expect(report.zeroLrValueDeltaNorm).toBe(0);
+    expect(report.zeroValueCoefValueDeltaNorm).toBe(0);
+    expect(report.zeroValueCoefPolicyDeltaNorm).toBeGreaterThan(0);
+    expect(report.rewardRescalingHeldOutInvariantUnderFrozenPolicy).toBe(true);
+    expect(report.antiRewardHackingVerifiedUnderActiveTraining).toBe(true);
+    expect(report.mirroredRolloutCount).toBe(32);
+    expect(report.mirroredDistinctCandidateCount).toBeGreaterThan(1);
   });
 });

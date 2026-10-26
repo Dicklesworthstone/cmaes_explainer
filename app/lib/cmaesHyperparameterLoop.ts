@@ -586,3 +586,133 @@ export class CmaesHyperparameterOptimizer {
     };
   }
 }
+
+export interface HpoKnobInterventionDelta {
+  name: string;
+  policyDeltaDiff: number;
+  valueDeltaDiff: number;
+  gaeAdvantageDiff: number;
+  heldOutReturnDiff: number;
+}
+
+export interface HpoEightKnobCausalInterventionReport {
+  baselineReceipt: InnerTrainingReceipt;
+  perKnobReceiptDeltas: HpoKnobInterventionDelta[];
+  allEightKnobsCausallyActive: boolean;
+  zeroLrPolicyDeltaNorm: number;
+  zeroLrValueDeltaNorm: number;
+  zeroValueCoefValueDeltaNorm: number;
+  zeroValueCoefPolicyDeltaNorm: number;
+  rewardRescalingHeldOutInvariantUnderFrozenPolicy: boolean;
+  antiRewardHackingVerifiedUnderActiveTraining: boolean;
+  mirroredRolloutCount: number;
+  mirroredDistinctCandidateCount: number;
+}
+
+/**
+ * Runs a deterministic 8-knob causal intervention and anti-reward-hacking audit
+ * on CmaesHyperparameterOptimizer (cmaes-za0x.27 / cmaes-za0x.28).
+ */
+export function evaluateHpoEightKnobCausalInterventions(
+  seed = 42,
+): HpoEightKnobCausalInterventionReport {
+  const hpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, seed);
+  const baseGenotype = defaultGenotypeFromSpecs(G1_TRAINING_HYPERPARAMETERS);
+  const baselineReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype);
+
+  const perKnobReceiptDeltas: HpoKnobInterventionDelta[] = [];
+  let allEightKnobsCausallyActive = true;
+
+  for (let dim = 0; dim < G1_TRAINING_HYPERPARAMETERS.length; dim++) {
+    const lowGenotype = [...baseGenotype];
+    const highGenotype = [...baseGenotype];
+    lowGenotype[dim] = -0.9;
+    highGenotype[dim] = 0.9;
+
+    const lowReceipt = hpo.evaluateCandidateWithReceipt(lowGenotype);
+    const highReceipt = hpo.evaluateCandidateWithReceipt(highGenotype);
+
+    const policyDeltaDiff = Math.abs(
+      highReceipt.innerPolicyWeightDeltaNorm - lowReceipt.innerPolicyWeightDeltaNorm,
+    );
+    const valueDeltaDiff = Math.abs(
+      highReceipt.innerValueWeightDeltaNorm - lowReceipt.innerValueWeightDeltaNorm,
+    );
+    const gaeAdvantageDiff = Math.abs(
+      highReceipt.meanGaeAdvantage - lowReceipt.meanGaeAdvantage,
+    );
+    const heldOutReturnDiff = Math.abs(
+      highReceipt.heldOutCanonicalReturn - lowReceipt.heldOutCanonicalReturn,
+    );
+
+    if (policyDeltaDiff <= 0 || heldOutReturnDiff <= 0) {
+      allEightKnobsCausallyActive = false;
+    }
+
+    perKnobReceiptDeltas.push({
+      name: G1_TRAINING_HYPERPARAMETERS[dim].name,
+      policyDeltaDiff,
+      valueDeltaDiff,
+      gaeAdvantageDiff,
+      heldOutReturnDiff,
+    });
+  }
+
+  const zeroLrReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+    muonLearningRate: 0.0,
+  });
+  const zeroValueCoefReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+    valueLossCoef: 0.0,
+  });
+
+  const frozenScaledReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+    muonLearningRate: 0.0,
+    weightProgress: baselineReceipt.hyperparameters.weightProgress * 10.0,
+    weightUpright: baselineReceipt.hyperparameters.weightUpright * 10.0,
+    weightEnergy: baselineReceipt.hyperparameters.weightEnergy * 10.0,
+  });
+  const rewardRescalingHeldOutInvariantUnderFrozenPolicy =
+    Math.abs(frozenScaledReceipt.heldOutCanonicalReturn - zeroLrReceipt.heldOutCanonicalReturn) <
+      1e-12 &&
+    Math.abs(frozenScaledReceipt.innerShapedReturn) > Math.abs(zeroLrReceipt.innerShapedReturn) * 5;
+
+  const inflatedActiveReceipt = hpo.evaluateCandidateWithReceipt(baseGenotype, {
+    weightProgress: baselineReceipt.hyperparameters.weightProgress * 1000.0,
+    weightUpright: baselineReceipt.hyperparameters.weightUpright * 1000.0,
+    weightEnergy: baselineReceipt.hyperparameters.weightEnergy * 1000.0,
+  });
+  const antiRewardHackingVerifiedUnderActiveTraining =
+    inflatedActiveReceipt.innerShapedReturn > baselineReceipt.innerShapedReturn * 500.0 &&
+    Math.abs(inflatedActiveReceipt.heldOutCanonicalReturn) < 100.0;
+
+  const mirroredHpo = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, seed, {
+    mirroredSampling: true,
+    replicationsPerCandidate: 2,
+    baseRolloutSeed: 71,
+  });
+  const candidates = mirroredHpo.cmaOptimizer.samplePopulation(true);
+  const candidateFitnesses = candidates.map(
+    (cand) => mirroredHpo.evaluateCandidateWithReceipt(cand).fitness,
+  );
+  const mirroredDistinctCandidateCount = new Set(candidateFitnesses).size;
+  const mirroredGen = new CmaesHyperparameterOptimizer(G1_TRAINING_HYPERPARAMETERS, seed, {
+    mirroredSampling: true,
+    replicationsPerCandidate: 2,
+    baseRolloutSeed: 71,
+  }).stepGeneration();
+
+  return {
+    baselineReceipt,
+    perKnobReceiptDeltas,
+    allEightKnobsCausallyActive,
+    zeroLrPolicyDeltaNorm: zeroLrReceipt.innerPolicyWeightDeltaNorm,
+    zeroLrValueDeltaNorm: zeroLrReceipt.innerValueWeightDeltaNorm,
+    zeroValueCoefValueDeltaNorm: zeroValueCoefReceipt.innerValueWeightDeltaNorm,
+    zeroValueCoefPolicyDeltaNorm: zeroValueCoefReceipt.innerPolicyWeightDeltaNorm,
+    rewardRescalingHeldOutInvariantUnderFrozenPolicy,
+    antiRewardHackingVerifiedUnderActiveTraining,
+    mirroredRolloutCount: mirroredGen.evaluationsCount,
+    mirroredDistinctCandidateCount,
+  };
+}
+
