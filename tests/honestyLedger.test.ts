@@ -78,6 +78,19 @@ describe("Project Honesty Ledger & Traceability Registry", () => {
     expect(diag.schema8ZeroCopyBodyCount).toBe(2);
     expect(diag.schema8ZeroCopyJointCount).toBe(1);
     expect(diag.schema8ZeroCopyContactCount).toBe(1);
+    expect(diag.schema8DecodedFrame.sequenceIndex).toBe(101);
+    expect(diag.schema8DecodedFrame.bodies.length).toBe(2);
+    expect(diag.schema8DecodedFrame.joints.length).toBe(1);
+    expect(diag.schema8DecodedFrame.contacts.length).toBe(1);
+    expect(diag.featherstoneDynamics.abaRneaResidualAbs).toBeLessThan(1e-10);
+    expect(Number.isFinite(diag.featherstoneDynamics.totalEnergy)).toBe(true);
+    expect(Number.isFinite(diag.featherstoneDynamics.stepQNext)).toBe(true);
+    expect(diag.equalBudgetHouseholdCmaes.evaluationBudget).toBe(8);
+    expect(diag.equalBudgetHouseholdCmaes.cmaesEvaluationsUsed).toBe(8);
+    expect(diag.equalBudgetHouseholdCmaes.randomSearchEvaluationsUsed).toBe(8);
+    expect(diag.equalBudgetHouseholdCmaes.cmaesBestReceipt.loss).toBeLessThanOrEqual(
+      diag.equalBudgetHouseholdCmaes.initialPolicyReceipt.loss,
+    );
     expect(diag.stressTrial.trialSeed).toBe(101);
     expect(diag.stressTrial.totalSteps).toBeGreaterThan(0);
     expect(Number.isFinite(diag.stressTrial.minimumClearanceMeters)).toBe(true);

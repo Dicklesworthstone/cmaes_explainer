@@ -20,14 +20,29 @@ import {
 } from "../lib/browserPhysicsAdapter";
 import { solveContactImplicitCollocation } from "../lib/contactImplicitTrajectoryOpt";
 import { DEFAULT_DDP_CONFIG, solveDDP } from "../lib/ddpTrajectoryOptimization";
-import type { MultibodyTree } from "../lib/featherstoneDynamics";
+import {
+  computeMechanicalEnergy,
+  forwardDynamicsABA,
+  inverseDynamicsRNEA,
+  type MultibodyTree,
+  stepMultibodyDynamics,
+} from "../lib/featherstoneDynamics";
 import {
   evaluateHouseNavigationSafetyAndCostmap,
   type HouseNavigationSafetyAndCostmapDiagnostic,
 } from "../lib/houseNavigationChain";
 import { KernelPerfProfiler, type ProfilerSummaryStats } from "../lib/kernelPerfProfiler";
+import {
+  type EqualBudgetHouseholdCmaesResult,
+  runEqualBudgetHouseholdCmaes,
+} from "../lib/liveCmaesHousehold";
 import { generateMultiRoomTourRollout } from "../lib/multiRoomTour";
-import { encodeSchema8Packet, viewSchema8Packet } from "../lib/schema8WireFormat";
+import {
+  decodeSchema8Packet,
+  encodeSchema8Packet,
+  type Schema8Frame,
+  viewSchema8Packet,
+} from "../lib/schema8WireFormat";
 import {
   computeWilsonConfidenceInterval95,
   generateShuffledScene,
@@ -51,6 +66,17 @@ export interface FrontierKernelAndStressDiagnostics {
   schema8ZeroCopyBodyCount: number;
   schema8ZeroCopyJointCount: number;
   schema8ZeroCopyContactCount: number;
+  schema8DecodedFrame: Schema8Frame;
+  featherstoneDynamics: {
+    qDDotAba: number;
+    tauRneaRoundtrip: number;
+    abaRneaResidualAbs: number;
+    kineticEnergy: number;
+    potentialEnergy: number;
+    totalEnergy: number;
+    stepQNext: number;
+  };
+  equalBudgetHouseholdCmaes: EqualBudgetHouseholdCmaesResult;
   stressTrial: StressTrialResult;
   multiTrialSuite: MultiTrialSummary;
   wilson95CiPercent: [number, number];
@@ -160,6 +186,21 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     ],
   });
   const zeroCopyView = viewSchema8Packet(packet);
+  const schema8DecodedFrame = decodeSchema8Packet(packet);
+
+  // Featherstone ABA / RNEA inverse-forward roundtrip + total mechanical energy
+  const appliedTau = 1.25;
+  const abaRes = forwardDynamicsABA(SINGLE_PENDULUM_TREE, [0.45], [0.2], [appliedTau]);
+  const rneaTau = inverseDynamicsRNEA(SINGLE_PENDULUM_TREE, [0.45], [0.2], abaRes.qDDot);
+  const mechEnergy = computeMechanicalEnergy(SINGLE_PENDULUM_TREE, [0.45], [0.2]);
+  const stepDyn = stepMultibodyDynamics(SINGLE_PENDULUM_TREE, [0.45], [0.2], [appliedTau], 0.002);
+
+  // Equal-budget CMA-ES vs Random Search on Craftsman Household Navigation Policy
+  const equalBudgetHouseholdCmaes = runEqualBudgetHouseholdCmaes({
+    seed,
+    populationSize: 4,
+    generations: 2,
+  });
 
   const shuffledScene = generateShuffledScene({ seed });
   const stressTrial = runShuffledStressTrial(shuffledScene);
@@ -259,6 +300,17 @@ export function evaluateFrontierKernelAndStressDiagnostics(
     schema8ZeroCopyBodyCount: zeroCopyView.numBodies,
     schema8ZeroCopyJointCount: zeroCopyView.numJoints,
     schema8ZeroCopyContactCount: zeroCopyView.numContacts,
+    schema8DecodedFrame,
+    featherstoneDynamics: {
+      qDDotAba: abaRes.qDDot[0] ?? 0,
+      tauRneaRoundtrip: rneaTau[0] ?? 0,
+      abaRneaResidualAbs: Math.abs((rneaTau[0] ?? 0) - appliedTau),
+      kineticEnergy: mechEnergy.kineticEnergy,
+      potentialEnergy: mechEnergy.potentialEnergy,
+      totalEnergy: mechEnergy.totalEnergy,
+      stepQNext: stepDyn.qNext[0] ?? 0,
+    },
+    equalBudgetHouseholdCmaes,
     stressTrial,
     multiTrialSuite,
     wilson95CiPercent,
@@ -464,7 +516,8 @@ export function FrankenRobotsResearchAnnex() {
                 <div>
                   Zero-Copy Views: {frontierDiag.schema8ZeroCopyBodyCount}B /{" "}
                   {frontierDiag.schema8ZeroCopyJointCount}J /{" "}
-                  {frontierDiag.schema8ZeroCopyContactCount}C
+                  {frontierDiag.schema8ZeroCopyContactCount}C (decoded seq #
+                  {frontierDiag.schema8DecodedFrame.sequenceIndex})
                 </div>
                 <div>
                   Quality Gates: PR{" "}
@@ -526,6 +579,11 @@ export function FrankenRobotsResearchAnnex() {
                   Safety / Costmap: {frontierDiag.houseNavSafetyAndCostmap.recoveryState} • Tour:{" "}
                   {frontierDiag.multiRoomTourFrameCount}f
                 </div>
+                <div>
+                  CMA-ES vs Rand ({frontierDiag.equalBudgetHouseholdCmaes.evaluationBudget} evals):{" "}
+                  {frontierDiag.equalBudgetHouseholdCmaes.cmaesBestReceipt.loss.toFixed(1)} vs{" "}
+                  {frontierDiag.equalBudgetHouseholdCmaes.randomSearchBestReceipt.loss.toFixed(1)}
+                </div>
               </div>
             </div>
 
@@ -534,6 +592,11 @@ export function FrankenRobotsResearchAnnex() {
                 DDP, C-ITO &amp; Kernel Perf Telemetry
               </p>
               <div className="mt-2 space-y-1 font-mono text-xs text-slate-300">
+                <div>
+                  ABA/RNEA Δτ:{" "}
+                  {frontierDiag.featherstoneDynamics.abaRneaResidualAbs.toExponential(2)} N·m • E:{" "}
+                  {frontierDiag.featherstoneDynamics.totalEnergy.toFixed(3)} J
+                </div>
                 <div>
                   DDP / iLQR Cost: {frontierDiag.ddpTrajectory.initialCost.toFixed(2)} →{" "}
                   {frontierDiag.ddpTrajectory.finalCost.toFixed(2)} (
