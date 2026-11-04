@@ -9,6 +9,15 @@ import {
   computeKukaFK,
   solveKukaIK,
 } from "./armInverseKinematics";
+import {
+  antipodalFrictionCapacityN,
+  horizontalAccelCapacityMps2,
+  HOUSEHOLD_COMFORT_CARRY_ACCEL_MPS2,
+  HOUSEHOLD_GRAVITY_MPS2,
+  HOUSEHOLD_TABLE_LIFT_HEIGHT_M,
+  planAntipodalLift,
+  sampleMinimumJerkLift,
+} from "./graspLift";
 import type { RigidBody } from "./contactGraph";
 import type { OrientedBoundingBox } from "./houseMultiObstacleKernel";
 import {
@@ -232,6 +241,7 @@ export function composeKmrMountedArmKinematics(
   targetWorldPosition?: [number, number, number],
   carriedObjectMassKg = 0.0,
   verticalAccelMps2 = 0.0,
+  horizontalAccelMps2: readonly [number, number] = [0, 0],
 ): ComposedKmrArmKinematics {
   const plate = computeMountingPlatePose(
     KMR_IIWA_PROCEDURAL_CHASSIS_ASSUMPTIONS,
@@ -253,11 +263,13 @@ export function composeKmrMountedArmKinematics(
     const localForwardZ = cosYaw * dx + sinYaw * dy;
     const localLateralX = -sinYaw * dx + cosYaw * dy;
     const localUpY = dz;
+    // 0.1 mm, not the 2 mm probe stop. A slow lift otherwise waits and jumps.
     solvedAngles = solveKukaIK(
       [localLateralX, localUpY, localForwardZ],
       solvedAngles,
       [0, 0, 0],
       60,
+      0.0001,
     );
   }
 
@@ -276,14 +288,24 @@ export function composeKmrMountedArmKinematics(
   const worldLinkPositionsMeters = fkLocal.linkPositions.map(toWorld);
   const worldEndEffectorMeters = toWorld(fkLocal.endEffector);
 
-  // Carried-object reaction wrench on the KMR mounting plate
-  const fz = -Math.max(0, carriedObjectMassKg) * (9.81 + verticalAccelMps2);
-  const forceN: [number, number, number] = [0, 0, fz];
+  // Reaction on the mounting plate of the hand force that produces the
+  // commanded object acceleration. Z is up, so holding a weight is -z.
+  const massKg = Math.max(0, carriedObjectMassKg);
+  const ax = horizontalAccelMps2[0];
+  const ay = horizontalAccelMps2[1];
+  const forceN: [number, number, number] = [
+    -massKg * ax,
+    -massKg * ay,
+    -massKg * (HOUSEHOLD_GRAVITY_MPS2 + verticalAccelMps2),
+  ];
   const rx = worldEndEffectorMeters[0] - plate.xMeters;
   const ry = worldEndEffectorMeters[1] - plate.yMeters;
   const rz = worldEndEffectorMeters[2] - plate.zMeters;
-  // r x F where F = [0, 0, fz] => [ry * fz, -rx * fz, 0]
-  const torqueNm: [number, number, number] = [ry * fz, -rx * fz, 0 * rz];
+  const torqueNm: [number, number, number] = [
+    ry * forceN[2] - rz * forceN[1],
+    rz * forceN[0] - rx * forceN[2],
+    rx * forceN[1] - ry * forceN[0],
+  ];
 
   return {
     mountingPlateWorldPose: plate,
@@ -359,7 +381,9 @@ function isPointBlockedByObstacles(
  * Seven-phase KMR iiwa mobile manipulation state machine (`cmaes-ss8z`, `cmaes-za0x.57`):
  * `approach -> align -> grasp -> lift -> transport -> place -> return`.
  * Couples the 4-mecanum KMR base and household LCP contact world with the mounted 7-DoF iiwa
- * arm kinematics and Ferrari-Canny grasp wrench without teleportation.
+ * arm kinematics and a two-pad Coulomb lift. The object rises and lowers on a
+ * minimum-jerk profile that friction can support, and the base only accelerates
+ * a carried object inside that same pad budget.
  */
 export class KmrSevenPhaseMobileManipulator {
   private currentPhase: KmrManipulationPhase = "approach";
@@ -381,6 +405,13 @@ export class KmrSevenPhaseMobileManipulator {
   private isGrasped = false;
   private gwsRadius = 0;
   private graspNormalForceN = 0;
+  private liftDurationS = 0;
+  private lowerDurationS = 0;
+  private liftSupported = false;
+  private carriedSpeedMps = 0;
+  private carriedOmegaRadPerSec = 0;
+  private prevBaseVelocityWorld: [number, number] = [0, 0];
+  private prevObjectVelocity: [number, number] = [0, 0];
   private objectPos: [number, number, number];
   private phaseStepCounter = 0;
   private totalSteps = 0;
@@ -461,11 +492,48 @@ export class KmrSevenPhaseMobileManipulator {
     }
   }
 
+  private carryHorizontalAccelLimit(): number {
+    const capacityN = antipodalFrictionCapacityN(
+      this.graspNormalForceN,
+      this.objectFrictionCoeff,
+    );
+    return Math.min(
+      HOUSEHOLD_COMFORT_CARRY_ACCEL_MPS2,
+      horizontalAccelCapacityMps2(this.objectMassKg, capacityN),
+    );
+  }
+
+  private carryDriveLimits(): {
+    maxLinearAccelMps2: number;
+    maxAngularAccelRadPerSec2: number;
+    maxOmegaRadPerSec: number;
+  } {
+    const limit = this.carryHorizontalAccelLimit();
+    // The payload orbits the base origin, so yaw rate costs centripetal acceleration.
+    const leverM = Math.max(
+      0.05,
+      Math.hypot(this.objectPos[0] - this.basePose.x, this.objectPos[1] - this.basePose.y),
+    );
+    const centripetal = this.carriedOmegaRadPerSec * this.carriedOmegaRadPerSec * leverM;
+    const remain = Math.max(0, limit - centripetal);
+    const shared = remain * 0.5;
+    return {
+      maxLinearAccelMps2: shared,
+      maxAngularAccelRadPerSec2: shared / leverM,
+      maxOmegaRadPerSec: Math.sqrt((0.2 * Math.max(limit, 0)) / leverM),
+    };
+  }
+
   private driveBaseToward(
     target: KmrPose2D,
     dt: number,
     maxLinearSpeedMps = 0.55,
     maxAngularSpeedRadPerSec = 1.2,
+    limits?: {
+      maxLinearAccelMps2: number;
+      maxAngularAccelRadPerSec2: number;
+      maxOmegaRadPerSec?: number;
+    },
   ): {
     reached: boolean;
     vX: number;
@@ -478,17 +546,73 @@ export class KmrSevenPhaseMobileManipulator {
     const dist = Math.hypot(dx, dy);
     const dTheta = shortestAngularDelta(this.basePose.theta, target.theta);
 
-    if (dist <= 0.015 && Math.abs(dTheta) <= 0.025) {
+    // A carried snap of the old 1.5 cm gate is tens of m/s^2 at the payload.
+    // Ungrasped approach and return still settle on that coarser gate.
+    const posTol = limits ? 4e-4 : 0.015;
+    const angTol = limits ? 1e-3 : 0.025;
+    const omegaNow = Math.abs(this.carriedOmegaRadPerSec);
+    if (
+      dist <= posTol &&
+      Math.abs(dTheta) <= angTol &&
+      this.carriedSpeedMps <= 0.02 &&
+      (!limits || omegaNow <= 0.05)
+    ) {
       this.basePose = { ...target };
+      this.carriedSpeedMps = 0;
+      this.carriedOmegaRadPerSec = 0;
       return { reached: true, vX: 0, vY: 0, omega: 0, wheelSpeeds: [0, 0, 0, 0] };
     }
 
-    const stepDist = Math.min(dist, maxLinearSpeedMps * dt);
-    const stepTheta =
-      Math.sign(dTheta) * Math.min(Math.abs(dTheta), maxAngularSpeedRadPerSec * dt);
+    // Plan the stop with half the pad budget. A discrete step that rides the
+    // full-budget curve arrives hot, and the last clipped step then spikes.
+    const brakingSpeed =
+      limits && limits.maxLinearAccelMps2 > 0
+        ? Math.sqrt(limits.maxLinearAccelMps2 * dist)
+        : maxLinearSpeedMps;
+    const desiredSpeed = Math.min(maxLinearSpeedMps, dist / Math.max(dt, 1e-6), brakingSpeed);
+    let speed = desiredSpeed;
+    if (limits) {
+      const maxDelta = Math.max(0, limits.maxLinearAccelMps2) * dt;
+      const delta = desiredSpeed - this.carriedSpeedMps;
+      speed = this.carriedSpeedMps + Math.sign(delta) * Math.min(Math.abs(delta), maxDelta);
+    }
+    this.carriedSpeedMps = speed;
+
+    const omegaCap = limits?.maxOmegaRadPerSec ?? maxAngularSpeedRadPerSec;
+    const alphaCap = limits?.maxAngularAccelRadPerSec2 ?? Number.POSITIVE_INFINITY;
+    // Same stopping curve as the wheels. Without it the yaw rate stays at the
+    // cap until the last degree and the payload orbits through the goal.
+    const yawBrake =
+      Number.isFinite(alphaCap) && alphaCap > 0
+        ? Math.sqrt(alphaCap * Math.abs(dTheta))
+        : limits
+          ? 0
+          : maxAngularSpeedRadPerSec;
+    const desiredOmega =
+      Math.sign(dTheta) *
+      Math.min(
+        Math.abs(dTheta) / Math.max(dt, 1e-6),
+        maxAngularSpeedRadPerSec,
+        Math.max(0, omegaCap),
+        yawBrake,
+      );
+    let omega = desiredOmega;
+    if (limits) {
+      const maxDelta = Math.max(0, limits.maxAngularAccelRadPerSec2) * dt;
+      const delta = desiredOmega - this.carriedOmegaRadPerSec;
+      omega =
+        this.carriedOmegaRadPerSec + Math.sign(delta) * Math.min(Math.abs(delta), maxDelta);
+    }
+    this.carriedOmegaRadPerSec = omega;
+
+    const stepDist = Math.min(dist, speed * dt);
+    const stepTheta = omega * dt;
+    if (limits) {
+      // Remember the speed the payload actually had, not the pre-clip command.
+      this.carriedSpeedMps = stepDist / Math.max(dt, 1e-6);
+    }
     const vxWorld = dist > 1e-6 ? (dx / dist) * (stepDist / dt) : 0;
     const vyWorld = dist > 1e-6 ? (dy / dist) * (stepDist / dt) : 0;
-    const omega = stepTheta / dt;
 
     this.basePose = {
       x: this.basePose.x + vxWorld * dt,
@@ -530,6 +654,9 @@ export class KmrSevenPhaseMobileManipulator {
     this.totalSteps += 1;
     this.phaseStepCounter += 1;
     const prevObjectPos: [number, number, number] = [...this.objectPos];
+    const baseBeforeX = this.basePose.x;
+    const baseBeforeY = this.basePose.y;
+    let driveSettled = false;
 
     let vX = 0;
     let vY = 0;
@@ -558,6 +685,7 @@ export class KmrSevenPhaseMobileManipulator {
         vY = drive.vY;
         omega = drive.omega;
         wheelSpeeds = drive.wheelSpeeds;
+        driveSettled = drive.reached;
         if (drive.reached) {
           this.transitionTo("align");
         }
@@ -594,36 +722,92 @@ export class KmrSevenPhaseMobileManipulator {
         this.transitionTo("lift");
       }
     } else if (this.currentPhase === "lift") {
-      const liftDeltaZ = 0.18 * Math.min(1, this.phaseStepCounter / 10);
-      targetWorldForArm = [this.pickPos[0], this.pickPos[1], this.pickPos[2] + liftDeltaZ];
-      verticalAccel = 0.45;
-      if (this.phaseStepCounter >= 10) {
-        this.transitionTo("transport");
+      if (this.phaseStepCounter === 1) {
+        const plan = planAntipodalLift({
+          heightM: HOUSEHOLD_TABLE_LIFT_HEIGHT_M,
+          massKg: this.objectMassKg,
+          normalForceN: this.graspNormalForceN,
+          frictionCoeff: this.objectFrictionCoeff,
+        });
+        this.liftSupported = plan.supported;
+        this.liftDurationS = plan.durationS;
+      }
+      if (!this.liftSupported) {
+        this.isGrasped = false;
+        this.refusalReason = "GRASP_SLIP_UNDER_WEIGHT";
+        this.currentPhase = "refused";
+        this.recoveryReady = true;
+        targetWorldForArm = [...this.pickPos];
+        verticalAccel = 0;
+      } else {
+        const sample = sampleMinimumJerkLift(
+          this.phaseStepCounter * dt,
+          this.liftDurationS,
+          HOUSEHOLD_TABLE_LIFT_HEIGHT_M,
+        );
+        targetWorldForArm = [
+          this.pickPos[0],
+          this.pickPos[1],
+          this.pickPos[2] + sample.heightM,
+        ];
+        verticalAccel = sample.accelMps2;
+        if (sample.done) this.transitionTo("transport");
       }
     } else if (this.currentPhase === "transport") {
-      const drive = this.driveBaseToward(this.placeStandoffPose, dt);
+      const drive = this.driveBaseToward(
+        this.placeStandoffPose,
+        dt,
+        0.55,
+        1.2,
+        this.carryDriveLimits(),
+      );
       vX = drive.vX;
       vY = drive.vY;
       omega = drive.omega;
       wheelSpeeds = drive.wheelSpeeds;
+      driveSettled = drive.reached;
       if (drive.reached) {
         this.transitionTo("place");
       }
     } else if (this.currentPhase === "place") {
-      const lowerAlpha = Math.min(1, this.phaseStepCounter / 8);
-      const liftedZ = this.pickPos[2] + 0.18;
-      targetWorldForArm = [
-        this.placePos[0],
-        this.placePos[1],
-        liftedZ + (this.placePos[2] - liftedZ) * lowerAlpha,
-      ];
-      if (this.phaseStepCounter >= 8) {
+      const dropM = this.pickPos[2] + HOUSEHOLD_TABLE_LIFT_HEIGHT_M - this.placePos[2];
+      if (this.phaseStepCounter === 1) {
+        const plan = planAntipodalLift({
+          heightM: Math.abs(dropM),
+          massKg: this.objectMassKg,
+          normalForceN: this.graspNormalForceN,
+          frictionCoeff: this.objectFrictionCoeff,
+        });
+        this.liftSupported = plan.supported;
+        this.lowerDurationS = plan.durationS;
+      }
+      if (!this.liftSupported) {
         this.isGrasped = false;
-        this.gripperAperture = 0.08;
-        this.gwsRadius = 0;
-        this.graspNormalForceN = 0;
-        this.objectPos = [...this.placePos];
-        this.transitionTo("return");
+        this.refusalReason = "GRASP_SLIP_UNDER_WEIGHT";
+        this.currentPhase = "refused";
+        this.recoveryReady = true;
+      } else {
+        const distanceM = Math.abs(dropM);
+        const sample = sampleMinimumJerkLift(
+          this.phaseStepCounter * dt,
+          this.lowerDurationS,
+          distanceM,
+        );
+        const direction = dropM >= 0 ? 1 : -1;
+        targetWorldForArm = [
+          this.placePos[0],
+          this.placePos[1],
+          this.placePos[2] + direction * (distanceM - sample.heightM),
+        ];
+        verticalAccel = -direction * sample.accelMps2;
+        if (sample.done) {
+          this.isGrasped = false;
+          this.gripperAperture = 0.08;
+          this.gwsRadius = 0;
+          this.graspNormalForceN = 0;
+          this.objectPos = [...this.placePos];
+          this.transitionTo("return");
+        }
       }
     } else if (this.currentPhase === "return") {
       // Retract arm toward stowed pose and drive back toward standby pose
@@ -635,8 +819,29 @@ export class KmrSevenPhaseMobileManipulator {
       vY = drive.vY;
       omega = drive.omega;
       wheelSpeeds = drive.wheelSpeeds;
+      driveSettled = drive.reached;
       if (drive.reached) {
         this.transitionTo("standby");
+      }
+    }
+
+    let horizontalAccel: [number, number] = [0, 0];
+    if (driveSettled) {
+      this.prevBaseVelocityWorld = [0, 0];
+      this.carriedSpeedMps = 0;
+      this.carriedOmegaRadPerSec = 0;
+    } else {
+      const vxWorld = (this.basePose.x - baseBeforeX) / dt;
+      const vyWorld = (this.basePose.y - baseBeforeY) / dt;
+      const ax = (vxWorld - this.prevBaseVelocityWorld[0]) / dt;
+      const ay = (vyWorld - this.prevBaseVelocityWorld[1]) / dt;
+      this.prevBaseVelocityWorld = [vxWorld, vyWorld];
+      const limit = this.isGrasped ? this.carryHorizontalAccelLimit() : Number.POSITIVE_INFINITY;
+      const magnitude = Math.hypot(ax, ay);
+      if (magnitude > limit && magnitude > 0) {
+        horizontalAccel = [(ax / magnitude) * limit, (ay / magnitude) * limit];
+      } else if (this.isGrasped) {
+        horizontalAccel = [ax, ay];
       }
     }
 
@@ -646,11 +851,36 @@ export class KmrSevenPhaseMobileManipulator {
       targetWorldForArm,
       this.isGrasped ? this.objectMassKg : 0.0,
       verticalAccel,
+      horizontalAccel,
     );
     this.armAngles = [...armKinematics.jointAngles];
 
     if (this.isGrasped) {
       this.objectPos = [...armKinematics.worldEndEffectorMeters];
+      // The receipt has to match the payload, including yaw centripetal load.
+      // Vertical force stays on the commanded lift profile.
+      const payloadVx = (this.objectPos[0] - prevObjectPos[0]) / dt;
+      const payloadVy = (this.objectPos[1] - prevObjectPos[1]) / dt;
+      const payloadAx = (payloadVx - this.prevObjectVelocity[0]) / dt;
+      const payloadAy = (payloadVy - this.prevObjectVelocity[1]) / dt;
+      this.prevObjectVelocity = [payloadVx, payloadVy];
+      const force: [number, number, number] = [
+        -this.objectMassKg * payloadAx,
+        -this.objectMassKg * payloadAy,
+        armKinematics.mountingPlateReactionForceN[2],
+      ];
+      const plate = armKinematics.mountingPlateWorldPose;
+      const rx = this.objectPos[0] - plate.xMeters;
+      const ry = this.objectPos[1] - plate.yMeters;
+      const rz = this.objectPos[2] - plate.zMeters;
+      armKinematics.mountingPlateReactionForceN = force;
+      armKinematics.mountingPlateReactionTorqueNm = [
+        ry * force[2] - rz * force[1],
+        rz * force[0] - rx * force[2],
+        rx * force[1] - ry * force[0],
+      ];
+    } else {
+      this.prevObjectVelocity = [0, 0];
     }
 
     const navReceipt: KmrNavigationReceipt = {
@@ -748,7 +978,9 @@ export function evaluateKmrSevenPhaseManipulationSuite(): KmrSevenPhaseManipulat
     let maxDisp = receipt.objectStepDisplacementMeters;
     let maxResidual = receipt.householdContactReceipt.lcpMaxResidual;
 
-    for (let i = 1; i < 360 && !receipt.completed; i++) {
+    // A friction-limited minimum-jerk lift and a braked carry take longer
+    // than the old 10-step script. 12 s is enough for the nominal 0.45 kg mug.
+    for (let i = 1; i < 720 && !receipt.completed; i++) {
       receipt = machine.step();
       if (receipt.graspGwsRadius > peakGws) peakGws = receipt.graspGwsRadius;
       const tau = Math.hypot(...receipt.armKinematics.mountingPlateReactionTorqueNm);

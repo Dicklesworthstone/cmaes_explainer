@@ -8,6 +8,7 @@
  * experiments and must never certify placement or replace owner telemetry.
  */
 
+import { antipodalFrictionCapacityN, HOUSEHOLD_GRAVITY_MPS2 } from "./graspLift";
 import { distanceToOBB, type OrientedBoundingBox } from "./houseMultiObstacleKernel";
 
 export interface ObjectContactHull {
@@ -193,16 +194,23 @@ export function resolveArmObjectContact({
       ? penetrationDepthM * contactStiffnessNPerM
       : 0;
 
-  // 3. HEURISTIC FRICTION-SUPPORT SCORE
+  // 3. TWO-PAD COULOMB SUPPORT
+  // A parallel pinch holds weight on the pad friction, not on the squeeze
+  // itself. One pad's mu*N is not enough to decide that the object lifts.
   const mu = hull.frictionCoeff;
-  const maxFrictionN = mu * normalForceN;
-  const objectWeightN = hull.massKg * 9.81;
-  const gwsRadius =
-    normalForceN > 0.5 && maxFrictionN >= objectWeightN * 0.5
-      ? Math.min(1.0, (maxFrictionN / (objectWeightN + 1e-4)) * 0.45)
-      : 0.0;
+  const capacityN = antipodalFrictionCapacityN(normalForceN, mu);
+  const objectWeightN = hull.massKg * HOUSEHOLD_GRAVITY_MPS2;
+  const supportsWeight = capacityN + 1e-9 >= objectWeightN;
+  const supportScaleN = capacityN + objectWeightN;
+  // (capacity - weight) / (capacity + weight) is the leftover friction margin.
+  // A weightless object has nothing to support, so the margin is full.
+  const gwsRadius = !supportsWeight
+    ? 0
+    : supportScaleN > 1e-9
+      ? Math.min(1, (capacityN - objectWeightN) / supportScaleN)
+      : 1;
 
-  const isGrasped = isGraspedIntent && normalForceN >= 2.0;
+  const isGrasped = isGraspedIntent && normalForceN >= 2.0 && supportsWeight;
 
   // 4. END-EFFECTOR PALM AXIAL DISPLAY CLAMP
   // The palm box must not plunge into the top rim of the mug when directly overhead.
@@ -220,7 +228,9 @@ export function resolveArmObjectContact({
     rawEndEffectorPos[2],
   ];
 
-  // 5. OBJECT DISPLAY POSITION WITH KINEMATIC FOLLOWING
+  // 5. OBJECT DISPLAY POSITION
+  // Follow the hand only while the pads can hold the weight. Otherwise the
+  // object stays on the table instead of floating with the wrist.
   let resolvedObjectPos: [number, number, number];
   if (isGrasped) {
     // Follow the gripper end-effector coordinate center for display.

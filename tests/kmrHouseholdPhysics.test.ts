@@ -124,4 +124,76 @@ describe("live KMR → household contact/LCP coupling", () => {
     expect(outReceipt.phase).toBe("refused");
     expect(outReceipt.refusalReason).toBe("GOAL_OUT_OF_BOUNDS");
   });
+
+  test("a heavy low-friction object slips instead of being carried to the goal", () => {
+    const machine = new KmrSevenPhaseMobileManipulator({
+      objectMassKg: 12,
+      objectFrictionCoeff: 0.05,
+      pickObjectWorldPos: [0.85, 0.0, 0.72],
+      placeGoalWorldPos: [1.35, 0.25, 0.72],
+    });
+    let receipt = machine.step();
+    for (let step = 0; step < 240 && receipt.phase !== "refused" && !receipt.completed; step++) {
+      receipt = machine.step();
+    }
+    expect(receipt.refusalReason).toBe("GRASP_SLIP_UNDER_WEIGHT");
+    expect(receipt.isObjectGrasped).toBe(false);
+    expect(receipt.objectWorldPositionMeters[2]).toBeLessThan(0.8);
+    expect(receipt.phase).not.toBe("standby");
+  });
+
+  test("the nominal lift accelerates with the minimum-jerk profile, not a fixed 0.45 m/s^2", () => {
+    const machine = new KmrSevenPhaseMobileManipulator({
+      objectMassKg: 0.45,
+      objectFrictionCoeff: 0.65,
+      pickObjectWorldPos: [0.85, 0.0, 0.72],
+      placeGoalWorldPos: [1.35, 0.25, 0.72],
+    });
+    const verticalAccels: number[] = [];
+    const liftedAz: number[] = [];
+    let carriedAh = 0;
+    let prev: [number, number, number] | null = null;
+    let prevV: [number, number, number] = [0, 0, 0];
+    let receipt = machine.step();
+    for (let step = 0; step < 720 && !receipt.completed; step++) {
+      receipt = machine.step();
+      const pos = receipt.objectWorldPositionMeters;
+      if (prev && receipt.isObjectGrasped) {
+        const velocity: [number, number, number] = [
+          (pos[0] - prev[0]) * 60,
+          (pos[1] - prev[1]) * 60,
+          (pos[2] - prev[2]) * 60,
+        ];
+        const accel = [
+          (velocity[0] - prevV[0]) * 60,
+          (velocity[1] - prevV[1]) * 60,
+          (velocity[2] - prevV[2]) * 60,
+        ];
+        if (receipt.phase === "lift") liftedAz.push(accel[2]);
+        if (receipt.phase === "transport") {
+          carriedAh = Math.max(carriedAh, Math.hypot(accel[0], accel[1]));
+        }
+        prevV = velocity;
+      } else {
+        prevV = [0, 0, 0];
+      }
+      prev = [...pos];
+      if (receipt.phase === "lift" || receipt.visitedPhases.includes("lift")) {
+        const fz = receipt.armKinematics.mountingPlateReactionForceN[2];
+        if (receipt.isObjectGrasped && fz < 0 && receipt.phase === "lift") {
+          verticalAccels.push(-fz / 0.45 - 9.81);
+        }
+      }
+      if (receipt.phase === "return") break;
+    }
+    const peak = Math.max(...verticalAccels.map((a) => Math.abs(a)));
+    const unique = new Set(verticalAccels.map((a) => Math.round(a * 100)));
+    expect(peak).toBeGreaterThan(0.5);
+    expect(peak).toBeLessThanOrEqual(1.25);
+    expect(unique.size).toBeGreaterThan(3);
+    const trackedPeak = Math.max(...liftedAz.map((a) => Math.abs(a)));
+    expect(trackedPeak).toBeGreaterThan(0.4);
+    expect(trackedPeak).toBeLessThanOrEqual(1.6);
+    expect(carriedAh).toBeLessThanOrEqual(1.65);
+  });
 });

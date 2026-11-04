@@ -229,7 +229,13 @@ export function solveKukaIK(
   /** Owner link-0 origin; see computeKukaFK. */
   basePos: [number, number, number] = [0, 0, 0],
   maxIterations: number = 60,
+  /**
+   * Early exit distance. The 2 mm default is a reachability probe. A tracked
+   * lift has to pass a tighter tolerance or the hand waits, then jumps.
+   */
+  toleranceM = 0.002,
 ): number[] {
+  const stopM = Number.isFinite(toleranceM) && toleranceM > 0 ? toleranceM : 0.002;
   const bX = basePos[0];
   const bZ = basePos[2];
   const q0Nominal = Math.atan2(targetPos[0] - bX, targetPos[2] - bZ);
@@ -253,7 +259,7 @@ export function solveKukaIK(
       targetPos[1] - warmEe[1],
       targetPos[2] - warmEe[2],
     );
-    if (warmErr < 0.002) {
+    if (warmErr < stopM) {
       angles = warmAngles;
     } else if (warmAngles[1] > 0 && warmAngles[3] > 0) {
       const { endEffector: seedEe } = computeKukaFK(candidateSeed, basePos);
@@ -278,7 +284,7 @@ export function solveKukaIK(
     const errY = targetPos[1] - endEffector[1];
     const errZ = targetPos[2] - endEffector[2];
     const errDist = Math.hypot(errX, errY, errZ);
-    if (errDist < 0.002) break; // converged to 2mm
+    if (errDist < stopM) break;
 
     // Numerical 3x4 Jacobian J[row][col]
     const J = [

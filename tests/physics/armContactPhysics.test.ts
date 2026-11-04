@@ -51,6 +51,21 @@ describe("experimental arm contact display approximation", () => {
     expect(result.resolvedObjectPos[1]).toBeGreaterThan(0.9);
   });
 
+  test("a loose pinch does not lift a pitcher the pads cannot hold", () => {
+    const pitcher = OBJECT_CONTACT_HULLS["glass-pitcher"];
+    const result = resolveArmObjectContact({
+      rawEndEffectorPos: [0.1, 1.15, 0.0],
+      rawObjectPos: [0.1, pitcher.tableRestYM, 0.0],
+      commandedGripperWidthM: 0.2,
+      taskOrObjectId: "glass-pitcher",
+      isGraspedIntent: true,
+      tableY: 0.78,
+    });
+    expect(result.isGrasped).toBe(false);
+    expect(result.gwsRadius).toBe(0);
+    expect(result.resolvedObjectPos[1]).toBeCloseTo(pitcher.tableRestYM, 5);
+  });
+
   test("clamps resting display objects above the tabletop", () => {
     // Commanded object position below table (0.5m)
     const result = resolveArmObjectContact({
